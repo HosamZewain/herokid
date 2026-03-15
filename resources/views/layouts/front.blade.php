@@ -8,43 +8,44 @@
 
     {{-- ── Dynamic title: pages pass $pageTitle via x-slot; falls back to default ── --}}
     @php
-        $seoTitle       = isset($pageTitle)       ? (string)$pageTitle       : 'قصص أطفال مخصصة تجعل طفلك بطل القصة';
-        $seoDescription = isset($pageDescription) ? (string)$pageDescription : 'هيرو كيد — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي. اختر القصة، أرسل صورة طفلك، واستلمها مطبوعة خلال أيام.';
-        $seoImage       = isset($pageImage)       ? (string)$pageImage       : asset('images/og-cover.jpg');
-        $canonicalUrl   = rtrim(strtok(url()->full(), '?'), '/');
-        $fullTitle      = $seoTitle . ' | HeroKid';
+        $seoTitle = isset($pageTitle) ? (string) $pageTitle : 'قصص أطفال مخصصة تجعل طفلك بطل القصة';
+        $seoDescription = isset($pageDescription) ? (string) $pageDescription : 'هيرو كيد — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي. اختر القصة، أرسل صورة طفلك، واستلمها مطبوعة خلال أيام.';
+        $seoImage = isset($pageImage) ? (string) $pageImage : asset('images/og-cover.jpg');
+        $canonicalUrl = rtrim(strtok(url()->full(), '?'), '/');
+        $fullTitle = $seoTitle . ' | HeroKid';
     @endphp
 
     <title>{{ $fullTitle }}</title>
 
     <!-- ══ Core SEO ══ -->
     <meta name="description" content="{{ $seoDescription }}">
-    <meta name="keywords" content="قصص أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, هدايا أطفال, بطل القصة, قصص شخصية مطبوعة, قصص باسم الطفل">
+    <meta name="keywords"
+        content="قصص أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, هدايا أطفال, بطل القصة, قصص شخصية مطبوعة, قصص باسم الطفل">
     <meta name="author" content="HeroKid">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
     <link rel="canonical" href="{{ $canonicalUrl }}">
 
     <!-- ══ Open Graph ══ -->
-    <meta property="og:type"        content="{{ isset($ogType) ? (string)$ogType : 'website' }}">
-    <meta property="og:site_name"   content="HeroKid">
-    <meta property="og:url"         content="{{ $canonicalUrl }}">
-    <meta property="og:title"       content="{{ $fullTitle }}">
+    <meta property="og:type" content="{{ isset($ogType) ? (string) $ogType : 'website' }}">
+    <meta property="og:site_name" content="HeroKid">
+    <meta property="og:url" content="{{ $canonicalUrl }}">
+    <meta property="og:title" content="{{ $fullTitle }}">
     <meta property="og:description" content="{{ $seoDescription }}">
-    <meta property="og:image"       content="{{ $seoImage }}">
-    <meta property="og:image:width"  content="1200">
+    <meta property="og:image" content="{{ $seoImage }}">
+    <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:locale"      content="ar_EG">
+    <meta property="og:locale" content="ar_EG">
 
     <!-- ══ Twitter Card ══ -->
-    <meta name="twitter:card"        content="summary_large_image">
-    <meta name="twitter:site"        content="@HeroKidEG">
-    <meta name="twitter:title"       content="{{ $fullTitle }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@HeroKidEG">
+    <meta name="twitter:title" content="{{ $fullTitle }}">
     <meta name="twitter:description" content="{{ $seoDescription }}">
-    <meta name="twitter:image"       content="{{ $seoImage }}">
+    <meta name="twitter:image" content="{{ $seoImage }}">
 
     <!-- ══ Favicon & Icons ══ -->
-    <link rel="icon"             type="image/png"  href="/images/logo.png">
-    <link rel="apple-touch-icon"                   href="/images/logo.png">
+    <link rel="icon" type="image/png" href="/images/logo.png">
+    <link rel="apple-touch-icon" href="/images/logo.png">
     <meta name="theme-color" content="#f97316">
     <meta name="msapplication-TileColor" content="#f97316">
 
@@ -105,7 +106,11 @@
 
     <!-- ══ Scripts ══ -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>body { font-family: 'Cairo', sans-serif; }</style>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+        }
+    </style>
 </head>
 
 <body class="font-sans antialiased text-gray-900 bg-white">
@@ -210,7 +215,7 @@
         </main>
 
         <!-- ===================== FOOTER ===================== -->
-        <footer class="bg-slate-900 text-white pt-16 pb-8 mt-16">
+        <footer class="bg-slate-900 text-white pt-16 pb-8">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
 
