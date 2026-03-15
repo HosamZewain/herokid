@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Exclude admin and user account paths
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+
+Sitemap: http://localhost/sitemap.xml
