@@ -1,11 +1,22 @@
 User-agent: *
 Allow: /
 
-# Exclude admin and user account paths
+# Block private / admin paths
+Disallow: /admin
 Disallow: /admin/
+Disallow: /dashboard
 Disallow: /dashboard/
 Disallow: /login
 Disallow: /register
 Disallow: /logout
+Disallow: /profile
+Disallow: /checkout/
+Disallow: /track-order
+Disallow: /orders/
 
-Sitemap: http://localhost/sitemap.xml
+# Block query-param noise
+Disallow: /*?*page=
+Disallow: /*?*sort=
+
+# Dynamic sitemap (update domain before going live)
+Sitemap: https://herokid.eg/sitemap.xml

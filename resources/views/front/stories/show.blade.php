@@ -1,4 +1,50 @@
 <x-front-layout>
+
+{{-- ══ Per-page SEO slots ══ --}}
+<x-slot name="pageTitle">{{ $story->title }} — قصة أطفال مخصصة بوجه طفلك</x-slot>
+<x-slot name="pageDescription">{{ $story->short_desc ?? 'اجعل طفلك بطل قصة ' . $story->title . ' بوجهه الحقيقي. قصة مطبوعة مخصصة من HeroKid تُشحن إلى بابك.' }}</x-slot>
+<x-slot name="pageImage">{{ $story->cover_url ?? asset('images/og-cover.jpg') }}</x-slot>
+<x-slot name="ogType">product</x-slot>
+
+<x-slot name="schema">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "{{ route('home') }}" },
+        { "@type": "ListItem", "position": 2, "name": "مكتبة القصص", "item": "{{ route('stories.index') }}" },
+        { "@type": "ListItem", "position": 3, "name": "{{ $story->title }}", "item": "{{ route('stories.show', $story->slug) }}" }
+      ]
+    },
+    {
+      "@type": "Product",
+      "name": "{{ $story->title }}",
+      "description": "{{ $story->short_desc ?? 'قصة أطفال مخصصة بوجه طفلك واسمه' }}",
+      "image": "{{ $story->cover_url ?? asset('images/og-cover.jpg') }}",
+      "brand": { "@type": "Brand", "name": "HeroKid" },
+      "offers": {
+        "@type": "Offer",
+        "priceCurrency": "EGP",
+        "price": "{{ $story->price }}",
+        "availability": "https://schema.org/InStock",
+        "url": "{{ route('stories.show', $story->slug) }}"
+      }
+      @if($story->lesson_value)
+      ,"additionalProperty": {
+        "@type": "PropertyValue",
+        "name": "القيمة التربوية",
+        "value": "{{ $story->lesson_value }}"
+      }
+      @endif
+    }
+  ]
+}
+</script>
+</x-slot>
+
 <div class="bg-slate-50 min-h-screen py-12">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 

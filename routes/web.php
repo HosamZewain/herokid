@@ -37,6 +37,47 @@ Route::post('/orders/{order}/approve-preview', function (\App\Models\Order $orde
 })->middleware('auth')->name('orders.approve-preview');
 
 // Static Pages
+// ── Dynamic Sitemap ──────────────────────────────────────────────────────────
+Route::get('/sitemap.xml', function () {
+    $stories = \App\Models\Story::where('active', true)->select('slug', 'updated_at')->get();
+
+    $staticPages = [
+        ['url' => route('home'),          'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
+        ['url' => route('stories.index'), 'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
+        ['url' => route('how-it-works'),  'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
+        ['url' => route('pricing'),       'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
+        ['url' => route('faq'),           'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
+        ['url' => route('contact'),       'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.5'],
+    ];
+
+    $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+    $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+
+    foreach ($staticPages as $page) {
+        $xml .= "  <url>\n";
+        $xml .= "    <loc>{$page['url']}</loc>\n";
+        $xml .= "    <lastmod>{$page['lastmod']}</lastmod>\n";
+        $xml .= "    <changefreq>{$page['freq']}</changefreq>\n";
+        $xml .= "    <priority>{$page['priority']}</priority>\n";
+        $xml .= "  </url>\n";
+    }
+
+    foreach ($stories as $story) {
+        $url     = route('stories.show', $story->slug);
+        $lastmod = $story->updated_at ? $story->updated_at->toDateString() : now()->toDateString();
+        $xml .= "  <url>\n";
+        $xml .= "    <loc>{$url}</loc>\n";
+        $xml .= "    <lastmod>{$lastmod}</lastmod>\n";
+        $xml .= "    <changefreq>weekly</changefreq>\n";
+        $xml .= "    <priority>0.8</priority>\n";
+        $xml .= "  </url>\n";
+    }
+
+    $xml .= '</urlset>';
+
+    return response($xml, 200)->header('Content-Type', 'application/xml');
+})->name('sitemap');
+
 Route::get('/faq', [\App\Http\Controllers\Front\PageController::class, 'faq'])->name('faq');
 Route::get('/contact', [\App\Http\Controllers\Front\PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [\App\Http\Controllers\Front\PageController::class, 'submitContact'])->name('contact.submit');

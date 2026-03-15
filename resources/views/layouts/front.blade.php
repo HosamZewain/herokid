@@ -1,48 +1,111 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="rtl">
+<html lang="ar" dir="rtl">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid</title>
-    
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="هيرو كيد هي أول منصة في مصر لتحويل طفلك إلى بطل قصة حقيقي! ارفع صورة طفلك واحصل على قصة مطبوعة تحمل وجهه واسمه في مغامرات لا تُنسى.">
-    <meta name="keywords" content="قصص أطفال, قصص مخصصة, هيرو كيد, HeroKid, هدايا أطفال, كتب أطفال مصر, بطل القصة">
+
+    {{-- ── Dynamic title: pages pass $pageTitle via x-slot; falls back to default ── --}}
+    @php
+        $seoTitle       = isset($pageTitle)       ? (string)$pageTitle       : 'قصص أطفال مخصصة تجعل طفلك بطل القصة';
+        $seoDescription = isset($pageDescription) ? (string)$pageDescription : 'هيرو كيد — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي. اختر القصة، أرسل صورة طفلك، واستلمها مطبوعة خلال أيام.';
+        $seoImage       = isset($pageImage)       ? (string)$pageImage       : asset('images/og-cover.jpg');
+        $canonicalUrl   = rtrim(strtok(url()->full(), '?'), '/');
+        $fullTitle      = $seoTitle . ' | HeroKid';
+    @endphp
+
+    <title>{{ $fullTitle }}</title>
+
+    <!-- ══ Core SEO ══ -->
+    <meta name="description" content="{{ $seoDescription }}">
+    <meta name="keywords" content="قصص أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, هدايا أطفال, بطل القصة, قصص شخصية مطبوعة, قصص باسم الطفل">
     <meta name="author" content="HeroKid">
-    <link rel="canonical" href="{{ url()->current() }}">
-    
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ url()->current() }}">
-    <meta property="og:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid">
-    <meta property="og:description" content="اجعل طفلك بطل القصة الحقيقي بوجهه واسمه. اطلب قصتك المخصصة الآن من هيرو كيد.">
-    <meta property="og:image" content="{{ asset('images/logo.png') }}">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+    <link rel="canonical" href="{{ $canonicalUrl }}">
 
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="{{ url()->current() }}">
-    <meta property="twitter:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid">
-    <meta property="twitter:description" content="اجعل طفلك بطل القصة الحقيقي بوجهه واسمه. اطلب قصتك المخصصة الآن من هيرو كيد.">
-    <meta property="twitter:image" content="{{ asset('images/logo.png') }}">
+    <!-- ══ Open Graph ══ -->
+    <meta property="og:type"        content="{{ isset($ogType) ? (string)$ogType : 'website' }}">
+    <meta property="og:site_name"   content="HeroKid">
+    <meta property="og:url"         content="{{ $canonicalUrl }}">
+    <meta property="og:title"       content="{{ $fullTitle }}">
+    <meta property="og:description" content="{{ $seoDescription }}">
+    <meta property="og:image"       content="{{ $seoImage }}">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale"      content="ar_EG">
 
-    <meta name="robots" content="index, follow">
+    <!-- ══ Twitter Card ══ -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:site"        content="@HeroKidEG">
+    <meta name="twitter:title"       content="{{ $fullTitle }}">
+    <meta name="twitter:description" content="{{ $seoDescription }}">
+    <meta name="twitter:image"       content="{{ $seoImage }}">
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800,900&display=swap" rel="stylesheet" />
+    <!-- ══ Favicon & Icons ══ -->
+    <link rel="icon"             type="image/png"  href="/images/logo.png">
+    <link rel="apple-touch-icon"                   href="/images/logo.png">
+    <meta name="theme-color" content="#f97316">
+    <meta name="msapplication-TileColor" content="#f97316">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/jpeg" href="/images/logo.png">
-
-    <!-- Scripts -->
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
-        body {
-            font-family: 'Cairo', sans-serif;
+    <!-- ══ JSON-LD: Organization + WebSite (every page) ══ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "{{ config('app.url') }}/#organization",
+          "name": "HeroKid",
+          "url": "{{ config('app.url') }}",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "{{ asset('images/logo.png') }}"
+          },
+          "description": "أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "المنصورة",
+            "addressCountry": "EG"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer service",
+            "availableLanguage": "Arabic"
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "{{ config('app.url') }}/#website",
+          "url": "{{ config('app.url') }}",
+          "name": "HeroKid",
+          "publisher": { "@id": "{{ config('app.url') }}/#organization" },
+          "inLanguage": "ar",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "{{ route('stories.index') }}?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
         }
-    </style>
+      ]
+    }
+    </script>
+
+    {{-- Extra schema injected per-page (e.g. FAQPage, Book, BreadcrumbList) --}}
+    {{ $schema ?? '' }}
+
+    <!-- ══ Fonts ══ -->
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+    <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800,900&display=swap" rel="stylesheet">
+
+    <!-- ══ Scripts ══ -->
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>body { font-family: 'Cairo', sans-serif; }</style>
 </head>
 
 <body class="font-sans antialiased text-gray-900 bg-white">
