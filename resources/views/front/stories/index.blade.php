@@ -15,18 +15,185 @@
     @endphp
 
     <div class="bg-slate-50 min-h-screen flex flex-col">
-        
-        <!-- Header Section -->
-        <div class="bg-indigo-900 pt-16 pb-24 flex items-center justify-center relative overflow-hidden shrink-0">
-            <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 text-white text-right relative z-10">
-                <span class="text-indigo-300 font-black text-xs uppercase tracking-[0.2em] mb-4 block">اختر قصتك</span>
-                <h1 class="text-4xl md:text-5xl font-black mb-6 leading-tight">مكتبة قصص HeroKid</h1>
-                <p class="text-indigo-200/80 font-medium text-lg max-w-2xl mr-0 ml-auto leading-relaxed">قصص مخصصة تجعل طفلك بطل القصة الحقيقي.</p>
+
+        {{-- ===== HERO SECTION ===== --}}
+        <div class="relative bg-gradient-to-bl from-slate-900 via-indigo-950 to-purple-950 overflow-hidden" dir="rtl">
+
+            {{-- Background layers --}}
+            <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                {{-- Blobs --}}
+                <div class="absolute -top-40 -right-40 w-[700px] h-[700px] bg-indigo-600/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-700/15 rounded-full blur-3xl"></div>
+                {{-- Dot grid --}}
+                <div class="absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(circle, #818cf8 1px, transparent 1px); background-size: 28px 28px;"></div>
+                {{-- Diagonal light streak --}}
+                <div class="absolute top-0 left-1/3 w-px h-full bg-gradient-to-b from-transparent via-indigo-400/10 to-transparent transform -skew-x-12"></div>
             </div>
-            <!-- Decorative elements -->
-            <div class="absolute -bottom-20 -right-20 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl"></div>
-            <div class="absolute -top-20 -left-20 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl"></div>
+
+            <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-0">
+
+                {{-- Two-column grid --}}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+
+                    {{-- === TEXT SIDE === --}}
+                    <div class="text-right py-8 lg:py-16">
+
+                        {{-- Eyebrow badge --}}
+                        <div class="inline-flex items-center gap-2.5 bg-indigo-500/15 border border-indigo-400/25 text-indigo-300 text-[11px] font-black px-4 py-2 rounded-full mb-6 backdrop-blur-sm tracking-wider">
+                            <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></span>
+                            مكتبة HeroKid المخصصة
+                        </div>
+
+                        {{-- Headline --}}
+                        <h1 class="text-4xl md:text-5xl xl:text-6xl font-black text-white leading-[1.15] mb-5">
+                            اختر القصة<br>
+                            <span class="relative inline-block">
+                                <span class="text-transparent bg-clip-text bg-gradient-to-l from-purple-300 via-indigo-300 to-blue-300">التي تجعل طفلك</span>
+                            </span><br>
+                            البطل الحقيقي ✨
+                        </h1>
+
+                        {{-- Sub-text built from real data --}}
+                        <p class="text-slate-400 text-base md:text-lg font-medium leading-relaxed mb-8 max-w-xl">
+                            @if($stories->total() > 0)
+                                <span class="text-white font-black">{{ $stories->total() }} قصة</span> مخصصة مطبوعة احترافياً —
+                            @endif
+                            @if($categories->isNotEmpty())
+                                في <span class="text-indigo-300 font-bold">{{ $categories->count() }} تصنيف</span>،
+                            @endif
+                            @if($ageRanges->isNotEmpty())
+                                للأعمار
+                                @foreach($ageRanges->take(2) as $r)
+                                    <span class="text-amber-300 font-bold">{{ $r }}</span>{{ !$loop->last ? ' و' : '' }}
+                                @endforeach
+                                سنة وما فوق،
+                            @endif
+                            للأولاد والبنات بالعربية والإنجليزية.
+                        </p>
+
+                        {{-- Stats row --}}
+                        <div class="flex flex-wrap gap-3 justify-end mb-8">
+                            <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
+                                <span class="text-2xl font-black text-white">{{ $stories->total() ?: '∞' }}</span>
+                                <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">قصة</span>
+                            </div>
+                            @if($categories->isNotEmpty())
+                            <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
+                                <span class="text-2xl font-black text-white">{{ $categories->count() }}</span>
+                                <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">تصنيف</span>
+                            </div>
+                            @endif
+                            @if($ageRanges->isNotEmpty())
+                            <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
+                                <span class="text-2xl font-black text-white">{{ $ageRanges->count() }}</span>
+                                <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">فئة عمرية</span>
+                            </div>
+                            @endif
+                            <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
+                                <span class="text-2xl font-black text-white">2</span>
+                                <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">لغة</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {{-- === VISUAL SIDE === --}}
+                    <div class="hidden lg:flex items-end justify-center relative h-80 xl:h-96 pb-0">
+
+                        {{-- Main big card mock --}}
+                        <div class="absolute bottom-0 right-16 w-52 bg-white rounded-[1.5rem] shadow-2xl overflow-hidden transform rotate-3 hover:rotate-1 transition-transform duration-700 z-20">
+                            <div class="aspect-square bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center overflow-hidden">
+                                @php $heroStory = $stories->first(); @endphp
+                                @if($heroStory && $heroStory->cover_image)
+                                    <img src="{{ $heroStory->cover_url }}" alt="{{ $heroStory->title }}" class="w-full h-full object-cover">
+                                @else
+                                    <img src="https://images.unsplash.com/{{ $fallbacks[0] }}?w=400&auto=format&fit=crop&q=85" alt="قصة" class="w-full h-full object-cover">
+                                @endif
+                            </div>
+                            <div class="p-4 text-right">
+                                @if($heroStory)
+                                    <p class="text-[10px] font-black text-indigo-500 mb-1">{{ $heroStory->categories->first()->name ?? 'قصة مخصصة' }}</p>
+                                    <h4 class="text-sm font-black text-slate-900 leading-snug line-clamp-1">{{ $heroStory->title }}</h4>
+                                    <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
+                                        <span class="text-xs font-black text-indigo-600">{{ number_format($heroStory->price, 0) }} <small class="text-slate-400">ج.م</small></span>
+                                        <span class="text-[9px] bg-indigo-50 text-indigo-600 font-black px-2 py-1 rounded-lg">{{ $heroStory->age_range }} سنة</span>
+                                    </div>
+                                @else
+                                    <p class="text-[10px] font-black text-indigo-500 mb-1">مغامرات</p>
+                                    <h4 class="text-sm font-black text-slate-900 leading-snug">قصة مخصصة بوجه طفلك</h4>
+                                @endif
+                            </div>
+                        </div>
+
+                        {{-- Secondary card mock (blurred, behind) --}}
+                        <div class="absolute bottom-8 right-52 w-44 bg-white/80 backdrop-blur rounded-[1.5rem] shadow-xl overflow-hidden transform -rotate-6 z-10 opacity-70">
+                            <div class="aspect-square bg-gradient-to-br from-amber-100 to-rose-100 flex items-center justify-center overflow-hidden">
+                                <img src="https://images.unsplash.com/{{ $fallbacks[2] }}?w=300&auto=format&fit=crop&q=80" alt="قصة" class="w-full h-full object-cover">
+                            </div>
+                            <div class="p-3 text-right">
+                                <p class="text-[9px] font-black text-amber-500 mb-0.5">حيوانات</p>
+                                <h4 class="text-xs font-black text-slate-800 leading-snug line-clamp-1">قصة بطل صغير</h4>
+                            </div>
+                        </div>
+
+                        {{-- Third card (behind left) --}}
+                        <div class="absolute bottom-4 left-8 w-40 bg-white/60 backdrop-blur rounded-[1.5rem] shadow-lg overflow-hidden transform rotate-12 z-10 opacity-50">
+                            <div class="aspect-square bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center overflow-hidden">
+                                <img src="https://images.unsplash.com/{{ $fallbacks[4] }}?w=300&auto=format&fit=crop&q=80" alt="قصة" class="w-full h-full object-cover">
+                            </div>
+                        </div>
+
+                        {{-- Floating badges --}}
+                        <div class="absolute top-6 right-4 bg-white rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-2 text-xs font-black text-slate-800 transform -rotate-3 z-30 hover:rotate-0 transition-transform duration-500">
+                            <span class="text-base">⭐</span> قصة مخصصة
+                        </div>
+                        <div class="absolute top-16 left-12 bg-indigo-600 text-white rounded-2xl px-3.5 py-2 shadow-xl flex items-center gap-2 text-xs font-black transform rotate-6 z-30 hover:rotate-0 transition-transform duration-500">
+                            <span class="text-base">🚀</span> طفلك البطل
+                        </div>
+                        @if($categories->isNotEmpty())
+                        <div class="absolute top-40 left-4 bg-amber-400 text-slate-900 rounded-2xl px-3.5 py-2 shadow-xl text-[10px] font-black transform -rotate-3 z-30">
+                            📚 {{ $categories->first()->name }}
+                        </div>
+                        @endif
+
+                        {{-- Decorative dots --}}
+                        <div class="absolute top-8 left-1/2 w-2.5 h-2.5 bg-indigo-400/50 rounded-full animate-bounce" style="animation-delay:0.1s"></div>
+                        <div class="absolute top-1/3 right-2 w-2 h-2 bg-purple-400/50 rounded-full animate-bounce" style="animation-delay:0.4s"></div>
+                        <div class="absolute bottom-1/3 left-1/3 w-3 h-3 bg-amber-400/40 rounded-full animate-bounce" style="animation-delay:0.7s"></div>
+                    </div>
+
+                </div>
+
+                {{-- === CATEGORY QUICK-FILTER STRIP === --}}
+                @if($categories->isNotEmpty())
+                <div class="border-t border-white/8 pt-5 pb-6 mt-2">
+                    <div class="flex items-center gap-3 overflow-x-auto pb-1 justify-end" style="scrollbar-width:none">
+                        <span class="text-slate-600 text-[10px] font-black tracking-[0.15em] uppercase shrink-0">تصفح حسب:</span>
+                        <a href="{{ route('stories.index') }}"
+                           class="shrink-0 px-5 py-2.5 rounded-full text-[11px] font-black transition-all duration-200 {{ !request('category') && !$hasFilter ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/40 scale-105' : 'bg-white/8 text-slate-400 border border-white/10 hover:bg-white/15 hover:text-white' }}">
+                            الكل <span class="opacity-60">({{ \App\Models\Story::where('active', true)->count() }})</span>
+                        </a>
+                        @foreach($categories as $cat)
+                        <a href="{{ route('stories.index', ['category' => $cat->slug]) }}"
+                           class="shrink-0 px-5 py-2.5 rounded-full text-[11px] font-black transition-all duration-200 {{ request('category') == $cat->slug ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/40 scale-105' : 'bg-white/8 text-slate-400 border border-white/10 hover:bg-white/15 hover:text-white' }}">
+                            {{ $cat->name }} <span class="opacity-50">({{ $cat->stories_count }})</span>
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
+            </div>
+
+            {{-- Wave divider --}}
+            <div class="relative overflow-hidden leading-none" style="height:52px">
+                <svg viewBox="0 0 1440 52" fill="none" xmlns="http://www.w3.org/2000/svg" class="absolute bottom-0 w-full h-full" preserveAspectRatio="none">
+                    <path d="M0 52L80 46C160 40 320 28 480 22C640 16 800 16 960 20C1120 24 1280 36 1360 42L1440 48V52H0Z" fill="#f8fafc"/>
+                </svg>
+            </div>
+
         </div>
+        {{-- END HERO --}}
 
         <!-- Section for Filters and Grid -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 w-full flex-grow relative z-20">

@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — {{ config('app.name') }}</title>
+    <title>{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid</title>
     
     <!-- SEO Meta Tags -->
     <meta name="description" content="هيرو كيد هي أول منصة في مصر لتحويل طفلك إلى بطل قصة حقيقي! ارفع صورة طفلك واحصل على قصة مطبوعة تحمل وجهه واسمه في مغامرات لا تُنسى.">
@@ -16,14 +16,14 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url()->current() }}">
-    <meta property="og:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — {{ config('app.name') }}">
+    <meta property="og:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid">
     <meta property="og:description" content="اجعل طفلك بطل القصة الحقيقي بوجهه واسمه. اطلب قصتك المخصصة الآن من هيرو كيد.">
     <meta property="og:image" content="{{ asset('images/logo.png') }}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="{{ url()->current() }}">
-    <meta property="twitter:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — {{ config('app.name') }}">
+    <meta property="twitter:title" content="{{ $title ?? 'قصص أطفال مخصصة تجعل طفلك بطل القصة' }} — HeroKid">
     <meta property="twitter:description" content="اجعل طفلك بطل القصة الحقيقي بوجهه واسمه. اطلب قصتك المخصصة الآن من هيرو كيد.">
     <meta property="twitter:image" content="{{ asset('images/logo.png') }}">
 
@@ -58,7 +58,7 @@
                         <a href="{{ route('home') }}" class="flex-shrink-0">
                             <img src="/images/logo.png" alt="HeroKid Logo" class="h-12 md:h-24 w-auto object-contain">
                         </a>
-                        <div class="hidden lg:flex items-center gap-1">
+                        <div class="hidden lg:flex items-center gap-10">
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
                             <x-nav-link :href="route('stories.index')"
                                 :active="request()->routeIs('stories.*')">القصص</x-nav-link>

@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // Homepage
 Route::get('/', function () {
-    $featuredStories = \App\Models\Story::where('active', true)->latest()->take(3)->get();
+    $featuredStories = \App\Models\Story::where('active', true)->with('categories')->latest()->take(8)->get();
     $faqs            = \App\Models\FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
     $testimonials    = \App\Models\Testimonial::where('active', true)->orderBy('sort_order')->get();
     return view('welcome', compact('featuredStories', 'faqs', 'testimonials'));
