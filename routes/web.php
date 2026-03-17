@@ -3,6 +3,23 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
+// ── Storage Fallback for Shared Hosting ──────────────────────────────────────
+// On some servers the public/storage symlink can't be created (symlink() and
+// exec() disabled). The .htaccess only routes requests to PHP when the file
+// does NOT exist on disk, so this only fires when the symlink is missing —
+// it has zero cost when the symlink is in place.
+Route::get('/storage/{path}', function (string $path) {
+    // Block directory traversal
+    if (str_contains($path, '..')) {
+        abort(403);
+    }
+    $fullPath = storage_path('app/public/' . ltrim($path, '/'));
+    if (!file_exists($fullPath) || !is_file($fullPath)) {
+        abort(404);
+    }
+    return response()->file($fullPath);
+})->where('path', '.*')->name('storage.serve');
+
 // Homepage
 Route::get('/', function () {
     $featuredStories = \App\Models\Story::where('active', true)->with('categories')->latest()->take(8)->get();
