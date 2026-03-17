@@ -1,4 +1,10 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">تتبع طلبك</x-slot>
+<x-slot name="pageDescription">تتبع حالة طلب قصة طفلك المخصصة من HeroKid. أدخل رقم الطلب للاطلاع على آخر تحديثات الطباعة والشحن.</x-slot>
+<x-slot name="robots">noindex, nofollow</x-slot>
+
     <div class="bg-gray-50 py-20 min-h-[70vh]">
         <div class="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">

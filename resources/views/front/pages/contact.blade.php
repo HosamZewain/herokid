@@ -1,5 +1,35 @@
 <x-front-layout>
 
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">تواصل مع فريق HeroKid — دعم العملاء على مدار الساعة</x-slot>
+<x-slot name="pageDescription">تواصل مع فريق HeroKid لأي استفسار عن قصص الأطفال المخصصة أو حالة طلبك. نرد خلال ساعات العمل عبر الواتساب أو البريد الإلكتروني.</x-slot>
+
+@push('schema')
+<script type="application/ld+json">
+{
+  "@@context": "https://schema.org",
+  "@@type": "ContactPage",
+  "name": "تواصل مع HeroKid",
+  "url": "{{ route('contact') }}",
+  "description": "صفحة تواصل HeroKid — دعم العملاء لقصص الأطفال المخصصة",
+  "mainEntity": {
+    "@@type": "LocalBusiness",
+    "name": "HeroKid",
+    "telephone": "+201112333646",
+    "email": "hello@herokid.eg",
+    "address": {
+      "@@type": "PostalAddress",
+      "streetAddress": "شارع سامية الجمل",
+      "addressLocality": "المنصورة",
+      "addressCountry": "EG"
+    },
+    "openingHours": "Sa-Th 09:00-21:00",
+    "url": "{{ config('app.url') }}"
+  }
+}
+</script>
+@endpush
+
     <!-- Header -->
     <div class="relative bg-gradient-to-br from-indigo-600 to-indigo-800 py-16 overflow-hidden">
         <div class="absolute inset-0 opacity-10">

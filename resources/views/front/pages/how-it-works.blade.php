@@ -1,4 +1,52 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">كيف يعمل HeroKid؟ — ٣ خطوات لقصة مخصصة بوجه طفلك</x-slot>
+<x-slot name="pageDescription">اكتشف كيف يحول HeroKid طفلك إلى بطل قصته في ٣ خطوات بسيطة: اختر القصة المناسبة لعمره، خصّص باسمه وصورته، ثم استلم كتاباً مطبوعاً فاخراً في أيام قليلة.</x-slot>
+
+@push('schema')
+<script type="application/ld+json">
+{
+  "@@context": "https://schema.org",
+  "@@type": "HowTo",
+  "name": "كيف تطلب قصة مخصصة لطفلك من HeroKid",
+  "description": "خطوات بسيطة لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي من HeroKid",
+  "totalTime": "PT5M",
+  "estimatedCost": {
+    "@@type": "MonetaryAmount",
+    "currency": "EGP",
+    "value": "199"
+  },
+  "supply": [
+    { "@@type": "HowToSupply", "name": "صورة واضحة لوجه الطفل" }
+  ],
+  "step": [
+    {
+      "@@type": "HowToStep",
+      "position": 1,
+      "name": "اختر القصة",
+      "text": "تصفح مكتبة HeroKid واختر القصة التي تناسب عمر طفلك واهتماماته من بين قصص متنوعة للأعمار ٢–١٠ سنوات.",
+      "url": "{{ route('stories.index') }}"
+    },
+    {
+      "@@type": "HowToStep",
+      "position": 2,
+      "name": "خصّص وأرسل",
+      "text": "أضف اسم طفلك وارفع صورة واضحة لوجهه. يقوم ذكاءنا الاصطناعي بدمج وجهه في رسومات القصة بشكل احترافي.",
+      "url": "{{ route('how-it-works') }}"
+    },
+    {
+      "@@type": "HowToStep",
+      "position": 3,
+      "name": "استلم الكتاب",
+      "text": "نطبع كتابك ونشحنه مباشرة إلى بابك خلال ٥–١٠ أيام عمل لجميع محافظات مصر.",
+      "url": "{{ route('how-it-works') }}"
+    }
+  ]
+}
+</script>
+@endpush
+
     <!-- Page Header -->
     <div class="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-800 py-20">
         <div class="absolute inset-0 opacity-10">

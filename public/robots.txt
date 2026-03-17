@@ -14,6 +14,12 @@ Disallow: /checkout/
 Disallow: /track-order
 Disallow: /orders/
 
+# Block auth utility pages
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /confirm-password
+
 # Block query-param noise
 Disallow: /*?*page=
 Disallow: /*?*sort=

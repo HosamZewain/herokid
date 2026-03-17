@@ -1,4 +1,60 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">أسعار قصص الأطفال المخصصة — باقات HeroKid بدون رسوم خفية</x-slot>
+<x-slot name="pageDescription">اكتشف باقات HeroKid لقصص الأطفال المخصصة. باقة أساسية بغلاف ناعم ٢٤ صفحة، وباقة مميزة بغلاف صلب ٣٢ صفحة مع تغليف هدايا. بدون اشتراكات — تدفع مرة واحدة.</x-slot>
+
+@push('schema')
+<script type="application/ld+json">
+{
+  "@@context": "https://schema.org",
+  "@@type": "WebPage",
+  "name": "أسعار قصص HeroKid المخصصة",
+  "url": "{{ route('pricing') }}",
+  "description": "باقات HeroKid لقصص الأطفال المخصصة بأسعار واضحة بدون رسوم خفية",
+  "mainEntity": {
+    "@@type": "ItemList",
+    "itemListElement": [
+      {
+        "@@type": "ListItem",
+        "position": 1,
+        "item": {
+          "@@type": "Product",
+          "name": "الباقة الأساسية — غلاف ناعم",
+          "description": "كتاب مخصص بوجه طفلك واسمه، ٢٤ صفحة ملونة، غلاف ناعم، شحن لجميع المحافظات",
+          "brand": { "@@type": "Brand", "name": "HeroKid" },
+          "offers": {
+            "@@type": "Offer",
+            "priceCurrency": "EGP",
+            "price": "199",
+            "availability": "https://schema.org/InStock",
+            "url": "{{ route('stories.index') }}"
+          }
+        }
+      },
+      {
+        "@@type": "ListItem",
+        "position": 2,
+        "item": {
+          "@@type": "Product",
+          "name": "الباقة المميزة — غلاف صلب",
+          "description": "كتاب مخصص بوجه طفلك واسمه، ٣٢ صفحة ملونة، غلاف صلب فاخر، تغليف هدايا، شحن مجاني",
+          "brand": { "@@type": "Brand", "name": "HeroKid" },
+          "offers": {
+            "@@type": "Offer",
+            "priceCurrency": "EGP",
+            "price": "299",
+            "availability": "https://schema.org/InStock",
+            "url": "{{ route('stories.index') }}"
+          }
+        }
+      }
+    ]
+  }
+}
+</script>
+@endpush
+
     <!-- Header -->
     <div class="relative overflow-hidden bg-gradient-to-br from-slate-900 to-indigo-900 py-20">
         <div class="absolute inset-0 opacity-10">

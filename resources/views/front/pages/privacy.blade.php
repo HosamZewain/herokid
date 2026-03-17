@@ -1,4 +1,10 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">سياسة الخصوصية</x-slot>
+<x-slot name="pageDescription">تعرف على كيفية حماية HeroKid لبياناتك الشخصية وصور أطفالك. نلتزم بأعلى معايير الخصوصية — صور أطفالك تُستخدم فقط لإنشاء القصة وتُحذف بعد اكتمالها.</x-slot>
+<x-slot name="robots">noindex, nofollow</x-slot>
+
     <div class="bg-white py-16">
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
 

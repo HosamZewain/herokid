@@ -22,7 +22,7 @@
     <meta name="keywords"
         content="قصص أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, هدايا أطفال, بطل القصة, قصص شخصية مطبوعة, قصص باسم الطفل">
     <meta name="author" content="HeroKid">
-    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+    <meta name="robots" content="{{ isset($robots) ? (string) $robots : 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1' }}">
     <link rel="canonical" href="{{ $canonicalUrl }}">
 
     <!-- ══ Open Graph ══ -->
@@ -52,41 +52,41 @@
     <!-- ══ JSON-LD: Organization + WebSite (every page) ══ -->
     <script type="application/ld+json">
     {
-      "@context": "https://schema.org",
-      "@graph": [
+      "@@context": "https://schema.org",
+      "@@graph": [
         {
-          "@type": "Organization",
-          "@id": "{{ config('app.url') }}/#organization",
+          "@@type": "Organization",
+          "@@id": "{{ config('app.url') }}/#organization",
           "name": "HeroKid",
           "url": "{{ config('app.url') }}",
           "logo": {
-            "@type": "ImageObject",
+            "@@type": "ImageObject",
             "url": "{{ asset('images/logo.png') }}"
           },
           "description": "أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.",
           "address": {
-            "@type": "PostalAddress",
+            "@@type": "PostalAddress",
             "addressLocality": "المنصورة",
             "addressCountry": "EG"
           },
           "contactPoint": {
-            "@type": "ContactPoint",
+            "@@type": "ContactPoint",
             "contactType": "customer service",
             "availableLanguage": "Arabic"
           },
           "sameAs": []
         },
         {
-          "@type": "WebSite",
-          "@id": "{{ config('app.url') }}/#website",
+          "@@type": "WebSite",
+          "@@id": "{{ config('app.url') }}/#website",
           "url": "{{ config('app.url') }}",
           "name": "HeroKid",
-          "publisher": { "@id": "{{ config('app.url') }}/#organization" },
+          "publisher": { "@@id": "{{ config('app.url') }}/#organization" },
           "inLanguage": "ar",
           "potentialAction": {
-            "@type": "SearchAction",
+            "@@type": "SearchAction",
             "target": {
-              "@type": "EntryPoint",
+              "@@type": "EntryPoint",
               "urlTemplate": "{{ route('stories.index') }}?search={search_term_string}"
             },
             "query-input": "required name=search_term_string"
@@ -96,8 +96,8 @@
     }
     </script>
 
-    {{-- Extra schema injected per-page (e.g. FAQPage, Book, BreadcrumbList) --}}
-    {{ $schema ?? '' }}
+    {{-- Extra schema injected per-page via @push('schema') --}}
+    @stack('schema')
 
     <!-- ══ Fonts ══ -->
     <link rel="preconnect" href="https://fonts.bunny.net">

@@ -5,18 +5,18 @@
 <x-slot name="pageDescription">HeroKid — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه واسمه. اختر القصة، أرسل صورة طفلك، واستلم كتاباً فاخراً خلال {{ $settings['delivery_days'] ?? 5 }} أيام فقط.</x-slot>
 
 @if($faqs->count())
-<x-slot name="schema">
+@push('schema')
 <script type="application/ld+json">
 {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
+  "@@context": "https://schema.org",
+  "@@type": "FAQPage",
   "mainEntity": [
     @foreach($faqs as $faq)
     {
-      "@type": "Question",
+      "@@type": "Question",
       "name": "{{ addslashes($faq->question) }}",
       "acceptedAnswer": {
-        "@type": "Answer",
+        "@@type": "Answer",
         "text": "{{ addslashes($faq->answer) }}"
       }
     }{{ !$loop->last ? ',' : '' }}
@@ -24,11 +24,12 @@
   ]
 }
 </script>
-</x-slot>
+@endpush
 @endif
 
     <style>
         /* Entry animations */
+@verbatim
         @keyframes heroFadeUp {
             from { opacity: 0; transform: translateY(28px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -70,6 +71,7 @@
         /* Stat card hover lift */
         .stat-card { transition: transform .25s ease, box-shadow .25s ease; }
         .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(0,0,0,.1); }
+@endverbatim
     </style>
 
     {{-- ═══════════════════════════════════════════
@@ -251,7 +253,7 @@
                 </div>
 
                 {{-- ── Story Cards Visual (3 cols) ── --}}
-                <div class="lg:col-span-3 relative h-[420px] md:h-[500px] order-1 lg:order-2">
+                <div class="lg:col-span-3 relative h-[300px] sm:h-[380px] md:h-[500px] order-1 lg:order-2">
 
                     {{-- Glow behind main card --}}
                     <div class="absolute pointer-events-none" style="top:40px;left:50%;transform:translateX(-50%);width:280px;height:360px;border-radius:2.5rem;background:radial-gradient(ellipse,rgba(249,115,22,.18),transparent 70%);filter:blur(40px);z-index:1;"></div>
@@ -396,16 +398,16 @@
                 </div>
                 <div class="flex flex-col items-end gap-3 flex-shrink-0">
                     {{-- Quick stats --}}
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-amber-200 rounded-2xl px-4 py-2 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-amber-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">📖</span>
                             <span class="text-xs font-black text-slate-700">{{ \App\Models\Story::where('active',true)->count() }}+ قصة</span>
                         </div>
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-orange-200 rounded-2xl px-4 py-2 shadow-sm">
+                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-orange-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🌐</span>
                             <span class="text-xs font-black text-slate-700">٢ لغة</span>
                         </div>
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-yellow-200 rounded-2xl px-4 py-2 shadow-sm">
+                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-yellow-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🎯</span>
                             <span class="text-xs font-black text-slate-700">٣ فئات عمرية</span>
                         </div>
@@ -435,7 +437,7 @@
                 $fallbackImgs = ['photo-1446776811953-b23d57bd21aa','photo-1518709268805-4e9042af9f23','photo-1448375240586-882707db888b','photo-1490750967868-88df5691cc4a','photo-1575361204480-aadea25e6e68','photo-1581091226825-a6a2a5aee158','photo-1543269865-cbf427effbad','photo-1524995997946-a1c2e315a42f'];
             @endphp
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
                 @forelse($featuredStories as $story)
                     @php $accent = $cardAccents[$loop->index % 8]; @endphp
                     <div class="group bg-white rounded-[1.75rem] overflow-hidden hover:shadow-2xl {{ $accent['shadow'] }} transition-all duration-500 hover:-translate-y-2 flex flex-col border border-orange-100/80">
@@ -475,34 +477,34 @@
                         </div>
 
                         {{-- Card body --}}
-                        <div class="p-4 flex flex-col flex-grow">
-                            {{-- Category tags --}}
+                        <div class="p-3 sm:p-4 flex flex-col flex-grow">
+                            {{-- Category tags (hidden on mobile to save space) --}}
                             @if($story->categories->count())
-                                <div class="flex flex-wrap gap-1 mb-2">
+                                <div class="hidden sm:flex flex-wrap gap-1 mb-2">
                                     @foreach($story->categories->take(2) as $cat)
                                         <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{{ $cat->name }}</span>
                                     @endforeach
                                 </div>
                             @endif
 
-                            <h3 class="text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-1 leading-snug">{{ $story->title }}</h3>
-                            <p class="text-slate-400 text-xs leading-relaxed mb-3 flex-grow line-clamp-2">{{ $story->short_desc }}</p>
+                            <h3 class="text-[13px] sm:text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-2 leading-snug">{{ $story->title }}</h3>
+                            <p class="hidden sm:block text-slate-400 text-xs leading-relaxed mb-3 flex-grow line-clamp-2">{{ $story->short_desc }}</p>
 
                             @if($story->lesson_value)
-                                <div class="mb-3">
+                                <div class="hidden sm:block mb-3">
                                     <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">💡 {{ $story->lesson_value }}</span>
                                 </div>
                             @endif
 
                             {{-- Price + CTA --}}
-                            <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-auto gap-2">
+                            <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
                                 <div class="text-right">
-                                    <span class="text-base font-extrabold {{ $accent['price'] }}">{{ number_format($story->price, 0) }}</span>
-                                    <span class="text-[11px] text-slate-400 font-bold"> ج.م</span>
+                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ number_format($story->price, 0) }}</span>
+                                    <span class="text-[10px] text-slate-400 font-bold"> ج.م</span>
                                 </div>
                                 <a href="{{ route('stories.show', $story->slug) }}"
-                                    class="text-white text-[11px] font-black px-3.5 py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"
-                                    style="background: linear-gradient(135deg, #f97316, #ec4899);">اصنع قصتك ✨</a>
+                                    class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"
+                                    style="background: linear-gradient(135deg, #f97316, #ec4899);">اصنعها ✨</a>
                             </div>
                         </div>
                     </div>
@@ -791,7 +793,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {{-- Basic --}}
-                <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
+                <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-6 md:p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
                     <h3 class="text-xl font-bold text-white mb-2">الباقة الأساسية</h3>
                     <p class="text-slate-400 text-sm mb-6">كتاب مخصص بغلاف ناعم</p>
                     <div class="flex items-end gap-2 mb-6 justify-end">
@@ -816,7 +818,7 @@
                         class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">ابدأ الآن</a>
                 </div>
                 {{-- Premium --}}
-                <div class="relative rounded-3xl p-10 text-right overflow-hidden"
+                <div class="relative rounded-3xl p-6 md:p-10 text-right overflow-hidden"
                     style="background: linear-gradient(135deg, #f97316, #ec4899, #8b5cf6); box-shadow: 0 20px 60px rgba(139,92,246,.4);">
                     <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                         <span class="bg-yellow-400 text-yellow-900 text-xs font-extrabold px-4 py-1.5 rounded-full shadow-lg">⭐ الأكثر طلباً</span>
@@ -961,7 +963,7 @@
                 <div class="relative mt-12 lg:mt-0">
                     <div class="absolute -inset-4 rounded-[3rem] blur-2xl -z-10 opacity-60"
                         style="background: linear-gradient(135deg, #bae6fd, #c7d2fe);"></div>
-                    <div class="bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-sky-200/40 border border-sky-50">
+                    <div class="bg-white rounded-[2rem] p-6 md:p-10 shadow-2xl shadow-sky-200/40 border border-sky-50">
                         <h3 class="text-2xl font-black text-slate-900 mb-8 text-right">
                             أرسل لنا رسالة <span class="text-sky-500">✉️</span>
                         </h3>

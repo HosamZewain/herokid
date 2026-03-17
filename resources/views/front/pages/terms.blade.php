@@ -1,4 +1,10 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">الشروط والأحكام</x-slot>
+<x-slot name="pageDescription">اطلع على شروط وأحكام استخدام خدمات HeroKid لقصص الأطفال المخصصة، بما فيها سياسة الطلب والدفع والاسترجاع.</x-slot>
+<x-slot name="robots">noindex, nofollow</x-slot>
+
     <div class="bg-white py-16">
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
 

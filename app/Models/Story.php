@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Story extends Model
 {
@@ -22,10 +23,13 @@ class Story extends Model
         if (!$this->cover_image) {
             return null;
         }
+        // Already a full external URL (e.g. seeder placeholder images)
         if (str_starts_with($this->cover_image, 'http')) {
             return $this->cover_image;
         }
-        return asset('storage/' . $this->cover_image);
+        // Use Storage::url() so the URL respects the disk driver (local OR S3/cloud)
+        // and is always consistent with where the file was actually stored.
+        return Storage::disk('public')->url($this->cover_image);
     }
 
     public function orders()

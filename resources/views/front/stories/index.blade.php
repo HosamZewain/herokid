@@ -1,5 +1,34 @@
 <x-front-layout>
 
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">مكتبة قصص الأطفال المخصصة — اجعل طفلك بطل القصة بوجهه الحقيقي</x-slot>
+<x-slot name="pageDescription">استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة. قصص بوجه طفلك واسمه للأعمار ٢–١٠ سنوات بالعربية والإنجليزية. اختر القصة وخصّصها الآن.</x-slot>
+
+@push('schema')
+<script type="application/ld+json">
+{
+  "@@context": "https://schema.org",
+  "@@type": "CollectionPage",
+  "name": "مكتبة قصص الأطفال المخصصة — HeroKid",
+  "description": "مجموعة قصص أطفال مخصصة مطبوعة بوجه طفلك واسمه من HeroKid",
+  "url": "{{ route('stories.index') }}",
+  "inLanguage": ["ar", "en"],
+  "publisher": {
+    "@@type": "Organization",
+    "name": "HeroKid",
+    "url": "{{ config('app.url') }}"
+  },
+  "breadcrumb": {
+    "@@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "{{ route('home') }}" },
+      { "@@type": "ListItem", "position": 2, "name": "مكتبة القصص", "item": "{{ route('stories.index') }}" }
+    ]
+  }
+}
+</script>
+@endpush
+
     @php
         $hasFilter = request()->hasAny(['gender', 'lang', 'age', 'category']);
         $fallbacks = [

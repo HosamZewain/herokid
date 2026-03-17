@@ -1,4 +1,9 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">تم استلام طلبك بنجاح</x-slot>
+<x-slot name="robots">noindex, nofollow</x-slot>
+
     <div class="bg-gray-50 py-20 min-h-[70vh] flex flex-col justify-center">
         <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center bg-white p-10 rounded-3xl shadow-xl border border-gray-100">
             

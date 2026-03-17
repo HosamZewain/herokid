@@ -1,4 +1,32 @@
 <x-front-layout>
+
+{{-- ══ SEO ══ --}}
+<x-slot name="pageTitle">الأسئلة الشائعة عن قصص HeroKid المخصصة</x-slot>
+<x-slot name="pageDescription">إجابات شاملة عن قصص HeroKid المخصصة: كيف يتم تصميم القصة بوجه طفلك، مدة التوصيل، أسعار الكتب، سياسة الاسترجاع، وكل ما تحتاج معرفته.</x-slot>
+
+@if($faqs->count())
+@push('schema')
+<script type="application/ld+json">
+{
+  "@@context": "https://schema.org",
+  "@@type": "FAQPage",
+  "mainEntity": [
+    @foreach($faqs as $faq)
+    {
+      "@@type": "Question",
+      "name": "{{ addslashes($faq->question) }}",
+      "acceptedAnswer": {
+        "@@type": "Answer",
+        "text": "{{ addslashes($faq->answer) }}"
+      }
+    }{{ !$loop->last ? ',' : '' }}
+    @endforeach
+  ]
+}
+</script>
+@endpush
+@endif
+
     <div class="bg-indigo-600 py-16">
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
             <h1 class="text-4xl font-extrabold mb-4">الأسئلة الشائعة</h1>

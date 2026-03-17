@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,6 +14,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Force HTTPS in production so asset() / Storage::url() always return https:// URLs.
+        // Without this, APP_URL=http:// causes mixed-content errors and images won't load.
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         // Share $settings (key => value map) with ALL views.
         // Cached for 60 minutes; cleared whenever admin saves settings.
         View::composer('*', function ($view) {
