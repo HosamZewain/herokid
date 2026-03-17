@@ -353,9 +353,9 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-12">
                             @foreach($stories as $idx => $story)
                                 <div class="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group flex flex-col h-full relative">
-                                    <div class="aspect-[1/1] overflow-hidden relative bg-slate-50">
+                                    <div class=" overflow-hidden relative bg-slate-50">
                                         @if($story->cover_image)
-                                            <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000">
+                                            <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-contain group-hover:scale-105 transition duration-1000">
                                         @else
                                             <img src="https://images.unsplash.com/{{ $fallbacks[$idx % count($fallbacks)] }}?w=700&auto=format&fit=crop&q=85" alt="{{ $story->title }}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000">
                                         @endif
