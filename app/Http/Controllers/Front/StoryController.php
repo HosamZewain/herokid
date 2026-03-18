@@ -46,13 +46,13 @@ class StoryController extends Controller
             }
         }
 
-        $stories = $query->latest()->paginate(12)->withQueryString();
+        $perPage = in_array((int) $request->input('per_page'), [10, 15, 20, 30]) ? (int) $request->input('per_page') : 12;
+        $stories = $query->latest()->paginate($perPage)->withQueryString();
 
         // Sidebar: categories with story counts
         $categories = collect();
         try {
             $categories = StoryCategory::withCount(['stories' => fn($q) => $q->where('active', true)])
-                ->having('stories_count', '>', 0)
                 ->orderBy('name')
                 ->get();
         } catch (\Exception $e) {

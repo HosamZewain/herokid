@@ -10,9 +10,31 @@ class StoryController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $stories = \App\Models\Story::latest()->paginate(10);
+        $query = \App\Models\Story::with(['categories', 'attachments'])
+            ->withCount('orders')
+            ->latest();
+
+        if ($request->filled('q')) {
+            $q = $request->input('q');
+            $query->where(function ($builder) use ($q) {
+                $builder->where('title', 'like', "%{$q}%")
+                        ->orWhere('slug', 'like', "%{$q}%");
+            });
+        }
+
+        if ($request->input('status') === 'active') {
+            $query->where('active', true);
+        } elseif ($request->input('status') === 'inactive') {
+            $query->where('active', false);
+        }
+
+        if ($request->filled('language')) {
+            $query->where('language', $request->input('language'));
+        }
+
+        $stories = $query->paginate(15)->withQueryString();
         return view('admin.stories.index', compact('stories'));
     }
 
@@ -42,6 +64,8 @@ class StoryController extends Controller
             'price'        => 'required|numeric|min:0',
             'active'       => 'boolean',
             'cover_image'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'full_story'   => 'nullable|string',
+            'prompt'       => 'nullable|string',
         ]);
 
         if ($request->hasFile('cover_image')) {
@@ -68,6 +92,7 @@ class StoryController extends Controller
     public function edit(\App\Models\Story $story)
     {
         $categories = \App\Models\StoryCategory::orderBy('name')->get();
+        $story->load('attachments');
         return view('admin.stories.edit', compact('story', 'categories'));
     }
 
@@ -88,6 +113,8 @@ class StoryController extends Controller
             'price'        => 'required|numeric|min:0',
             'active'       => 'boolean',
             'cover_image'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'full_story'   => 'nullable|string',
+            'prompt'       => 'nullable|string',
         ]);
 
         if ($request->hasFile('cover_image')) {

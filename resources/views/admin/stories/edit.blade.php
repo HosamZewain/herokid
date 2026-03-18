@@ -36,9 +36,21 @@
                         </div>
 
                         <!-- Age Range -->
+                        @php
+                            $ageRangeOptions = json_decode($settings['age_ranges'] ?? '[]', true) ?: [
+                                '٢ - ٤ سنوات','٢ - ٦ سنوات','٣ - ٥ سنوات','٣ - ٦ سنوات','٣ - ٧ سنوات',
+                                '٤ - ٦ سنوات','٤ - ٨ سنوات','٥ - ٧ سنوات','٥ - ٨ سنوات','٥ - ١٠ سنوات',
+                                '٦ - ٨ سنوات','٦ - ١٠ سنوات','٧ - ١٠ سنوات','٨ - ١٢ سنوات',
+                            ];
+                        @endphp
                         <div>
                             <x-input-label for="age_range" :value="__('الفئة العمرية')" />
-                            <x-text-input id="age_range" class="block mt-1 w-full" type="text" name="age_range" :value="old('age_range', $story->age_range)" placeholder="مثال: 3-5 سنوات" />
+                            <select id="age_range" name="age_range" class="block mt-1 w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                <option value="">-- اختر الفئة العمرية --</option>
+                                @foreach($ageRangeOptions as $range)
+                                <option value="{{ $range }}" @selected(old('age_range', $story->age_range) === $range)>{{ $range }}</option>
+                                @endforeach
+                            </select>
                             <x-input-error :messages="$errors->get('age_range')" class="mt-2" />
                         </div>
 
@@ -110,6 +122,22 @@
                         <x-input-error :messages="$errors->get('full_desc')" class="mt-2" />
                     </div>
 
+                    <!-- Full Story (Rich Text Editor - internal only) -->
+                    <div class="mt-6">
+                        <x-input-label for="full_story" :value="__('القصة الكاملة')" />
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">للاستخدام الداخلي فقط — لا يظهر على الموقع</p>
+                        <textarea id="full_story" name="full_story" class="block mt-1 w-full border-gray-300 rounded-md shadow-sm" rows="16">{{ old('full_story', $story->full_story) }}</textarea>
+                        <x-input-error :messages="$errors->get('full_story')" class="mt-2" />
+                    </div>
+
+                    <!-- Prompt (internal only) -->
+                    <div class="mt-6">
+                        <x-input-label for="prompt" :value="__('البرومبت (Prompt)')" />
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">للاستخدام الداخلي فقط — لا يظهر على الموقع</p>
+                        <textarea id="prompt" name="prompt" dir="ltr" class="block mt-1 w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm font-mono text-sm" rows="8" placeholder="Enter the AI prompt here...">{{ old('prompt', $story->prompt) }}</textarea>
+                        <x-input-error :messages="$errors->get('prompt')" class="mt-2" />
+                    </div>
+
                     <!-- Cover Image -->
                     <div class="mt-6">
                         <x-input-label for="cover_image" :value="__('تحديث صورة الغلاف (اختياري)')" />
@@ -140,6 +168,138 @@
                 </form>
 
             </div>
+
+            {{-- ===== ATTACHMENTS SECTION ===== --}}
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mt-6">
+                <div class="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                    <div>
+                        <h3 class="text-base font-bold text-gray-900">📎 المرفقات الداخلية</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">للاستخدام الداخلي فقط — لا تظهر على الموقع</p>
+                    </div>
+                    <span class="text-xs bg-gray-100 text-gray-500 font-bold px-3 py-1.5 rounded-full">
+                        {{ $story->attachments->count() }} مرفق
+                    </span>
+                </div>
+
+                {{-- Existing Attachments --}}
+                @if($story->attachments->isNotEmpty())
+                <div class="space-y-2 mb-6">
+                    @foreach($story->attachments as $attachment)
+                    <div class="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="text-2xl flex-shrink-0">{{ $attachment->icon }}</span>
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-gray-800 truncate">{{ $attachment->original_name }}</p>
+                                <p class="text-xs text-gray-400">{{ $attachment->human_size }} · {{ $attachment->created_at->format('Y/m/d H:i') }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0 mr-3">
+                            <a href="{{ route('admin.attachments.download', $attachment) }}"
+                               class="text-indigo-600 hover:text-indigo-800 text-xs font-bold border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition">
+                                تحميل
+                            </a>
+                            <form action="{{ route('admin.attachments.destroy', $attachment) }}" method="POST"
+                                  onsubmit="return confirm('هل أنت متأكد من حذف هذا المرفق؟')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit"
+                                        class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition">
+                                    حذف
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+                @endif
+
+                {{-- Upload New Attachments --}}
+                <form action="{{ route('admin.stories.attachments.store', $story) }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div id="attachment-drop-zone"
+                         class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer"
+                         onclick="document.getElementById('attachment-input').click()">
+                        <div class="text-4xl mb-3">📂</div>
+                        <p class="text-sm font-bold text-gray-600 mb-1">اضغط لاختيار الملفات أو اسحبها هنا</p>
+                        <p class="text-xs text-gray-400">PDF, Word, Excel, صور، ZIP — حجم أقصى 20 MB لكل ملف</p>
+                        <input id="attachment-input" type="file" name="attachments[]" multiple class="hidden"
+                               onchange="updateFileList(this)">
+                    </div>
+
+                    {{-- Selected files preview --}}
+                    <div id="file-list" class="mt-3 space-y-1 hidden"></div>
+
+                    <div class="mt-4 flex justify-end">
+                        <button type="submit" id="upload-btn"
+                                class="hidden bg-indigo-600 text-white font-bold px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition text-sm">
+                            ⬆️ رفع المرفقات
+                        </button>
+                    </div>
+                    <x-input-error :messages="$errors->get('attachments')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('attachments.*')" class="mt-1" />
+                </form>
+            </div>
+
         </div>
     </div>
+@push('scripts')
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+tinymce.init({
+    selector: '#full_story',
+    language: 'ar',
+    directionality: 'rtl',
+    height: 500,
+    menubar: true,
+    plugins: 'anchor autolink lists link image charmap preview searchreplace visualblocks code fullscreen insertdatetime table wordcount',
+    toolbar: 'undo redo | formatselect | bold italic underline | alignright aligncenter alignleft alignjustify | bullist numlist outdent indent | removeformat | code fullscreen',
+    content_style: 'body { font-family: Cairo, Tahoma, sans-serif; font-size: 16px; direction: rtl; text-align: right; }',
+    setup: function(editor) {
+        editor.on('change', function() {
+            editor.save();
+        });
+    }
+});
+</script>
+
+<script>
+// File list preview + drag & drop for attachments
+function updateFileList(input) {
+    const list  = document.getElementById('file-list');
+    const btn   = document.getElementById('upload-btn');
+    const files = Array.from(input.files);
+
+    list.innerHTML = '';
+    if (!files.length) { list.classList.add('hidden'); btn.classList.add('hidden'); return; }
+
+    list.classList.remove('hidden');
+    btn.classList.remove('hidden');
+
+    files.forEach(file => {
+        const kb   = (file.size / 1024).toFixed(1);
+        const size = file.size >= 1048576 ? (file.size/1048576).toFixed(1)+' MB' : kb+' KB';
+        const row  = document.createElement('div');
+        row.className = 'flex items-center gap-2 text-xs text-gray-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2';
+        row.innerHTML = `<span class="text-base">📎</span><span class="truncate flex-1 font-medium">${file.name}</span><span class="text-gray-400 flex-shrink-0">${size}</span>`;
+        list.appendChild(row);
+    });
+}
+
+// Drag & drop support
+const dropZone = document.getElementById('attachment-drop-zone');
+if (dropZone) {
+    ['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => {
+        ev.preventDefault(); dropZone.classList.add('border-indigo-500','bg-indigo-50');
+    }));
+    ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => {
+        ev.preventDefault(); dropZone.classList.remove('border-indigo-500','bg-indigo-50');
+    }));
+    dropZone.addEventListener('drop', ev => {
+        const input = document.getElementById('attachment-input');
+        input.files = ev.dataTransfer.files;
+        updateFileList(input);
+    });
+}
+</script>
+@endpush
 </x-admin-layout>

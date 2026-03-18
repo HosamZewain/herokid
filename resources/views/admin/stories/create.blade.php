@@ -35,9 +35,21 @@
                         </div>
 
                         <!-- Age Range -->
+                        @php
+                            $ageRangeOptions = json_decode($settings['age_ranges'] ?? '[]', true) ?: [
+                                '٢ - ٤ سنوات','٢ - ٦ سنوات','٣ - ٥ سنوات','٣ - ٦ سنوات','٣ - ٧ سنوات',
+                                '٤ - ٦ سنوات','٤ - ٨ سنوات','٥ - ٧ سنوات','٥ - ٨ سنوات','٥ - ١٠ سنوات',
+                                '٦ - ٨ سنوات','٦ - ١٠ سنوات','٧ - ١٠ سنوات','٨ - ١٢ سنوات',
+                            ];
+                        @endphp
                         <div>
                             <x-input-label for="age_range" :value="__('الفئة العمرية')" />
-                            <x-text-input id="age_range" class="block mt-1 w-full" type="text" name="age_range" :value="old('age_range')" placeholder="مثال: 3-5 سنوات" />
+                            <select id="age_range" name="age_range" class="block mt-1 w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                <option value="">-- اختر الفئة العمرية --</option>
+                                @foreach($ageRangeOptions as $range)
+                                <option value="{{ $range }}" @selected(old('age_range') === $range)>{{ $range }}</option>
+                                @endforeach
+                            </select>
                             <x-input-error :messages="$errors->get('age_range')" class="mt-2" />
                         </div>
 
@@ -108,6 +120,22 @@
                         <x-input-error :messages="$errors->get('full_desc')" class="mt-2" />
                     </div>
 
+                    <!-- Full Story (Rich Text Editor - internal only) -->
+                    <div class="mt-6">
+                        <x-input-label for="full_story" :value="__('القصة الكاملة')" />
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">للاستخدام الداخلي فقط — لا يظهر على الموقع</p>
+                        <textarea id="full_story" name="full_story" class="block mt-1 w-full border-gray-300 rounded-md shadow-sm" rows="16">{{ old('full_story') }}</textarea>
+                        <x-input-error :messages="$errors->get('full_story')" class="mt-2" />
+                    </div>
+
+                    <!-- Prompt (internal only) -->
+                    <div class="mt-6">
+                        <x-input-label for="prompt" :value="__('البرومبت (Prompt)')" />
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">للاستخدام الداخلي فقط — لا يظهر على الموقع</p>
+                        <textarea id="prompt" name="prompt" dir="ltr" class="block mt-1 w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm font-mono text-sm" rows="8" placeholder="Enter the AI prompt here...">{{ old('prompt') }}</textarea>
+                        <x-input-error :messages="$errors->get('prompt')" class="mt-2" />
+                    </div>
+
                     <!-- Cover Image -->
                     <div class="mt-6">
                         <x-input-label for="cover_image" :value="__('صورة الغلاف')" />
@@ -134,4 +162,25 @@
             </div>
         </div>
     </div>
+@push('scripts')
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+tinymce.init({
+    selector: '#full_story',
+    language: 'ar',
+    directionality: 'rtl',
+    height: 500,
+    menubar: true,
+    plugins: 'anchor autolink lists link image charmap preview searchreplace visualblocks code fullscreen insertdatetime table wordcount',
+    toolbar: 'undo redo | formatselect | bold italic underline | alignright aligncenter alignleft alignjustify | bullist numlist outdent indent | removeformat | code fullscreen',
+    content_style: 'body { font-family: Cairo, Tahoma, sans-serif; font-size: 16px; direction: rtl; text-align: right; }',
+    setup: function(editor) {
+        // Sync TinyMCE content back to the textarea before form submit
+        editor.on('change', function() {
+            editor.save();
+        });
+    }
+});
+</script>
+@endpush
 </x-admin-layout>

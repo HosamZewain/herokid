@@ -325,6 +325,43 @@
 
             </div>
 
+            {{-- ===== Age Ranges ===== --}}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 class="text-base font-bold text-gray-900 mb-1 pb-3 border-b flex items-center gap-2">
+                    <span class="text-xl">🎂</span> الفئات العمرية
+                </h3>
+                <p class="text-xs text-gray-400 mb-5">هذه الخيارات ستظهر في سيليكت الفئة العمرية عند إضافة أو تعديل قصة.</p>
+
+                @php
+                    $savedRanges = json_decode($settings['age_ranges'] ?? '[]', true) ?: [
+                        '٢ - ٤ سنوات','٢ - ٦ سنوات','٣ - ٥ سنوات','٣ - ٦ سنوات','٣ - ٧ سنوات',
+                        '٤ - ٦ سنوات','٤ - ٨ سنوات','٥ - ٧ سنوات','٥ - ٨ سنوات','٥ - ١٠ سنوات',
+                        '٦ - ٨ سنوات','٦ - ١٠ سنوات','٧ - ١٠ سنوات','٨ - ١٢ سنوات',
+                    ];
+                @endphp
+
+                <div id="age-ranges-list" class="space-y-2 mb-4">
+                    @foreach($savedRanges as $range)
+                    <div class="flex items-center gap-2 age-range-row">
+                        <input type="text" name="age_ranges[]" value="{{ $range }}"
+                               class="flex-1 rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                               placeholder="مثال: ٣ - ٦ سنوات">
+                        <button type="button" onclick="this.closest('.age-range-row').remove()"
+                                class="text-red-400 hover:text-red-600 transition p-1.5 rounded-lg hover:bg-red-50" title="حذف">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    @endforeach
+                </div>
+
+                <button type="button" onclick="addAgeRange()"
+                        class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 text-sm font-bold border border-indigo-200 hover:border-indigo-400 px-4 py-2 rounded-lg transition hover:bg-indigo-50">
+                    + إضافة فئة عمرية
+                </button>
+            </div>
+
             {{-- ===== Operations ===== --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
@@ -358,4 +395,26 @@
             </button>
         </div>
     </form>
+
+@push('scripts')
+<script>
+function addAgeRange() {
+    const list = document.getElementById('age-ranges-list');
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 age-range-row';
+    row.innerHTML = `
+        <input type="text" name="age_ranges[]" value=""
+               class="flex-1 rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+               placeholder="مثال: ٣ - ٦ سنوات" autofocus>
+        <button type="button" onclick="this.closest('.age-range-row').remove()"
+                class="text-red-400 hover:text-red-600 transition p-1.5 rounded-lg hover:bg-red-50">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>`;
+    list.appendChild(row);
+    row.querySelector('input').focus();
+}
+</script>
+@endpush
 </x-admin-layout>

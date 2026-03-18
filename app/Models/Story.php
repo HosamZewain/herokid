@@ -37,6 +37,11 @@ class Story extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function attachments()
+    {
+        return $this->hasMany(StoryAttachment::class)->latest();
+    }
+
     public function categories()
     {
         return $this->belongsToMany(StoryCategory::class, 'story_story_category');

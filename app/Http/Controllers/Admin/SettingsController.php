@@ -30,6 +30,10 @@ class SettingsController extends Controller
             Setting::updateOrCreate(['key' => $key], ['value' => $value ?? '']);
         }
 
+        // Save age ranges as a JSON array
+        $ageRanges = array_values(array_filter($request->input('age_ranges', [])));
+        Setting::updateOrCreate(['key' => 'age_ranges'], ['value' => json_encode($ageRanges, JSON_UNESCAPED_UNICODE)]);
+
         // Bust the cache so front-end picks up new values immediately
         Cache::forget('site_settings');
 

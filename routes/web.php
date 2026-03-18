@@ -126,6 +126,11 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
     Route::resource('stories', \App\Http\Controllers\Admin\StoryController::class);
     Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class)->only(['index', 'store', 'destroy']);
 
+    // Story Attachments (private — admin only)
+    Route::post('stories/{story}/attachments', [\App\Http\Controllers\Admin\StoryAttachmentController::class, 'store'])->name('stories.attachments.store');
+    Route::get('attachments/{attachment}/download', [\App\Http\Controllers\Admin\StoryAttachmentController::class, 'download'])->name('attachments.download');
+    Route::delete('attachments/{attachment}', [\App\Http\Controllers\Admin\StoryAttachmentController::class, 'destroy'])->name('attachments.destroy');
+
     Route::get('orders', [\App\Http\Controllers\Admin\OrderController::class, 'index'])->name('orders.index');
     Route::get('orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'show'])->name('orders.show');
     Route::patch('orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'update'])->name('orders.update');
@@ -142,6 +147,9 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
     // Settings
     Route::get('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update'])->name('settings.update');
+
+    // Admin Users Management
+    Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['show']);
 });
 
 require __DIR__.'/auth.php';

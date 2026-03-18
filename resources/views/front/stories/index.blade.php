@@ -268,14 +268,18 @@
                             <span class="bg-amber-50 w-9 h-9 flex items-center justify-center rounded-xl text-lg">🎂</span>
                             العمر
                         </h4>
-                        <div class="grid grid-cols-2 gap-3">
+                        <select onchange="window.location = this.value"
+                                class="w-full border-2 border-slate-100 rounded-2xl px-4 py-3.5 text-sm font-bold text-slate-700 bg-white focus:outline-none focus:border-indigo-300 transition cursor-pointer appearance-none">
+                            <option value="{{ route('stories.index', array_merge(request()->except('age'), [])) }}" {{ !request('age') ? 'selected' : '' }}>
+                                كل الأعمار
+                            </option>
                             @foreach($ageRanges as $range)
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}" 
-                                   class="text-center py-4 rounded-2xl text-[11px] font-black border-2 transition {{ request('age') == $range ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-50 text-slate-400 hover:border-indigo-100 hover:text-indigo-600' }}">
-                                    {{ $range }} سنة
-                                </a>
+                                <option value="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
+                                        {{ request('age') == $range ? 'selected' : '' }}>
+                                    {{ $range }}
+                                </option>
                             @endforeach
-                        </div>
+                        </select>
                     </div>
 
                     <!-- Gender & Language -->
@@ -329,7 +333,7 @@
                     </div>
                     @endif
 
-                    {{-- Counter Header --}}
+                    {{-- Counter Header + Per-page selector --}}
                     <div class="flex items-center gap-6 mb-12 text-right">
                         <div class="flex flex-col gap-1.5">
                             <h2 class="text-3xl font-black text-slate-900 tracking-tight">المجموعة المتاحة</h2>
@@ -338,6 +342,19 @@
                             </p>
                         </div>
                         <div class="h-px flex-1 bg-slate-200/60 rounded-full hidden sm:block"></div>
+                        {{-- Per-page --}}
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">عرض:</span>
+                            <select onchange="window.location = this.value"
+                                    class="border-2 border-slate-100 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white focus:outline-none focus:border-indigo-300 transition cursor-pointer">
+                                @foreach([10, 15, 20, 30] as $n)
+                                    <option value="{{ route('stories.index', array_merge(request()->query(), ['per_page' => $n])) }}"
+                                            {{ request('per_page', 12) == $n ? 'selected' : '' }}>
+                                        {{ $n }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
 
                     @if($stories->isEmpty())
@@ -379,7 +396,9 @@
                                             @endforeach
                                         </div>
 
-                                        <h3 class="text-2xl font-black text-slate-900 mb-4 group-hover:text-indigo-600 transition-colors leading-tight">{{ $story->title }}</h3>
+                                        <h3 class="text-2xl font-black text-slate-900 mb-4 group-hover:text-indigo-600 transition-colors leading-tight">
+                            <a href="{{ route('stories.show', $story->slug) }}" class="hover:text-indigo-600 transition-colors">{{ $story->title }}</a>
+                        </h3>
                                         <p class="text-slate-400 text-[13px] font-medium leading-relaxed mb-8 line-clamp-2 h-10">{{ $story->short_desc }}</p>
                                         
                                         <div class="flex items-center justify-between pt-8 border-t border-slate-50 mt-auto">
