@@ -25,7 +25,8 @@ Route::get('/', function () {
     $featuredStories = \App\Models\Story::where('active', true)->with('categories')->latest()->take(8)->get();
     $faqs            = \App\Models\FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
     $testimonials    = \App\Models\Testimonial::where('active', true)->orderBy('sort_order')->get();
-    return view('welcome', compact('featuredStories', 'faqs', 'testimonials'));
+    $packages        = \App\Models\PricingPackage::active()->ordered()->get();
+    return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages'));
 })->name('home');
 
 // Public Story Routes
@@ -135,6 +136,7 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
     Route::get('orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'show'])->name('orders.show');
     Route::patch('orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'update'])->name('orders.update');
     Route::post('orders/{order}/preview', [\App\Http\Controllers\Admin\OrderController::class, 'uploadPreview'])->name('orders.upload-preview');
+    Route::get('orders/{order}/photos/{index}', [\App\Http\Controllers\Admin\OrderController::class, 'servePhoto'])->name('orders.photo')->where('index', '[0-9]+');
 
     // Content Management
     Route::resource('faqs', \App\Http\Controllers\Admin\FaqController::class)->except(['show']);
@@ -150,6 +152,9 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
 
     // Admin Users Management
     Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['show']);
+
+    // Pricing Packages
+    Route::resource('pricing', \App\Http\Controllers\Admin\PricingPackageController::class)->except(['show']);
 });
 
 require __DIR__.'/auth.php';

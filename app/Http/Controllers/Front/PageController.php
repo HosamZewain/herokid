@@ -44,8 +44,8 @@ class PageController extends Controller
 
     public function pricing()
     {
-        $stories = \App\Models\Story::where('active', true)->get();
-        return view('front.pages.pricing', compact('stories'));
+        $packages = \App\Models\PricingPackage::active()->ordered()->get();
+        return view('front.pages.pricing', compact('packages'));
     }
 
     public function howItWorks()

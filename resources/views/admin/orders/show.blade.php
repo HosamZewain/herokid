@@ -88,17 +88,21 @@
                         <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
                             @foreach($order->uploaded_photos as $photo)
                             <div class="relative group">
-                                <a href="{{ route('admin.orders.show', $order) }}" class="block">
+                                <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" class="block">
                                     <div class="aspect-square bg-gray-100 rounded-xl overflow-hidden">
-                                        <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold p-2 text-center">
-                                            📷 صورة {{ $loop->iteration }}
-                                        </div>
+                                        <img
+                                            src="{{ route('admin.orders.photo', [$order, $loop->index]) }}"
+                                            alt="صورة الطفل {{ $loop->iteration }}"
+                                            class="w-full h-full object-cover transition group-hover:scale-105"
+                                            loading="lazy"
+                                        >
                                     </div>
+                                    <p class="text-xs text-center text-gray-500 mt-1">صورة {{ $loop->iteration }}</p>
                                 </a>
                             </div>
                             @endforeach
                         </div>
-                        <p class="text-xs text-gray-400 mt-3 text-right">{{ count($order->uploaded_photos) }} صورة مرفقة (محفوظة بشكل آمن)</p>
+                        <p class="text-xs text-gray-400 mt-3 text-right">{{ count($order->uploaded_photos) }} صورة مرفقة — اضغط للعرض الكامل</p>
                         @else
                         <p class="text-gray-400 text-sm text-right">لا توجد صور مرفقة.</p>
                         @endif

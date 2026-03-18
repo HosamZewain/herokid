@@ -784,74 +784,77 @@
         <div class="absolute bottom-0 left-0 w-80 h-80 blur-3xl opacity-10 rounded-full pointer-events-none"
             style="background: radial-gradient(circle, #ec4899, transparent);"></div>
 
-        <div class="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-14">
                 <span class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 font-black text-xs px-4 py-2 rounded-full border border-indigo-500/30 mb-4">💎 الأسعار</span>
                 <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">سعر واحد، قيمة لا تُقدَّر</h2>
                 <div class="w-20 h-1.5 mx-auto rounded-full mb-4" style="background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);"></div>
                 <p class="text-lg text-indigo-300">لا رسوم خفية. تدفع مرة واحدة وتحصل على ذكرى للأبد.</p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {{-- Basic --}}
-                <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-6 md:p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
-                    <h3 class="text-xl font-bold text-white mb-2">الباقة الأساسية</h3>
-                    <p class="text-slate-400 text-sm mb-6">كتاب مخصص بغلاف ناعم</p>
-                    <div class="flex items-end gap-2 mb-6 justify-end">
-                        <span class="text-slate-400 text-xl">ج.م</span>
-                        <span class="text-5xl font-extrabold text-white">{{ $settings["price_soft_cover"] ?? 199 }}</span>
-                    </div>
-                    <ul class="space-y-3 text-sm text-slate-300 mb-8">
-                        <li class="flex items-center gap-2 justify-end">
-                            <span>اسم الطفل + وجهه في الرسومات</span>
-                            <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                        </li>
-                        <li class="flex items-center gap-2 justify-end">
-                            <span>٢٤ صفحة مصورة</span>
-                            <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                        </li>
-                        <li class="flex items-center gap-2 justify-end">
-                            <span>توصيل لجميع المحافظات</span>
-                            <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                        </li>
-                    </ul>
-                    <a href="{{ route('stories.index') }}"
-                        class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">ابدأ الآن</a>
-                </div>
-                {{-- Premium --}}
-                <div class="relative rounded-3xl p-6 md:p-10 text-right overflow-hidden"
-                    style="background: linear-gradient(135deg, #f97316, #ec4899, #8b5cf6); box-shadow: 0 20px 60px rgba(139,92,246,.4);">
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                        <span class="bg-yellow-400 text-yellow-900 text-xs font-extrabold px-4 py-1.5 rounded-full shadow-lg">⭐ الأكثر طلباً</span>
-                    </div>
-                    <div class="absolute inset-0 opacity-10"
-                        style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 18px 18px;"></div>
-                    <div class="relative z-10">
-                        <h3 class="text-xl font-bold text-white mb-2">الباقة المميزة</h3>
-                        <p class="text-white/70 text-sm mb-6">كتاب هدية فاخر بغلاف صلب</p>
-                        <div class="flex items-end gap-2 mb-6 justify-end">
-                            <span class="text-white/70 text-xl">ج.م</span>
-                            <span class="text-5xl font-extrabold text-white">{{ $settings["price_hard_cover"] ?? 299 }}</span>
+
+            @if(isset($packages) && $packages->count())
+            @php $colClass = $packages->count() >= 3 ? 'md:grid-cols-3' : ($packages->count() == 2 ? 'md:grid-cols-2' : 'md:grid-cols-1 max-w-sm mx-auto'); @endphp
+            <div class="grid grid-cols-1 {{ $colClass }} gap-8">
+                @foreach($packages as $pkg)
+                    @if($pkg->is_featured)
+                    {{-- Featured: gradient card --}}
+                    <div class="relative rounded-3xl p-6 md:p-10 text-right overflow-hidden"
+                        style="background: linear-gradient(135deg, #f97316, #ec4899, #8b5cf6); box-shadow: 0 20px 60px rgba(139,92,246,.4);">
+                        @if($pkg->badge)
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                            <span class="bg-yellow-400 text-yellow-900 text-xs font-extrabold px-4 py-1.5 rounded-full shadow-lg">⭐ {{ $pkg->badge }}</span>
                         </div>
-                        <ul class="space-y-3 text-sm text-white/90 mb-8">
-                            <li class="flex items-center gap-2 justify-end">
-                                <span>كل مزايا الأساسية</span>
-                                <span class="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-2 justify-end">
-                                <span>غلاف صلب + ٣٢ صفحة</span>
-                                <span class="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-2 justify-end">
-                                <span>تغليف هدايا + شحن مجاني</span>
-                                <span class="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                        </ul>
-                        <a href="{{ route('stories.index') }}"
-                            class="block text-center bg-white font-extrabold py-3 rounded-xl hover:shadow-2xl hover:scale-105 transition"
-                            style="color: #7c3aed;">ابدأ الآن</a>
+                        @endif
+                        <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 18px 18px;"></div>
+                        <div class="relative z-10">
+                            <h3 class="text-xl font-bold text-white mb-1">{{ $pkg->name }}</h3>
+                            @if($pkg->subtitle)<p class="text-white/70 text-sm mb-5">{{ $pkg->subtitle }}</p>@else<div class="mb-5"></div>@endif
+                            <div class="flex items-end gap-2 mb-6 justify-end">
+                                <span class="text-white/70 text-xl">{{ $pkg->currency }}</span>
+                                <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
+                            </div>
+                            @if($pkg->features && count($pkg->features))
+                            <ul class="space-y-3 text-sm text-white/90 mb-8">
+                                @foreach($pkg->features as $feature)
+                                <li class="flex items-center gap-2 justify-end">
+                                    <span>{{ $feature }}</span>
+                                    <span class="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                @endforeach
+                            </ul>
+                            @endif
+                            <a href="{{ route('stories.index') }}" class="block text-center bg-white font-extrabold py-3 rounded-xl hover:shadow-2xl hover:scale-105 transition" style="color: #7c3aed;">{{ $pkg->button_text }}</a>
+                        </div>
                     </div>
-                </div>
+                    @else
+                    {{-- Standard card --}}
+                    <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-6 md:p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
+                        @if($pkg->badge)
+                        <span class="inline-block bg-indigo-500/20 text-indigo-300 text-xs font-bold px-3 py-1 rounded-full border border-indigo-500/30 mb-3">{{ $pkg->badge }}</span>
+                        @endif
+                        <h3 class="text-xl font-bold text-white mb-1">{{ $pkg->name }}</h3>
+                        @if($pkg->subtitle)<p class="text-slate-400 text-sm mb-5">{{ $pkg->subtitle }}</p>@else<div class="mb-5"></div>@endif
+                        <div class="flex items-end gap-2 mb-6 justify-end">
+                            <span class="text-slate-400 text-xl">{{ $pkg->currency }}</span>
+                            <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
+                        </div>
+                        @if($pkg->features && count($pkg->features))
+                        <ul class="space-y-3 text-sm text-slate-300 mb-8">
+                            @foreach($pkg->features as $feature)
+                            <li class="flex items-center gap-2 justify-end">
+                                <span>{{ $feature }}</span>
+                                <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                            </li>
+                            @endforeach
+                        </ul>
+                        @endif
+                        <a href="{{ route('stories.index') }}" class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">{{ $pkg->button_text }}</a>
+                    </div>
+                    @endif
+                @endforeach
             </div>
+            @endif
+
             <div class="text-center mt-8">
                 <a href="{{ route('pricing') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض تفاصيل كاملة عن الأسعار ←</a>
             </div>

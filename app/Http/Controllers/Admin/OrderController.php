@@ -82,6 +82,26 @@ class OrderController extends Controller
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم رفع التصميم وتحديث حالة الطلب إلى "في انتظار موافقة العميل".');
     }
 
+    /**
+     * Serve a private child photo from local storage (admin only).
+     */
+    public function servePhoto(Order $order, int $index)
+    {
+        $photos = $order->uploaded_photos ?? [];
+
+        if (!isset($photos[$index])) {
+            abort(404);
+        }
+
+        $path = storage_path('app/' . $photos[$index]);
+
+        if (!file_exists($path) || !is_file($path)) {
+            abort(404);
+        }
+
+        return response()->file($path);
+    }
+
     // Stubs for resource controller compliance
     public function create() {}
     public function store(Request $request) {}
