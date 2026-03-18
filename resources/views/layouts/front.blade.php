@@ -111,6 +111,7 @@
             font-family: 'Cairo', sans-serif;
         }
     </style>
+    @stack('styles')
 </head>
 
 <body class="font-sans antialiased text-gray-900 bg-white">

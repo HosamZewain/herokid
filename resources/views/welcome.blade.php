@@ -445,7 +445,7 @@
                         <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
 
                         {{-- Image --}}
-                        <div class="aspect-[4/3] overflow-hidden relative bg-amber-50">
+                        <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
                             @if($story->cover_image)
                                 <img src="{{ $story->cover_url }}" alt="{{ $story->title }}"
                                     class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
@@ -469,12 +469,11 @@
 
                             {{-- Overlay on hover --}}
                             <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end pb-4 justify-center">
-                                <a href="{{ route('stories.show', $story->slug) }}"
-                                    class="text-white text-xs font-black bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full hover:bg-white/30 transition">
+                                <span class="text-white text-xs font-black bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full">
                                     🔍 معاينة سريعة
-                                </a>
+                                </span>
                             </div>
-                        </div>
+                        </a>
 
                         {{-- Card body --}}
                         <div class="p-3 sm:p-4 flex flex-col flex-grow">
@@ -487,7 +486,9 @@
                                 </div>
                             @endif
 
-                            <h3 class="text-[13px] sm:text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-2 leading-snug">{{ $story->title }}</h3>
+                            <h3 class="text-[13px] sm:text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-2 leading-snug">
+                                <a href="{{ route('stories.show', $story->slug) }}" class="hover:text-indigo-600 transition-colors">{{ $story->title }}</a>
+                            </h3>
                             <p class="hidden sm:block text-slate-400 text-xs leading-relaxed mb-3 flex-grow line-clamp-2">{{ $story->short_desc }}</p>
 
                             @if($story->lesson_value)

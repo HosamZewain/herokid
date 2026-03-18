@@ -1,5 +1,12 @@
 <x-front-layout>
 
+@push('styles')
+<style>
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+</style>
+@endpush
+
 {{-- ══ SEO ══ --}}
 <x-slot name="pageTitle">مكتبة قصص الأطفال المخصصة — اجعل طفلك بطل القصة بوجهه الحقيقي</x-slot>
 <x-slot name="pageDescription">استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة. قصص بوجه طفلك واسمه للأعمار ٢–١٠ سنوات بالعربية والإنجليزية. اختر القصة وخصّصها الآن.</x-slot>
@@ -224,211 +231,296 @@
         </div>
         {{-- END HERO --}}
 
-        <!-- Section for Filters and Grid -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 w-full flex-grow relative z-20">
-            
-            <!-- Main Layout Grid (Naturally Sidebar Right in RTL) -->
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-12 items-start" dir="rtl">
-                
-                {{-- ===== SIDEBAR FILTERS (Right side in RTL) ===== --}}
-                <aside class="lg:col-span-1 space-y-6 h-fit lg:order-1 lg:sticky lg:top-24">
-                    
+        {{-- ===== MAIN LAYOUT ===== --}}
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full flex-grow" dir="rtl">
+            <div class="flex gap-8 items-start">
+
+                {{-- ===== SIDEBAR ===== --}}
+                <aside class="hidden lg:flex flex-col gap-4 w-64 shrink-0 sticky top-6">
+
+                    {{-- Clear filters --}}
                     @if($hasFilter)
                     <a href="{{ route('stories.index') }}"
-                       class="flex items-center justify-center gap-2 w-full bg-white border border-red-100 text-red-500 font-black text-[11px] py-5 px-4 rounded-3xl hover:bg-red-50 transition active:scale-95 shadow-sm">
-                        ✕ مسح جميع الفلاتر
+                       class="flex items-center justify-center gap-2 w-full bg-red-50 border border-red-100 text-red-500 font-black text-xs py-3 px-4 rounded-2xl hover:bg-red-100 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        مسح الفلاتر
                     </a>
                     @endif
 
-                    <!-- Categories -->
-                    <div class="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100/60">
-                        <h4 class="font-black text-slate-900 mb-6 flex items-center gap-3 justify-start">
-                            <span class="bg-indigo-50 w-9 h-9 flex items-center justify-center rounded-xl text-lg">📚</span>
-                            التصنيفات
-                        </h4>
-                        <div class="space-y-2">
-                            <a href="{{ route('stories.index', request()->except('category')) }}" 
-                               class="flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-bold transition {{ !request('category') ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-700' }}">
-                                <span>الكل</span>
-                                <span class="text-[10px] {{ !request('category') ? 'text-white/60' : 'text-slate-300' }}">({{ \App\Models\Story::where('active', true)->count() }})</span>
-                            </a>
-                            @foreach($categories as $cat)
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['category' => $cat->slug])) }}" 
-                                   class="flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-bold transition {{ request('category') == $cat->slug ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-700' }}">
-                                    <span>{{ $cat->name }}</span>
-                                    <span class="text-[10px] {{ request('category') == $cat->slug ? 'text-white/60' : 'text-slate-300' }}">({{ $cat->stories_count }})</span>
-                                </a>
-                            @endforeach
-                        </div>
-                    </div>
+                    {{-- Filter card --}}
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
 
-                    <!-- Ages -->
-                    <div class="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100/60">
-                        <h4 class="font-black text-slate-900 mb-6 flex items-center gap-3 justify-start">
-                            <span class="bg-amber-50 w-9 h-9 flex items-center justify-center rounded-xl text-lg">🎂</span>
-                            العمر
-                        </h4>
-                        <select onchange="window.location = this.value"
-                                class="w-full border-2 border-slate-100 rounded-2xl px-4 py-3.5 text-sm font-bold text-slate-700 bg-white focus:outline-none focus:border-indigo-300 transition cursor-pointer appearance-none">
-                            <option value="{{ route('stories.index', array_merge(request()->except('age'), [])) }}" {{ !request('age') ? 'selected' : '' }}>
-                                كل الأعمار
-                            </option>
-                            @foreach($ageRanges as $range)
-                                <option value="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
-                                        {{ request('age') == $range ? 'selected' : '' }}>
+                        {{-- Gender --}}
+                        <div class="p-5 border-b border-slate-50">
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">👦 البطل</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <a href="{{ route('stories.index', request()->except('gender')) }}"
+                                   class="flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-black transition
+                                          {{ !request('gender') ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400 hover:border-slate-300' }}">
+                                    <span class="text-base">👫</span>
+                                    <span>الكل</span>
+                                </a>
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'boy'])) }}"
+                                   class="flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-black transition
+                                          {{ request('gender') == 'boy' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-400 hover:border-blue-200 hover:text-blue-500' }}">
+                                    <span class="text-base">👦</span>
+                                    <span>ولد</span>
+                                </a>
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'girl'])) }}"
+                                   class="flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-black transition
+                                          {{ request('gender') == 'girl' ? 'bg-pink-50 border-pink-300 text-pink-700' : 'border-slate-200 text-slate-400 hover:border-pink-200 hover:text-pink-500' }}">
+                                    <span class="text-base">👧</span>
+                                    <span>بنت</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        {{-- Age --}}
+                        <div class="p-5 border-b border-slate-50">
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">🎂 العمر</p>
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{{ route('stories.index', request()->except('age')) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition
+                                          {{ !request('age') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600' }}">
+                                    الكل
+                                </a>
+                                @foreach($ageRanges as $range)
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition
+                                          {{ request('age') == $range ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600' }}">
                                     {{ $range }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Gender & Language -->
-                    <div class="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100/60 space-y-8">
-                        <div>
-                            <h4 class="font-black text-slate-900 mb-6 flex items-center gap-3 justify-start">
-                                <span class="bg-emerald-50 w-9 h-9 flex items-center justify-center rounded-xl text-lg">👦</span>
-                                البطل
-                            </h4>
-                            <div class="flex gap-4">
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'boy'])) }}" class="flex-1 flex flex-col items-center gap-2 py-5 rounded-3xl border-2 transition {{ request('gender') == 'boy' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-transparent text-slate-400 opacity-60 hover:opacity-100' }}">
-                                    <span class="text-2xl">👦</span>
-                                    <span class="text-[10px] font-black tracking-widest uppercase">ولد</span>
                                 </a>
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'girl'])) }}" class="flex-1 flex flex-col items-center gap-2 py-5 rounded-3xl border-2 transition {{ request('gender') == 'girl' ? 'bg-pink-50 border-pink-200 text-pink-700' : 'bg-slate-50 border-transparent text-slate-400 opacity-60 hover:opacity-100' }}">
-                                    <span class="text-2xl">👧</span>
-                                    <span class="text-[10px] font-black tracking-widest uppercase">بنت</span>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- Categories --}}
+                        <div class="p-5 border-b border-slate-50">
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">📚 التصنيف</p>
+                            <div class="space-y-1">
+                                <a href="{{ route('stories.index', request()->except('category')) }}"
+                                   class="flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold transition
+                                          {{ !request('category') ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50' }}">
+                                    <span>الكل</span>
+                                    <span class="text-[11px] {{ !request('category') ? 'text-white/60' : 'text-slate-300' }}">{{ \App\Models\Story::where('active', true)->count() }}</span>
+                                </a>
+                                @foreach($categories as $cat)
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['category' => $cat->slug])) }}"
+                                   class="flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold transition
+                                          {{ request('category') == $cat->slug ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50' }}">
+                                    <span>{{ $cat->name }}</span>
+                                    <span class="text-[11px] {{ request('category') == $cat->slug ? 'text-white/60' : 'text-slate-300' }}">{{ $cat->stories_count }}</span>
+                                </a>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        {{-- Language --}}
+                        <div class="p-5">
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">🌐 اللغة</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <a href="{{ route('stories.index', request()->except('lang')) }}"
+                                   class="text-center py-2.5 rounded-xl border text-xs font-black transition
+                                          {{ !request('lang') ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400 hover:border-slate-300' }}">
+                                    الكل
+                                </a>
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}"
+                                   class="text-center py-2.5 rounded-xl border text-xs font-black transition
+                                          {{ request('lang') == 'ar' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400 hover:border-slate-300' }}">
+                                    🇸🇦 عربي
+                                </a>
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'en'])) }}"
+                                   class="text-center py-2.5 rounded-xl border text-xs font-black transition
+                                          {{ request('lang') == 'en' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400 hover:border-slate-300' }}">
+                                    🇬🇧 EN
                                 </a>
                             </div>
                         </div>
 
-                        <div class="pt-8 border-t border-slate-50">
-                            <h4 class="font-black text-slate-900 mb-6 flex items-center gap-3 justify-start">
-                                <span class="bg-slate-50 w-9 h-9 flex items-center justify-center rounded-xl text-lg">🌐</span>
-                                اللغة
-                            </h4>
-                            <div class="flex gap-3">
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}" class="flex-1 text-center py-4 rounded-2xl text-[10px] font-black border-2 transition {{ request('lang') == 'ar' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-slate-50 text-slate-400 hover:border-slate-200' }}">العربية</a>
-                                <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'en'])) }}" class="flex-1 text-center py-4 rounded-2xl text-[10px] font-black border-2 transition {{ request('lang') == 'en' ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-white border-slate-50 text-slate-400 hover:border-slate-200' }}">English</a>
-                            </div>
-                        </div>
                     </div>
                 </aside>
 
-                {{-- ===== CONTENT SECTION (Left side in RTL) ===== --}}
-                <div class="lg:col-span-3 min-w-0 lg:order-2">
-                    
-                    {{-- Active Filter Tags --}}
-                    @if($hasFilter)
-                    <div class="flex flex-wrap gap-2.5 mb-10 justify-end">
-                        @if(request('category'))
-                            <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 px-5 py-3 rounded-2xl text-[11px] font-black flex items-center gap-3 shadow-sm">
-                                <span class="opacity-40">التصنيف:</span> {{ $categories->firstWhere('slug', request('category'))?->name ?? request('category') }}
-                            </div>
-                        @endif
-                        @if(request('age'))
-                            <div class="bg-amber-50 border border-amber-100 text-amber-700 px-5 py-3 rounded-2xl text-[11px] font-black flex items-center gap-3 shadow-sm">
-                                <span class="opacity-40">العمر:</span> {{ request('age') }} سنة
-                            </div>
-                        @endif
-                    </div>
-                    @endif
+                {{-- ===== CONTENT ===== --}}
+                <div class="flex-1 min-w-0">
 
-                    {{-- Counter Header + Per-page selector --}}
-                    <div class="flex items-center gap-6 mb-12 text-right">
-                        <div class="flex flex-col gap-1.5">
-                            <h2 class="text-3xl font-black text-slate-900 tracking-tight">المجموعة المتاحة</h2>
-                            <p class="text-slate-400 text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                                <span class="w-2 h-0.5 bg-indigo-200"></span> تصفح {{ $stories->total() }} قصة مخصصة
-                            </p>
+                    {{-- Header row --}}
+                    <div class="flex items-center justify-between mb-6 gap-4" dir="rtl">
+                        <div>
+                            <h2 class="text-xl font-black text-slate-900">المجموعة المتاحة</h2>
+                            <p class="text-slate-400 text-xs font-bold mt-0.5">{{ $stories->total() }} قصة مخصصة</p>
                         </div>
-                        <div class="h-px flex-1 bg-slate-200/60 rounded-full hidden sm:block"></div>
-                        {{-- Per-page --}}
-                        <div class="flex items-center gap-2 shrink-0">
-                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">عرض:</span>
+                        <div class="flex items-center gap-3 shrink-0">
+                            {{-- Mobile filter button --}}
+                            <button onclick="document.getElementById('mobile-filters').classList.toggle('hidden')"
+                                    class="lg:hidden flex items-center gap-2 bg-white border border-slate-200 text-slate-600 font-black text-xs px-4 py-2.5 rounded-xl shadow-sm hover:border-indigo-300 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M7 12h10M11 20h2"/></svg>
+                                فلترة {{ $hasFilter ? '•' : '' }}
+                            </button>
+                            {{-- Per-page --}}
                             <select onchange="window.location = this.value"
-                                    class="border-2 border-slate-100 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 bg-white focus:outline-none focus:border-indigo-300 transition cursor-pointer">
-                                @foreach([10, 15, 20, 30] as $n)
+                                    class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300 transition shadow-sm">
+                                @foreach([12, 20, 30] as $n)
                                     <option value="{{ route('stories.index', array_merge(request()->query(), ['per_page' => $n])) }}"
-                                            {{ request('per_page', 12) == $n ? 'selected' : '' }}>
-                                        {{ $n }}
-                                    </option>
+                                            {{ request('per_page', 12) == $n ? 'selected' : '' }}>{{ $n }} قصة</option>
                                 @endforeach
                             </select>
                         </div>
                     </div>
 
-                    @if($stories->isEmpty())
-                        <div class="bg-white rounded-[3.5rem] py-40 text-center border-2 border-dashed border-slate-200 shadow-sm px-6">
-                            <div class="text-7xl mb-10 transform hover:scale-110 transition duration-500 inline-block cursor-default">🕵️‍♀️</div>
-                            <h3 class="text-3xl font-black text-slate-900 mb-4">لم نجد أي قصص تطابق بحثك!</h3>
-                            <p class="text-slate-400 mt-2 font-bold text-lg max-w-sm mx-auto leading-relaxed">جرب باستخدام فلاتر مختلفة أو تصفح كل المجموعة لنتفقد مغامرات جديدة.</p>
-                            <a href="{{ route('stories.index') }}" class="mt-10 inline-block bg-indigo-600 text-white font-black px-12 py-5 rounded-[2.5rem] shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition active:scale-95">عرض جميع القصص</a>
+                    {{-- Mobile filters panel --}}
+                    <div id="mobile-filters" class="hidden lg:hidden bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6 space-y-4" dir="rtl">
+                        {{-- Category --}}
+                        <div>
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">📚 التصنيف</p>
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{{ route('stories.index', request()->except('category')) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ !request('category') ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
+                                @foreach($categories as $cat)
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['category' => $cat->slug])) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ request('category') == $cat->slug ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 text-slate-500' }}">{{ $cat->name }}</a>
+                                @endforeach
+                            </div>
                         </div>
+                        {{-- Age --}}
+                        <div>
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">🎂 العمر</p>
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{{ route('stories.index', request()->except('age')) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ !request('age') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
+                                @foreach($ageRanges as $range)
+                                <a href="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
+                                   class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ request('age') == $range ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500' }}">{{ $range }}</a>
+                                @endforeach
+                            </div>
+                        </div>
+                        {{-- Gender & Language --}}
+                        <div class="flex gap-4">
+                            <div class="flex-1">
+                                <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">👦 البطل</p>
+                                <div class="flex gap-2">
+                                    <a href="{{ route('stories.index', request()->except('gender')) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ !request('gender') ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
+                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'boy'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('gender') == 'boy' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-500' }}">👦</a>
+                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['gender' => 'girl'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('gender') == 'girl' ? 'bg-pink-50 border-pink-300 text-pink-700' : 'border-slate-200 text-slate-500' }}">👧</a>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">🌐 اللغة</p>
+                                <div class="flex gap-2">
+                                    <a href="{{ route('stories.index', request()->except('lang')) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ !request('lang') ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
+                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('lang') == 'ar' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">🇸🇦</a>
+                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'en'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('lang') == 'en' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">🇬🇧</a>
+                                </div>
+                            </div>
+                        </div>
+                        @if($hasFilter)
+                        <a href="{{ route('stories.index') }}" class="block text-center py-2.5 rounded-xl text-xs font-black bg-red-50 text-red-500 border border-red-100">✕ مسح الفلاتر</a>
+                        @endif
+                    </div>
+
+                    {{-- Active filter chips --}}
+                    @if($hasFilter)
+                    <div class="flex flex-wrap gap-2 mb-5" dir="rtl">
+                        @if(request('category'))
+                            <span class="bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">📚 {{ $categories->firstWhere('slug', request('category'))?->name }}</span>
+                        @endif
+                        @if(request('age'))
+                            <span class="bg-amber-50 border border-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-black">🎂 {{ request('age') }}</span>
+                        @endif
+                        @if(request('gender'))
+                            <span class="bg-blue-50 border border-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black">{{ request('gender') == 'boy' ? '👦 ولد' : '👧 بنت' }}</span>
+                        @endif
+                        @if(request('lang'))
+                            <span class="bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-black">🌐 {{ request('lang') == 'ar' ? 'عربي' : 'English' }}</span>
+                        @endif
+                    </div>
+                    @endif
+
+                    {{-- Empty state --}}
+                    @if($stories->isEmpty())
+                    <div class="bg-white rounded-2xl py-24 text-center border border-dashed border-slate-200 shadow-sm px-6">
+                        <div class="text-6xl mb-6">🕵️‍♀️</div>
+                        <h3 class="text-xl font-black text-slate-900 mb-2">لم نجد قصص تطابق بحثك</h3>
+                        <p class="text-slate-400 text-sm mb-6">جرب فلاتر مختلفة أو تصفح كل المجموعة</p>
+                        <a href="{{ route('stories.index') }}" class="inline-block bg-indigo-600 text-white font-black px-8 py-3 rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition">عرض جميع القصص</a>
+                    </div>
+
                     @else
-                        
-                        {{-- UNIFORM 3-COLUMN GRID --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pb-12">
-                            @foreach($stories as $idx => $story)
-                                <div class="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group flex flex-col h-full relative">
-                                    <div class=" overflow-hidden relative bg-slate-50">
-                                        @if($story->cover_image)
-                                            <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-contain group-hover:scale-105 transition duration-1000">
-                                        @else
-                                            <img src="https://images.unsplash.com/{{ $fallbacks[$idx % count($fallbacks)] }}?w=700&auto=format&fit=crop&q=85" alt="{{ $story->title }}" class="w-full h-full object-cover group-hover:scale-110 transition duration-1000">
-                                        @endif
-                                        
-                                        <!-- Age Badge -->
-                                        <div class="absolute top-5 right-5 z-10 scale-90 origin-top-right group-hover:scale-100 transition duration-500">
-                                            <div class="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl text-[10px] font-black shadow-2xl border border-white/50 text-slate-800 flex items-center gap-2">
-                                                <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
-                                                {{ $story->age_range }} سنة
-                                            </div>
-                                        </div>
 
-                                        <!-- Simple Overlay on Hover -->
-                                        <div class="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                    {{-- STORY CARDS --}}
+                    @php
+                        $cardAccents = [
+                            ['bar' => 'from-orange-400 to-yellow-400',   'badge' => 'bg-orange-50 text-orange-700 border-orange-200',   'price' => 'text-orange-600',  'shadow' => 'hover:shadow-orange-200/60'],
+                            ['bar' => 'from-pink-400 to-rose-500',       'badge' => 'bg-pink-50 text-pink-700 border-pink-200',         'price' => 'text-pink-600',    'shadow' => 'hover:shadow-pink-200/60'],
+                            ['bar' => 'from-violet-500 to-indigo-500',   'badge' => 'bg-violet-50 text-violet-700 border-violet-200',   'price' => 'text-violet-600',  'shadow' => 'hover:shadow-violet-200/60'],
+                            ['bar' => 'from-emerald-400 to-teal-500',    'badge' => 'bg-emerald-50 text-emerald-700 border-emerald-200','price' => 'text-emerald-600', 'shadow' => 'hover:shadow-emerald-200/60'],
+                            ['bar' => 'from-sky-400 to-blue-500',        'badge' => 'bg-sky-50 text-sky-700 border-sky-200',            'price' => 'text-sky-600',     'shadow' => 'hover:shadow-sky-200/60'],
+                            ['bar' => 'from-fuchsia-400 to-pink-500',    'badge' => 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200','price' => 'text-fuchsia-600', 'shadow' => 'hover:shadow-fuchsia-200/60'],
+                            ['bar' => 'from-amber-400 to-orange-500',    'badge' => 'bg-amber-50 text-amber-700 border-amber-200',      'price' => 'text-amber-600',   'shadow' => 'hover:shadow-amber-200/60'],
+                            ['bar' => 'from-cyan-400 to-sky-500',        'badge' => 'bg-cyan-50 text-cyan-700 border-sky-200',          'price' => 'text-sky-600',     'shadow' => 'hover:shadow-cyan-200/60'],
+                        ];
+                    @endphp
+                    <div class="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5 pb-12">
+                        @foreach($stories as $idx => $story)
+                            @php $accent = $cardAccents[$loop->index % 8]; @endphp
+                            <div class="group bg-white rounded-[1.75rem] overflow-hidden hover:shadow-2xl {{ $accent['shadow'] }} transition-all duration-500 hover:-translate-y-2 flex flex-col border border-orange-100/80">
+                                <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
+                                <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
+                                    @if($story->cover_image)
+                                        <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
+                                    @else
+                                        <img src="https://images.unsplash.com/{{ $fallbacks[$idx % count($fallbacks)] }}?w=500&auto=format&fit=crop&q=80" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
+                                    @endif
+                                    <div class="absolute top-3 right-3">
+                                        <span class="bg-white/92 backdrop-blur-sm text-[10px] font-black px-2.5 py-1 rounded-full shadow border {{ $accent['badge'] }}">{{ $story->age_range }}</span>
                                     </div>
-                                    
-                                    <div class="p-8 flex flex-col flex-grow text-right">
-                                        <div class="flex flex-wrap gap-2 justify-end mb-4 opacity-50">
-                                            @foreach($story->categories->take(1) as $cat)
-                                            <span class="text-indigo-600 text-[10px] font-black uppercase tracking-widest">{{ $cat->name }}</span>
-                                            @endforeach
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end pb-4 justify-center">
+                                        <span class="text-white text-xs font-black bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full">🔍 معاينة سريعة</span>
+                                    </div>
+                                </a>
+                                <div class="p-3 sm:p-4 flex flex-col flex-grow text-right">
+                                    @if($story->categories->count())
+                                    <div class="hidden sm:flex flex-wrap gap-1 mb-2">
+                                        @foreach($story->categories->take(2) as $cat)
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{{ $cat->name }}</span>
+                                        @endforeach
+                                    </div>
+                                    @endif
+                                    <h3 class="text-[13px] sm:text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-2 leading-snug group-hover:text-indigo-600 transition-colors">
+                                        <a href="{{ route('stories.show', $story->slug) }}" class="hover:text-indigo-600 transition-colors">{{ $story->title }}</a>
+                                    </h3>
+                                    <p class="hidden sm:block text-slate-400 text-xs leading-relaxed mb-3 flex-grow line-clamp-2">{{ $story->short_desc }}</p>
+                                    @if($story->lesson_value)
+                                    <div class="hidden sm:block mb-3">
+                                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">💡 {{ $story->lesson_value }}</span>
+                                    </div>
+                                    @endif
+                                    <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
+                                        <div class="text-right">
+                                            <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ number_format($story->price, 0) }}</span>
+                                            <span class="text-[10px] text-slate-400 font-bold"> ج.م</span>
                                         </div>
-
-                                        <h3 class="text-2xl font-black text-slate-900 mb-4 group-hover:text-indigo-600 transition-colors leading-tight">
-                            <a href="{{ route('stories.show', $story->slug) }}" class="hover:text-indigo-600 transition-colors">{{ $story->title }}</a>
-                        </h3>
-                                        <p class="text-slate-400 text-[13px] font-medium leading-relaxed mb-8 line-clamp-2 h-10">{{ $story->short_desc }}</p>
-                                        
-                                        <div class="flex items-center justify-between pt-8 border-t border-slate-50 mt-auto">
-                                            <div class="flex flex-col items-end">
-                                                <span class="text-xs font-bold text-slate-300 mb-0.5">السعر</span>
-                                                <div class="flex items-baseline gap-1">
-                                                    <span class="text-2xl font-black text-indigo-600 tracking-tighter">{{ number_format($story->price, 0) }}</span>
-                                                    <small class="text-[10px] font-black text-slate-400">ج.م</small>
-                                                </div>
-                                            </div>
-                                            <a href="{{ route('stories.show', $story->slug) }}" class="bg-slate-900 text-white text-[11px] font-black px-7 py-4 rounded-2xl shadow-xl shadow-slate-100 hover:bg-indigo-600 transition-all active:scale-95 group-hover:translate-x-1">تخصيص القصة</a>
-                                        </div>
+                                        <a href="{{ route('stories.show', $story->slug) }}"
+                                            class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"
+                                            style="background: linear-gradient(135deg, #f97316, #ec4899);">اصنعها ✨</a>
                                     </div>
                                 </div>
-                            @endforeach
-                        </div>
+                            </div>
+                        @endforeach
+                    </div>
 
-                        {{-- Pagination --}}
-                        @if($stories->hasPages())
-                        <div class="pt-20 flex justify-center border-t border-slate-100">
-                            {{ $stories->links() }}
-                        </div>
-                        @endif
+                    {{-- Pagination --}}
+                    @if($stories->hasPages())
+                    <div class="pt-12 flex justify-center border-t border-slate-100">
+                        {{ $stories->links() }}
+                    </div>
+                    @endif
 
                     @endif
 
                 </div>
+                {{-- end content --}}
 
             </div>
-
         </div>
     </div>
 
