@@ -51,6 +51,18 @@
                         <input type="email" name="settings[privacy_email]" value="{{ $s('privacy_email') }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">المدينة / المحافظة</label>
+                        <input type="text" name="settings[address_city]" value="{{ $s('address_city') }}"
+                               placeholder="مثال: المنصورة"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">العنوان / الشارع</label>
+                        <input type="text" name="settings[address_street]" value="{{ $s('address_street') }}"
+                               placeholder="مثال: شارع سامية الجمل"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
                 </div>
             </div>
 
@@ -81,7 +93,7 @@
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
                     <span class="text-xl">📱</span> وسائل التواصل الاجتماعي
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">Instagram</label>
                         <input type="url" name="settings[instagram_url]" value="{{ $s('instagram_url') }}"
@@ -98,6 +110,12 @@
                         <label class="block text-sm font-bold text-gray-700 mb-1">TikTok</label>
                         <input type="url" name="settings[tiktok_url]" value="{{ $s('tiktok_url') }}"
                                placeholder="https://tiktok.com/..."
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">YouTube</label>
+                        <input type="url" name="settings[youtube_url]" value="{{ $s('youtube_url') }}"
+                               placeholder="https://youtube.com/..."
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                 </div>

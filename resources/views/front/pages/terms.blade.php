@@ -76,8 +76,8 @@
                     <h2 class="text-2xl font-bold text-slate-900 mb-4">٨. التواصل</h2>
                     <p class="text-slate-600">لأي استفسار أو شكوى:</p>
                     <div class="bg-slate-50 rounded-lg p-4 mt-3 space-y-1 text-slate-700">
-                        <p>📧 البريد الإلكتروني: <a href="mailto:support@herokid.sa" class="text-indigo-600">support@herokid.sa</a></p>
-                        <p>📱 واتساب: <a href="https://wa.me/966500000000" class="text-indigo-600">966500000000+</a></p>
+                        <p>📧 البريد الإلكتروني: <a href="mailto:{{ $settings['support_email'] ?? $settings['site_email'] ?? '' }}" class="text-indigo-600">{{ $settings['support_email'] ?? $settings['site_email'] ?? '' }}</a></p>
+                        <p>📱 واتساب: <a href="{{ $settings['whatsapp_url'] ?? '#' }}" class="text-indigo-600">{{ $settings['whatsapp_number'] ?? '' }}+</a></p>
                     </div>
                 </section>
 

@@ -66,7 +66,7 @@
           "description": "أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.",
           "address": {
             "@@type": "PostalAddress",
-            "addressLocality": "المنصورة",
+            "addressLocality": "{{ $settings['address_city'] ?? 'المنصورة' }}",
             "addressCountry": "EG"
           },
           "contactPoint": {
@@ -226,7 +226,7 @@
                             المطبوعة.
                         </p>
                         <div class="flex gap-4 mt-8 justify-start">
-                            <a href="https://wa.me/201112333646" target="_blank"
+                            <a href="{{ $settings['whatsapp_url'] ?? '#' }}" target="_blank"
                                 class="w-10 h-10 bg-slate-800 hover:bg-green-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="WhatsApp">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -236,7 +236,7 @@
                                     </path>
                                 </svg>
                             </a>
-                            <a href="#"
+                            <a href="{{ $settings['instagram_url'] ?? '#' }}" target="_blank"
                                 class="w-10 h-10 bg-slate-800 hover:bg-pink-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="Instagram">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -246,7 +246,7 @@
                                     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
                                 </svg>
                             </a>
-                            <a href="{{ $settings['facebook'] ?? '#' }}"
+                            <a href="{{ $settings['facebook_url'] ?? '#' }}" target="_blank"
                                 class="w-10 h-10 bg-slate-800 hover:bg-blue-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="Facebook">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -254,7 +254,7 @@
                                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                                 </svg>
                             </a>
-                            <a href="#"
+                            <a href="{{ $settings['youtube_url'] ?? '#' }}" target="_blank"
                                 class="w-10 h-10 bg-slate-800 hover:bg-red-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="YouTube">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -295,11 +295,13 @@
                             <li><a href="{{ route('terms') }}" class="hover:text-white transition">الشروط والأحكام</a>
                             </li>
                         </ul>
+                        @if(!empty($settings['whatsapp_number']))
                         <div class="mt-6">
                             <p class="text-slate-400 text-xs">للتواصل السريع:</p>
-                            <a href="tel:201112333646"
-                                class="text-indigo-400 text-sm font-bold hover:text-indigo-300 transition">01112333646</a>
+                            <a href="tel:{{ $settings['whatsapp_number'] }}"
+                                class="text-indigo-400 text-sm font-bold hover:text-indigo-300 transition">{{ $settings['whatsapp_number'] }}</a>
                         </div>
+                        @endif
                     </div>
                 </div>
 

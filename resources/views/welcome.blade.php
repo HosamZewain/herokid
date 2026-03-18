@@ -933,8 +933,8 @@
                             <div class="text-right">
                                 <h4 class="font-bold text-slate-900">واتساب</h4>
                                 <p class="text-slate-500 text-sm">رد سريع خلال ساعات العمل</p>
-                                <a href="https://wa.me/{{ $settings["whatsapp"] ?? "201112333646" }}" target="_blank"
-                                    class="text-green-600 font-bold mt-1 block hover:underline">{{ $settings["whatsapp"] ?? "01112333646" }}</a>
+                                <a href="{{ $settings['whatsapp_url'] ?? '#' }}" target="_blank"
+                                    class="text-green-600 font-bold mt-1 block hover:underline">{{ $settings['whatsapp_number'] ?? '' }}</a>
                             </div>
                         </div>
 
@@ -943,8 +943,8 @@
                             <div class="text-right">
                                 <h4 class="font-bold text-slate-900">البريد الإلكتروني</h4>
                                 <p class="text-slate-500 text-sm">للاستفسارات الرسمية والطلبات الخاصة</p>
-                                <a href="mailto:{{ $settings["email"] ?? "hello@herokid.eg" }}"
-                                    class="text-indigo-600 font-bold mt-1 block hover:underline">{{ $settings["email"] ?? "hello@herokid.eg" }}</a>
+                                <a href="mailto:{{ $settings['site_email'] ?? '' }}"
+                                    class="text-indigo-600 font-bold mt-1 block hover:underline">{{ $settings['site_email'] ?? '' }}</a>
                             </div>
                         </div>
 
@@ -952,7 +952,7 @@
                             <div class="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-200 group-hover:scale-110 transition flex-shrink-0">📍</div>
                             <div class="text-right">
                                 <h4 class="font-bold text-slate-900">المقر الرئيسي</h4>
-                                <p class="text-slate-500 text-sm">المنصورة، شارع سامية الجمل</p>
+                                <p class="text-slate-500 text-sm">{{ $settings['address_city'] ?? '' }}{{ !empty($settings['address_street']) ? '، ' . $settings['address_street'] : '' }}</p>
                                 <span class="text-slate-400 text-xs font-bold mt-1 block">نشحن لجميع المحافظات</span>
                             </div>
                         </div>
