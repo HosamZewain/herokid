@@ -70,6 +70,7 @@ class SecurityAndCacheHeaders
     {
         return $request->routeIs([
             'admin.*',
+            'cart.*',
             'dashboard',
             'profile.*',
             'checkout.*',
@@ -82,6 +83,8 @@ class SecurityAndCacheHeaders
         ]) || $request->is([
             'admin',
             'admin/*',
+            'cart',
+            'cart/*',
             'dashboard',
             'profile',
             'profile/*',

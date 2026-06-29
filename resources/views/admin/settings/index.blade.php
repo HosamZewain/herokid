@@ -93,7 +93,7 @@
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
                     <span class="text-xl">📱</span> وسائل التواصل الاجتماعي
                 </h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-5">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">Instagram</label>
                         <input type="url" name="settings[instagram_url]" value="{{ $s('instagram_url') }}"
@@ -135,6 +135,11 @@
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الصلب (ج.م)</label>
                         <input type="number" name="settings[price_hard_cover]" value="{{ $s('price_hard_cover', 149) }}" min="1"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">مصاريف التوصيل (ج.م)</label>
+                        <input type="number" name="settings[delivery_fee]" value="{{ $s('delivery_fee', 0) }}" min="0" step="0.01"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>

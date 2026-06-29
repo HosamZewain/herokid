@@ -79,6 +79,16 @@
                             {{ $order->delivery_details['city'] ?? '-' }}<br>
                             {{ $order->delivery_details['address'] ?? '-' }}
                         </p>
+                        @if(!empty($order->delivery_details['checkout_group']))
+                            <div class="mt-4 pt-4 border-t text-sm text-right text-gray-700 space-y-2">
+                                <div><span class="font-bold text-gray-600">مجموعة السلة:</span> <span class="font-mono dir-ltr">{{ $order->delivery_details['checkout_group'] }}</span></div>
+                                <div><span class="font-bold text-gray-600">ترتيب القصة في السلة:</span> {{ $order->delivery_details['cart_item_index'] ?? '-' }} / {{ $order->delivery_details['cart_items_count'] ?? '-' }}</div>
+                                <div><span class="font-bold text-gray-600">سعر القصة:</span> {{ number_format((float) ($order->delivery_details['item_price'] ?? ($order->story->price ?? 0)), 0) }} ج.م</div>
+                                <div><span class="font-bold text-gray-600">إجمالي القصص:</span> {{ number_format((float) ($order->delivery_details['subtotal'] ?? 0), 0) }} ج.م</div>
+                                <div><span class="font-bold text-gray-600">مصاريف التوصيل:</span> {{ number_format((float) ($order->delivery_details['delivery_fee'] ?? 0), 0) }} ج.م</div>
+                                <div><span class="font-bold text-gray-600">إجمالي السلة:</span> {{ number_format((float) ($order->delivery_details['total'] ?? 0), 0) }} ج.م</div>
+                            </div>
+                        @endif
                     </div>
 
                     <!-- Child Photos -->

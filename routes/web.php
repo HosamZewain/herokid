@@ -36,9 +36,12 @@ Route::get('/', function () {
 Route::get('/stories', [\App\Http\Controllers\Front\StoryController::class, 'index'])->name('stories.index');
 Route::get('/stories/{slug}', [\App\Http\Controllers\Front\StoryController::class, 'show'])->name('stories.show');
 
-// Checkout routes
-Route::post('/checkout/{story:slug}', [\App\Http\Controllers\Front\CheckoutController::class, 'store'])->name('checkout.store');
-Route::get('/checkout/success/{order}', [\App\Http\Controllers\Front\CheckoutController::class, 'success'])->name('checkout.success');
+// Cart and checkout routes
+Route::get('/cart', [\App\Http\Controllers\Front\CartController::class, 'index'])->name('cart.index');
+Route::post('/cart/stories/{story:slug}', [\App\Http\Controllers\Front\CartController::class, 'store'])->name('cart.store');
+Route::delete('/cart/{key}', [\App\Http\Controllers\Front\CartController::class, 'destroy'])->name('cart.destroy');
+Route::post('/checkout', [\App\Http\Controllers\Front\CheckoutController::class, 'store'])->name('checkout.store');
+Route::get('/checkout/success', [\App\Http\Controllers\Front\CheckoutController::class, 'success'])->name('checkout.success');
 
 // Order Tracking
 Route::get('/track-order', [\App\Http\Controllers\Front\TrackOrderController::class, 'index'])->name('track.index');

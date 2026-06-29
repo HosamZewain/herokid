@@ -147,6 +147,11 @@
                                 الشائعة</x-nav-link>
                             <x-nav-link :href="route('track.index')" :active="request()->routeIs('track.*')">تتبع
                                 الطلب</x-nav-link>
+                            <x-nav-link :href="route('cart.index')" :active="request()->routeIs('cart.*')">السلة
+                                @if(count(session('cart.items', [])) > 0)
+                                    <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ count(session('cart.items', [])) }}</span>
+                                @endif
+                            </x-nav-link>
                         </div>
                     </div>
 
@@ -203,6 +208,12 @@
                 <a href="{{ route('track.index') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">تتبع
                     الطلب</a>
+                <a href="{{ route('cart.index') }}"
+                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">السلة
+                    @if(count(session('cart.items', [])) > 0)
+                        <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ count(session('cart.items', [])) }}</span>
+                    @endif
+                </a>
                 <div class="pt-2 border-t border-gray-100">
                     @auth
                         <a href="{{ route('dashboard') }}" class="block px-4 py-2 rounded-xl text-indigo-600 font-bold">👤

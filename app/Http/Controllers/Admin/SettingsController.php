@@ -24,6 +24,7 @@ class SettingsController extends Controller
             'settings.whatsapp_number'=> 'required|string|max:20',
             'settings.price_soft_cover' => 'required|numeric|min:1',
             'settings.price_hard_cover' => 'required|numeric|min:1',
+            'settings.delivery_fee' => 'required|numeric|min:0',
         ]);
 
         foreach ($request->input('settings', []) as $key => $value) {

@@ -174,61 +174,16 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('checkout.store', $story) }}" method="POST" enctype="multipart/form-data"
+                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" enctype="multipart/form-data"
                             class="space-y-0">
                             @csrf
 
-                            {{-- SECTION 1: Parent Info --}}
-                            <div class="mb-6">
-                                <div class="flex items-center gap-2 mb-4 justify-end">
-                                    <h3 class="text-base font-extrabold text-indigo-800">بيانات ولي الأمر</h3>
-                                    <span
-                                        class="bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">١</span>
-                                </div>
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الاسم
-                                            الكامل <span class="text-red-500">*</span></label>
-                                        <input type="text" name="parent_name"
-                                            value="{{ old('parent_name', auth()->user()->name ?? '') }}" required
-                                            class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
-                                            placeholder="اسمك الكامل">
-                                        <x-input-error :messages="$errors->get('parent_name')" class="mt-1" />
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم
-                                                الهاتف / واتساب <span class="text-red-500">*</span></label>
-                                            <input type="text" name="phone" value="{{ old('phone') }}" required
-                                                dir="ltr"
-                                                class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3"
-                                                placeholder="+20 1XX XXXX XXX">
-                                            <x-input-error :messages="$errors->get('phone')" class="mt-1" />
-                                        </div>
-                                        <div>
-                                            <label
-                                                class="block text-sm font-bold text-slate-700 mb-1.5 text-right">البريد
-                                                الإلكتروني <span class="text-red-500">*</span></label>
-                                            <input type="email" name="email"
-                                                value="{{ old('email', auth()->user()->email ?? '') }}" required
-                                                dir="ltr"
-                                                class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3"
-                                                placeholder="email@example.com">
-                                            <p class="text-xs text-slate-400 mt-1 text-right">سنرسل رابط التصميم هنا</p>
-                                            <x-input-error :messages="$errors->get('email')" class="mt-1" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="border-slate-100 my-6">
-
-                            {{-- SECTION 2: Child Info --}}
+                            {{-- SECTION 1: Child Info --}}
                             <div class="mb-6">
                                 <div class="flex items-center gap-2 mb-4 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">بيانات البطل (الطفل)</h3>
                                     <span
-                                        class="bg-pink-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٢</span>
+                                        class="bg-pink-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">١</span>
                                 </div>
                                 <div class="space-y-4">
                                     <div>
@@ -279,12 +234,12 @@
 
                             <hr class="border-slate-100 my-6">
 
-                            {{-- SECTION 3: Photos --}}
+                            {{-- SECTION 2: Photos --}}
                             <div class="mb-6">
                                 <div class="flex items-center gap-2 mb-4 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">صور الطفل</h3>
                                     <span
-                                        class="bg-amber-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٣</span>
+                                        class="bg-amber-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٢</span>
                                 </div>
                                 <div
                                     class="bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-2xl p-6 text-right">
@@ -304,12 +259,12 @@
 
                             <hr class="border-slate-100 my-6">
 
-                            {{-- SECTION 4: Personalization & Gift --}}
+                            {{-- SECTION 3: Personalization & Gift --}}
                             <div class="mb-6">
                                 <div class="flex items-center gap-2 mb-4 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">إضافات خاصة (اختياري)</h3>
                                     <span
-                                        class="bg-green-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٤</span>
+                                        class="bg-green-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٣</span>
                                 </div>
                                 <div class="space-y-4">
                                     <div>
@@ -327,63 +282,6 @@
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="أي تفاصيل إضافية تريد إضافتها...">{{ old('parent_notes') }}</textarea>
                                         <x-input-error :messages="$errors->get('parent_notes')" class="mt-1" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="border-slate-100 my-6">
-
-                            {{-- SECTION 5: Delivery --}}
-                            <div class="mb-6">
-                                <div class="flex items-center gap-2 mb-4 justify-end">
-                                    <h3 class="text-base font-extrabold text-indigo-800">عنوان التوصيل</h3>
-                                    <span
-                                        class="bg-slate-700 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٥</span>
-                                </div>
-
-                                @guest
-                                    <div
-                                        class="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3 text-sm text-blue-800 mb-4">
-                                        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-500" fill="none"
-                                            stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <p>أنت تطلب كزائر. ننصح بـ <a href="{{ route('login') }}"
-                                                class="font-bold underline">تسجيل الدخول</a> لتتمكن من متابعة طلبك لاحقاً
-                                            بسهولة.</p>
-                                    </div>
-                                @endguest
-
-                                <div class="space-y-4">
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label
-                                                class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المحافظة
-                                                <span class="text-red-500">*</span></label>
-                                            <input type="text" name="governorate" value="{{ old('governorate') }}"
-                                                required
-                                                class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
-                                                placeholder="القاهرة">
-                                            <x-input-error :messages="$errors->get('governorate')" class="mt-1" />
-                                        </div>
-                                        <div>
-                                            <label
-                                                class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة
-                                                / المنطقة <span class="text-red-500">*</span></label>
-                                            <input type="text" name="city" value="{{ old('city') }}" required
-                                                class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
-                                                placeholder="مدينة نصر">
-                                            <x-input-error :messages="$errors->get('city')" class="mt-1" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">العنوان
-                                            بالتفصيل <span class="text-red-500">*</span></label>
-                                        <textarea name="address" rows="2" required
-                                            class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
-                                            placeholder="شارع، رقم المبنى، الدور، الشقة...">{{ old('address') }}</textarea>
-                                        <x-input-error :messages="$errors->get('address')" class="mt-1" />
                                     </div>
                                 </div>
                             </div>
@@ -407,16 +305,22 @@
                             </div>
 
                             {{-- Submit --}}
-                            <button type="submit"
-                                class="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-2xl text-lg font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-300">
-                                <span>تأكيد الطلب — {{ number_format($story->price, 0) }} ج.م</span>
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                                </svg>
-                            </button>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button type="submit" name="next" value="cart"
+                                    class="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-300">
+                                    <span>إضافة للسلة وإتمام الطلب</span>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                    </svg>
+                                </button>
+                                <button type="submit" name="next" value="stories"
+                                    class="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-200">
+                                    <span>إضافة واختيار قصة أخرى</span>
+                                </button>
+                            </div>
                             <p class="text-center text-xs text-slate-400 mt-3">
-                                الدفع يتم بعد مراجعة الطلب وإرسال تأكيد الطلب عليك
+                                بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ number_format($story->price, 0) }} ج.م
                             </p>
                         </form>
                     </div>

@@ -90,7 +90,7 @@
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
                                         <div class="text-sm text-gray-800">{{ $order->parent_name ?? $order->customer_name ?? '—' }}</div>
-                                        <div class="text-xs text-gray-400">{{ $order->customer_phone ?? '' }}</div>
+                                        <div class="text-xs text-gray-400 dir-ltr">{{ $order->delivery_details['phone'] ?? $order->customer_phone ?? '' }}</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
                                         <div class="text-sm font-semibold text-gray-900">{{ $order->child_name }}</div>

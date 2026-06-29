@@ -22,6 +22,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'price_soft_cover',   'value' => '99'],
             ['key' => 'price_hard_cover',   'value' => '149'],
             ['key' => 'currency_symbol',    'value' => 'ج.م'],
+            ['key' => 'delivery_fee',        'value' => '0'],
 
             // Delivery
             ['key' => 'delivery_days_min',  'value' => '7'],
