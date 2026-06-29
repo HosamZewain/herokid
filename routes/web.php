@@ -57,6 +57,11 @@ Route::post('/orders/{order}/approve-preview', function (\App\Models\Order $orde
     return back()->with('error', 'لا يوجد تصميم قيد المراجعة حالياً.');
 })->middleware('auth')->name('orders.approve-preview');
 
+Route::get('/orders/{order}/production-photos/{index}', [\App\Http\Controllers\Admin\OrderController::class, 'serveProductionPhoto'])
+    ->middleware('signed')
+    ->name('orders.production-photo')
+    ->where('index', '[0-9]+');
+
 // Static Pages
 // ── Dynamic Sitemap ──────────────────────────────────────────────────────────
 Route::get('/sitemap.xml', function () {

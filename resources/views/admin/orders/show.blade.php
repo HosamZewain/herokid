@@ -108,6 +108,35 @@
                         @endif
                     </div>
 
+                    <!-- Story Production Prompt -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 border-b pb-3">
+                            <h3 class="text-lg font-bold text-right">Story Production Prompt</h3>
+                            <button
+                                type="button"
+                                id="copy-production-prompt"
+                                class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            >
+                                Copy Prompt
+                            </button>
+                        </div>
+                        <textarea
+                            id="story-production-prompt"
+                            rows="24"
+                            dir="ltr"
+                            spellcheck="false"
+                            class="block w-full rounded-xl border-gray-300 bg-slate-50 text-left font-mono text-sm leading-6 text-slate-800 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        >{{ $storyProductionPrompt }}</textarea>
+                        <div
+                            id="production-prompt-copy-message"
+                            class="mt-3 hidden rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-right text-sm font-bold text-green-700"
+                            role="status"
+                            aria-live="polite"
+                        >
+                            تم نسخ برومبت الإنتاج بنجاح
+                        </div>
+                    </div>
+
                     <!-- Status History -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">سجل تاريخ الحالات</h3>
@@ -223,4 +252,49 @@
             </div>
         </div>
     </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var copyButton = document.getElementById('copy-production-prompt');
+    var promptTextarea = document.getElementById('story-production-prompt');
+    var message = document.getElementById('production-prompt-copy-message');
+
+    if (!copyButton || !promptTextarea || !message) {
+        return;
+    }
+
+    function showCopiedMessage() {
+        message.classList.remove('hidden');
+        window.clearTimeout(showCopiedMessage.timeout);
+        showCopiedMessage.timeout = window.setTimeout(function () {
+            message.classList.add('hidden');
+        }, 3000);
+    }
+
+    function fallbackCopy() {
+        promptTextarea.focus();
+        promptTextarea.select();
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+
+    copyButton.addEventListener('click', function () {
+        var promptText = promptTextarea.value;
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(promptText).then(showCopiedMessage).catch(function () {
+                fallbackCopy();
+                showCopiedMessage();
+            });
+
+            return;
+        }
+
+        fallbackCopy();
+        showCopiedMessage();
+    });
+});
+</script>
+@endpush
 </x-admin-layout>

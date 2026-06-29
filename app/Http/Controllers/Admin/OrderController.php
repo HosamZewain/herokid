@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
+use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,7 +28,9 @@ class OrderController extends Controller
     public function show(Order $order)
     {
         $order->load(['user', 'story', 'statusLogs', 'previews']);
-        return view('admin.orders.show', compact('order'));
+        $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
+
+        return view('admin.orders.show', compact('order', 'storyProductionPrompt'));
     }
 
     public function update(Request $request, Order $order)
@@ -87,6 +90,19 @@ class OrderController extends Controller
      * Serve a private child photo from local storage (admin only).
      */
     public function servePhoto(Order $order, int $index)
+    {
+        return $this->photoResponse($order, $index);
+    }
+
+    /**
+     * Serve a signed child photo URL for production prompts.
+     */
+    public function serveProductionPhoto(Order $order, int $index)
+    {
+        return $this->photoResponse($order, $index);
+    }
+
+    private function photoResponse(Order $order, int $index)
     {
         $photos = $order->uploaded_photos ?? [];
 
