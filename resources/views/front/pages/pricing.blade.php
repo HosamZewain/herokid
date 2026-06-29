@@ -2,41 +2,40 @@
 
 {{-- ══ SEO ══ --}}
 <x-slot name="pageTitle">أسعار قصص الأطفال المخصصة — باقات HeroKid بدون رسوم خفية</x-slot>
-<x-slot name="pageDescription">اكتشف باقات HeroKid لقصص الأطفال المخصصة. بدون اشتراكات — تدفع مرة واحدة.</x-slot>
+<x-slot name="pageDescription">اكتشف باقات HeroKid لقصص الأطفال المخصصة المطبوعة باسم طفلك ووجهه. أسعار واضحة بدون اشتراكات، وهدية تربوية تناسب الأعمار ٢–١٠ سنوات.</x-slot>
 
 @push('schema')
+@php
+    $pricingSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebPage',
+        'name' => 'أسعار قصص HeroKid المخصصة',
+        'url' => \App\Support\Seo::url('/pricing'),
+        'description' => 'باقات HeroKid لقصص الأطفال المخصصة بأسعار واضحة بدون رسوم خفية',
+        'mainEntity' => [
+            '@type' => 'ItemList',
+            'itemListElement' => $packages->values()->map(fn ($pkg, $i) => [
+                '@type' => 'ListItem',
+                'position' => $i + 1,
+                'item' => [
+                    '@type' => 'Product',
+                    'name' => $pkg->name,
+                    'description' => $pkg->description ?? '',
+                    'brand' => ['@type' => 'Brand', 'name' => 'HeroKid'],
+                    'offers' => [
+                        '@type' => 'Offer',
+                        'priceCurrency' => 'EGP',
+                        'price' => (string) $pkg->price,
+                        'availability' => 'https://schema.org/InStock',
+                        'url' => \App\Support\Seo::url('/stories'),
+                    ],
+                ],
+            ])->all(),
+        ],
+    ];
+@endphp
 <script type="application/ld+json">
-{
-  "@@context": "https://schema.org",
-  "@@type": "WebPage",
-  "name": "أسعار قصص HeroKid المخصصة",
-  "url": "{{ route('pricing') }}",
-  "description": "باقات HeroKid لقصص الأطفال المخصصة بأسعار واضحة بدون رسوم خفية",
-  "mainEntity": {
-    "@@type": "ItemList",
-    "itemListElement": [
-      @foreach($packages as $i => $pkg)
-      {
-        "@@type": "ListItem",
-        "position": {{ $i + 1 }},
-        "item": {
-          "@@type": "Product",
-          "name": "{{ addslashes($pkg->name) }}",
-          "description": "{{ addslashes($pkg->description ?? '') }}",
-          "brand": { "@@type": "Brand", "name": "HeroKid" },
-          "offers": {
-            "@@type": "Offer",
-            "priceCurrency": "EGP",
-            "price": "{{ $pkg->price }}",
-            "availability": "https://schema.org/InStock",
-            "url": "{{ route('stories.index') }}"
-          }
-        }
-      }{{ !$loop->last ? ',' : '' }}
-      @endforeach
-    ]
-  }
-}
+@json($pricingSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Setting;
+use App\Support\Seo;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
@@ -17,6 +18,7 @@ class AppServiceProvider extends ServiceProvider
         // Force HTTPS in production so asset() / Storage::url() always return https:// URLs.
         // Without this, APP_URL=http:// causes mixed-content errors and images won't load.
         if ($this->app->environment('production')) {
+            URL::forceRootUrl(Seo::canonicalBase());
             URL::forceScheme('https');
         }
 

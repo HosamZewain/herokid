@@ -2,45 +2,53 @@
 
     {{-- ══ Per-page SEO slots ══ --}}
     <x-slot name="pageTitle">{{ $story->title }} — قصة أطفال مخصصة بوجه طفلك</x-slot>
-    <x-slot
-        name="pageDescription">{{ $story->short_desc ?? 'اجعل طفلك بطل قصة ' . $story->title . ' بوجهه الحقيقي. قصة مطبوعة مخصصة من HeroKid تُشحن إلى بابك.' }}</x-slot>
+    <x-slot name="pageDescription">{{ $story->seo_description }}</x-slot>
     <x-slot name="pageImage">{{ $story->cover_url ?? asset('images/og-cover.jpg') }}</x-slot>
     <x-slot name="ogType">product</x-slot>
 
     @push('schema')
-            <script type="application/ld+json">
-        {
-          "@@context": "https://schema.org",
-          "@@graph": [
-            {
-              "@@type": "BreadcrumbList",
-              "itemListElement": [
-                { "@@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "{{ route('home') }}" },
-                { "@@type": "ListItem", "position": 2, "name": "مكتبة القصص", "item": "{{ route('stories.index') }}" },
-                { "@@type": "ListItem", "position": 3, "name": "{{ $story->title }}", "item": "{{ route('stories.show', $story->slug) }}" }
-              ]
-            },
-            {
-              "@@type": "Product",
-              "name": "{{ $story->title }}",
-              "description": "{{ $story->short_desc ?? 'قصة أطفال مخصصة بوجه طفلك واسمه' }}",
-              "image": "{{ $story->cover_url ?? asset('images/og-cover.jpg') }}",
-              "brand": { "@@type": "Brand", "name": "HeroKid" },
-              "offers": {
-                "@@type": "Offer",
-                "priceCurrency": "EGP",
-                "price": "{{ $story->price }}",
-                "availability": "https://schema.org/InStock",
-                "url": "{{ route('stories.show', $story->slug) }}"
-              }@if($story->lesson_value),
-                  "additionalProperty": {
-                    "@@type": "PropertyValue",
-                    "name": "القيمة التربوية",
-                    "value": "{{ $story->lesson_value }}"
-              }@endif
+        @php
+            $storyUrl = \App\Support\Seo::url('/stories/' . $story->slug);
+            $storySchemaProduct = [
+                '@type' => 'Product',
+                'name' => $story->title,
+                'description' => $story->seo_description,
+                'image' => $story->cover_url ?? \App\Support\Seo::imageUrl('/images/og-cover.jpg'),
+                'brand' => ['@type' => 'Brand', 'name' => 'HeroKid'],
+                'offers' => [
+                    '@type' => 'Offer',
+                    'priceCurrency' => 'EGP',
+                    'price' => (string) $story->price,
+                    'availability' => 'https://schema.org/InStock',
+                    'url' => $storyUrl,
+                ],
+            ];
+
+            if ($story->lesson_value) {
+                $storySchemaProduct['additionalProperty'] = [
+                    '@type' => 'PropertyValue',
+                    'name' => 'القيمة التربوية',
+                    'value' => $story->lesson_value,
+                ];
             }
-          ]
-        }
+
+            $storySchema = [
+                '@context' => 'https://schema.org',
+                '@graph' => [
+                    [
+                        '@type' => 'BreadcrumbList',
+                        'itemListElement' => [
+                            ['@type' => 'ListItem', 'position' => 1, 'name' => 'الرئيسية', 'item' => \App\Support\Seo::url('/')],
+                            ['@type' => 'ListItem', 'position' => 2, 'name' => 'مكتبة القصص', 'item' => \App\Support\Seo::url('/stories')],
+                            ['@type' => 'ListItem', 'position' => 3, 'name' => $story->title, 'item' => $storyUrl],
+                        ],
+                    ],
+                    $storySchemaProduct,
+                ],
+            ];
+        @endphp
+        <script type="application/ld+json">
+        @json($storySchema, \App\Support\Seo::jsonFlags())
         </script>
     @endpush
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 
 // ── Storage Fallback for Shared Hosting ──────────────────────────────────────
@@ -17,7 +18,9 @@ Route::get('/storage/{path}', function (string $path) {
     if (!file_exists($fullPath) || !is_file($fullPath)) {
         abort(404);
     }
-    return response()->file($fullPath);
+    return response()->file($fullPath, [
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
 })->where('path', '.*')->name('storage.serve');
 
 // Homepage
@@ -57,15 +60,18 @@ Route::post('/orders/{order}/approve-preview', function (\App\Models\Order $orde
 // Static Pages
 // ── Dynamic Sitemap ──────────────────────────────────────────────────────────
 Route::get('/sitemap.xml', function () {
-    $stories = \App\Models\Story::where('active', true)->select('slug', 'updated_at')->get();
+    $stories = \App\Models\Story::where('active', true)
+        ->select('slug', 'updated_at')
+        ->orderBy('updated_at', 'desc')
+        ->get();
 
     $staticPages = [
-        ['url' => route('home'),          'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
-        ['url' => route('stories.index'), 'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
-        ['url' => route('how-it-works'),  'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
-        ['url' => route('pricing'),       'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
-        ['url' => route('faq'),           'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
-        ['url' => route('contact'),       'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.5'],
+        ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
+        ['url' => Seo::url('/stories'),      'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
+        ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
+        ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
+        ['url' => Seo::url('/contact'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
+        ['url' => Seo::url('/how-it-works'), 'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
     ];
 
     $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
@@ -73,7 +79,7 @@ Route::get('/sitemap.xml', function () {
 
     foreach ($staticPages as $page) {
         $xml .= "  <url>\n";
-        $xml .= "    <loc>{$page['url']}</loc>\n";
+        $xml .= '    <loc>' . e($page['url']) . "</loc>\n";
         $xml .= "    <lastmod>{$page['lastmod']}</lastmod>\n";
         $xml .= "    <changefreq>{$page['freq']}</changefreq>\n";
         $xml .= "    <priority>{$page['priority']}</priority>\n";
@@ -81,10 +87,10 @@ Route::get('/sitemap.xml', function () {
     }
 
     foreach ($stories as $story) {
-        $url     = route('stories.show', $story->slug);
+        $url     = Seo::url('/stories/' . $story->slug);
         $lastmod = $story->updated_at ? $story->updated_at->toDateString() : now()->toDateString();
         $xml .= "  <url>\n";
-        $xml .= "    <loc>{$url}</loc>\n";
+        $xml .= '    <loc>' . e($url) . "</loc>\n";
         $xml .= "    <lastmod>{$lastmod}</lastmod>\n";
         $xml .= "    <changefreq>weekly</changefreq>\n";
         $xml .= "    <priority>0.8</priority>\n";
@@ -93,7 +99,9 @@ Route::get('/sitemap.xml', function () {
 
     $xml .= '</urlset>';
 
-    return response($xml, 200)->header('Content-Type', 'application/xml');
+    return response($xml, 200)
+        ->header('Content-Type', 'application/xml; charset=UTF-8')
+        ->header('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
 })->name('sitemap');
 
 Route::get('/faq', [\App\Http\Controllers\Front\PageController::class, 'faq'])->name('faq');

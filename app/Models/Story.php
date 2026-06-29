@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\Seo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Story extends Model
 {
@@ -25,11 +27,47 @@ class Story extends Model
         }
         // Already a full external URL (e.g. seeder placeholder images)
         if (str_starts_with($this->cover_image, 'http')) {
-            return $this->cover_image;
+            return Seo::imageUrl($this->cover_image);
         }
         // Use Storage::url() so the URL respects the disk driver (local OR S3/cloud)
         // and is always consistent with where the file was actually stored.
-        return Storage::disk('public')->url($this->cover_image);
+        return Seo::imageUrl(Storage::disk('public')->url($this->cover_image));
+    }
+
+    public function getSeoDescriptionAttribute(): string
+    {
+        $title = $this->cleanSeoText((string) $this->title);
+        $ageRange = $this->cleanSeoText((string) $this->age_range);
+        $lesson = $this->cleanSeoText((string) $this->lesson_value);
+
+        $description = 'في قصة ' . $title . ' يصبح طفلك بطل الحكاية باسمه ووجهه المخصص';
+
+        if ($ageRange !== '') {
+            $description .= '، للأعمار ' . $ageRange;
+        }
+
+        if ($lesson !== '') {
+            $description .= '، مع مغزى يعزز ' . $lesson;
+        } else {
+            $description .= '، مع تجربة عاطفية وتربوية تمنحه الثقة والخيال';
+        }
+
+        $description .= ' في كتاب مطبوع من HeroKid.';
+
+        if (mb_strlen($description) < 110) {
+            $description .= ' هدية شخصية تصله كذكرى يحبها الأهل والطفل.';
+        }
+
+        if (mb_strlen($description) > 155) {
+            $description = rtrim(mb_substr($description, 0, 152), " \t\n\r\0\x0B،.") . '.';
+        }
+
+        return $description;
+    }
+
+    private function cleanSeoText(string $value): string
+    {
+        return Str::squish(html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
     }
 
     public function orders()

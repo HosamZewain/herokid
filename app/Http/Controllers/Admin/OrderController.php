@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class OrderController extends Controller
 {
@@ -63,7 +64,7 @@ class OrderController extends Controller
             'preview_note' => 'nullable|string|max:1000',
         ]);
 
-        $path = $request->file('preview_file')->store('orders/previews/' . $order->id);
+        $path = $request->file('preview_file')->store('orders/previews/' . $order->id, 'local');
 
         OrderPreview::create([
             'order_id'     => $order->id,
@@ -93,13 +94,36 @@ class OrderController extends Controller
             abort(404);
         }
 
-        $path = storage_path('app/' . $photos[$index]);
+        $photoPath = $photos[$index];
 
-        if (!file_exists($path) || !is_file($path)) {
+        if (! is_string($photoPath) || str_contains($photoPath, '..')) {
             abort(404);
         }
 
-        return response()->file($path);
+        $disk = Storage::disk('local');
+
+        if ($disk->exists($photoPath)) {
+            return response()->file($disk->path($photoPath), [
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            ]);
+        }
+
+        $publicDisk = Storage::disk('public');
+        if ($publicDisk->exists($photoPath)) {
+            return response()->file($publicDisk->path($photoPath), [
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            ]);
+        }
+
+        // Backward compatibility for files saved before Laravel's local disk moved to storage/app/private.
+        $legacyPath = storage_path('app/' . ltrim($photoPath, '/'));
+        if (file_exists($legacyPath) && is_file($legacyPath)) {
+            return response()->file($legacyPath, [
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            ]);
+        }
+
+        abort(404);
     }
 
     // Stubs for resource controller compliance

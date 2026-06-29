@@ -30,8 +30,8 @@ class CheckoutController extends Controller
         $photoPaths = [];
         if ($request->hasFile('photos')) {
             foreach ($request->file('photos') as $photo) {
-                // Store in private folder (not public) to prevent direct URL access
-                $path = $photo->store('orders/photos/' . date('Y-m'));
+                // Store in the private local disk; admins view these through an authenticated route.
+                $path = $photo->store('orders/photos/' . date('Y-m'), 'local');
                 $photoPaths[] = $path;
             }
         }

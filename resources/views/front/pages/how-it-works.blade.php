@@ -5,45 +5,48 @@
 <x-slot name="pageDescription">اكتشف كيف يحول HeroKid طفلك إلى بطل قصته في ٣ خطوات بسيطة: اختر القصة المناسبة لعمره، خصّص باسمه وصورته، ثم استلم كتاباً مطبوعاً فاخراً في أيام قليلة.</x-slot>
 
 @push('schema')
+@php
+    $howToSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'HowTo',
+        'name' => 'كيف تطلب قصة مخصصة لطفلك من HeroKid',
+        'description' => 'خطوات بسيطة لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي من HeroKid',
+        'totalTime' => 'PT5M',
+        'estimatedCost' => [
+            '@type' => 'MonetaryAmount',
+            'currency' => 'EGP',
+            'value' => '199',
+        ],
+        'supply' => [
+            ['@type' => 'HowToSupply', 'name' => 'صورة واضحة لوجه الطفل'],
+        ],
+        'step' => [
+            [
+                '@type' => 'HowToStep',
+                'position' => 1,
+                'name' => 'اختر القصة',
+                'text' => 'تصفح مكتبة HeroKid واختر القصة التي تناسب عمر طفلك واهتماماته من بين قصص متنوعة للأعمار ٢–١٠ سنوات.',
+                'url' => \App\Support\Seo::url('/stories'),
+            ],
+            [
+                '@type' => 'HowToStep',
+                'position' => 2,
+                'name' => 'خصّص وأرسل',
+                'text' => 'أضف اسم طفلك وارفع صورة واضحة لوجهه. يقوم ذكاءنا الاصطناعي بدمج وجهه في رسومات القصة بشكل احترافي.',
+                'url' => \App\Support\Seo::url('/how-it-works'),
+            ],
+            [
+                '@type' => 'HowToStep',
+                'position' => 3,
+                'name' => 'استلم الكتاب',
+                'text' => 'نطبع كتابك ونشحنه مباشرة إلى بابك خلال ٥–١٠ أيام عمل لجميع محافظات مصر.',
+                'url' => \App\Support\Seo::url('/how-it-works'),
+            ],
+        ],
+    ];
+@endphp
 <script type="application/ld+json">
-{
-  "@@context": "https://schema.org",
-  "@@type": "HowTo",
-  "name": "كيف تطلب قصة مخصصة لطفلك من HeroKid",
-  "description": "خطوات بسيطة لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي من HeroKid",
-  "totalTime": "PT5M",
-  "estimatedCost": {
-    "@@type": "MonetaryAmount",
-    "currency": "EGP",
-    "value": "199"
-  },
-  "supply": [
-    { "@@type": "HowToSupply", "name": "صورة واضحة لوجه الطفل" }
-  ],
-  "step": [
-    {
-      "@@type": "HowToStep",
-      "position": 1,
-      "name": "اختر القصة",
-      "text": "تصفح مكتبة HeroKid واختر القصة التي تناسب عمر طفلك واهتماماته من بين قصص متنوعة للأعمار ٢–١٠ سنوات.",
-      "url": "{{ route('stories.index') }}"
-    },
-    {
-      "@@type": "HowToStep",
-      "position": 2,
-      "name": "خصّص وأرسل",
-      "text": "أضف اسم طفلك وارفع صورة واضحة لوجهه. يقوم ذكاءنا الاصطناعي بدمج وجهه في رسومات القصة بشكل احترافي.",
-      "url": "{{ route('how-it-works') }}"
-    },
-    {
-      "@@type": "HowToStep",
-      "position": 3,
-      "name": "استلم الكتاب",
-      "text": "نطبع كتابك ونشحنه مباشرة إلى بابك خلال ٥–١٠ أيام عمل لجميع محافظات مصر.",
-      "url": "{{ route('how-it-works') }}"
-    }
-  ]
-}
+@json($howToSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 
@@ -80,7 +83,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ $settings['img_hiw_step1'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=700&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step1'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=700&auto=format&fit=crop&q=80') }}"
                              alt="مكتبة القصص" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-indigo-900/70 to-indigo-600/20"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -101,7 +104,7 @@
             <div class="flex flex-col lg:flex-row items-center gap-12 mb-24">
                 <div class="lg:w-1/2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ $settings['img_hiw_step2'] ?? 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step2'] ?? 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&auto=format&fit=crop&q=80') }}"
                              alt="صور الطفل" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-pink-900/70 to-pink-400/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -146,7 +149,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ $settings['img_hiw_step3'] ?? 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=700&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step3'] ?? 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=700&auto=format&fit=crop&q=80') }}"
                              alt="رسومات فنية" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-900/70 to-amber-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -167,7 +170,7 @@
             <div class="flex flex-col lg:flex-row items-center gap-12 mb-24">
                 <div class="lg:w-1/2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ $settings['img_hiw_step4'] ?? 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=700&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step4'] ?? 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=700&auto=format&fit=crop&q=80') }}"
                              alt="مراجعة التصميم" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-green-900/70 to-green-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -211,7 +214,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ $settings['img_hiw_step5'] ?? 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=700&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step5'] ?? 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=700&auto=format&fit=crop&q=80') }}"
                              alt="توصيل الكتاب" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-blue-900/70 to-blue-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">

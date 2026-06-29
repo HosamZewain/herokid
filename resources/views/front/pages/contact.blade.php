@@ -5,28 +5,31 @@
 <x-slot name="pageDescription">تواصل مع فريق HeroKid لأي استفسار عن قصص الأطفال المخصصة أو حالة طلبك. نرد خلال ساعات العمل عبر الواتساب أو البريد الإلكتروني.</x-slot>
 
 @push('schema')
+@php
+    $contactSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'ContactPage',
+        'name' => 'تواصل مع HeroKid',
+        'url' => \App\Support\Seo::url('/contact'),
+        'description' => 'صفحة تواصل HeroKid — دعم العملاء لقصص الأطفال المخصصة',
+        'mainEntity' => [
+            '@type' => 'LocalBusiness',
+            'name' => 'HeroKid',
+            'telephone' => ! empty($settings['whatsapp_number']) ? '+' . $settings['whatsapp_number'] : null,
+            'email' => $settings['site_email'] ?? null,
+            'address' => [
+                '@type' => 'PostalAddress',
+                'streetAddress' => $settings['address_street'] ?? '',
+                'addressLocality' => $settings['address_city'] ?? '',
+                'addressCountry' => 'EG',
+            ],
+            'openingHours' => 'Sa-Th 09:00-21:00',
+            'url' => \App\Support\Seo::url('/'),
+        ],
+    ];
+@endphp
 <script type="application/ld+json">
-{
-  "@@context": "https://schema.org",
-  "@@type": "ContactPage",
-  "name": "تواصل مع HeroKid",
-  "url": "{{ route('contact') }}",
-  "description": "صفحة تواصل HeroKid — دعم العملاء لقصص الأطفال المخصصة",
-  "mainEntity": {
-    "@@type": "LocalBusiness",
-    "name": "HeroKid",
-    "telephone": "+{{ $settings['whatsapp_number'] ?? '' }}",
-    "email": "{{ $settings['site_email'] ?? '' }}",
-    "address": {
-      "@@type": "PostalAddress",
-      "streetAddress": "{{ $settings['address_street'] ?? '' }}",
-      "addressLocality": "{{ $settings['address_city'] ?? '' }}",
-      "addressCountry": "EG"
-    },
-    "openingHours": "Sa-Th 09:00-21:00",
-    "url": "{{ config('app.url') }}"
-  }
-}
+@json($contactSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 
@@ -118,6 +121,12 @@
 
                         <form action="{{ route('contact.submit') }}" method="POST" class="space-y-5">
                             @csrf
+                            {{-- Honeypot: hidden from humans, bots fill it in --}}
+                            <div style="display:none" aria-hidden="true">
+                                <input type="text" name="website" value="" tabindex="-1" autocomplete="off">
+                            </div>
+                            {{-- Timing token: reject if form is submitted too fast --}}
+                            <input type="hidden" name="_loaded_at" value="{{ $formToken ?? now()->timestamp }}">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <div>
                                     <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الاسم الكامل <span class="text-red-500">*</span></label>

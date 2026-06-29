@@ -6,23 +6,22 @@
 
 @if($faqs->count())
 @push('schema')
+@php
+    $faqSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => $faqs->map(fn ($faq) => [
+            '@type' => 'Question',
+            'name' => $faq->question,
+            'acceptedAnswer' => [
+                '@type' => 'Answer',
+                'text' => $faq->answer,
+            ],
+        ])->values()->all(),
+    ];
+@endphp
 <script type="application/ld+json">
-{
-  "@@context": "https://schema.org",
-  "@@type": "FAQPage",
-  "mainEntity": [
-    @foreach($faqs as $faq)
-    {
-      "@@type": "Question",
-      "name": "{{ addslashes($faq->question) }}",
-      "acceptedAnswer": {
-        "@@type": "Answer",
-        "text": "{{ addslashes($faq->answer) }}"
-      }
-    }{{ !$loop->last ? ',' : '' }}
-    @endforeach
-  ]
-}
+@json($faqSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 @endif

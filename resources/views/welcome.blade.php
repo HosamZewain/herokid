@@ -6,23 +6,22 @@
 
 @if($faqs->count())
 @push('schema')
+@php
+    $homeFaqSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => $faqs->map(fn ($faq) => [
+            '@type' => 'Question',
+            'name' => $faq->question,
+            'acceptedAnswer' => [
+                '@type' => 'Answer',
+                'text' => $faq->answer,
+            ],
+        ])->values()->all(),
+    ];
+@endphp
 <script type="application/ld+json">
-{
-  "@@context": "https://schema.org",
-  "@@type": "FAQPage",
-  "mainEntity": [
-    @foreach($faqs as $faq)
-    {
-      "@@type": "Question",
-      "name": "{{ addslashes($faq->question) }}",
-      "acceptedAnswer": {
-        "@@type": "Answer",
-        "text": "{{ addslashes($faq->answer) }}"
-      }
-    }{{ !$loop->last ? ',' : '' }}
-    @endforeach
-  ]
-}
+@json($homeFaqSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 @endif
@@ -270,7 +269,7 @@
                                 @if($heroCard && $heroCard->cover_image)
                                     <img src="{{ $heroCard->cover_url }}" alt="{{ $heroCard->title }}" class="w-full h-full object-cover">
                                 @else
-                                    <img src="{{ $settings['img_hero_main'] ?? 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=500&auto=format&fit=crop&q=80' }}" alt="HeroKid" class="w-full h-full object-cover">
+                                    <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_main'] ?? 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=500&auto=format&fit=crop&q=80') }}" alt="HeroKid" class="w-full h-full object-cover">
                                 @endif
                                 <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(15,23,42,.85) 0%,transparent 52%);"></div>
                                 <div class="absolute top-3 right-3">
@@ -562,7 +561,7 @@
                 {{-- Step 1 --}}
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-violet-900/60 border border-violet-500/20">
-                        <img src="{{ $settings['img_home_step1'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=600&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step1'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=600&auto=format&fit=crop&q=80') }}"
                             alt="اختر القصة" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(109,40,217,.92) 0%, rgba(109,40,217,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
@@ -580,7 +579,7 @@
                 {{-- Step 2 --}}
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-pink-900/60 border border-pink-500/20">
-                        <img src="{{ $settings['img_home_step2'] ?? 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=600&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step2'] ?? 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=600&auto=format&fit=crop&q=80') }}"
                             alt="خصص وأرسل" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(190,24,93,.92) 0%, rgba(190,24,93,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
@@ -598,7 +597,7 @@
                 {{-- Step 3 --}}
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-amber-900/60 border border-amber-500/20">
-                        <img src="{{ $settings['img_home_step3'] ?? 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=600&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step3'] ?? 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=600&auto=format&fit=crop&q=80') }}"
                             alt="استلم الكتاب" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(161,90,0,.92) 0%, rgba(161,90,0,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
@@ -677,7 +676,7 @@
                 </div>
                 <div class="grid grid-cols-2 gap-4 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden aspect-square shadow-xl shadow-emerald-200/50 group">
-                        <img src="{{ $settings['img_stat_books'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=500&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_stat_books'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=500&auto=format&fit=crop&q=80') }}"
                             alt="قصص" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(4,120,87,.92) 0%,rgba(4,120,87,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
@@ -687,7 +686,7 @@
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">📚</div>
                     </div>
                     <div class="relative rounded-3xl overflow-hidden aspect-square shadow-xl shadow-teal-200/50 group">
-                        <img src="{{ $settings['img_stat_rating'] ?? 'https://images.unsplash.com/photo-1543269865-cbf427effbad?w=500&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_stat_rating'] ?? 'https://images.unsplash.com/photo-1543269865-cbf427effbad?w=500&auto=format&fit=crop&q=80') }}"
                             alt="تقييم" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(14,116,144,.92) 0%,rgba(14,116,144,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
@@ -697,7 +696,7 @@
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">⭐</div>
                     </div>
                     <div class="relative rounded-3xl overflow-hidden aspect-square shadow-xl shadow-emerald-200/50 group">
-                        <img src="{{ $settings['img_stat_family'] ?? 'https://images.unsplash.com/photo-1511895426328-dc8714191011?w=500&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_stat_family'] ?? 'https://images.unsplash.com/photo-1511895426328-dc8714191011?w=500&auto=format&fit=crop&q=80') }}"
                             alt="عائلات سعيدة" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(5,150,105,.92) 0%,rgba(5,150,105,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
@@ -707,7 +706,7 @@
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">👨‍👩‍👧</div>
                     </div>
                     <div class="relative rounded-3xl overflow-hidden aspect-square shadow-xl shadow-teal-200/50 group">
-                        <img src="{{ $settings['img_stat_delivery'] ?? 'https://images.unsplash.com/photo-1619454016518-697bc231e7cb?w=500&auto=format&fit=crop&q=80' }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_stat_delivery'] ?? 'https://images.unsplash.com/photo-1619454016518-697bc231e7cb?w=500&auto=format&fit=crop&q=80') }}"
                             alt="توصيل" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(8,145,178,.92) 0%,rgba(8,145,178,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
@@ -758,7 +757,7 @@
                                     <p class="text-[10px] text-rose-400 font-black uppercase tracking-wider">قائد المغامرة</p>
                                 </div>
                                 @if($testimonial->reviewer_avatar || $testimonial->image)
-                                    <img src="{{ $testimonial->reviewer_avatar ?? Storage::url($testimonial->image) }}"
+                                    <img src="{{ \App\Support\Seo::imageUrl($testimonial->reviewer_avatar ?: Storage::url($testimonial->image)) }}"
                                         alt="{{ $testimonial->reviewer_name ?? $testimonial->name }}"
                                         class="w-11 h-11 rounded-full object-cover border-2 border-rose-200 flex-shrink-0">
                                 @else

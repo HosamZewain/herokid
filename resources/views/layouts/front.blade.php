@@ -10,9 +10,59 @@
     @php
         $seoTitle = isset($pageTitle) ? (string) $pageTitle : 'قصص أطفال مخصصة تجعل طفلك بطل القصة';
         $seoDescription = isset($pageDescription) ? (string) $pageDescription : 'هيرو كيد — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي. اختر القصة، أرسل صورة طفلك، واستلمها مطبوعة خلال أيام.';
-        $seoImage = isset($pageImage) ? (string) $pageImage : asset('images/og-cover.jpg');
-        $canonicalUrl = rtrim(strtok(url()->full(), '?'), '/');
+        $seoImage = \App\Support\Seo::imageUrl(isset($pageImage) ? (string) $pageImage : '/images/og-cover.jpg');
+        $canonicalUrl = isset($canonical) ? \App\Support\Seo::url((string) $canonical) : \App\Support\Seo::canonicalForRequest(request());
         $fullTitle = $seoTitle . ' | HeroKid';
+        $siteUrl = \App\Support\Seo::url('/');
+        $organizationId = \App\Support\Seo::url('/#organization');
+        $websiteId = \App\Support\Seo::url('/#website');
+        $siteSchema = [
+            '@context' => 'https://schema.org',
+            '@graph' => [
+                [
+                    '@type' => 'Organization',
+                    '@id' => $organizationId,
+                    'name' => 'HeroKid',
+                    'url' => $siteUrl,
+                    'logo' => [
+                        '@type' => 'ImageObject',
+                        'url' => \App\Support\Seo::imageUrl('/images/logo.png'),
+                    ],
+                    'description' => 'أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.',
+                    'address' => [
+                        '@type' => 'PostalAddress',
+                        'addressLocality' => $settings['address_city'] ?? 'المنصورة',
+                        'addressCountry' => 'EG',
+                    ],
+                    'contactPoint' => [
+                        '@type' => 'ContactPoint',
+                        'contactType' => 'customer service',
+                        'availableLanguage' => 'Arabic',
+                    ],
+                    'sameAs' => array_values(array_filter([
+                        $settings['facebook_url'] ?? null,
+                        $settings['instagram_url'] ?? null,
+                        $settings['youtube_url'] ?? null,
+                    ])),
+                ],
+                [
+                    '@type' => 'WebSite',
+                    '@id' => $websiteId,
+                    'url' => $siteUrl,
+                    'name' => 'HeroKid',
+                    'publisher' => ['@id' => $organizationId],
+                    'inLanguage' => 'ar',
+                    'potentialAction' => [
+                        '@type' => 'SearchAction',
+                        'target' => [
+                            '@type' => 'EntryPoint',
+                            'urlTemplate' => \App\Support\Seo::url('/stories?search={search_term_string}'),
+                        ],
+                        'query-input' => 'required name=search_term_string',
+                    ],
+                ],
+            ],
+        ];
     @endphp
 
     <title>{{ $fullTitle }}</title>
@@ -51,49 +101,7 @@
 
     <!-- ══ JSON-LD: Organization + WebSite (every page) ══ -->
     <script type="application/ld+json">
-    {
-      "@@context": "https://schema.org",
-      "@@graph": [
-        {
-          "@@type": "Organization",
-          "@@id": "{{ config('app.url') }}/#organization",
-          "name": "HeroKid",
-          "url": "{{ config('app.url') }}",
-          "logo": {
-            "@@type": "ImageObject",
-            "url": "{{ asset('images/logo.png') }}"
-          },
-          "description": "أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.",
-          "address": {
-            "@@type": "PostalAddress",
-            "addressLocality": "{{ $settings['address_city'] ?? 'المنصورة' }}",
-            "addressCountry": "EG"
-          },
-          "contactPoint": {
-            "@@type": "ContactPoint",
-            "contactType": "customer service",
-            "availableLanguage": "Arabic"
-          },
-          "sameAs": []
-        },
-        {
-          "@@type": "WebSite",
-          "@@id": "{{ config('app.url') }}/#website",
-          "url": "{{ config('app.url') }}",
-          "name": "HeroKid",
-          "publisher": { "@@id": "{{ config('app.url') }}/#organization" },
-          "inLanguage": "ar",
-          "potentialAction": {
-            "@@type": "SearchAction",
-            "target": {
-              "@@type": "EntryPoint",
-              "urlTemplate": "{{ route('stories.index') }}?search={search_term_string}"
-            },
-            "query-input": "required name=search_term_string"
-          }
-        }
-      ]
-    }
+    @json($siteSchema, \App\Support\Seo::jsonFlags())
     </script>
 
     {{-- Extra schema injected per-page via @push('schema') --}}

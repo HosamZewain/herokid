@@ -9,6 +9,17 @@ set -e  # Exit immediately on error
 
 echo "🚀 Starting HeroKid deployment..."
 
+# ── 0. Validate production URL configuration ───────────────────────────────────
+if [[ -f .env ]]; then
+    APP_ENV_VALUE="$(grep -E '^APP_ENV=' .env | tail -n1 | cut -d= -f2- | tr -d '"'\''[:space:]')"
+    APP_URL_VALUE="$(grep -E '^APP_URL=' .env | tail -n1 | cut -d= -f2- | tr -d '"'\''[:space:]')"
+
+    if [[ "$APP_ENV_VALUE" == "production" && "$APP_URL_VALUE" != "https://hero-kid.com" ]]; then
+        echo "❌ APP_URL must be https://hero-kid.com before production config is cached."
+        exit 1
+    fi
+fi
+
 # ── 1. Install / update PHP dependencies ─────────────────────────────────────
 echo "📦 Installing Composer dependencies..."
 composer install --no-dev --optimize-autoloader --no-interaction

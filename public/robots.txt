@@ -21,8 +21,7 @@ Disallow: /verify-email
 Disallow: /confirm-password
 
 # Block query-param noise
-Disallow: /*?*page=
 Disallow: /*?*sort=
 
-# Dynamic sitemap (update domain before going live)
-Sitemap: https://herokid.eg/sitemap.xml
+# Dynamic sitemap
+Sitemap: https://hero-kid.com/sitemap.xml
