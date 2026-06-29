@@ -26,6 +26,7 @@ class AdminOrderProductionPromptTest extends TestCase
             'slug' => 'calm-sleep',
             'short_desc' => 'قصة قصيرة عن الهدوء والشجاعة قبل النوم.',
             'full_desc' => '<p>مغامرة ناعمة تساعد الطفل على الشعور بالأمان.</p>',
+            'age_range' => '8-10 سنوات',
             'language' => 'ar',
             'lesson_value' => 'الهدوء والاستقلال',
             'price' => 100,
@@ -45,7 +46,7 @@ class AdminOrderProductionPromptTest extends TestCase
             'child_gender' => 'girl',
             'language' => 'ar',
             'lesson' => 'الهدوء والاستقلال',
-            'interests' => 'الرسم والنجوم',
+            'interests' => "الرسم والنجوم و Frozen & Spider-Man\nألوان بنفسجية ومساحات هادئة",
             'gift_note' => 'إلى رينا الجميلة',
             'parent_notes' => 'تحب الألوان الهادئة.',
             'delivery_details' => ['email' => 'parent@example.test', 'phone' => '201000000000'],
@@ -64,6 +65,21 @@ class AdminOrderProductionPromptTest extends TestCase
         $response->assertSee('ليلة نوم هادئة');
         $prompt = $this->productionPromptFromResponse($response->getContent());
 
+        $this->assertStringContainsString('- Selected story age range: 8-10 سنوات', $prompt);
+        $this->assertStringContainsString("Interests / favorite themes: الرسم والنجوم و Frozen & Spider-Man\nألوان بنفسجية ومساحات هادئة", $prompt);
+        $this->assertStringContainsString('The child’s interests are parent-provided creative preferences', $prompt);
+        $this->assertStringContainsString('The final Hero Kid book must always contain exactly 28 A4 portrait pages.', $prompt);
+        $this->assertStringContainsString('- 7 physical A3 sheets', $prompt);
+        $this->assertStringContainsString('- The story must contain exactly 13 complete scenes.', $prompt);
+        $this->assertStringContainsString('## Reader Order and Print Imposition Rules', $prompt);
+        $this->assertStringContainsString('- Scene 13: Pages 26–27', $prompt);
+        $this->assertStringContainsString('Do not confuse reader-order scene spreads with printer-imposed A3 sheet sides.', $prompt);
+        $this->assertStringContainsString('## Spread Illustration and Text Layout Rules', $prompt);
+        $this->assertStringContainsString('one single connected full-width A3 landscape illustration across two facing A4 pages', $prompt);
+        $this->assertStringContainsString('- Final production canvas for each A3 spread: exactly 4961 × 3508 px.', $prompt);
+        $this->assertStringContainsString('- The selected story age range was used as the primary writing-complexity reference.', $prompt);
+        $this->assertStringContainsString('- The child’s raw parent-provided interests were preserved in the prompt.', $prompt);
+        $this->assertStringNotContainsString('Each A4 page area must be exactly: `2480 × 3508 px`', $prompt);
         $this->assertStringContainsString('/orders/' . $order->id . '/production-photos/0', $prompt);
         $this->assertStringNotContainsString('parent@example.test', $prompt);
         $this->assertStringNotContainsString('201000000000', $prompt);
@@ -105,6 +121,7 @@ class AdminOrderProductionPromptTest extends TestCase
         $response->assertSee('HK-2026-MISSING');
         $response->assertSee('سليم');
         $response->assertSee('- Story title: Not available');
+        $response->assertSee('- Selected story age range: Not available');
         $response->assertSee('No child images were attached to this order.');
     }
 
