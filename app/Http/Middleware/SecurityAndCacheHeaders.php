@@ -106,7 +106,9 @@ class SecurityAndCacheHeaders
     private function isPublicCacheableRoute(Request $request): bool
     {
         return $request->routeIs([
+            'home',
             'stories.index',
+            'stories.show',
             'faq',
             'pricing',
             'how-it-works',
