@@ -49,7 +49,6 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-right">
                             <div class="space-y-3">
                                 <div><span class="font-bold text-gray-600">اسم ولي الأمر:</span> <span class="text-gray-900">{{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}</span></div>
-                                <div><span class="font-bold text-gray-600">البريد الإلكتروني:</span> <span class="text-gray-900 dir-ltr text-left block">{{ $order->delivery_details['email'] ?? ($order->user->email ?? '-') }}</span></div>
                                 <div><span class="font-bold text-gray-600">الهاتف / واتساب:</span>
                                     <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}" target="_blank" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
                                 </div>
@@ -74,11 +73,19 @@
                     <!-- Delivery Info -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">عنوان التوصيل</h3>
-                        <p class="text-sm text-right text-gray-700">
-                            {{ $order->delivery_details['governorate'] ?? '-' }} /
-                            {{ $order->delivery_details['city'] ?? '-' }}<br>
-                            {{ $order->delivery_details['address'] ?? '-' }}
-                        </p>
+                        @php
+                            $delivery = $order->delivery_details ?? [];
+                        @endphp
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-right text-gray-700">
+                            <div><span class="font-bold text-gray-600">الدولة:</span> {{ $delivery['country'] ?? 'Egypt' }}</div>
+                            <div><span class="font-bold text-gray-600">المحافظة:</span> {{ $delivery['governorate'] ?? '-' }}</div>
+                            <div><span class="font-bold text-gray-600">المدينة:</span> {{ $delivery['city'] ?? '-' }}</div>
+                            <div><span class="font-bold text-gray-600">الشارع:</span> {{ $delivery['street'] ?? '-' }}</div>
+                            <div class="md:col-span-2">
+                                <span class="font-bold text-gray-600">تفاصيل العنوان:</span>
+                                {{ $delivery['address_details'] ?? ($delivery['address'] ?? '-') }}
+                            </div>
+                        </div>
                         @if(!empty($order->delivery_details['checkout_group']))
                             <div class="mt-4 pt-4 border-t text-sm text-right text-gray-700 space-y-2">
                                 <div><span class="font-bold text-gray-600">مجموعة السلة:</span> <span class="font-mono dir-ltr">{{ $order->delivery_details['checkout_group'] }}</span></div>

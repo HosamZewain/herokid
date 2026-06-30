@@ -111,7 +111,6 @@ class SecurityAndCacheHeaders
         return $request->routeIs([
             'home',
             'stories.index',
-            'stories.show',
             'faq',
             'pricing',
             'how-it-works',

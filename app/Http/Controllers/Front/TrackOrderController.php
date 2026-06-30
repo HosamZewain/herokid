@@ -16,26 +16,16 @@ class TrackOrderController extends Controller
     {
         $validated = $request->validate([
             'order_number' => 'required|string',
-            'email' => 'required|email',
+            'phone' => 'required|string|max:20',
         ]);
 
         $order = \App\Models\Order::with(['story', 'statusLogs'])
             ->where('order_number', $validated['order_number'])
-            ->whereJsonContains('delivery_details->email', $validated['email'])
+            ->where('delivery_details->phone', $validated['phone'])
             ->first();
 
         if (!$order) {
-            // Unregistered users or security fallback
-            $order = \App\Models\Order::with(['story', 'statusLogs'])
-                ->where('order_number', $validated['order_number'])
-                ->whereHas('user', function($q) use ($validated) {
-                    $q->where('email', $validated['email']);
-                })
-                ->first();
-        }
-
-        if (!$order) {
-            return back()->with('error', 'البيانات غير صحيحة. يرجى التأكد من رقم الطلب والبريد الإلكتروني.');
+            return back()->with('error', 'البيانات غير صحيحة. يرجى التأكد من رقم الطلب ورقم الموبايل.');
         }
 
         return view('front.track.show', compact('order'));

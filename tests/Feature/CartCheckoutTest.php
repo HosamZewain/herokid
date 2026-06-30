@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\DeliveryCountry;
+use App\Models\DeliveryGovernorate;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
@@ -15,10 +17,52 @@ class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_story_page_sets_session_cookie_for_cart_csrf_submission(): void
+    {
+        $story = $this->story('space-story', 'رحلة الفضاء', 100);
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertHeader('Set-Cookie');
+    }
+
+    public function test_story_cart_validation_errors_are_readable_arabic_messages(): void
+    {
+        $story = $this->story('space-story', 'رحلة الفضاء', 100);
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), [])
+            ->assertRedirect(route('stories.show', $story->slug))
+            ->assertSessionHasErrors([
+                'child_name',
+                'child_age',
+                'child_gender',
+                'privacy_consent',
+                'photos',
+            ]);
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('id="story-order-errors"', false)
+            ->assertSee('data-scroll-on-load', false)
+            ->assertSee('يرجى مراجعة البيانات التالية')
+            ->assertSee('يرجى إدخال اسم الطفل')
+            ->assertSee('يرجى إدخال عمر الطفل')
+            ->assertSee('يرجى اختيار جنس الطفل')
+            ->assertSee('يجب الموافقة على استخدام الصور لإكمال الطلب')
+            ->assertSee('يرجى رفع صورة واحدة واضحة للطفل على الأقل')
+            ->assertSee('اختيار الصور')
+            ->assertSee('لم يتم اختيار صور');
+    }
+
     public function test_parent_can_checkout_multiple_personalized_stories_with_shared_delivery_details(): void
     {
         Storage::fake('local');
         Setting::create(['key' => 'delivery_fee', 'value' => '75']);
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $egypt->update(['delivery_fee' => 75]);
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $cairo->update(['delivery_fee' => 40]);
 
         $spaceStory = $this->story('space-story', 'رحلة الفضاء', 100);
         $seaStory = $this->story('sea-story', 'سر البحر', 150);
@@ -35,15 +79,20 @@ class CartCheckoutTest extends TestCase
             ->assertOk()
             ->assertSee('رحلة الفضاء')
             ->assertSee('سر البحر')
-            ->assertSee('75');
+            ->assertSee('75')
+            ->assertSee('رقم الموبايل / واتساب')
+            ->assertSee('المحافظة')
+            ->assertSee('القاهرة')
+            ->assertDontSee('البريد الإلكتروني');
 
         $this->post(route('checkout.store'), [
             'parent_name' => 'Parent Name',
-            'email' => 'parent@example.test',
             'phone' => '201000000000',
-            'governorate' => 'Cairo',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
             'city' => 'Nasr City',
-            'address' => 'Street 1, Building 2',
+            'street' => 'Street 1',
+            'address_details' => 'Building 2, Apartment 3',
         ])->assertRedirect(route('checkout.success'));
 
         $this->assertDatabaseCount('orders', 2);
@@ -52,14 +101,28 @@ class CartCheckoutTest extends TestCase
         $orders = Order::with('story')->orderBy('id')->get();
         $this->assertSame(['رينا', 'سليم'], $orders->pluck('child_name')->all());
         $this->assertSame('Parent Name', $orders[0]->parent_name);
-        $this->assertSame('parent@example.test', $orders[0]->delivery_details['email']);
+        $this->assertArrayNotHasKey('email', $orders[0]->delivery_details);
         $this->assertSame('201000000000', $orders[0]->delivery_details['phone']);
+        $this->assertSame($egypt->id, $orders[0]->delivery_details['delivery_country_id']);
+        $this->assertSame($cairo->id, $orders[0]->delivery_details['delivery_governorate_id']);
+        $this->assertSame('Egypt', $orders[0]->delivery_details['country']);
+        $this->assertSame('القاهرة', $orders[0]->delivery_details['governorate']);
+        $this->assertSame('Nasr City', $orders[0]->delivery_details['city']);
+        $this->assertSame('Street 1', $orders[0]->delivery_details['street']);
+        $this->assertSame('Building 2, Apartment 3', $orders[0]->delivery_details['address_details']);
         $this->assertSame(250.0, (float) $orders[0]->delivery_details['subtotal']);
-        $this->assertSame(75.0, (float) $orders[0]->delivery_details['delivery_fee']);
-        $this->assertSame(325.0, (float) $orders[0]->delivery_details['total']);
+        $this->assertSame(40.0, (float) $orders[0]->delivery_details['delivery_fee']);
+        $this->assertSame(290.0, (float) $orders[0]->delivery_details['total']);
         $this->assertNotEmpty($orders[0]->delivery_details['checkout_group']);
         $this->assertSame($orders[0]->delivery_details['checkout_group'], $orders[1]->delivery_details['checkout_group']);
         $this->assertCount(1, $orders[0]->uploaded_photos);
+
+        $this->post(route('track.search'), [
+            'order_number' => $orders[0]->order_number,
+            'phone' => '201000000000',
+        ])
+            ->assertOk()
+            ->assertSee($orders[0]->order_number);
     }
 
     public function test_admin_can_control_delivery_fee_setting(): void
@@ -85,6 +148,84 @@ class CartCheckoutTest extends TestCase
         $this->assertDatabaseHas('settings', [
             'key' => 'delivery_fee',
             'value' => '65',
+        ]);
+    }
+
+    public function test_admin_order_details_show_new_delivery_address_fields_without_checkout_email(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin@example.test',
+            'password' => 'password',
+            'role' => 'admin',
+        ]);
+        $story = $this->story('space-story', 'رحلة الفضاء', 100);
+
+        $order = Order::create([
+            'order_number' => 'HK-2026-TEST01',
+            'parent_name' => 'Parent Name',
+            'story_id' => $story->id,
+            'child_name' => 'رينا',
+            'child_age' => 6,
+            'child_gender' => 'girl',
+            'language' => 'ar',
+            'delivery_details' => [
+                'phone' => '201000000000',
+                'country' => 'Egypt',
+                'governorate' => 'القاهرة',
+                'city' => 'Nasr City',
+                'street' => 'Street 1',
+                'address_details' => 'Building 2, Apartment 3',
+            ],
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertSee('Egypt')
+            ->assertSee('القاهرة')
+            ->assertSee('Nasr City')
+            ->assertSee('Street 1')
+            ->assertSee('Building 2, Apartment 3')
+            ->assertDontSee('البريد الإلكتروني');
+    }
+
+    public function test_admin_can_manage_country_and_governorate_delivery_fees(): void
+    {
+        $admin = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin@example.test',
+            'password' => 'password',
+            'role' => 'admin',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.delivery-zones.countries.store'), [
+            'name' => 'Saudi Arabia',
+            'code' => 'SA',
+            'delivery_fee' => 120,
+            'active' => 1,
+        ])->assertRedirect(route('admin.delivery-zones.index'));
+
+        $country = DeliveryCountry::where('code', 'SA')->firstOrFail();
+
+        $this->actingAs($admin)->post(route('admin.delivery-zones.governorates.store'), [
+            'delivery_country_id' => $country->id,
+            'name' => 'Riyadh',
+            'delivery_fee' => 90,
+            'active' => 1,
+        ])->assertRedirect(route('admin.delivery-zones.index'));
+
+        $this->assertDatabaseHas('delivery_countries', [
+            'name' => 'Saudi Arabia',
+            'code' => 'SA',
+            'delivery_fee' => 120,
+        ]);
+        $this->assertDatabaseHas('delivery_governorates', [
+            'delivery_country_id' => $country->id,
+            'name' => 'Riyadh',
+            'delivery_fee' => 90,
         ]);
     }
 

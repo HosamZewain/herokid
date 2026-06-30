@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryCountry;
+use App\Models\DeliveryGovernorate;
 use App\Models\Order;
-use App\Models\Setting;
 use App\Models\Story;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class CheckoutController extends Controller
@@ -17,12 +18,24 @@ class CheckoutController extends Controller
     {
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
             'phone' => 'required|string|max:20',
-            'governorate' => 'required|string|max:255',
+            'delivery_country_id' => [
+                'required',
+                Rule::exists('delivery_countries', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
+            'delivery_governorate_id' => [
+                'required',
+                Rule::exists('delivery_governorates', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
             'city' => 'required|string|max:255',
-            'address' => 'required|string|max:1000',
+            'street' => 'required|string|max:255',
+            'address_details' => 'required|string|max:1000',
         ]);
+
+        $country = DeliveryCountry::where('active', true)->findOrFail($validated['delivery_country_id']);
+        $governorate = DeliveryGovernorate::where('active', true)
+            ->where('delivery_country_id', $country->id)
+            ->findOrFail($validated['delivery_governorate_id']);
 
         $cart = session('cart.items', []);
 
@@ -34,11 +47,11 @@ class CheckoutController extends Controller
         $subtotal = collect($cart)->sum(function (array $item) use ($stories): float {
             return (float) ($stories->get($item['story_id'] ?? null)?->price ?? $item['story_price'] ?? 0);
         });
-        $deliveryFee = $this->deliveryFee();
+        $deliveryFee = $this->deliveryFee($country, $governorate);
         $checkoutGroup = 'CHK-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
         $orderIds = [];
 
-        DB::transaction(function () use ($cart, $stories, $validated, $subtotal, $deliveryFee, $checkoutGroup, &$orderIds): void {
+        DB::transaction(function () use ($cart, $stories, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, &$orderIds): void {
             $itemCount = count($cart);
 
             foreach (array_values($cart) as $index => $item) {
@@ -63,11 +76,15 @@ class CheckoutController extends Controller
                     'notes' => null,
                     'parent_notes' => $item['parent_notes'] ?? null,
                     'delivery_details' => [
-                        'email' => $validated['email'],
                         'phone' => $validated['phone'],
-                        'governorate' => $validated['governorate'],
+                        'delivery_country_id' => $country->id,
+                        'delivery_governorate_id' => $governorate->id,
+                        'country' => $country->name,
+                        'governorate' => $governorate->name,
                         'city' => $validated['city'],
-                        'address' => $validated['address'],
+                        'street' => $validated['street'],
+                        'address_details' => $validated['address_details'],
+                        'address' => trim($validated['street'] . ' - ' . $validated['address_details']),
                         'checkout_group' => $checkoutGroup,
                         'cart_item_index' => $index + 1,
                         'cart_items_count' => $itemCount,
@@ -123,10 +140,8 @@ class CheckoutController extends Controller
         return $orderNumber;
     }
 
-    private function deliveryFee(): float
+    private function deliveryFee(DeliveryCountry $country, DeliveryGovernorate $governorate): float
     {
-        $settings = Cache::remember('site_settings', 3600, fn () => Setting::all()->pluck('value', 'key')->toArray());
-
-        return max(0, (float) ($settings['delivery_fee'] ?? 0));
+        return max(0, (float) ($governorate->delivery_fee ?? $country->delivery_fee));
     }
 }

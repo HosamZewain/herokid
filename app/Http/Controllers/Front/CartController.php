@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryCountry;
 use App\Models\Setting;
 use App\Models\Story;
 use Illuminate\Http\Request;
@@ -19,7 +20,8 @@ class CartController extends Controller
         return view('front.cart.index', [
             'cartItems' => $cart,
             'subtotal' => $this->subtotal($cart),
-            'deliveryFee' => $this->deliveryFee(),
+            'deliveryFee' => $this->defaultDeliveryFee(),
+            'deliveryCountries' => $this->deliveryCountries(),
         ]);
     }
 
@@ -37,6 +39,27 @@ class CartController extends Controller
             'privacy_consent' => 'required|accepted',
             'photos' => 'required|array|min:1|max:5',
             'photos.*' => 'image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'child_name.required' => 'يرجى إدخال اسم الطفل.',
+            'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفاً.',
+            'child_age.required' => 'يرجى إدخال عمر الطفل.',
+            'child_age.integer' => 'يرجى إدخال عمر الطفل كرقم صحيح.',
+            'child_age.min' => 'عمر الطفل يجب ألا يقل عن سنة واحدة.',
+            'child_age.max' => 'عمر الطفل يجب ألا يزيد عن 18 سنة.',
+            'child_gender.required' => 'يرجى اختيار جنس الطفل.',
+            'child_gender.in' => 'يرجى اختيار جنس صحيح للطفل.',
+            'gift_note.max' => 'الإهداء يجب ألا يزيد عن 500 حرف.',
+            'interests.max' => 'اهتمامات الطفل يجب ألا تزيد عن 500 حرف.',
+            'parent_notes.max' => 'ملاحظات الفريق يجب ألا تزيد عن 1000 حرف.',
+            'privacy_consent.required' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
+            'privacy_consent.accepted' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
+            'photos.required' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photos.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
+            'photos.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photos.max' => 'يمكنك رفع 5 صور كحد أقصى.',
+            'photos.*.image' => 'يجب أن تكون صور الطفل ملفات صور صحيحة.',
+            'photos.*.mimes' => 'صور الطفل يجب أن تكون بصيغة JPG أو PNG.',
+            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن 5 ميجا.',
         ]);
 
         $itemKey = (string) Str::uuid();
@@ -103,10 +126,25 @@ class CartController extends Controller
         return collect($cart)->sum(fn (array $item): float => (float) ($item['story_price'] ?? 0));
     }
 
-    private function deliveryFee(): float
+    private function defaultDeliveryFee(): float
     {
+        $country = $this->deliveryCountries()->first();
+
+        if ($country) {
+            return max(0, (float) $country->delivery_fee);
+        }
+
         $settings = Cache::remember('site_settings', 3600, fn () => Setting::all()->pluck('value', 'key')->toArray());
 
         return max(0, (float) ($settings['delivery_fee'] ?? 0));
+    }
+
+    private function deliveryCountries()
+    {
+        return DeliveryCountry::where('active', true)
+            ->with(['activeGovernorates'])
+            ->orderByRaw("code = 'EG' desc")
+            ->orderBy('name')
+            ->get();
     }
 }

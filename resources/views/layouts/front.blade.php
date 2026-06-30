@@ -123,10 +123,13 @@
 </head>
 
 <body class="font-sans antialiased text-gray-900 bg-white">
+    @php
+        $cartItemCount = count(session('cart.items', []));
+    @endphp
     <div class="min-h-screen flex flex-col">
 
         <!-- ===================== NAVBAR ===================== -->
-        <nav class="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-50" x-data="{ mobileOpen: false }">
+        <nav class="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-18 py-3">
 
@@ -147,9 +150,16 @@
                                 الشائعة</x-nav-link>
                             <x-nav-link :href="route('track.index')" :active="request()->routeIs('track.*')">تتبع
                                 الطلب</x-nav-link>
-                            <x-nav-link :href="route('cart.index')" :active="request()->routeIs('cart.*')">السلة
-                                @if(count(session('cart.items', [])) > 0)
-                                    <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ count(session('cart.items', [])) }}</span>
+                            <x-nav-link :href="route('cart.index')" :active="request()->routeIs('cart.*')">
+                                <span class="inline-flex items-center gap-1.5">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437m0 0L6.75 14.25A2.25 2.25 0 009 16.5h7.5a2.25 2.25 0 002.2-1.77l1.05-4.8A1.5 1.5 0 0018.285 8H6.04m-.934-2.728L4.5 3m4.5 16.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm9 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                                    </svg>
+                                    <span>السلة</span>
+                                </span>
+                                @if($cartItemCount > 0)
+                                    <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
                                 @endif
                             </x-nav-link>
                         </div>
@@ -172,15 +182,26 @@
                                 </a>
                             @endauth
                         </div>
+                        <a href="{{ route('cart.index') }}"
+                            class="relative lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+                            aria-label="السلة">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437m0 0L6.75 14.25A2.25 2.25 0 009 16.5h7.5a2.25 2.25 0 002.2-1.77l1.05-4.8A1.5 1.5 0 0018.285 8H6.04m-.934-2.728L4.5 3m4.5 16.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm9 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                            </svg>
+                            @if($cartItemCount > 0)
+                                <span class="absolute -top-1 -left-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-black text-white">{{ $cartItemCount }}</span>
+                            @endif
+                        </a>
                         <!-- Mobile Hamburger -->
-                        <button @click="mobileOpen = !mobileOpen"
+                        <button type="button" data-front-menu-toggle aria-expanded="false" aria-controls="front-mobile-menu"
                             class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition">
-                            <svg x-show="!mobileOpen" class="w-6 h-6" fill="none" stroke="currentColor"
+                            <svg data-front-menu-open-icon class="w-6 h-6" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
-                            <svg x-show="mobileOpen" class="w-6 h-6" style="display:none" fill="none"
+                            <svg data-front-menu-close-icon class="hidden w-6 h-6" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M6 18L18 6M6 6l12 12" />
@@ -191,8 +212,8 @@
             </div>
 
             <!-- Mobile Menu -->
-            <div x-show="mobileOpen" x-transition
-                class="lg:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-2" style="display:none">
+            <div id="front-mobile-menu" data-front-mobile-menu
+                class="hidden lg:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-2">
                 <a href="{{ route('home') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الرئيسية</a>
                 <a href="{{ route('stories.index') }}"
@@ -209,9 +230,16 @@
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">تتبع
                     الطلب</a>
                 <a href="{{ route('cart.index') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">السلة
-                    @if(count(session('cart.items', [])) > 0)
-                        <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ count(session('cart.items', [])) }}</span>
+                    class="flex items-center justify-between px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">
+                    <span class="inline-flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437m0 0L6.75 14.25A2.25 2.25 0 009 16.5h7.5a2.25 2.25 0 002.2-1.77l1.05-4.8A1.5 1.5 0 0018.285 8H6.04m-.934-2.728L4.5 3m4.5 16.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm9 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                        </svg>
+                        <span>السلة</span>
+                    </span>
+                    @if($cartItemCount > 0)
+                        <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
                     @endif
                 </a>
                 <div class="pt-2 border-t border-gray-100">

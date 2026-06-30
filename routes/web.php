@@ -165,6 +165,13 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
     // Settings
     Route::get('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update'])->name('settings.update');
+    Route::get('delivery-zones', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'index'])->name('delivery-zones.index');
+    Route::post('delivery-zones/countries', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'storeCountry'])->name('delivery-zones.countries.store');
+    Route::put('delivery-zones/countries/{country}', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'updateCountry'])->name('delivery-zones.countries.update');
+    Route::delete('delivery-zones/countries/{country}', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'destroyCountry'])->name('delivery-zones.countries.destroy');
+    Route::post('delivery-zones/governorates', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'storeGovernorate'])->name('delivery-zones.governorates.store');
+    Route::put('delivery-zones/governorates/{governorate}', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'updateGovernorate'])->name('delivery-zones.governorates.update');
+    Route::delete('delivery-zones/governorates/{governorate}', [\App\Http\Controllers\Admin\DeliveryZoneController::class, 'destroyGovernorate'])->name('delivery-zones.governorates.destroy');
 
     // Admin Users Management
     Route::resource('users', \App\Http\Controllers\Admin\UserController::class)->except(['show']);

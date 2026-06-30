@@ -138,11 +138,6 @@
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">مصاريف التوصيل (ج.م)</label>
-                        <input type="number" name="settings[delivery_fee]" value="{{ $s('delivery_fee', 0) }}" min="0" step="0.01"
-                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    </div>
-                    <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">أدنى أيام توصيل</label>
                         <input type="number" name="settings[delivery_days_min]" value="{{ $s('delivery_days_min', 7) }}" min="1"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
@@ -151,6 +146,10 @@
                         <label class="block text-sm font-bold text-gray-700 mb-1">أقصى أيام توصيل</label>
                         <input type="number" name="settings[delivery_days_max]" value="{{ $s('delivery_days_max', 10) }}" min="1"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div class="md:col-span-2 rounded-lg bg-indigo-50 border border-indigo-100 p-4 text-sm text-indigo-800">
+                        يتم تحديد رسوم التوصيل حسب الدولة والمحافظة من صفحة
+                        <a href="{{ route('admin.delivery-zones.index') }}" class="font-bold underline">مناطق التوصيل</a>.
                     </div>
                 </div>
             </div>

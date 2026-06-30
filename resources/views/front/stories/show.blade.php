@@ -174,8 +174,20 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" enctype="multipart/form-data"
-                            class="space-y-0">
+                        @if($errors->any())
+                            <div id="story-order-errors" data-scroll-on-load
+                                class="bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-xl mb-6 text-right"
+                                tabindex="-1">
+                                <p class="font-extrabold mb-2">يرجى مراجعة البيانات التالية:</p>
+                                <ul class="space-y-1 text-sm list-disc list-inside">
+                                    @foreach($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" enctype="multipart/form-data" novalidate>
                             @csrf
 
                             {{-- SECTION 1: Child Info --}}
@@ -251,7 +263,17 @@
                                     </ul>
                                     <input type="file" name="photos[]" id="photos" multiple
                                         accept="image/jpeg,image/png,image/jpg" required
-                                        class="block w-full text-sm text-slate-500 file:ml-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 file:cursor-pointer">
+                                        class="sr-only"
+                                        data-photo-input>
+                                    <div class="flex flex-col sm:flex-row-reverse sm:items-center gap-3">
+                                        <label for="photos"
+                                            class="inline-flex justify-center items-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-indigo-700 cursor-pointer transition">
+                                            اختيار الصور
+                                        </label>
+                                        <span class="text-sm font-semibold text-slate-500" data-photo-label>
+                                            لم يتم اختيار صور
+                                        </span>
+                                    </div>
                                     <x-input-error :messages="$errors->get('photos')" class="mt-2" />
                                     <x-input-error :messages="$errors->get('photos.*')" class="mt-2" />
                                 </div>
@@ -287,7 +309,7 @@
                             </div>
 
                             {{-- Privacy Consent --}}
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 mb-6">
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 mb-8">
                                 <div class="flex items-start gap-3">
                                     <input id="privacy_consent" name="privacy_consent" type="checkbox" required
                                         class="mt-1 h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 flex-shrink-0">
@@ -305,7 +327,7 @@
                             </div>
 
                             {{-- Submit --}}
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8">
                                 <button type="submit" name="next" value="cart"
                                     class="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-300">
                                     <span>إضافة للسلة وإتمام الطلب</span>
