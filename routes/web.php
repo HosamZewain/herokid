@@ -137,7 +137,7 @@ Route::middleware('auth')->group(function () {
 });
 
 // Admin Routes
-Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard.index');
 
     Route::resource('stories', \App\Http\Controllers\Admin\StoryController::class);
@@ -178,6 +178,10 @@ Route::middleware(['auth', 'is_admin'])->prefix('admin')->name('admin.')->group(
 
     // Pricing Packages
     Route::resource('pricing', \App\Http\Controllers\Admin\PricingPackageController::class)->except(['show']);
+
+    // Admin Activity Logs
+    Route::get('activity-logs', [\App\Http\Controllers\Admin\AdminActivityLogController::class, 'index'])->name('activity-logs.index');
+    Route::get('activity-logs/{activityLog}', [\App\Http\Controllers\Admin\AdminActivityLogController::class, 'show'])->name('activity-logs.show');
 });
 
 require __DIR__.'/auth.php';

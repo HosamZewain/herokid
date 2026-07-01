@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Printed book delivery">
+  <rect width="640" height="420" rx="42" fill="#eff6ff"/>
+  <path d="M82 310h476" stroke="#bfdbfe" stroke-width="14" stroke-linecap="round"/>
+  <rect x="114" y="154" width="210" height="116" rx="24" fill="#2563eb"/>
+  <rect x="278" y="104" width="134" height="166" rx="20" fill="#60a5fa"/>
+  <circle cx="172" cy="288" r="30" fill="#111827"/>
+  <circle cx="370" cy="288" r="30" fill="#111827"/>
+  <circle cx="172" cy="288" r="12" fill="#fff"/>
+  <circle cx="370" cy="288" r="12" fill="#fff"/>
+  <rect x="430" y="150" width="96" height="94" rx="18" fill="#f97316"/>
+  <path d="M430 154l48-28 48 28-48 28z" fill="#fdba74"/>
+  <path d="M478 182v62" stroke="#fed7aa" stroke-width="8"/>
+  <path d="M130 120h98M104 160h70" stroke="#93c5fd" stroke-width="14" stroke-linecap="round"/>
+</svg>

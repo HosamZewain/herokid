@@ -83,7 +83,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step1'] ?? 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=700&auto=format&fit=crop&q=80') }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step1'] ?? \App\Support\SiteImages::url('img_hiw_step1')) }}"
                              alt="مكتبة القصص" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-indigo-900/70 to-indigo-600/20"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -104,7 +104,7 @@
             <div class="flex flex-col lg:flex-row items-center gap-12 mb-24">
                 <div class="lg:w-1/2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step2'] ?? 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&auto=format&fit=crop&q=80') }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step2'] ?? \App\Support\SiteImages::url('img_hiw_step2')) }}"
                              alt="صور الطفل" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-pink-900/70 to-pink-400/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -149,7 +149,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step3'] ?? 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=700&auto=format&fit=crop&q=80') }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step3'] ?? \App\Support\SiteImages::url('img_hiw_step3')) }}"
                              alt="رسومات فنية" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-amber-900/70 to-amber-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -170,7 +170,7 @@
             <div class="flex flex-col lg:flex-row items-center gap-12 mb-24">
                 <div class="lg:w-1/2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step4'] ?? 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=700&auto=format&fit=crop&q=80') }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step4'] ?? \App\Support\SiteImages::url('img_hiw_step4')) }}"
                              alt="مراجعة التصميم" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-green-900/70 to-green-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">
@@ -214,7 +214,7 @@
                 </div>
                 <div class="lg:w-1/2 order-1 lg:order-2">
                     <div class="relative rounded-3xl overflow-hidden h-64 shadow-xl">
-                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step5'] ?? 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=700&auto=format&fit=crop&q=80') }}"
+                        <img src="{{ \App\Support\Seo::imageUrl($settings['img_hiw_step5'] ?? \App\Support\SiteImages::url('img_hiw_step5')) }}"
                              alt="توصيل الكتاب" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-gradient-to-t from-blue-900/70 to-blue-500/10"></div>
                         <div class="absolute bottom-4 right-4 text-right">

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Delivery speed">
+  <rect width="640" height="420" rx="42" fill="#eff6ff"/>
+  <path d="M80 292h480" stroke="#bfdbfe" stroke-width="14" stroke-linecap="round"/>
+  <path d="M132 232h170c24 0 44 20 44 44v16H132z" fill="#2563eb"/>
+  <path d="M346 184h100l62 54v54H346z" fill="#3b82f6"/>
+  <path d="M374 208h54l34 30h-88z" fill="#dbeafe"/>
+  <circle cx="202" cy="306" r="34" fill="#111827"/>
+  <circle cx="430" cy="306" r="34" fill="#111827"/>
+  <circle cx="202" cy="306" r="14" fill="#ffffff"/>
+  <circle cx="430" cy="306" r="14" fill="#ffffff"/>
+  <path d="M112 188h112M92 222h90M118 154h64" stroke="#60a5fa" stroke-width="14" stroke-linecap="round"/>
+  <rect x="448" y="96" width="82" height="72" rx="14" fill="#f97316"/>
+  <path d="M448 100l41-24 41 24-41 24z" fill="#fdba74"/>
+</svg>

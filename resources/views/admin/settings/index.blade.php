@@ -199,34 +199,11 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
                     <span class="text-xl">🖼️</span> صور الموقع
-                    <span class="text-xs font-normal text-gray-400 mr-2">أدخل رابط URL للصورة (Unsplash أو أي مصدر مباشر)</span>
+                    <span class="text-xs font-normal text-gray-400 mr-2">كل الصور الافتراضية محلية من سيرفر الموقع ويمكن تعديل رابطها عند الحاجة</span>
                 </h3>
 
                 @php
-                // Default test images — used when DB has no saved value yet.
-                // The first time admin clicks "حفظ", these get persisted to DB.
-                $imgDefaults = [
-                    // Hero
-                    'img_hero_main'  => 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=500&auto=format&fit=crop&q=80',
-                    'img_hero_mini1' => 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=300&auto=format&fit=crop&q=80',
-                    'img_hero_mini2' => 'https://images.unsplash.com/photo-1490750967868-88df5691cc4a?w=300&auto=format&fit=crop&q=80',
-                    // Homepage steps
-                    'img_home_step1' => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=600&auto=format&fit=crop&q=80',
-                    'img_home_step2' => 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=600&auto=format&fit=crop&q=80',
-                    'img_home_step3' => 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=600&auto=format&fit=crop&q=80',
-                    // Stats
-                    'img_stat_books'    => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=500&auto=format&fit=crop&q=80',
-                    'img_stat_rating'   => 'https://images.unsplash.com/photo-1543269865-cbf427effbad?w=500&auto=format&fit=crop&q=80',
-                    'img_stat_family'   => 'https://images.unsplash.com/photo-1511895426328-dc8714191011?w=500&auto=format&fit=crop&q=80',
-                    'img_stat_delivery' => 'https://images.unsplash.com/photo-1619454016518-697bc231e7cb?w=500&auto=format&fit=crop&q=80',
-                    // How-it-works page
-                    'img_hiw_step1' => 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=700&auto=format&fit=crop&q=80',
-                    'img_hiw_step2' => 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=700&auto=format&fit=crop&q=80',
-                    'img_hiw_step3' => 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=700&auto=format&fit=crop&q=80',
-                    'img_hiw_step4' => 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=700&auto=format&fit=crop&q=80',
-                    'img_hiw_step5' => 'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=700&auto=format&fit=crop&q=80',
-                ];
-                // Helper that falls back to our defaults map
+                $imgDefaults = \App\Support\SiteImages::settingsDefaults();
                 $si = fn($key) => $settings[$key] ?? $imgDefaults[$key] ?? '';
                 @endphp
 
@@ -247,10 +224,10 @@
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ $meta['label'] }}</label>
                             <div class="flex gap-2 items-start">
                                 <div class="flex-1">
-                                    <input type="url" name="settings[{{ $key }}]"
+                                    <input type="text" name="settings[{{ $key }}]"
                                            value="{{ $val }}"
                                            oninput="previewImg(this,'{{ $meta['pid'] }}')"
-                                           placeholder="https://..."
+                                           placeholder="/images/site/settings/example.svg"
                                            class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs">
                                 </div>
                                 <img id="{{ $meta['pid'] }}" src="{{ $val }}" class="img-preview" alt="" {{ $val ? '' : 'style=display:none' }}>
@@ -277,10 +254,10 @@
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ $meta['label'] }}</label>
                             <div class="flex gap-2 items-start">
                                 <div class="flex-1">
-                                    <input type="url" name="settings[{{ $key }}]"
+                                    <input type="text" name="settings[{{ $key }}]"
                                            value="{{ $val }}"
                                            oninput="previewImg(this,'{{ $meta['pid'] }}')"
-                                           placeholder="https://..."
+                                           placeholder="/images/site/settings/example.svg"
                                            class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs">
                                 </div>
                                 <img id="{{ $meta['pid'] }}" src="{{ $val }}" class="img-preview" alt="" {{ $val ? '' : 'style=display:none' }}>
@@ -307,10 +284,10 @@
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ $meta['label'] }}</label>
                             <img id="{{ $meta['pid'] }}" src="{{ $val }}" class="img-preview-lg mb-2" alt="" {{ $val ? '' : 'style=display:none' }}>
-                            <input type="url" name="settings[{{ $key }}]"
+                            <input type="text" name="settings[{{ $key }}]"
                                    value="{{ $val }}"
                                    oninput="previewImg(this,'{{ $meta['pid'] }}')"
-                                   placeholder="https://..."
+                                   placeholder="/images/site/settings/example.svg"
                                    class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs">
                         </div>
                         @endforeach
@@ -335,10 +312,10 @@
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ $meta['label'] }}</label>
                             <img id="{{ $meta['pid'] }}" src="{{ $val }}" class="img-preview-lg mb-2" alt="" {{ $val ? '' : 'style=display:none' }}>
-                            <input type="url" name="settings[{{ $key }}]"
+                            <input type="text" name="settings[{{ $key }}]"
                                    value="{{ $val }}"
                                    oninput="previewImg(this,'{{ $meta['pid'] }}')"
-                                   placeholder="https://..."
+                                   placeholder="/images/site/settings/example.svg"
                                    class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-xs">
                         </div>
                         @endforeach

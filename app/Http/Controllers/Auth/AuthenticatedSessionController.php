@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Support\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,19 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        if ($request->user()?->role === 'admin') {
+            AdminActivityLogger::log(
+                action: 'admin.login',
+                description: 'تسجيل دخول مشرف إلى لوحة الإدارة.',
+                subject: $request->user(),
+                properties: [
+                    'login_to' => 'admin_panel',
+                ],
+                request: $request,
+                markRequestLogged: false,
+            );
+        }
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

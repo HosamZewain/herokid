@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -17,6 +18,11 @@ class SettingsController extends Controller
 
     public function update(Request $request)
     {
+        $settingsInput = $request->input('settings', []);
+        $before = Setting::whereIn('key', array_keys($settingsInput))
+            ->pluck('value', 'key')
+            ->toArray();
+
         $request->validate([
             'settings'                => 'required|array',
             'settings.site_name'      => 'required|string|max:100',
@@ -26,7 +32,7 @@ class SettingsController extends Controller
             'settings.price_hard_cover' => 'required|numeric|min:1',
         ]);
 
-        foreach ($request->input('settings', []) as $key => $value) {
+        foreach ($settingsInput as $key => $value) {
             Setting::updateOrCreate(['key' => $key], ['value' => $value ?? '']);
         }
 
@@ -36,6 +42,20 @@ class SettingsController extends Controller
 
         // Bust the cache so front-end picks up new values immediately
         Cache::forget('site_settings');
+
+        $after = Setting::whereIn('key', array_keys($settingsInput))
+            ->pluck('value', 'key')
+            ->toArray();
+
+        AdminActivityLogger::log(
+            action: 'settings.updated',
+            description: 'تحديث إعدادات الموقع.',
+            properties: [
+                'changed_settings' => AdminActivityLogger::changedValues($before, $after),
+                'age_ranges_count' => count($ageRanges),
+            ],
+            request: $request,
+        );
 
         return redirect()->route('admin.settings.index')->with('success', 'تم حفظ الإعدادات بنجاح!');
     }

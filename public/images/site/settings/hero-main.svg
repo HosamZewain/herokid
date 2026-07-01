@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Personalized HeroKid storybook">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff7ed"/>
+      <stop offset="0.55" stop-color="#ede9fe"/>
+      <stop offset="1" stop-color="#cffafe"/>
+    </linearGradient>
+    <linearGradient id="book" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" rx="42" fill="url(#bg)"/>
+  <circle cx="120" cy="92" r="52" fill="#fde68a"/>
+  <circle cx="526" cy="80" r="36" fill="#bfdbfe"/>
+  <circle cx="548" cy="322" r="70" fill="#fecdd3"/>
+  <path d="M130 314c72-78 147-92 229-41 52 32 100 34 151 4 22-13 45 7 36 32-14 41-86 62-158 39-76-24-133-7-191 53H130z" fill="#c7d2fe"/>
+  <g transform="translate(210 76)">
+    <path d="M46 22h242c20 0 36 16 36 36v238H76c-37 0-66-29-66-66V58c0-20 16-36 36-36z" fill="url(#book)"/>
+    <path d="M76 58h210v200H90c-24 0-44-20-44-44V88c0-17 13-30 30-30z" fill="#ffffff" opacity=".95"/>
+    <path d="M104 96h142" stroke="#c4b5fd" stroke-width="12" stroke-linecap="round"/>
+    <path d="M104 134h104" stroke="#fed7aa" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="164" cy="200" r="48" fill="#f59e0b"/>
+    <circle cx="164" cy="184" r="23" fill="#fde68a"/>
+    <path d="M118 254c13-39 79-39 92 0" fill="#7c3aed"/>
+    <path d="M286 58v238" stroke="#312e81" stroke-width="6" opacity=".22"/>
+  </g>
+  <g fill="#f59e0b">
+    <path d="M78 232l8 20 21 2-16 13 5 21-18-11-18 11 5-21-16-13 21-2z"/>
+    <path d="M500 166l6 15 16 2-12 10 4 16-14-8-14 8 4-16-12-10 16-2z"/>
+  </g>
+</svg>

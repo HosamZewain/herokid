@@ -42,6 +42,11 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    public function adminActivityLogs()
+    {
+        return $this->hasMany(AdminActivityLog::class);
+    }
     
     public function isAdmin()
     {

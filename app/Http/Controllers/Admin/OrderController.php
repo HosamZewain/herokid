@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
+use App\Support\AdminActivityLogger;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,18 @@ class OrderController extends Controller
         $order->load(['user', 'story', 'statusLogs', 'previews']);
         $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
 
+        AdminActivityLogger::log(
+            action: 'order.viewed',
+            description: 'عرض تفاصيل الطلب: ' . $order->order_number,
+            subject: $order,
+            properties: [
+                'order_number' => $order->order_number,
+                'status' => $order->status,
+                'story_title' => $order->story?->title,
+            ],
+            request: request(),
+        );
+
         return view('admin.orders.show', compact('order', 'storyProductionPrompt'));
     }
 
@@ -40,7 +53,9 @@ class OrderController extends Controller
             'admin_notes'  => 'nullable|string|max:2000',
         ]);
 
-        $statusChanged = $order->status !== $validated['status'];
+        $oldStatus = $order->status;
+        $oldNotes = $order->notes;
+        $statusChanged = $oldStatus !== $validated['status'];
 
         $order->update([
             'status' => $validated['status'],
@@ -53,6 +68,23 @@ class OrderController extends Controller
                 'notes'  => $request->admin_notes ?? 'تم تحديث الحالة من لوحة الإدارة.',
             ]);
         }
+
+        AdminActivityLogger::log(
+            action: $statusChanged ? 'order.status_updated' : 'order.updated',
+            description: 'تحديث الطلب: ' . $order->order_number,
+            subject: $order,
+            properties: [
+                'order_number' => $order->order_number,
+                'status' => [
+                    'old' => $oldStatus,
+                    'new' => $order->status,
+                    'changed' => $statusChanged,
+                ],
+                'notes_changed' => $oldNotes !== $order->notes,
+                'admin_notes' => $validated['admin_notes'] ?? null,
+            ],
+            request: $request,
+        );
 
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم تحديث الطلب بنجاح!');
     }
@@ -67,9 +99,10 @@ class OrderController extends Controller
             'preview_note' => 'nullable|string|max:1000',
         ]);
 
+        $oldStatus = $order->status;
         $path = $request->file('preview_file')->store('orders/previews/' . $order->id, 'local');
 
-        OrderPreview::create([
+        $preview = OrderPreview::create([
             'order_id'     => $order->id,
             'file_path'    => $path,
             'note'         => $request->preview_note,
@@ -82,6 +115,27 @@ class OrderController extends Controller
             'status' => 'preview_uploaded',
             'notes'  => 'تم رفع التصميم الأولي وإرساله للعميل للموافقة.',
         ]);
+
+        AdminActivityLogger::log(
+            action: 'order.preview_uploaded',
+            description: 'رفع تصميم معاينة للطلب: ' . $order->order_number,
+            subject: $order,
+            properties: [
+                'order_number' => $order->order_number,
+                'preview_id' => $preview->id,
+                'preview_file' => [
+                    'path' => $path,
+                    'original_name' => $request->file('preview_file')?->getClientOriginalName(),
+                    'mime_type' => $request->file('preview_file')?->getClientMimeType(),
+                    'size' => $request->file('preview_file')?->getSize(),
+                ],
+                'status' => [
+                    'old' => $oldStatus,
+                    'new' => 'preview_uploaded',
+                ],
+            ],
+            request: $request,
+        );
 
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم رفع التصميم وتحديث حالة الطلب إلى "في انتظار موافقة العميل".');
     }

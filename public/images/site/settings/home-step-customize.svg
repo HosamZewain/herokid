@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Customize child story">
+  <rect width="640" height="420" rx="42" fill="#fdf2f8"/>
+  <rect x="96" y="82" width="448" height="256" rx="34" fill="#ffffff"/>
+  <rect x="128" y="122" width="168" height="176" rx="24" fill="#fce7f3"/>
+  <circle cx="212" cy="184" r="46" fill="#fbbf24"/>
+  <circle cx="212" cy="168" r="24" fill="#fde68a"/>
+  <path d="M160 262c18-44 86-44 104 0" fill="#ec4899"/>
+  <path d="M340 134h130M340 174h104M340 214h142" stroke="#c4b5fd" stroke-width="16" stroke-linecap="round"/>
+  <rect x="340" y="248" width="148" height="36" rx="18" fill="#4f46e5"/>
+  <circle cx="500" cy="258" r="54" fill="#fee2e2" opacity=".8"/>
+  <path d="M482 256l16 16 32-42" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

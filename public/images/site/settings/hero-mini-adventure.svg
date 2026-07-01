@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Adventure story card">
+  <rect width="640" height="420" rx="42" fill="#ecfdf5"/>
+  <circle cx="116" cy="94" r="48" fill="#bbf7d0"/>
+  <circle cx="522" cy="82" r="38" fill="#fde68a"/>
+  <path d="M0 298c98-58 183-74 256-47 79 29 139 20 205-26 61-43 119-38 179 16v179H0z" fill="#22c55e"/>
+  <path d="M0 348c81-45 166-50 255-16 101 39 195 34 283-15 39-22 73-20 102 5v98H0z" fill="#15803d"/>
+  <g transform="translate(210 82)">
+    <path d="M64 262l32-120 32 120z" fill="#92400e"/>
+    <path d="M96 56l-72 126h144z" fill="#166534"/>
+    <path d="M178 264l26-96 26 96z" fill="#78350f"/>
+    <path d="M204 82l-60 108h120z" fill="#16a34a"/>
+    <path d="M268 264l20-74 20 74z" fill="#78350f"/>
+    <path d="M288 126l-48 86h96z" fill="#15803d"/>
+  </g>
+  <path d="M124 276c34-30 77-45 128-44" stroke="#fef3c7" stroke-width="10" stroke-linecap="round" stroke-dasharray="2 24"/>
+  <circle cx="124" cy="276" r="16" fill="#f97316"/>
+  <path d="M112 274l12-30 12 30-12 10z" fill="#fb923c"/>
+</svg>

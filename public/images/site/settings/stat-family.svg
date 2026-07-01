@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Happy family">
+  <rect width="640" height="420" rx="42" fill="#fff7ed"/>
+  <circle cx="320" cy="94" r="48" fill="#fde68a"/>
+  <path d="M104 316c42-68 94-102 156-102s114 34 156 102z" fill="#fed7aa"/>
+  <circle cx="260" cy="164" r="46" fill="#f59e0b"/>
+  <circle cx="260" cy="150" r="24" fill="#fde68a"/>
+  <path d="M206 282c17-55 91-55 108 0z" fill="#4f46e5"/>
+  <circle cx="382" cy="166" r="44" fill="#ec4899"/>
+  <circle cx="382" cy="150" r="23" fill="#fde68a"/>
+  <path d="M330 282c17-53 87-53 104 0z" fill="#db2777"/>
+  <circle cx="320" cy="206" r="34" fill="#fb923c"/>
+  <circle cx="320" cy="194" r="18" fill="#fde68a"/>
+  <path d="M280 296c15-43 65-43 80 0z" fill="#10b981"/>
+  <path d="M168 324h304" stroke="#fdba74" stroke-width="14" stroke-linecap="round"/>
+</svg>

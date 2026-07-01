@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 
 class StoryController extends Controller
@@ -75,6 +76,17 @@ class StoryController extends Controller
         $story = \App\Models\Story::create($validated);
         $story->categories()->sync($request->input('category_ids', []));
 
+        AdminActivityLogger::log(
+            action: 'story.created',
+            description: 'إضافة قصة جديدة: ' . $story->title,
+            subject: $story,
+            properties: [
+                'story' => $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']),
+                'category_ids' => $request->input('category_ids', []),
+            ],
+            request: $request,
+        );
+
         return redirect()->route('admin.stories.index')->with('success', 'تم إضافة القصة بنجاح!');
     }
 
@@ -101,6 +113,12 @@ class StoryController extends Controller
      */
     public function update(Request $request, \App\Models\Story $story)
     {
+        $before = $story->only([
+            'title', 'slug', 'short_desc', 'full_desc', 'age_range', 'language',
+            'lesson_value', 'gender', 'price', 'active', 'cover_image', 'full_story', 'prompt',
+        ]);
+        $beforeCategories = $story->categories()->pluck('story_categories.id')->all();
+
         $validated = $request->validate([
             'title'        => 'required|string|max:255',
             'slug'         => 'required|string|max:255|unique:stories,slug,'.$story->id,
@@ -130,6 +148,24 @@ class StoryController extends Controller
 
         $story->update($validated);
         $story->categories()->sync($request->input('category_ids', []));
+        $story->refresh();
+
+        $after = $story->only(array_keys($before));
+        $afterCategories = $story->categories()->pluck('story_categories.id')->all();
+
+        AdminActivityLogger::log(
+            action: 'story.updated',
+            description: 'تحديث قصة: ' . $story->title,
+            subject: $story,
+            properties: [
+                'changes' => AdminActivityLogger::changedValues($before, $after),
+                'categories' => [
+                    'old' => $beforeCategories,
+                    'new' => $afterCategories,
+                ],
+            ],
+            request: $request,
+        );
 
         return redirect()->route('admin.stories.index')->with('success', 'تم تحديث القصة بنجاح!');
     }
@@ -139,10 +175,22 @@ class StoryController extends Controller
      */
     public function destroy(\App\Models\Story $story)
     {
+        $storyDetails = $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']);
+
         if ($story->cover_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($story->cover_image)) {
             \Illuminate\Support\Facades\Storage::disk('public')->delete($story->cover_image);
         }
         $story->delete();
+
+        AdminActivityLogger::log(
+            action: 'story.deleted',
+            description: 'حذف قصة: ' . ($storyDetails['title'] ?? '#' . $storyDetails['id']),
+            subject: $story,
+            properties: [
+                'story' => $storyDetails,
+            ],
+            request: request(),
+        );
 
         return redirect()->route('admin.stories.index')->with('success', 'تم حذف القصة بنجاح!');
     }
