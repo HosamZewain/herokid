@@ -5,10 +5,11 @@
     <form method="POST" action="{{ route('login') }}">
         @csrf
 
-        <!-- Email Address -->
+        <!-- Login identifier -->
         <div>
-            <x-input-label for="email" :value="__('البريد الإلكتروني')" />
-            <x-text-input id="email" class="block mt-1 w-full text-left font-sans" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" dir="ltr" />
+            <x-input-label for="login" :value="__('البريد الإلكتروني أو رقم الموبايل')" />
+            <x-text-input id="login" class="block mt-1 w-full text-left font-sans" type="text" name="login" :value="old('login', old('email'))" required autofocus autocomplete="username" dir="ltr" />
+            <x-input-error :messages="$errors->get('login')" class="mt-2" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
@@ -30,21 +31,18 @@
             </label>
         </div>
 
-        <div class="flex justify-between items-center mt-6">
-            <div class="flex flex-col gap-2">
-                @if (Route::has('password.request'))
+        <div class="mt-6">
+            <x-primary-button class="w-full justify-center py-3">
+                {{ __('دخول') }}
+            </x-primary-button>
+
+            @if (Route::has('password.request'))
+                <div class="mt-4 text-center">
                     <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('password.request') }}">
                         {{ __('هل نسيت كلمة المرور؟') }}
                     </a>
-                @endif
-                <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('register') }}">
-                    {{ __('إنشاء حساب جديد') }}
-                </a>
-            </div>
-
-            <x-primary-button class="ms-3">
-                {{ __('دخول') }}
-            </x-primary-button>
+                </div>
+            @endif
         </div>
     </form>
 </x-guest-layout>

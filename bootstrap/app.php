@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 \App\Http\Middleware\SecurityAndCacheHeaders::class,
                 \App\Http\Middleware\CanonicalHost::class,
             ],
+            append: [
+                \App\Http\Middleware\TrackCustomerVisit::class,
+            ],
         );
 
         $middleware->alias([

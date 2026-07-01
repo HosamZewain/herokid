@@ -15,6 +15,8 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/login');
 
         $response->assertStatus(200);
+        $response->assertSee('Login');
+        $response->assertSee('Register');
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void
@@ -27,6 +29,21 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
+        $response->assertRedirect(route('dashboard', absolute: false));
+    }
+
+    public function test_users_can_authenticate_using_phone_number(): void
+    {
+        $user = User::factory()->create([
+            'phone' => '201111111111',
+        ]);
+
+        $response = $this->post('/login', [
+            'login' => '201111111111',
+            'password' => 'password',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
+use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Story;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class CartController extends Controller
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $this->deliveryCountries(),
+            'savedDeliveryDetails' => $this->savedDeliveryDetails(),
         ]);
     }
 
@@ -146,5 +148,21 @@ class CartController extends Controller
             ->orderByRaw("code = 'EG' desc")
             ->orderBy('name')
             ->get();
+    }
+
+    private function savedDeliveryDetails(): array
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return [];
+        }
+
+        $latestOrder = Order::where('user_id', $user->id)
+            ->whereNotNull('delivery_details')
+            ->latest()
+            ->first();
+
+        return is_array($latestOrder?->delivery_details) ? $latestOrder->delivery_details : [];
     }
 }

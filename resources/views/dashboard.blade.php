@@ -37,6 +37,19 @@
 
             {{-- Orders list --}}
             @if($orders->count() > 0)
+                @php
+                    $whatsappBaseUrl = $settings['whatsapp_url'] ?? null;
+                    $whatsappUrlWithText = function (string $text) use ($whatsappBaseUrl): string {
+                        if (empty($whatsappBaseUrl)) {
+                            return '#';
+                        }
+
+                        $separator = str_contains($whatsappBaseUrl, '?') ? '&' : '?';
+
+                        return $whatsappBaseUrl . $separator . 'text=' . urlencode($text);
+                    };
+                @endphp
+
                 <div class="space-y-6">
                     @foreach($orders as $order)
                         @php
@@ -168,7 +181,7 @@
                                                 ✅ أوافق على التصميم — ابدأ الطباعة
                                             </button>
                                         </form>
-                                        <a href="https://wa.me/201000000000?text={{ urlencode('مرحباً، لدي طلب تعديل على تصميم القصة. رقم الطلب: #' . $order->order_number) }}"
+                                        <a href="{{ $whatsappUrlWithText('مرحباً، لدي طلب تعديل على تصميم القصة. رقم الطلب: #' . $order->order_number) }}"
                                            target="_blank"
                                            class="flex-1 text-center bg-white hover:bg-green-50 text-green-700 font-bold py-3 px-6 rounded-xl text-sm border border-green-200 transition">
                                             💬 طلب تعديل عبر واتساب
@@ -201,12 +214,15 @@
 
                                 {{-- Collapsible status log --}}
                                 @if($order->statusLogs->count() > 0)
-                                <div x-data="{ open: false }" class="mt-2">
-                                    <button @click="open = !open"
+                                <div class="mt-2">
+                                    <button type="button"
+                                            data-status-log-toggle
+                                            aria-expanded="false"
+                                            aria-controls="status-log-{{ $order->id }}"
                                             class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
-                                        <span x-text="open ? '▲ إخفاء سجل التحديثات' : '▼ عرض سجل التحديثات'">▼ عرض سجل التحديثات</span>
+                                        <span data-status-log-label>▼ عرض سجل التحديثات</span>
                                     </button>
-                                    <div x-show="open" x-transition class="mt-3 space-y-2 border-r-2 border-indigo-100 pr-3" style="display:none">
+                                    <div id="status-log-{{ $order->id }}" hidden class="mt-3 space-y-2 border-r-2 border-indigo-100 pr-3">
                                         @foreach($order->statusLogs->sortByDesc('created_at') as $log)
                                             <div class="flex items-start gap-2 text-xs text-slate-600">
                                                 <span class="text-slate-400 whitespace-nowrap">{{ $log->created_at->format('d/m H:i') }}</span>
@@ -221,7 +237,7 @@
 
                             {{-- Order footer --}}
                             <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs">
-                                <a href="https://wa.me/201000000000?text={{ urlencode('مرحباً، أريد الاستفسار عن طلبي رقم: #' . $order->order_number) }}"
+                                <a href="{{ $whatsappUrlWithText('مرحباً، أريد الاستفسار عن طلبي رقم: #' . $order->order_number) }}"
                                    target="_blank"
                                    class="text-green-600 hover:text-green-800 font-bold">
                                     💬 تواصل معنا بشأن هذا الطلب

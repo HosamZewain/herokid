@@ -7,8 +7,9 @@
     $cartCount = count($cartItems);
     $total = $subtotal + $deliveryFee;
     $defaultCountry = $deliveryCountries->firstWhere('code', 'EG') ?? $deliveryCountries->first();
-    $selectedCountryId = (string) old('delivery_country_id', $defaultCountry?->id);
-    $selectedGovernorateId = (string) old('delivery_governorate_id');
+    $savedDeliveryDetails = $savedDeliveryDetails ?? [];
+    $selectedCountryId = (string) old('delivery_country_id', data_get($savedDeliveryDetails, 'delivery_country_id', $defaultCountry?->id));
+    $selectedGovernorateId = (string) old('delivery_governorate_id', data_get($savedDeliveryDetails, 'delivery_governorate_id'));
 @endphp
 
 <div class="min-h-[70vh] bg-slate-50">
@@ -57,7 +58,11 @@
                         </div>
                     </div>
                     <div class="bg-indigo-50 p-8 sm:p-10 flex items-center justify-center">
-                        <img src="/images/logo.png" alt="HeroKid" class="max-h-40 w-auto object-contain">
+                        <img src="/images/logo-192.png"
+                            srcset="/images/logo-96.png 96w, /images/logo-192.png 192w, /images/logo-320.png 320w"
+                            sizes="160px"
+                            width="192" height="164"
+                            alt="HeroKid" class="max-h-40 w-auto object-contain">
                     </div>
                 </div>
             </div>
@@ -87,7 +92,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم الموبايل / واتساب <span class="text-red-500">*</span></label>
-                                <input type="text" name="phone" value="{{ old('phone') }}" required dir="ltr"
+                                <input type="text" name="phone" value="{{ old('phone', auth()->user()->phone ?? data_get($savedDeliveryDetails, 'phone')) }}" required dir="ltr"
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
                                 <x-input-error :messages="$errors->get('phone')" class="mt-1" />
                             </div>
@@ -130,13 +135,13 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة <span class="text-red-500">*</span></label>
-                                    <input type="text" name="city" value="{{ old('city') }}" required
+                                    <input type="text" name="city" value="{{ old('city', data_get($savedDeliveryDetails, 'city')) }}" required
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                     <x-input-error :messages="$errors->get('city')" class="mt-1" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الشارع <span class="text-red-500">*</span></label>
-                                    <input type="text" name="street" value="{{ old('street') }}" required
+                                    <input type="text" name="street" value="{{ old('street', data_get($savedDeliveryDetails, 'street')) }}" required
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                     <x-input-error :messages="$errors->get('street')" class="mt-1" />
                                 </div>
@@ -144,7 +149,7 @@
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">تفاصيل العنوان <span class="text-red-500">*</span></label>
                                 <textarea name="address_details" rows="3" required
-                                    class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">{{ old('address_details') }}</textarea>
+                                    class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">{{ old('address_details', data_get($savedDeliveryDetails, 'address_details')) }}</textarea>
                                 <x-input-error :messages="$errors->get('address_details')" class="mt-1" />
                             </div>
                             <button type="submit"

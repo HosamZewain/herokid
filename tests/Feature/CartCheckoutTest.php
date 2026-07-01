@@ -229,6 +229,67 @@ class CartCheckoutTest extends TestCase
         ]);
     }
 
+    public function test_cart_prefills_registered_user_phone_and_latest_delivery_address(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Parent User',
+            'phone' => '201555555555',
+        ]);
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $story = $this->story('saved-address-story', 'قصة العنوان', 149);
+
+        Order::create([
+            'order_number' => 'HK-2026-ADDR01',
+            'user_id' => $user->id,
+            'parent_name' => 'Parent User',
+            'story_id' => $story->id,
+            'child_name' => 'رينا',
+            'child_age' => 6,
+            'child_gender' => 'girl',
+            'language' => 'ar',
+            'delivery_details' => [
+                'phone' => '201000000000',
+                'delivery_country_id' => $egypt->id,
+                'delivery_governorate_id' => $cairo->id,
+                'country' => 'Egypt',
+                'governorate' => 'القاهرة',
+                'city' => 'Nasr City',
+                'street' => 'Street 9',
+                'address_details' => 'Building 10, Apartment 4',
+            ],
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+
+        $this->withSession([
+            'cart.items' => [
+                'cart-key' => [
+                    'key' => 'cart-key',
+                    'story_id' => $story->id,
+                    'story_title' => $story->title,
+                    'story_slug' => $story->slug,
+                    'story_price' => (float) $story->price,
+                    'child_name' => 'رينا',
+                    'child_age' => 6,
+                    'child_gender' => 'girl',
+                    'uploaded_photos' => ['orders/cart/test/child.png'],
+                ],
+            ],
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('value="Parent User"', false)
+            ->assertSee('value="201555555555"', false)
+            ->assertSee('value="Nasr City"', false)
+            ->assertSee('value="Street 9"', false)
+            ->assertSee('Building 10, Apartment 4')
+            ->assertSee('value="' . $egypt->id . '" data-fee', false)
+            ->assertSee('value="' . $cairo->id . '"', false);
+    }
+
     private function story(string $slug, string $title, int $price): Story
     {
         return Story::create([

@@ -7,6 +7,7 @@ use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
 use App\Models\Story;
+use App\Support\Phone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -16,6 +17,10 @@ class CheckoutController extends Controller
 {
     public function store(Request $request)
     {
+        $request->merge([
+            'phone' => Phone::normalize($request->input('phone')),
+        ]);
+
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
@@ -49,9 +54,14 @@ class CheckoutController extends Controller
         });
         $deliveryFee = $this->deliveryFee($country, $governorate);
         $checkoutGroup = 'CHK-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
+        $checkoutSessionId = $request->session()->getId();
         $orderIds = [];
 
-        DB::transaction(function () use ($cart, $stories, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, &$orderIds): void {
+        if (auth()->check() && ! auth()->user()->phone) {
+            auth()->user()->forceFill(['phone' => $validated['phone']])->saveQuietly();
+        }
+
+        DB::transaction(function () use ($cart, $stories, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, &$orderIds): void {
             $itemCount = count($cart);
 
             foreach (array_values($cart) as $index => $item) {
@@ -86,6 +96,7 @@ class CheckoutController extends Controller
                         'address_details' => $validated['address_details'],
                         'address' => trim($validated['street'] . ' - ' . $validated['address_details']),
                         'checkout_group' => $checkoutGroup,
+                        'checkout_session_id' => $checkoutSessionId,
                         'cart_item_index' => $index + 1,
                         'cart_items_count' => $itemCount,
                         'item_price' => (float) $story->price,

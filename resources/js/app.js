@@ -1,9 +1,5 @@
 import './bootstrap';
 
-import Alpine from 'alpinejs';
-
-window.Alpine = Alpine;
-
 document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('[data-front-menu-toggle]');
     const menu = document.querySelector('[data-front-mobile-menu]');
@@ -39,6 +35,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.querySelectorAll('[data-faq-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const item = button.closest('[data-faq-item]');
+            const answer = item?.querySelector('[data-faq-answer]');
+            const icon = item?.querySelector('[data-faq-icon]');
+            const indicator = item?.querySelector('[data-faq-indicator]');
+
+            if (!answer) {
+                return;
+            }
+
+            const isOpen = button.getAttribute('aria-expanded') === 'true';
+            const nextOpen = !isOpen;
+
+            button.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+            answer.hidden = !nextOpen;
+            icon?.classList.toggle('rotate-180', nextOpen);
+
+            if (indicator) {
+                indicator.classList.toggle('bg-amber-500', nextOpen);
+                indicator.classList.toggle('text-white', nextOpen);
+                indicator.classList.toggle('bg-amber-100', !nextOpen);
+                indicator.classList.toggle('text-amber-600', !nextOpen);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-status-log-toggle]').forEach((button) => {
+        const targetId = button.getAttribute('aria-controls');
+        const log = targetId ? document.getElementById(targetId) : null;
+        const label = button.querySelector('[data-status-log-label]');
+
+        if (!log) {
+            return;
+        }
+
+        button.addEventListener('click', () => {
+            const nextOpen = button.getAttribute('aria-expanded') !== 'true';
+
+            button.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+            log.hidden = !nextOpen;
+
+            if (label) {
+                label.textContent = nextOpen ? '▲ إخفاء سجل التحديثات' : '▼ عرض سجل التحديثات';
+            }
+        });
+    });
+
     if (toggle && menu) {
         const setOpen = (isOpen) => {
             menu.classList.toggle('hidden', !isOpen);
@@ -52,9 +96,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
-try {
-    Alpine.start();
-} catch (error) {
-    console.warn('Alpine failed to start.', error);
-}

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800&display=swap" rel="stylesheet" />
     <!-- Favicon -->
-    <link rel="icon" type="image/jpeg" href="/images/logo.png">
+    <link rel="icon" type="image/png" href="/images/logo-96.png">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
@@ -30,7 +30,7 @@
             {{-- Logo --}}
             <div class="px-6 py-5 border-b border-indigo-700">
                 <a href="{{ route('admin.dashboard.index') }}" class="flex items-center gap-3">
-                    <img src="/images/logo.png" alt="HeroKid"
+                    <img src="/images/logo-192.png" alt="HeroKid"
                         class="h-8 md:h-16 w-8 md:w-16 rounded-lg object-contain bg-white p-0.5">
                     <span class="font-extrabold text-lg text-white">HeroKid</span>
                     <span class="text-indigo-300 text-xs font-bold">Admin</span>
@@ -76,6 +76,16 @@
                                 d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                         القصص
+                    </a>
+
+                    <a href="{{ route('admin.customers.index') }}"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
+                          {{ request()->routeIs('admin.customers.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
+                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m8-4a4 4 0 10-8 0 4 4 0 008 0zm-8 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        Customers
                     </a>
 
                     <a href="{{ route('admin.categories.index') }}"

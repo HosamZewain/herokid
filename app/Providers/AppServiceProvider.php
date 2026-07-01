@@ -18,6 +18,10 @@ class AppServiceProvider extends ServiceProvider
         // Force HTTPS in production so asset() / Storage::url() always return https:// URLs.
         // Without this, APP_URL=http:// causes mixed-content errors and images won't load.
         if ($this->app->environment('production')) {
+            if (Seo::canonicalBase() !== Seo::DEFAULT_CANONICAL_URL) {
+                throw new \RuntimeException('Production APP_URL must be https://hero-kid.com.');
+            }
+
             URL::forceRootUrl(Seo::canonicalBase());
             URL::forceScheme('https');
         }

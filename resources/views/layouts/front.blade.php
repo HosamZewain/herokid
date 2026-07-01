@@ -26,7 +26,7 @@
                     'url' => $siteUrl,
                     'logo' => [
                         '@type' => 'ImageObject',
-                        'url' => \App\Support\Seo::imageUrl('/images/logo.png'),
+                        'url' => \App\Support\Seo::imageUrl('/images/logo-192.png'),
                     ],
                     'description' => 'أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.',
                     'address' => [
@@ -94,8 +94,8 @@
     <meta name="twitter:image" content="{{ $seoImage }}">
 
     <!-- ══ Favicon & Icons ══ -->
-    <link rel="icon" type="image/png" href="/images/logo.png">
-    <link rel="apple-touch-icon" href="/images/logo.png">
+    <link rel="icon" type="image/png" href="/images/logo-96.png">
+    <link rel="apple-touch-icon" href="/images/logo-192.png">
     <meta name="theme-color" content="#f97316">
     <meta name="msapplication-TileColor" content="#f97316">
 
@@ -136,7 +136,11 @@
                     <!-- Logo + Desktop Nav -->
                     <div class="flex items-center gap-8">
                         <a href="{{ route('home') }}" class="flex-shrink-0">
-                            <img src="/images/logo.png" alt="HeroKid Logo" class="h-12 md:h-24 w-auto object-contain">
+                            <img src="/images/logo-192.png"
+                                srcset="/images/logo-96.png 96w, /images/logo-192.png 192w, /images/logo-320.png 320w"
+                                sizes="(min-width: 768px) 104px, 56px"
+                                width="192" height="164"
+                                alt="HeroKid Logo" class="h-12 md:h-24 w-auto object-contain">
                         </a>
                         <div class="hidden lg:flex items-center gap-10">
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
@@ -176,6 +180,8 @@
                             @else
                                 <a href="{{ route('login') }}"
                                     class="text-gray-600 hover:text-indigo-600 font-bold text-sm px-3">دخول</a>
+                                <a href="{{ route('register') }}"
+                                    class="text-gray-600 hover:text-indigo-600 font-bold text-sm px-3">إنشاء حساب</a>
                                 <a href="{{ route('stories.index') }}"
                                     class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-5 py-2.5 rounded-xl font-bold shadow-sm shadow-indigo-200 transition hover:-translate-y-0.5">
                                     ابدأ الآن
@@ -194,7 +200,7 @@
                             @endif
                         </a>
                         <!-- Mobile Hamburger -->
-                        <button type="button" data-front-menu-toggle aria-expanded="false" aria-controls="front-mobile-menu"
+                        <button type="button" data-front-menu-toggle aria-expanded="false" aria-controls="front-mobile-menu" aria-label="فتح القائمة"
                             class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition">
                             <svg data-front-menu-open-icon class="w-6 h-6" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
@@ -267,14 +273,19 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
 
-                    <div class="md:col-span-2 text-right text-slate-400">
-                        <img src="/images/logo.png" alt="HeroKid Logo" class="h-20 md:h-32 w-auto mb-4 object-contain">
-                        <p class="text-slate-400 mt-3 leading-relaxed max-w-xs mr-0">
+                    <div class="md:col-span-2 text-right text-slate-300">
+                        <img src="/images/logo-192.png"
+                            srcset="/images/logo-192.png 192w, /images/logo-320.png 320w"
+                            sizes="(min-width: 768px) 140px, 96px"
+                            width="192" height="164"
+                            alt="HeroKid Logo" class="h-20 md:h-32 w-auto mb-4 object-contain">
+                        <p class="text-slate-300 mt-3 leading-relaxed max-w-xs mr-0">
                             قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي. نهدف لنشر الحب والقيم الجميلة عبر القصص
                             المطبوعة.
                         </p>
                         <div class="flex gap-4 mt-8 justify-start">
-                            <a href="{{ $settings['whatsapp_url'] ?? '#' }}" target="_blank"
+                            @if(!empty($settings['whatsapp_url']))
+                            <a href="{{ $settings['whatsapp_url'] }}" target="_blank" rel="noopener"
                                 class="w-10 h-10 bg-slate-800 hover:bg-green-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="WhatsApp">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -284,7 +295,9 @@
                                     </path>
                                 </svg>
                             </a>
-                            <a href="{{ $settings['instagram_url'] ?? '#' }}" target="_blank"
+                            @endif
+                            @if(!empty($settings['instagram_url']))
+                            <a href="{{ $settings['instagram_url'] }}" target="_blank" rel="noopener"
                                 class="w-10 h-10 bg-slate-800 hover:bg-pink-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="Instagram">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -294,7 +307,9 @@
                                     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
                                 </svg>
                             </a>
-                            <a href="{{ $settings['facebook_url'] ?? '#' }}" target="_blank"
+                            @endif
+                            @if(!empty($settings['facebook_url']))
+                            <a href="{{ $settings['facebook_url'] }}" target="_blank" rel="noopener"
                                 class="w-10 h-10 bg-slate-800 hover:bg-blue-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="Facebook">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -302,7 +317,9 @@
                                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
                                 </svg>
                             </a>
-                            <a href="{{ $settings['youtube_url'] ?? '#' }}" target="_blank"
+                            @endif
+                            @if(!empty($settings['youtube_url']))
+                            <a href="{{ $settings['youtube_url'] }}" target="_blank" rel="noopener"
                                 class="w-10 h-10 bg-slate-800 hover:bg-red-600 text-white rounded-xl flex items-center justify-center transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-slate-900/50"
                                 title="YouTube">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
@@ -313,13 +330,14 @@
                                     <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"></polygon>
                                 </svg>
                             </a>
+                            @endif
                         </div>
                     </div>
 
                     <!-- Quick Links -->
                     <div class="text-right">
                         <h4 class="font-bold mb-4 text-white">روابط سريعة</h4>
-                        <ul class="space-y-2 text-slate-400 text-sm">
+                        <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('stories.index') }}" class="hover:text-white transition">القصص
                                     المتاحة</a></li>
@@ -337,7 +355,7 @@
                     <!-- Policies -->
                     <div class="text-right">
                         <h4 class="font-bold mb-4 text-white">قانوني</h4>
-                        <ul class="space-y-2 text-slate-400 text-sm">
+                        <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('privacy') }}" class="hover:text-white transition">سياسة الخصوصية</a>
                             </li>
                             <li><a href="{{ route('terms') }}" class="hover:text-white transition">الشروط والأحكام</a>
@@ -345,7 +363,7 @@
                         </ul>
                         @if(!empty($settings['whatsapp_number']))
                         <div class="mt-6">
-                            <p class="text-slate-400 text-xs">للتواصل السريع:</p>
+                            <p class="text-slate-300 text-xs">للتواصل السريع:</p>
                             <a href="tel:{{ $settings['whatsapp_number'] }}"
                                 class="text-indigo-400 text-sm font-bold hover:text-indigo-300 transition">{{ $settings['whatsapp_number'] }}</a>
                         </div>
@@ -353,7 +371,7 @@
                     </div>
                 </div>
 
-                <div class="border-t border-slate-800 pt-8 text-center text-slate-500 text-sm">
+                <div class="border-t border-slate-800 pt-8 text-center text-slate-400 text-sm">
                     &copy; {{ date('Y') }} HeroKid. جميع الحقوق محفوظة.
                 </div>
             </div>

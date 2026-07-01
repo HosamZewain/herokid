@@ -94,7 +94,13 @@
                     <p class="text-slate-600">لأي استفسار حول هذه السياسة أو بياناتك الشخصية:</p>
                     <div class="bg-slate-50 rounded-lg p-4 mt-3 space-y-1 text-slate-700">
                         <p>📧 البريد الإلكتروني: <a href="mailto:privacy@herokid.sa" class="text-indigo-600">privacy@herokid.sa</a></p>
-                        <p>📱 واتساب: <a href="{{ $settings['whatsapp_url'] ?? '#' }}" class="text-indigo-600">{{ $settings['whatsapp_number'] ?? '' }}+</a></p>
+                        <p>📱 واتساب:
+                            @if(!empty($settings['whatsapp_url']))
+                                <a href="{{ $settings['whatsapp_url'] }}" class="text-indigo-600">{{ $settings['whatsapp_number'] ?? '' }}+</a>
+                            @else
+                                <span>{{ $settings['whatsapp_number'] ?? '' }}+</span>
+                            @endif
+                        </p>
                     </div>
                 </section>
 

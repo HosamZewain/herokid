@@ -886,23 +886,29 @@
                     <h2 class="text-4xl font-extrabold text-slate-900 mt-1 mb-2">أسئلة يطرحها الآباء دائماً</h2>
                     <div class="w-20 h-1.5 mx-auto rounded-full" style="background: linear-gradient(90deg, #f59e0b, #f97316);"></div>
                 </div>
-                <div class="space-y-4" x-data="{}">
+                <div class="space-y-4">
                     @foreach($faqs as $faq)
-                        <div class="bg-white border border-amber-100 rounded-2xl overflow-hidden shadow-sm shadow-amber-100/50 hover:shadow-md hover:shadow-amber-200/40 transition" x-data="{ open: false }">
-                            <button @click="open = !open"
+                        @php
+                            $faqAnswerId = 'home-faq-answer-' . $loop->iteration;
+                        @endphp
+                        <div class="bg-white border border-amber-100 rounded-2xl overflow-hidden shadow-sm shadow-amber-100/50 hover:shadow-md hover:shadow-amber-200/40 transition" data-faq-item>
+                            <button type="button"
+                                data-faq-toggle
+                                aria-expanded="false"
+                                aria-controls="{{ $faqAnswerId }}"
                                 class="w-full text-right px-6 py-5 font-bold text-slate-900 flex justify-between items-center hover:bg-amber-50/50 transition">
                                 <span>{{ $faq->question }}</span>
-                                <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200"
-                                    :class="open ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-600'">
-                                    <svg class="w-4 h-4 transform transition-transform duration-200" :class="{'rotate-180': open}"
+                                <div data-faq-indicator class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 bg-amber-100 text-amber-600">
+                                    <svg data-faq-icon class="w-4 h-4 transform transition-transform duration-200"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
                                     </svg>
                                 </div>
                             </button>
-                            <div x-show="open" x-transition
+                            <div id="{{ $faqAnswerId }}"
+                                data-faq-answer
                                 class="px-6 pb-5 pt-2 text-slate-600 border-t border-amber-50 text-sm leading-relaxed text-right"
-                                style="display:none">{{ $faq->answer }}</div>
+                                hidden>{{ $faq->answer }}</div>
                         </div>
                     @endforeach
                 </div>
@@ -945,8 +951,12 @@
                             <div class="text-right">
                                 <h4 class="font-bold text-slate-900">واتساب</h4>
                                 <p class="text-slate-500 text-sm">رد سريع خلال ساعات العمل</p>
-                                <a href="{{ $settings['whatsapp_url'] ?? '#' }}" target="_blank"
+                                @if(!empty($settings['whatsapp_url']))
+                                <a href="{{ $settings['whatsapp_url'] }}" target="_blank" rel="noopener"
                                     class="text-green-600 font-bold mt-1 block hover:underline">{{ $settings['whatsapp_number'] ?? '' }}</a>
+                                @elseif(!empty($settings['whatsapp_number']))
+                                <span class="text-green-600 font-bold mt-1 block">{{ $settings['whatsapp_number'] }}</span>
+                                @endif
                             </div>
                         </div>
 

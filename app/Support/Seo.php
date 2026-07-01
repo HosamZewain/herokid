@@ -57,7 +57,7 @@ class Seo
         $url = trim((string) $url);
 
         if ($url === '') {
-            return self::url('/images/logo.png');
+            return self::url('/images/logo-192.png');
         }
 
         if (str_starts_with($url, '//')) {

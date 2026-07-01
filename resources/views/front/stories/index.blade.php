@@ -42,14 +42,14 @@
     @php
         $hasFilter = request()->hasAny(['gender', 'lang', 'age', 'category']);
         $fallbacks = [
-            'photo-1446776811953-b23d57bd21aa',
-            'photo-1448375240586-882707db888b',
-            'photo-1490750967868-88df5691cc4a',
-            'photo-1575361204480-aadea25e6e68',
-            'photo-1518709268805-4e9042af9f23',
-            'photo-1581091226825-a6a2a5aee158',
-            'photo-1556909114-f6e7ad7d3136',
-            'photo-1548199973-03cce0bbc87b',
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_main')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_mini1')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_mini2')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_home_step1')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_home_step2')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_home_step3')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_stat_books')),
+            \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_stat_rating')),
         ];
     @endphp
 
@@ -146,7 +146,7 @@
                                 @if($heroStory && $heroStory->cover_image)
                                     <img src="{{ $heroStory->cover_url }}" alt="{{ $heroStory->title }}" class="w-full h-full object-cover">
                                 @else
-                                    <img src="https://images.unsplash.com/{{ $fallbacks[0] }}?w=400&auto=format&fit=crop&q=85" alt="قصة" class="w-full h-full object-cover">
+                                    <img src="{{ $fallbacks[0] }}" alt="قصة" class="w-full h-full object-cover">
                                 @endif
                             </div>
                             <div class="p-4 text-right">
@@ -167,7 +167,7 @@
                         {{-- Secondary card mock (blurred, behind) --}}
                         <div class="absolute bottom-8 right-52 w-44 bg-white/80 backdrop-blur rounded-[1.5rem] shadow-xl overflow-hidden transform -rotate-6 z-10 opacity-70">
                             <div class="aspect-square bg-gradient-to-br from-amber-100 to-rose-100 flex items-center justify-center overflow-hidden">
-                                <img src="https://images.unsplash.com/{{ $fallbacks[2] }}?w=300&auto=format&fit=crop&q=80" alt="قصة" class="w-full h-full object-cover">
+                                <img src="{{ $fallbacks[2] }}" alt="قصة" class="w-full h-full object-cover">
                             </div>
                             <div class="p-3 text-right">
                                 <p class="text-[9px] font-black text-amber-500 mb-0.5">حيوانات</p>
@@ -178,7 +178,7 @@
                         {{-- Third card (behind left) --}}
                         <div class="absolute bottom-4 left-8 w-40 bg-white/60 backdrop-blur rounded-[1.5rem] shadow-lg overflow-hidden transform rotate-12 z-10 opacity-50">
                             <div class="aspect-square bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center overflow-hidden">
-                                <img src="https://images.unsplash.com/{{ $fallbacks[4] }}?w=300&auto=format&fit=crop&q=80" alt="قصة" class="w-full h-full object-cover">
+                                <img src="{{ $fallbacks[4] }}" alt="قصة" class="w-full h-full object-cover">
                             </div>
                         </div>
 
@@ -471,7 +471,7 @@
                                     @if($story->cover_image)
                                         <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
                                     @else
-                                        <img src="https://images.unsplash.com/{{ $fallbacks[$idx % count($fallbacks)] }}?w=500&auto=format&fit=crop&q=80" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
+                                        <img src="{{ $fallbacks[$idx % count($fallbacks)] }}" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
                                     @endif
                                     <div class="absolute top-3 right-3">
                                         <span class="bg-white/92 backdrop-blur-sm text-[10px] font-black px-2.5 py-1 rounded-full shadow border {{ $accent['badge'] }}">{{ $story->age_range }}</span>

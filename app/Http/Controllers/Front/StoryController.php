@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomerStoryView;
 use App\Models\Story;
 use App\Models\StoryCategory;
 use Illuminate\Http\Request;
@@ -75,9 +76,19 @@ class StoryController extends Controller
         return view('front.stories.index', compact('stories', 'categories', 'ageRanges'));
     }
 
-    public function show($slug)
+    public function show(Request $request, $slug)
     {
         $story = Story::where('slug', $slug)->where('active', true)->firstOrFail();
+
+        CustomerStoryView::create([
+            'user_id' => $request->user()?->id,
+            'story_id' => $story->id,
+            'session_id' => $request->session()->getId(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'viewed_at' => now(),
+        ]);
+
         return view('front.stories.show', compact('story'));
     }
 }

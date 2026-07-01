@@ -154,6 +154,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('orders/{order}/preview', [\App\Http\Controllers\Admin\OrderController::class, 'uploadPreview'])->name('orders.upload-preview');
     Route::get('orders/{order}/photos/{index}', [\App\Http\Controllers\Admin\OrderController::class, 'servePhoto'])->name('orders.photo')->where('index', '[0-9]+');
 
+    Route::get('customers', [\App\Http\Controllers\Admin\CustomerController::class, 'index'])->name('customers.index');
+    Route::get('customers/{customerKey}', [\App\Http\Controllers\Admin\CustomerController::class, 'show'])->name('customers.show');
+
     // Content Management
     Route::resource('faqs', \App\Http\Controllers\Admin\FaqController::class)->except(['show']);
     Route::resource('testimonials', \App\Http\Controllers\Admin\TestimonialController::class)->except(['show']);

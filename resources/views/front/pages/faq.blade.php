@@ -39,14 +39,21 @@
             @if($faqs->count() > 0)
                 <div class="space-y-4">
                     @foreach($faqs as $faq)
-                        <div class="bg-white border rounded-xl overflow-hidden shadow-sm" x-data="{ open: false }">
-                            <button @click="open = !open" class="w-full text-right px-6 py-4 font-bold text-gray-900 flex justify-between items-center hover:bg-gray-50 focus:outline-none">
+                        @php
+                            $faqAnswerId = 'faq-answer-' . $loop->iteration;
+                        @endphp
+                        <div class="bg-white border rounded-xl overflow-hidden shadow-sm" data-faq-item>
+                            <button type="button"
+                                data-faq-toggle
+                                aria-expanded="false"
+                                aria-controls="{{ $faqAnswerId }}"
+                                class="w-full text-right px-6 py-4 font-bold text-gray-900 flex justify-between items-center hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                                 <span>{{ $faq->question }}</span>
-                                <svg class="w-5 h-5 text-indigo-500 transform transition-transform duration-200" :class="{'rotate-180': open}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg data-faq-icon class="w-5 h-5 text-indigo-500 transform transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
-                            <div x-show="open" class="px-6 pb-4 pt-2 text-gray-600 border-t border-gray-100 bg-gray-50" style="display: none;">
+                            <div id="{{ $faqAnswerId }}" data-faq-answer class="px-6 pb-4 pt-2 text-gray-600 border-t border-gray-100 bg-gray-50" hidden>
                                 {{ $faq->answer }}
                             </div>
                         </div>

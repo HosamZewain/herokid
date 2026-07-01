@@ -1,9 +1,13 @@
 <x-front-layout>
+    @php
+        $fallbackStoryCover = \App\Support\Seo::imageUrl('/images/site/featured_generic.png');
+        $storyCoverUrl = $story->cover_url ?: $fallbackStoryCover;
+    @endphp
 
     {{-- ══ Per-page SEO slots ══ --}}
     <x-slot name="pageTitle">{{ $story->title }} — قصة أطفال مخصصة بوجه طفلك</x-slot>
     <x-slot name="pageDescription">{{ $story->seo_description }}</x-slot>
-    <x-slot name="pageImage">{{ $story->cover_url ?? asset('images/og-cover.jpg') }}</x-slot>
+    <x-slot name="pageImage">{{ $storyCoverUrl }}</x-slot>
     <x-slot name="ogType">product</x-slot>
 
     @push('schema')
@@ -13,7 +17,7 @@
                 '@type' => 'Product',
                 'name' => $story->title,
                 'description' => $story->seo_description,
-                'image' => $story->cover_url ?? \App\Support\Seo::imageUrl('/images/og-cover.jpg'),
+                'image' => $storyCoverUrl,
                 'brand' => ['@type' => 'Brand', 'name' => 'HeroKid'],
                 'offers' => [
                     '@type' => 'Offer',
@@ -76,13 +80,11 @@
                     <!-- Cover Image -->
                     <div
                         class="aspect-[4/4] bg-gradient-to-br from-indigo-50 to-slate-100 rounded-3xl overflow-hidden shadow-lg mb-8 relative">
-                        @if($story->cover_image)
-                            <img src="{{ $story->cover_url }}" alt="{{ $story->title }}"
-                                class="w-full h-full object-contain">
-                        @else
-                            <img src="https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800&auto=format&fit=crop&q=80"
-                                alt="{{ $story->title }}" class="w-full h-full object-cover">
-                        @endif
+                        <img src="{{ $storyCoverUrl }}" alt="{{ $story->title }}"
+                            width="640" height="640"
+                            fetchpriority="high"
+                            onerror="this.onerror=null;this.src='{{ $fallbackStoryCover }}';"
+                            class="w-full h-full object-cover">
                     </div>
 
                     <!-- Title & Price -->
@@ -199,28 +201,28 @@
                                 </div>
                                 <div class="space-y-4">
                                     <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم
+                                        <label for="child_name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم
                                             الطفل <span class="text-red-500">*</span></label>
-                                        <input type="text" name="child_name" value="{{ old('child_name') }}" required
+                                        <input id="child_name" type="text" name="child_name" value="{{ old('child_name') }}" required
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="الاسم الأول للطفل">
                                         <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label
+                                            <label for="child_age"
                                                 class="block text-sm font-bold text-slate-700 mb-1.5 text-right">العمر
                                                 <span class="text-red-500">*</span></label>
-                                            <input type="number" name="child_age" value="{{ old('child_age') }}"
+                                            <input id="child_age" type="number" name="child_age" value="{{ old('child_age') }}"
                                                 required min="1" max="18"
                                                 class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-center py-3">
                                             <x-input-error :messages="$errors->get('child_age')" class="mt-1" />
                                         </div>
                                         <div>
-                                            <label
+                                            <label for="child_gender"
                                                 class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الجنس
                                                 <span class="text-red-500">*</span></label>
-                                            <select name="child_gender" required
+                                            <select id="child_gender" name="child_gender" required
                                                 class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
                                                 <option value="">اختر...</option>
                                                 <option value="boy" @selected(old('child_gender') == 'boy')>ولد 👦
@@ -232,12 +234,12 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اهتمامات
+                                        <label for="interests" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اهتمامات
                                             الطفل (اختياري)</label>
-                                        <input type="text" name="interests" value="{{ old('interests') }}"
+                                        <input id="interests" type="text" name="interests" value="{{ old('interests') }}"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="مثال: رائد فضاء، ديناصورات، كرة قدم...">
-                                        <p class="text-xs text-slate-400 mt-1 text-right">سنحاول دمجها في القصة إن أمكن
+                                        <p class="text-xs text-slate-600 mt-1 text-right">سنحاول دمجها في القصة إن أمكن
                                         </p>
                                         <x-input-error :messages="$errors->get('interests')" class="mt-1" />
                                     </div>
@@ -290,17 +292,17 @@
                                 </div>
                                 <div class="space-y-4">
                                     <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">إهداء
+                                        <label for="gift_note" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">إهداء
                                             يُطبع في الصفحة الأولى</label>
-                                        <textarea name="gift_note" rows="2"
+                                        <textarea id="gift_note" name="gift_note" rows="2"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="إلى ابني الغالي... أنت بطلنا الحقيقي ❤️">{{ old('gift_note') }}</textarea>
                                         <x-input-error :messages="$errors->get('gift_note')" class="mt-1" />
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">ملاحظات
+                                        <label for="parent_notes" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">ملاحظات
                                             إضافية للفريق</label>
-                                        <textarea name="parent_notes" rows="2"
+                                        <textarea id="parent_notes" name="parent_notes" rows="2"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="أي تفاصيل إضافية تريد إضافتها...">{{ old('parent_notes') }}</textarea>
                                         <x-input-error :messages="$errors->get('parent_notes')" class="mt-1" />

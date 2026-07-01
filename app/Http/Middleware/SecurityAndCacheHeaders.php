@@ -55,7 +55,6 @@ class SecurityAndCacheHeaders
             $response->headers->set('Cache-Control', self::PUBLIC_CACHE);
             $response->headers->remove('Pragma');
             $response->headers->remove('Expires');
-            $response->headers->remove('Set-Cookie');
             $this->varyByCookie($response);
 
             return;
@@ -111,9 +110,13 @@ class SecurityAndCacheHeaders
         return $request->routeIs([
             'home',
             'stories.index',
+            'stories.show',
             'faq',
             'pricing',
             'how-it-works',
+            'contact',
+            'privacy',
+            'terms',
             'sitemap',
         ]);
     }
@@ -128,6 +131,8 @@ class SecurityAndCacheHeaders
             'pricing',
             'how-it-works',
             'contact',
+            'privacy',
+            'terms',
             'sitemap',
         ]);
     }
