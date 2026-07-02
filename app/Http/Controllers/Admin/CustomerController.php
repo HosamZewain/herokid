@@ -7,10 +7,14 @@ use App\Models\CustomerStoryView;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\Phone;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
 class CustomerController extends Controller
 {
@@ -62,6 +66,133 @@ class CustomerController extends Controller
         abort_if(! $customer, 404);
 
         return view('admin.customers.show', $customer);
+    }
+
+    public function edit(string $customerKey): View
+    {
+        $customer = $this->resolveCustomer($customerKey);
+
+        abort_if(! $customer, 404);
+
+        return view('admin.customers.edit', array_merge($customer, [
+            'customerKey' => $customerKey,
+        ]));
+    }
+
+    public function update(Request $request, string $customerKey): RedirectResponse
+    {
+        $resolved = $this->resolveCustomer($customerKey);
+
+        abort_if(! $resolved, 404);
+
+        $isRegistered = $resolved['customer']['type'] === 'registered';
+        $userId = $isRegistered ? (int) Str::after($customerKey, 'user-') : null;
+        $normalizedPhone = Phone::normalize($request->input('phone'));
+
+        $request->merge([
+            'email' => $request->filled('email') ? mb_strtolower(trim((string) $request->input('email'))) : null,
+            'phone' => $normalizedPhone,
+        ]);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => [
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique(User::class, 'email')->ignore($userId),
+            ],
+            'phone' => [
+                'required',
+                'string',
+                'max:32',
+                Rule::unique(User::class, 'phone')->ignore($userId),
+            ],
+            'password' => [
+                $isRegistered ? 'nullable' : 'required',
+                'confirmed',
+                'string',
+                'min:8',
+                'max:255',
+            ],
+        ], [
+            'password.required' => 'كلمة المرور مطلوبة لتحويل العميل إلى حساب مسجل.',
+            'phone.required' => 'رقم الهاتف مطلوب لإنشاء أو تحديث حساب العميل.',
+        ]);
+
+        $plainPassword = (string) ($validated['password'] ?? '');
+
+        $user = DB::transaction(function () use ($resolved, $customerKey, $isRegistered, $userId, $validated, $plainPassword): User {
+            if ($isRegistered) {
+                $user = User::where('role', '!=', 'admin')->findOrFail($userId);
+                $user->fill([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'] ?? null,
+                    'phone' => $validated['phone'],
+                ]);
+
+                if ($plainPassword !== '') {
+                    $user->password = $plainPassword;
+                }
+
+                $user->save();
+            } else {
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'] ?? null,
+                    'phone' => $validated['phone'],
+                    'password' => $plainPassword,
+                    'role' => 'customer',
+                    'last_seen_at' => null,
+                ]);
+            }
+
+            $orders = $resolved['orders'];
+            $sessionIds = $this->checkoutSessionIds($orders);
+
+            $orders->each(function (Order $order) use ($user, $validated): void {
+                $details = $order->delivery_details ?? [];
+                $details['phone'] = $validated['phone'];
+
+                $order->update([
+                    'user_id' => $user->id,
+                    'parent_name' => $validated['name'],
+                    'delivery_details' => $details,
+                ]);
+            });
+
+            if ($sessionIds->isNotEmpty()) {
+                CustomerStoryView::whereIn('session_id', $sessionIds)
+                    ->whereNull('user_id')
+                    ->update(['user_id' => $user->id]);
+            }
+
+            return $user;
+        });
+
+        $redirect = redirect()
+            ->route('admin.customers.show', 'user-' . $user->id)
+            ->with('success', $isRegistered ? 'تم تحديث بيانات العميل بنجاح.' : 'تم تحويل العميل إلى حساب مسجل بنجاح.');
+
+        if ($plainPassword !== '') {
+            $login = $user->phone ?: $user->email;
+            $message = implode("\n", [
+                'مرحباً ' . $user->name . '،',
+                'تم إنشاء حسابك على HeroKid لمتابعة طلبك.',
+                'رابط الدخول: ' . route('login'),
+                'بيانات الدخول:',
+                'الهاتف/البريد: ' . $login,
+                'كلمة المرور: ' . $plainPassword,
+            ]);
+
+            $redirect->with('customer_account_message', $message);
+
+            if ($user->phone) {
+                $redirect->with('customer_account_whatsapp_url', 'https://wa.me/' . preg_replace('/[^0-9]/', '', $user->phone) . '?text=' . urlencode($message));
+            }
+        }
+
+        return $redirect;
     }
 
     private function resolveCustomer(string $customerKey): ?array

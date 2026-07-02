@@ -28,7 +28,7 @@
                     </div>
                     <div>
                         <p class="text-xs text-gray-500">إجمالي القصص</p>
-                        <p class="text-2xl font-bold text-gray-800">{{ $stories->total() }}</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ $stats['total'] }}</p>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
@@ -37,7 +37,7 @@
                     </div>
                     <div>
                         <p class="text-xs text-gray-500">نشطة</p>
-                        <p class="text-2xl font-bold text-gray-800">{{ $stories->getCollection()->where('active', true)->count() }}</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ $stats['active'] }}</p>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
@@ -46,7 +46,7 @@
                     </div>
                     <div>
                         <p class="text-xs text-gray-500">معطلة</p>
-                        <p class="text-2xl font-bold text-gray-800">{{ $stories->getCollection()->where('active', false)->count() }}</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ $stats['inactive'] }}</p>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-4 flex items-center gap-3">
@@ -55,7 +55,7 @@
                     </div>
                     <div>
                         <p class="text-xs text-gray-500">إجمالي الطلبات</p>
-                        <p class="text-2xl font-bold text-gray-800">{{ $stories->getCollection()->sum('orders_count') }}</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ $stats['orders'] }}</p>
                     </div>
                 </div>
             </div>
@@ -100,10 +100,11 @@
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">القصة</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">التصنيفات</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الفئة العمرية</th>
+                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الجنس</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">اللغة</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">السعر</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">طلبات</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مرفقات</th>
+                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مشاهدات</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الحالة</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">تاريخ الإضافة</th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">آخر تعديل</th>
@@ -130,7 +131,10 @@
                                                 </div>
                                             @endif
                                             <div>
-                                                <div class="font-medium text-gray-900">{{ $story->title }}</div>
+                                                <a href="{{ route('admin.stories.edit', $story) }}"
+                                                   class="font-medium text-gray-900 hover:text-indigo-600 hover:underline transition">
+                                                    {{ $story->title }}
+                                                </a>
                                                 <div class="text-xs text-gray-400 mt-0.5">{{ $story->slug }}</div>
                                             </div>
                                         </div>
@@ -150,6 +154,23 @@
                                     {{-- Age Range --}}
                                     <td class="px-4 py-3 text-gray-600 whitespace-nowrap">
                                         {{ $story->age_range ?: '—' }}
+                                    </td>
+
+                                    {{-- Gender --}}
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        @php
+                                            $genderLabel = match ($story->gender) {
+                                                'boy' => 'ولد',
+                                                'girl' => 'بنت',
+                                                default => 'للجنسين',
+                                            };
+                                            $genderClass = match ($story->gender) {
+                                                'boy' => 'bg-blue-50 text-blue-700',
+                                                'girl' => 'bg-pink-50 text-pink-700',
+                                                default => 'bg-slate-100 text-slate-700',
+                                            };
+                                        @endphp
+                                        <span class="{{ $genderClass }} text-xs px-2 py-0.5 rounded-full font-medium">{{ $genderLabel }}</span>
                                     </td>
 
                                     {{-- Language --}}
@@ -178,11 +199,11 @@
                                         </span>
                                     </td>
 
-                                    {{-- Attachments count --}}
+                                    {{-- View count --}}
                                     <td class="px-4 py-3 text-center">
                                         <span class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold
-                                            {{ $story->attachments->count() > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400' }}">
-                                            {{ $story->attachments->count() }}
+                                            {{ $story->views_count > 0 ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-400' }}">
+                                            {{ $story->views_count }}
                                         </span>
                                     </td>
 

@@ -77,10 +77,16 @@
                                     {{ $lastActivity }}
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-left">
-                                    <a href="{{ route('admin.customers.show', $customer['key']) }}"
-                                        class="text-indigo-600 hover:text-indigo-800 font-bold text-sm">
-                                        عرض التفاصيل
-                                    </a>
+                                    <div class="flex items-center justify-end gap-3">
+                                        <a href="{{ route('admin.customers.edit', $customer['key']) }}"
+                                            class="text-gray-500 hover:text-indigo-700 font-bold text-sm">
+                                            تعديل
+                                        </a>
+                                        <a href="{{ route('admin.customers.show', $customer['key']) }}"
+                                            class="text-indigo-600 hover:text-indigo-800 font-bold text-sm">
+                                            عرض التفاصيل
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         @empty

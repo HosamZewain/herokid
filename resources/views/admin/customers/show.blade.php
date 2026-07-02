@@ -5,10 +5,16 @@
                 <h2 class="text-xl font-bold text-gray-800">تفاصيل العميل</h2>
                 <p class="text-xs text-gray-500 mt-1">{{ $customer['name'] }} — {{ $customer['type_label'] }}</p>
             </div>
-            <a href="{{ route('admin.customers.index') }}"
-                class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-bold transition">
-                العودة للعملاء
-            </a>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('admin.customers.edit', $customer['key']) }}"
+                    class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-bold transition">
+                    تعديل العميل
+                </a>
+                <a href="{{ route('admin.customers.index') }}"
+                    class="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-bold transition">
+                    العودة للعملاء
+                </a>
+            </div>
         </div>
     </x-slot>
 
@@ -18,6 +24,31 @@
     @endphp
 
     <div class="space-y-6">
+        @if(session('success'))
+            <div class="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-right text-sm font-bold text-green-700">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if(session('customer_account_message'))
+            <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5 text-right">
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div>
+                        <h3 class="font-extrabold text-indigo-900">بيانات الحساب جاهزة للإرسال</h3>
+                        <p class="text-sm text-indigo-700 mt-1">يمكنك إرسال هذه البيانات للعميل عبر واتساب لمتابعة طلبه.</p>
+                    </div>
+                    @if(session('customer_account_whatsapp_url'))
+                        <a href="{{ session('customer_account_whatsapp_url') }}" target="_blank" rel="noopener"
+                            class="inline-flex justify-center rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-green-700">
+                            إرسال عبر واتساب
+                        </a>
+                    @endif
+                </div>
+                <textarea readonly dir="rtl"
+                    class="mt-4 block w-full rounded-xl border-indigo-100 bg-white text-right text-sm leading-7 text-slate-800 shadow-sm">{{ session('customer_account_message') }}</textarea>
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 lg:col-span-2">
                 <p class="text-xs font-bold text-indigo-600 mb-2">بيانات التواصل</p>

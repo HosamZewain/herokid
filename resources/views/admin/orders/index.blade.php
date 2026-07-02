@@ -78,6 +78,10 @@
                                 @php
                                     $rowColor = $order->status === 'preview_uploaded' ? 'bg-orange-50' : 'bg-white hover:bg-gray-50';
                                     $badgeColor = $statusBadgeColors[$order->status] ?? 'bg-gray-100 text-gray-700';
+                                    $phone = \App\Support\Phone::normalize($order->delivery_details['phone'] ?? $order->customer_phone ?? null);
+                                    $customerKey = $order->user && $order->user->role !== 'admin'
+                                        ? 'user-' . $order->user->id
+                                        : 'guest-' . sha1($phone ?: 'order-' . $order->id);
                                 @endphp
                                 <tr class="{{ $rowColor }} transition">
                                     <td class="px-5 py-4 whitespace-nowrap">
@@ -85,11 +89,17 @@
                                             @if($order->status === 'preview_uploaded')
                                                 <span class="text-orange-500 text-sm">⚠️</span>
                                             @endif
-                                            <span class="text-sm font-bold text-gray-900">#{{ $order->order_number }}</span>
+                                            <a href="{{ route('admin.orders.show', $order) }}"
+                                               class="text-sm font-bold text-gray-900 hover:text-indigo-600 hover:underline transition">
+                                                #{{ $order->order_number }}
+                                            </a>
                                         </div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
-                                        <div class="text-sm text-gray-800">{{ $order->parent_name ?? $order->customer_name ?? '—' }}</div>
+                                        <a href="{{ route('admin.customers.show', $customerKey) }}"
+                                           class="text-sm text-gray-800 hover:text-indigo-600 hover:underline transition">
+                                            {{ $order->parent_name ?? $order->customer_name ?? '—' }}
+                                        </a>
                                         <div class="text-xs text-gray-400 dir-ltr">{{ $order->delivery_details['phone'] ?? $order->customer_phone ?? '' }}</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
@@ -97,7 +107,14 @@
                                         <div class="text-xs text-gray-400">{{ $order->child_age }} سنة • {{ $order->child_gender === 'boy' ? '👦' : '👧' }}</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
-                                        <div class="text-sm text-gray-700">{{ $order->story->title ?? '—' }}</div>
+                                        @if($order->story)
+                                            <a href="{{ route('admin.stories.edit', $order->story) }}"
+                                               class="text-sm text-gray-700 hover:text-indigo-600 hover:underline transition">
+                                                {{ $order->story->title }}
+                                            </a>
+                                        @else
+                                            <div class="text-sm text-gray-700">—</div>
+                                        @endif
                                         <div class="text-xs text-gray-400">{{ $order->story->price ?? 0 }} ج.م</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">

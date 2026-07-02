@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\Story;
+use App\Models\StoryCategory;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 
@@ -13,8 +16,8 @@ class StoryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = \App\Models\Story::with(['categories', 'attachments'])
-            ->withCount('orders')
+        $query = Story::with('categories')
+            ->withCount(['orders', 'views'])
             ->latest();
 
         if ($request->filled('q')) {
@@ -36,7 +39,14 @@ class StoryController extends Controller
         }
 
         $stories = $query->paginate(15)->withQueryString();
-        return view('admin.stories.index', compact('stories'));
+        $stats = [
+            'total' => Story::count(),
+            'active' => Story::where('active', true)->count(),
+            'inactive' => Story::where('active', false)->count(),
+            'orders' => Order::count(),
+        ];
+
+        return view('admin.stories.index', compact('stories', 'stats'));
     }
 
     /**
@@ -44,7 +54,7 @@ class StoryController extends Controller
      */
     public function create()
     {
-        $categories = \App\Models\StoryCategory::orderBy('name')->get();
+        $categories = StoryCategory::orderBy('name')->get();
         return view('admin.stories.create', compact('categories'));
     }
 
@@ -73,7 +83,7 @@ class StoryController extends Controller
             $validated['cover_image'] = $request->file('cover_image')->store('stories', 'public');
         }
 
-        $story = \App\Models\Story::create($validated);
+        $story = Story::create($validated);
         $story->categories()->sync($request->input('category_ids', []));
 
         AdminActivityLogger::log(
@@ -101,9 +111,9 @@ class StoryController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(\App\Models\Story $story)
+    public function edit(Story $story)
     {
-        $categories = \App\Models\StoryCategory::orderBy('name')->get();
+        $categories = StoryCategory::orderBy('name')->get();
         $story->load('attachments');
         return view('admin.stories.edit', compact('story', 'categories'));
     }
@@ -111,7 +121,7 @@ class StoryController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, \App\Models\Story $story)
+    public function update(Request $request, Story $story)
     {
         $before = $story->only([
             'title', 'slug', 'short_desc', 'full_desc', 'age_range', 'language',
@@ -173,7 +183,7 @@ class StoryController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(\App\Models\Story $story)
+    public function destroy(Story $story)
     {
         $storyDetails = $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']);
 

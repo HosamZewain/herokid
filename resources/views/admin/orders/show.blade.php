@@ -1,7 +1,18 @@
+@php
+    $customerPhone = \App\Support\Phone::normalize($order->delivery_details['phone'] ?? null);
+    $customerKey = $order->user && $order->user->role !== 'admin'
+        ? 'user-' . $order->user->id
+        : 'guest-' . sha1($customerPhone ?: 'order-' . $order->id);
+@endphp
+
 <x-admin-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            تفاصيل الطلب #{{ $order->order_number }}
+            تفاصيل الطلب
+            <a href="{{ route('admin.orders.show', $order) }}"
+               class="text-gray-800 hover:text-indigo-600 hover:underline transition">
+                #{{ $order->order_number }}
+            </a>
         </h2>
     </x-slot>
 
@@ -48,7 +59,13 @@
                         <h3 class="text-lg font-bold mb-5 text-right border-b pb-3">بيانات الطفل والقصة</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-right">
                             <div class="space-y-3">
-                                <div><span class="font-bold text-gray-600">اسم ولي الأمر:</span> <span class="text-gray-900">{{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}</span></div>
+                                <div>
+                                    <span class="font-bold text-gray-600">اسم ولي الأمر:</span>
+                                    <a href="{{ route('admin.customers.show', $customerKey) }}"
+                                       class="text-gray-900 hover:text-indigo-600 hover:underline transition">
+                                        {{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}
+                                    </a>
+                                </div>
                                 <div><span class="font-bold text-gray-600">الهاتف / واتساب:</span>
                                     <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}" target="_blank" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
                                 </div>
@@ -56,7 +73,17 @@
                             <div class="space-y-3">
                                 <div><span class="font-bold text-gray-600">اسم الطفل:</span> <span class="text-gray-900 font-bold">{{ $order->child_name }}</span></div>
                                 <div><span class="font-bold text-gray-600">العمر / الجنس:</span> <span>{{ $order->child_age }} سنة / {{ $order->child_gender == 'boy' ? '👦 ولد' : '👧 بنت' }}</span></div>
-                                <div><span class="font-bold text-gray-600">القصة:</span> <span class="text-indigo-600 font-bold">{{ $order->story->title ?? '-' }}</span></div>
+                                <div>
+                                    <span class="font-bold text-gray-600">القصة:</span>
+                                    @if($order->story)
+                                        <a href="{{ route('admin.stories.edit', $order->story) }}"
+                                           class="text-indigo-600 font-bold hover:text-indigo-800 hover:underline transition">
+                                            {{ $order->story->title }}
+                                        </a>
+                                    @else
+                                        <span class="text-indigo-600 font-bold">-</span>
+                                    @endif
+                                </div>
                                 <div><span class="font-bold text-gray-600">اللغة:</span> <span>{{ $order->language == 'ar' ? '🇸🇦 عربي' : '🇬🇧 English' }}</span></div>
                             </div>
                         </div>

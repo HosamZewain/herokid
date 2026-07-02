@@ -59,4 +59,21 @@ class FaqController extends Controller
         $faq->delete();
         return redirect()->route('admin.faqs.index')->with('success', 'تم حذف السؤال بنجاح.');
     }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'faq_ids' => 'required|array|min:1',
+            'faq_ids.*' => 'integer|exists:faq_items,id',
+        ], [
+            'faq_ids.required' => 'يرجى اختيار سؤال واحد على الأقل للحذف.',
+            'faq_ids.min' => 'يرجى اختيار سؤال واحد على الأقل للحذف.',
+        ]);
+
+        $deletedCount = FaqItem::whereIn('id', $validated['faq_ids'])->delete();
+
+        return redirect()
+            ->route('admin.faqs.index')
+            ->with('success', 'تم حذف ' . $deletedCount . ' سؤال بنجاح.');
+    }
 }

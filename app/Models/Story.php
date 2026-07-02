@@ -75,6 +75,11 @@ class Story extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function views()
+    {
+        return $this->hasMany(CustomerStoryView::class);
+    }
+
     public function attachments()
     {
         return $this->hasMany(StoryAttachment::class)->latest();
