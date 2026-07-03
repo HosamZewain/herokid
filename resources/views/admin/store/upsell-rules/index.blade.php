@@ -1,0 +1,10 @@
+<x-admin-layout>
+    <x-slot name="header"><div class="flex items-center justify-between"><h2 class="text-xl font-semibold text-gray-800">قواعد ترشيح المنتجات</h2><a href="{{ route('admin.upsell-rules.create') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white">إضافة قاعدة</a></div></x-slot>
+    <div class="py-8" dir="rtl"><div class="mx-auto max-w-7xl space-y-4 sm:px-6 lg:px-8">
+        @if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-bold text-green-700">{{ session('success') }}</div>@endif
+        <div class="overflow-hidden rounded-2xl bg-white shadow-sm"><table class="min-w-full divide-y divide-gray-100 text-right text-sm">
+            <thead class="bg-gray-50 text-xs font-bold text-gray-500"><tr><th class="px-4 py-3">المنتج المقترح</th><th class="px-4 py-3">قصة</th><th class="px-4 py-3">تصنيف قصة</th><th class="px-4 py-3">عمر/جنس</th><th class="px-4 py-3">الأولوية</th><th class="px-4 py-3">الحالة</th><th class="px-4 py-3">إجراءات</th></tr></thead>
+            <tbody class="divide-y divide-gray-100">@foreach($rules as $rule)<tr><td class="px-4 py-3 font-black">{{ $rule->targetProduct?->name_ar }}</td><td class="px-4 py-3">{{ $rule->sourceStory?->title ?? 'كل القصص' }}</td><td class="px-4 py-3">{{ $rule->sourceStoryCategory?->name ?? 'كل التصنيفات' }}</td><td class="px-4 py-3">{{ $rule->age_group ?: 'كل الأعمار' }} / {{ $rule->gender ?: 'الكل' }}</td><td class="px-4 py-3">{{ $rule->priority }}</td><td class="px-4 py-3">{{ $rule->is_active ? 'نشطة' : 'معطلة' }}</td><td class="px-4 py-3"><a href="{{ route('admin.upsell-rules.edit', $rule) }}" class="font-bold text-indigo-600">تعديل</a></td></tr>@endforeach</tbody>
+        </table></div>{{ $rules->links() }}
+    </div></div>
+</x-admin-layout>

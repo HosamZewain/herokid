@@ -10,6 +10,10 @@
     $savedDeliveryDetails = $savedDeliveryDetails ?? [];
     $selectedCountryId = (string) old('delivery_country_id', data_get($savedDeliveryDetails, 'delivery_country_id', $defaultCountry?->id));
     $selectedGovernorateId = (string) old('delivery_governorate_id', data_get($savedDeliveryDetails, 'delivery_governorate_id'));
+    $cartCollection = collect($cartItems);
+    $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
+    $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
+    $addOnItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product_add_on');
 @endphp
 
 <div class="min-h-[70vh] bg-slate-50">
@@ -166,11 +170,11 @@
                         <div class="bg-slate-950 p-6 text-white text-right">
                             <p class="text-sm font-bold text-indigo-200">ملخص الطلب</p>
                             <p class="mt-2 text-3xl font-black"><span data-cart-total>{{ number_format($total, 0) }}</span> ج.م</p>
-                            <p class="mt-1 text-sm text-slate-300">يشمل القصص ومصاريف التوصيل</p>
+                            <p class="mt-1 text-sm text-slate-300">يشمل عناصر السلة ومصاريف التوصيل</p>
                         </div>
                         <div class="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
-                                <span class="block text-slate-500 mb-1">إجمالي القصص</span>
+                                <span class="block text-slate-500 mb-1">إجمالي العناصر</span>
                                 <span class="font-black text-slate-950">{{ number_format($subtotal, 0) }} ج.م</span>
                             </div>
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
@@ -187,44 +191,97 @@
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                         <div class="border-b border-slate-100 p-5 sm:p-6">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <p class="text-sm font-bold text-slate-500">{{ $cartCount }} {{ $cartCount === 1 ? 'قصة مخصصة' : 'قصص مخصصة' }}</p>
-                                <h2 class="text-xl font-black text-slate-950 text-right">القصص داخل السلة</h2>
+                                <p class="text-sm font-bold text-slate-500">{{ $cartCount }} عنصر في السلة</p>
+                                <h2 class="text-xl font-black text-slate-950 text-right">عناصر السلة</h2>
                             </div>
                         </div>
 
                         <div class="divide-y divide-slate-100">
                             @foreach($cartItems as $key => $item)
+                                @continue(($item['item_type'] ?? 'story') === 'product_add_on')
+                                @php
+                                    $itemType = $item['item_type'] ?? 'story';
+                                    $linkedAddOns = $itemType === 'story'
+                                        ? $addOnItems->filter(fn ($addOn) => ($addOn['linked_story_key'] ?? null) === $key)
+                                        : collect();
+                                @endphp
                                 <article class="p-5 sm:p-6">
                                     <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5">
                                         <div class="text-right">
                                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                                 <div>
-                                                    <p class="text-xs font-extrabold text-indigo-500 mb-1">قصة رقم {{ $loop->iteration }}</p>
-                                                    <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['story_title'] ?? 'قصة' }}</h3>
+                                                    @if($itemType === 'story')
+                                                        <p class="text-xs font-extrabold text-indigo-500 mb-1">قصة مخصصة</p>
+                                                        <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['story_title'] ?? 'قصة' }}</h3>
+                                                    @else
+                                                        <p class="text-xs font-extrabold text-emerald-600 mb-1">منتج من المتجر</p>
+                                                        <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['product_title'] ?? 'منتج' }}</h3>
+                                                        @if(!empty($item['variant_name']))
+                                                            <p class="mt-1 text-xs font-bold text-slate-400">النوع: {{ $item['variant_name'] }}</p>
+                                                        @endif
+                                                    @endif
                                                 </div>
                                                 <p class="inline-flex w-fit rounded-2xl bg-indigo-50 px-4 py-2 text-base font-black text-indigo-700">
-                                                    {{ number_format((float) ($item['story_price'] ?? 0), 0) }} ج.م
+                                                    {{ number_format($itemType === 'story' ? (float) ($item['story_price'] ?? 0) : ((int) ($item['line_total_cents'] ?? 0) / 100), 0) }} ج.م
                                                 </p>
                                             </div>
 
-                                            <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                <div class="rounded-2xl bg-slate-50 p-4">
-                                                    <p class="text-xs font-bold text-slate-400 mb-1">اسم الطفل</p>
-                                                    <p class="font-black text-slate-900">{{ $item['child_name'] ?? '-' }}</p>
+                                            @if($itemType === 'story')
+                                                <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">اسم الطفل</p>
+                                                        <p class="font-black text-slate-900">{{ $item['child_name'] ?? '-' }}</p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">العمر والجنس</p>
+                                                        <p class="font-black text-slate-900">
+                                                            {{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? '') === 'boy' ? 'ولد' : 'بنت' }}
+                                                        </p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">الصور المرفقة</p>
+                                                        <p class="font-black text-slate-900">{{ count($item['uploaded_photos'] ?? []) }} صورة</p>
+                                                    </div>
                                                 </div>
-                                                <div class="rounded-2xl bg-slate-50 p-4">
-                                                    <p class="text-xs font-bold text-slate-400 mb-1">العمر والجنس</p>
-                                                    <p class="font-black text-slate-900">
-                                                        {{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? '') === 'boy' ? 'ولد' : 'بنت' }}
-                                                    </p>
-                                                </div>
-                                                <div class="rounded-2xl bg-slate-50 p-4">
-                                                    <p class="text-xs font-bold text-slate-400 mb-1">الصور المرفقة</p>
-                                                    <p class="font-black text-slate-900">{{ count($item['uploaded_photos'] ?? []) }} صورة</p>
-                                                </div>
-                                            </div>
 
-                                            @if(!empty($item['interests']) || !empty($item['gift_note']) || !empty($item['parent_notes']))
+                                                @if($linkedAddOns->isNotEmpty())
+                                                    <div class="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                                                        <p class="mb-3 text-sm font-black text-indigo-800">إضافات مرتبطة بهذه القصة</p>
+                                                        <div class="space-y-2">
+                                                            @foreach($linkedAddOns as $addOnKey => $addOn)
+                                                                <div class="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm">
+                                                                    <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button class="font-black text-red-500">حذف</button>
+                                                                    </form>
+                                                                    <div class="text-right">
+                                                                        <p class="font-black text-slate-900">{{ $addOn['product_title'] ?? 'إضافة' }}</p>
+                                                                        <p class="text-xs text-slate-400">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
+                                                                    </div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            @else
+                                                <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">الكمية</p>
+                                                        <p class="font-black text-slate-900">{{ $item['quantity'] ?? 1 }}</p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">سعر الوحدة</p>
+                                                        <p class="font-black text-slate-900">{{ number_format((float) ($item['unit_price'] ?? 0), 0) }} ج.م</p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                        <p class="text-xs font-bold text-slate-400 mb-1">التخصيص</p>
+                                                        <p class="font-black text-slate-900">بدون بيانات طفل</p>
+                                                    </div>
+                                                </div>
+                                            @endif
+
+                                            @if($itemType === 'story' && (!empty($item['interests']) || !empty($item['gift_note']) || !empty($item['parent_notes'])))
                                                 <div class="mt-4 rounded-2xl border border-slate-100 bg-white p-4 text-sm leading-7 text-slate-600">
                                                     @if(!empty($item['interests']))
                                                         <p><span class="font-black text-slate-800">الاهتمامات:</span> {{ $item['interests'] }}</p>
@@ -240,16 +297,21 @@
                                         </div>
 
                                         <div class="flex md:flex-col gap-3 md:min-w-28">
-                                            @if(!empty($item['story_slug']))
+                                            @if($itemType === 'story' && !empty($item['story_slug']))
                                                 <a href="{{ route('stories.show', $item['story_slug']) }}"
                                                     class="inline-flex flex-1 md:flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 hover:bg-slate-50 transition">
                                                     عرض القصة
+                                                </a>
+                                            @elseif($itemType !== 'story' && !empty($item['product_slug']))
+                                                <a href="{{ route('shop.product.show', $item['product_slug']) }}"
+                                                    class="inline-flex flex-1 md:flex-none items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 hover:bg-slate-50 transition">
+                                                    عرض المنتج
                                                 </a>
                                             @endif
                                             <form action="{{ route('cart.destroy', $key) }}" method="POST" class="flex-1 md:flex-none">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit"
+                                                <button type="submit" @if($linkedAddOns->isNotEmpty()) onclick="return confirm('سيتم حذف الإضافات المرتبطة بهذه القصة أيضاً. هل تريد المتابعة؟')" @endif
                                                     class="w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 hover:bg-red-100 transition">
                                                     حذف
                                                 </button>
@@ -260,6 +322,35 @@
                             @endforeach
                         </div>
                     </section>
+
+                    @if(isset($recommendedProducts) && $recommendedProducts->isNotEmpty() && $storyLineItems->isNotEmpty())
+                        @php $targetStory = $storyLineItems->first(); @endphp
+                        <section class="rounded-3xl border border-indigo-100 bg-indigo-50/60 shadow-sm p-5 sm:p-6">
+                            <div class="mb-5 text-right">
+                                <p class="text-sm font-black text-indigo-600">كمّل هدية بطلك</p>
+                                <h2 class="mt-1 text-xl font-black text-slate-950">منتجات مقترحة لطفلك</h2>
+                                <p class="mt-2 text-sm leading-6 text-slate-500">أضف أنشطة وهدايا مناسبة وتستخدم نفس القصة والصور عند الحاجة.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                @foreach($recommendedProducts as $product)
+                                    <div class="rounded-2xl bg-white p-4 shadow-sm text-right">
+                                        <h3 class="font-black text-slate-950">{{ $product->name_ar }}</h3>
+                                        <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{{ $product->short_description_ar }}</p>
+                                        <div class="mt-4 flex items-center justify-between gap-3">
+                                            <form action="{{ route('cart.products.store', $product) }}" method="POST">
+                                                @csrf
+                                                @if($product->isPersonalizedAddon())
+                                                    <input type="hidden" name="linked_story_key" value="{{ $targetStory['key'] }}">
+                                                @endif
+                                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700">إضافة للسلة</button>
+                                            </form>
+                                            <span class="font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</span>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endif
 
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm p-5 sm:p-6">
                         <div class="flex items-start justify-between gap-4 text-right">

@@ -146,6 +146,8 @@
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
                             <x-nav-link :href="route('stories.index')"
                                 :active="request()->routeIs('stories.*')">القصص</x-nav-link>
+                            <x-nav-link :href="route('shop.index')"
+                                :active="request()->routeIs('shop.*')">المتجر</x-nav-link>
                             <x-nav-link :href="route('how-it-works')" :active="request()->routeIs('how-it-works')">كيف
                                 يعمل؟</x-nav-link>
                             <x-nav-link :href="route('pricing')"
@@ -224,6 +226,8 @@
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الرئيسية</a>
                 <a href="{{ route('stories.index') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">القصص</a>
+                <a href="{{ route('shop.index') }}"
+                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">المتجر</a>
                 <a href="{{ route('how-it-works') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">كيف
                     يعمل؟</a>
@@ -341,6 +345,7 @@
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('stories.index') }}" class="hover:text-white transition">القصص
                                     المتاحة</a></li>
+                            <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">المتجر</a></li>
                             <li><a href="{{ route('how-it-works') }}" class="hover:text-white transition">كيف يعمل؟</a>
                             </li>
                             <li><a href="{{ route('pricing') }}" class="hover:text-white transition">الأسعار</a></li>

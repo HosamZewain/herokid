@@ -19,7 +19,7 @@
 
             <h1 class="text-4xl font-extrabold text-gray-900 mb-4">تم استلام طلبك بنجاح!</h1>
             <p class="text-xl text-gray-600 mb-8">
-                شكراً لك! استلمنا {{ $orders->count() }} {{ $orders->count() === 1 ? 'طلب قصة' : 'طلبات قصص' }} وسيبدأ فريق HeroKid في المراجعة.
+                شكراً لك! استلمنا طلبك وسيبدأ فريق HeroKid في المراجعة.
             </p>
             
             <div class="bg-indigo-50 rounded-xl p-6 mb-8 text-right">
@@ -30,22 +30,35 @@
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                 <span class="bg-indigo-50 px-2 py-1 rounded border dir-ltr font-mono text-indigo-900 font-bold">#{{ $createdOrder->order_number }}</span>
                                 <div class="text-right">
-                                    <p class="font-bold text-indigo-900">{{ $createdOrder->story->title ?? 'قصة' }}</p>
-                                    <p class="text-sm text-indigo-700">الطفل: {{ $createdOrder->child_name }}</p>
+                                    <p class="font-bold text-indigo-900">{{ $createdOrder->story->title ?? ($createdOrder->items->first()?->title ?? 'طلب متجر') }}</p>
+                                    <p class="text-sm text-indigo-700">
+                                        @if($createdOrder->child_name)
+                                            الطفل: {{ $createdOrder->child_name }}
+                                        @else
+                                            {{ $createdOrder->items->count() }} عنصر في الطلب
+                                        @endif
+                                    </p>
+                                    @if($createdOrder->items->where('item_type', '!=', 'story')->count())
+                                        <div class="mt-3 space-y-1 text-sm text-indigo-700">
+                                            @foreach($createdOrder->items->where('item_type', '!=', 'story') as $orderItem)
+                                                <p>• {{ $orderItem->title }} × {{ $orderItem->quantity }}</p>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
                     @endforeach
                 </div>
                 <div class="mt-5 pt-4 border-t border-indigo-100 space-y-2 text-indigo-900">
-                    <div class="flex justify-between"><span class="font-bold">{{ number_format($subtotal, 0) }} ج.م</span><span>إجمالي القصص</span></div>
+                    <div class="flex justify-between"><span class="font-bold">{{ number_format($subtotal, 0) }} ج.م</span><span>إجمالي العناصر</span></div>
                     <div class="flex justify-between"><span class="font-bold">{{ number_format($deliveryFee, 0) }} ج.م</span><span>مصاريف التوصيل</span></div>
                     <div class="flex justify-between text-lg"><span class="font-black">{{ number_format($total, 0) }} ج.م</span><span class="font-black">الإجمالي</span></div>
                 </div>
             </div>
 
             <div class="text-gray-500 mb-10 text-sm bg-yellow-50 p-4 rounded-lg">
-                <p>سنقوم بمراجعة الصور والبيانات وتجهيز القصص.</p>
+                <p>سنقوم بمراجعة بيانات الطلب وتجهيز المنتجات المطلوبة.</p>
                 <p class="mt-2">سيتم التواصل معك عبر الواتساب على الرقم <strong>{{ $order->delivery_details['phone'] }}</strong> بخصوص الدفع وتأكيد التصميم النهائي.</p>
             </div>
 

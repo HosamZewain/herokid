@@ -71,8 +71,8 @@
                                 </div>
                             </div>
                             <div class="space-y-3">
-                                <div><span class="font-bold text-gray-600">اسم الطفل:</span> <span class="text-gray-900 font-bold">{{ $order->child_name }}</span></div>
-                                <div><span class="font-bold text-gray-600">العمر / الجنس:</span> <span>{{ $order->child_age }} سنة / {{ $order->child_gender == 'boy' ? '👦 ولد' : '👧 بنت' }}</span></div>
+                                <div><span class="font-bold text-gray-600">اسم الطفل:</span> <span class="text-gray-900 font-bold">{{ $order->child_name ?? '-' }}</span></div>
+                                <div><span class="font-bold text-gray-600">العمر / الجنس:</span> <span>{{ $order->child_age ? $order->child_age . ' سنة' : '-' }} / {{ $order->child_gender == 'boy' ? '👦 ولد' : ($order->child_gender == 'girl' ? '👧 بنت' : '-') }}</span></div>
                                 <div>
                                     <span class="font-bold text-gray-600">القصة:</span>
                                     @if($order->story)
@@ -84,7 +84,7 @@
                                         <span class="text-indigo-600 font-bold">-</span>
                                     @endif
                                 </div>
-                                <div><span class="font-bold text-gray-600">اللغة:</span> <span>{{ $order->language == 'ar' ? '🇸🇦 عربي' : '🇬🇧 English' }}</span></div>
+                                <div><span class="font-bold text-gray-600">اللغة:</span> <span>{{ $order->language ? ($order->language == 'ar' ? '🇸🇦 عربي' : '🇬🇧 English') : '-' }}</span></div>
                             </div>
                         </div>
                         @if($order->interests || $order->parent_notes || $order->gift_note || $order->lesson)
@@ -124,6 +124,44 @@
                             </div>
                         @endif
                     </div>
+
+                    @if($order->items->count())
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">عناصر الطلب والمنتجات</h3>
+                            <div class="space-y-3">
+                                @foreach($order->items->whereNull('linked_order_item_id') as $orderItem)
+                                    <div class="rounded-xl border border-gray-100 bg-slate-50 p-4 text-right">
+                                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                            <div>
+                                                <p class="text-xs font-bold text-indigo-600">{{ $orderItem->item_type === 'story' ? 'قصة مخصصة' : 'منتج' }}</p>
+                                                <p class="font-black text-gray-900">{{ $orderItem->title }}</p>
+                                                @if($orderItem->variant_snapshot)
+                                                    <p class="text-xs text-gray-500">النوع: {{ $orderItem->variant_snapshot['name_ar'] ?? '-' }}</p>
+                                                @endif
+                                            </div>
+                                            <div class="text-sm font-bold text-gray-700">
+                                                {{ $orderItem->quantity }} × {{ number_format($orderItem->unit_price_cents / 100, 0) }} ج.م
+                                            </div>
+                                        </div>
+
+                                        @if($orderItem->linkedAddOns->count())
+                                            <div class="mt-4 border-t border-indigo-100 pt-4">
+                                                <p class="mb-2 text-xs font-black text-indigo-700">إضافات مرتبطة بهذا الطفل/القصة</p>
+                                                <div class="space-y-2">
+                                                    @foreach($orderItem->linkedAddOns as $addOn)
+                                                        <div class="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                                                            <span class="font-bold text-gray-900">{{ $addOn->title }}</span>
+                                                            <span class="text-gray-500">{{ $addOn->quantity }} × {{ number_format($addOn->unit_price_cents / 100, 0) }} ج.م</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
 
                     <!-- Child Photos -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

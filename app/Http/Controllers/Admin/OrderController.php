@@ -14,7 +14,7 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Order::with(['user', 'story'])->latest();
+        $query = Order::with(['user', 'story', 'items.product', 'items.variant'])->latest();
 
         // Filter by status
         if ($request->filled('status')) {
@@ -28,7 +28,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load(['user', 'story', 'statusLogs', 'previews']);
+        $order->load(['user', 'story', 'statusLogs', 'previews', 'items.product', 'items.variant', 'items.linkedAddOns.product']);
         $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
 
         AdminActivityLogger::log(

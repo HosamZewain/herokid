@@ -32,4 +32,9 @@ class Order extends Model
     {
         return $this->hasMany(OrderPreview::class);
     }
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
 }

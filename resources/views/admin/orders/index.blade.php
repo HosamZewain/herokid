@@ -103,8 +103,14 @@
                                         <div class="text-xs text-gray-400 dir-ltr">{{ $order->delivery_details['phone'] ?? $order->customer_phone ?? '' }}</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-semibold text-gray-900">{{ $order->child_name }}</div>
-                                        <div class="text-xs text-gray-400">{{ $order->child_age }} سنة • {{ $order->child_gender === 'boy' ? '👦' : '👧' }}</div>
+                                        <div class="text-sm font-semibold text-gray-900">{{ $order->child_name ?? 'طلب متجر' }}</div>
+                                        <div class="text-xs text-gray-400">
+                                            @if($order->child_age)
+                                                {{ $order->child_age }} سنة • {{ $order->child_gender === 'boy' ? '👦' : '👧' }}
+                                            @else
+                                                بدون بيانات طفل
+                                            @endif
+                                        </div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
                                         @if($order->story)
@@ -113,9 +119,9 @@
                                                 {{ $order->story->title }}
                                             </a>
                                         @else
-                                            <div class="text-sm text-gray-700">—</div>
+                                            <div class="text-sm text-gray-700">{{ $order->items->first()?->title ?? 'منتجات متجر' }}</div>
                                         @endif
-                                        <div class="text-xs text-gray-400">{{ $order->story->price ?? 0 }} ج.م</div>
+                                        <div class="text-xs text-gray-400">{{ number_format((float) ($order->delivery_details['subtotal'] ?? $order->story->price ?? 0), 0) }} ج.م</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
                                         <span class="px-2.5 py-1 inline-flex text-xs font-bold rounded-full {{ $badgeColor }}">

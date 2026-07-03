@@ -542,6 +542,44 @@
         </div>
     </section>
 
+    @if(isset($storeSections) && $storeSections->isNotEmpty())
+        <section class="py-20 bg-slate-50" dir="rtl">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+                <div class="text-center max-w-2xl mx-auto">
+                    <span class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 font-black text-xs px-4 py-2 rounded-full border border-indigo-100 mb-4">المتجر</span>
+                    <h2 class="text-3xl sm:text-4xl font-black text-slate-950">منتجات تكمل تجربة طفلك</h2>
+                    <p class="mt-3 text-slate-500 leading-8">كتب أنشطة، قصص جاهزة، وهدايا يمكن شراؤها مباشرة أو إضافتها مع القصة المخصصة.</p>
+                </div>
+
+                @foreach($storeSections as $section)
+                    @php
+                        $sectionProducts = $section->category->activeProducts->take($section->max_products);
+                    @endphp
+                    @if($sectionProducts->isNotEmpty())
+                        <div>
+                            <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                <div class="text-right">
+                                    <h3 class="text-2xl font-black text-slate-950">{{ $section->title_ar }}</h3>
+                                    @if($section->subtitle_ar)
+                                        <p class="mt-2 text-slate-500">{{ $section->subtitle_ar }}</p>
+                                    @endif
+                                </div>
+                                <a href="{{ $section->cta_url ?: route('shop.category', $section->category) }}" class="inline-flex items-center justify-center rounded-2xl border border-indigo-100 bg-white px-5 py-3 text-sm font-black text-indigo-700 shadow-sm hover:bg-indigo-50">
+                                    {{ $section->cta_text_ar ?: 'عرض الكل' }}
+                                </a>
+                            </div>
+                            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                                @foreach($sectionProducts as $product)
+                                    @include('front.shop._product-card', ['product' => $product])
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     {{-- HOW IT WORKS --}}
     <section id="how-it-works" class="py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(145deg, #0f0a1e 0%, #1e1b4b 50%, #2e1065 100%);">

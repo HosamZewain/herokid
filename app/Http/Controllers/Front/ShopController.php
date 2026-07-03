@@ -1,0 +1,79 @@
+<?php
+
+namespace App\Http\Controllers\Front;
+
+use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+
+class ShopController extends Controller
+{
+    public function index(Request $request)
+    {
+        return $this->listing($request);
+    }
+
+    public function category(Request $request, ProductCategory $category)
+    {
+        abort_unless($category->is_active && $category->show_in_store, 404);
+
+        return $this->listing($request, $category);
+    }
+
+    public function show(Product $product)
+    {
+        abort_unless($product->is_active && $product->category?->is_active && $product->category?->show_in_store, 404);
+
+        $product->load(['category', 'activeVariants']);
+        $storyItems = collect(session('cart.items', []))
+            ->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story')
+            ->values();
+        $relatedProducts = Product::query()
+            ->with('category')
+            ->publiclyVisible()
+            ->where('id', '!=', $product->id)
+            ->where('product_category_id', $product->product_category_id)
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->take(4)
+            ->get();
+
+        return view('front.shop.show', compact('product', 'storyItems', 'relatedProducts'));
+    }
+
+    private function listing(Request $request, ?ProductCategory $category = null)
+    {
+        $categories = ProductCategory::query()
+            ->where('is_active', true)
+            ->where('show_in_store', true)
+            ->whereHas('activeProducts')
+            ->orderBy('sort_order')
+            ->get();
+
+        $products = Product::query()
+            ->with('category')
+            ->publiclyVisible()
+            ->when($category, fn (Builder $query) => $query->where('product_category_id', $category->id))
+            ->when($request->filled('category'), fn (Builder $query) => $query->whereHas('category', fn (Builder $categoryQuery) => $categoryQuery->where('slug', $request->category)))
+            ->forAgeGroup($request->input('age'))
+            ->when($request->filled('personalization'), fn (Builder $query) => $query->where('personalization_mode', $request->personalization))
+            ->when($request->input('availability') === 'available', fn (Builder $query) => $query->where(function (Builder $builder) {
+                $builder->where('inventory_mode', '!=', 'track_stock')->orWhere('stock_quantity', '>', 0)->orWhereNull('stock_quantity');
+            }));
+
+        match ($request->input('sort', 'featured')) {
+            'newest' => $products->latest(),
+            'price_asc' => $products->orderByRaw('coalesce(sale_price_cents, price_cents) asc'),
+            'price_desc' => $products->orderByRaw('coalesce(sale_price_cents, price_cents) desc'),
+            default => $products->orderByDesc('is_featured')->orderBy('sort_order')->latest(),
+        };
+
+        return view('front.shop.index', [
+            'categories' => $categories,
+            'products' => $products->paginate(12)->withQueryString(),
+            'currentCategory' => $category,
+        ]);
+    }
+}

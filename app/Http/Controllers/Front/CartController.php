@@ -7,6 +7,7 @@ use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Story;
+use App\Support\ProductRecommendations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -17,9 +18,18 @@ class CartController extends Controller
     public function index()
     {
         $cart = $this->cart();
+        $storyItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
+        $upsellStoryKey = session('upsell_story_key');
+        $upsellStoryItem = $upsellStoryKey && isset($cart[$upsellStoryKey]) ? $cart[$upsellStoryKey] : $storyItems->first();
+        $recommendedProducts = $upsellStoryItem
+            ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6)
+            : collect();
 
         return view('front.cart.index', [
             'cartItems' => $cart,
+            'storyItems' => $storyItems,
+            'recommendedProducts' => $recommendedProducts,
+            'upsellStoryKey' => $upsellStoryKey,
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $this->deliveryCountries(),
@@ -68,12 +78,13 @@ class CartController extends Controller
         $photoPaths = [];
 
         foreach ($request->file('photos', []) as $photo) {
-            $photoPaths[] = $photo->store('orders/cart/' . now()->format('Y-m') . '/' . $itemKey, 'local');
+            $photoPaths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$itemKey, 'local');
         }
 
         $cart = $this->cart();
         $cart[$itemKey] = [
             'key' => $itemKey,
+            'item_type' => 'story',
             'story_id' => $story->id,
             'story_title' => $story->title,
             'story_slug' => $story->slug,
@@ -90,6 +101,7 @@ class CartController extends Controller
         ];
 
         session(['cart.items' => $cart]);
+        session()->flash('upsell_story_key', $itemKey);
 
         if ($request->input('next') === 'cart') {
             return redirect()->route('cart.index')->with('success', 'تمت إضافة القصة إلى السلة بنجاح.');
@@ -105,17 +117,26 @@ class CartController extends Controller
         $cart = $this->cart();
 
         if (isset($cart[$key])) {
-            foreach ($cart[$key]['uploaded_photos'] ?? [] as $photoPath) {
+            $item = $cart[$key];
+
+            foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
                 if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
                     Storage::disk('local')->delete($photoPath);
                 }
             }
 
             unset($cart[$key]);
+
+            if (($item['item_type'] ?? 'story') === 'story') {
+                $cart = collect($cart)
+                    ->reject(fn (array $cartItem) => ($cartItem['linked_story_key'] ?? null) === $key)
+                    ->all();
+            }
+
             session(['cart.items' => $cart]);
         }
 
-        return redirect()->route('cart.index')->with('success', 'تم حذف القصة من السلة.');
+        return redirect()->route('cart.index')->with('success', 'تم حذف العنصر من السلة.');
     }
 
     private function cart(): array
@@ -125,7 +146,13 @@ class CartController extends Controller
 
     private function subtotal(array $cart): float
     {
-        return collect($cart)->sum(fn (array $item): float => (float) ($item['story_price'] ?? 0));
+        return collect($cart)->sum(function (array $item): float {
+            if (($item['item_type'] ?? 'story') === 'story') {
+                return (float) ($item['story_price'] ?? 0);
+            }
+
+            return ((int) ($item['line_total_cents'] ?? 0)) / 100;
+        });
     }
 
     private function defaultDeliveryFee(): float

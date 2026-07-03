@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Models\HomepageStoreSection;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 
@@ -29,16 +30,29 @@ Route::get('/', function () {
     $faqs            = \App\Models\FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
     $testimonials    = \App\Models\Testimonial::where('active', true)->orderBy('sort_order')->get();
     $packages        = \App\Models\PricingPackage::active()->ordered()->get();
-    return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages'));
+    $storeSections   = HomepageStoreSection::query()
+        ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get()
+        ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty());
+
+    return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages', 'storeSections'));
 })->name('home');
 
 // Public Story Routes
 Route::get('/stories', [\App\Http\Controllers\Front\StoryController::class, 'index'])->name('stories.index');
 Route::get('/stories/{slug}', [\App\Http\Controllers\Front\StoryController::class, 'show'])->name('stories.show');
 
+// Public Store Routes
+Route::get('/shop', [\App\Http\Controllers\Front\ShopController::class, 'index'])->name('shop.index');
+Route::get('/shop/product/{product:slug}', [\App\Http\Controllers\Front\ShopController::class, 'show'])->name('shop.product.show');
+Route::get('/shop/{category:slug}', [\App\Http\Controllers\Front\ShopController::class, 'category'])->name('shop.category');
+
 // Cart and checkout routes
 Route::get('/cart', [\App\Http\Controllers\Front\CartController::class, 'index'])->name('cart.index');
 Route::post('/cart/stories/{story:slug}', [\App\Http\Controllers\Front\CartController::class, 'store'])->name('cart.store');
+Route::post('/cart/products/{product:slug}', [\App\Http\Controllers\Front\ProductCartController::class, 'store'])->name('cart.products.store');
 Route::delete('/cart/{key}', [\App\Http\Controllers\Front\CartController::class, 'destroy'])->name('cart.destroy');
 Route::post('/checkout', [\App\Http\Controllers\Front\CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success', [\App\Http\Controllers\Front\CheckoutController::class, 'success'])->name('checkout.success');
@@ -72,10 +86,19 @@ Route::get('/sitemap.xml', function () {
         ->select('slug', 'updated_at')
         ->orderBy('updated_at', 'desc')
         ->get();
+    $productCategories = \App\Models\ProductCategory::where('is_active', true)
+        ->where('show_in_store', true)
+        ->whereHas('activeProducts')
+        ->select('slug', 'updated_at')
+        ->get();
+    $products = \App\Models\Product::publiclyVisible()
+        ->select('slug', 'updated_at')
+        ->get();
 
     $staticPages = [
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
         ['url' => Seo::url('/stories'),      'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
+        ['url' => Seo::url('/shop'),         'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.8'],
         ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
         ['url' => Seo::url('/contact'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
@@ -102,6 +125,24 @@ Route::get('/sitemap.xml', function () {
         $xml .= "    <lastmod>{$lastmod}</lastmod>\n";
         $xml .= "    <changefreq>weekly</changefreq>\n";
         $xml .= "    <priority>0.8</priority>\n";
+        $xml .= "  </url>\n";
+    }
+
+    foreach ($productCategories as $category) {
+        $xml .= "  <url>\n";
+        $xml .= '    <loc>' . e(Seo::url('/shop/' . $category->slug)) . "</loc>\n";
+        $xml .= '    <lastmod>' . ($category->updated_at?->toDateString() ?? now()->toDateString()) . "</lastmod>\n";
+        $xml .= "    <changefreq>weekly</changefreq>\n";
+        $xml .= "    <priority>0.7</priority>\n";
+        $xml .= "  </url>\n";
+    }
+
+    foreach ($products as $product) {
+        $xml .= "  <url>\n";
+        $xml .= '    <loc>' . e(Seo::url('/shop/product/' . $product->slug)) . "</loc>\n";
+        $xml .= '    <lastmod>' . ($product->updated_at?->toDateString() ?? now()->toDateString()) . "</lastmod>\n";
+        $xml .= "    <changefreq>weekly</changefreq>\n";
+        $xml .= "    <priority>0.7</priority>\n";
         $xml .= "  </url>\n";
     }
 
@@ -142,6 +183,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
 
     Route::resource('stories', \App\Http\Controllers\Admin\StoryController::class);
     Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class)->only(['index', 'store', 'destroy']);
+
+    Route::resource('product-categories', \App\Http\Controllers\Admin\ProductCategoryController::class)->except(['show']);
+    Route::resource('products', \App\Http\Controllers\Admin\ProductController::class)->except(['show']);
+    Route::post('products/{product}/variants', [\App\Http\Controllers\Admin\ProductVariantController::class, 'store'])->name('products.variants.store');
+    Route::put('product-variants/{variant}', [\App\Http\Controllers\Admin\ProductVariantController::class, 'update'])->name('product-variants.update');
+    Route::delete('product-variants/{variant}', [\App\Http\Controllers\Admin\ProductVariantController::class, 'destroy'])->name('product-variants.destroy');
+    Route::resource('homepage-store-sections', \App\Http\Controllers\Admin\HomepageStoreSectionController::class)->except(['show']);
+    Route::resource('upsell-rules', \App\Http\Controllers\Admin\ProductUpsellRuleController::class)->except(['show']);
 
     // Story Attachments (private — admin only)
     Route::post('stories/{story}/attachments', [\App\Http\Controllers\Admin\StoryAttachmentController::class, 'store'])->name('stories.attachments.store');
