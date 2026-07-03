@@ -1,5 +1,11 @@
 <?php
 
+use App\Http\Middleware\CanonicalHost;
+use App\Http\Middleware\IsAdmin;
+use App\Http\Middleware\LogAdminActivity;
+use App\Http\Middleware\RequireAdminPermission;
+use App\Http\Middleware\SecurityAndCacheHeaders;
+use App\Http\Middleware\TrackCustomerVisit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,17 +19,18 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(
             prepend: [
-                \App\Http\Middleware\SecurityAndCacheHeaders::class,
-                \App\Http\Middleware\CanonicalHost::class,
+                SecurityAndCacheHeaders::class,
+                CanonicalHost::class,
             ],
             append: [
-                \App\Http\Middleware\TrackCustomerVisit::class,
+                TrackCustomerVisit::class,
             ],
         );
 
         $middleware->alias([
-            'is_admin' => \App\Http\Middleware\IsAdmin::class,
-            'admin_audit' => \App\Http\Middleware\LogAdminActivity::class,
+            'is_admin' => IsAdmin::class,
+            'admin_audit' => LogAdminActivity::class,
+            'permission' => RequireAdminPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

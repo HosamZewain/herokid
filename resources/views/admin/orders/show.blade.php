@@ -61,10 +61,14 @@
                             <div class="space-y-3">
                                 <div>
                                     <span class="font-bold text-gray-600">اسم ولي الأمر:</span>
-                                    <a href="{{ route('admin.customers.show', $customerKey) }}"
-                                       class="text-gray-900 hover:text-indigo-600 hover:underline transition">
-                                        {{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}
-                                    </a>
+                                    @can('customers.view')
+                                        <a href="{{ route('admin.customers.show', $customerKey) }}"
+                                           class="text-gray-900 hover:text-indigo-600 hover:underline transition">
+                                            {{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}
+                                        </a>
+                                    @else
+                                        <span class="text-gray-900">{{ $order->parent_name ?? ($order->user->name ?? 'زائر') }}</span>
+                                    @endcan
                                 </div>
                                 <div><span class="font-bold text-gray-600">الهاتف / واتساب:</span>
                                     <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}" target="_blank" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
@@ -76,10 +80,14 @@
                                 <div>
                                     <span class="font-bold text-gray-600">القصة:</span>
                                     @if($order->story)
+                                        @can('stories.update')
                                         <a href="{{ route('admin.stories.edit', $order->story) }}"
                                            class="text-indigo-600 font-bold hover:text-indigo-800 hover:underline transition">
                                             {{ $order->story->title }}
                                         </a>
+                                        @else
+                                            <span class="text-indigo-600 font-bold">{{ $order->story->title }}</span>
+                                        @endcan
                                     @else
                                         <span class="text-indigo-600 font-bold">-</span>
                                     @endif
@@ -164,6 +172,7 @@
                     @endif
 
                     <!-- Child Photos -->
+                    @can('orders.photos.view')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">📸 صور الطفل المرفقة</h3>
                         @if($order->uploaded_photos && count($order->uploaded_photos) > 0)
@@ -189,8 +198,10 @@
                         <p class="text-gray-400 text-sm text-right">لا توجد صور مرفقة.</p>
                         @endif
                     </div>
+                    @endcan
 
                     <!-- Story Production Prompt -->
+                    @can('orders.production_prompt.manage')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 border-b pb-3">
                             <div class="text-right">
@@ -278,6 +289,7 @@
                             </div>
                         @endif
                     </div>
+                    @endcan
 
                     <!-- Status History -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -325,6 +337,7 @@
                 <div class="space-y-6">
 
                     <!-- Update Status -->
+                    @can('orders.update')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-base font-bold mb-4 text-right">تحديث حالة الطلب</h3>
                         <form action="{{ route('admin.orders.update', $order) }}" method="POST" class="space-y-4">
@@ -354,8 +367,10 @@
                             </button>
                         </form>
                     </div>
+                    @endcan
 
                     <!-- Upload Preview -->
+                    @can('orders.preview.upload')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-base font-bold mb-4 text-right">رفع تصميم للعميل (Preview)</h3>
                         <form action="{{ route('admin.orders.upload-preview', $order) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
@@ -377,6 +392,7 @@
                         </form>
                         <p class="text-xs text-gray-400 mt-2 text-right">سيتم تحديث حالة الطلب تلقائياً إلى "تصميم تم رفعه"</p>
                     </div>
+                    @endcan
 
                     <!-- WhatsApp Quick Link -->
                     @if(isset($order->delivery_details['phone']))
@@ -395,6 +411,7 @@
         </div>
     </div>
 
+@can('orders.production_prompt.manage')
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -466,4 +483,5 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endpush
+@endcan
 </x-admin-layout>

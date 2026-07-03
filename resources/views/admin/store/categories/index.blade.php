@@ -2,7 +2,9 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold text-gray-800">تصنيفات المتجر</h2>
-            <a href="{{ route('admin.product-categories.create') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">إضافة تصنيف</a>
+            @can('store.categories.create')
+                <a href="{{ route('admin.product-categories.create') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">إضافة تصنيف</a>
+            @endcan
         </div>
     </x-slot>
 
@@ -35,12 +37,16 @@
                                 <td class="px-4 py-3">{{ $category->is_active ? 'نشط' : 'معطل' }} / {{ $category->show_in_store ? 'ظاهر' : 'مخفي' }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex gap-2">
-                                        <a href="{{ route('admin.product-categories.edit', $category) }}" class="font-bold text-indigo-600">تعديل</a>
-                                        <form action="{{ route('admin.product-categories.destroy', $category) }}" method="POST" onsubmit="return confirm('حذف التصنيف؟')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="font-bold text-red-600">حذف</button>
-                                        </form>
+                                        @can('store.categories.update')
+                                            <a href="{{ route('admin.product-categories.edit', $category) }}" class="font-bold text-indigo-600">تعديل</a>
+                                        @endcan
+                                        @can('store.categories.delete')
+                                            <form action="{{ route('admin.product-categories.destroy', $category) }}" method="POST" onsubmit="return confirm('حذف التصنيف؟')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="font-bold text-red-600">حذف</button>
+                                            </form>
+                                        @endcan
                                     </div>
                                 </td>
                             </tr>

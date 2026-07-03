@@ -3,10 +3,18 @@
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold text-gray-800">منتجات المتجر</h2>
             <div class="flex gap-2">
-                <a href="{{ route('admin.product-categories.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">التصنيفات</a>
-                <a href="{{ route('admin.homepage-store-sections.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">أقسام الرئيسية</a>
-                <a href="{{ route('admin.upsell-rules.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">Upsell</a>
-                <a href="{{ route('admin.products.create') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">إضافة منتج</a>
+                @can('store.categories.view')
+                    <a href="{{ route('admin.product-categories.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">التصنيفات</a>
+                @endcan
+                @can('store.homepage_sections.view')
+                    <a href="{{ route('admin.homepage-store-sections.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">أقسام الرئيسية</a>
+                @endcan
+                @can('store.upsell_rules.view')
+                    <a href="{{ route('admin.upsell-rules.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">Upsell</a>
+                @endcan
+                @can('store.products.create')
+                    <a href="{{ route('admin.products.create') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700">إضافة منتج</a>
+                @endcan
             </div>
         </div>
     </x-slot>
@@ -24,7 +32,14 @@
                     <tbody class="divide-y divide-gray-100">
                         @foreach($products as $product)
                             <tr>
-                                <td class="px-4 py-3"><a href="{{ route('admin.products.edit', $product) }}" class="font-black text-gray-900 hover:text-indigo-600">{{ $product->name_ar }}</a><div class="text-xs text-gray-400">{{ $product->slug }}</div></td>
+                                <td class="px-4 py-3">
+                                    @can('store.products.update')
+                                        <a href="{{ route('admin.products.edit', $product) }}" class="font-black text-gray-900 hover:text-indigo-600">{{ $product->name_ar }}</a>
+                                    @else
+                                        <span class="font-black text-gray-900">{{ $product->name_ar }}</span>
+                                    @endcan
+                                    <div class="text-xs text-gray-400">{{ $product->slug }}</div>
+                                </td>
                                 <td class="px-4 py-3">{{ $product->category?->name_ar ?? '-' }}</td>
                                 <td class="px-4 py-3">{{ number_format($product->effectivePrice(), 0) }} ج.م</td>
                                 <td class="px-4 py-3">{{ $product->personalization_mode }}</td>

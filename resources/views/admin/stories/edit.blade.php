@@ -170,6 +170,7 @@
             </div>
 
             {{-- ===== ATTACHMENTS SECTION ===== --}}
+            @if(auth()->user()->hasAnyPermission(['story_attachments.view', 'story_attachments.create', 'story_attachments.delete']))
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 mt-6">
                 <div class="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
                     <div>
@@ -182,6 +183,7 @@
                 </div>
 
                 {{-- Existing Attachments --}}
+                @can('story_attachments.view')
                 @if($story->attachments->isNotEmpty())
                 <div class="space-y-2 mb-6">
                     @foreach($story->attachments as $attachment)
@@ -198,22 +200,26 @@
                                class="text-indigo-600 hover:text-indigo-800 text-xs font-bold border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition">
                                 تحميل
                             </a>
-                            <form action="{{ route('admin.attachments.destroy', $attachment) }}" method="POST"
-                                  onsubmit="return confirm('هل أنت متأكد من حذف هذا المرفق؟')">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit"
-                                        class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition">
-                                    حذف
-                                </button>
-                            </form>
+                            @can('story_attachments.delete')
+                                <form action="{{ route('admin.attachments.destroy', $attachment) }}" method="POST"
+                                      onsubmit="return confirm('هل أنت متأكد من حذف هذا المرفق؟')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit"
+                                            class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition">
+                                        حذف
+                                    </button>
+                                </form>
+                            @endcan
                         </div>
                     </div>
                     @endforeach
                 </div>
                 @endif
+                @endcan
 
                 {{-- Upload New Attachments --}}
+                @can('story_attachments.create')
                 <form action="{{ route('admin.stories.attachments.store', $story) }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div id="attachment-drop-zone"
@@ -238,7 +244,9 @@
                     <x-input-error :messages="$errors->get('attachments')" class="mt-2" />
                     <x-input-error :messages="$errors->get('attachments.*')" class="mt-1" />
                 </form>
+                @endcan
             </div>
+            @endif
 
         </div>
     </div>

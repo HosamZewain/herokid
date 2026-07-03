@@ -4,10 +4,12 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('إدارة القصص') }}
             </h2>
-            <a href="{{ route('admin.stories.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                إضافة قصة جديدة
-            </a>
+            @can('stories.create')
+                <a href="{{ route('admin.stories.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    إضافة قصة جديدة
+                </a>
+            @endcan
         </div>
     </x-slot>
 
@@ -131,10 +133,14 @@
                                                 </div>
                                             @endif
                                             <div>
-                                                <a href="{{ route('admin.stories.edit', $story) }}"
-                                                   class="font-medium text-gray-900 hover:text-indigo-600 hover:underline transition">
-                                                    {{ $story->title }}
-                                                </a>
+                                                @can('stories.update')
+                                                    <a href="{{ route('admin.stories.edit', $story) }}"
+                                                       class="font-medium text-gray-900 hover:text-indigo-600 hover:underline transition">
+                                                        {{ $story->title }}
+                                                    </a>
+                                                @else
+                                                    <span class="font-medium text-gray-900">{{ $story->title }}</span>
+                                                @endcan
                                                 <div class="text-xs text-gray-400 mt-0.5">{{ $story->slug }}</div>
                                             </div>
                                         </div>
@@ -239,21 +245,23 @@
                                                class="text-gray-400 hover:text-blue-600 transition" >
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                                             </a>
-                                            {{-- Edit --}}
-                                            <a href="{{ route('admin.stories.edit', $story) }}"
-                                               title="تعديل"
-                                               class="text-gray-400 hover:text-indigo-600 transition">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                            </a>
-                                            {{-- Delete --}}
-                                            <form action="{{ route('admin.stories.destroy', $story) }}" method="POST"
-                                                  onsubmit="return confirm('هل أنت متأكد من حذف قصة «{{ addslashes($story->title) }}»؟');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" title="حذف" class="text-gray-400 hover:text-red-600 transition">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                                </button>
-                                            </form>
+                                            @can('stories.update')
+                                                <a href="{{ route('admin.stories.edit', $story) }}"
+                                                   title="تعديل"
+                                                   class="text-gray-400 hover:text-indigo-600 transition">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                                </a>
+                                            @endcan
+                                            @can('stories.delete')
+                                                <form action="{{ route('admin.stories.destroy', $story) }}" method="POST"
+                                                      onsubmit="return confirm('هل أنت متأكد من حذف قصة «{{ addslashes($story->title) }}»؟');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" title="حذف" class="text-gray-400 hover:text-red-600 transition">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                </form>
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>
@@ -262,7 +270,9 @@
                                     <td colspan="12" class="px-6 py-16 text-center">
                                         <div class="text-5xl mb-3">📚</div>
                                         <p class="text-gray-400 text-sm">لا توجد قصص حتى الآن.</p>
-                                        <a href="{{ route('admin.stories.create') }}" class="mt-3 inline-block text-blue-600 hover:underline text-sm">أضف أول قصة</a>
+                                        @can('stories.create')
+                                            <a href="{{ route('admin.stories.create') }}" class="mt-3 inline-block text-blue-600 hover:underline text-sm">أضف أول قصة</a>
+                                        @endcan
                                     </td>
                                 </tr>
                             @endforelse

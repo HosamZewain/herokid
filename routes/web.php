@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
+use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
@@ -217,72 +218,119 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard.index');
+    Route::get('/', AdminHomeController::class)->name('home');
+    Route::get('dashboard', [DashboardController::class, 'index'])
+        ->middleware('permission:dashboard.view')
+        ->name('dashboard.index');
 
-    Route::resource('stories', App\Http\Controllers\Admin\StoryController::class);
-    Route::resource('categories', CategoryController::class)->only(['index', 'store', 'destroy']);
+    Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
+        ->middlewareFor(['index', 'show'], 'permission:stories.view')
+        ->middlewareFor(['create', 'store'], 'permission:stories.create')
+        ->middlewareFor(['edit', 'update'], 'permission:stories.update')
+        ->middlewareFor('destroy', 'permission:stories.delete');
+    Route::resource('categories', CategoryController::class)->only(['index', 'store', 'destroy'])
+        ->middlewareFor('index', 'permission:story_categories.view')
+        ->middlewareFor('store', 'permission:story_categories.create')
+        ->middlewareFor('destroy', 'permission:story_categories.delete');
 
-    Route::resource('product-categories', ProductCategoryController::class)->except(['show']);
-    Route::resource('products', ProductController::class)->except(['show']);
-    Route::post('products/{product}/variants', [ProductVariantController::class, 'store'])->name('products.variants.store');
-    Route::put('product-variants/{variant}', [ProductVariantController::class, 'update'])->name('product-variants.update');
-    Route::delete('product-variants/{variant}', [ProductVariantController::class, 'destroy'])->name('product-variants.destroy');
-    Route::resource('homepage-store-sections', HomepageStoreSectionController::class)->except(['show']);
-    Route::resource('upsell-rules', ProductUpsellRuleController::class)->except(['show']);
+    Route::resource('product-categories', ProductCategoryController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:store.categories.view')
+        ->middlewareFor(['create', 'store'], 'permission:store.categories.create')
+        ->middlewareFor(['edit', 'update'], 'permission:store.categories.update')
+        ->middlewareFor('destroy', 'permission:store.categories.delete');
+    Route::resource('products', ProductController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:store.products.view')
+        ->middlewareFor(['create', 'store'], 'permission:store.products.create')
+        ->middlewareFor(['edit', 'update'], 'permission:store.products.update')
+        ->middlewareFor('destroy', 'permission:store.products.delete');
+    Route::post('products/{product}/variants', [ProductVariantController::class, 'store'])
+        ->middleware('permission:store.variants.create')
+        ->name('products.variants.store');
+    Route::put('product-variants/{variant}', [ProductVariantController::class, 'update'])
+        ->middleware('permission:store.variants.update')
+        ->name('product-variants.update');
+    Route::delete('product-variants/{variant}', [ProductVariantController::class, 'destroy'])
+        ->middleware('permission:store.variants.delete')
+        ->name('product-variants.destroy');
+    Route::resource('homepage-store-sections', HomepageStoreSectionController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:store.homepage_sections.view')
+        ->middlewareFor(['create', 'store'], 'permission:store.homepage_sections.create')
+        ->middlewareFor(['edit', 'update'], 'permission:store.homepage_sections.update')
+        ->middlewareFor('destroy', 'permission:store.homepage_sections.delete');
+    Route::resource('upsell-rules', ProductUpsellRuleController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:store.upsell_rules.view')
+        ->middlewareFor(['create', 'store'], 'permission:store.upsell_rules.create')
+        ->middlewareFor(['edit', 'update'], 'permission:store.upsell_rules.update')
+        ->middlewareFor('destroy', 'permission:store.upsell_rules.delete');
 
     // Story Attachments (private — admin only)
-    Route::post('stories/{story}/attachments', [StoryAttachmentController::class, 'store'])->name('stories.attachments.store');
-    Route::get('attachments/{attachment}/download', [StoryAttachmentController::class, 'download'])->name('attachments.download');
-    Route::delete('attachments/{attachment}', [StoryAttachmentController::class, 'destroy'])->name('attachments.destroy');
+    Route::post('stories/{story}/attachments', [StoryAttachmentController::class, 'store'])->middleware('permission:story_attachments.create')->name('stories.attachments.store');
+    Route::get('attachments/{attachment}/download', [StoryAttachmentController::class, 'download'])->middleware('permission:story_attachments.view')->name('attachments.download');
+    Route::delete('attachments/{attachment}', [StoryAttachmentController::class, 'destroy'])->middleware('permission:story_attachments.delete')->name('attachments.destroy');
 
-    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
-    Route::get('orders/{order}', [OrderController::class, 'show'])->name('orders.show');
-    Route::patch('orders/{order}', [OrderController::class, 'update'])->name('orders.update');
-    Route::post('orders/{order}/preview', [OrderController::class, 'uploadPreview'])->name('orders.upload-preview');
-    Route::get('orders/{order}/photos/{index}', [OrderController::class, 'servePhoto'])->name('orders.photo')->where('index', '[0-9]+');
-    Route::get('orders/{order}/production-prompt/regenerate', [OrderProductionPromptController::class, 'regenerate'])->name('orders.production-prompt.regenerate');
-    Route::post('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'saveOverride'])->name('orders.production-prompt.override');
-    Route::delete('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'resetOverride'])->name('orders.production-prompt.override-reset');
-    Route::post('orders/{order}/production-prompt/snapshot', [OrderProductionPromptController::class, 'saveSnapshot'])->name('orders.production-prompt.snapshot');
+    Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
+    Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
+    Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
+    Route::post('orders/{order}/preview', [OrderController::class, 'uploadPreview'])->middleware('permission:orders.preview.upload')->name('orders.upload-preview');
+    Route::get('orders/{order}/photos/{index}', [OrderController::class, 'servePhoto'])->middleware('permission:orders.photos.view')->name('orders.photo')->where('index', '[0-9]+');
+    Route::get('orders/{order}/production-prompt/regenerate', [OrderProductionPromptController::class, 'regenerate'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.regenerate');
+    Route::post('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'saveOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override');
+    Route::delete('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'resetOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override-reset');
+    Route::post('orders/{order}/production-prompt/snapshot', [OrderProductionPromptController::class, 'saveSnapshot'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.snapshot');
 
-    Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
-    Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
-    Route::put('customers/{customerKey}', [CustomerController::class, 'update'])->name('customers.update');
-    Route::get('customers/{customerKey}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
+    Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');
+    Route::put('customers/{customerKey}', [CustomerController::class, 'update'])->middleware('permission:customers.update')->name('customers.update');
+    Route::get('customers/{customerKey}', [CustomerController::class, 'show'])->middleware('permission:customers.view')->name('customers.show');
 
     // Content Management
-    Route::delete('faqs/bulk-delete', [FaqController::class, 'bulkDestroy'])->name('faqs.bulk-destroy');
-    Route::resource('faqs', FaqController::class)->except(['show']);
-    Route::resource('testimonials', TestimonialController::class)->except(['show']);
+    Route::delete('faqs/bulk-delete', [FaqController::class, 'bulkDestroy'])->middleware('permission:content.faqs.delete')->name('faqs.bulk-destroy');
+    Route::resource('faqs', FaqController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:content.faqs.view')
+        ->middlewareFor(['create', 'store'], 'permission:content.faqs.create')
+        ->middlewareFor(['edit', 'update'], 'permission:content.faqs.update')
+        ->middlewareFor('destroy', 'permission:content.faqs.delete');
+    Route::resource('testimonials', TestimonialController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:content.testimonials.view')
+        ->middlewareFor(['create', 'store'], 'permission:content.testimonials.create')
+        ->middlewareFor(['edit', 'update'], 'permission:content.testimonials.update')
+        ->middlewareFor('destroy', 'permission:content.testimonials.delete');
 
-    Route::get('messages', [ContactMessageController::class, 'index'])->name('messages.index');
-    Route::get('messages/{message}', [ContactMessageController::class, 'show'])->name('messages.show');
-    Route::delete('messages/{message}', [ContactMessageController::class, 'destroy'])->name('messages.destroy');
+    Route::get('messages', [ContactMessageController::class, 'index'])->middleware('permission:content.messages.view')->name('messages.index');
+    Route::get('messages/{message}', [ContactMessageController::class, 'show'])->middleware('permission:content.messages.view')->name('messages.show');
+    Route::delete('messages/{message}', [ContactMessageController::class, 'destroy'])->middleware('permission:content.messages.delete')->name('messages.destroy');
 
     // Settings
-    Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
-    Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
-    Route::get('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'edit'])->name('settings.story-production-prompt.edit');
-    Route::put('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'update'])->name('settings.story-production-prompt.update');
-    Route::post('settings/story-production-prompt/preview', [StoryProductionPromptTemplateController::class, 'preview'])->name('settings.story-production-prompt.preview');
-    Route::post('settings/story-production-prompt/reset', [StoryProductionPromptTemplateController::class, 'reset'])->name('settings.story-production-prompt.reset');
-    Route::get('delivery-zones', [DeliveryZoneController::class, 'index'])->name('delivery-zones.index');
-    Route::post('delivery-zones/countries', [DeliveryZoneController::class, 'storeCountry'])->name('delivery-zones.countries.store');
-    Route::put('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'updateCountry'])->name('delivery-zones.countries.update');
-    Route::delete('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'destroyCountry'])->name('delivery-zones.countries.destroy');
-    Route::post('delivery-zones/governorates', [DeliveryZoneController::class, 'storeGovernorate'])->name('delivery-zones.governorates.store');
-    Route::put('delivery-zones/governorates/{governorate}', [DeliveryZoneController::class, 'updateGovernorate'])->name('delivery-zones.governorates.update');
-    Route::delete('delivery-zones/governorates/{governorate}', [DeliveryZoneController::class, 'destroyGovernorate'])->name('delivery-zones.governorates.destroy');
+    Route::get('settings', [SettingsController::class, 'index'])->middleware('permission:settings.site.view')->name('settings.index');
+    Route::put('settings', [SettingsController::class, 'update'])->middleware('permission:settings.site.update')->name('settings.update');
+    Route::get('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'edit'])->middleware('permission:settings.production_prompt.view')->name('settings.story-production-prompt.edit');
+    Route::put('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'update'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.update');
+    Route::post('settings/story-production-prompt/preview', [StoryProductionPromptTemplateController::class, 'preview'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.preview');
+    Route::post('settings/story-production-prompt/reset', [StoryProductionPromptTemplateController::class, 'reset'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.reset');
+    Route::get('delivery-zones', [DeliveryZoneController::class, 'index'])->middleware('permission:settings.delivery_zones.view')->name('delivery-zones.index');
+    Route::post('delivery-zones/countries', [DeliveryZoneController::class, 'storeCountry'])->middleware('permission:settings.delivery_zones.create')->name('delivery-zones.countries.store');
+    Route::put('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'updateCountry'])->middleware('permission:settings.delivery_zones.update')->name('delivery-zones.countries.update');
+    Route::delete('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'destroyCountry'])->middleware('permission:settings.delivery_zones.delete')->name('delivery-zones.countries.destroy');
+    Route::post('delivery-zones/governorates', [DeliveryZoneController::class, 'storeGovernorate'])->middleware('permission:settings.delivery_zones.create')->name('delivery-zones.governorates.store');
+    Route::put('delivery-zones/governorates/{governorate}', [DeliveryZoneController::class, 'updateGovernorate'])->middleware('permission:settings.delivery_zones.update')->name('delivery-zones.governorates.update');
+    Route::delete('delivery-zones/governorates/{governorate}', [DeliveryZoneController::class, 'destroyGovernorate'])->middleware('permission:settings.delivery_zones.delete')->name('delivery-zones.governorates.destroy');
 
     // Admin Users Management
-    Route::resource('users', UserController::class)->except(['show']);
+    Route::resource('users', UserController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:admin_users.view')
+        ->middlewareFor(['create', 'store'], 'permission:admin_users.create,admin_users.permissions.manage')
+        ->middlewareFor('destroy', 'permission:admin_users.delete');
 
     // Pricing Packages
-    Route::resource('pricing', PricingPackageController::class)->except(['show']);
+    Route::resource('pricing', PricingPackageController::class)->except(['show'])
+        ->middlewareFor('index', 'permission:settings.pricing.view')
+        ->middlewareFor(['create', 'store'], 'permission:settings.pricing.create')
+        ->middlewareFor(['edit', 'update'], 'permission:settings.pricing.update')
+        ->middlewareFor('destroy', 'permission:settings.pricing.delete');
 
     // Admin Activity Logs
-    Route::get('activity-logs', [AdminActivityLogController::class, 'index'])->name('activity-logs.index');
-    Route::get('activity-logs/{activityLog}', [AdminActivityLogController::class, 'show'])->name('activity-logs.show');
+    Route::get('activity-logs', [AdminActivityLogController::class, 'index'])->middleware('permission:activity_logs.view')->name('activity-logs.index');
+    Route::get('activity-logs/{activityLog}', [AdminActivityLogController::class, 'show'])->middleware('permission:activity_logs.view')->name('activity-logs.show');
 });
 
 require __DIR__.'/auth.php';

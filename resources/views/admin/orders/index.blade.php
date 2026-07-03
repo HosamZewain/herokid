@@ -96,10 +96,14 @@
                                         </div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
-                                        <a href="{{ route('admin.customers.show', $customerKey) }}"
-                                           class="text-sm text-gray-800 hover:text-indigo-600 hover:underline transition">
-                                            {{ $order->parent_name ?? $order->customer_name ?? '—' }}
-                                        </a>
+                                        @can('customers.view')
+                                            <a href="{{ route('admin.customers.show', $customerKey) }}"
+                                               class="text-sm text-gray-800 hover:text-indigo-600 hover:underline transition">
+                                                {{ $order->parent_name ?? $order->customer_name ?? '—' }}
+                                            </a>
+                                        @else
+                                            <span class="text-sm text-gray-800">{{ $order->parent_name ?? $order->customer_name ?? '—' }}</span>
+                                        @endcan
                                         <div class="text-xs text-gray-400 dir-ltr">{{ $order->delivery_details['phone'] ?? $order->customer_phone ?? '' }}</div>
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
@@ -114,10 +118,14 @@
                                     </td>
                                     <td class="px-5 py-4 whitespace-nowrap">
                                         @if($order->story)
+                                            @can('stories.update')
                                             <a href="{{ route('admin.stories.edit', $order->story) }}"
                                                class="text-sm text-gray-700 hover:text-indigo-600 hover:underline transition">
                                                 {{ $order->story->title }}
                                             </a>
+                                            @else
+                                                <span class="text-sm text-gray-700">{{ $order->story->title }}</span>
+                                            @endcan
                                         @else
                                             <div class="text-sm text-gray-700">{{ $order->items->first()?->title ?? 'منتجات متجر' }}</div>
                                         @endif

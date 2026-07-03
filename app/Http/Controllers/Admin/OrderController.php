@@ -39,9 +39,15 @@ class OrderController extends Controller
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
         ]);
-        $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
-        $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
-        $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
+        $storyProductionPrompt = null;
+        $globalStoryProductionPrompt = null;
+        $productionPromptTemplateSetting = null;
+
+        if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
+            $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
+            $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
+            $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
+        }
 
         AdminActivityLogger::log(
             action: 'order.viewed',

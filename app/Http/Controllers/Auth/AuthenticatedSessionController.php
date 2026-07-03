@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\AdminActivityLogger;
+use App\Support\AdminPermissionRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,6 +41,14 @@ class AuthenticatedSessionController extends Controller
                 request: $request,
                 markRequestLogged: false,
             );
+
+            if ($request->user()->isAdmin()) {
+                $routeName = AdminPermissionRegistry::firstAllowedRoute($request->user()->permissionKeys()->all());
+
+                if ($routeName) {
+                    return redirect()->intended(route($routeName, absolute: false));
+                }
+            }
         }
 
         return redirect()->intended(route('dashboard', absolute: false));

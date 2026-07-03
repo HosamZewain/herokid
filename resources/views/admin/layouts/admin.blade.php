@@ -29,7 +29,7 @@
 
             {{-- Logo --}}
             <div class="px-6 py-5 border-b border-indigo-700">
-                <a href="{{ route('admin.dashboard.index') }}" class="flex items-center gap-3">
+                <a href="{{ route('admin.home') }}" class="flex items-center gap-3">
                     <img src="/images/logo-192.png" alt="HeroKid"
                         class="h-8 md:h-16 w-8 md:w-16 rounded-lg object-contain bg-white p-0.5">
                     <span class="font-extrabold text-lg text-white">HeroKid</span>
@@ -38,178 +38,88 @@
             </div>
 
             {{-- Navigation --}}
+            @php
+                $navLink = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition';
+                $idleLink = 'text-indigo-200 hover:bg-indigo-700 hover:text-white';
+                $activeLink = 'bg-indigo-600 text-white';
+                $canOperations = auth()->user()->hasAnyPermission([
+                    'orders.view', 'stories.view', 'story_categories.view', 'store.products.view',
+                    'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
+                ]);
+                $canContent = auth()->user()->hasAnyPermission([
+                    'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
+                ]);
+                $canSettings = auth()->user()->hasAnyPermission([
+                    'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
+                    'settings.pricing.view', 'admin_users.view', 'admin_users.create',
+                    'admin_users.permissions.manage', 'activity_logs.view',
+                ]);
+            @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
+                @can('dashboard.view')
+                    <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الرئيسية</p>
+                    <a href="{{ route('admin.dashboard.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.dashboard.*') ? $activeLink : $idleLink }}">لوحة القيادة</a>
+                @endcan
 
-                {{-- Main --}}
-                <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الرئيسية</p>
+                @if($canOperations)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">العمليات</p>
+                        @can('orders.view')
+                            <a href="{{ route('admin.orders.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.orders.*') ? $activeLink : $idleLink }}">الطلبات</a>
+                        @endcan
+                        @can('stories.view')
+                            <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>
+                        @endcan
+                        @if(auth()->user()->hasAnyPermission(['store.products.view', 'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view']))
+                            <a href="{{ auth()->user()->hasPermission('store.products.view') ? route('admin.products.index') : route('admin.product-categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.products.*') || request()->routeIs('admin.product-categories.*') || request()->routeIs('admin.homepage-store-sections.*') || request()->routeIs('admin.upsell-rules.*') ? $activeLink : $idleLink }}">المتجر</a>
+                        @endif
+                        @can('customers.view')
+                            <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">Customers</a>
+                        @endcan
+                        @can('story_categories.view')
+                            <a href="{{ route('admin.categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.categories.*') ? $activeLink : $idleLink }}">التصنيفات</a>
+                        @endcan
+                    </div>
+                @endif
 
-                <a href="{{ route('admin.dashboard.index') }}"
-                    class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                      {{ request()->routeIs('admin.dashboard.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                    لوحة القيادة
-                </a>
+                @if($canContent)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">إدارة المحتوى</p>
+                        @can('content.testimonials.view')
+                            <a href="{{ route('admin.testimonials.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.testimonials.*') ? $activeLink : $idleLink }}">آراء العملاء</a>
+                        @endcan
+                        @can('content.faqs.view')
+                            <a href="{{ route('admin.faqs.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.faqs.*') ? $activeLink : $idleLink }}">الأسئلة الشائعة</a>
+                        @endcan
+                        @can('content.messages.view')
+                            <a href="{{ route('admin.messages.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.messages.*') ? $activeLink : $idleLink }}">الرسائل الواردة</a>
+                        @endcan
+                    </div>
+                @endif
 
-                {{-- Operations --}}
-                <div class="pt-4">
-                    <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">العمليات</p>
-
-                    <a href="{{ route('admin.orders.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.orders.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        الطلبات
-                        {{-- badge for orders needing action --}}
-                    </a>
-
-                    <a href="{{ route('admin.stories.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.stories.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                        القصص
-                    </a>
-
-                    <a href="{{ route('admin.products.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.products.*') || request()->routeIs('admin.product-categories.*') || request()->routeIs('admin.homepage-store-sections.*') || request()->routeIs('admin.upsell-rules.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 7h18M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V5a3 3 0 016 0v2" />
-                        </svg>
-                        المتجر
-                    </a>
-
-                    <a href="{{ route('admin.customers.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.customers.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m8-4a4 4 0 10-8 0 4 4 0 008 0zm-8 0a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                        Customers
-                    </a>
-
-                    <a href="{{ route('admin.categories.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.categories.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        التصنيفات
-                    </a>
-                </div>
-
-                {{-- Content --}}
-                <div class="pt-4">
-                    <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">إدارة المحتوى</p>
-
-                    <a href="{{ route('admin.testimonials.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.testimonials.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                        آراء العملاء
-                    </a>
-
-                    <a href="{{ route('admin.faqs.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.faqs.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        الأسئلة الشائعة
-                    </a>
-
-                    <a href="{{ route('admin.messages.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.messages.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        الرسائل الواردة
-                    </a>
-                </div>
-
-                {{-- Settings --}}
-                <div class="pt-4">
-                    <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإعدادات</p>
-
-                    <a href="{{ route('admin.settings.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        إعدادات الموقع
-                    </a>
-
-                    <a href="{{ route('admin.settings.story-production-prompt.edit') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.settings.story-production-prompt.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
-                        </svg>
-                        قالب برومبت الإنتاج
-                    </a>
-
-                    <a href="{{ route('admin.delivery-zones.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.delivery-zones.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                        مناطق التوصيل
-                    </a>
-
-                    <a href="{{ route('admin.users.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.users.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        </svg>
-                        إدارة المشرفين
-                    </a>
-
-                    <a href="{{ route('admin.pricing.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.pricing.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        باقات الأسعار
-                    </a>
-
-                    <a href="{{ route('admin.activity-logs.index') }}"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition
-                          {{ request()->routeIs('admin.activity-logs.*') ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white' }}">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
-                        </svg>
-                        سجل النشاط
-                    </a>
-                </div>
+                @if($canSettings)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإعدادات</p>
+                        @can('settings.site.view')
+                            <a href="{{ route('admin.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? $activeLink : $idleLink }}">إعدادات الموقع</a>
+                        @endcan
+                        @can('settings.production_prompt.view')
+                            <a href="{{ route('admin.settings.story-production-prompt.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.story-production-prompt.*') ? $activeLink : $idleLink }}">قالب برومبت الإنتاج</a>
+                        @endcan
+                        @can('settings.delivery_zones.view')
+                            <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>
+                        @endcan
+                        @if(auth()->user()->hasAnyPermission(['admin_users.view', 'admin_users.create', 'admin_users.permissions.manage']))
+                            <a href="{{ route('admin.users.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.users.*') ? $activeLink : $idleLink }}">إدارة المشرفين</a>
+                        @endif
+                        @can('settings.pricing.view')
+                            <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">باقات الأسعار</a>
+                        @endcan
+                        @can('activity_logs.view')
+                            <a href="{{ route('admin.activity-logs.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.activity-logs.*') ? $activeLink : $idleLink }}">سجل النشاط</a>
+                        @endcan
+                    </div>
+                @endif
             </nav>
 
             {{-- User + logout --}}

@@ -29,12 +29,14 @@
                                 </p>
                             @endif
                         </div>
-                        <form action="{{ route('admin.settings.story-production-prompt.reset') }}" method="POST" onsubmit="return confirm('سيتم استعادة القالب الافتراضي. هل تريد المتابعة؟')">
-                            @csrf
-                            <button class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100">
-                                استعادة القالب الافتراضي
-                            </button>
-                        </form>
+                        @can('settings.production_prompt.manage')
+                            <form action="{{ route('admin.settings.story-production-prompt.reset') }}" method="POST" onsubmit="return confirm('سيتم استعادة القالب الافتراضي. هل تريد المتابعة؟')">
+                                @csrf
+                                <button class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100">
+                                    استعادة القالب الافتراضي
+                                </button>
+                            </form>
+                        @endcan
                     </div>
 
                     <form id="story-production-template-form" action="{{ route('admin.settings.story-production-prompt.update') }}" method="POST" class="space-y-4">
@@ -47,13 +49,16 @@
                             dir="ltr"
                             spellcheck="false"
                             class="block w-full rounded-xl border-gray-300 bg-slate-50 text-left font-mono text-sm leading-6 text-slate-800 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            @cannot('settings.production_prompt.manage') readonly @endcannot
                         >{{ old('template', $template) }}</textarea>
                         <x-input-error :messages="$errors->get('template')" class="mt-2" />
+                        @can('settings.production_prompt.manage')
                         <div class="flex flex-col sm:flex-row gap-3 sm:justify-between">
                             <button type="submit" class="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white hover:bg-indigo-700">
                                 حفظ القالب
                             </button>
                         </div>
+                        @endcan
                     </form>
                 </section>
 
@@ -67,9 +72,11 @@
                                     <code dir="ltr" class="block text-xs font-black text-indigo-700">{{ $token }}</code>
                                     <p class="mt-1 text-xs font-bold text-gray-700">{{ $meta['label'] }}</p>
                                     <p class="mt-1 text-[11px] text-gray-400 break-words">{{ $meta['example'] }}</p>
-                                    <button type="button" data-insert-variable="{{ $token }}" class="mt-2 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-100 hover:bg-indigo-50">
-                                        إدراج
-                                    </button>
+                                    @can('settings.production_prompt.manage')
+                                        <button type="button" data-insert-variable="{{ $token }}" class="mt-2 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-100 hover:bg-indigo-50">
+                                            إدراج
+                                        </button>
+                                    @endcan
                                 </div>
                             @endforeach
                         </div>
@@ -77,6 +84,7 @@
                 </aside>
             </div>
 
+            @can('settings.production_prompt.manage')
             <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div class="mb-4 text-right border-b pb-4">
                     <h3 class="text-lg font-black text-gray-900">Preview باستخدام طلب موجود</h3>
@@ -121,6 +129,7 @@
                     </div>
                 </div>
             </section>
+            @endcan
         </div>
     </div>
 
