@@ -193,22 +193,64 @@
                     <!-- Story Production Prompt -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 border-b pb-3">
-                            <h3 class="text-lg font-bold text-right">Story Production Prompt</h3>
-                            <button
-                                type="button"
-                                id="copy-production-prompt"
-                                class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                            >
-                                Copy Prompt
-                            </button>
+                            <div class="text-right">
+                                <h3 class="text-lg font-bold">Story Production Prompt</h3>
+                                <p class="mt-1 text-xs font-bold text-gray-500">تم إنشاؤه من قالب الإنتاج العام / Generated from the global production template</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                @if($order->productionPromptOverride)
+                                    <span class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700 border border-amber-200">Using Order-Specific Override</span>
+                                @else
+                                    <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 border border-emerald-200">Using Global Template</span>
+                                @endif
+                                <button
+                                    type="button"
+                                    id="copy-production-prompt"
+                                    class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                >
+                                    Copy Prompt
+                                </button>
+                            </div>
                         </div>
+                        @if($productionPromptTemplateSetting)
+                            <p class="mb-3 text-right text-xs text-gray-400">آخر تحديث للقالب العام: {{ $productionPromptTemplateSetting->updated_at?->format('Y-m-d H:i') }}</p>
+                        @endif
                         <textarea
                             id="story-production-prompt"
                             rows="24"
                             dir="ltr"
+                            data-regenerate-url="{{ route('admin.orders.production-prompt.regenerate', $order) }}"
+                            data-regenerate-confirm="سيتم استبدال التعديلات اليدوية بالنسخة الجديدة من القالب. هل تريد المتابعة؟"
                             spellcheck="false"
                             class="block w-full rounded-xl border-gray-300 bg-slate-50 text-left font-mono text-sm leading-6 text-slate-800 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                         >{{ $storyProductionPrompt }}</textarea>
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <button type="button" id="regenerate-production-prompt" class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-100">
+                                إعادة إنشاء من القالب الحالي
+                            </button>
+                            <form action="{{ route('admin.orders.production-prompt.override', $order) }}" method="POST" data-production-prompt-form>
+                                @csrf
+                                <input type="hidden" name="prompt_text">
+                                <button class="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-100">
+                                    Save as Order-Specific Prompt
+                                </button>
+                            </form>
+                            <form action="{{ route('admin.orders.production-prompt.override-reset', $order) }}" method="POST" onsubmit="return confirm('سيتم حذف البرومبت الخاص والرجوع للقالب العام. هل تريد المتابعة؟')">
+                                @csrf
+                                @method('DELETE')
+                                <button class="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                                    Reset to Global Template
+                                </button>
+                            </form>
+                            <form action="{{ route('admin.orders.production-prompt.snapshot', $order) }}" method="POST" data-production-prompt-form>
+                                @csrf
+                                <input type="hidden" name="prompt_text">
+                                <input type="hidden" name="snapshot_reason" value="manual">
+                                <button class="w-full rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-bold text-green-700 hover:bg-green-100">
+                                    حفظ نسخة إنتاج
+                                </button>
+                            </form>
+                        </div>
                         <div
                             id="production-prompt-copy-message"
                             class="mt-3 hidden rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-right text-sm font-bold text-green-700"
@@ -217,6 +259,24 @@
                         >
                             تم نسخ برومبت الإنتاج بنجاح
                         </div>
+                        @if($order->productionPromptSnapshots->count())
+                            <div class="mt-6 rounded-xl border border-slate-100 bg-slate-50 p-4 text-right">
+                                <h4 class="mb-3 text-sm font-black text-slate-800">نسخ الإنتاج المحفوظة</h4>
+                                <div class="space-y-3">
+                                    @foreach($order->productionPromptSnapshots as $snapshot)
+                                        <details class="rounded-lg bg-white p-3">
+                                            <summary class="cursor-pointer text-sm font-bold text-slate-700">
+                                                {{ $snapshot->created_at->format('Y-m-d H:i') }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
+                                                @if($snapshot->creator)
+                                                    — {{ $snapshot->creator->name }}
+                                                @endif
+                                            </summary>
+                                            <textarea rows="10" readonly dir="ltr" class="mt-3 block w-full rounded-lg border-gray-200 bg-slate-50 text-left font-mono text-xs">{{ $snapshot->prompt_text }}</textarea>
+                                        </details>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </div>
 
                     <!-- Status History -->
@@ -341,6 +401,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var copyButton = document.getElementById('copy-production-prompt');
     var promptTextarea = document.getElementById('story-production-prompt');
     var message = document.getElementById('production-prompt-copy-message');
+    var regenerateButton = document.getElementById('regenerate-production-prompt');
+    var originalPrompt = promptTextarea ? promptTextarea.value : '';
 
     if (!copyButton || !promptTextarea || !message) {
         return;
@@ -376,6 +438,31 @@ document.addEventListener('DOMContentLoaded', function () {
         fallbackCopy();
         showCopiedMessage();
     });
+
+    document.querySelectorAll('[data-production-prompt-form]').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            form.querySelector('input[name="prompt_text"]').value = promptTextarea.value;
+        });
+    });
+
+    if (regenerateButton) {
+        regenerateButton.addEventListener('click', function () {
+            var isDirty = promptTextarea.value !== originalPrompt;
+
+            if (isDirty && !window.confirm(promptTextarea.dataset.regenerateConfirm)) {
+                return;
+            }
+
+            fetch(promptTextarea.dataset.regenerateUrl, {
+                headers: {'Accept': 'application/json'}
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    promptTextarea.value = data.prompt || '';
+                    originalPrompt = promptTextarea.value;
+                });
+        });
+    }
 });
 </script>
 @endpush

@@ -37,4 +37,14 @@ class Order extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    public function productionPromptOverride()
+    {
+        return $this->hasOne(OrderProductionPromptOverride::class);
+    }
+
+    public function productionPromptSnapshots()
+    {
+        return $this->hasMany(OrderProductionPromptSnapshot::class)->latest();
+    }
 }

@@ -28,12 +28,24 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load(['user', 'story', 'statusLogs', 'previews', 'items.product', 'items.variant', 'items.linkedAddOns.product']);
+        $order->load([
+            'user',
+            'story',
+            'statusLogs',
+            'previews',
+            'items.product',
+            'items.variant',
+            'items.linkedAddOns.product',
+            'productionPromptOverride.editor',
+            'productionPromptSnapshots.creator',
+        ]);
         $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
+        $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
+        $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
 
         AdminActivityLogger::log(
             action: 'order.viewed',
-            description: 'عرض تفاصيل الطلب: ' . $order->order_number,
+            description: 'عرض تفاصيل الطلب: '.$order->order_number,
             subject: $order,
             properties: [
                 'order_number' => $order->order_number,
@@ -43,14 +55,14 @@ class OrderController extends Controller
             request: request(),
         );
 
-        return view('admin.orders.show', compact('order', 'storyProductionPrompt'));
+        return view('admin.orders.show', compact('order', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting'));
     }
 
     public function update(Request $request, Order $order)
     {
         $validated = $request->validate([
-            'status'       => 'required|string|in:new,under_review,generating,preview_uploaded,approved_for_print,printing,shipped,delivered,cancelled',
-            'admin_notes'  => 'nullable|string|max:2000',
+            'status' => 'required|string|in:new,under_review,generating,preview_uploaded,approved_for_print,printing,shipped,delivered,cancelled',
+            'admin_notes' => 'nullable|string|max:2000',
         ]);
 
         $oldStatus = $order->status;
@@ -59,19 +71,28 @@ class OrderController extends Controller
 
         $order->update([
             'status' => $validated['status'],
-            'notes'  => $validated['admin_notes'] ?? $order->notes,
+            'notes' => $validated['admin_notes'] ?? $order->notes,
         ]);
 
         if ($statusChanged) {
             $order->statusLogs()->create([
                 'status' => $validated['status'],
-                'notes'  => $request->admin_notes ?? 'تم تحديث الحالة من لوحة الإدارة.',
+                'notes' => $request->admin_notes ?? 'تم تحديث الحالة من لوحة الإدارة.',
             ]);
+
+            if (in_array($validated['status'], ['generating', 'approved_for_print', 'printing'], true) && ! $order->productionPromptSnapshots()->exists()) {
+                $order->productionPromptSnapshots()->create([
+                    'prompt_text' => StoryProductionPrompt::forOrder($order->fresh(['story', 'productionPromptOverride'])),
+                    'template_updated_at' => StoryProductionPrompt::templateUpdatedAt(),
+                    'snapshot_reason' => 'status:'.$validated['status'],
+                    'created_by' => auth()->id(),
+                ]);
+            }
         }
 
         AdminActivityLogger::log(
             action: $statusChanged ? 'order.status_updated' : 'order.updated',
-            description: 'تحديث الطلب: ' . $order->order_number,
+            description: 'تحديث الطلب: '.$order->order_number,
             subject: $order,
             properties: [
                 'order_number' => $order->order_number,
@@ -100,25 +121,25 @@ class OrderController extends Controller
         ]);
 
         $oldStatus = $order->status;
-        $path = $request->file('preview_file')->store('orders/previews/' . $order->id, 'local');
+        $path = $request->file('preview_file')->store('orders/previews/'.$order->id, 'local');
 
         $preview = OrderPreview::create([
-            'order_id'     => $order->id,
-            'file_path'    => $path,
-            'note'         => $request->preview_note,
-            'uploaded_by'  => auth()->id(),
+            'order_id' => $order->id,
+            'file_path' => $path,
+            'note' => $request->preview_note,
+            'uploaded_by' => auth()->id(),
         ]);
 
         // Update order status to preview_uploaded
         $order->update(['status' => 'preview_uploaded']);
         $order->statusLogs()->create([
             'status' => 'preview_uploaded',
-            'notes'  => 'تم رفع التصميم الأولي وإرساله للعميل للموافقة.',
+            'notes' => 'تم رفع التصميم الأولي وإرساله للعميل للموافقة.',
         ]);
 
         AdminActivityLogger::log(
             action: 'order.preview_uploaded',
-            description: 'رفع تصميم معاينة للطلب: ' . $order->order_number,
+            description: 'رفع تصميم معاينة للطلب: '.$order->order_number,
             subject: $order,
             properties: [
                 'order_number' => $order->order_number,
@@ -160,7 +181,7 @@ class OrderController extends Controller
     {
         $photos = $order->uploaded_photos ?? [];
 
-        if (!isset($photos[$index])) {
+        if (! isset($photos[$index])) {
             abort(404);
         }
 
@@ -186,7 +207,7 @@ class OrderController extends Controller
         }
 
         // Backward compatibility for files saved before Laravel's local disk moved to storage/app/private.
-        $legacyPath = storage_path('app/' . ltrim($photoPath, '/'));
+        $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
         if (file_exists($legacyPath) && is_file($legacyPath)) {
             return response()->file($legacyPath, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
@@ -198,7 +219,10 @@ class OrderController extends Controller
 
     // Stubs for resource controller compliance
     public function create() {}
+
     public function store(Request $request) {}
+
     public function edit(string $id) {}
+
     public function destroy(string $id) {}
 }
