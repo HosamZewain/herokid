@@ -94,22 +94,94 @@
 
             {{-- Stories Table --}}
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                @php
+                    $sort ??= 'created_at';
+                    $direction ??= 'desc';
+                    $sortUrl = function (string $column) use ($sort, $direction): string {
+                        $query = request()->query();
+                        unset($query['page']);
+
+                        $query['sort'] = $column;
+                        $query['direction'] = $sort === $column
+                            ? ($direction === 'asc' ? 'desc' : 'asc')
+                            : (in_array($column, ['id', 'price', 'orders', 'views', 'status', 'created_at', 'updated_at'], true) ? 'desc' : 'asc');
+
+                        return route('admin.stories.index', $query);
+                    };
+                    $sortIndicator = fn (string $column): string => $sort === $column ? ($direction === 'asc' ? '↑' : '↓') : '↕';
+                    $sortClass = fn (string $column): string => $sort === $column ? 'text-indigo-700' : 'text-gray-500 hover:text-indigo-700';
+                @endphp
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 text-right text-sm">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">#</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">القصة</th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('id') }}" class="inline-flex items-center gap-1 {{ $sortClass('id') }}">
+                                        <span>#</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('id') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('title') }}" class="inline-flex items-center gap-1 {{ $sortClass('title') }}">
+                                        <span>القصة</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('title') }}</span>
+                                    </a>
+                                </th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">التصنيفات</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الفئة العمرية</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الجنس</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">اللغة</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">السعر</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">طلبات</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مشاهدات</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الحالة</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">تاريخ الإضافة</th>
-                                <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">آخر تعديل</th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('age_range') }}" class="inline-flex items-center gap-1 {{ $sortClass('age_range') }}">
+                                        <span>الفئة العمرية</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('age_range') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('gender') }}" class="inline-flex items-center gap-1 {{ $sortClass('gender') }}">
+                                        <span>الجنس</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('gender') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('language') }}" class="inline-flex items-center gap-1 {{ $sortClass('language') }}">
+                                        <span>اللغة</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('language') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('price') }}" class="inline-flex items-center gap-1 {{ $sortClass('price') }}">
+                                        <span>السعر</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('price') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase text-center">
+                                    <a href="{{ $sortUrl('orders') }}" class="inline-flex items-center justify-center gap-1 {{ $sortClass('orders') }}">
+                                        <span>طلبات</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('orders') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase text-center">
+                                    <a href="{{ $sortUrl('views') }}" class="inline-flex items-center justify-center gap-1 {{ $sortClass('views') }}">
+                                        <span>مشاهدات</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('views') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase text-center">
+                                    <a href="{{ $sortUrl('status') }}" class="inline-flex items-center justify-center gap-1 {{ $sortClass('status') }}">
+                                        <span>الحالة</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('status') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('created_at') }}" class="inline-flex items-center gap-1 {{ $sortClass('created_at') }}">
+                                        <span>تاريخ الإضافة</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('created_at') }}</span>
+                                    </a>
+                                </th>
+                                <th class="px-4 py-3 text-xs font-semibold uppercase">
+                                    <a href="{{ $sortUrl('updated_at') }}" class="inline-flex items-center gap-1 {{ $sortClass('updated_at') }}">
+                                        <span>آخر تعديل</span>
+                                        <span class="text-[11px]">{{ $sortIndicator('updated_at') }}</span>
+                                    </a>
+                                </th>
                                 <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">إجراءات</th>
                             </tr>
                         </thead>
@@ -267,7 +339,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="12" class="px-6 py-16 text-center">
+                                    <td colspan="13" class="px-6 py-16 text-center">
                                         <div class="text-5xl mb-3">📚</div>
                                         <p class="text-gray-400 text-sm">لا توجد قصص حتى الآن.</p>
                                         @can('stories.create')

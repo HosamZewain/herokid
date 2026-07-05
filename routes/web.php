@@ -62,7 +62,7 @@ Route::get('/storage/{path}', function (string $path) {
 
 // Homepage
 Route::get('/', function () {
-    $featuredStories = Story::where('active', true)->with('categories')->latest()->take(8)->get();
+    $featuredStories = Story::where('active', true)->with('categories')->inRandomOrder()->take(8)->get();
     $faqs = FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
     $testimonials = Testimonial::where('active', true)->orderBy('sort_order')->get();
     $packages = PricingPackage::active()->ordered()->get();

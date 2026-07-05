@@ -364,7 +364,7 @@
                                     class="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300 transition shadow-sm">
                                 @foreach([12, 20, 30] as $n)
                                     <option value="{{ route('stories.index', array_merge(request()->query(), ['per_page' => $n])) }}"
-                                            {{ request('per_page', 12) == $n ? 'selected' : '' }}>{{ $n }} قصة</option>
+                                            {{ request('per_page', 20) == $n ? 'selected' : '' }}>{{ $n }} قصة</option>
                                 @endforeach
                             </select>
                         </div>

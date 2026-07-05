@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\Story;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,8 +20,8 @@ class AdminStoriesIndexTest extends TestCase
 
         for ($i = 1; $i <= 15; $i++) {
             Story::create([
-                'title' => 'قصة نشطة ' . $i,
-                'slug' => 'active-story-' . $i,
+                'title' => 'قصة نشطة '.$i,
+                'slug' => 'active-story-'.$i,
                 'language' => 'ar',
                 'gender' => 'both',
                 'price' => 299,
@@ -57,7 +58,86 @@ class AdminStoriesIndexTest extends TestCase
             ->assertDontSee('مرفقات')
             ->assertSee('بنت')
             ->assertSee('2')
-            ->assertSee('href="' . route('admin.stories.edit', $target) . '"', false)
+            ->assertSee('href="'.route('admin.stories.edit', $target).'"', false)
             ->assertSee('قصة قابلة للتعديل');
+    }
+
+    public function test_admin_story_list_can_sort_by_views_and_order_count(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+        ]);
+
+        $fewViews = Story::create([
+            'title' => 'قصة مشاهدة واحدة',
+            'slug' => 'one-view-story',
+            'language' => 'ar',
+            'gender' => 'both',
+            'price' => 299,
+            'active' => true,
+        ]);
+        $manyViews = Story::create([
+            'title' => 'قصة مشاهدات كثيرة',
+            'slug' => 'many-views-story',
+            'language' => 'ar',
+            'gender' => 'both',
+            'price' => 299,
+            'active' => true,
+        ]);
+        $manyOrders = Story::create([
+            'title' => 'قصة طلبات كثيرة',
+            'slug' => 'many-orders-story',
+            'language' => 'ar',
+            'gender' => 'both',
+            'price' => 299,
+            'active' => true,
+        ]);
+
+        $this->get(route('stories.show', $fewViews->slug))->assertOk();
+        $this->get(route('stories.show', $manyViews->slug))->assertOk();
+        $this->get(route('stories.show', $manyViews->slug))->assertOk();
+        $this->get(route('stories.show', $manyViews->slug))->assertOk();
+
+        $this->orderForStory($fewViews, 'HK-2026-SORT01');
+        $this->orderForStory($manyOrders, 'HK-2026-SORT02');
+        $this->orderForStory($manyOrders, 'HK-2026-SORT03');
+
+        $this->actingAs($admin)
+            ->get(route('admin.stories.index', ['sort' => 'views', 'direction' => 'desc']))
+            ->assertOk()
+            ->assertSee('sort=views', false)
+            ->assertSee('direction=asc', false)
+            ->assertSeeTextInOrder([
+                'قصة مشاهدات كثيرة',
+                'قصة مشاهدة واحدة',
+                'قصة طلبات كثيرة',
+            ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.stories.index', ['sort' => 'orders', 'direction' => 'desc']))
+            ->assertOk()
+            ->assertSee('sort=orders', false)
+            ->assertSee('direction=asc', false)
+            ->assertSeeTextInOrder([
+                'قصة طلبات كثيرة',
+                'قصة مشاهدة واحدة',
+                'قصة مشاهدات كثيرة',
+            ]);
+    }
+
+    private function orderForStory(Story $story, string $orderNumber): Order
+    {
+        return Order::create([
+            'order_number' => $orderNumber,
+            'parent_name' => 'Parent Name',
+            'story_id' => $story->id,
+            'child_name' => 'رينا',
+            'child_age' => 6,
+            'child_gender' => 'girl',
+            'language' => 'ar',
+            'delivery_details' => ['phone' => '201000000000'],
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
     }
 }

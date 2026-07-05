@@ -10,6 +10,8 @@ class SecurityAndCacheHeaders
 {
     private const PUBLIC_CACHE = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800';
 
+    private const PUBLIC_REVALIDATE_CACHE = 'public, max-age=0, s-maxage=0, no-cache, must-revalidate';
+
     private const PRIVATE_CACHE = 'no-store, no-cache, must-revalidate, private';
 
     public function handle(Request $request, Closure $next): Response
@@ -47,6 +49,15 @@ class SecurityAndCacheHeaders
             $response->headers->set('Cache-Control', self::PRIVATE_CACHE);
             $response->headers->set('Pragma', 'no-cache');
             $response->headers->set('Expires', '0');
+
+            return;
+        }
+
+        if ($request->routeIs('home') && ! $this->hasSessionCookie($request)) {
+            $response->headers->set('Cache-Control', self::PUBLIC_REVALIDATE_CACHE);
+            $response->headers->remove('Pragma');
+            $response->headers->remove('Expires');
+            $this->varyByCookie($response);
 
             return;
         }

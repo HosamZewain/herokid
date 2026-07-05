@@ -48,8 +48,8 @@ class StoryController extends Controller
             }
         }
 
-        $perPage = in_array((int) $request->input('per_page'), [10, 15, 20, 30]) ? (int) $request->input('per_page') : 12;
-        $stories = $query->latest()->paginate($perPage)->withQueryString();
+        $perPage = in_array((int) $request->input('per_page'), [10, 12, 15, 20, 30]) ? (int) $request->input('per_page') : 20;
+        $stories = $query->inRandomOrder()->paginate($perPage)->withQueryString();
 
         // Sidebar: categories with story counts
         $categories = collect();

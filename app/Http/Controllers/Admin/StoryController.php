@@ -8,6 +8,7 @@ use App\Models\Story;
 use App\Models\StoryCategory;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
@@ -17,14 +18,13 @@ class StoryController extends Controller
     public function index(Request $request)
     {
         $query = Story::with('categories')
-            ->withCount(['orders', 'views'])
-            ->latest();
+            ->withCount(['orders', 'views']);
 
         if ($request->filled('q')) {
             $q = $request->input('q');
             $query->where(function ($builder) use ($q) {
                 $builder->where('title', 'like', "%{$q}%")
-                        ->orWhere('slug', 'like', "%{$q}%");
+                    ->orWhere('slug', 'like', "%{$q}%");
             });
         }
 
@@ -38,6 +38,27 @@ class StoryController extends Controller
             $query->where('language', $request->input('language'));
         }
 
+        $sortableColumns = [
+            'id' => 'stories.id',
+            'title' => 'title',
+            'age_range' => 'age_range',
+            'gender' => 'gender',
+            'language' => 'language',
+            'price' => 'price',
+            'orders' => 'orders_count',
+            'views' => 'views_count',
+            'status' => 'active',
+            'created_at' => 'created_at',
+            'updated_at' => 'updated_at',
+        ];
+        $sort = array_key_exists((string) $request->input('sort'), $sortableColumns)
+            ? (string) $request->input('sort')
+            : 'created_at';
+        $direction = strtolower((string) $request->input('direction')) === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($sortableColumns[$sort], $direction)
+            ->orderBy('stories.id', 'desc');
+
         $stories = $query->paginate(15)->withQueryString();
         $stats = [
             'total' => Story::count(),
@@ -46,7 +67,7 @@ class StoryController extends Controller
             'orders' => Order::count(),
         ];
 
-        return view('admin.stories.index', compact('stories', 'stats'));
+        return view('admin.stories.index', compact('stories', 'stats', 'sort', 'direction'));
     }
 
     /**
@@ -55,6 +76,7 @@ class StoryController extends Controller
     public function create()
     {
         $categories = StoryCategory::orderBy('name')->get();
+
         return view('admin.stories.create', compact('categories'));
     }
 
@@ -64,19 +86,19 @@ class StoryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title'        => 'required|string|max:255',
-            'slug'         => 'required|string|max:255|unique:stories',
-            'short_desc'   => 'nullable|string',
-            'full_desc'    => 'nullable|string',
-            'age_range'    => 'nullable|string|max:255',
-            'language'     => 'required|string|in:ar,en',
+            'title' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|unique:stories',
+            'short_desc' => 'nullable|string',
+            'full_desc' => 'nullable|string',
+            'age_range' => 'nullable|string|max:255',
+            'language' => 'required|string|in:ar,en',
             'lesson_value' => 'nullable|string|max:255',
-            'gender'       => 'required|in:both,boy,girl',
-            'price'        => 'required|numeric|min:0',
-            'active'       => 'boolean',
-            'cover_image'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'full_story'   => 'nullable|string',
-            'prompt'       => 'nullable|string',
+            'gender' => 'required|in:both,boy,girl',
+            'price' => 'required|numeric|min:0',
+            'active' => 'boolean',
+            'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'full_story' => 'nullable|string',
+            'prompt' => 'nullable|string',
         ]);
 
         if ($request->hasFile('cover_image')) {
@@ -88,7 +110,7 @@ class StoryController extends Controller
 
         AdminActivityLogger::log(
             action: 'story.created',
-            description: 'إضافة قصة جديدة: ' . $story->title,
+            description: 'إضافة قصة جديدة: '.$story->title,
             subject: $story,
             properties: [
                 'story' => $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']),
@@ -115,6 +137,7 @@ class StoryController extends Controller
     {
         $categories = StoryCategory::orderBy('name')->get();
         $story->load('attachments');
+
         return view('admin.stories.edit', compact('story', 'categories'));
     }
 
@@ -130,25 +153,25 @@ class StoryController extends Controller
         $beforeCategories = $story->categories()->pluck('story_categories.id')->all();
 
         $validated = $request->validate([
-            'title'        => 'required|string|max:255',
-            'slug'         => 'required|string|max:255|unique:stories,slug,'.$story->id,
-            'short_desc'   => 'nullable|string',
-            'full_desc'    => 'nullable|string',
-            'age_range'    => 'nullable|string|max:255',
-            'language'     => 'required|string|in:ar,en',
+            'title' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|unique:stories,slug,'.$story->id,
+            'short_desc' => 'nullable|string',
+            'full_desc' => 'nullable|string',
+            'age_range' => 'nullable|string|max:255',
+            'language' => 'required|string|in:ar,en',
             'lesson_value' => 'nullable|string|max:255',
-            'gender'       => 'required|in:both,boy,girl',
-            'price'        => 'required|numeric|min:0',
-            'active'       => 'boolean',
-            'cover_image'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'full_story'   => 'nullable|string',
-            'prompt'       => 'nullable|string',
+            'gender' => 'required|in:both,boy,girl',
+            'price' => 'required|numeric|min:0',
+            'active' => 'boolean',
+            'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'full_story' => 'nullable|string',
+            'prompt' => 'nullable|string',
         ]);
 
         if ($request->hasFile('cover_image')) {
             // Delete old image if exists
-            if ($story->cover_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($story->cover_image)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($story->cover_image);
+            if ($story->cover_image && Storage::disk('public')->exists($story->cover_image)) {
+                Storage::disk('public')->delete($story->cover_image);
             }
             $validated['cover_image'] = $request->file('cover_image')->store('stories', 'public');
         }
@@ -165,7 +188,7 @@ class StoryController extends Controller
 
         AdminActivityLogger::log(
             action: 'story.updated',
-            description: 'تحديث قصة: ' . $story->title,
+            description: 'تحديث قصة: '.$story->title,
             subject: $story,
             properties: [
                 'changes' => AdminActivityLogger::changedValues($before, $after),
@@ -187,14 +210,14 @@ class StoryController extends Controller
     {
         $storyDetails = $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']);
 
-        if ($story->cover_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($story->cover_image)) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($story->cover_image);
+        if ($story->cover_image && Storage::disk('public')->exists($story->cover_image)) {
+            Storage::disk('public')->delete($story->cover_image);
         }
         $story->delete();
 
         AdminActivityLogger::log(
             action: 'story.deleted',
-            description: 'حذف قصة: ' . ($storyDetails['title'] ?? '#' . $storyDetails['id']),
+            description: 'حذف قصة: '.($storyDetails['title'] ?? '#'.$storyDetails['id']),
             subject: $story,
             properties: [
                 'story' => $storyDetails,
