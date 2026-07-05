@@ -248,6 +248,9 @@ class CheckoutController extends Controller
 
         session()->forget('cart.items');
         session(['checkout.last_order_ids' => $orderIds]);
+        if ($facebookPurchaseEvent = $this->facebookPurchaseEvent($orderIds)) {
+            session()->flash('facebook_purchase_event', $facebookPurchaseEvent);
+        }
 
         return redirect()->route('checkout.success');
     }
@@ -264,6 +267,7 @@ class CheckoutController extends Controller
         return view('front.checkout.success', [
             'orders' => $orders,
             'order' => $orders->first(),
+            'facebookPurchaseEvent' => session()->pull('facebook_purchase_event'),
         ]);
     }
 
@@ -319,5 +323,47 @@ class CheckoutController extends Controller
         if ($product->stock_quantity !== null) {
             $product->decrement('stock_quantity', $quantity);
         }
+    }
+
+    private function facebookPurchaseEvent(array $orderIds): ?array
+    {
+        $orders = Order::with('items')->whereIn('id', $orderIds)->get();
+
+        if ($orders->isEmpty()) {
+            return null;
+        }
+
+        $orderItems = $orders->flatMap->items;
+        $contents = $orderItems->map(function ($item): array {
+            $contentId = match ($item->item_type) {
+                'story' => 'story:'.$item->story_id,
+                'product', 'product_add_on' => 'product:'.($item->product_id ?: $item->id),
+                default => 'order-item:'.$item->id,
+            };
+
+            return [
+                'id' => $contentId,
+                'quantity' => max(1, (int) $item->quantity),
+                'item_price' => round(((int) $item->unit_price_cents) / 100, 2),
+            ];
+        })->values();
+
+        $firstOrder = $orders->first();
+        $itemsSubtotal = round(((int) $orderItems->sum('total_price_cents')) / 100, 2);
+        $deliveryFee = (float) ($firstOrder->delivery_details['delivery_fee'] ?? 0);
+        $total = (float) ($firstOrder->delivery_details['total'] ?? ($itemsSubtotal + $deliveryFee));
+
+        return [
+            'event_id' => 'hk-purchase-'.(string) Str::uuid(),
+            'data' => [
+                'value' => round($total, 2),
+                'currency' => 'EGP',
+                'content_type' => 'product',
+                'content_ids' => $contents->pluck('id')->unique()->values()->all(),
+                'contents' => $contents->all(),
+                'num_items' => $contents->sum('quantity'),
+                'order_numbers' => $orders->pluck('order_number')->values()->all(),
+            ],
+        ];
     }
 }

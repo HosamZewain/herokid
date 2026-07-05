@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Order;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
+use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
@@ -24,6 +24,59 @@ class CartCheckoutTest extends TestCase
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertHeader('Set-Cookie');
+    }
+
+    public function test_meta_pixel_tracks_page_views_and_purchase_once_after_checkout(): void
+    {
+        Storage::fake('local');
+        config(['services.meta_pixel.id' => '1241523867742555']);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('connect.facebook.net/en_US/fbevents.js', false)
+            ->assertSee("fbq('track', 'PageView')", false)
+            ->assertSee('www.facebook.com/tr?id=1241523867742555', false);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $cairo->update(['delivery_fee' => 40]);
+        $story = $this->story('pixel-story', 'رحلة التتبع', 100);
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee("fbq('track', 'ViewContent'", false)
+            ->assertSee('"content_ids":["story:'.$story->id.'"]', false);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم والنجوم'))
+            ->assertRedirect(route('cart.index'));
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee("fbq('track', 'AddToCart'", false)
+            ->assertSee('"content_ids":["story:'.$story->id.'"]', false);
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'Parent Name',
+            'phone' => '201000000000',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'city' => 'Nasr City',
+            'street' => 'Street 1',
+            'address_details' => 'Building 2, Apartment 3',
+        ])
+            ->assertRedirect(route('checkout.success'))
+            ->assertSessionHas('facebook_purchase_event');
+
+        $this->get(route('checkout.success'))
+            ->assertOk()
+            ->assertSee("fbq('track', 'Purchase'", false)
+            ->assertSee('"currency":"EGP"', false)
+            ->assertSee('"value":140', false)
+            ->assertSee('"content_ids":["story:', false);
+
+        $this->get(route('checkout.success'))
+            ->assertOk()
+            ->assertDontSee("fbq('track', 'Purchase'", false);
     }
 
     public function test_story_cart_validation_errors_are_readable_arabic_messages(): void
@@ -286,8 +339,8 @@ class CartCheckoutTest extends TestCase
             ->assertSee('value="Nasr City"', false)
             ->assertSee('value="Street 9"', false)
             ->assertSee('Building 10, Apartment 4')
-            ->assertSee('value="' . $egypt->id . '" data-fee', false)
-            ->assertSee('value="' . $cairo->id . '"', false);
+            ->assertSee('value="'.$egypt->id.'" data-fee', false)
+            ->assertSee('value="'.$cairo->id.'"', false);
     }
 
     private function story(string $slug, string $title, int $price): Story

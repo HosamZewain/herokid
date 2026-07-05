@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'meta_pixel' => [
+        'id' => env('META_PIXEL_ID', '1241523867742555'),
+    ],
+
 ];

@@ -6,6 +6,18 @@
         <x-slot name="pageImage">{{ $product->featured_image_url }}</x-slot>
     @endif
 
+    @if(!empty($facebookViewContentEvent['data']))
+        @push('scripts')
+            <script>
+                if (typeof fbq === 'function') {
+                    fbq('track', 'ViewContent', @json($facebookViewContentEvent['data']), {
+                        eventID: @json($facebookViewContentEvent['event_id'])
+                    });
+                }
+            </script>
+        @endpush
+    @endif
+
     @php
         $requiresStory = $product->personalization_mode === 'inherit_from_linked_story' || $product->purchase_mode === 'add_on_only';
         $canSubmit = ! $requiresStory || $storyItems->count() > 0;

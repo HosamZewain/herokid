@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ShopController extends Controller
 {
@@ -40,7 +41,24 @@ class ShopController extends Controller
             ->take(4)
             ->get();
 
-        return view('front.shop.show', compact('product', 'storyItems', 'relatedProducts'));
+        $facebookViewContentEvent = [
+            'event_id' => 'hk-view-product-'.(string) Str::uuid(),
+            'data' => [
+                'content_type' => 'product',
+                'content_ids' => ['product:'.$product->id],
+                'contents' => [[
+                    'id' => 'product:'.$product->id,
+                    'quantity' => 1,
+                    'item_price' => round($product->effectivePrice(), 2),
+                ]],
+                'content_name' => $product->name_ar,
+                'content_category' => $product->category?->name_ar,
+                'value' => round($product->effectivePrice(), 2),
+                'currency' => 'EGP',
+            ],
+        ];
+
+        return view('front.shop.show', compact('product', 'storyItems', 'relatedProducts', 'facebookViewContentEvent'));
     }
 
     private function listing(Request $request, ?ProductCategory $category = null)

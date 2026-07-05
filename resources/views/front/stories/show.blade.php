@@ -10,6 +10,18 @@
     <x-slot name="pageImage">{{ $storyCoverUrl }}</x-slot>
     <x-slot name="ogType">product</x-slot>
 
+    @if(!empty($facebookViewContentEvent['data']))
+        @push('scripts')
+            <script>
+                if (typeof fbq === 'function') {
+                    fbq('track', 'ViewContent', @json($facebookViewContentEvent['data']), {
+                        eventID: @json($facebookViewContentEvent['event_id'])
+                    });
+                }
+            </script>
+        @endpush
+    @endif
+
     @push('schema')
         @php
             $storyUrl = \App\Support\Seo::url('/stories/' . $story->slug);

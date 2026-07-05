@@ -7,6 +7,7 @@ use App\Models\CustomerStoryView;
 use App\Models\Story;
 use App\Models\StoryCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class StoryController extends Controller
 {
@@ -30,7 +31,7 @@ class StoryController extends Controller
 
         // Filter: age
         if ($request->filled('age')) {
-            $query->where('age_range', 'like', '%' . $request->age . '%');
+            $query->where('age_range', 'like', '%'.$request->age.'%');
         }
 
         // Filter: language
@@ -41,7 +42,7 @@ class StoryController extends Controller
         // Filter: category
         if ($request->filled('category')) {
             try {
-                $query->whereHas('categories', fn($q) => $q->where('slug', $request->category));
+                $query->whereHas('categories', fn ($q) => $q->where('slug', $request->category));
             } catch (\Exception $e) {
                 // pivot table not migrated yet — skip filter
             }
@@ -53,7 +54,7 @@ class StoryController extends Controller
         // Sidebar: categories with story counts
         $categories = collect();
         try {
-            $categories = StoryCategory::withCount(['stories' => fn($q) => $q->where('active', true)])
+            $categories = StoryCategory::withCount(['stories' => fn ($q) => $q->where('active', true)])
                 ->orderBy('name')
                 ->get();
         } catch (\Exception $e) {
@@ -89,6 +90,23 @@ class StoryController extends Controller
             'viewed_at' => now(),
         ]);
 
-        return view('front.stories.show', compact('story'));
+        $facebookViewContentEvent = [
+            'event_id' => 'hk-view-story-'.(string) Str::uuid(),
+            'data' => [
+                'content_type' => 'product',
+                'content_ids' => ['story:'.$story->id],
+                'contents' => [[
+                    'id' => 'story:'.$story->id,
+                    'quantity' => 1,
+                    'item_price' => round((float) $story->price, 2),
+                ]],
+                'content_name' => $story->title,
+                'content_category' => 'Personalized Story',
+                'value' => round((float) $story->price, 2),
+                'currency' => 'EGP',
+            ],
+        ];
+
+        return view('front.stories.show', compact('story', 'facebookViewContentEvent'));
     }
 }

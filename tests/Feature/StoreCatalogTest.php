@@ -126,6 +126,35 @@ class StoreCatalogTest extends TestCase
         $this->assertSame('A3', $item['variant_name']);
     }
 
+    public function test_meta_pixel_tracks_product_views_and_product_add_to_cart(): void
+    {
+        config(['services.meta_pixel.id' => '1241523867742555']);
+        $product = $this->product('pixel-poster', 100);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'A3',
+            'price_override_cents' => 15000,
+            'is_active' => true,
+        ]);
+
+        $this->get(route('shop.product.show', $product))
+            ->assertOk()
+            ->assertSee("fbq('track', 'ViewContent'", false)
+            ->assertSee('"content_ids":["product:'.$product->id.'"]', false)
+            ->assertSee('"value":100', false);
+
+        $this->post(route('cart.products.store', $product), [
+            'variant_id' => $variant->id,
+            'quantity' => 2,
+        ])->assertRedirect(route('cart.index'));
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee("fbq('track', 'AddToCart'", false)
+            ->assertSee('"content_ids":["product:'.$product->id.':variant:'.$variant->id.'"]', false)
+            ->assertSee('"value":300', false);
+    }
+
     public function test_personalized_addons_require_and_inherit_story_context(): void
     {
         $addon = $this->product('hero-poster', 75, [

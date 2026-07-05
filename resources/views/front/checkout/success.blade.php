@@ -10,6 +10,18 @@
     $total = (float) ($order->delivery_details['total'] ?? ($subtotal + $deliveryFee));
 @endphp
 
+@if(!empty($facebookPurchaseEvent['data']))
+    @push('scripts')
+        <script>
+            if (typeof fbq === 'function') {
+                fbq('track', 'Purchase', @json($facebookPurchaseEvent['data']), {
+                    eventID: @json($facebookPurchaseEvent['event_id'])
+                });
+            }
+        </script>
+    @endpush
+@endif
+
     <div class="bg-gray-50 py-20 min-h-[70vh] flex flex-col justify-center">
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center bg-white p-10 rounded-3xl shadow-xl border border-gray-100">
             

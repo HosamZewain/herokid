@@ -107,6 +107,26 @@
     {{-- Extra schema injected per-page via @push('schema') --}}
     @stack('schema')
 
+    @php
+        $metaPixelId = trim((string) config('services.meta_pixel.id', ''));
+    @endphp
+    @if($metaPixelId !== '')
+        <!-- Meta Pixel Code -->
+        <script>
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', @json($metaPixelId));
+            fbq('track', 'PageView');
+        </script>
+        <!-- End Meta Pixel Code -->
+    @endif
+
     <!-- ══ Fonts ══ -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
@@ -123,6 +143,11 @@
 </head>
 
 <body class="font-sans antialiased text-gray-900 bg-white">
+    @if($metaPixelId !== '')
+        <noscript><img height="1" width="1" style="display:none"
+            src="https://www.facebook.com/tr?id={{ $metaPixelId }}&ev=PageView&noscript=1"
+            alt=""></noscript>
+    @endif
     @php
         $cartItemCount = count(session('cart.items', []));
     @endphp
@@ -382,6 +407,19 @@
             </div>
         </footer>
     </div>
+    @stack('scripts')
+    @php
+        $facebookAddToCartEvent = session()->pull('facebook_add_to_cart_event');
+    @endphp
+    @if(!empty($facebookAddToCartEvent['data']))
+        <script>
+            if (typeof fbq === 'function') {
+                fbq('track', 'AddToCart', @json($facebookAddToCartEvent['data']), {
+                    eventID: @json($facebookAddToCartEvent['event_id'])
+                });
+            }
+        </script>
+    @endif
 </body>
 
 </html>
