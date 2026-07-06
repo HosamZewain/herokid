@@ -352,23 +352,23 @@
                                         $recommendedImage = $product->featured_image_url ?: '/images/logo-192.png';
                                     @endphp
                                     <div class="overflow-hidden rounded-3xl bg-white shadow-sm text-right border border-white">
-                                        <div class="grid grid-cols-[96px_1fr] gap-3 p-3">
+                                        <div class="bg-slate-50">
                                             <img src="{{ $recommendedImage }}" alt="{{ $product->name_ar }}"
-                                                class="h-24 w-24 rounded-2xl object-cover bg-slate-50">
-                                            <div>
-                                                <div class="mb-2 flex flex-wrap justify-end gap-1.5">
-                                                    @if($isPersonalizedAddon)
-                                                        <span class="rounded-full bg-pink-50 px-2.5 py-1 text-[10px] font-black text-pink-700">يستخدم صورة الطفل</span>
-                                                    @else
-                                                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">منتج مستقل</span>
-                                                    @endif
-                                                </div>
-                                                <h3 class="font-black text-slate-950 leading-6">{{ $product->name_ar }}</h3>
-                                                <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{{ $product->short_description_ar }}</p>
-                                                <p class="mt-2 font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</p>
-                                            </div>
+                                                class="aspect-[4/3] w-full object-cover">
                                         </div>
-                                        <form action="{{ route('cart.products.store', $product) }}" method="POST" class="border-t border-slate-100 p-3 space-y-3">
+                                        <div class="p-4">
+                                            <div class="mb-3 flex flex-wrap justify-end gap-1.5">
+                                                @if($isPersonalizedAddon)
+                                                    <span class="rounded-full bg-pink-50 px-3 py-1.5 text-xs font-black text-pink-700">يستخدم صورة الطفل</span>
+                                                @else
+                                                    <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">منتج مستقل</span>
+                                                @endif
+                                            </div>
+                                            <h3 class="text-lg font-black leading-7 text-slate-950">{{ $product->name_ar }}</h3>
+                                            <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{{ $product->short_description_ar }}</p>
+                                            <p class="mt-3 text-xl font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</p>
+                                        </div>
+                                        <form action="{{ route('cart.products.store', $product) }}" method="POST" class="border-t border-slate-100 p-4 space-y-3">
                                             @csrf
                                             @if($isPersonalizedAddon)
                                                 @if($storyLineItems->count() > 1)
@@ -390,9 +390,9 @@
                                                     </div>
                                                 @endif
                                             @endif
-                                            <div class="flex items-center justify-between gap-3">
-                                                <a href="{{ route('shop.product.show', $product) }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50">التفاصيل</a>
-                                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700">
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <a href="{{ route('shop.product.show', $product) }}" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">التفاصيل</a>
+                                                <button class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700">
                                                     {{ $isPersonalizedAddon ? 'إضافة الهدية' : 'إضافة للسلة' }}
                                                 </button>
                                             </div>
