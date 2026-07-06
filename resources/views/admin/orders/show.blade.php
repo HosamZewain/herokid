@@ -105,6 +105,55 @@
                         @endif
                     </div>
 
+                    <!-- Production Studio -->
+                    @if(config('production_studio.enabled') && auth()->user()->hasAnyPermission(['production_studio.view', 'production_studio.create_from_order']))
+                    <div class="bg-white rounded-2xl shadow-sm border border-indigo-100 p-6">
+                        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-indigo-50 pb-4">
+                            <div class="text-right">
+                                <p class="text-xs font-black text-indigo-500">Production Studio</p>
+                                <h3 class="text-lg font-bold text-gray-900">استوديو الإنتاج</h3>
+                                <p class="mt-2 text-sm leading-6 text-gray-500">
+                                    هذا ينشئ مشروع إنتاج داخلي منفصل ولا يؤثر على سير الطلب الحالي أو حالة الطلب أو برومبت الإنتاج الحالي.
+                                </p>
+                            </div>
+                            @if($order->productionProject)
+                                @can('production_studio.view')
+                                    <a href="{{ route('admin.production-studio.show', $order->productionProject) }}"
+                                       class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">
+                                        فتح مشروع الاستوديو
+                                    </a>
+                                @endcan
+                            @else
+                                @can('production_studio.create_from_order')
+                                    <form action="{{ route('admin.production-studio.from-order', $order) }}" method="POST">
+                                        @csrf
+                                        <button class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">
+                                            إرسال إلى استوديو الإنتاج
+                                        </button>
+                                    </form>
+                                @endcan
+                            @endif
+                        </div>
+
+                        @if($order->productionProject)
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-right text-sm">
+                                <div class="rounded-xl bg-indigo-50 p-4">
+                                    <p class="text-xs font-bold text-indigo-500">حالة المشروع</p>
+                                    <p class="mt-1 font-black text-gray-900">{{ $order->productionProject->statusLabel() }}</p>
+                                </div>
+                                <div class="rounded-xl bg-slate-50 p-4">
+                                    <p class="text-xs font-bold text-slate-400">المرحلة الحالية</p>
+                                    <p class="mt-1 font-black text-gray-900">{{ $order->productionProject->stageLabel() }}</p>
+                                </div>
+                                <div class="rounded-xl bg-slate-50 p-4">
+                                    <p class="text-xs font-bold text-slate-400">المسؤول</p>
+                                    <p class="mt-1 font-black text-gray-900">{{ $order->productionProject->assignedTo?->name ?? 'غير معين' }}</p>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+                    @endif
+
                     <!-- Delivery Info -->
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                         <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">عنوان التوصيل</h3>

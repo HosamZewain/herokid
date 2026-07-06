@@ -47,4 +47,9 @@ class Order extends Model
     {
         return $this->hasMany(OrderProductionPromptSnapshot::class)->latest();
     }
+
+    public function productionProject()
+    {
+        return $this->hasOne(ProductionProject::class);
+    }
 }

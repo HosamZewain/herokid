@@ -45,6 +45,7 @@
                 $canOperations = auth()->user()->hasAnyPermission([
                     'orders.view', 'stories.view', 'story_categories.view', 'store.products.view',
                     'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
+                    'production_studio.view',
                 ]);
                 $canContent = auth()->user()->hasAnyPermission([
                     'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
@@ -67,6 +68,11 @@
                         @can('orders.view')
                             <a href="{{ route('admin.orders.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.orders.*') ? $activeLink : $idleLink }}">الطلبات</a>
                         @endcan
+                        @if(config('production_studio.enabled'))
+                            @can('production_studio.view')
+                                <a href="{{ route('admin.production-studio.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.production-studio.*') ? $activeLink : $idleLink }}">استوديو الإنتاج</a>
+                            @endcan
+                        @endif
                         @can('stories.view')
                             <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>
                         @endcan

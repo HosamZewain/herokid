@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\PricingPackageController;
+use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
@@ -277,6 +278,21 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'saveOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override');
     Route::delete('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'resetOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override-reset');
     Route::post('orders/{order}/production-prompt/snapshot', [OrderProductionPromptController::class, 'saveSnapshot'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.snapshot');
+
+    Route::get('production-studio', [ProductionStudioController::class, 'index'])->middleware('permission:production_studio.view')->name('production-studio.index');
+    Route::post('production-studio/from-order/{order}', [ProductionStudioController::class, 'storeFromOrder'])->middleware('permission:production_studio.create_from_order')->name('production-studio.from-order');
+    Route::get('production-studio/{project}', [ProductionStudioController::class, 'show'])->middleware('permission:production_studio.view')->name('production-studio.show');
+    Route::get('production-studio/{project}/photos/{index}', [ProductionStudioController::class, 'servePhoto'])->whereNumber('index')->middleware('permission:production_studio.view')->name('production-studio.photo');
+    Route::patch('production-studio/{project}', [ProductionStudioController::class, 'update'])->middleware('permission:production_studio.manage')->name('production-studio.update');
+    Route::post('production-studio/{project}/archive', [ProductionStudioController::class, 'archive'])->middleware('permission:production_studio.archive')->name('production-studio.archive');
+    Route::post('production-studio/{project}/cancel', [ProductionStudioController::class, 'cancel'])->middleware('permission:production_studio.delete_or_cancel')->name('production-studio.cancel');
+    Route::post('production-studio/{project}/reopen', [ProductionStudioController::class, 'reopen'])->middleware('permission:production_studio.archive')->name('production-studio.reopen');
+    Route::post('production-studio/{project}/story-versions/from-story', [ProductionStudioController::class, 'createDraftFromStory'])->middleware('permission:production_studio.story_edit')->name('production-studio.story-versions.from-story');
+    Route::patch('production-studio/{project}/story-versions/{version}', [ProductionStudioController::class, 'reviewStoryVersion'])->middleware('permission:production_studio.story_edit')->name('production-studio.story-versions.review');
+    Route::patch('production-studio/{project}/character-profile', [ProductionStudioController::class, 'updateCharacterProfile'])->middleware('permission:production_studio.character_profile_edit')->name('production-studio.character-profile.update');
+    Route::post('production-studio/{project}/scenes', [ProductionStudioController::class, 'storeScene'])->middleware('permission:production_studio.scene_edit')->name('production-studio.scenes.store');
+    Route::patch('production-studio/{project}/scenes/{scene}', [ProductionStudioController::class, 'updateScene'])->middleware('permission:production_studio.scene_edit')->name('production-studio.scenes.update');
+    Route::patch('production-studio/{project}/qa/{qaCheck}', [ProductionStudioController::class, 'updateQa'])->middleware('permission:production_studio.qa_review')->name('production-studio.qa.update');
 
     Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
     Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');

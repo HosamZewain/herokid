@@ -38,6 +38,7 @@ class OrderController extends Controller
             'items.linkedAddOns.product',
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
+            'productionProject.assignedTo',
         ]);
         $storyProductionPrompt = null;
         $globalStoryProductionPrompt = null;

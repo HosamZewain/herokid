@@ -14,6 +14,11 @@ return [
             'name_en' => 'Orders and Production',
             'sort_order' => 20,
         ],
+        'production_studio' => [
+            'name_ar' => 'استوديو الإنتاج',
+            'name_en' => 'Production Studio',
+            'sort_order' => 25,
+        ],
         'customers' => [
             'name_ar' => 'العملاء',
             'name_en' => 'Customers',
@@ -103,6 +108,18 @@ return [
             'sort_order' => 50,
             'sensitive' => true,
         ],
+
+        'production_studio.view' => ['group_key' => 'production_studio', 'name_ar' => 'عرض استوديو الإنتاج', 'name_en' => 'View Production Studio', 'description_ar' => 'عرض مشاريع استوديو الإنتاج والبيانات المرجعية.', 'description_en' => 'View Production Studio projects and reference data.', 'sort_order' => 10, 'sensitive' => true],
+        'production_studio.create_from_order' => ['group_key' => 'production_studio', 'name_ar' => 'إرسال الطلب للاستوديو', 'name_en' => 'Send orders to Studio', 'description_ar' => 'إنشاء مشروع إنتاج معزول مرتبط بطلب موجود.', 'description_en' => 'Create an isolated production project linked to an existing order.', 'sort_order' => 20, 'sensitive' => true],
+        'production_studio.manage' => ['group_key' => 'production_studio', 'name_ar' => 'إدارة مشروع الاستوديو', 'name_en' => 'Manage Studio project', 'description_ar' => 'تحديث حالة المشروع والمرحلة والملاحظات العامة.', 'description_en' => 'Update project status, stage, and production notes.', 'sort_order' => 30, 'sensitive' => true],
+        'production_studio.assign' => ['group_key' => 'production_studio', 'name_ar' => 'تعيين مسؤول المشروع', 'name_en' => 'Assign Studio project', 'description_ar' => 'تعيين مشروع إنتاج لأحد أعضاء الفريق.', 'description_en' => 'Assign production projects to staff members.', 'sort_order' => 40, 'sensitive' => true],
+        'production_studio.story_edit' => ['group_key' => 'production_studio', 'name_ar' => 'تحرير قصة الاستوديو', 'name_en' => 'Edit Studio story', 'description_ar' => 'إنشاء ومراجعة نسخ القصة الخاصة بالمشروع فقط.', 'description_en' => 'Create and review project-specific story versions.', 'sort_order' => 50, 'sensitive' => true],
+        'production_studio.character_profile_edit' => ['group_key' => 'production_studio', 'name_ar' => 'تحرير ملف الشخصية', 'name_en' => 'Edit character profile', 'description_ar' => 'تعديل ملف شخصية الطفل داخل الاستوديو.', 'description_en' => 'Edit the project character profile.', 'sort_order' => 60, 'sensitive' => true],
+        'production_studio.scene_edit' => ['group_key' => 'production_studio', 'name_ar' => 'تحرير مشاهد الاستوديو', 'name_en' => 'Edit Studio scenes', 'description_ar' => 'إضافة وتحديث مشاهد المشروع وتجهيزات الصور.', 'description_en' => 'Create and update project scenes.', 'sort_order' => 70, 'sensitive' => true],
+        'production_studio.qa_review' => ['group_key' => 'production_studio', 'name_ar' => 'مراجعة جودة الاستوديو', 'name_en' => 'Review Studio QA', 'description_ar' => 'تحديث قائمة مراجعة الجودة واعتماد الاستثناءات.', 'description_en' => 'Update QA checklist items and overrides.', 'sort_order' => 80, 'sensitive' => true],
+        'production_studio.archive' => ['group_key' => 'production_studio', 'name_ar' => 'أرشفة مشاريع الاستوديو', 'name_en' => 'Archive Studio projects', 'description_ar' => 'أرشفة أو إعادة فتح مشاريع الاستوديو.', 'description_en' => 'Archive or reopen Studio projects.', 'sort_order' => 90, 'sensitive' => true],
+        'production_studio.delete_or_cancel' => ['group_key' => 'production_studio', 'name_ar' => 'إلغاء مشاريع الاستوديو', 'name_en' => 'Cancel Studio projects', 'description_ar' => 'إلغاء مشروع استوديو بدون إلغاء الطلب الأصلي.', 'description_en' => 'Cancel Studio projects without cancelling original orders.', 'sort_order' => 100, 'sensitive' => true],
+        'production_studio.settings' => ['group_key' => 'production_studio', 'name_ar' => 'إعدادات استوديو الإنتاج', 'name_en' => 'Production Studio settings', 'description_ar' => 'إدارة إعدادات الاستوديو ومزودي الذكاء الاصطناعي مستقبلًا.', 'description_en' => 'Manage Studio settings and future AI providers.', 'sort_order' => 110, 'sensitive' => true],
 
         'customers.view' => [
             'group_key' => 'customers',
