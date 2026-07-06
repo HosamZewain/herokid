@@ -223,6 +223,69 @@ class StoreCatalogTest extends TestCase
         $this->assertSame([], session('cart.items'));
     }
 
+    public function test_cart_recommendations_make_personalized_addon_target_child_clear(): void
+    {
+        $addon = $this->product('hero-gift', 65, [
+            'name_ar' => 'بوستر البطل',
+            'purchase_mode' => 'add_on_only',
+            'personalization_mode' => 'inherit_from_linked_story',
+            'is_featured' => true,
+        ]);
+        $storyOne = $this->story('story-one', 'قصة أولى');
+        $storyTwo = $this->story('story-two', 'قصة ثانية');
+
+        $this->withSession([
+            'cart.items' => [
+                'one' => $this->storyCartItem('one', $storyOne, 'رينا'),
+                'two' => $this->storyCartItem('two', $storyTwo, 'سليم'),
+            ],
+            'upsell_story_key' => 'two',
+        ]);
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('كمّل هدية بطلك')
+            ->assertSee('بوستر البطل')
+            ->assertSee('سيتم تخصيصه لأي طفل؟')
+            ->assertSee('رينا - قصة أولى')
+            ->assertSee('سليم - قصة ثانية')
+            ->assertSee('إضافة الهدية');
+    }
+
+    public function test_cart_shows_linked_addons_under_their_story_with_product_details(): void
+    {
+        $story = $this->story('linked-addon-story', 'قصة الهدية');
+        $addon = $this->product('linked-poster', 50, [
+            'name_ar' => 'بوستر البطل',
+            'purchase_mode' => 'add_on_only',
+            'personalization_mode' => 'inherit_from_linked_story',
+        ]);
+
+        $this->withSession(['cart.items' => [
+            'story-key' => $this->storyCartItem('story-key', $story, 'رينا'),
+            'addon-key' => [
+                'key' => 'addon-key',
+                'item_type' => 'product_add_on',
+                'product_id' => $addon->id,
+                'product_title' => 'بوستر البطل',
+                'product_slug' => $addon->slug,
+                'linked_story_key' => 'story-key',
+                'variant_name' => 'A3',
+                'line_total_cents' => 10000,
+                'quantity' => 2,
+            ],
+        ]]);
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('إضافات مرتبطة بهذه القصة')
+            ->assertSee('1 إضافة')
+            ->assertSee('بوستر البطل')
+            ->assertSee('النوع: A3')
+            ->assertSee('الكمية: 2')
+            ->assertSee('100 ج.م');
+    }
+
     public function test_stock_limits_are_respected(): void
     {
         $product = $this->product('limited', 80, [

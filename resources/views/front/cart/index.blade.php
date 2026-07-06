@@ -14,6 +14,20 @@
     $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
     $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
     $addOnItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product_add_on');
+    $cartStories = $cartStories ?? collect();
+    $cartProducts = $cartProducts ?? collect();
+    $cartItemImage = function (array $item) use ($cartStories, $cartProducts): string {
+        if (($item['item_type'] ?? 'story') === 'story') {
+            return $item['story_cover_url']
+                ?? $cartStories->get($item['story_id'] ?? null)?->cover_url
+                ?? '/images/logo-192.png';
+        }
+
+        return $item['product_image_url']
+            ?? $cartProducts->get($item['product_id'] ?? null)?->featured_image_url
+            ?? (! empty($item['product_image']) ? \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk('public')->url($item['product_image'])) : null)
+            ?? '/images/logo-192.png';
+    };
 @endphp
 
 <div class="min-h-[70vh] bg-slate-50">
@@ -206,15 +220,25 @@
                                         : collect();
                                 @endphp
                                 <article class="p-5 sm:p-6">
-                                    <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5">
+                                    @php
+                                        $itemImage = $cartItemImage($item);
+                                        $itemPrice = $itemType === 'story'
+                                            ? (float) ($item['story_price'] ?? 0)
+                                            : ((int) ($item['line_total_cents'] ?? 0) / 100);
+                                    @endphp
+                                    <div class="grid grid-cols-1 md:grid-cols-[112px_1fr_auto] gap-5">
+                                        <div class="overflow-hidden rounded-3xl border border-slate-100 bg-slate-50 shadow-sm">
+                                            <img src="{{ $itemImage }}" alt="{{ $itemType === 'story' ? ($item['story_title'] ?? 'قصة') : ($item['product_title'] ?? 'منتج') }}"
+                                                class="aspect-[4/3] w-full object-cover md:aspect-square">
+                                        </div>
                                         <div class="text-right">
                                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                                 <div>
                                                     @if($itemType === 'story')
-                                                        <p class="text-xs font-extrabold text-indigo-500 mb-1">قصة مخصصة</p>
+                                                        <p class="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-extrabold text-indigo-600 mb-2">قصة مخصصة</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['story_title'] ?? 'قصة' }}</h3>
                                                     @else
-                                                        <p class="text-xs font-extrabold text-emerald-600 mb-1">منتج من المتجر</p>
+                                                        <p class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 mb-2">منتج من المتجر</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['product_title'] ?? 'منتج' }}</h3>
                                                         @if(!empty($item['variant_name']))
                                                             <p class="mt-1 text-xs font-bold text-slate-400">النوع: {{ $item['variant_name'] }}</p>
@@ -222,7 +246,7 @@
                                                     @endif
                                                 </div>
                                                 <p class="inline-flex w-fit rounded-2xl bg-indigo-50 px-4 py-2 text-base font-black text-indigo-700">
-                                                    {{ number_format($itemType === 'story' ? (float) ($item['story_price'] ?? 0) : ((int) ($item['line_total_cents'] ?? 0) / 100), 0) }} ج.م
+                                                    {{ number_format($itemPrice, 0) }} ج.م
                                                 </p>
                                             </div>
 
@@ -246,19 +270,29 @@
 
                                                 @if($linkedAddOns->isNotEmpty())
                                                     <div class="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-                                                        <p class="mb-3 text-sm font-black text-indigo-800">إضافات مرتبطة بهذه القصة</p>
-                                                        <div class="space-y-2">
+                                                        <div class="mb-3 flex items-center justify-between gap-3">
+                                                            <p class="text-xs font-bold text-indigo-500">{{ $linkedAddOns->count() }} إضافة</p>
+                                                            <p class="text-sm font-black text-indigo-900">إضافات مرتبطة بهذه القصة</p>
+                                                        </div>
+                                                        <div class="space-y-3">
                                                             @foreach($linkedAddOns as $addOnKey => $addOn)
-                                                                <div class="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm">
+                                                                @php $addOnImage = $cartItemImage($addOn); @endphp
+                                                                <div class="grid grid-cols-[64px_1fr_auto] items-center gap-3 rounded-2xl bg-white p-3 text-sm shadow-sm">
+                                                                    <img src="{{ $addOnImage }}" alt="{{ $addOn['product_title'] ?? 'إضافة' }}"
+                                                                        class="h-16 w-16 rounded-xl object-cover bg-slate-50">
+                                                                    <div class="text-right">
+                                                                        <p class="font-black text-slate-900">{{ $addOn['product_title'] ?? 'إضافة' }}</p>
+                                                                        <p class="mt-1 text-xs text-slate-400">
+                                                                            {{ !empty($addOn['variant_name']) ? 'النوع: '.$addOn['variant_name'].' · ' : '' }}
+                                                                            الكمية: {{ $addOn['quantity'] ?? 1 }}
+                                                                        </p>
+                                                                        <p class="mt-1 text-xs font-black text-indigo-700">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
+                                                                    </div>
                                                                     <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST">
                                                                         @csrf
                                                                         @method('DELETE')
-                                                                        <button class="font-black text-red-500">حذف</button>
+                                                                        <button class="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-500 hover:bg-red-100">حذف</button>
                                                                     </form>
-                                                                    <div class="text-right">
-                                                                        <p class="font-black text-slate-900">{{ $addOn['product_title'] ?? 'إضافة' }}</p>
-                                                                        <p class="text-xs text-slate-400">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
-                                                                    </div>
                                                                 </div>
                                                             @endforeach
                                                         </div>
@@ -329,23 +363,60 @@
                             <div class="mb-5 text-right">
                                 <p class="text-sm font-black text-indigo-600">كمّل هدية بطلك</p>
                                 <h2 class="mt-1 text-xl font-black text-slate-950">منتجات مقترحة لطفلك</h2>
-                                <p class="mt-2 text-sm leading-6 text-slate-500">أضف أنشطة وهدايا مناسبة وتستخدم نفس القصة والصور عند الحاجة.</p>
+                                <p class="mt-2 text-sm leading-6 text-slate-500">اختر هدية أو نشاطًا إضافيًا. المنتجات المخصصة ستستخدم نفس بيانات الطفل والصور بدون رفعها مرة أخرى.</p>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 @foreach($recommendedProducts as $product)
-                                    <div class="rounded-2xl bg-white p-4 shadow-sm text-right">
-                                        <h3 class="font-black text-slate-950">{{ $product->name_ar }}</h3>
-                                        <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{{ $product->short_description_ar }}</p>
-                                        <div class="mt-4 flex items-center justify-between gap-3">
-                                            <form action="{{ route('cart.products.store', $product) }}" method="POST">
-                                                @csrf
-                                                @if($product->isPersonalizedAddon())
-                                                    <input type="hidden" name="linked_story_key" value="{{ $targetStory['key'] }}">
-                                                @endif
-                                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700">إضافة للسلة</button>
-                                            </form>
-                                            <span class="font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</span>
+                                    @php
+                                        $isPersonalizedAddon = $product->isPersonalizedAddon();
+                                        $recommendedImage = $product->featured_image_url ?: '/images/logo-192.png';
+                                    @endphp
+                                    <div class="overflow-hidden rounded-3xl bg-white shadow-sm text-right border border-white">
+                                        <div class="grid grid-cols-[96px_1fr] gap-3 p-3">
+                                            <img src="{{ $recommendedImage }}" alt="{{ $product->name_ar }}"
+                                                class="h-24 w-24 rounded-2xl object-cover bg-slate-50">
+                                            <div>
+                                                <div class="mb-2 flex flex-wrap justify-end gap-1.5">
+                                                    @if($isPersonalizedAddon)
+                                                        <span class="rounded-full bg-pink-50 px-2.5 py-1 text-[10px] font-black text-pink-700">يستخدم صورة الطفل</span>
+                                                    @else
+                                                        <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">منتج مستقل</span>
+                                                    @endif
+                                                </div>
+                                                <h3 class="font-black text-slate-950 leading-6">{{ $product->name_ar }}</h3>
+                                                <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{{ $product->short_description_ar }}</p>
+                                                <p class="mt-2 font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</p>
+                                            </div>
                                         </div>
+                                        <form action="{{ route('cart.products.store', $product) }}" method="POST" class="border-t border-slate-100 p-3 space-y-3">
+                                            @csrf
+                                            @if($isPersonalizedAddon)
+                                                @if($storyLineItems->count() > 1)
+                                                    <div>
+                                                        <label class="mb-1 block text-xs font-black text-slate-500">سيتم تخصيصه لأي طفل؟</label>
+                                                        <select name="linked_story_key" required class="w-full rounded-xl border-slate-200 text-sm text-right">
+                                                            @foreach($storyLineItems as $storyKey => $storyItem)
+                                                                <option value="{{ $storyKey }}" @selected($storyKey === $upsellStoryKey)>
+                                                                    {{ $storyItem['child_name'] ?? 'طفل' }} - {{ $storyItem['story_title'] ?? 'قصة' }}
+                                                                </option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                @else
+                                                    <input type="hidden" name="linked_story_key" value="{{ $targetStory['key'] ?? $storyLineItems->keys()->first() }}">
+                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-800">
+                                                        <span class="font-black">سيضاف إلى:</span>
+                                                        {{ $targetStory['child_name'] ?? 'الطفل' }} - {{ $targetStory['story_title'] ?? 'القصة' }}
+                                                    </div>
+                                                @endif
+                                            @endif
+                                            <div class="flex items-center justify-between gap-3">
+                                                <a href="{{ route('shop.product.show', $product) }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50">التفاصيل</a>
+                                                <button class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700">
+                                                    {{ $isPersonalizedAddon ? 'إضافة الهدية' : 'إضافة للسلة' }}
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
                                 @endforeach
                             </div>

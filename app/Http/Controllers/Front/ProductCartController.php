@@ -67,6 +67,7 @@ class ProductCartController extends Controller
             'product_title' => $product->name_ar,
             'product_slug' => $product->slug,
             'product_image' => $product->featured_image,
+            'product_image_url' => $product->featured_image_url,
             'variant_id' => $variant?->id,
             'variant_name' => $variant?->name_ar,
             'sku' => $variant?->sku ?: $product->sku,

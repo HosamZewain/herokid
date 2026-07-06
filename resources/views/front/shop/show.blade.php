@@ -21,6 +21,7 @@
     @php
         $requiresStory = $product->personalization_mode === 'inherit_from_linked_story' || $product->purchase_mode === 'add_on_only';
         $canSubmit = ! $requiresStory || $storyItems->count() > 0;
+        $singleStoryItem = $storyItems->count() === 1 ? $storyItems->first() : null;
     @endphp
 
     <div class="bg-slate-50 py-10 lg:py-14">
@@ -59,7 +60,9 @@
 
                     @if($requiresStory && $storyItems->isEmpty())
                         <div class="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-right">
-                            <p class="font-black text-amber-800">أضف قصة مخصصة أولًا لاستخدام صورة طفلك في هذا المنتج</p>
+                            <p class="text-xs font-black text-amber-600">منتج مخصص مرتبط بقصة</p>
+                            <p class="mt-1 font-black text-amber-900">أضف قصة مخصصة أولًا لاستخدام صورة طفلك في هذا المنتج</p>
+                            <p class="mt-2 text-sm leading-6 text-amber-800">بعد إضافة القصة للسلة سيظهر هذا المنتج كهدية إضافية، وسيستخدم نفس بيانات الطفل والصور بدون رفعها مرة أخرى.</p>
                             <a href="{{ route('stories.index') }}" class="mt-4 inline-flex rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">اختيار قصة مخصصة</a>
                         </div>
                     @endif
@@ -89,7 +92,12 @@
                                 <x-input-error :messages="$errors->get('linked_story_key')" class="mt-1" />
                             </div>
                         @elseif($requiresStory && $storyItems->count() === 1)
-                            <input type="hidden" name="linked_story_key" value="{{ $storyItems->first()['key'] }}">
+                            <input type="hidden" name="linked_story_key" value="{{ $singleStoryItem['key'] }}">
+                            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                                <p class="text-xs font-black text-indigo-500">سيتم تخصيصه تلقائيًا لـ</p>
+                                <p class="mt-1 font-black text-slate-950">{{ $singleStoryItem['child_name'] ?? 'الطفل' }}</p>
+                                <p class="text-sm text-slate-500">{{ $singleStoryItem['story_title'] ?? 'القصة المخصصة' }}</p>
+                            </div>
                         @endif
 
                         <div>
@@ -99,7 +107,7 @@
 
                         <button type="submit" @disabled(! $canSubmit)
                             class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-                            إضافة للسلة
+                            {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
                         </button>
                     </form>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Support\ProductRecommendations;
@@ -18,18 +19,27 @@ class CartController extends Controller
     public function index()
     {
         $cart = $this->cart();
-        $storyItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
+        $cartCollection = collect($cart);
+        $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $upsellStoryKey = session('upsell_story_key');
         $upsellStoryItem = $upsellStoryKey && isset($cart[$upsellStoryKey]) ? $cart[$upsellStoryKey] : $storyItems->first();
         $recommendedProducts = $upsellStoryItem
             ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6)
             : collect();
+        $cartStories = Story::whereIn('id', $cartCollection->pluck('story_id')->filter()->unique()->all())
+            ->get()
+            ->keyBy('id');
+        $cartProducts = Product::whereIn('id', $cartCollection->pluck('product_id')->filter()->unique()->all())
+            ->get()
+            ->keyBy('id');
 
         return view('front.cart.index', [
             'cartItems' => $cart,
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,
+            'cartStories' => $cartStories,
+            'cartProducts' => $cartProducts,
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $this->deliveryCountries(),
@@ -89,6 +99,7 @@ class CartController extends Controller
             'story_title' => $story->title,
             'story_slug' => $story->slug,
             'story_price' => (float) $story->price,
+            'story_cover_url' => $story->cover_url,
             'story_language' => $story->language,
             'story_lesson' => $story->lesson_value,
             'child_name' => $validated['child_name'],
