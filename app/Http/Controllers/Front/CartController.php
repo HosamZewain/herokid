@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
-use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Support\ProductRecommendations;
@@ -26,20 +25,12 @@ class CartController extends Controller
         $recommendedProducts = $upsellStoryItem
             ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6)
             : collect();
-        $cartStories = Story::whereIn('id', $cartCollection->pluck('story_id')->filter()->unique()->all())
-            ->get()
-            ->keyBy('id');
-        $cartProducts = Product::whereIn('id', $cartCollection->pluck('product_id')->filter()->unique()->all())
-            ->get()
-            ->keyBy('id');
 
         return view('front.cart.index', [
             'cartItems' => $cart,
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,
-            'cartStories' => $cartStories,
-            'cartProducts' => $cartProducts,
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $this->deliveryCountries(),

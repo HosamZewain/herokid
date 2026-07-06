@@ -14,20 +14,6 @@
     $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
     $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
     $addOnItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product_add_on');
-    $cartStories = $cartStories ?? collect();
-    $cartProducts = $cartProducts ?? collect();
-    $cartItemImage = function (array $item) use ($cartStories, $cartProducts): string {
-        if (($item['item_type'] ?? 'story') === 'story') {
-            return $item['story_cover_url']
-                ?? $cartStories->get($item['story_id'] ?? null)?->cover_url
-                ?? '/images/logo-192.png';
-        }
-
-        return $item['product_image_url']
-            ?? $cartProducts->get($item['product_id'] ?? null)?->featured_image_url
-            ?? (! empty($item['product_image']) ? \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk('public')->url($item['product_image'])) : null)
-            ?? '/images/logo-192.png';
-    };
 @endphp
 
 <div class="min-h-[70vh] bg-slate-50">
@@ -221,16 +207,11 @@
                                 @endphp
                                 <article class="p-5 sm:p-6">
                                     @php
-                                        $itemImage = $cartItemImage($item);
                                         $itemPrice = $itemType === 'story'
                                             ? (float) ($item['story_price'] ?? 0)
                                             : ((int) ($item['line_total_cents'] ?? 0) / 100);
                                     @endphp
-                                    <div class="grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-5">
-                                        <div class="overflow-hidden rounded-3xl border border-slate-100 bg-slate-50 shadow-sm">
-                                            <img src="{{ $itemImage }}" alt="{{ $itemType === 'story' ? ($item['story_title'] ?? 'قصة') : ($item['product_title'] ?? 'منتج') }}"
-                                                class="aspect-[4/3] w-full object-cover sm:aspect-square">
-                                        </div>
+                                    <div class="space-y-4">
                                         <div class="text-right">
                                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                                 <div>
@@ -251,18 +232,18 @@
                                             </div>
 
                                             @if($itemType === 'story')
-                                                <div class="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-3">
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">اسم الطفل</p>
                                                         <p class="font-black text-slate-900">{{ $item['child_name'] ?? '-' }}</p>
                                                     </div>
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">العمر والجنس</p>
                                                         <p class="font-black text-slate-900">
                                                             {{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? '') === 'boy' ? 'ولد' : 'بنت' }}
                                                         </p>
                                                     </div>
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">الصور المرفقة</p>
                                                         <p class="font-black text-slate-900">{{ count($item['uploaded_photos'] ?? []) }} صورة</p>
                                                     </div>
@@ -276,24 +257,21 @@
                                                         </div>
                                                         <div class="space-y-3">
                                                             @foreach($linkedAddOns as $addOnKey => $addOn)
-                                                                @php $addOnImage = $cartItemImage($addOn); @endphp
-                                                                <div class="grid grid-cols-[76px_1fr] items-start gap-3 rounded-2xl bg-white p-3 text-sm shadow-sm">
-                                                                    <img src="{{ $addOnImage }}" alt="{{ $addOn['product_title'] ?? 'إضافة' }}"
-                                                                        class="h-20 w-20 rounded-xl object-cover bg-slate-50">
-                                                                    <div class="text-right">
-                                                                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                                <div class="rounded-2xl bg-white p-3 text-sm shadow-sm">
+                                                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                                        <div class="text-right">
                                                                             <p class="font-black leading-6 text-slate-900">{{ $addOn['product_title'] ?? 'إضافة' }}</p>
-                                                                            <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST" class="shrink-0">
-                                                                                @csrf
-                                                                                @method('DELETE')
-                                                                                <button class="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-500 hover:bg-red-100">حذف</button>
-                                                                            </form>
+                                                                            <p class="mt-1 text-xs text-slate-400">
+                                                                                {{ !empty($addOn['variant_name']) ? 'النوع: '.$addOn['variant_name'].' · ' : '' }}
+                                                                                الكمية: {{ $addOn['quantity'] ?? 1 }}
+                                                                            </p>
+                                                                            <p class="mt-1 text-xs font-black text-indigo-700">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
                                                                         </div>
-                                                                        <p class="mt-1 text-xs text-slate-400">
-                                                                            {{ !empty($addOn['variant_name']) ? 'النوع: '.$addOn['variant_name'].' · ' : '' }}
-                                                                            الكمية: {{ $addOn['quantity'] ?? 1 }}
-                                                                        </p>
-                                                                        <p class="mt-1 text-xs font-black text-indigo-700">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
+                                                                        <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST" class="shrink-0">
+                                                                            @csrf
+                                                                            @method('DELETE')
+                                                                            <button class="w-full rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-500 hover:bg-red-100 sm:w-auto">حذف</button>
+                                                                        </form>
                                                                     </div>
                                                                 </div>
                                                             @endforeach
@@ -301,16 +279,16 @@
                                                     </div>
                                                 @endif
                                             @else
-                                                <div class="mt-5 grid grid-cols-1 xl:grid-cols-3 gap-3">
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">الكمية</p>
                                                         <p class="font-black text-slate-900">{{ $item['quantity'] ?? 1 }}</p>
                                                     </div>
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">سعر الوحدة</p>
                                                         <p class="font-black text-slate-900">{{ number_format((float) ($item['unit_price'] ?? 0), 0) }} ج.م</p>
                                                     </div>
-                                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">التخصيص</p>
                                                         <p class="font-black text-slate-900">بدون بيانات طفل</p>
                                                     </div>
@@ -332,7 +310,7 @@
                                             @endif
                                         </div>
 
-                                        <div class="flex flex-col gap-3 sm:col-span-2 sm:flex-row">
+                                        <div class="flex flex-col gap-3 sm:flex-row">
                                             @if($itemType === 'story' && !empty($item['story_slug']))
                                                 <a href="{{ route('stories.show', $item['story_slug']) }}"
                                                     class="inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 hover:bg-slate-50 transition">
