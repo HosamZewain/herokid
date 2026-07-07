@@ -251,7 +251,7 @@
         </div>
     </div>
 @push('scripts')
-<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+<script src="https://cdn.tiny.cloud/1/mye2mwh0apz773i39n61jw8ge5lxxqup0yk0jud0efybgix1/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
 <script>
 tinymce.init({
     selector: '#full_story',
