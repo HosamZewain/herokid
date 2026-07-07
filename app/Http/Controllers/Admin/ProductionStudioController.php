@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\ProductionStudio\ApproveGeneratedAssetAction;
+use App\Actions\ProductionStudio\CreateGenerationJobAction;
+use App\Actions\ProductionStudio\RejectGeneratedAssetAction;
 use App\Http\Controllers\Controller;
+use App\Models\AiModel;
 use App\Models\Order;
 use App\Models\ProductionProject;
+use App\Models\ProductionProjectAsset;
 use App\Models\ProductionQaCheck;
 use App\Models\ProductionScene;
 use App\Models\ProductionStoryVersion;
+use App\Models\SceneGenerationJob;
 use App\Models\Story;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
@@ -90,10 +96,21 @@ class ProductionStudioController extends Controller
             'scenes',
             'qaChecks.reviewer',
             'assets.uploader',
+            'assets.reviewer',
+            'assets.scene',
+            'assets.generationJob',
             'generationJobs.provider',
             'generationJobs.model',
+            'generationJobs.initiator',
             'activityLogs.actor',
         ]);
+
+        $aiModels = AiModel::query()
+            ->with('provider')
+            ->where('is_active', true)
+            ->whereHas('provider', fn ($query) => $query->where('driver', 'fal'))
+            ->orderBy('display_name')
+            ->get();
 
         return view('admin.production-studio.show', [
             'project' => $project,
@@ -101,6 +118,10 @@ class ProductionStudioController extends Controller
             'statuses' => config('production_studio.statuses', []),
             'stages' => config('production_studio.stages', []),
             'assignees' => User::where('role', 'admin')->orderBy('name')->get(['id', 'name']),
+            'aiModels' => $aiModels,
+            'aiAvailable' => ProductionStudio::aiAvailable(),
+            'stylePresets' => config('production_studio.ai.style_presets', []),
+            'aiCostSummary' => $project->aiCostSummary(),
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
                 ? StoryProductionPrompt::forOrder($project->order)
                 : null,
@@ -148,6 +169,132 @@ class ProductionStudioController extends Controller
         }
 
         abort(404);
+    }
+
+    public function serveGeneratedAsset(ProductionProject $project, ProductionProjectAsset $asset)
+    {
+        $this->ensureEnabled();
+        abort_unless($asset->production_project_id === $project->id, 404);
+
+        if (! is_string($asset->file_path) || str_contains($asset->file_path, '..')) {
+            abort(404);
+        }
+
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($asset->file_path)) {
+            abort(404);
+        }
+
+        return response()->file($disk->path($asset->file_path), [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+        ]);
+    }
+
+    public function generateCharacterSheet(Request $request, ProductionProject $project, CreateGenerationJobAction $action)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate($this->generationValidation('character_sheet'));
+        $validated['job_type'] = 'character_sheet';
+        $validated['generation_mode'] = 'character_sheet';
+
+        try {
+            $action->execute($project, $validated);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        return back()->with('success', 'تم إنشاء مهمة توليد Character Sheet وهي الآن في قائمة الانتظار.');
+    }
+
+    public function generateSceneImage(Request $request, ProductionProject $project, ProductionScene $scene, CreateGenerationJobAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($scene->production_project_id === $project->id, 404);
+
+        $validated = $request->validate($this->generationValidation('scene_image'));
+        $validated['job_type'] = 'scene_image';
+        $validated['generation_mode'] = 'character_scene';
+
+        try {
+            $action->execute($project, $validated, $scene);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        return back()->with('success', 'تم إنشاء مهمة توليد صورة المشهد وهي الآن في قائمة الانتظار.');
+    }
+
+    public function generateCoverImage(Request $request, ProductionProject $project, CreateGenerationJobAction $action)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate($this->generationValidation('cover_image'));
+        $validated['job_type'] = 'cover_image';
+        $validated['generation_mode'] = 'cover_generation';
+
+        try {
+            $action->execute($project, $validated);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        return back()->with('success', 'تم إنشاء مهمة توليد الغلاف وهي الآن في قائمة الانتظار.');
+    }
+
+    public function retryGeneration(Request $request, ProductionProject $project, SceneGenerationJob $generationJob, CreateGenerationJobAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($generationJob->production_project_id === $project->id, 404);
+
+        $validated = $request->validate([
+            'prompt_notes' => 'nullable|string|max:3000',
+        ]);
+
+        $payload = [
+            'model_code' => $generationJob->model?->code,
+            'job_type' => $generationJob->job_type,
+            'generation_mode' => $generationJob->generation_mode,
+            'style_preset' => data_get($generationJob->provider_request_json, 'style_preset', 'premium_storybook'),
+            'reference_photo_indices' => data_get($generationJob->input_assets_json, 'reference_photo_indices', []),
+            'character_sheet_id' => data_get($generationJob->input_assets_json, 'character_sheet_id'),
+            'prompt_notes' => $validated['prompt_notes'] ?? null,
+        ];
+
+        try {
+            $action->execute($project, $payload, $generationJob->scene);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        return back()->with('success', 'تم إنشاء محاولة جديدة بناءً على المهمة السابقة.');
+    }
+
+    public function approveAsset(Request $request, ProductionProject $project, ProductionProjectAsset $asset, ApproveGeneratedAssetAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($asset->production_project_id === $project->id, 404);
+
+        $validated = $request->validate(['review_notes' => 'nullable|string|max:2000']);
+        $action->execute($asset, $validated['review_notes'] ?? null);
+
+        return back()->with('success', 'تم اعتماد المخرج.');
+    }
+
+    public function rejectAsset(Request $request, ProductionProject $project, ProductionProjectAsset $asset, RejectGeneratedAssetAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($asset->production_project_id === $project->id, 404);
+
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:2000',
+            'archive' => 'nullable|boolean',
+        ]);
+
+        $action->execute($asset, $validated['rejection_reason'], (bool) ($validated['archive'] ?? false));
+
+        return back()->with('success', 'تم تحديث حالة المخرج.');
     }
 
     public function update(Request $request, ProductionProject $project)
@@ -418,5 +565,28 @@ class ProductionStudioController extends Controller
     private function ensureEnabled(): void
     {
         abort_unless(ProductionStudio::enabled(), 404);
+    }
+
+    private function generationValidation(string $assetType): array
+    {
+        $rules = [
+            'model_code' => ['required', 'string', 'exists:ai_models,code'],
+            'style_preset' => ['nullable', Rule::in(array_keys(config('production_studio.ai.style_presets', [])))],
+            'reference_photo_indices' => ['nullable', 'array', 'max:4'],
+            'reference_photo_indices.*' => ['integer', 'min:0'],
+            'prompt_notes' => ['nullable', 'string', 'max:3000'],
+            'negative_prompt' => ['nullable', 'string', 'max:2000'],
+        ];
+
+        if (in_array($assetType, ['scene_image', 'cover_image'], true)) {
+            $rules['character_sheet_id'] = ['nullable', 'integer', 'exists:production_project_assets,id'];
+        }
+
+        return $rules;
+    }
+
+    private function safeAiError(\Throwable $exception): string
+    {
+        return str_replace((string) config('production_studio.ai.fal.key'), '[redacted]', $exception->getMessage());
     }
 }

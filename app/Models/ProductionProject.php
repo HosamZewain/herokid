@@ -69,6 +69,13 @@ class ProductionProject extends Model
         return $this->hasMany(SceneGenerationJob::class);
     }
 
+    public function approvedCharacterSheet(): HasOne
+    {
+        return $this->hasOne(ProductionProjectAsset::class)
+            ->where('asset_type', 'character_sheet')
+            ->where('is_primary', true);
+    }
+
     public function statusLabel(): string
     {
         return config('production_studio.statuses.'.$this->status, $this->status);
@@ -103,5 +110,20 @@ class ProductionProject extends Model
                     ->where('override_allowed', false);
             })
             ->exists();
+    }
+
+    public function aiCostSummary(): array
+    {
+        $jobs = $this->relationLoaded('generationJobs') ? $this->generationJobs : $this->generationJobs()->get();
+        $assets = $this->relationLoaded('assets') ? $this->assets : $this->assets()->get();
+
+        return [
+            'estimated' => number_format((float) $jobs->sum('estimated_cost'), 4, '.', ''),
+            'actual' => number_format((float) $jobs->sum(fn (SceneGenerationJob $job): float => (float) ($job->actual_cost ?? 0)), 4, '.', ''),
+            'attempts' => $jobs->count(),
+            'approved' => $assets->where('status', 'approved')->count(),
+            'rejected' => $assets->where('status', 'rejected')->count(),
+            'failed' => $jobs->where('status', 'failed')->count(),
+        ];
     }
 }

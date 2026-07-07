@@ -22,4 +22,16 @@ class ProductionScene extends Model
     {
         return $this->hasMany(SceneGenerationJob::class);
     }
+
+    public function assets()
+    {
+        return $this->hasMany(ProductionProjectAsset::class);
+    }
+
+    public function approvedFinalImage()
+    {
+        return $this->hasOne(ProductionProjectAsset::class)
+            ->where('asset_type', 'scene_image')
+            ->where('is_final', true);
+    }
 }

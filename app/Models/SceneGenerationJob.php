@@ -10,9 +10,14 @@ class SceneGenerationJob extends Model
 
     protected $casts = [
         'input_assets_json' => 'array',
+        'provider_request_json' => 'array',
         'output_metadata_json' => 'array',
+        'provider_response_json' => 'array',
         'estimated_cost' => 'decimal:4',
         'actual_cost' => 'decimal:4',
+        'submitted_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'failed_at' => 'datetime',
     ];
 
     public function project()
@@ -38,5 +43,10 @@ class SceneGenerationJob extends Model
     public function initiator()
     {
         return $this->belongsTo(User::class, 'initiated_by_user_id');
+    }
+
+    public function assets()
+    {
+        return $this->hasMany(ProductionProjectAsset::class);
     }
 }

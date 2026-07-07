@@ -1,8 +1,8 @@
 # Production Studio Future AI Architecture
 
-Production Studio includes provider-ready database structures, but no external AI service is connected in this phase.
+Production Studio includes provider-ready database structures. Phase 2 adds the first controlled provider implementation: fal.ai.
 
-There are no FLUX, Grok, Google Imagen, OpenAI, Replicate, fal.ai, or other provider calls in the current implementation.
+Fal is disabled unless `HERO_KID_PRODUCTION_STUDIO_ENABLED=true`, `FAL_ENABLED=true`, and `FAL_KEY` is present.
 
 ## Provider Abstraction
 
@@ -20,6 +20,20 @@ Provider configuration must be referenced indirectly. API keys must never be sto
 
 Use environment variables or a secrets manager for future provider credentials.
 
+The current provider contract is `App\Contracts\AiImageProvider`.
+
+Required provider methods:
+
+- `isAvailable`
+- `listSupportedModels`
+- `supportsCapability`
+- `estimateCost`
+- `submitGeneration`
+- `pollGeneration`
+- `downloadOutput`
+
+The first implementation is `App\Services\Ai\FalImageProvider`.
+
 ## Model Abstraction
 
 AI models are represented by `ai_models`.
@@ -34,6 +48,11 @@ Important fields:
 - `is_active`
 
 This makes providers and models swappable without changing the scene or project domain model.
+
+Initial Fal model registry:
+
+- `fal-ai/flux-kontext/dev`: FLUX Kontext Dev
+- `fal-ai/flux-pro/kontext`: FLUX Kontext Pro
 
 ## Scene Generation Jobs
 
@@ -58,6 +77,16 @@ Job lifecycle fields include:
 - initiating user
 
 The job record should store the exact prompt and inputs used so future outputs are traceable.
+
+Phase 2 job lifecycle:
+
+1. Admin submits a single generation request.
+2. `scene_generation_jobs` row is created with `queued`.
+3. `SubmitAiGenerationJob` submits to Fal and stores the external request/status/response URLs.
+4. `PollAiGenerationJob` polls status.
+5. When complete, the job downloads the generated image to private storage.
+6. A versioned `production_project_assets` row is created.
+7. The asset waits for review, approval, rejection, archive, or retry.
 
 ## Suggested Future Job Statuses
 
@@ -111,3 +140,55 @@ Recommended future outputs:
 - Proof checklist asset
 
 Automation should write versioned assets and never overwrite original order files silently.
+
+## Prompt Snapshot Policy
+
+Prompts are compiled by `App\Services\Ai\ProductionPromptCompiler` from structured project, scene, story, child, character profile, style preset, and manual admin notes.
+
+Every generation job stores:
+
+- `prompt_snapshot`
+- `negative_prompt_snapshot`
+- selected model/provider metadata
+- selected reference photo indexes
+- selected character sheet id when used
+
+Provider API keys are never included in prompt snapshots.
+
+## Asset Versioning Policy
+
+Generated outputs are stored as private `production_project_assets`.
+
+Supported Phase 2 asset types:
+
+- `character_sheet`
+- `scene_image`
+- `cover_image`
+
+Multiple versions are allowed. Approval rules:
+
+- one primary approved Character Sheet per project
+- one final approved Scene Image per scene
+- one final approved Cover Image per project
+
+Approving a new output unsets the previous primary/final flag but does not delete old versions.
+
+## Cost Tracking Policy
+
+Each job stores:
+
+- estimated cost before submission
+- actual cost when provider metadata is available
+- `cost_source` to distinguish provider actuals from estimate fallback
+
+Project-level totals are calculated from `scene_generation_jobs`.
+
+## Adding Future Providers
+
+To add Grok, Imagen, OpenAI, Replicate, or another provider:
+
+1. Create a class implementing `App\Contracts\AiImageProvider`.
+2. Register provider/model rows in `ai_providers` and `ai_models`.
+3. Extend `AiProviderManager` to return the provider for the new driver.
+4. Keep controller and Studio business logic unchanged.
+5. Store credentials only in environment variables or secrets.

@@ -133,7 +133,9 @@ Staff can manually record:
 - approved reference photos
 - reviewer notes
 
-This is structured for future image production tools but does not call any AI provider.
+This is structured for image production tools. The optional Phase 2 AI pilot only calls Fal when explicitly configured and enabled.
+
+Phase 2 AI generation is documented separately in `docs/production-studio-ai-pilot.md`.
 
 ## QA Behavior
 

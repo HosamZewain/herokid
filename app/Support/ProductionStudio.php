@@ -16,6 +16,13 @@ class ProductionStudio
         return (bool) config('production_studio.enabled', true);
     }
 
+    public static function aiAvailable(): bool
+    {
+        return self::enabled()
+            && (bool) config('production_studio.ai.fal.enabled')
+            && filled(config('production_studio.ai.fal.key'));
+    }
+
     public static function createProjectFromOrder(Order $order, User $creator): ProductionProject
     {
         $order->loadMissing(['story', 'items.product', 'items.variant']);

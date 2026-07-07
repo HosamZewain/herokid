@@ -13,6 +13,12 @@
         $photos = $order->uploaded_photos ?? [];
         $profile = $project->characterProfile;
         $snapshot = $project->source_snapshot_json ?? [];
+        $characterSheets = $project->assets->where('asset_type', 'character_sheet');
+        $sceneAssets = $project->assets->where('asset_type', 'scene_image');
+        $coverAssets = $project->assets->where('asset_type', 'cover_image');
+        $approvedCharacterSheet = $characterSheets->firstWhere('is_primary', true);
+        $defaultModel = config('production_studio.ai.fal.default_model');
+        $premiumModel = config('production_studio.ai.fal.default_premium_model');
     @endphp
 
     <div class="space-y-6" dir="rtl">
@@ -67,6 +73,20 @@
                         <p class="text-xs font-bold text-gray-400">تقدم الجودة</p>
                         <p class="mt-1 font-black text-gray-900">{{ $project->qaProgress() }}%</p>
                     </div>
+                    @can('production_studio.ai_view_costs')
+                        <div class="rounded-xl bg-indigo-50 p-4">
+                            <p class="text-xs font-bold text-indigo-500">محاولات AI</p>
+                            <p class="mt-1 font-black text-gray-900">{{ $aiCostSummary['attempts'] }} محاولة</p>
+                        </div>
+                        <div class="rounded-xl bg-indigo-50 p-4">
+                            <p class="text-xs font-bold text-indigo-500">تكلفة تقديرية</p>
+                            <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['estimated'] }}</p>
+                        </div>
+                        <div class="rounded-xl bg-indigo-50 p-4">
+                            <p class="text-xs font-bold text-indigo-500">تكلفة فعلية</p>
+                            <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['actual'] }}</p>
+                        </div>
+                    @endcan
                     <div class="rounded-xl bg-gray-50 p-4">
                         <p class="text-xs font-bold text-gray-400">منشئ المشروع</p>
                         <p class="mt-1 font-black text-gray-900">{{ $project->creator?->name ?? '-' }}</p>
@@ -345,6 +365,57 @@
                     <button class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">حفظ ملف الشخصية</button>
                 @endcan
             </form>
+
+            <div class="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-right">
+                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-black text-indigo-700">AI Pilot</p>
+                        <h3 class="mt-1 text-lg font-black text-gray-950">Character Reference Sheet</h3>
+                        <p class="mt-2 text-sm leading-7 text-indigo-900">ينشئ صورة مرجعية واحدة للطفل من الصور المعتمدة. الصور الناتجة خاصة ولا تظهر للعامة.</p>
+                    </div>
+                    @unless($aiAvailable)
+                        <div class="rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-700">AI generation is not configured yet.</div>
+                    @endunless
+                </div>
+
+                @can('production_studio.ai_generate')
+                    <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" class="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
+                        @csrf
+                        <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                            @foreach($aiModels as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->display_name }}</option>
+                            @endforeach
+                        </select>
+                        <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                            @foreach($stylePresets as $key => $label)
+                                <option value="{{ $key }}">{{ $key }}</option>
+                            @endforeach
+                        </select>
+                        <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right lg:col-span-2" placeholder="ملاحظات اختيارية للتوليد">
+                        <div class="lg:col-span-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+                            @foreach($profile?->approved_reference_photos ?? [] as $photoIndex)
+                                <label class="rounded-xl bg-white p-2 text-center text-sm font-bold text-gray-700">
+                                    <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" checked @disabled(!$aiAvailable)>
+                                    صورة {{ ((int) $photoIndex) + 1 }}
+                                </label>
+                            @endforeach
+                        </div>
+                        <div class="lg:col-span-4 rounded-xl bg-white p-3 text-xs leading-6 text-gray-600">
+                            <p class="font-black text-gray-900">Preview prompt basis:</p>
+                            <p>Single child, neutral friendly pose, clean background, no text/logos, preserve identity from selected references.</p>
+                        </div>
+                        <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">Generate Character Sheet</button>
+                    </form>
+                @endcan
+
+                <div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    @forelse($characterSheets as $asset)
+                        @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
+                    @empty
+                        <p class="rounded-xl bg-white p-4 text-sm text-gray-500">لا توجد Character Sheets بعد.</p>
+                    @endforelse
+                </div>
+            </div>
         </section>
 
         <section id="scenes" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -411,13 +482,109 @@
 
         <section id="images" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <div class="text-right">
-                <h2 class="text-xl font-black text-gray-950">إنتاج الصور</h2>
-                <p class="mt-1 text-sm text-gray-500">تم تجهيز الجداول للمزودين والنماذج والمهام المستقبلية، ولا يوجد أي اتصال خارجي الآن.</p>
+                <h2 class="text-xl font-black text-gray-950">إنتاج الصور بالذكاء الاصطناعي</h2>
+                <p class="mt-1 text-sm text-gray-500">Pilot داخلي: توليد Character Sheet أو مشهد واحد أو غلاف واحد فقط. لا يوجد توليد جماعي.</p>
             </div>
-            <div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm font-black text-gray-500">Text to Image - قريبًا</div>
-                <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm font-black text-gray-500">Image to Image - قريبًا</div>
-                <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center text-sm font-black text-gray-500">Upscale/Edit - قريبًا</div>
+            @unless($aiAvailable)
+                <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-black text-amber-800">
+                    AI generation is not configured yet.
+                </div>
+            @endunless
+
+            <div class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                <h3 class="font-black text-gray-950">توليد غلاف</h3>
+                @can('production_studio.ai_generate')
+                    <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                        @csrf
+                        <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                            @foreach($aiModels as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->display_name }}</option>
+                            @endforeach
+                        </select>
+                        <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                            @foreach($stylePresets as $key => $label)
+                                <option value="{{ $key }}">{{ $key }}</option>
+                            @endforeach
+                        </select>
+                        <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right md:col-span-2" placeholder="ملاحظات الغلاف">
+                        @if($approvedCharacterSheet)
+                            <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
+                        @endif
+                        <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">Generate Cover</button>
+                    </form>
+                @endcan
+            </div>
+
+            <div class="mt-5 space-y-4">
+                <h3 class="text-right font-black text-gray-950">توليد مشهد واحد</h3>
+                @foreach($project->scenes as $scene)
+                    <div class="rounded-xl border border-gray-100 p-4 text-right">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                                <p class="font-black text-gray-900">مشهد {{ $scene->scene_number }} - {{ $scene->title ?? 'بدون عنوان' }}</p>
+                                <p class="text-sm text-gray-500">{{ $scene->visual_direction ?: 'لا يوجد توجيه بصري بعد.' }}</p>
+                            </div>
+                            @can('production_studio.ai_generate')
+                                <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                                    @csrf
+                                    <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
+                                        @foreach($aiModels as $model)
+                                            <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->display_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
+                                        @foreach($stylePresets as $key => $label)
+                                            <option value="{{ $key }}">{{ $key }}</option>
+                                        @endforeach
+                                    </select>
+                                    <select name="character_sheet_id" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
+                                        <option value="">بدون Character Sheet</option>
+                                        @foreach($characterSheets->where('status', 'approved') as $sheet)
+                                            <option value="{{ $sheet->id }}" @selected($sheet->is_primary)>{{ $sheet->label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm" placeholder="ملاحظات اختيارية">
+                                    <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-black text-white disabled:bg-gray-300">Generate Scene</button>
+                                </form>
+                            @endcan
+                        </div>
+                        <p class="mt-3 text-xs text-gray-500">scene_edit موجود كهيكل مستقبلي وسيتم تفعيله في Phase 3.</p>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                @foreach($coverAssets as $asset)
+                    @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
+                @endforeach
+                @foreach($sceneAssets as $asset)
+                    @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
+                @endforeach
+            </div>
+
+            <div class="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
+                <h3 class="font-black text-gray-950">سجل مهام التوليد</h3>
+                <div class="mt-3 space-y-2">
+                    @forelse($project->generationJobs as $job)
+                        <div class="rounded-lg bg-white p-3 text-sm">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                <p class="font-black text-gray-900">#{{ $job->id }} - {{ $job->job_type }} - {{ $job->status }}</p>
+                                @can('production_studio.ai_view_costs')
+                                    <p class="text-gray-500">estimated ${{ $job->estimated_cost ?? '0.0000' }} / actual ${{ $job->actual_cost ?? '-' }}</p>
+                                @endcan
+                            </div>
+                            <details class="mt-2">
+                                <summary class="cursor-pointer text-xs font-bold text-indigo-700">عرض prompt snapshot</summary>
+                                <pre dir="ltr" class="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-left text-xs">{{ $job->prompt_snapshot }}</pre>
+                                @if($job->error_message)
+                                    <p class="mt-2 text-xs font-bold text-red-600">{{ $job->error_message }}</p>
+                                @endif
+                            </details>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-500">لا توجد مهام توليد بعد.</p>
+                    @endforelse
+                </div>
             </div>
         </section>
 

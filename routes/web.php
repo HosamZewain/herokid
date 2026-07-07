@@ -283,6 +283,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('production-studio/from-order/{order}', [ProductionStudioController::class, 'storeFromOrder'])->middleware('permission:production_studio.create_from_order')->name('production-studio.from-order');
     Route::get('production-studio/{project}', [ProductionStudioController::class, 'show'])->middleware('permission:production_studio.view')->name('production-studio.show');
     Route::get('production-studio/{project}/photos/{index}', [ProductionStudioController::class, 'servePhoto'])->whereNumber('index')->middleware('permission:production_studio.view')->name('production-studio.photo');
+    Route::get('production-studio/{project}/assets/{asset}', [ProductionStudioController::class, 'serveGeneratedAsset'])->middleware('permission:production_studio.ai_review')->name('production-studio.assets.show');
     Route::patch('production-studio/{project}', [ProductionStudioController::class, 'update'])->middleware('permission:production_studio.manage')->name('production-studio.update');
     Route::post('production-studio/{project}/archive', [ProductionStudioController::class, 'archive'])->middleware('permission:production_studio.archive')->name('production-studio.archive');
     Route::post('production-studio/{project}/cancel', [ProductionStudioController::class, 'cancel'])->middleware('permission:production_studio.delete_or_cancel')->name('production-studio.cancel');
@@ -293,6 +294,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('production-studio/{project}/scenes', [ProductionStudioController::class, 'storeScene'])->middleware('permission:production_studio.scene_edit')->name('production-studio.scenes.store');
     Route::patch('production-studio/{project}/scenes/{scene}', [ProductionStudioController::class, 'updateScene'])->middleware('permission:production_studio.scene_edit')->name('production-studio.scenes.update');
     Route::patch('production-studio/{project}/qa/{qaCheck}', [ProductionStudioController::class, 'updateQa'])->middleware('permission:production_studio.qa_review')->name('production-studio.qa.update');
+    Route::post('production-studio/{project}/ai/character-sheet', [ProductionStudioController::class, 'generateCharacterSheet'])->middleware('permission:production_studio.ai_generate')->name('production-studio.ai.character-sheet');
+    Route::post('production-studio/{project}/ai/cover', [ProductionStudioController::class, 'generateCoverImage'])->middleware('permission:production_studio.ai_generate')->name('production-studio.ai.cover');
+    Route::post('production-studio/{project}/scenes/{scene}/ai', [ProductionStudioController::class, 'generateSceneImage'])->middleware('permission:production_studio.ai_generate')->name('production-studio.ai.scene');
+    Route::post('production-studio/{project}/ai/jobs/{generationJob}/retry', [ProductionStudioController::class, 'retryGeneration'])->middleware('permission:production_studio.ai_retry')->name('production-studio.ai.retry');
+    Route::post('production-studio/{project}/assets/{asset}/approve', [ProductionStudioController::class, 'approveAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.approve');
+    Route::post('production-studio/{project}/assets/{asset}/reject', [ProductionStudioController::class, 'rejectAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.reject');
 
     Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
     Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');
