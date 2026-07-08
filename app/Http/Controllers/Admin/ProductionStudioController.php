@@ -20,6 +20,7 @@ use App\Services\Ai\AiProviderAvailability;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -218,9 +219,17 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'character_sheet';
 
         try {
-            $action->execute($project, $validated);
+            $job = $action->execute($project, $validated);
         } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
             return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        if ($request->expectsJson()) {
+            return $this->studioJsonSuccess('تم إنشاء مهمة توليد Character Sheet وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
         return back()->with('success', 'تم إنشاء مهمة توليد Character Sheet وهي الآن في قائمة الانتظار.');
@@ -236,9 +245,17 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'character_scene';
 
         try {
-            $action->execute($project, $validated, $scene);
+            $job = $action->execute($project, $validated, $scene);
         } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
             return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        if ($request->expectsJson()) {
+            return $this->studioJsonSuccess('تم إنشاء مهمة توليد صورة المشهد وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
         return back()->with('success', 'تم إنشاء مهمة توليد صورة المشهد وهي الآن في قائمة الانتظار.');
@@ -253,9 +270,17 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'cover_generation';
 
         try {
-            $action->execute($project, $validated);
+            $job = $action->execute($project, $validated);
         } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
             return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        if ($request->expectsJson()) {
+            return $this->studioJsonSuccess('تم إنشاء مهمة توليد الغلاف وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
         return back()->with('success', 'تم إنشاء مهمة توليد الغلاف وهي الآن في قائمة الانتظار.');
@@ -281,9 +306,17 @@ class ProductionStudioController extends Controller
         ];
 
         try {
-            $action->execute($project, $payload, $generationJob->scene);
+            $job = $action->execute($project, $payload, $generationJob->scene);
         } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
             return back()->withErrors(['ai_generation' => $this->safeAiError($exception)])->withInput();
+        }
+
+        if ($request->expectsJson()) {
+            return $this->studioJsonSuccess('تم إنشاء محاولة جديدة بناءً على المهمة السابقة.', $project, $job);
         }
 
         return back()->with('success', 'تم إنشاء محاولة جديدة بناءً على المهمة السابقة.');
@@ -296,6 +329,14 @@ class ProductionStudioController extends Controller
 
         $validated = $request->validate(['review_notes' => 'nullable|string|max:2000']);
         $action->execute($asset, $validated['review_notes'] ?? null);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'تم اعتماد المخرج.',
+                'asset' => $this->assetPayload($asset->fresh()),
+            ]);
+        }
 
         return back()->with('success', 'تم اعتماد المخرج.');
     }
@@ -312,7 +353,26 @@ class ProductionStudioController extends Controller
 
         $action->execute($asset, $validated['rejection_reason'], (bool) ($validated['archive'] ?? false));
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'تم تحديث حالة المخرج.',
+                'asset' => $this->assetPayload($asset->fresh()),
+            ]);
+        }
+
         return back()->with('success', 'تم تحديث حالة المخرج.');
+    }
+
+    public function generationJobStatus(ProductionProject $project, SceneGenerationJob $generationJob): JsonResponse
+    {
+        $this->ensureEnabled();
+        abort_unless($generationJob->production_project_id === $project->id, 404);
+
+        return response()->json([
+            'ok' => true,
+            'job' => $this->jobPayload($generationJob->fresh(['model.provider'])),
+        ]);
     }
 
     public function update(Request $request, ProductionProject $project)
@@ -606,5 +666,60 @@ class ProductionStudioController extends Controller
     private function safeAiError(\Throwable $exception): string
     {
         return preg_replace('/Key\s+[A-Za-z0-9_\-:.]+/', 'Key [redacted]', $exception->getMessage()) ?: 'AI generation failed.';
+    }
+
+    private function studioJsonSuccess(string $message, ProductionProject $project, SceneGenerationJob $job): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'job' => $this->jobPayload($job->fresh(['model.provider'])),
+            'status_url' => route('admin.production-studio.ai.jobs.status', [$project, $job]),
+        ], 201);
+    }
+
+    private function studioJsonError(string $message, int $status = 422): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+        ], $status);
+    }
+
+    private function jobPayload(SceneGenerationJob $job): array
+    {
+        return [
+            'id' => $job->id,
+            'job_type' => $job->job_type,
+            'generation_mode' => $job->generation_mode,
+            'status' => $job->status,
+            'model' => $job->model?->display_name,
+            'provider' => $job->model?->provider?->public_name,
+            'estimated_cost' => $job->estimated_cost,
+            'actual_cost' => $job->actual_cost,
+            'error_message' => $job->error_message,
+            'created_at' => $job->created_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $job->updated_at?->format('Y-m-d H:i:s'),
+            'completed_at' => $job->completed_at?->format('Y-m-d H:i:s'),
+            'failed_at' => $job->failed_at?->format('Y-m-d H:i:s'),
+            'asset_id' => data_get($job->output_metadata_json, 'asset_id'),
+        ];
+    }
+
+    private function assetPayload(?ProductionProjectAsset $asset): ?array
+    {
+        if (! $asset) {
+            return null;
+        }
+
+        return [
+            'id' => $asset->id,
+            'asset_type' => $asset->asset_type,
+            'status' => $asset->status,
+            'is_primary' => $asset->is_primary,
+            'is_final' => $asset->is_final,
+            'review_notes' => $asset->review_notes,
+            'rejection_reason' => $asset->rejection_reason,
+        ];
     }
 }

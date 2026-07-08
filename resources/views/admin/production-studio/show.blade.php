@@ -20,6 +20,67 @@
         $defaultModel = $defaultModelsByCapability['scene_generation'] ?? null;
         $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
         $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
+        $hasApprovedReferences = collect($profile?->approved_reference_photos ?? [])->isNotEmpty();
+        $hasStoryDraft = $project->storyVersions->isNotEmpty();
+        $hasScenes = $project->scenes->isNotEmpty();
+        $hasAiJob = $project->generationJobs->isNotEmpty();
+        $hasApprovedProductionAsset = $sceneAssets->where('status', 'approved')->isNotEmpty()
+            || $coverAssets->where('status', 'approved')->isNotEmpty();
+        $qaDone = $project->qaChecks->isNotEmpty()
+            && $project->qaChecks->every(fn ($check) => in_array($check->result, ['pass', 'not_applicable'], true) || $check->override_allowed);
+        $workflowSteps = [
+            [
+                'title' => 'راجع الطلب',
+                'description' => 'تأكد من بيانات الطفل والقصة والصور.',
+                'href' => '#reference',
+                'done' => true,
+                'action' => 'فتح بيانات الطلب',
+            ],
+            [
+                'title' => 'جهز ملف الشخصية',
+                'description' => 'اكتب ملاحظات الهوية واختر الصور المرجعية.',
+                'href' => '#character',
+                'done' => $hasApprovedReferences,
+                'action' => 'اختيار الصور المرجعية',
+            ],
+            [
+                'title' => 'ولّد بروفايل الشخصية',
+                'description' => 'أنشئ Character Sheet واعتمد أفضل نسخة.',
+                'href' => '#character-sheet-generator',
+                'done' => (bool) $approvedCharacterSheet,
+                'action' => 'توليد بروفايل الشخصية',
+            ],
+            [
+                'title' => 'جهز القصة والمشاهد',
+                'description' => 'أنشئ مسودة الاستوديو وتأكد من المشاهد.',
+                'href' => '#story',
+                'done' => $hasStoryDraft && $hasScenes,
+                'action' => 'إنشاء مسودة ومشاهد',
+            ],
+            [
+                'title' => 'ولّد الصور',
+                'description' => 'ولّد غلافًا أو مشهدًا واحدًا ثم راجع النتيجة.',
+                'href' => '#images',
+                'done' => $hasAiJob,
+                'action' => 'توليد الصور',
+            ],
+            [
+                'title' => 'اعتمد المخرجات',
+                'description' => 'اعتمد Character Sheet والصور النهائية المناسبة.',
+                'href' => '#images',
+                'done' => (bool) $approvedCharacterSheet && $hasApprovedProductionAsset,
+                'action' => 'مراجعة واعتماد',
+            ],
+            [
+                'title' => 'مراجعة الجودة',
+                'description' => 'أكمل QA قبل اعتبار المشروع جاهزًا للطباعة.',
+                'href' => '#qa',
+                'done' => $qaDone,
+                'action' => 'فتح QA',
+            ],
+        ];
+        $currentWorkflowIndex = collect($workflowSteps)->search(fn ($step) => ! $step['done']);
+        $currentWorkflowIndex = $currentWorkflowIndex === false ? count($workflowSteps) - 1 : $currentWorkflowIndex;
     @endphp
 
     <div class="space-y-6" dir="rtl">
@@ -50,6 +111,47 @@
             <a href="#qa" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">مراجعة الجودة</a>
             <a href="#activity" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">سجل النشاط</a>
         </div>
+
+        <section class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 text-right">
+                <div>
+                    <p class="text-sm font-black text-indigo-700">ماذا أفعل الآن؟</p>
+                    <h2 class="mt-1 text-xl font-black text-gray-950">خطوات إنتاج الطلب داخل الاستوديو</h2>
+                    <p class="mt-1 text-sm text-gray-500">اتبع الخطوات بالترتيب. الخطوة المكتملة تظهر بعلامة صح، والخطوة الحالية مميزة.</p>
+                </div>
+                <a href="{{ $workflowSteps[$currentWorkflowIndex]['href'] }}" class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">
+                    التالي: {{ $workflowSteps[$currentWorkflowIndex]['action'] }}
+                </a>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                @foreach($workflowSteps as $index => $step)
+                    @php
+                        $isCurrent = $index === $currentWorkflowIndex && ! $step['done'];
+                        $stepClass = $step['done']
+                            ? 'border-emerald-200 bg-emerald-50'
+                            : ($isCurrent ? 'border-indigo-300 bg-indigo-50 ring-2 ring-indigo-100' : 'border-gray-100 bg-gray-50');
+                        $iconClass = $step['done']
+                            ? 'bg-emerald-600 text-white'
+                            : ($isCurrent ? 'bg-indigo-600 text-white' : 'bg-white text-gray-400 border border-gray-200');
+                    @endphp
+                    <a href="{{ $step['href'] }}" class="block rounded-2xl border p-4 text-right transition hover:border-indigo-300 hover:bg-indigo-50 {{ $stepClass }}">
+                        <div class="flex items-start gap-3">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black {{ $iconClass }}">
+                                {{ $step['done'] ? '✓' : $index + 1 }}
+                            </span>
+                            <div>
+                                <p class="font-black text-gray-950">{{ $step['title'] }}</p>
+                                <p class="mt-1 text-xs leading-6 text-gray-600">{{ $step['description'] }}</p>
+                                <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs font-black {{ $step['done'] ? 'bg-white text-emerald-700' : ($isCurrent ? 'bg-white text-indigo-700' : 'bg-white text-gray-500') }}">
+                                    {{ $step['done'] ? 'تم' : ($isCurrent ? 'الخطوة الحالية' : 'بانتظار الخطوات السابقة') }}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        </section>
 
         <section id="overview" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div class="xl:col-span-2 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -317,7 +419,7 @@
         <section id="character" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
             <div class="border-b border-gray-100 pb-4 text-right">
                 <h2 class="text-xl font-black text-gray-950">ملف الشخصية</h2>
-                <p class="mt-1 text-sm text-gray-500">تحضير يدوي للهوية البصرية، بدون أي توليد تلقائي في هذه المرحلة.</p>
+                <p class="mt-1 text-sm text-gray-500">ابدأ بكتابة ملاحظات الهوية واختيار الصور المرجعية، ثم استخدم زر توليد بروفايل الشخصية لإنشاء Character Sheet.</p>
             </div>
 
             <form method="POST" action="{{ route('admin.production-studio.character-profile.update', $project) }}" class="mt-5 space-y-4">
@@ -367,12 +469,12 @@
                 @endcan
             </form>
 
-            <div class="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-right">
+            <div id="character-sheet-generator" class="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-right">
                 <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                     <div>
                         <p class="text-sm font-black text-indigo-700">AI Pilot</p>
-                        <h3 class="mt-1 text-lg font-black text-gray-950">Character Reference Sheet</h3>
-                        <p class="mt-2 text-sm leading-7 text-indigo-900">ينشئ صورة مرجعية واحدة للطفل من الصور المعتمدة. الصور الناتجة خاصة ولا تظهر للعامة.</p>
+                        <h3 class="mt-1 text-lg font-black text-gray-950">توليد بروفايل الشخصية / Character Sheet</h3>
+                        <p class="mt-2 text-sm leading-7 text-indigo-900">بعد اختيار الصور المرجعية، اضغط الزر لإنشاء صورة مرجعية للطفل. اعتمد أفضل نسخة لتستخدمها في الغلاف والمشاهد.</p>
                     </div>
                     @unless($aiAvailable)
                         <div class="rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-700">
@@ -385,7 +487,7 @@
                 </div>
 
                 @can('production_studio.ai_generate')
-                    <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" class="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
+                    <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" data-studio-ai-form class="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
                         @csrf
                         <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
                             @foreach($aiModelsByCapability['character_sheet'] ?? collect() as $model)
@@ -406,11 +508,17 @@
                                 </label>
                             @endforeach
                         </div>
+                        @unless($hasApprovedReferences)
+                            <div class="lg:col-span-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                                اختر صورة مرجعية واحدة على الأقل من قسم الصور المعتمدة ثم احفظ ملف الشخصية قبل التوليد.
+                            </div>
+                        @endunless
                         <div class="lg:col-span-4 rounded-xl bg-white p-3 text-xs leading-6 text-gray-600">
                             <p class="font-black text-gray-900">Preview prompt basis:</p>
                             <p>Single child, neutral friendly pose, clean background, no text/logos, preserve identity from selected references.</p>
                         </div>
-                        <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">Generate Character Sheet</button>
+                        <button @disabled(!$aiAvailable || !$hasApprovedReferences) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">توليد بروفايل الشخصية</button>
+                        <div data-studio-ai-feedback class="lg:col-span-4 hidden rounded-xl border p-3 text-sm font-bold"></div>
                     </form>
                 @endcan
 
@@ -418,7 +526,7 @@
                     @forelse($characterSheets as $asset)
                         @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
                     @empty
-                        <p class="rounded-xl bg-white p-4 text-sm text-gray-500">لا توجد Character Sheets بعد.</p>
+                        <p class="rounded-xl bg-white p-4 text-sm text-gray-500">لم يتم توليد بروفايل الشخصية بعد. اختر الصور المرجعية بالأعلى ثم اضغط توليد بروفايل الشخصية.</p>
                     @endforelse
                 </div>
             </div>
@@ -503,7 +611,7 @@
             <div class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
                 <h3 class="font-black text-gray-950">توليد غلاف</h3>
                 @can('production_studio.ai_generate')
-                    <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" data-studio-ai-form class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
                         @csrf
                         <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
                             @foreach($aiModelsByCapability['cover_generation'] ?? collect() as $model)
@@ -520,6 +628,7 @@
                             <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
                         @endif
                         <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">Generate Cover</button>
+                        <div data-studio-ai-feedback class="md:col-span-4 hidden rounded-xl border p-3 text-sm font-bold"></div>
                     </form>
                 @endcan
             </div>
@@ -534,7 +643,7 @@
                                 <p class="text-sm text-gray-500">{{ $scene->visual_direction ?: 'لا يوجد توجيه بصري بعد.' }}</p>
                             </div>
                             @can('production_studio.ai_generate')
-                                <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" class="grid grid-cols-1 md:grid-cols-5 gap-2">
+                                <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-studio-ai-form class="grid grid-cols-1 md:grid-cols-5 gap-2">
                                     @csrf
                                     <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
                                         @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
@@ -554,6 +663,7 @@
                                     </select>
                                     <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm" placeholder="ملاحظات اختيارية">
                                     <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-black text-white disabled:bg-gray-300">Generate Scene</button>
+                                    <div data-studio-ai-feedback class="md:col-span-5 hidden rounded-xl border p-3 text-sm font-bold"></div>
                                 </form>
                             @endcan
                         </div>
@@ -573,15 +683,16 @@
 
             <div class="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
                 <h3 class="font-black text-gray-950">سجل مهام التوليد</h3>
-                <div class="mt-3 space-y-2">
+                <div class="mt-3 space-y-2" data-studio-job-list>
                     @forelse($project->generationJobs as $job)
-                        <div class="rounded-lg bg-white p-3 text-sm">
+                        <div class="rounded-lg bg-white p-3 text-sm" data-studio-job-row="{{ $job->id }}">
                             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                <p class="font-black text-gray-900">#{{ $job->id }} - {{ $job->job_type }} - {{ $job->status }}</p>
+                                <p class="font-black text-gray-900">#{{ $job->id }} - {{ $job->job_type }} - <span data-studio-job-status>{{ $job->status }}</span></p>
                                 @can('production_studio.ai_view_costs')
                                     <p class="text-gray-500">estimated ${{ $job->estimated_cost ?? '0.0000' }} / actual ${{ $job->actual_cost ?? '-' }}</p>
                                 @endcan
                             </div>
+                            <p data-studio-job-error class="mt-2 text-xs font-bold text-red-600">{{ $job->error_message }}</p>
                             <details class="mt-2">
                                 <summary class="cursor-pointer text-xs font-bold text-indigo-700">عرض prompt snapshot</summary>
                                 <pre dir="ltr" class="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-left text-xs">{{ $job->prompt_snapshot }}</pre>
@@ -591,7 +702,7 @@
                             </details>
                         </div>
                     @empty
-                        <p class="text-sm text-gray-500">لا توجد مهام توليد بعد.</p>
+                        <p class="text-sm text-gray-500" data-studio-empty-jobs>لا توجد مهام توليد بعد.</p>
                     @endforelse
                 </div>
             </div>
@@ -678,6 +789,93 @@
     </div>
 
     <script>
+        function studioFeedback(element, type, message) {
+            if (!element) return;
+
+            element.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-red-200', 'bg-red-50', 'text-red-800', 'border-indigo-200', 'bg-indigo-50', 'text-indigo-800');
+
+            const classes = {
+                success: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-800'],
+                error: ['border-red-200', 'bg-red-50', 'text-red-800'],
+                info: ['border-indigo-200', 'bg-indigo-50', 'text-indigo-800'],
+            }[type] || ['border-indigo-200', 'bg-indigo-50', 'text-indigo-800'];
+
+            element.classList.add(...classes);
+            element.textContent = message;
+        }
+
+        function studioJobLabel(job) {
+            const cost = job.actual_cost || job.estimated_cost || '0.0000';
+            return `#${job.id} - ${job.job_type} - ${job.status} - $${cost}`;
+        }
+
+        function upsertStudioJob(job, statusUrl) {
+            const list = document.querySelector('[data-studio-job-list]');
+            if (!list || !job) return;
+
+            document.querySelector('[data-studio-empty-jobs]')?.remove();
+
+            let row = list.querySelector(`[data-studio-job-row="${job.id}"]`);
+            if (!row) {
+                row = document.createElement('div');
+                row.className = 'rounded-lg bg-white p-3 text-sm';
+                row.dataset.studioJobRow = job.id;
+                row.dataset.statusUrl = statusUrl || '';
+                row.innerHTML = `
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <p class="font-black text-gray-900"><span data-studio-job-label></span></p>
+                        <p class="text-gray-500" data-studio-job-updated></p>
+                    </div>
+                    <p data-studio-job-error class="mt-2 text-xs font-bold text-red-600"></p>
+                `;
+                list.prepend(row);
+            }
+
+            row.querySelector('[data-studio-job-label]').textContent = studioJobLabel(job);
+            row.querySelector('[data-studio-job-updated]').textContent = job.updated_at ? `آخر تحديث: ${job.updated_at}` : '';
+            row.querySelector('[data-studio-job-error]').textContent = job.error_message || '';
+
+            if (statusUrl) {
+                row.dataset.statusUrl = statusUrl;
+            }
+        }
+
+        async function pollStudioJob(statusUrl, feedback) {
+            if (!statusUrl) return;
+
+            for (let attempt = 0; attempt < 18; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 1200 : 5000));
+
+                const response = await fetch(statusUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (!response.ok) {
+                    studioFeedback(feedback, 'error', 'تعذر قراءة حالة مهمة التوليد.');
+                    return;
+                }
+
+                const payload = await response.json();
+                const job = payload.job;
+                upsertStudioJob(job, statusUrl);
+
+                if (job.status === 'completed') {
+                    studioFeedback(feedback, 'success', 'اكتملت المهمة. يمكنك مراجعة المخرج في سجل التوليد أو تحديث الصفحة لعرض الصورة الجديدة.');
+                    return;
+                }
+
+                if (job.status === 'failed') {
+                    studioFeedback(feedback, 'error', job.error_message || 'فشلت مهمة التوليد.');
+                    return;
+                }
+
+                studioFeedback(feedback, 'info', `حالة المهمة #${job.id}: ${job.status}. إذا بقيت Queued تأكد من تشغيل Queue Worker على السيرفر.`);
+            }
+        }
+
         document.addEventListener('click', async function (event) {
             const button = event.target.closest('[data-copy-target]');
             if (!button) return;
@@ -692,6 +890,66 @@
             } catch (error) {
                 target.select();
                 document.execCommand('copy');
+            }
+        });
+
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('[data-studio-ai-form]');
+            if (!form) return;
+
+            event.preventDefault();
+
+            const button = form.querySelector('button[type="submit"], button:not([type])');
+            const feedback = form.querySelector('[data-studio-ai-feedback]') || form.closest('[data-studio-asset-card]')?.querySelector('[data-studio-ai-feedback]');
+            const originalButtonText = button?.textContent;
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'جارٍ التنفيذ...';
+            }
+            studioFeedback(feedback, 'info', 'جارٍ إرسال الطلب...');
+
+            try {
+                const response = await fetch(form.action, {
+                    method: form.method || 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok || payload.ok === false) {
+                    const validationMessage = payload.errors
+                        ? Object.values(payload.errors).flat().join(' ')
+                        : null;
+                    studioFeedback(feedback, 'error', validationMessage || payload.message || 'تعذر تنفيذ الطلب.');
+                    return;
+                }
+
+                studioFeedback(feedback, 'success', payload.message || 'تم تنفيذ الطلب بنجاح.');
+
+                if (payload.job) {
+                    upsertStudioJob(payload.job, payload.status_url);
+                    pollStudioJob(payload.status_url, feedback);
+                }
+
+                if (payload.asset) {
+                    const card = form.closest('[data-studio-asset-card]');
+                    const status = card?.querySelector('.text-xs.text-gray-500');
+                    if (status) {
+                        status.textContent = status.textContent.replace(/ - .+$/, ` - ${payload.asset.status}`);
+                    }
+                }
+            } catch (error) {
+                studioFeedback(feedback, 'error', 'حدث خطأ في الاتصال. حاول مرة أخرى.');
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalButtonText;
+                }
             }
         });
     </script>

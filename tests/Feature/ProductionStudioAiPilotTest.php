@@ -135,6 +135,38 @@ class ProductionStudioAiPilotTest extends TestCase
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
+    public function test_ajax_generation_returns_inline_job_status_payload(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+
+        $response = $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.character-sheet', $project), $this->generationPayload())
+            ->assertCreated()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('job.status', 'queued')
+            ->assertJsonPath('job.job_type', 'character_sheet')
+            ->assertJsonStructure(['message', 'status_url', 'job' => ['id', 'status', 'job_type', 'estimated_cost']]);
+
+        $job = SceneGenerationJob::firstOrFail();
+        $this->assertSame($job->id, $response->json('job.id'));
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.production-studio.ai.jobs.status', [$project, $job]))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('job.id', $job->id)
+            ->assertJsonPath('job.status', 'queued');
+
+        Queue::assertPushed(SubmitAiGenerationJob::class);
+    }
+
+
     public function test_generation_rejects_child_reference_photos_that_are_not_approved_for_studio(): void
     {
         Queue::fake();

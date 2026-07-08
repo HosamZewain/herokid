@@ -28,6 +28,9 @@ class AiProviderCredentialService
         $provider->forceFill([
             'is_configured' => true,
             'is_available' => $provider->is_active,
+            'last_health_check_status' => null,
+            'last_health_check_message' => null,
+            'last_health_check_at' => null,
         ])->save();
 
         return $credential;

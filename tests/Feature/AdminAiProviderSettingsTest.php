@@ -95,6 +95,38 @@ class AdminAiProviderSettingsTest extends TestCase
         $this->assertSame('fal.ai updated', $provider->fresh()->display_name);
     }
 
+    public function test_saving_new_key_clears_previous_failed_health_check(): void
+    {
+        $admin = $this->adminWithPermissions([
+            'settings.ai_providers.view',
+            'settings.ai_providers.manage',
+            'settings.ai_providers.manage_credentials',
+            'settings.ai_providers.enable_disable',
+        ]);
+        $provider = $this->falProvider();
+        $provider->update([
+            'is_active' => false,
+            'last_health_check_status' => 'failed',
+            'last_health_check_message' => 'Authentication failed.',
+            'last_health_check_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.settings.ai-providers.update', $provider), $this->providerPayload([
+                'api_key' => 'fresh-fal-secret-key',
+                'is_active' => '1',
+            ]))
+            ->assertRedirect();
+
+        $provider = $provider->fresh();
+        $this->assertTrue($provider->is_active);
+        $this->assertTrue($provider->is_available);
+        $this->assertNull($provider->last_health_check_status);
+        $this->assertNull($provider->last_health_check_message);
+        $this->assertTrue(app(\App\Services\Ai\AiProviderAvailability::class)->providerAvailable($provider));
+    }
+
+
     public function test_replacing_existing_key_requires_confirmation(): void
     {
         $admin = $this->adminWithPermissions([
