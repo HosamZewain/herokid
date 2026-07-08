@@ -100,7 +100,8 @@ class ProductionStudioController extends Controller
             'assets.uploader',
             'assets.reviewer',
             'assets.scene',
-            'assets.generationJob',
+            'assets.generationJob.provider',
+            'assets.generationJob.model',
             'generationJobs.provider',
             'generationJobs.model',
             'generationJobs.initiator',
@@ -229,10 +230,10 @@ class ProductionStudioController extends Controller
         }
 
         if ($request->expectsJson()) {
-            return $this->studioJsonSuccess('تم إنشاء مهمة توليد Character Sheet وهي الآن في قائمة الانتظار.', $project, $job);
+            return $this->studioJsonSuccess('تم إنشاء مهمة توليد الصورة المرجعية للطفل وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
-        return back()->with('success', 'تم إنشاء مهمة توليد Character Sheet وهي الآن في قائمة الانتظار.');
+        return back()->with('success', 'تم إنشاء مهمة توليد الصورة المرجعية للطفل وهي الآن في قائمة الانتظار.');
     }
 
     public function generateSceneImage(Request $request, ProductionProject $project, ProductionScene $scene, CreateGenerationJobAction $action)
@@ -553,12 +554,36 @@ class ProductionStudioController extends Controller
             'negative_instructions' => 'nullable|string|max:3000',
             'approved_reference_photos' => 'nullable|array',
             'approved_reference_photos.*' => 'integer|min:0',
+            'primary_face_reference_index' => 'nullable|integer|min:0',
+            'body_reference_index' => 'nullable|integer|min:0',
+            'style_reference_index' => 'nullable|integer|min:0',
             'reviewer_notes' => 'nullable|string|max:3000',
         ]);
 
+        $approved = array_values(array_unique(array_map('intval', $validated['approved_reference_photos'] ?? [])));
+
+        foreach (['primary_face_reference_index', 'body_reference_index', 'style_reference_index'] as $referenceField) {
+            if (isset($validated[$referenceField]) && ! in_array((int) $validated[$referenceField], $approved, true)) {
+                return back()
+                    ->withErrors([$referenceField => 'يجب اختيار الصورة كصورة مرجعية معتمدة أولًا.'])
+                    ->withInput();
+            }
+        }
+
+        if (! isset($validated['primary_face_reference_index']) && $approved !== []) {
+            $validated['primary_face_reference_index'] = $approved[0];
+        }
+
+        foreach (['primary_face_reference_index', 'body_reference_index', 'style_reference_index'] as $referenceField) {
+            $validated[$referenceField] = $validated[$referenceField] ?? null;
+        }
+
         $project->characterProfile()->updateOrCreate(
             ['production_project_id' => $project->id],
-            $validated + ['reference_photo_selection' => $validated['approved_reference_photos'] ?? []]
+            $validated + [
+                'approved_reference_photos' => $approved,
+                'reference_photo_selection' => $approved,
+            ]
         );
 
         ProductionStudio::log($project, 'character_profile.updated', 'تم تحديث ملف الشخصية داخل الاستوديو.', [], auth()->user());
@@ -658,6 +683,10 @@ class ProductionStudioController extends Controller
 
         if (in_array($assetType, ['scene_image', 'cover_image'], true)) {
             $rules['character_sheet_id'] = ['nullable', 'integer', 'exists:production_project_assets,id'];
+        }
+
+        if ($assetType === 'cover_image') {
+            $rules['confirm_primary_face_cover_fallback'] = ['nullable', 'boolean'];
         }
 
         return $rules;

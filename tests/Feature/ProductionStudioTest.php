@@ -338,6 +338,45 @@ class ProductionStudioTest extends TestCase
         $this->assertDatabaseCount('production_projects', 0);
     }
 
+    public function test_project_detail_renders_collapsible_workflow_sections_and_preserves_key_actions(): void
+    {
+        $admin = $this->adminUser();
+        $order = $this->orderWithStory(['uploaded_photos' => ['orders/photos/kid.png']]);
+
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+
+        $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
+        $project = ProductionProject::firstOrFail();
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('data-studio-project="'.$project->id.'"', false)
+            ->assertSee('production-studio:${root.dataset.studioProject}:open-section', false)
+            ->assertSee('عرض برومبت الطلب الأصلي')
+            ->assertSee(route('admin.orders.show', $order), false)
+            ->assertSee(route('admin.production-studio.character-profile.update', $project), false)
+            ->assertSee(route('admin.production-studio.ai.character-sheet', $project), false)
+            ->assertSee('data-scene-filters', false)
+            ->assertSee('data-activity-filters', false);
+
+        foreach ([
+            'overview',
+            'order-child-data',
+            'story-workspace',
+            'character-profile',
+            'child-reference',
+            'scenes',
+            'ai-production',
+            'layout-print',
+            'qa-checklist',
+            'activity-log',
+        ] as $sectionId) {
+            $response->assertSee('id="'.$sectionId.'"', false);
+        }
+    }
+
     private function adminUser(): User
     {
         return User::create([

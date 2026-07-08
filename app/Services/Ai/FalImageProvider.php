@@ -67,9 +67,17 @@ class FalImageProvider implements AiImageProvider
             'output_format' => 'png',
         ];
 
+        if ($request->model->requiresImageUrl() && $request->inputAssets === []) {
+            throw new RuntimeException('هذا الموديل يحتاج صورة مرجعية. اختر صورة مرجعية أو صورة شخصية معتمدة أولًا.');
+        }
+
         if ($request->inputAssets !== []) {
-            $payload['image_urls'] = array_values($request->inputAssets);
-            $payload['image_url'] = $payload['image_urls'][0];
+            $inputAssets = array_values($request->inputAssets);
+            $payload['image_url'] = $inputAssets[0];
+
+            if ($request->model->supportsMultipleReferences()) {
+                $payload['image_urls'] = $inputAssets;
+            }
         }
 
         $response = $this->client($provider)

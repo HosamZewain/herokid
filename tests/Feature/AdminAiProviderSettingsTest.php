@@ -12,6 +12,7 @@ use App\Models\Permission;
 use App\Models\ProductionProject;
 use App\Models\SceneGenerationJob;
 use App\Models\User;
+use App\Services\Ai\AiProviderAvailability;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\AiProviderRegistrySyncer;
@@ -123,9 +124,8 @@ class AdminAiProviderSettingsTest extends TestCase
         $this->assertTrue($provider->is_available);
         $this->assertNull($provider->last_health_check_status);
         $this->assertNull($provider->last_health_check_message);
-        $this->assertTrue(app(\App\Services\Ai\AiProviderAvailability::class)->providerAvailable($provider));
+        $this->assertTrue(app(AiProviderAvailability::class)->providerAvailable($provider));
     }
-
 
     public function test_replacing_existing_key_requires_confirmation(): void
     {
@@ -338,8 +338,16 @@ class AdminAiProviderSettingsTest extends TestCase
         ]);
 
         $project->characterProfile()->create([
+            'appearance_summary' => 'Egyptian child with natural face and warm smile.',
+            'hair_details' => 'Dark curly hair with natural volume.',
+            'skin_tone' => 'Light warm skin tone.',
+            'eye_color_traits' => 'Brown eyes and natural smile.',
+            'typical_expression' => 'Calm friendly smile.',
+            'identity_rules' => 'Preserve exact face shape, hair, skin tone, apparent age, and body proportions.',
+            'negative_instructions' => 'No changed face, no text, no logos.',
             'approved_reference_photos' => [0],
             'reference_photo_selection' => [0],
+            'primary_face_reference_index' => 0,
         ]);
 
         return $project->load(['order', 'characterProfile']);

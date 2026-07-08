@@ -12,13 +12,25 @@ class GenerationInputAssetResolver
 {
     public function resolve(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null): array
     {
+        return $this->resolveWithMetadata($project, $indices, $characterSheet)['assets'];
+    }
+
+    public function resolveWithMetadata(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null): array
+    {
         $assets = [];
+        $metadata = [];
 
         if ($characterSheet?->file_path) {
             $assets[] = $this->dataUriFromPath($characterSheet->file_path);
+            $metadata[] = [
+                'type' => 'approved_child_reference_illustration',
+                'asset_id' => $characterSheet->id,
+                'path' => $characterSheet->file_path,
+            ];
         }
 
         $photos = $project->order?->uploaded_photos ?? [];
+        $profile = $project->characterProfile;
 
         foreach (array_slice(array_unique(array_map('intval', $indices)), 0, 4) as $index) {
             if (! isset($photos[$index]) || ! is_string($photos[$index]) || str_contains($photos[$index], '..')) {
@@ -26,9 +38,34 @@ class GenerationInputAssetResolver
             }
 
             $assets[] = $this->dataUriFromPath($photos[$index]);
+            $metadata[] = [
+                'type' => $this->referenceRole($profile, $index),
+                'photo_index' => $index,
+                'path' => $photos[$index],
+            ];
         }
 
-        return $assets;
+        return [
+            'assets' => $assets,
+            'metadata' => $metadata,
+        ];
+    }
+
+    private function referenceRole($profile, int $index): string
+    {
+        if ($profile?->primaryFaceReferenceIndex() === $index) {
+            return 'primary_face_reference';
+        }
+
+        if ($profile?->bodyReferenceIndex() === $index) {
+            return 'optional_body_reference';
+        }
+
+        if ($profile?->styleReferenceIndex() === $index) {
+            return 'optional_style_reference';
+        }
+
+        return 'approved_child_photo_reference';
     }
 
     private function dataUriFromPath(string $path): string

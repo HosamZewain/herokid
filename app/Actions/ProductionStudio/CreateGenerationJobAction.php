@@ -28,7 +28,7 @@ class CreateGenerationJobAction
 
     public function execute(ProductionProject $project, array $data, ?ProductionScene $scene = null): SceneGenerationJob
     {
-        $project->loadMissing(['order', 'characterProfile']);
+        $project->loadMissing(['order', 'characterProfile', 'assets']);
 
         $capability = $this->capabilityFor($data['generation_mode']);
         $providerModel = $this->resolveModel($data['model_code'] ?? null, $capability);
@@ -38,10 +38,17 @@ class CreateGenerationJobAction
             throw new RuntimeException('AI generation is not configured yet.');
         }
 
-        $characterSheet = isset($data['character_sheet_id'])
-            ? $this->resolveAsset($project, (int) $data['character_sheet_id'])
-            : null;
-        $referencePhotoIndices = $this->approvedReferencePhotoIndices($project, $data['reference_photo_indices'] ?? []);
+        $this->validateProfileReady($project);
+        $this->validateSceneReady($scene, $data);
+
+        $characterSheet = $this->resolveCharacterReference($project, $data);
+        $referencePhotoIndices = $this->referencePhotoIndicesForJob($project, $data, $characterSheet);
+        $resolvedInputs = $this->inputAssets->resolveWithMetadata($project, $referencePhotoIndices, $characterSheet);
+        $inputAssets = $resolvedInputs['assets'];
+
+        if ($providerModel->requiresImageUrl() && $inputAssets === []) {
+            throw new RuntimeException('هذا الموديل يحتاج صورة مرجعية. اختر صورة مرجعية أو صورة شخصية معتمدة أولًا.');
+        }
 
         $compiled = $this->compiler->compile(
             project: $project,
@@ -52,7 +59,6 @@ class CreateGenerationJobAction
             characterSheet: $characterSheet,
         );
 
-        $inputAssets = $this->inputAssets->resolve($project, $referencePhotoIndices, $characterSheet);
         $request = new GenerationRequest(
             project: $project,
             scene: $scene,
@@ -81,6 +87,10 @@ class CreateGenerationJobAction
                 'reference_photo_indices' => $referencePhotoIndices,
                 'character_sheet_id' => $characterSheet?->id,
                 'input_count' => count($inputAssets),
+                'reference_assets' => $resolvedInputs['metadata'],
+                'primary_face_reference_index' => $project->characterProfile?->primaryFaceReferenceIndex(),
+                'body_reference_index' => $project->characterProfile?->bodyReferenceIndex(),
+                'style_reference_index' => $project->characterProfile?->styleReferenceIndex(),
             ],
             'provider_request_json' => [
                 'provider_driver' => $providerModel->provider->driver,
@@ -93,6 +103,10 @@ class CreateGenerationJobAction
                     'cost_amount' => $providerModel->estimatedCost(),
                     'cost_currency' => $providerModel->estimated_cost_currency,
                     'cost_unit' => $providerModel->cost_unit,
+                    'requires_image_url' => $providerModel->requiresImageUrl(),
+                    'supports_multiple_references' => $providerModel->supportsMultipleReferences(),
+                    'supports_text_to_image_only' => $providerModel->supportsTextToImageOnly(),
+                    'supports_image_editing' => $providerModel->supportsImageEditing(),
                 ],
                 'provider_settings' => [
                     'timeout' => $providerModel->provider->default_timeout_seconds,
@@ -151,8 +165,96 @@ class CreateGenerationJobAction
     {
         return $project->assets()
             ->whereKey($assetId)
-            ->whereIn('asset_type', ['character_sheet', 'scene_image', 'cover_image'])
+            ->where('asset_type', 'character_sheet')
+            ->where('status', 'approved')
             ->firstOrFail();
+    }
+
+    private function validateProfileReady(ProductionProject $project): void
+    {
+        $profile = $project->characterProfile;
+
+        if (! $profile || ! $profile->isReadyForAiGeneration()) {
+            $missing = $profile?->missingAiGenerationFields() ?? ['character_profile' => 'ملف الشخصية'];
+
+            throw new RuntimeException('أكمل ملف الشخصية واختر صور مرجعية واضحة قبل التوليد. ناقص: '.implode('، ', $missing));
+        }
+    }
+
+    private function validateSceneReady(?ProductionScene $scene, array $data): void
+    {
+        if (! $scene || ($data['generation_mode'] ?? null) !== 'character_scene') {
+            return;
+        }
+
+        if (blank($scene->visual_direction) && ! (bool) ($data['confirm_missing_visual_direction'] ?? false)) {
+            throw new RuntimeException('أضف التوجيه البصري للمشهد قبل التوليد.');
+        }
+    }
+
+    private function resolveCharacterReference(ProductionProject $project, array $data): ?ProductionProjectAsset
+    {
+        if (isset($data['character_sheet_id']) && filled($data['character_sheet_id'])) {
+            return $this->resolveAsset($project, (int) $data['character_sheet_id']);
+        }
+
+        if (($data['generation_mode'] ?? null) === 'cover_generation') {
+            $asset = $project->assets()
+                ->where('asset_type', 'character_sheet')
+                ->where('status', 'approved')
+                ->where('is_primary', true)
+                ->first();
+
+            if ($asset) {
+                return $asset;
+            }
+
+            if (! (bool) ($data['confirm_primary_face_cover_fallback'] ?? false)) {
+                throw new RuntimeException('يفضل اعتماد صورة مرجعية للطفل قبل توليد الغلاف.');
+            }
+
+            return null;
+        }
+
+        if (($data['generation_mode'] ?? null) === 'character_scene') {
+            $asset = $project->assets()
+                ->where('asset_type', 'character_sheet')
+                ->where('status', 'approved')
+                ->where('is_primary', true)
+                ->first();
+
+            if (! $asset) {
+                throw new RuntimeException('اعتمد الصورة المرجعية للطفل قبل توليد المشاهد.');
+            }
+
+            return $asset;
+        }
+
+        return null;
+    }
+
+    private function referencePhotoIndicesForJob(ProductionProject $project, array $data, ?ProductionProjectAsset $characterSheet): array
+    {
+        $profile = $project->characterProfile;
+        $requested = $data['reference_photo_indices'] ?? [];
+        $indices = array_values(array_unique(array_map('intval', is_array($requested) ? $requested : [])));
+        $primary = $profile?->primaryFaceReferenceIndex();
+
+        if ($primary !== null && ! in_array($primary, $indices, true)) {
+            array_unshift($indices, $primary);
+        }
+
+        foreach ([$profile?->bodyReferenceIndex(), $profile?->styleReferenceIndex()] as $optionalIndex) {
+            if ($optionalIndex !== null && in_array($optionalIndex, $profile->approvedReferenceIndices(), true) && ! in_array($optionalIndex, $indices, true)) {
+                $indices[] = $optionalIndex;
+            }
+        }
+
+        if (($data['generation_mode'] ?? null) === 'cover_generation' && $characterSheet && $primary !== null && ! in_array($primary, $indices, true)) {
+            $indices[] = $primary;
+        }
+
+        return $this->approvedReferencePhotoIndices($project, $indices);
     }
 
     private function approvedReferencePhotoIndices(ProductionProject $project, array $requestedIndices): array

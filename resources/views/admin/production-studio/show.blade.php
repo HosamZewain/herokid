@@ -4,11 +4,11 @@
     </x-slot>
 
     @php
-        $statusClass = match ($project->status) {
-            'completed', 'ready_for_print', 'approved' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            'cancelled' => 'bg-red-50 text-red-700 border-red-200',
-            'archived' => 'bg-gray-100 text-gray-700 border-gray-200',
-            default => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        $statusTone = match ($project->status) {
+            'completed', 'ready_for_print', 'approved' => 'emerald',
+            'cancelled' => 'red',
+            'archived' => 'gray',
+            default => 'indigo',
         };
         $photos = $order->uploaded_photos ?? [];
         $profile = $project->characterProfile;
@@ -17,81 +17,93 @@
         $sceneAssets = $project->assets->where('asset_type', 'scene_image');
         $coverAssets = $project->assets->where('asset_type', 'cover_image');
         $approvedCharacterSheet = $characterSheets->firstWhere('is_primary', true);
+        $primaryFaceIndex = $profile?->primaryFaceReferenceIndex();
         $defaultModel = $defaultModelsByCapability['scene_generation'] ?? null;
         $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
         $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
-        $hasApprovedReferences = collect($profile?->approved_reference_photos ?? [])->isNotEmpty();
+        $profileReady = (bool) $profile?->isReadyForAiGeneration();
+        $missingProfileFields = $profile?->missingAiGenerationFields() ?? ['character_profile' => 'ملف الشخصية'];
         $hasStoryDraft = $project->storyVersions->isNotEmpty();
-        $hasScenes = $project->scenes->isNotEmpty();
-        $hasAiJob = $project->generationJobs->isNotEmpty();
-        $hasApprovedProductionAsset = $sceneAssets->where('status', 'approved')->isNotEmpty()
-            || $coverAssets->where('status', 'approved')->isNotEmpty();
-        $qaDone = $project->qaChecks->isNotEmpty()
-            && $project->qaChecks->every(fn ($check) => in_array($check->result, ['pass', 'not_applicable'], true) || $check->override_allowed);
-        $workflowSteps = [
-            [
-                'title' => 'راجع الطلب',
-                'description' => 'تأكد من بيانات الطفل والقصة والصور.',
-                'href' => '#reference',
-                'done' => true,
-                'action' => 'فتح بيانات الطلب',
-            ],
-            [
-                'title' => 'جهز ملف الشخصية',
-                'description' => 'اكتب ملاحظات الهوية واختر الصور المرجعية.',
-                'href' => '#character',
-                'done' => $hasApprovedReferences,
-                'action' => 'اختيار الصور المرجعية',
-            ],
-            [
-                'title' => 'ولّد بروفايل الشخصية',
-                'description' => 'أنشئ Character Sheet واعتمد أفضل نسخة.',
-                'href' => '#character-sheet-generator',
-                'done' => (bool) $approvedCharacterSheet,
-                'action' => 'توليد بروفايل الشخصية',
-            ],
-            [
-                'title' => 'جهز القصة والمشاهد',
-                'description' => 'أنشئ مسودة الاستوديو وتأكد من المشاهد.',
-                'href' => '#story',
-                'done' => $hasStoryDraft && $hasScenes,
-                'action' => 'إنشاء مسودة ومشاهد',
-            ],
-            [
-                'title' => 'ولّد الصور',
-                'description' => 'ولّد غلافًا أو مشهدًا واحدًا ثم راجع النتيجة.',
-                'href' => '#images',
-                'done' => $hasAiJob,
-                'action' => 'توليد الصور',
-            ],
-            [
-                'title' => 'اعتمد المخرجات',
-                'description' => 'اعتمد Character Sheet والصور النهائية المناسبة.',
-                'href' => '#images',
-                'done' => (bool) $approvedCharacterSheet && $hasApprovedProductionAsset,
-                'action' => 'مراجعة واعتماد',
-            ],
-            [
-                'title' => 'مراجعة الجودة',
-                'description' => 'أكمل QA قبل اعتبار المشروع جاهزًا للطباعة.',
-                'href' => '#qa',
-                'done' => $qaDone,
-                'action' => 'فتح QA',
-            ],
+        $qaProgress = $project->qaProgress();
+        $qaFailed = $project->qaChecks->where('result', 'fail')->count();
+        $qaPending = $project->qaChecks->where('result', 'not_reviewed')->count();
+        $totalScenes = $project->scenes->count();
+        $missingVisualScenes = $project->scenes->filter(fn ($scene) => blank($scene->visual_direction))->count();
+        $readyScenes = $project->scenes->filter(fn ($scene) => filled($scene->visual_direction))->count();
+        $approvedSceneImages = $sceneAssets->where('status', 'approved')->count();
+        $jobCompleted = $project->generationJobs->where('status', 'completed')->count();
+        $jobFailed = $project->generationJobs->where('status', 'failed')->count();
+        $jobProcessing = $project->generationJobs->whereIn('status', ['queued', 'processing'])->count();
+        $latestActivity = $project->activityLogs->sortByDesc('created_at')->first();
+        $referencePhotoSummary = $primaryFaceIndex !== null ? 'صورة الوجه الأساسية #'.($primaryFaceIndex + 1) : 'لا توجد صورة وجه أساسية';
+        $stageDefaultMap = [
+            'intake' => 'order-child-data',
+            'story_review' => 'story-workspace',
+            'character_profile' => 'character-profile',
+            'scene_preparation' => 'scenes',
+            'image_generation' => 'ai-production',
+            'image_review' => 'ai-production',
+            'layout' => 'layout-print',
+            'quality_check' => 'qa-checklist',
+            'print_ready' => 'layout-print',
         ];
-        $currentWorkflowIndex = collect($workflowSteps)->search(fn ($step) => ! $step['done']);
-        $currentWorkflowIndex = $currentWorkflowIndex === false ? count($workflowSteps) - 1 : $currentWorkflowIndex;
+        $defaultOpenSection = $stageDefaultMap[$project->current_stage] ?? 'overview';
+        $nextAction = match (true) {
+            ! $profileReady => ['label' => 'أكمل ملف الشخصية', 'section' => 'character-profile'],
+            ! $approvedCharacterSheet => ['label' => 'اعتمد الصورة المرجعية للطفل', 'section' => 'child-reference'],
+            $missingVisualScenes > 0 => ['label' => 'أضف التوجيه البصري للمشاهد', 'section' => 'scenes'],
+            $project->generationJobs->isEmpty() => ['label' => 'ولّد مشهدًا أو غلافًا واحدًا', 'section' => 'ai-production'],
+            $project->assets->where('status', 'under_review')->isNotEmpty() => ['label' => 'راجع المخرجات المنتظرة', 'section' => 'ai-production'],
+            $qaProgress < 100 => ['label' => 'أكمل مراجعة الجودة', 'section' => 'qa-checklist'],
+            default => ['label' => 'راجع الإخراج والطباعة', 'section' => 'layout-print'],
+        };
+        $sectionNav = [
+            'overview' => 'نظرة عامة',
+            'order-child-data' => 'بيانات الطلب والطفل',
+            'story-workspace' => 'مساحة القصة',
+            'character-profile' => 'ملف الشخصية',
+            'child-reference' => 'الصورة المرجعية',
+            'scenes' => 'المشاهد',
+            'ai-production' => 'إنتاج الصور',
+            'layout-print' => 'الإخراج والطباعة',
+            'qa-checklist' => 'مراجعة الجودة',
+            'activity-log' => 'سجل النشاط',
+        ];
+        $layoutPrintItems = ['Reader Order PDF', 'Print-Ready Booklet PDF', 'Print Manifest', 'Proof Print Checklist'];
+        $activityFilters = ['all' => 'All', 'project' => 'project', 'story' => 'story', 'character' => 'character', 'ai' => 'AI', 'asset' => 'asset', 'qa' => 'QA', 'status' => 'status'];
+        $activityLogs = $project->activityLogs->sortByDesc('created_at')->values()->map(function ($log, $index) {
+            $action = $log->action;
+            $type = 'project';
+
+            if (str_starts_with($action, 'ai_')) {
+                $type = 'ai';
+            } elseif (str_contains($action, 'qa')) {
+                $type = 'qa';
+            } elseif (str_contains($action, 'story')) {
+                $type = 'story';
+            } elseif (str_contains($action, 'character')) {
+                $type = 'character';
+            } elseif (str_contains($action, 'asset')) {
+                $type = 'asset';
+            } elseif (str_contains($action, 'status')) {
+                $type = 'status';
+            }
+
+            return [
+                'log' => $log,
+                'type' => $type,
+                'is_extra' => $index >= 10,
+            ];
+        });
     @endphp
 
-    <div class="space-y-6" dir="rtl">
+    <div class="space-y-6" dir="rtl" data-studio-project="{{ $project->id }}" data-default-section="{{ $defaultOpenSection }}">
         <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-right">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <p class="text-sm font-black text-indigo-700">Production Studio</p>
                     <h1 class="mt-1 text-2xl font-black text-gray-950">مشروع إنتاج معزول للطلب {{ $order->order_number }}</h1>
-                    <p class="mt-2 text-sm leading-7 text-indigo-900">
-                        هذا استوديو إنتاج داخلي اختياري. مسار الطلب الأصلي وحالته وبرومبت الإنتاج الحالي لا يتغيرون من هنا.
-                    </p>
+                    <p class="mt-2 text-sm leading-7 text-indigo-900">مساحة داخلية اختيارية. لا تغيّر حالة الطلب الأصلي أو برومبت الإنتاج الحالي.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <a href="{{ route('admin.orders.show', $order) }}" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-50">فتح الطلب الأصلي</a>
@@ -100,116 +112,83 @@
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-2 rounded-2xl border border-gray-100 bg-white p-3 text-sm font-black shadow-sm">
-            <a href="#overview" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">نظرة عامة</a>
-            <a href="#reference" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">بيانات الطلب والطفل</a>
-            <a href="#story" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">مساحة القصة</a>
-            <a href="#character" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">ملف الشخصية</a>
-            <a href="#scenes" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">المشاهد</a>
-            <a href="#images" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">إنتاج الصور</a>
-            <a href="#layout" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">الإخراج والطباعة</a>
-            <a href="#qa" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">مراجعة الجودة</a>
-            <a href="#activity" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">سجل النشاط</a>
-        </div>
+        <nav class="flex flex-wrap gap-2 rounded-2xl border border-gray-100 bg-white p-3 text-sm font-black shadow-sm" aria-label="Production Studio workflow">
+            @foreach($sectionNav as $sectionId => $label)
+                <a href="#{{ $sectionId }}" data-studio-nav="{{ $sectionId }}" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700">{{ $label }}</a>
+            @endforeach
+        </nav>
 
-        <section class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 text-right">
-                <div>
-                    <p class="text-sm font-black text-indigo-700">ماذا أفعل الآن؟</p>
-                    <h2 class="mt-1 text-xl font-black text-gray-950">خطوات إنتاج الطلب داخل الاستوديو</h2>
-                    <p class="mt-1 text-sm text-gray-500">اتبع الخطوات بالترتيب. الخطوة المكتملة تظهر بعلامة صح، والخطوة الحالية مميزة.</p>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'overview',
+            'title' => 'نظرة عامة',
+            'description' => 'ملخص سريع لحالة مشروع الاستوديو وما يجب عمله بعد ذلك.',
+            'status' => $project->statusLabel(),
+            'statusTone' => $statusTone,
+            'summary' => 'التالي: '.$nextAction['label'],
+        ])
+            <div class="grid grid-cols-1 gap-4 text-right md:grid-cols-3 xl:grid-cols-6">
+                <div class="rounded-xl bg-gray-50 p-4 md:col-span-2">
+                    <p class="text-xs font-bold text-gray-400">رقم الطلب</p>
+                    <a href="{{ route('admin.orders.show', $order) }}" class="mt-1 block font-black text-indigo-700 hover:underline">{{ $order->order_number }}</a>
                 </div>
-                <a href="{{ $workflowSteps[$currentWorkflowIndex]['href'] }}" class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">
-                    التالي: {{ $workflowSteps[$currentWorkflowIndex]['action'] }}
-                </a>
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-xs font-bold text-gray-400">الطفل</p>
+                    <p class="mt-1 font-black text-gray-900">{{ $order->child_name ?? 'Not available' }}</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-4 md:col-span-2">
+                    <p class="text-xs font-bold text-gray-400">القصة</p>
+                    <p class="mt-1 font-black text-gray-900">{{ $order->story?->title ?? 'Not available' }}</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-xs font-bold text-gray-400">المرحلة</p>
+                    <p class="mt-1 font-black text-gray-900">{{ $project->stageLabel() }}</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-xs font-bold text-gray-400">المسؤول</p>
+                    <p class="mt-1 font-black text-gray-900">{{ $project->assignedTo?->name ?? 'غير معين' }}</p>
+                </div>
+                <div class="rounded-xl bg-emerald-50 p-4">
+                    <p class="text-xs font-bold text-emerald-600">تقدم QA</p>
+                    <p class="mt-1 font-black text-gray-900">{{ $qaProgress }}%</p>
+                </div>
+                @can('production_studio.ai_view_costs')
+                    <div class="rounded-xl bg-indigo-50 p-4">
+                        <p class="text-xs font-bold text-indigo-500">محاولات AI</p>
+                        <p class="mt-1 font-black text-gray-900">{{ $aiCostSummary['attempts'] }}</p>
+                    </div>
+                    <div class="rounded-xl bg-indigo-50 p-4">
+                        <p class="text-xs font-bold text-indigo-500">تقديري</p>
+                        <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['estimated'] }}</p>
+                    </div>
+                    <div class="rounded-xl bg-indigo-50 p-4">
+                        <p class="text-xs font-bold text-indigo-500">فعلي</p>
+                        <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['actual'] }}</p>
+                    </div>
+                @endcan
             </div>
 
-            <div class="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                @foreach($workflowSteps as $index => $step)
-                    @php
-                        $isCurrent = $index === $currentWorkflowIndex && ! $step['done'];
-                        $stepClass = $step['done']
-                            ? 'border-emerald-200 bg-emerald-50'
-                            : ($isCurrent ? 'border-indigo-300 bg-indigo-50 ring-2 ring-indigo-100' : 'border-gray-100 bg-gray-50');
-                        $iconClass = $step['done']
-                            ? 'bg-emerald-600 text-white'
-                            : ($isCurrent ? 'bg-indigo-600 text-white' : 'bg-white text-gray-400 border border-gray-200');
-                    @endphp
-                    <a href="{{ $step['href'] }}" class="block rounded-2xl border p-4 text-right transition hover:border-indigo-300 hover:bg-indigo-50 {{ $stepClass }}">
-                        <div class="flex items-start gap-3">
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black {{ $iconClass }}">
-                                {{ $step['done'] ? '✓' : $index + 1 }}
-                            </span>
-                            <div>
-                                <p class="font-black text-gray-950">{{ $step['title'] }}</p>
-                                <p class="mt-1 text-xs leading-6 text-gray-600">{{ $step['description'] }}</p>
-                                <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs font-black {{ $step['done'] ? 'bg-white text-emerald-700' : ($isCurrent ? 'bg-white text-indigo-700' : 'bg-white text-gray-500') }}">
-                                    {{ $step['done'] ? 'تم' : ($isCurrent ? 'الخطوة الحالية' : 'بانتظار الخطوات السابقة') }}
-                                </span>
-                            </div>
-                        </div>
-                    </a>
-                @endforeach
+            <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                    <p class="font-black text-indigo-900">الإجراء المقترح التالي</p>
+                    <button type="button" data-studio-open-section="{{ $nextAction['section'] }}" class="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">{{ $nextAction['label'] }}</button>
+                </div>
+                <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 text-right lg:col-span-2">
+                    <p class="font-black text-gray-900">آخر نشاط</p>
+                    <p class="mt-2 text-sm text-gray-600">{{ $latestActivity?->description ?? 'لا يوجد نشاط مسجل بعد.' }}</p>
+                    @if($latestActivity)
+                        <p class="mt-1 text-xs text-gray-400">{{ $latestActivity->actor?->name ?? 'System' }} · {{ $latestActivity->created_at?->format('Y-m-d H:i') }}</p>
+                    @endif
+                </div>
             </div>
-        </section>
 
-        <section id="overview" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div class="xl:col-span-2 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100 pb-4">
-                    <div class="text-right">
-                        <h2 class="text-xl font-black text-gray-950">نظرة عامة</h2>
-                        <p class="mt-1 text-sm text-gray-500">البيانات هنا تخص مشروع الاستوديو فقط.</p>
-                    </div>
-                    <span class="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black {{ $statusClass }}">{{ $project->statusLabel() }}</span>
-                </div>
-
-                <div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3 text-right">
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">المرحلة الحالية</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->stageLabel() }}</p>
-                    </div>
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">المسؤول</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->assignedTo?->name ?? 'غير معين' }}</p>
-                    </div>
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">تقدم الجودة</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->qaProgress() }}%</p>
-                    </div>
-                    @can('production_studio.ai_view_costs')
-                        <div class="rounded-xl bg-indigo-50 p-4">
-                            <p class="text-xs font-bold text-indigo-500">محاولات AI</p>
-                            <p class="mt-1 font-black text-gray-900">{{ $aiCostSummary['attempts'] }} محاولة</p>
-                        </div>
-                        <div class="rounded-xl bg-indigo-50 p-4">
-                            <p class="text-xs font-bold text-indigo-500">تكلفة تقديرية</p>
-                            <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['estimated'] }}</p>
-                        </div>
-                        <div class="rounded-xl bg-indigo-50 p-4">
-                            <p class="text-xs font-bold text-indigo-500">تكلفة فعلية</p>
-                            <p class="mt-1 font-black text-gray-900">${{ $aiCostSummary['actual'] }}</p>
-                        </div>
-                    @endcan
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">منشئ المشروع</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->creator?->name ?? '-' }}</p>
-                    </div>
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">أرسل للاستوديو</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->sent_to_studio_at?->format('Y-m-d H:i') ?? '-' }}</p>
-                    </div>
-                    <div class="rounded-xl bg-gray-50 p-4">
-                        <p class="text-xs font-bold text-gray-400">آخر تحديث</p>
-                        <p class="mt-1 font-black text-gray-900">{{ $project->updated_at?->diffForHumans() }}</p>
-                    </div>
-                </div>
-
-                @can('production_studio.manage')
-                    <form method="POST" action="{{ route('admin.production-studio.update', $project) }}" class="mt-6 space-y-4">
+            @can('production_studio.manage')
+                <details class="mt-5 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
+                    <summary class="cursor-pointer font-black text-gray-900">إدارة حالة المشروع والملاحظات</summary>
+                    <form method="POST" action="{{ route('admin.production-studio.update', $project) }}" class="mt-4 space-y-4">
                         @csrf
                         @method('PATCH')
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <label class="block text-right">
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <label class="block">
                                 <span class="text-sm font-black text-gray-700">حالة الاستوديو</span>
                                 <select name="status" class="mt-2 w-full rounded-xl border-gray-300 text-right">
                                     @foreach($statuses as $value => $label)
@@ -217,7 +196,7 @@
                                     @endforeach
                                 </select>
                             </label>
-                            <label class="block text-right">
+                            <label class="block">
                                 <span class="text-sm font-black text-gray-700">المرحلة</span>
                                 <select name="current_stage" class="mt-2 w-full rounded-xl border-gray-300 text-right">
                                     <option value="">بدون مرحلة</option>
@@ -226,7 +205,7 @@
                                     @endforeach
                                 </select>
                             </label>
-                            <label class="block text-right">
+                            <label class="block">
                                 <span class="text-sm font-black text-gray-700">المسؤول</span>
                                 <select name="assigned_to_user_id" class="mt-2 w-full rounded-xl border-gray-300 text-right">
                                     <option value="">غير معين</option>
@@ -236,62 +215,49 @@
                                 </select>
                             </label>
                         </div>
-                        <label class="block text-right">
-                            <span class="text-sm font-black text-gray-700">ملاحظات الإنتاج</span>
-                            <textarea name="production_notes" rows="4" class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old('production_notes', $project->production_notes) }}</textarea>
-                        </label>
-                        <label class="block text-right">
-                            <span class="text-sm font-black text-gray-700">سبب تجاوز QA عند النقل إلى جاهز للطباعة</span>
-                            <input name="qa_override_reason" value="{{ old('qa_override_reason') }}" class="mt-2 w-full rounded-xl border-gray-300 text-right" placeholder="يُطلب فقط إذا توجد بنود QA غير مكتملة أو فاشلة">
-                        </label>
+                        <textarea name="production_notes" rows="3" class="w-full rounded-xl border-gray-300 text-right" placeholder="ملاحظات الإنتاج">{{ old('production_notes', $project->production_notes) }}</textarea>
+                        <input name="qa_override_reason" value="{{ old('qa_override_reason') }}" class="w-full rounded-xl border-gray-300 text-right" placeholder="سبب تجاوز QA عند النقل إلى جاهز للطباعة">
                         <button class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">حفظ بيانات المشروع</button>
                     </form>
-                @endcan
-            </div>
+                </details>
+            @endcan
 
-            <div class="space-y-4">
-                <div class="rounded-2xl border border-gray-100 bg-white p-6 text-right shadow-sm">
-                    <h3 class="text-lg font-black text-gray-950">إجراءات سريعة</h3>
-                    <div class="mt-4 space-y-3">
-                        @can('production_studio.archive')
-                            @if($project->status === 'archived')
-                                <form method="POST" action="{{ route('admin.production-studio.reopen', $project) }}">
-                                    @csrf
-                                    <button class="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100">إعادة فتح المشروع</button>
-                                </form>
-                            @else
-                                <form method="POST" action="{{ route('admin.production-studio.archive', $project) }}">
-                                    @csrf
-                                    <button class="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-100">أرشفة المشروع</button>
-                                </form>
-                            @endif
-                        @endcan
-                        @can('production_studio.delete_or_cancel')
-                            <form method="POST" action="{{ route('admin.production-studio.cancel', $project) }}" class="space-y-2">
+            <details class="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
+                <summary class="cursor-pointer font-black text-gray-900">إجراءات الأرشفة والإلغاء</summary>
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    @can('production_studio.archive')
+                        @if($project->status === 'archived')
+                            <form method="POST" action="{{ route('admin.production-studio.reopen', $project) }}">
                                 @csrf
-                                <input name="cancel_reason" class="w-full rounded-xl border-gray-300 text-right text-sm" placeholder="سبب إلغاء مشروع الاستوديو">
-                                <button class="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-100">إلغاء مشروع الاستوديو فقط</button>
+                                <button class="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100">إعادة فتح المشروع</button>
                             </form>
-                        @endcan
-                    </div>
+                        @else
+                            <form method="POST" action="{{ route('admin.production-studio.archive', $project) }}">
+                                @csrf
+                                <button class="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-100">أرشفة المشروع</button>
+                            </form>
+                        @endif
+                    @endcan
+                    @can('production_studio.delete_or_cancel')
+                        <form method="POST" action="{{ route('admin.production-studio.cancel', $project) }}" class="flex gap-2">
+                            @csrf
+                            <input name="cancel_reason" class="min-w-0 flex-1 rounded-xl border-gray-300 text-right text-sm" placeholder="سبب الإلغاء">
+                            <button class="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-100">إلغاء</button>
+                        </form>
+                    @endcan
                 </div>
-                <div class="rounded-2xl border border-amber-100 bg-amber-50 p-5 text-right text-sm leading-7 text-amber-900">
-                    <p class="font-black">تنبيه عزل آمن</p>
-                    <p class="mt-1">أي تحديث هنا لا يغير حالة الطلب الأصلي ولا يلغي الطلب ولا يبدل برومبت الإنتاج الحالي.</p>
-                </div>
-            </div>
-        </section>
+            </details>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="reference" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-gray-100 pb-4">
-                <div class="text-right">
-                    <h2 class="text-xl font-black text-gray-950">بيانات الطلب والطفل</h2>
-                    <p class="mt-1 text-sm text-gray-500">قراءة مباشرة من الطلب الأصلي. لقطة الإنشاء محفوظة للرجوع التاريخي فقط.</p>
-                </div>
-                <a href="{{ route('admin.orders.show', $order) }}" class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-100">فتح الطلب الأصلي</a>
-            </div>
-
-            <div class="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4 text-right">
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'order-child-data',
+            'title' => 'بيانات الطلب والطفل',
+            'description' => 'مرجع قراءة فقط من الطلب الأصلي والصور المرفقة.',
+            'status' => count($photos) ? 'صور مرفقة' : 'لا توجد صور',
+            'statusTone' => count($photos) ? 'emerald' : 'amber',
+            'summary' => ($order->parent_name ?? $order->user?->name ?? 'Not available').' · '.($order->child_name ?? 'Not available'),
+        ])
+            <div class="grid grid-cols-1 gap-4 text-right lg:grid-cols-3">
                 <div class="rounded-xl bg-gray-50 p-4">
                     <p class="text-xs font-bold text-gray-400">العميل</p>
                     <p class="mt-1 font-black text-gray-900">{{ $order->parent_name ?? $order->user?->name ?? 'Not available' }}</p>
@@ -309,7 +275,7 @@
                 </div>
             </div>
 
-            <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div class="rounded-xl border border-gray-100 p-4 text-right">
                     <p class="font-black text-gray-900">الاهتمامات وملاحظات الوالد</p>
                     <p class="mt-2 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $order->interests ?: 'Not available' }}</p>
@@ -318,25 +284,21 @@
                 <div class="rounded-xl border border-gray-100 p-4 text-right">
                     <p class="font-black text-gray-900">الإضافات المرتبطة</p>
                     @php($addOns = $order->items->where('item_type', 'product_add_on'))
-                    @if($addOns->isEmpty())
-                        <p class="mt-2 text-sm text-gray-500">لا توجد إضافات مرتبطة.</p>
-                    @else
-                        <div class="mt-2 space-y-2">
-                            @foreach($addOns as $addOn)
-                                <div class="rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                                    <span class="font-black text-gray-900">{{ $addOn->title }}</span>
-                                    <span class="text-gray-500"> - {{ $addOn->quantity }} × {{ number_format($addOn->unit_price_cents / 100, 0) }} ج.م</span>
-                                </div>
-                            @endforeach
+                    @forelse($addOns as $addOn)
+                        <div class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                            <span class="font-black text-gray-900">{{ $addOn->title }}</span>
+                            <span class="text-gray-500"> - {{ $addOn->quantity }} × {{ number_format($addOn->unit_price_cents / 100, 0) }} ج.م</span>
                         </div>
-                    @endif
+                    @empty
+                        <p class="mt-2 text-sm text-gray-500">لا توجد إضافات مرتبطة.</p>
+                    @endforelse
                 </div>
             </div>
 
             <div class="mt-5">
                 <p class="mb-3 text-right font-black text-gray-900">صور الطفل الأصلية</p>
                 @if(count($photos))
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
                         @foreach($photos as $photo)
                             <a href="{{ route('admin.production-studio.photo', [$project, $loop->index]) }}" target="_blank" class="block rounded-xl border border-gray-100 bg-gray-50 p-2 hover:border-indigo-200">
                                 <div class="aspect-square overflow-hidden rounded-lg bg-gray-100">
@@ -352,26 +314,33 @@
             </div>
 
             @if($existingProductionPrompt)
-                <div class="mt-5 rounded-xl border border-gray-100 bg-slate-50 p-4">
-                    <div class="mb-3 flex items-center justify-between gap-3">
+                <details class="mt-5 rounded-xl border border-gray-100 bg-slate-50 p-4">
+                    <summary class="cursor-pointer text-right font-black text-gray-900">عرض برومبت الطلب الأصلي</summary>
+                    <div class="mt-3 flex items-center justify-between gap-3">
                         <button type="button" data-copy-target="existing-production-prompt" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">نسخ برومبت الطلب الحالي</button>
-                        <p class="text-right font-black text-gray-900">برومبت الإنتاج الحالي للطلب الأصلي</p>
                     </div>
-                    <textarea id="existing-production-prompt" rows="12" dir="ltr" readonly class="w-full rounded-xl border-gray-300 bg-white font-mono text-sm text-left">{{ $existingProductionPrompt }}</textarea>
-                </div>
+                    <textarea id="existing-production-prompt" rows="10" dir="ltr" readonly class="mt-3 w-full rounded-xl border-gray-300 bg-white font-mono text-sm text-left">{{ $existingProductionPrompt }}</textarea>
+                </details>
             @endif
 
             <details class="mt-5 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
                 <summary class="cursor-pointer font-black text-gray-800">عرض لقطة بيانات المشروع عند الإنشاء</summary>
-                <pre dir="ltr" class="mt-3 overflow-x-auto rounded-lg bg-white p-3 text-left text-xs text-gray-700">{{ json_encode($snapshot, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+                <pre dir="ltr" class="mt-3 max-h-72 overflow-auto rounded-lg bg-white p-3 text-left text-xs text-gray-700">{{ json_encode($snapshot, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
             </details>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="story" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-gray-100 pb-4">
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'story-workspace',
+            'title' => 'مساحة القصة',
+            'description' => 'نسخ العمل الخاصة بهذا الطلب دون تعديل القصة الأصلية.',
+            'status' => $hasStoryDraft ? 'توجد مسودة' : 'لا توجد مسودة',
+            'statusTone' => $hasStoryDraft ? 'emerald' : 'amber',
+            'summary' => $project->storyVersions->count().' نسخة · '.$totalScenes.' مشهد',
+        ])
+            <div class="flex flex-col gap-3 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
                 <div class="text-right">
-                    <h2 class="text-xl font-black text-gray-950">مساحة القصة</h2>
-                    <p class="mt-1 text-sm text-gray-500">نسخ عمل خاصة بهذا الطلب فقط. لا يتم تعديل سجل القصة الأصلي.</p>
+                    <p class="font-black text-gray-900">{{ $order->story?->title ?? 'Not available' }}</p>
+                    <p class="mt-1 text-sm text-gray-500">القصة الأصلية مرجع فقط.</p>
                 </div>
                 @can('production_studio.story_edit')
                     <form method="POST" action="{{ route('admin.production-studio.story-versions.from-story', $project) }}">
@@ -381,21 +350,21 @@
                 @endcan
             </div>
 
-            <div class="mt-5 rounded-xl bg-gray-50 p-4 text-right">
-                <p class="font-black text-gray-900">{{ $order->story?->title ?? 'Not available' }}</p>
-                <p class="mt-2 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $order->story?->full_desc ?? $order->story?->short_desc ?? 'Not available' }}</p>
-            </div>
+            <details class="mt-4 rounded-xl bg-gray-50 p-4 text-right">
+                <summary class="cursor-pointer font-black text-gray-900">عرض النص الأصلي الكامل</summary>
+                <p class="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $order->story?->full_desc ?? $order->story?->short_desc ?? 'Not available' }}</p>
+            </details>
 
             <div class="mt-5 space-y-3">
                 @forelse($project->storyVersions as $version)
                     <div class="rounded-xl border border-gray-100 p-4 text-right">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
                                 <p class="font-black text-gray-950">نسخة {{ $version->version_number }} - {{ $version->title ?? 'بدون عنوان' }}</p>
                                 <p class="text-sm text-gray-500">الحالة: {{ $version->status }} - العمر المستهدف: {{ $version->target_age_group ?? 'Not available' }}</p>
                             </div>
                             @can('production_studio.story_edit')
-                                <form method="POST" action="{{ route('admin.production-studio.story-versions.review', [$project, $version]) }}" class="flex flex-col md:flex-row gap-2">
+                                <form method="POST" action="{{ route('admin.production-studio.story-versions.review', [$project, $version]) }}" class="flex flex-col gap-2 md:flex-row">
                                     @csrf
                                     @method('PATCH')
                                     <select name="status" class="rounded-xl border-gray-300 text-sm">
@@ -408,47 +377,85 @@
                                 </form>
                             @endcan
                         </div>
-                        <p class="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $version->full_story_content ?: 'لا يوجد محتوى محفوظ.' }}</p>
+                        <details class="mt-3">
+                            <summary class="cursor-pointer text-sm font-black text-indigo-700">عرض النص الكامل</summary>
+                            <p class="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $version->full_story_content ?: 'لا يوجد محتوى محفوظ.' }}</p>
+                        </details>
                     </div>
                 @empty
                     <p class="rounded-xl bg-gray-50 p-4 text-right text-sm text-gray-500">لم يتم إنشاء مسودة داخل الاستوديو بعد.</p>
                 @endforelse
             </div>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="character" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="border-b border-gray-100 pb-4 text-right">
-                <h2 class="text-xl font-black text-gray-950">ملف الشخصية</h2>
-                <p class="mt-1 text-sm text-gray-500">ابدأ بكتابة ملاحظات الهوية واختيار الصور المرجعية، ثم استخدم زر توليد بروفايل الشخصية لإنشاء Character Sheet.</p>
-            </div>
-
-            <form method="POST" action="{{ route('admin.production-studio.character-profile.update', $project) }}" class="mt-5 space-y-4">
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'character-profile',
+            'title' => 'ملف الشخصية',
+            'description' => 'تحضير بيانات الهوية والصور المرجعية قبل أي توليد.',
+            'status' => $profileReady ? 'مكتمل' : 'ناقص بيانات',
+            'statusTone' => $profileReady ? 'emerald' : 'amber',
+            'warning' => $profileReady ? null : 'ينقص: '.count($missingProfileFields),
+            'summary' => $referencePhotoSummary,
+        ])
+            <form method="POST" action="{{ route('admin.production-studio.character-profile.update', $project) }}" class="space-y-5">
                 @csrf
                 @method('PATCH')
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    @foreach([
-                        'appearance_summary' => 'ملخص المظهر',
-                        'hair_details' => 'تفاصيل الشعر',
-                        'skin_tone' => 'لون البشرة',
-                        'eye_color_traits' => 'العين والملامح الظاهرة',
-                        'typical_expression' => 'التعبير المعتاد',
-                        'identity_rules' => 'قواعد الحفاظ على الهوية',
-                        'wardrobe_direction' => 'اتجاه الملابس',
-                        'approved_visual_style' => 'الأسلوب البصري المعتمد',
-                        'negative_instructions' => 'تعليمات سلبية',
-                        'reviewer_notes' => 'ملاحظات المراجع',
-                    ] as $field => $label)
-                        <label class="block text-right">
-                            <span class="text-sm font-black text-gray-700">{{ $label }}</span>
-                            <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
-                        </label>
-                    @endforeach
+                <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <p class="font-black text-indigo-900">مساعد تعبئة وصف الهوية</p>
+                            <p class="mt-1 text-sm leading-7 text-indigo-800">لا يستخدم AI خارجي. يملأ نصًا مبدئيًا يمكن تعديله قبل الحفظ.</p>
+                        </div>
+                        <button type="button" data-fill-identity-summary class="rounded-xl bg-white px-4 py-2 text-sm font-black text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">توليد وصف الهوية من الصور</button>
+                    </div>
+                </div>
+
+                @unless($profileReady)
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-bold text-amber-800">
+                        أكمل ملف الشخصية واختر صور مرجعية واضحة قبل التوليد.
+                        <span class="mt-1 block">الحقول الناقصة: {{ implode('، ', $missingProfileFields) }}</span>
+                    </div>
+                @endunless
+
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <fieldset class="rounded-xl border border-gray-100 p-4">
+                        <legend class="px-2 text-sm font-black text-gray-900">Identity Summary</legend>
+                        @foreach(['appearance_summary' => 'ملخص المظهر', 'eye_color_traits' => 'العين والملامح الظاهرة / eyes_and_visible_traits', 'skin_tone' => 'لون البشرة', 'typical_expression' => 'التعبير المعتاد / usual_expression'] as $field => $label)
+                            <label class="mt-3 block text-right">
+                                <span class="text-sm font-black text-gray-700">{{ $label }}</span>
+                                <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
+                            </label>
+                        @endforeach
+                    </fieldset>
+
+                    <fieldset class="rounded-xl border border-gray-100 p-4">
+                        <legend class="px-2 text-sm font-black text-gray-900">Hair & Body</legend>
+                        @foreach(['hair_details' => 'تفاصيل الشعر', 'wardrobe_direction' => 'اتجاه الملابس', 'approved_visual_style' => 'الأسلوب البصري المعتمد'] as $field => $label)
+                            <label class="mt-3 block text-right">
+                                <span class="text-sm font-black text-gray-700">{{ $label }}</span>
+                                <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
+                            </label>
+                        @endforeach
+                    </fieldset>
+
+                    <fieldset class="rounded-xl border border-gray-100 p-4">
+                        <legend class="px-2 text-sm font-black text-gray-900">Identity Rules</legend>
+                        @foreach(['identity_rules' => 'قواعد الحفاظ على الهوية', 'negative_instructions' => 'تعليمات سلبية', 'reviewer_notes' => 'ملاحظات المراجع'] as $field => $label)
+                            <label class="mt-3 block text-right">
+                                <span class="text-sm font-black text-gray-700">{{ $label }}</span>
+                                <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
+                            </label>
+                        @endforeach
+                    </fieldset>
                 </div>
 
                 <div class="rounded-xl border border-gray-100 p-4 text-right">
-                    <p class="font-black text-gray-900">الصور المعتمدة كمرجع</p>
+                    <p class="font-black text-gray-900">References</p>
+                    <div class="mt-2 rounded-xl bg-gray-50 p-3 text-xs leading-6 text-gray-600">
+                        استخدم صورة وجه واضحة كمرجع الهوية الأساسي. استخدم صورة جسم كاملة فقط للنسب. تجنب الصور البعيدة أو الضبابية أو الملابس المتضاربة.
+                    </div>
                     @if(count($photos))
-                        <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
                             @foreach($photos as $photo)
                                 <label class="rounded-xl border border-gray-100 bg-gray-50 p-2">
                                     <img src="{{ route('admin.production-studio.photo', [$project, $loop->index]) }}" alt="مرجع {{ $loop->iteration }}" class="aspect-square w-full rounded-lg object-cover">
@@ -456,6 +463,20 @@
                                         <input type="checkbox" name="approved_reference_photos[]" value="{{ $loop->index }}" @checked(in_array($loop->index, $profile?->approved_reference_photos ?? [], true)) @cannot('production_studio.character_profile_edit') disabled @endcannot>
                                         صورة {{ $loop->iteration }}
                                     </span>
+                                    <div class="mt-2 space-y-1 text-xs font-bold text-gray-600">
+                                        <label class="flex items-center justify-center gap-1">
+                                            <input type="radio" name="primary_face_reference_index" value="{{ $loop->index }}" @checked($profile?->primaryFaceReferenceIndex() === $loop->index) @cannot('production_studio.character_profile_edit') disabled @endcannot>
+                                            وجه أساسي
+                                        </label>
+                                        <label class="flex items-center justify-center gap-1">
+                                            <input type="radio" name="body_reference_index" value="{{ $loop->index }}" @checked($profile?->bodyReferenceIndex() === $loop->index) @cannot('production_studio.character_profile_edit') disabled @endcannot>
+                                            جسم اختياري
+                                        </label>
+                                        <label class="flex items-center justify-center gap-1">
+                                            <input type="radio" name="style_reference_index" value="{{ $loop->index }}" @checked($profile?->styleReferenceIndex() === $loop->index) @cannot('production_studio.character_profile_edit') disabled @endcannot>
+                                            ستايل اختياري
+                                        </label>
+                                    </div>
                                 </label>
                             @endforeach
                         </div>
@@ -468,137 +489,138 @@
                     <button class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">حفظ ملف الشخصية</button>
                 @endcan
             </form>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-            <div id="character-sheet-generator" class="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-right">
-                <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div>
-                        <p class="text-sm font-black text-indigo-700">AI Pilot</p>
-                        <h3 class="mt-1 text-lg font-black text-gray-950">توليد بروفايل الشخصية / Character Sheet</h3>
-                        <p class="mt-2 text-sm leading-7 text-indigo-900">بعد اختيار الصور المرجعية، اضغط الزر لإنشاء صورة مرجعية للطفل. اعتمد أفضل نسخة لتستخدمها في الغلاف والمشاهد.</p>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'child-reference',
+            'title' => 'الصورة المرجعية للطفل',
+            'description' => 'توليد واعتماد الرسم المرجعي النظيف المستخدم لاحقًا للغلاف والمشاهد.',
+            'status' => $approvedCharacterSheet ? 'معتمدة' : 'لا توجد صورة معتمدة',
+            'statusTone' => $approvedCharacterSheet ? 'emerald' : 'amber',
+            'summary' => $characterSheets->count().' نسخة مرجعية',
+        ])
+            @unless($aiAvailable)
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-black text-amber-800">
+                    AI generation is not configured yet.
+                    @can('settings.ai_providers.view')
+                        <a href="{{ route('admin.settings.ai-providers.index') }}" class="underline">إعداد المزودين</a>
+                    @endcan
+                </div>
+            @endunless
+
+            @can('production_studio.ai_generate')
+                <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" data-studio-ai-form class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
+                    @csrf
+                    <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                        @foreach($aiModelsByCapability['character_sheet'] ?? collect() as $model)
+                            <option value="{{ $model->code }}" @selected($model->code === $characterSheetModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                        @endforeach
+                    </select>
+                    <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                        @foreach($stylePresets as $key => $label)
+                            <option value="{{ $key }}">{{ $key }}</option>
+                        @endforeach
+                    </select>
+                    <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right lg:col-span-2" placeholder="ملاحظات اختيارية للتوليد">
+                    <div class="grid grid-cols-2 gap-2 lg:col-span-4 md:grid-cols-5">
+                        @foreach($profile?->approved_reference_photos ?? [] as $photoIndex)
+                            <label class="rounded-xl bg-gray-50 p-2 text-center text-sm font-bold text-gray-700">
+                                <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" checked @disabled(!$aiAvailable)>
+                                صورة {{ ((int) $photoIndex) + 1 }}
+                            </label>
+                        @endforeach
                     </div>
-                    @unless($aiAvailable)
-                        <div class="rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-700">
-                            AI generation is not configured yet.
-                            @can('settings.ai_providers.view')
-                                <a href="{{ route('admin.settings.ai-providers.index') }}" class="underline">إعداد المزودين</a>
-                            @endcan
+                    @unless($profileReady)
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800 lg:col-span-4">
+                            أكمل ملف الشخصية واختر صور مرجعية واضحة قبل التوليد. ناقص: {{ implode('، ', $missingProfileFields) }}
                         </div>
                     @endunless
-                </div>
+                    <details class="rounded-xl bg-gray-50 p-3 text-xs leading-6 text-gray-600 lg:col-span-4">
+                        <summary class="cursor-pointer font-black text-gray-900">معاينة أساس البرومبت</summary>
+                        <p class="mt-2">Identity fidelity is the highest priority. Preserve exact face shape, eye spacing, nose, smile, cheeks, jawline, hairline, hairstyle, skin tone, apparent age, and natural proportions. Output one child only with no text, labels, logos, fake writing, profile-card layout, school badges, or poster design.</p>
+                    </details>
+                    <button @disabled(!$aiAvailable || !$profileReady) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">توليد الصورة المرجعية للطفل</button>
+                    <div data-studio-ai-feedback class="hidden rounded-xl border p-3 text-sm font-bold lg:col-span-4"></div>
+                </form>
+            @endcan
 
-                @can('production_studio.ai_generate')
-                    <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" data-studio-ai-form class="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
-                        @csrf
-                        <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($aiModelsByCapability['character_sheet'] ?? collect() as $model)
-                                <option value="{{ $model->code }}" @selected($model->code === $characterSheetModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
-                            @endforeach
-                        </select>
-                        <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($stylePresets as $key => $label)
-                                <option value="{{ $key }}">{{ $key }}</option>
-                            @endforeach
-                        </select>
-                        <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right lg:col-span-2" placeholder="ملاحظات اختيارية للتوليد">
-                        <div class="lg:col-span-4 grid grid-cols-2 md:grid-cols-5 gap-2">
-                            @foreach($profile?->approved_reference_photos ?? [] as $photoIndex)
-                                <label class="rounded-xl bg-white p-2 text-center text-sm font-bold text-gray-700">
-                                    <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" checked @disabled(!$aiAvailable)>
-                                    صورة {{ ((int) $photoIndex) + 1 }}
-                                </label>
-                            @endforeach
-                        </div>
-                        @unless($hasApprovedReferences)
-                            <div class="lg:col-span-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-                                اختر صورة مرجعية واحدة على الأقل من قسم الصور المعتمدة ثم احفظ ملف الشخصية قبل التوليد.
-                            </div>
-                        @endunless
-                        <div class="lg:col-span-4 rounded-xl bg-white p-3 text-xs leading-6 text-gray-600">
-                            <p class="font-black text-gray-900">Preview prompt basis:</p>
-                            <p>Single child, neutral friendly pose, clean background, no text/logos, preserve identity from selected references.</p>
-                        </div>
-                        <button @disabled(!$aiAvailable || !$hasApprovedReferences) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">توليد بروفايل الشخصية</button>
-                        <div data-studio-ai-feedback class="lg:col-span-4 hidden rounded-xl border p-3 text-sm font-bold"></div>
-                    </form>
-                @endcan
-
-                <div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    @forelse($characterSheets as $asset)
-                        @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
-                    @empty
-                        <p class="rounded-xl bg-white p-4 text-sm text-gray-500">لم يتم توليد بروفايل الشخصية بعد. اختر الصور المرجعية بالأعلى ثم اضغط توليد بروفايل الشخصية.</p>
-                    @endforelse
-                </div>
+            <div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                @forelse($characterSheets as $asset)
+                    @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
+                @empty
+                    <p class="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">لم يتم توليد الصورة المرجعية للطفل بعد.</p>
+                @endforelse
             </div>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="scenes" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="border-b border-gray-100 pb-4 text-right">
-                <h2 class="text-xl font-black text-gray-950">المشاهد</h2>
-                <p class="mt-1 text-sm text-gray-500">مساحة إعداد مشاهد الإنتاج. العدد القياسي الحالي 13 مشهدًا، مع بقاء النموذج مرنًا للمستقبل.</p>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'scenes',
+            'title' => 'المشاهد',
+            'description' => 'قائمة compact للمشاهد مع مؤشرات الجاهزية وتعديل مشهد واحد في كل مرة.',
+            'status' => $totalScenes.' مشهد',
+            'statusTone' => $missingVisualScenes ? 'amber' : 'emerald',
+            'warning' => $missingVisualScenes ? $missingVisualScenes.' ناقصة توجيه بصري' : null,
+            'summary' => $readyScenes.' جاهزة للتوليد · '.$approvedSceneImages.' صور معتمدة',
+        ])
+            <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-4">
+                <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-400">الإجمالي</p><p class="font-black">{{ $totalScenes }}</p></div>
+                <div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs text-emerald-600">جاهزة للتوليد</p><p class="font-black">{{ $readyScenes }}</p></div>
+                <div class="rounded-xl bg-amber-50 p-4"><p class="text-xs text-amber-600">ناقصة توجيه</p><p class="font-black">{{ $missingVisualScenes }}</p></div>
+                <div class="rounded-xl bg-indigo-50 p-4"><p class="text-xs text-indigo-600">صور معتمدة</p><p class="font-black">{{ $approvedSceneImages }}</p></div>
             </div>
-
-            <div class="mt-5 space-y-4">
+            <div class="mt-4 flex flex-wrap justify-end gap-2 text-xs font-black" data-scene-filters>
+                <button type="button" data-scene-filter="all" class="rounded-xl bg-indigo-600 px-3 py-2 text-white">All</button>
+                <button type="button" data-scene-filter="missing-visual" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Missing visual direction</button>
+                <button type="button" data-scene-filter="ready" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Ready for generation</button>
+                <button type="button" data-scene-filter="has-image" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Has generated image</button>
+                <button type="button" data-scene-filter="needs-review" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Needs review</button>
+                <button type="button" data-scene-filter="approved" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Approved</button>
+            </div>
+            <div class="mt-5 space-y-3">
                 @forelse($project->scenes as $scene)
-                    <form method="POST" action="{{ route('admin.production-studio.scenes.update', [$project, $scene]) }}" class="rounded-xl border border-gray-100 p-4 text-right">
-                        @csrf
-                        @method('PATCH')
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <label class="block">
-                                <span class="text-xs font-black text-gray-500">رقم المشهد</span>
-                                <input name="scene_number" value="{{ $scene->scene_number }}" @cannot('production_studio.scene_edit') readonly @endcannot class="mt-1 w-full rounded-xl border-gray-300 text-right">
-                            </label>
-                            <label class="block md:col-span-2">
-                                <span class="text-xs font-black text-gray-500">العنوان</span>
-                                <input name="title" value="{{ $scene->title }}" @cannot('production_studio.scene_edit') readonly @endcannot class="mt-1 w-full rounded-xl border-gray-300 text-right">
-                            </label>
-                            <label class="block">
-                                <span class="text-xs font-black text-gray-500">الحالة</span>
-                                <input name="status" value="{{ $scene->status }}" @cannot('production_studio.scene_edit') readonly @endcannot class="mt-1 w-full rounded-xl border-gray-300 text-right">
-                            </label>
-                        </div>
-                        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <textarea name="story_text" rows="4" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="نص المشهد">{{ $scene->story_text }}</textarea>
-                            <textarea name="visual_direction" rows="4" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="التوجيه البصري">{{ $scene->visual_direction }}</textarea>
-                            <textarea name="educational_value" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="القيمة التعليمية">{{ $scene->educational_value }}</textarea>
-                            <textarea name="child_action_pose" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="حركة أو وضع الطفل">{{ $scene->child_action_pose }}</textarea>
-                            <textarea name="text_safe_area_notes" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات منطقة النص الآمنة">{{ $scene->text_safe_area_notes }}</textarea>
-                            <textarea name="review_notes" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات المراجعة">{{ $scene->review_notes }}</textarea>
-                        </div>
-                        <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                            <div class="rounded-xl bg-gray-50 p-3">الصورة الأساسية: {{ $scene->base_scene_image_path ?: 'قادم لاحقًا' }}</div>
-                            <div class="rounded-xl bg-gray-50 p-3">الصورة المخصصة: {{ $scene->generated_child_image_path ?: 'قادم لاحقًا' }}</div>
-                            <div class="rounded-xl bg-gray-50 p-3">الصورة النهائية: {{ $scene->approved_final_image_path ?: 'قادم لاحقًا' }}</div>
-                        </div>
-                        @can('production_studio.scene_edit')
-                            <button class="mt-3 rounded-xl bg-gray-900 px-4 py-2 text-sm font-black text-white">حفظ المشهد</button>
-                        @endcan
-                    </form>
+                    @include('admin.production-studio.partials.scene-row', [
+                        'scene' => $scene,
+                        'project' => $project,
+                        'sceneAssets' => $sceneAssets,
+                        'approvedCharacterSheet' => $approvedCharacterSheet,
+                        'profileReady' => $profileReady,
+                        'aiAvailable' => $aiAvailable,
+                        'defaultModel' => $defaultModel,
+                    ])
                 @empty
                     <p class="rounded-xl bg-gray-50 p-4 text-right text-sm text-gray-500">لا توجد مشاهد بعد. أنشئ مسودة من القصة الأصلية أو أضف مشهدًا يدويًا.</p>
                 @endforelse
             </div>
-
             @can('production_studio.scene_edit')
-                <form method="POST" action="{{ route('admin.production-studio.scenes.store', $project) }}" class="mt-5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50 p-4 text-right">
-                    @csrf
-                    <p class="font-black text-indigo-900">إضافة مشهد يدوي</p>
-                    <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <details class="mt-5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50 p-4 text-right">
+                    <summary class="cursor-pointer font-black text-indigo-900">إضافة مشهد يدوي</summary>
+                    <form method="POST" action="{{ route('admin.production-studio.scenes.store', $project) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        @csrf
                         <input name="scene_number" class="rounded-xl border-gray-300 text-right" placeholder="رقم المشهد" required>
                         <input name="title" class="rounded-xl border-gray-300 text-right" placeholder="عنوان المشهد">
                         <input name="status" value="draft" class="rounded-xl border-gray-300 text-right" placeholder="الحالة">
-                        <textarea name="story_text" rows="3" class="md:col-span-3 rounded-xl border-gray-300 text-right" placeholder="نص المشهد"></textarea>
-                    </div>
-                    <button class="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">إضافة</button>
-                </form>
+                        <textarea name="story_text" rows="3" class="rounded-xl border-gray-300 text-right md:col-span-3" placeholder="نص المشهد"></textarea>
+                        <button class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">إضافة</button>
+                    </form>
+                </details>
             @endcan
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="images" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="text-right">
-                <h2 class="text-xl font-black text-gray-950">إنتاج الصور بالذكاء الاصطناعي</h2>
-                <p class="mt-1 text-sm text-gray-500">Pilot داخلي: توليد Character Sheet أو مشهد واحد أو غلاف واحد فقط. لا يوجد توليد جماعي.</p>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'ai-production',
+            'title' => 'إنتاج الصور بالذكاء الاصطناعي',
+            'description' => 'توليد الغلاف أو مشهد واحد ومراجعة سجل المهام دون تكرار كل المشاهد.',
+            'status' => $jobCompleted.' مكتملة / '.$jobFailed.' فاشلة / '.$jobProcessing.' قيد التنفيذ',
+            'statusTone' => $jobFailed ? 'amber' : 'indigo',
+            'summary' => 'لا يوجد توليد جماعي في هذه المرحلة',
+        ])
+            <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-4">
+                @include('admin.production-studio.partials.status-badge', ['label' => $aiAvailable ? 'المزود جاهز' : 'AI غير مهيأ', 'tone' => $aiAvailable ? 'emerald' : 'amber'])
+                @include('admin.production-studio.partials.status-badge', ['label' => $profileReady ? 'ملف الشخصية مكتمل' : 'ملف الشخصية ناقص', 'tone' => $profileReady ? 'emerald' : 'amber'])
+                @include('admin.production-studio.partials.status-badge', ['label' => $approvedCharacterSheet ? 'مرجع الطفل معتمد' : 'لا يوجد مرجع معتمد', 'tone' => $approvedCharacterSheet ? 'emerald' : 'amber'])
+                @include('admin.production-studio.partials.status-badge', ['label' => 'Queue عبر cron/worker', 'tone' => 'gray'])
             </div>
+
             @unless($aiAvailable)
                 <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-black text-amber-800">
                     AI generation is not configured yet.
@@ -608,71 +630,82 @@
                 </div>
             @endunless
 
-            <div class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
-                <h3 class="font-black text-gray-950">توليد غلاف</h3>
-                @can('production_studio.ai_generate')
-                    <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" data-studio-ai-form class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
-                        @csrf
-                        <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($aiModelsByCapability['cover_generation'] ?? collect() as $model)
-                                <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
-                            @endforeach
-                        </select>
-                        <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($stylePresets as $key => $label)
-                                <option value="{{ $key }}">{{ $key }}</option>
-                            @endforeach
-                        </select>
-                        <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right md:col-span-2" placeholder="ملاحظات الغلاف">
+            <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                    <h3 class="font-black text-gray-950">توليد غلاف</h3>
+                    <p class="mt-2 text-xs leading-6 text-indigo-900">
                         @if($approvedCharacterSheet)
-                            <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
+                            image_url: {{ $approvedCharacterSheet->label }}
+                        @elseif($primaryFaceIndex !== null)
+                            يفضل اعتماد صورة مرجعية للطفل قبل توليد الغلاف. يمكن استخدام صورة الوجه مؤقتًا بالتأكيد الصريح.
+                        @else
+                            لا توجد صورة وجه أساسية. أكمل ملف الشخصية أولًا.
                         @endif
-                        <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">Generate Cover</button>
-                        <div data-studio-ai-feedback class="md:col-span-4 hidden rounded-xl border p-3 text-sm font-bold"></div>
-                    </form>
-                @endcan
+                    </p>
+                    @can('production_studio.ai_generate')
+                        <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" data-studio-ai-form class="mt-3 grid grid-cols-1 gap-3">
+                            @csrf
+                            <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                @foreach($aiModelsByCapability['cover_generation'] ?? collect() as $model)
+                                    <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                                @endforeach
+                            </select>
+                            <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                @foreach($stylePresets as $key => $label)
+                                    <option value="{{ $key }}">{{ $key }}</option>
+                                @endforeach
+                            </select>
+                            <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات الغلاف">
+                            @if($approvedCharacterSheet)
+                                <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
+                            @elseif($primaryFaceIndex !== null)
+                                <label class="flex items-center justify-end gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-black text-amber-800">
+                                    <span>استخدم صورة الوجه الأساسية مؤقتًا بدون صورة مرجعية معتمدة.</span>
+                                    <input type="checkbox" name="confirm_primary_face_cover_fallback" value="1" required class="rounded border-amber-300">
+                                </label>
+                            @endif
+                            <button @disabled(!$aiAvailable || !$profileReady || ($primaryFaceIndex === null && !$approvedCharacterSheet)) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">توليد Artwork الغلاف</button>
+                            <div data-studio-ai-feedback class="hidden rounded-xl border p-3 text-sm font-bold"></div>
+                        </form>
+                    @endcan
+                </div>
+
+                <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
+                    <h3 class="font-black text-gray-950">توليد مشهد محدد</h3>
+                    @php($firstScene = $project->scenes->first())
+                    @can('production_studio.ai_generate')
+                        <form method="POST" action="{{ $firstScene ? route('admin.production-studio.ai.scene', [$project, $firstScene]) : '#' }}" data-studio-ai-form data-scene-select-form class="mt-3 grid grid-cols-1 gap-3">
+                            @csrf
+                            <select data-scene-action-select class="rounded-xl border-gray-300 text-right" @disabled($project->scenes->isEmpty())>
+                                @forelse($project->scenes as $scene)
+                                    <option value="{{ $scene->id }}" data-action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-ready="{{ filled($scene->visual_direction) ? '1' : '0' }}">مشهد {{ $scene->scene_number }} - {{ $scene->title ?? 'بدون عنوان' }}</option>
+                                @empty
+                                    <option>لا توجد مشاهد</option>
+                                @endforelse
+                            </select>
+                            <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
+                                    <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                                @endforeach
+                            </select>
+                            <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                @foreach($stylePresets as $key => $label)
+                                    <option value="{{ $key }}">{{ $key }}</option>
+                                @endforeach
+                            </select>
+                            @if($approvedCharacterSheet)
+                                <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
+                            @endif
+                            <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات اختيارية">
+                            <p class="text-xs font-bold text-gray-500" data-scene-readiness-note>اختر مشهدًا جاهزًا يحتوي على توجيه بصري.</p>
+                            <button @disabled(!$aiAvailable || !$profileReady || !$approvedCharacterSheet || !$firstScene) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">توليد المشهد المحدد</button>
+                            <div data-studio-ai-feedback class="hidden rounded-xl border p-3 text-sm font-bold"></div>
+                        </form>
+                    @endcan
+                </div>
             </div>
 
-            <div class="mt-5 space-y-4">
-                <h3 class="text-right font-black text-gray-950">توليد مشهد واحد</h3>
-                @foreach($project->scenes as $scene)
-                    <div class="rounded-xl border border-gray-100 p-4 text-right">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                            <div>
-                                <p class="font-black text-gray-900">مشهد {{ $scene->scene_number }} - {{ $scene->title ?? 'بدون عنوان' }}</p>
-                                <p class="text-sm text-gray-500">{{ $scene->visual_direction ?: 'لا يوجد توجيه بصري بعد.' }}</p>
-                            </div>
-                            @can('production_studio.ai_generate')
-                                <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-studio-ai-form class="grid grid-cols-1 md:grid-cols-5 gap-2">
-                                    @csrf
-                                    <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
-                                        @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
-                                            <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
-                                        @endforeach
-                                    </select>
-                                    <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
-                                        @foreach($stylePresets as $key => $label)
-                                            <option value="{{ $key }}">{{ $key }}</option>
-                                        @endforeach
-                                    </select>
-                                    <select name="character_sheet_id" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
-                                        <option value="">بدون Character Sheet</option>
-                                        @foreach($characterSheets->where('status', 'approved') as $sheet)
-                                            <option value="{{ $sheet->id }}" @selected($sheet->is_primary)>{{ $sheet->label }}</option>
-                                        @endforeach
-                                    </select>
-                                    <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm" placeholder="ملاحظات اختيارية">
-                                    <button @disabled(!$aiAvailable) class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-black text-white disabled:bg-gray-300">Generate Scene</button>
-                                    <div data-studio-ai-feedback class="md:col-span-5 hidden rounded-xl border p-3 text-sm font-bold"></div>
-                                </form>
-                            @endcan
-                        </div>
-                        <p class="mt-3 text-xs text-gray-500">scene_edit موجود كهيكل مستقبلي وسيتم تفعيله في Phase 3.</p>
-                    </div>
-                @endforeach
-            </div>
-
-            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
                 @foreach($coverAssets as $asset)
                     @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
                 @endforeach
@@ -684,108 +717,84 @@
             <div class="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
                 <h3 class="font-black text-gray-950">سجل مهام التوليد</h3>
                 <div class="mt-3 space-y-2" data-studio-job-list>
-                    @forelse($project->generationJobs as $job)
-                        <div class="rounded-lg bg-white p-3 text-sm" data-studio-job-row="{{ $job->id }}">
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                <p class="font-black text-gray-900">#{{ $job->id }} - {{ $job->job_type }} - <span data-studio-job-status>{{ $job->status }}</span></p>
-                                @can('production_studio.ai_view_costs')
-                                    <p class="text-gray-500">estimated ${{ $job->estimated_cost ?? '0.0000' }} / actual ${{ $job->actual_cost ?? '-' }}</p>
-                                @endcan
-                            </div>
-                            <p data-studio-job-error class="mt-2 text-xs font-bold text-red-600">{{ $job->error_message }}</p>
-                            <details class="mt-2">
-                                <summary class="cursor-pointer text-xs font-bold text-indigo-700">عرض prompt snapshot</summary>
-                                <pre dir="ltr" class="mt-2 overflow-x-auto rounded bg-slate-50 p-2 text-left text-xs">{{ $job->prompt_snapshot }}</pre>
-                                @if($job->error_message)
-                                    <p class="mt-2 text-xs font-bold text-red-600">{{ $job->error_message }}</p>
-                                @endif
-                            </details>
-                        </div>
+                    @forelse($project->generationJobs->sortByDesc('created_at') as $job)
+                        @include('admin.production-studio.partials.generation-job-row', ['job' => $job])
                     @empty
                         <p class="text-sm text-gray-500" data-studio-empty-jobs>لا توجد مهام توليد بعد.</p>
                     @endforelse
                 </div>
             </div>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="layout" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="text-right">
-                <h2 class="text-xl font-black text-gray-950">Layout & PDF</h2>
-                <p class="mt-1 text-sm text-gray-500">تجهيز مستقبلي للإخراج اليدوي أو الآلي. لا يتم استبدال أي ملفات إنتاج حالية.</p>
-            </div>
-            <div class="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-right">
-                @foreach(['Reader Order PDF - صفحات A4 بترتيب القراءة', 'Print-Ready Booklet PDF - A3 أفقي مزدوج', 'Print Manifest - ترتيب الطباعة', 'Proof Print Checklist - مراجعة بروفة الطباعة'] as $assetLabel)
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'layout-print',
+            'title' => 'الإخراج والطباعة',
+            'description' => 'مكان compact لمخرجات Reader PDF وPrint PDF والمانيفست.',
+            'status' => 'قادم لاحقًا',
+            'statusTone' => 'gray',
+            'summary' => 'لا يتم توليد PDF تلقائيًا في هذه المرحلة',
+        ])
+            <div class="grid grid-cols-1 gap-4 text-right md:grid-cols-4">
+                @foreach($layoutPrintItems as $assetLabel)
                     <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
                         <p class="font-black text-gray-800">{{ $assetLabel }}</p>
                         <p class="mt-2 text-sm text-gray-500">مكان مخصص للمرحلة القادمة.</p>
                     </div>
                 @endforeach
             </div>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="qa" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-gray-100 pb-4">
-                <div class="text-right">
-                    <h2 class="text-xl font-black text-gray-950">مراجعة الجودة</h2>
-                    <p class="mt-1 text-sm text-gray-500">لا يمكن النقل إلى جاهز للطباعة عند وجود بنود إلزامية فاشلة أو غير مكتملة بدون سبب تجاوز.</p>
-                </div>
-                <div class="rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">التقدم {{ $project->qaProgress() }}%</div>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'qa-checklist',
+            'title' => 'مراجعة الجودة',
+            'description' => 'بنود QA مجمعة حتى لا تظهر كل التفاصيل مرة واحدة.',
+            'status' => $qaProgress.'%',
+            'statusTone' => $qaProgress >= 100 ? 'emerald' : 'amber',
+            'warning' => $qaFailed ? $qaFailed.' فاشلة' : ($qaPending ? $qaPending.' معلقة' : null),
+            'summary' => 'لا يمكن النقل إلى جاهز للطباعة مع بنود إلزامية فاشلة بدون سبب تجاوز',
+        ])
+            <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-3">
+                <div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs text-emerald-600">التقدم</p><p class="font-black">{{ $qaProgress }}%</p></div>
+                <div class="rounded-xl bg-red-50 p-4"><p class="text-xs text-red-600">فاشلة</p><p class="font-black">{{ $qaFailed }}</p></div>
+                <div class="rounded-xl bg-amber-50 p-4"><p class="text-xs text-amber-600">معلقة</p><p class="font-black">{{ $qaPending }}</p></div>
             </div>
-
-            <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div class="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
                 @foreach($project->qaChecks->groupBy('category') as $category => $checks)
-                    <div class="rounded-xl border border-gray-100 p-4 text-right">
-                        <p class="mb-3 font-black text-gray-900">{{ $category }}</p>
-                        <div class="space-y-3">
-                            @foreach($checks as $check)
-                                <form method="POST" action="{{ route('admin.production-studio.qa.update', [$project, $check]) }}" class="rounded-lg bg-gray-50 p-3">
-                                    @csrf
-                                    @method('PATCH')
-                                    <p class="font-bold text-gray-900">{{ $check->label }}</p>
-                                    <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        <select name="result" @cannot('production_studio.qa_review') disabled @endcannot class="rounded-xl border-gray-300 text-sm">
-                                            <option value="not_reviewed" @selected($check->result === 'not_reviewed')>لم يراجع</option>
-                                            <option value="pass" @selected($check->result === 'pass')>ناجح</option>
-                                            <option value="fail" @selected($check->result === 'fail')>فشل</option>
-                                            <option value="not_applicable" @selected($check->result === 'not_applicable')>لا ينطبق</option>
-                                        </select>
-                                        <input name="note" value="{{ $check->note }}" @cannot('production_studio.qa_review') readonly @endcannot class="rounded-xl border-gray-300 text-sm" placeholder="ملاحظة">
-                                        <label class="flex items-center gap-2 text-xs font-bold text-gray-600">
-                                            <input type="checkbox" name="override_allowed" value="1" @checked($check->override_allowed) @cannot('production_studio.qa_review') disabled @endcannot>
-                                            تجاوز بصلاحية
-                                        </label>
-                                        <input name="override_reason" value="{{ $check->override_reason }}" @cannot('production_studio.qa_review') readonly @endcannot class="rounded-xl border-gray-300 text-sm" placeholder="سبب التجاوز">
-                                    </div>
-                                    @can('production_studio.qa_review')
-                                        <button class="mt-2 rounded-lg bg-white px-3 py-1.5 text-xs font-black text-indigo-700 ring-1 ring-indigo-200">حفظ البند</button>
-                                    @endcan
-                                </form>
-                            @endforeach
-                        </div>
-                    </div>
+                    @include('admin.production-studio.partials.qa-subgroup', ['project' => $project, 'category' => $category, 'checks' => $checks])
                 @endforeach
             </div>
-        </section>
+        @include('admin.production-studio.partials.workflow-card-close')
 
-        <section id="activity" class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-            <div class="border-b border-gray-100 pb-4 text-right">
-                <h2 class="text-xl font-black text-gray-950">سجل النشاط</h2>
-                <p class="mt-1 text-sm text-gray-500">أحداث خاصة بمشروع الاستوديو فقط.</p>
+        @include('admin.production-studio.partials.workflow-card-open', [
+            'id' => 'activity-log',
+            'title' => 'سجل النشاط',
+            'description' => 'آخر الأحداث فقط افتراضيًا مع إمكانية عرض المزيد.',
+            'status' => $project->activityLogs->count().' حدث',
+            'statusTone' => 'gray',
+            'summary' => $latestActivity?->description ?? 'لا يوجد نشاط بعد',
+        ])
+            <div class="mb-4 flex flex-wrap justify-end gap-2 text-xs font-black" data-activity-filters>
+                @foreach($activityFilters as $filter => $label)
+                    <button type="button" data-activity-filter="{{ $filter }}" class="rounded-xl {{ $loop->first ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700' }} px-3 py-2">{{ $label }}</button>
+                @endforeach
             </div>
-            <div class="mt-5 space-y-3">
-                @forelse($project->activityLogs as $log)
-                    <div class="rounded-xl bg-gray-50 p-4 text-right">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                            <p class="font-black text-gray-900">{{ $log->description }}</p>
-                            <p class="text-xs text-gray-500">{{ $log->created_at?->format('Y-m-d H:i') }}</p>
+            <div class="space-y-3" data-activity-list>
+                @forelse($activityLogs as $activity)
+                    <div class="rounded-xl bg-gray-50 p-4 text-right {{ $activity['is_extra'] ? 'hidden' : '' }}" data-activity-item data-activity-type="{{ $activity['type'] }}" data-activity-extra="{{ $activity['is_extra'] ? '1' : '0' }}">
+                        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <p class="font-black text-gray-900">{{ $activity['log']->description }}</p>
+                            <p class="text-xs text-gray-500">{{ $activity['log']->created_at?->format('Y-m-d H:i') }}</p>
                         </div>
-                        <p class="mt-1 text-sm text-gray-500">{{ $log->actor?->name ?? 'System' }} - {{ $log->action }}</p>
+                        <p class="mt-1 text-sm text-gray-500">{{ $activity['log']->actor?->name ?? 'System' }} - {{ $activity['log']->action }}</p>
                     </div>
                 @empty
                     <p class="rounded-xl bg-gray-50 p-4 text-right text-sm text-gray-500">لا يوجد نشاط مسجل بعد.</p>
                 @endforelse
             </div>
-        </section>
+            @if($project->activityLogs->count() > 10)
+                <button type="button" data-activity-show-more class="mt-4 rounded-xl bg-gray-100 px-4 py-2 text-sm font-black text-gray-700 hover:bg-gray-200">Show more</button>
+            @endif
+        @include('admin.production-studio.partials.workflow-card-close')
     </div>
 
     <script>
@@ -818,7 +827,7 @@
             let row = list.querySelector(`[data-studio-job-row="${job.id}"]`);
             if (!row) {
                 row = document.createElement('div');
-                row.className = 'rounded-lg bg-white p-3 text-sm';
+                row.className = 'rounded-xl bg-white p-3 text-sm ring-1 ring-gray-100';
                 row.dataset.studioJobRow = job.id;
                 row.dataset.statusUrl = statusUrl || '';
                 row.innerHTML = `
@@ -876,7 +885,163 @@
             }
         }
 
+        document.addEventListener('DOMContentLoaded', function () {
+            const root = document.querySelector('[data-studio-project]');
+            if (!root) return;
+
+            const storageKey = `production-studio:${root.dataset.studioProject}:open-section`;
+            const sections = Array.from(document.querySelectorAll('[data-studio-section]'));
+
+            function sectionExists(id) {
+                return sections.some(section => section.dataset.studioSection === id);
+            }
+
+            function setOpenSection(id, scroll = false) {
+                if (!sectionExists(id)) id = 'overview';
+
+                sections.forEach(section => {
+                    const isOpen = section.dataset.studioSection === id;
+                    const panel = section.querySelector('[data-studio-section-panel]');
+                    const button = section.querySelector('[data-studio-section-toggle]');
+                    const icon = section.querySelector('[data-studio-section-icon]');
+
+                    panel?.classList.toggle('hidden', !isOpen);
+                    button?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    if (icon) icon.textContent = isOpen ? '−' : '+';
+                });
+
+                document.querySelectorAll('[data-studio-nav]').forEach(link => {
+                    const isActive = link.dataset.studioNav === id;
+                    link.classList.toggle('bg-indigo-600', isActive);
+                    link.classList.toggle('text-white', isActive);
+                    link.classList.toggle('bg-gray-100', !isActive);
+                    link.classList.toggle('text-gray-700', !isActive);
+                });
+
+                localStorage.setItem(storageKey, id);
+
+                if (scroll) {
+                    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+
+            const hashSection = window.location.hash ? window.location.hash.replace('#', '') : null;
+            const savedSection = localStorage.getItem(storageKey);
+            const initialSection = hashSection && sectionExists(hashSection)
+                ? hashSection
+                : (savedSection && sectionExists(savedSection) ? savedSection : root.dataset.defaultSection || 'overview');
+
+            setOpenSection(initialSection, Boolean(hashSection));
+
+            document.addEventListener('click', function (event) {
+                const toggle = event.target.closest('[data-studio-section-toggle]');
+                const opener = event.target.closest('[data-studio-open-section]');
+                const nav = event.target.closest('[data-studio-nav]');
+                const target = toggle?.dataset.studioSectionToggle || opener?.dataset.studioOpenSection || nav?.dataset.studioNav;
+
+                if (target) {
+                    event.preventDefault();
+                    history.replaceState(null, '', `#${target}`);
+                    setOpenSection(target, true);
+                }
+            });
+        });
+
+        document.addEventListener('toggle', function (event) {
+            const sceneEditor = event.target.closest('[data-studio-scene-editor]');
+            if (sceneEditor && event.target.open) {
+                document.querySelectorAll('[data-studio-scene-editor]').forEach(details => {
+                    if (details !== event.target) details.removeAttribute('open');
+                });
+            }
+            const qaGroup = event.target.closest('[data-studio-qa-group]');
+            if (qaGroup && event.target.open) {
+                document.querySelectorAll('[data-studio-qa-group]').forEach(details => {
+                    if (details !== event.target) details.removeAttribute('open');
+                });
+            }
+        }, true);
+
         document.addEventListener('click', async function (event) {
+            const fillButton = event.target.closest('[data-fill-identity-summary]');
+            if (fillButton) {
+                const defaults = {
+                    appearance_summary: 'فتاة مصرية عمرها حوالي 7 سنوات، وجه طفولي طبيعي، ابتسامة هادئة، ملامح ناعمة، مظهر طبيعي مناسب لعمرها.',
+                    hair_details: 'شعر بني داكن طويل وكثيف، مموج/كيرلي، فرق واضح في المنتصف أو قريب من المنتصف حسب الصورة المرجعية.',
+                    skin_tone: 'بشرة فاتحة إلى قمحية فاتحة بدرجة طبيعية.',
+                    eye_color_traits: 'عينان بنيتان، حواجب داكنة، ابتسامة هادئة، ملامح وجه طفولية.',
+                    typical_expression: 'ابتسامة طبيعية وهادئة، تعبير ودود وواثق.',
+                    identity_rules: 'يجب الحفاظ على نفس شكل الوجه، العينين، الأنف، الابتسامة، خط الشعر، ملمس الشعر، لون البشرة، العمر الظاهري، والنسب الجسدية. لا تجعل الطفلة أكبر سنًا أو أكثر تجميلًا أو كشخصية مختلفة.',
+                    negative_instructions: 'لا تغير ملامح الوجه. لا تغير تسريحة الشعر. لا تجعلها تبدو أكبر من عمرها. لا تضف مكياج. لا تجعلها أنمي. لا تضف نصوص أو شعارات أو شارات مدرسة أو كتابة عشوائية. لا تنسخ أي شخصية محمية.',
+                };
+
+                Object.entries(defaults).forEach(([name, value]) => {
+                    const field = document.querySelector(`[name="${name}"]`);
+                    if (field && !field.value.trim()) {
+                        field.value = value;
+                    }
+                });
+
+                fillButton.textContent = 'تم ملء الحقول الناقصة';
+                setTimeout(() => fillButton.textContent = 'توليد وصف الهوية من الصور', 1800);
+                return;
+            }
+
+            const sceneToggle = event.target.closest('[data-studio-scene-toggle]');
+            if (sceneToggle) {
+                const editor = sceneToggle.closest('[data-scene-row]')?.querySelector('[data-studio-scene-editor]');
+                if (editor) {
+                    document.querySelectorAll('[data-studio-scene-editor]').forEach(other => {
+                        if (other !== editor) other.classList.add('hidden');
+                    });
+                    editor.classList.toggle('hidden');
+                }
+                return;
+            }
+
+            const filterButton = event.target.closest('[data-scene-filter]');
+            if (filterButton) {
+                const filter = filterButton.dataset.sceneFilter;
+                document.querySelectorAll('[data-scene-filters] button').forEach(button => {
+                    button.classList.toggle('bg-indigo-600', button === filterButton);
+                    button.classList.toggle('text-white', button === filterButton);
+                    button.classList.toggle('bg-gray-100', button !== filterButton);
+                    button.classList.toggle('text-gray-700', button !== filterButton);
+                });
+                document.querySelectorAll('[data-scene-row]').forEach(row => {
+                    const show = filter === 'all' || row.dataset[`filter${filter.replace(/(^|-)([a-z])/g, (_, __, c) => c.toUpperCase())}`] === '1';
+                    row.classList.toggle('hidden', !show);
+                });
+                return;
+            }
+
+            const activityFilter = event.target.closest('[data-activity-filter]');
+            if (activityFilter) {
+                const filter = activityFilter.dataset.activityFilter;
+                document.querySelectorAll('[data-activity-filters] button').forEach(button => {
+                    button.classList.toggle('bg-indigo-600', button === activityFilter);
+                    button.classList.toggle('text-white', button === activityFilter);
+                    button.classList.toggle('bg-gray-100', button !== activityFilter);
+                    button.classList.toggle('text-gray-700', button !== activityFilter);
+                });
+                document.querySelectorAll('[data-activity-item]').forEach(item => {
+                    const typeMatch = filter === 'all' || item.dataset.activityType === filter;
+                    const withinDefault = item.dataset.activityExtra !== '1' || item.dataset.activityExpanded === '1';
+                    item.classList.toggle('hidden', !(typeMatch && withinDefault));
+                });
+                return;
+            }
+
+            const showMore = event.target.closest('[data-activity-show-more]');
+            if (showMore) {
+                document.querySelectorAll('[data-activity-item]').forEach(item => {
+                    item.dataset.activityExpanded = '1';
+                    item.classList.remove('hidden');
+                });
+                showMore.remove();
+                return;
+            }
+
             const button = event.target.closest('[data-copy-target]');
             if (!button) return;
 
@@ -890,6 +1055,25 @@
             } catch (error) {
                 target.select();
                 document.execCommand('copy');
+            }
+        });
+
+        document.addEventListener('change', function (event) {
+            const select = event.target.closest('[data-scene-action-select]');
+            if (!select) return;
+
+            const option = select.selectedOptions[0];
+            const form = select.closest('[data-scene-select-form]');
+            const note = form?.querySelector('[data-scene-readiness-note]');
+
+            if (form && option?.dataset.action) {
+                form.action = option.dataset.action;
+            }
+
+            if (note) {
+                note.textContent = option?.dataset.ready === '1'
+                    ? 'المشهد يحتوي على توجيه بصري ويمكن توليده عند اكتمال المتطلبات.'
+                    : 'هذا المشهد لا يحتوي على توجيه بصري بعد.';
             }
         });
 

@@ -99,7 +99,7 @@ class PollAiGenerationJob implements ShouldQueue
     private function labelFor(string $type, int $version): string
     {
         return match ($type) {
-            'character_sheet' => 'Character Sheet v'.$version,
+            'character_sheet' => 'Approved Child Reference Illustration v'.$version,
             'cover_image' => 'Cover Image v'.$version,
             default => 'Scene Image v'.$version,
         };

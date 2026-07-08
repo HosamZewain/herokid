@@ -52,6 +52,7 @@ class AiProviderRegistrySyncer
                     'estimated_cost_amount' => $model->estimated_cost_amount ?: $modelDefinition['estimated_cost_amount'],
                     'estimated_cost_currency' => $model->estimated_cost_currency ?: $modelDefinition['estimated_cost_currency'],
                     'cost_unit' => $model->cost_unit ?: $modelDefinition['cost_unit'],
+                    'configuration_json' => array_replace_recursive($model->configuration_json ?? [], $modelDefinition['configuration'] ?? []),
                     'notes' => $model->notes ?: $modelDefinition['notes'],
                     'sort_order' => $model->sort_order ?: $modelDefinition['sort_order'],
                     'is_active' => $model->exists ? $model->is_active : true,

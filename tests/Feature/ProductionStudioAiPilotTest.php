@@ -129,10 +129,59 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('queued', $job->status);
         $this->assertSame('character_sheet', $job->job_type);
         $this->assertSame('character_sheet', $job->generation_mode);
-        $this->assertStringContainsString('Character sheet requirements', $job->prompt_snapshot);
+        $this->assertStringContainsString('Approved Child Reference Illustration requirements', $job->prompt_snapshot);
         $this->assertSame('0.0300', (string) $job->estimated_cost);
         $this->assertSame('estimated', $job->cost_source);
         Queue::assertPushed(SubmitAiGenerationJob::class);
+    }
+
+    public function test_cannot_generate_child_reference_when_character_profile_is_incomplete(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->characterProfile()->update([
+            'appearance_summary' => null,
+            'hair_details' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.character-sheet', $project), $this->generationPayload())
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_cannot_generate_without_reference_image_when_model_requires_image_url(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->characterProfile()->update([
+            'approved_reference_photos' => [],
+            'primary_face_reference_index' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.cover', $project), $this->generationPayload([
+                'model_code' => config('production_studio.ai.fal.default_premium_model'),
+                'reference_photo_indices' => [],
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
     }
 
     public function test_ajax_generation_returns_inline_job_status_payload(): void
@@ -165,7 +214,6 @@ class ProductionStudioAiPilotTest extends TestCase
 
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
-
 
     public function test_generation_rejects_child_reference_photos_that_are_not_approved_for_studio(): void
     {
@@ -207,9 +255,13 @@ class ProductionStudioAiPilotTest extends TestCase
             'child_action_pose' => 'Holding a small lantern.',
             'text_safe_area_notes' => 'Keep calm sky area on the left.',
         ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
 
         $this->actingAs($admin)
-            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+            ]))
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -222,6 +274,32 @@ class ProductionStudioAiPilotTest extends TestCase
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
+    public function test_scene_generation_requires_approved_child_reference_illustration(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Moon Scene',
+            'visual_direction' => 'A calm magical night garden.',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'character_sheet_id' => null,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
+    }
+
     public function test_authorized_user_can_create_queued_cover_generation_job(): void
     {
         Queue::fake();
@@ -231,6 +309,8 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $admin = $this->adminUser();
         $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
 
         $this->actingAs($admin)
             ->post(route('admin.production-studio.ai.cover', $project), $this->generationPayload([
@@ -244,8 +324,44 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertNull($job->production_scene_id);
         $this->assertSame('cover_image', $job->job_type);
         $this->assertSame('cover_generation', $job->generation_mode);
-        $this->assertStringContainsString('Cover requirements', $job->prompt_snapshot);
+        $this->assertStringContainsString('Cover artwork requirements', $job->prompt_snapshot);
+        $this->assertStringContainsString('do not render final cover text', $job->prompt_snapshot);
         $this->assertSame('0.0800', (string) $job->estimated_cost);
+        Queue::assertPushed(SubmitAiGenerationJob::class);
+    }
+
+    public function test_cover_generation_requires_explicit_primary_face_fallback_without_approved_reference(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.cover', $project), $this->generationPayload([
+                'model_code' => config('production_studio.ai.fal.default_premium_model'),
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('message', 'يفضل اعتماد صورة مرجعية للطفل قبل توليد الغلاف.');
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.ai.cover', $project), $this->generationPayload([
+                'model_code' => config('production_studio.ai.fal.default_premium_model'),
+                'confirm_primary_face_cover_fallback' => '1',
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('ok', true);
+
+        $job = SceneGenerationJob::firstOrFail();
+        $this->assertNull($job->input_assets_json['character_sheet_id']);
+        $this->assertSame(1, $job->input_assets_json['input_count']);
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
@@ -287,8 +403,61 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('provider_actual', $job->cost_source);
         $this->assertSame('under_review', $asset->status);
         $this->assertSame('character_sheet', $asset->asset_type);
+        $this->assertNotEmpty(data_get($job->input_assets_json, 'reference_assets'));
+        Http::assertSent(fn ($request) => str_starts_with((string) data_get($request->data(), 'image_url'), 'data:image/'));
         Storage::disk('local')->assertExists($asset->file_path);
         Storage::disk('public')->assertMissing($asset->file_path);
+    }
+
+    public function test_fal_kontext_request_omits_unsupported_multiple_reference_field(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/face.png', 'face-bytes');
+        Storage::disk('local')->put('orders/photos/body.png', 'body-bytes');
+        Storage::disk('local')->put('orders/photos/style.png', 'style-bytes');
+        $this->enableFal('secret-key');
+
+        Http::fake([
+            'https://queue.fal.run/*' => Http::response([
+                'request_id' => 'fal-request-refs',
+                'status' => 'IN_QUEUE',
+                'status_url' => 'https://fal.test/status',
+                'response_url' => 'https://fal.test/result',
+            ]),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto([
+            'orders/photos/face.png',
+            'orders/photos/body.png',
+            'orders/photos/style.png',
+        ]);
+        $project->characterProfile()->update([
+            'approved_reference_photos' => [0, 1, 2],
+            'reference_photo_selection' => [0, 1, 2],
+            'primary_face_reference_index' => 0,
+            'body_reference_index' => 1,
+            'style_reference_index' => 2,
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.character-sheet', $project), $this->generationPayload([
+                'reference_photo_indices' => [0, 1, 2],
+            ]))
+            ->assertRedirect();
+
+        $job = SceneGenerationJob::firstOrFail();
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        $job = $job->fresh();
+        $this->assertSame(3, $job->input_assets_json['input_count']);
+        $this->assertCount(3, $job->input_assets_json['reference_assets']);
+
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+
+            return str_starts_with((string) data_get($payload, 'image_url'), 'data:image/')
+                && ! array_key_exists('image_urls', $payload);
+        });
     }
 
     public function test_same_scene_can_have_multiple_versions_but_only_one_approved_final_image(): void
@@ -352,6 +521,27 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringNotContainsString('secret-key', $job->fresh()->error_message);
     }
 
+    public function test_prompt_snapshot_includes_identity_fidelity_and_forbids_fake_text(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.character-sheet', $project), $this->generationPayload())
+            ->assertRedirect();
+
+        $job = SceneGenerationJob::firstOrFail();
+
+        $this->assertStringContainsString('Identity fidelity is the highest priority', $job->prompt_snapshot);
+        $this->assertStringContainsString('Preserve the exact face shape', $job->prompt_snapshot);
+        $this->assertStringContainsString('No text, no letters, no words', $job->prompt_snapshot);
+        $this->assertStringContainsString('fake HeroKid title', $job->negative_prompt_snapshot);
+    }
+
     public function test_order_status_and_existing_prompt_remain_unchanged_after_ai_job_creation(): void
     {
         Queue::fake();
@@ -413,9 +603,16 @@ class ProductionStudioAiPilotTest extends TestCase
         ]);
 
         $project->characterProfile()->create([
-            'appearance_summary' => 'Curly dark hair and warm smile.',
+            'appearance_summary' => 'Egyptian child with natural face and warm smile.',
+            'hair_details' => 'Dark curly hair with natural volume.',
+            'skin_tone' => 'Light warm skin tone.',
+            'eye_color_traits' => 'Brown eyes, soft cheeks, natural smile.',
+            'typical_expression' => 'Calm friendly smile.',
+            'identity_rules' => 'Preserve exact face shape, eyes, nose, smile, hairline, hairstyle, skin tone, apparent age, and body proportions.',
+            'negative_instructions' => 'No changed face, no changed hairstyle, no makeup, no anime face, no text, no logos.',
             'approved_reference_photos' => [0],
             'reference_photo_selection' => [0],
+            'primary_face_reference_index' => 0,
         ]);
 
         return $project->load(['order.story', 'characterProfile']);

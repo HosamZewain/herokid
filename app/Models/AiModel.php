@@ -32,4 +32,24 @@ class AiModel extends Model
     {
         return (string) ($this->estimated_cost_amount ?? $this->estimated_cost_per_output ?? '0.0000');
     }
+
+    public function requiresImageUrl(): bool
+    {
+        return (bool) data_get($this->configuration_json, 'requires_image_url', false);
+    }
+
+    public function supportsMultipleReferences(): bool
+    {
+        return (bool) data_get($this->configuration_json, 'supports_multiple_references', false);
+    }
+
+    public function supportsTextToImageOnly(): bool
+    {
+        return (bool) data_get($this->configuration_json, 'supports_text_to_image_only', true);
+    }
+
+    public function supportsImageEditing(): bool
+    {
+        return (bool) data_get($this->configuration_json, 'supports_image_editing', false);
+    }
 }
