@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
@@ -12,9 +13,9 @@ use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\PricingPackageController;
-use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -67,12 +68,14 @@ Route::get('/', function () {
     $faqs = FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
     $testimonials = Testimonial::where('active', true)->orderBy('sort_order')->get();
     $packages = PricingPackage::active()->ordered()->get();
-    $storeSections = HomepageStoreSection::query()
-        ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
-        ->where('is_active', true)
-        ->orderBy('sort_order')
-        ->get()
-        ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty());
+    $storeSections = setting('shop_enabled', '1') === '1'
+        ? HomepageStoreSection::query()
+            ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get()
+            ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty())
+        : collect();
 
     return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages', 'storeSections'));
 })->name('home');
@@ -121,28 +124,32 @@ Route::get('/orders/{order}/production-photos/{index}', [OrderController::class,
 // Static Pages
 // ── Dynamic Sitemap ──────────────────────────────────────────────────────────
 Route::get('/sitemap.xml', function () {
+    $shopEnabled = setting('shop_enabled', '1') === '1';
     $stories = Story::where('active', true)
         ->select('slug', 'updated_at')
         ->orderBy('updated_at', 'desc')
         ->get();
-    $productCategories = ProductCategory::where('is_active', true)
+    $productCategories = $shopEnabled ? ProductCategory::where('is_active', true)
         ->where('show_in_store', true)
         ->whereHas('activeProducts')
         ->select('slug', 'updated_at')
-        ->get();
-    $products = Product::publiclyVisible()
+        ->get() : collect();
+    $products = $shopEnabled ? Product::publiclyVisible()
         ->select('slug', 'updated_at')
-        ->get();
+        ->get() : collect();
 
     $staticPages = [
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
         ['url' => Seo::url('/stories'),      'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
-        ['url' => Seo::url('/shop'),         'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.8'],
         ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
         ['url' => Seo::url('/contact'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
         ['url' => Seo::url('/how-it-works'), 'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
     ];
+
+    if ($shopEnabled && $products->isNotEmpty()) {
+        $staticPages[] = ['url' => Seo::url('/shop'), 'lastmod' => now()->toDateString(), 'freq' => 'daily', 'priority' => '0.8'];
+    }
 
     $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n";
     $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'."\n";
@@ -330,6 +337,13 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'update'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.update');
     Route::post('settings/story-production-prompt/preview', [StoryProductionPromptTemplateController::class, 'preview'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.preview');
     Route::post('settings/story-production-prompt/reset', [StoryProductionPromptTemplateController::class, 'reset'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.reset');
+    Route::get('settings/ai-providers', [AiProviderSettingsController::class, 'index'])->middleware('permission:settings.ai_providers.view')->name('settings.ai-providers.index');
+    Route::get('settings/ai-providers/{provider}', [AiProviderSettingsController::class, 'edit'])->middleware('permission:settings.ai_providers.view')->name('settings.ai-providers.edit');
+    Route::put('settings/ai-providers/{provider}', [AiProviderSettingsController::class, 'update'])->middleware('permission:settings.ai_providers.manage')->name('settings.ai-providers.update');
+    Route::delete('settings/ai-providers/{provider}/credential', [AiProviderSettingsController::class, 'removeCredential'])->middleware('permission:settings.ai_providers.manage_credentials')->name('settings.ai-providers.credential.destroy');
+    Route::post('settings/ai-providers/{provider}/test', [AiProviderSettingsController::class, 'testConnection'])->middleware('permission:settings.ai_providers.test_connection')->name('settings.ai-providers.test');
+    Route::get('settings/ai-providers/{provider}/models', [AiProviderSettingsController::class, 'models'])->middleware('permission:settings.ai_providers.view')->name('settings.ai-providers.models');
+    Route::put('settings/ai-providers/{provider}/models', [AiProviderSettingsController::class, 'updateModels'])->middleware('permission:settings.ai_providers.manage_models')->name('settings.ai-providers.models.update');
     Route::get('delivery-zones', [DeliveryZoneController::class, 'index'])->middleware('permission:settings.delivery_zones.view')->name('delivery-zones.index');
     Route::post('delivery-zones/countries', [DeliveryZoneController::class, 'storeCountry'])->middleware('permission:settings.delivery_zones.create')->name('delivery-zones.countries.store');
     Route::put('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'updateCountry'])->middleware('permission:settings.delivery_zones.update')->name('delivery-zones.countries.update');

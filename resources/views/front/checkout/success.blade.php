@@ -63,9 +63,9 @@
                     @endforeach
                 </div>
                 <div class="mt-5 pt-4 border-t border-indigo-100 space-y-2 text-indigo-900">
-                    <div class="flex justify-between"><span class="font-bold">{{ number_format($subtotal, 0) }} ج.م</span><span>إجمالي العناصر</span></div>
-                    <div class="flex justify-between"><span class="font-bold">{{ number_format($deliveryFee, 0) }} ج.م</span><span>مصاريف التوصيل</span></div>
-                    <div class="flex justify-between text-lg"><span class="font-black">{{ number_format($total, 0) }} ج.م</span><span class="font-black">الإجمالي</span></div>
+                    <div class="flex justify-between"><span class="font-bold">{{ format_money($subtotal) }}</span><span>إجمالي العناصر</span></div>
+                    <div class="flex justify-between"><span class="font-bold">{{ format_money($deliveryFee) }}</span><span>مصاريف التوصيل</span></div>
+                    <div class="flex justify-between text-lg"><span class="font-black">{{ format_money($total) }}</span><span class="font-black">الإجمالي</span></div>
                 </div>
             </div>
 

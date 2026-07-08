@@ -1,0 +1,89 @@
+<?php
+
+namespace App\Support\Ai;
+
+use Illuminate\Support\Arr;
+
+class SupportedProviderRegistry
+{
+    public const DEFAULT_CAPABILITIES = [
+        'character_sheet',
+        'scene_generation',
+        'cover_generation',
+        'premium_retry',
+        'image_editing',
+    ];
+
+    public function providers(): array
+    {
+        return [
+            'fal' => [
+                'driver' => 'fal',
+                'display_name' => 'fal.ai',
+                'documentation_label' => 'fal.ai API',
+                'credential_type' => 'api_key',
+                'credential_label' => 'FAL API Key',
+                'capabilities' => ['text_to_image', 'image_to_image', 'image_editing', 'upscaling'],
+                'default_timeout_seconds' => 180,
+                'default_max_retries' => 2,
+                'default_models' => [
+                    'character_sheet' => 'fal-ai/flux-kontext/dev',
+                    'scene_generation' => 'fal-ai/flux-kontext/dev',
+                    'cover_generation' => 'fal-ai/flux-pro/kontext',
+                    'premium_retry' => 'fal-ai/flux-pro/kontext',
+                ],
+                'models' => [
+                    'fal-ai/flux-kontext/dev' => [
+                        'code' => 'fal-ai/flux-kontext/dev',
+                        'display_name' => 'FLUX Kontext Dev',
+                        'capability' => 'scene_generation',
+                        'capabilities' => ['character_sheet', 'scene_generation', 'image_editing'],
+                        'estimated_cost_amount' => '0.0300',
+                        'estimated_cost_currency' => 'USD',
+                        'cost_unit' => 'per_image',
+                        'notes' => 'Normal scene generation, character reference sheets, and retries.',
+                        'sort_order' => 10,
+                    ],
+                    'fal-ai/flux-pro/kontext' => [
+                        'code' => 'fal-ai/flux-pro/kontext',
+                        'display_name' => 'FLUX Kontext Pro',
+                        'capability' => 'cover_generation',
+                        'capabilities' => ['cover_generation', 'premium_retry', 'image_editing'],
+                        'estimated_cost_amount' => '0.0800',
+                        'estimated_cost_currency' => 'USD',
+                        'cost_unit' => 'per_image',
+                        'notes' => 'Premium cover generation, difficult retries, and high-priority scenes.',
+                        'sort_order' => 20,
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    public function provider(string $driver): ?array
+    {
+        return $this->providers()[$driver] ?? null;
+    }
+
+    public function supportsProvider(string $driver): bool
+    {
+        return isset($this->providers()[$driver]);
+    }
+
+    public function model(string $driver, string $code): ?array
+    {
+        return Arr::get($this->providers(), "{$driver}.models.{$code}");
+    }
+
+    public function supportsModel(string $driver, string $code): bool
+    {
+        return $this->model($driver, $code) !== null;
+    }
+
+    public function modelSupportsCapability(string $driver, string $code, string $capability): bool
+    {
+        $model = $this->model($driver, $code);
+
+        return $model && in_array($capability, $model['capabilities'] ?? [], true);
+    }
+}

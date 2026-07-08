@@ -1,12 +1,15 @@
 @php
-    $image = $product->featured_image_url ?: '/images/logo-192.png';
     $price = $product->effectivePrice();
 @endphp
 
 <article class="group overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
     <a href="{{ route('shop.product.show', $product) }}" class="block">
         <div class="aspect-[4/3] bg-indigo-50 overflow-hidden">
-            <img src="{{ $image }}" alt="{{ $product->name_ar }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy">
+            @if($product->featured_image_url)
+                <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy">
+            @else
+                <x-product-image-placeholder class="transition duration-300 group-hover:scale-105" />
+            @endif
         </div>
         <div class="p-5 text-right">
             <div class="mb-3 flex flex-wrap justify-end gap-2">
@@ -24,9 +27,9 @@
                 <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{{ $product->short_description_ar }}</p>
             @endif
             <div class="mt-4 flex items-end justify-between gap-3">
-                <span class="text-lg font-black text-indigo-700">{{ number_format($price, 0) }} ج.م</span>
+                <span class="text-lg font-black text-indigo-700">{{ format_money($price) }}</span>
                 @if($product->sale_price_cents)
-                    <span class="text-sm text-slate-400 line-through">{{ number_format($product->price_cents / 100, 0) }} ج.م</span>
+                    <span class="text-sm text-slate-400 line-through">{{ format_money($product->price_cents / 100) }}</span>
                 @endif
             </div>
         </div>

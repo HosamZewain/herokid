@@ -12,21 +12,20 @@ Add these variables:
 HERO_KID_PRODUCTION_STUDIO_ENABLED=true
 FAL_ENABLED=false
 FAL_KEY=
-FAL_DEFAULT_MODEL=fal-ai/flux-kontext/dev
-FAL_DEFAULT_PREMIUM_MODEL=fal-ai/flux-pro/kontext
-FAL_REQUEST_TIMEOUT=180
-FAL_MAX_RETRIES=2
 QUEUE_CONNECTION=database
 ```
 
-Enable Fal only after adding a real key:
+Fal credentials are now configured from Admin:
 
-```env
-FAL_ENABLED=true
-FAL_KEY=your-secret-fal-key
+`Admin -> Settings -> AI Providers & Models -> fal.ai`
+
+`FAL_KEY` is legacy fallback only during migration. Import an existing env key into encrypted database credentials with:
+
+```bash
+php artisan ai:import-provider-key fal --yes
 ```
 
-Never commit `FAL_KEY`. It is read only from environment config and is never exposed to frontend JavaScript or stored in the database.
+Never commit `FAL_KEY`. After Admin-managed credentials are verified, remove the legacy key from `.env`.
 
 ## What Can Be Generated
 

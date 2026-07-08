@@ -72,6 +72,7 @@ class AdminPermissionRegistry
             'content.messages.view' => 'admin.messages.index',
             'settings.site.view' => 'admin.settings.index',
             'settings.production_prompt.view' => 'admin.settings.story-production-prompt.edit',
+            'settings.ai_providers.view' => 'admin.settings.ai-providers.index',
             'settings.delivery_zones.view' => 'admin.delivery-zones.index',
             'settings.pricing.view' => 'admin.pricing.index',
             'admin_users.view' => 'admin.users.index',

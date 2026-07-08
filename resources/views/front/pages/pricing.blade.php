@@ -1,8 +1,13 @@
 <x-front-layout>
 
 {{-- ══ SEO ══ --}}
-<x-slot name="pageTitle">أسعار قصص الأطفال المخصصة — باقات HeroKid بدون رسوم خفية</x-slot>
-<x-slot name="pageDescription">اكتشف باقات HeroKid لقصص الأطفال المخصصة المطبوعة باسم طفلك ووجهه. أسعار واضحة بدون اشتراكات، وهدية تربوية تناسب الأعمار ٢–١٠ سنوات.</x-slot>
+<x-slot name="pageTitle">{{ setting('seo_pricing_title', $settings['seo_pricing_title'] ?? '') }}</x-slot>
+<x-slot name="pageDescription">{{ setting('seo_pricing_description', $settings['seo_pricing_description'] ?? '') }}</x-slot>
+
+@php
+    $paymentMethods = setting_array('payment_methods');
+    $shippingFeeRange = shipping_fee_range();
+@endphp
 
 @push('schema')
 @php
@@ -81,7 +86,7 @@
                                 @endif
                             </div>
                             <div class="flex items-end gap-1 mb-8">
-                                <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
+                                <span class="text-5xl font-extrabold text-white">{{ arabic_number(number_format($pkg->price, 0)) }}</span>
                                 <span class="text-2xl font-bold text-indigo-200 mb-1">{{ $pkg->currency }}</span>
                             </div>
                             @if(!empty($pkg->features))
@@ -116,7 +121,7 @@
                                 @endif
                             </div>
                             <div class="flex items-end gap-1 mb-8">
-                                <span class="text-5xl font-extrabold text-indigo-600">{{ number_format($pkg->price, 0) }}</span>
+                                <span class="text-5xl font-extrabold text-indigo-600">{{ arabic_number(number_format($pkg->price, 0)) }}</span>
                                 <span class="text-2xl font-bold text-slate-500 mb-1">{{ $pkg->currency }}</span>
                             </div>
                             @if(!empty($pkg->features))
@@ -144,7 +149,14 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <h4 class="font-bold text-slate-900 mb-2">هل السعر شامل الشحن؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">الشحن مضمّن في الباقة المميزة. للباقة الأساسية يُضاف رسم شحن بسيط يتراوح بين ١٥-٢٥ ج.م حسب المنطقة.</p>
+                        <p class="text-slate-600 text-sm leading-relaxed">
+                            رسوم الشحن تُحسب في السلة حسب محافظتك، وتظهر لك بوضوح قبل تأكيد الطلب
+                            @if($shippingFeeRange)
+                                (النطاق الحالي من مناطق التوصيل: {{ $shippingFeeRange }}).
+                            @else
+                                .
+                            @endif
+                        </p>
                     </div>
                     <div>
                         <h4 class="font-bold text-slate-900 mb-2">متى يتم الدفع؟</h4>
@@ -152,7 +164,13 @@
                     </div>
                     <div>
                         <h4 class="font-bold text-slate-900 mb-2">ما هي طرق الدفع المتاحة؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">نقبل التحويل البنكي، الدفع عبر رابط إلكتروني (مدى، فيزا، ماستركارد)، والدفع عند الاستلام للطلبات المحلية.</p>
+                        <p class="text-slate-600 text-sm leading-relaxed">
+                            @if($paymentMethods)
+                                نقبل {{ implode('، ', $paymentMethods) }}.
+                            @else
+                                يتم تأكيد طريقة الدفع المناسبة معك قبل بدء الإنتاج.
+                            @endif
+                        </p>
                     </div>
                     <div>
                         <h4 class="font-bold text-slate-900 mb-2">هل يوجد سياسة استرجاع؟</h4>

@@ -52,7 +52,7 @@
                 ]);
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
-                    'settings.pricing.view', 'admin_users.view', 'admin_users.create',
+                    'settings.pricing.view', 'settings.ai_providers.view', 'admin_users.view', 'admin_users.create',
                     'admin_users.permissions.manage', 'activity_logs.view',
                 ]);
             @endphp
@@ -111,6 +111,9 @@
                         @endcan
                         @can('settings.production_prompt.view')
                             <a href="{{ route('admin.settings.story-production-prompt.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.story-production-prompt.*') ? $activeLink : $idleLink }}">قالب برومبت الإنتاج</a>
+                        @endcan
+                        @can('settings.ai_providers.view')
+                            <a href="{{ route('admin.settings.ai-providers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.ai-providers.*') ? $activeLink : $idleLink }}">مزودو الذكاء الاصطناعي</a>
                         @endcan
                         @can('settings.delivery_zones.view')
                             <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>

@@ -188,7 +188,79 @@ Project-level totals are calculated from `scene_generation_jobs`.
 To add Grok, Imagen, OpenAI, Replicate, or another provider:
 
 1. Create a class implementing `App\Contracts\AiImageProvider`.
-2. Register provider/model rows in `ai_providers` and `ai_models`.
-3. Extend `AiProviderManager` to return the provider for the new driver.
+2. Add the provider and allowed model codes to `App\Support\Ai\SupportedProviderRegistry`.
+3. Register provider/model rows in `ai_providers` and `ai_models`.
+4. Extend `AiProviderManager` to return the provider for the new driver.
+5. Configure credentials from Admin after deployment.
+6. Keep controller and Studio business logic unchanged.
+
+## Admin-Managed Provider Configuration
+
+Provider runtime configuration is database-backed and adapter-based:
+
+- `SupportedProviderRegistry` defines drivers, model codes, capabilities, and safe defaults supported by code.
+- `ai_providers` stores enabled/disabled state, safe provider settings, health status, and default model mappings.
+- `ai_models` stores allowed model codes, active state, capabilities, estimated costs, notes, and sort order.
+- `ai_provider_credentials` stores encrypted provider secrets.
+
+Admins cannot create arbitrary drivers, endpoints, callback URLs, PHP classes, shell commands, or arbitrary model IDs from the UI.
+
+## Credential Encryption
+
+Provider API keys are encrypted at rest with Laravel encrypted casts. They are decrypted only inside server-side provider services through `AiProviderCredentialService`.
+
+Secrets must never be stored in:
+
+- Blade views
+- JavaScript
+- queue payloads
+- generation job snapshots
+- logs or audit records
+- provider/model settings JSON
+
+Rotating Laravel `APP_KEY` without a migration strategy can invalidate encrypted provider credentials.
+
+## Provider Adapter Resolution
+
+Generation resolution now follows this order:
+
+1. Validate Production Studio feature flag.
+2. Validate provider driver exists in `SupportedProviderRegistry`.
+3. Resolve adapter from `AiProviderManager`.
+4. Confirm provider is active and has an encrypted credential.
+5. Confirm provider is not in a failed health state.
+6. Confirm requested model is active and supports the requested capability.
+7. Submit through the adapter.
+
+Legacy `.env` keys are migration fallback only. Admin-managed encrypted credentials take precedence.
+
+## Default Model Resolution
+
+Default model mappings are stored under:
+
+```text
+ai_providers.settings_json.default_models
+```
+
+Supported default capabilities:
+
+- `character_sheet`
+- `scene_generation`
+- `cover_generation`
+- `premium_retry`
+
+Production Studio preselects these defaults but still snapshots the exact model used per generation job.
+
+## Audit Policy
+
+Audit logs record provider-management actions without secrets:
+
+- credential configured/replaced/removed
+- provider settings updated
+- connection tested
+- model updated
+- defaults changed
+
+Audit payloads must not include raw API keys, encrypted credential values, masked keys, last four values, Authorization headers, or raw provider responses.
 4. Keep controller and Studio business logic unchanged.
 5. Store credentials only in environment variables or secrets.

@@ -102,15 +102,14 @@
                     <!-- Title & Price -->
                     <h1 class="text-4xl font-extrabold text-slate-900 mb-4">{{ $story->title }}</h1>
                     <div class="flex items-center gap-4 mb-6 justify-end">
-                        <span class="text-4xl font-extrabold text-indigo-600">{{ number_format($story->price, 0) }}
-                            ج.م</span>
+                        <span class="text-4xl font-extrabold text-indigo-600">{{ format_money($story->price) }}</span>
                         <div class="flex gap-2 flex-wrap justify-end">
                             @if($story->age_range)
                                 <span class="bg-indigo-50 text-indigo-700 text-sm font-bold px-3 py-1.5 rounded-full">👶
                                     {{ $story->age_range }}</span>
                             @endif
                             <span
-                                class="bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1.5 rounded-full">{{ $story->language == 'ar' ? '🇸🇦 عربي' : '🇬🇧 English' }}</span>
+                                class="bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1.5 rounded-full">{{ $story->language == 'ar' ? 'عربي' : 'English' }}</span>
                         </div>
                     </div>
 
@@ -161,7 +160,7 @@
                     <!-- Delivery Time -->
                     <div class="bg-indigo-50 rounded-2xl p-5 flex items-center gap-4 justify-end">
                         <div class="text-right">
-                            <p class="font-bold text-indigo-800 text-lg">متوسط وقت التوصيل: ٧–١٠ أيام عمل</p>
+                            <p class="font-bold text-indigo-800 text-lg">متوسط وقت التوصيل: {{ delivery_range() }}</p>
                             <p class="text-indigo-600 text-sm">من تاريخ تأكيد الدفع وموافقتك على التصميم</p>
                         </div>
                         <span class="text-4xl flex-shrink-0">🚀</span>
@@ -356,7 +355,7 @@
                                 </button>
                             </div>
                             <p class="text-center text-xs text-slate-400 mt-3">
-                                بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ number_format($story->price, 0) }} ج.م
+                                بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ format_money($story->price) }}
                             </p>
                         </form>
                     </div>

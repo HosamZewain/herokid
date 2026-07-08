@@ -8,8 +8,8 @@
 @endpush
 
 {{-- ══ SEO ══ --}}
-<x-slot name="pageTitle">مكتبة قصص الأطفال المخصصة — اجعل طفلك بطل القصة بوجهه الحقيقي</x-slot>
-<x-slot name="pageDescription">استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة. قصص بوجه طفلك واسمه للأعمار ٢–١٠ سنوات بالعربية والإنجليزية. اختر القصة وخصّصها الآن.</x-slot>
+<x-slot name="pageTitle">{{ setting('seo_stories_title', $settings['seo_stories_title'] ?? '') }}</x-slot>
+<x-slot name="pageDescription">{{ setting('seo_stories_description', $settings['seo_stories_description'] ?? '') }}</x-slot>
 
 @push('schema')
 @php
@@ -41,6 +41,8 @@
 
     @php
         $hasFilter = request()->hasAny(['gender', 'lang', 'age', 'category']);
+        $ageRangeLabels = setting_array('age_ranges') ?: $ageRanges->values()->all();
+        $languageCount = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->count('language');
         $fallbacks = [
             \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_main')),
             \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_mini1')),
@@ -100,12 +102,11 @@
                             @if($categories->isNotEmpty())
                                 في <span class="text-indigo-300 font-bold">{{ $categories->count() }} تصنيف</span>،
                             @endif
-                            @if($ageRanges->isNotEmpty())
+                            @if($ageRangeLabels)
                                 للأعمار
-                                @foreach($ageRanges->take(2) as $r)
+                                @foreach($ageRangeLabels as $r)
                                     <span class="text-amber-300 font-bold">{{ $r }}</span>{{ !$loop->last ? ' و' : '' }}
                                 @endforeach
-                                سنة وما فوق،
                             @endif
                             للأولاد والبنات بالعربية والإنجليزية.
                         </p>
@@ -122,14 +123,14 @@
                                 <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">تصنيف</span>
                             </div>
                             @endif
-                            @if($ageRanges->isNotEmpty())
+                            @if($ageRangeLabels)
                             <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
-                                <span class="text-2xl font-black text-white">{{ $ageRanges->count() }}</span>
+                                <span class="text-2xl font-black text-white">{{ arabic_number(count($ageRangeLabels)) }}</span>
                                 <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">فئة عمرية</span>
                             </div>
                             @endif
                             <div class="flex flex-col items-center bg-white/6 border border-white/10 rounded-2xl px-5 py-4 backdrop-blur-sm min-w-[80px] hover:bg-white/10 transition">
-                                <span class="text-2xl font-black text-white">2</span>
+                                <span class="text-2xl font-black text-white">{{ arabic_number($languageCount) }}</span>
                                 <span class="text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase mt-0.5">لغة</span>
                             </div>
                         </div>
@@ -154,7 +155,7 @@
                                     <p class="text-[10px] font-black text-indigo-500 mb-1">{{ $heroStory->categories->first()->name ?? 'قصة مخصصة' }}</p>
                                     <h4 class="text-sm font-black text-slate-900 leading-snug line-clamp-1">{{ $heroStory->title }}</h4>
                                     <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
-                                        <span class="text-xs font-black text-indigo-600">{{ number_format($heroStory->price, 0) }} <small class="text-slate-400">ج.م</small></span>
+                                        <span class="text-xs font-black text-indigo-600">{{ format_money($heroStory->price) }}</span>
                                         <span class="text-[9px] bg-indigo-50 text-indigo-600 font-black px-2 py-1 rounded-lg">{{ $heroStory->age_range }} سنة</span>
                                     </div>
                                 @else
@@ -287,7 +288,7 @@
                                           {{ !request('age') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600' }}">
                                     الكل
                                 </a>
-                                @foreach($ageRanges as $range)
+                                @foreach($ageRangeLabels as $range)
                                 <a href="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
                                    class="px-3 py-1.5 rounded-xl text-xs font-black border transition
                                           {{ request('age') == $range ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600' }}">
@@ -330,7 +331,7 @@
                                 <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}"
                                    class="text-center py-2.5 rounded-xl border text-xs font-black transition
                                           {{ request('lang') == 'ar' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-400 hover:border-slate-300' }}">
-                                    🇸🇦 عربي
+                                    عربي
                                 </a>
                                 <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'en'])) }}"
                                    class="text-center py-2.5 rounded-xl border text-xs font-black transition
@@ -390,7 +391,7 @@
                             <div class="flex flex-wrap gap-2">
                                 <a href="{{ route('stories.index', request()->except('age')) }}"
                                    class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ !request('age') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
-                                @foreach($ageRanges as $range)
+                                @foreach($ageRangeLabels as $range)
                                 <a href="{{ route('stories.index', array_merge(request()->query(), ['age' => $range])) }}"
                                    class="px-3 py-1.5 rounded-xl text-xs font-black border transition {{ request('age') == $range ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-200 text-slate-500' }}">{{ $range }}</a>
                                 @endforeach
@@ -410,7 +411,7 @@
                                 <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">🌐 اللغة</p>
                                 <div class="flex gap-2">
                                     <a href="{{ route('stories.index', request()->except('lang')) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ !request('lang') ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">الكل</a>
-                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('lang') == 'ar' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">🇸🇦</a>
+                                    <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'ar'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('lang') == 'ar' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">عربي</a>
                                     <a href="{{ route('stories.index', array_merge(request()->query(), ['lang' => 'en'])) }}" class="flex-1 text-center py-2 rounded-xl text-xs font-black border transition {{ request('lang') == 'en' ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-200 text-slate-500' }}">🇬🇧</a>
                                 </div>
                             </div>
@@ -499,8 +500,7 @@
                                     @endif
                                     <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
                                         <div class="text-right">
-                                            <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ number_format($story->price, 0) }}</span>
-                                            <span class="text-[10px] text-slate-400 font-bold"> ج.م</span>
+                                            <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($story->price) }}</span>
                                         </div>
                                         <a href="{{ route('stories.show', $story->slug) }}"
                                             class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"

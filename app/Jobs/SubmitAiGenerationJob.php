@@ -79,6 +79,8 @@ class SubmitAiGenerationJob implements ShouldQueue
 
     private function safeMessage(Throwable $exception): string
     {
-        return str_replace((string) config('production_studio.ai.fal.key'), '[redacted]', $exception->getMessage());
+        $message = preg_replace('/Key\s+[A-Za-z0-9_\-:.]+/', 'Key [redacted]', $exception->getMessage());
+
+        return preg_replace('/[A-Za-z0-9_\-:.]*secret[A-Za-z0-9_\-:.]*/i', '[redacted]', $message ?: '') ?: 'AI generation failed.';
     }
 }

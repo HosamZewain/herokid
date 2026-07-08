@@ -17,8 +17,9 @@
         $sceneAssets = $project->assets->where('asset_type', 'scene_image');
         $coverAssets = $project->assets->where('asset_type', 'cover_image');
         $approvedCharacterSheet = $characterSheets->firstWhere('is_primary', true);
-        $defaultModel = config('production_studio.ai.fal.default_model');
-        $premiumModel = config('production_studio.ai.fal.default_premium_model');
+        $defaultModel = $defaultModelsByCapability['scene_generation'] ?? null;
+        $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
+        $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
     @endphp
 
     <div class="space-y-6" dir="rtl">
@@ -374,7 +375,12 @@
                         <p class="mt-2 text-sm leading-7 text-indigo-900">ينشئ صورة مرجعية واحدة للطفل من الصور المعتمدة. الصور الناتجة خاصة ولا تظهر للعامة.</p>
                     </div>
                     @unless($aiAvailable)
-                        <div class="rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-700">AI generation is not configured yet.</div>
+                        <div class="rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-700">
+                            AI generation is not configured yet.
+                            @can('settings.ai_providers.view')
+                                <a href="{{ route('admin.settings.ai-providers.index') }}" class="underline">إعداد المزودين</a>
+                            @endcan
+                        </div>
                     @endunless
                 </div>
 
@@ -382,8 +388,8 @@
                     <form method="POST" action="{{ route('admin.production-studio.ai.character-sheet', $project) }}" class="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
                         @csrf
                         <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($aiModels as $model)
-                                <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->display_name }}</option>
+                            @foreach($aiModelsByCapability['character_sheet'] ?? collect() as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $characterSheetModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
                             @endforeach
                         </select>
                         <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
@@ -488,6 +494,9 @@
             @unless($aiAvailable)
                 <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-black text-amber-800">
                     AI generation is not configured yet.
+                    @can('settings.ai_providers.view')
+                        <a href="{{ route('admin.settings.ai-providers.index') }}" class="underline">إعداد مزودي الذكاء الاصطناعي</a>
+                    @endcan
                 </div>
             @endunless
 
@@ -497,8 +506,8 @@
                     <form method="POST" action="{{ route('admin.production-studio.ai.cover', $project) }}" class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
                         @csrf
                         <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
-                            @foreach($aiModels as $model)
-                                <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->display_name }}</option>
+                            @foreach($aiModelsByCapability['cover_generation'] ?? collect() as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
                             @endforeach
                         </select>
                         <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
@@ -528,8 +537,8 @@
                                 <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" class="grid grid-cols-1 md:grid-cols-5 gap-2">
                                     @csrf
                                     <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">
-                                        @foreach($aiModels as $model)
-                                            <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->display_name }}</option>
+                                        @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
+                                            <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
                                         @endforeach
                                     </select>
                                     <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right text-sm">

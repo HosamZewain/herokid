@@ -1,6 +1,6 @@
 <x-front-layout>
-    <x-slot name="pageTitle">متجر HeroKid للأطفال</x-slot>
-    <x-slot name="pageDescription">تسوق كتب أنشطة، قصص جاهزة، وهدايا مخصصة تكمل تجربة قصة طفلك من HeroKid.</x-slot>
+    <x-slot name="pageTitle">{{ setting('seo_shop_title', $settings['seo_shop_title'] ?? '') }}</x-slot>
+    <x-slot name="pageDescription">{{ setting('seo_shop_description', $settings['seo_shop_description'] ?? '') }}</x-slot>
     <x-slot name="canonical">{{ $currentCategory ? '/shop/' . $currentCategory->slug : '/shop' }}</x-slot>
 
     <div class="bg-slate-50 py-10 lg:py-14">
@@ -27,7 +27,7 @@
                 </select>
                 <select name="age" class="rounded-2xl border-slate-200 text-right">
                     <option value="">كل الأعمار</option>
-                    @foreach(['1-3','3-6','6-9','9-12','12+'] as $age)
+                    @foreach(setting_array('age_ranges') as $age)
                         <option value="{{ $age }}" @selected(request('age') === $age)>{{ $age }}</option>
                     @endforeach
                 </select>

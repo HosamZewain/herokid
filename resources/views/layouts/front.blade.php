@@ -8,8 +8,8 @@
 
     {{-- ── Dynamic title: pages pass $pageTitle via x-slot; falls back to default ── --}}
     @php
-        $seoTitle = isset($pageTitle) ? (string) $pageTitle : 'قصص أطفال مخصصة تجعل طفلك بطل القصة';
-        $seoDescription = isset($pageDescription) ? (string) $pageDescription : 'هيرو كيد — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي. اختر القصة، أرسل صورة طفلك، واستلمها مطبوعة خلال أيام.';
+        $seoTitle = isset($pageTitle) ? (string) $pageTitle : setting('seo_home_title', $settings['seo_home_title'] ?? '');
+        $seoDescription = isset($pageDescription) ? (string) $pageDescription : setting('seo_home_description', $settings['seo_home_description'] ?? '');
         $seoImage = \App\Support\Seo::imageUrl(isset($pageImage) ? (string) $pageImage : '/images/og-cover.jpg');
         $canonicalUrl = isset($canonical) ? \App\Support\Seo::url((string) $canonical) : \App\Support\Seo::canonicalForRequest(request());
         $fullTitle = $seoTitle . ' | HeroKid';
@@ -28,7 +28,7 @@
                         '@type' => 'ImageObject',
                         'url' => \App\Support\Seo::imageUrl('/images/logo-192.png'),
                     ],
-                    'description' => 'أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه الحقيقي.',
+                    'description' => setting('seo_home_description', $settings['seo_home_description'] ?? ''),
                     'address' => [
                         '@type' => 'PostalAddress',
                         'addressLocality' => $settings['address_city'] ?? 'المنصورة',
@@ -171,8 +171,10 @@
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
                             <x-nav-link :href="route('stories.index')"
                                 :active="request()->routeIs('stories.*')">القصص</x-nav-link>
-                            <x-nav-link :href="route('shop.index')"
-                                :active="request()->routeIs('shop.*')">المتجر</x-nav-link>
+                            @if($shopAvailable ?? false)
+                                <x-nav-link :href="route('shop.index')"
+                                    :active="request()->routeIs('shop.*')">المتجر</x-nav-link>
+                            @endif
                             <x-nav-link :href="route('how-it-works')" :active="request()->routeIs('how-it-works')">كيف
                                 يعمل؟</x-nav-link>
                             <x-nav-link :href="route('pricing')"
@@ -251,8 +253,10 @@
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الرئيسية</a>
                 <a href="{{ route('stories.index') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">القصص</a>
-                <a href="{{ route('shop.index') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">المتجر</a>
+                @if($shopAvailable ?? false)
+                    <a href="{{ route('shop.index') }}"
+                        class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">المتجر</a>
+                @endif
                 <a href="{{ route('how-it-works') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">كيف
                     يعمل؟</a>
@@ -309,8 +313,7 @@
                             width="192" height="164"
                             alt="HeroKid Logo" class="h-20 md:h-32 w-auto mb-4 object-contain">
                         <p class="text-slate-300 mt-3 leading-relaxed max-w-xs mr-0">
-                            قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي. نهدف لنشر الحب والقيم الجميلة عبر القصص
-                            المطبوعة.
+                            {{ setting('footer_brand_description', $settings['footer_brand_description'] ?? '') }}
                         </p>
                         <div class="flex gap-4 mt-8 justify-start">
                             @if(!empty($settings['whatsapp_url']))
@@ -370,7 +373,9 @@
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('stories.index') }}" class="hover:text-white transition">القصص
                                     المتاحة</a></li>
-                            <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">المتجر</a></li>
+                            @if($shopAvailable ?? false)
+                                <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">المتجر</a></li>
+                            @endif
                             <li><a href="{{ route('how-it-works') }}" class="hover:text-white transition">كيف يعمل؟</a>
                             </li>
                             <li><a href="{{ route('pricing') }}" class="hover:text-white transition">الأسعار</a></li>

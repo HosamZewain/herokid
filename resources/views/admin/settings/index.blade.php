@@ -5,6 +5,8 @@
 
     @php
         $s = fn($key, $default = '') => $settings[$key] ?? $default;
+        $paymentMethods = json_decode((string) $s('payment_methods', '[]'), true);
+        $paymentMethodsText = implode("\n", is_array($paymentMethods) ? $paymentMethods : []);
     @endphp
 
     {{-- Live preview helper --}}
@@ -128,13 +130,18 @@
                 </h3>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الناعم (ج.م)</label>
-                        <input type="number" name="settings[price_soft_cover]" value="{{ $s('price_soft_cover', 99) }}" min="1"
+                        <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الناعم</label>
+                        <input type="number" name="settings[price_soft_cover]" value="{{ $s('price_soft_cover', 299) }}" min="1"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الصلب (ج.م)</label>
-                        <input type="number" name="settings[price_hard_cover]" value="{{ $s('price_hard_cover', 149) }}" min="1"
+                        <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الصلب</label>
+                        <input type="number" name="settings[price_hard_cover]" value="{{ $s('price_hard_cover', 399) }}" min="1"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">رمز العملة</label>
+                        <input type="text" name="settings[currency_label]" value="{{ $s('currency_label', $s('currency_symbol', 'ج.م')) }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
@@ -147,6 +154,22 @@
                         <input type="number" name="settings[delivery_days_max]" value="{{ $s('delivery_days_max', 10) }}" min="1"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">نطاق الشحن</label>
+                        <input type="text" name="settings[shipping_coverage_text]" value="{{ $s('shipping_coverage_text', 'شحن لجميع محافظات مصر') }}"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">طرق الدفع المتاحة</label>
+                        <textarea name="settings[payment_methods]" rows="4"
+                                  class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                  placeholder="طريقة دفع في كل سطر">{{ $paymentMethodsText }}</textarea>
+                    </div>
+                    <label class="md:col-span-2 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-700">
+                        <input type="checkbox" name="settings[shop_enabled]" value="1" @checked($s('shop_enabled', '1') === '1')
+                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <span>تفعيل رابط وصفحات المتجر عند وجود منتجات منشورة</span>
+                    </label>
                     <div class="md:col-span-2 rounded-lg bg-indigo-50 border border-indigo-100 p-4 text-sm text-indigo-800">
                         يتم تحديد رسوم التوصيل حسب الدولة والمحافظة من صفحة
                         <a href="{{ route('admin.delivery-zones.index') }}" class="font-bold underline">مناطق التوصيل</a>.
@@ -192,6 +215,85 @@
                                    class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                         </div>
                     </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">شارة أعلى الصفحة الرئيسية</label>
+                            <input type="text" name="settings[home_badge_text]" value="{{ $s('home_badge_text') }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">وصف الفوتر</label>
+                            <input type="text" name="settings[footer_brand_description]" value="{{ $s('footer_brand_description') }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        </div>
+                        @foreach(['home_feature_face' => 'ميزة الوجه', 'home_feature_values' => 'ميزة القيم', 'home_feature_delivery' => 'ميزة التوصيل', 'home_feature_languages' => 'ميزة اللغات'] as $key => $label)
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">{{ $label }}</label>
+                                <input type="text" name="settings[{{ $key }}]" value="{{ $s($key) }}"
+                                       class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- ===== SEO ===== --}}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
+                    <span class="text-xl">🔎</span> عناوين ووصف SEO
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    @foreach([
+                        'home' => 'الرئيسية',
+                        'stories' => 'القصص',
+                        'pricing' => 'الأسعار',
+                        'how_it_works' => 'كيف يعمل',
+                        'shop' => 'المتجر',
+                    ] as $page => $label)
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">عنوان {{ $label }}</label>
+                            <input type="text" name="settings[seo_{{ $page }}_title]" value="{{ $s('seo_'.$page.'_title') }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">وصف {{ $label }}</label>
+                            <textarea name="settings[seo_{{ $page }}_description]" rows="2"
+                                      class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ $s('seo_'.$page.'_description') }}</textarea>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- ===== How It Works Copy ===== --}}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
+                    <span class="text-xl">🧭</span> خطوات كيف يعمل
+                </h3>
+                <div class="space-y-6">
+                    @for($step = 1; $step <= 5; $step++)
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <p class="mb-4 text-sm font-black text-indigo-700">الخطوة {{ $step }}</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">العنوان</label>
+                                    <input type="text" name="settings[hiw_step{{ $step }}_title]" value="{{ $s('hiw_step'.$step.'_title') }}"
+                                           class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1">الوصف</label>
+                                    <input type="text" name="settings[hiw_step{{ $step }}_desc]" value="{{ $s('hiw_step'.$step.'_desc') }}"
+                                           class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                                </div>
+                                @for($bullet = 1; $bullet <= 3; $bullet++)
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-1">نقطة {{ $bullet }}</label>
+                                        <input type="text" name="settings[hiw_step{{ $step }}_bullet{{ $bullet }}]" value="{{ $s('hiw_step'.$step.'_bullet'.$bullet) }}"
+                                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                                    </div>
+                                @endfor
+                            </div>
+                        </div>
+                    @endfor
                 </div>
             </div>
 

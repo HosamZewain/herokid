@@ -29,7 +29,13 @@
             <div class="grid grid-cols-1 gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                 <div class="space-y-4">
                     <div class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
-                        <img src="{{ $product->featured_image_url ?: '/images/logo-192.png' }}" alt="{{ $product->name_ar }}" class="aspect-[4/3] w-full object-cover">
+                        @if($product->featured_image_url)
+                            <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}" class="aspect-[4/3] w-full object-cover">
+                        @else
+                            <div class="aspect-[4/3]">
+                                <x-product-image-placeholder />
+                            </div>
+                        @endif
                     </div>
                     @if($product->gallery_images)
                         <div class="grid grid-cols-4 gap-3">
@@ -50,7 +56,7 @@
                     <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-slate-50 p-5">
                         <div>
                             <p class="text-sm font-bold text-slate-500">السعر</p>
-                            <p class="text-3xl font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</p>
+                            <p class="text-3xl font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
                         </div>
                         <div class="text-left">
                             <p class="text-sm font-bold text-slate-500">العمر المناسب</p>
@@ -74,7 +80,7 @@
                                 <label class="mb-2 block text-sm font-black text-slate-700">اختيار النوع</label>
                                 <select name="variant_id" class="w-full rounded-2xl border-slate-200 text-right">
                                     @foreach($product->activeVariants as $variant)
-                                        <option value="{{ $variant->id }}">{{ $variant->name_ar }} - {{ number_format($product->effectivePriceCents($variant) / 100, 0) }} ج.م</option>
+                                        <option value="{{ $variant->id }}">{{ $variant->name_ar }} - {{ format_money($product->effectivePriceCents($variant) / 100) }}</option>
                                     @endforeach
                                 </select>
                             </div>

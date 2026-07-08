@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\ProductionProject;
 use App\Models\ProductionQaCheck;
 use App\Models\User;
+use App\Services\Ai\AiProviderAvailability;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -18,9 +19,7 @@ class ProductionStudio
 
     public static function aiAvailable(): bool
     {
-        return self::enabled()
-            && (bool) config('production_studio.ai.fal.enabled')
-            && filled(config('production_studio.ai.fal.key'));
+        return self::enabled() && app(AiProviderAvailability::class)->anyProviderAvailable();
     }
 
     public static function createProjectFromOrder(Order $order, User $creator): ProductionProject

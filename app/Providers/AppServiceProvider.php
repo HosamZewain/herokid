@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Setting;
+use App\Models\Product;
 use App\Support\AdminPermissionRegistry;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Cache;
@@ -37,16 +38,24 @@ class AppServiceProvider extends ServiceProvider
         }
 
         // Share $settings (key => value map) with ALL views.
-        // Cached for 60 minutes; cleared whenever admin saves settings.
+        // Cached until a Setting model write clears the cache.
         View::composer('*', function ($view) {
-            $settings = Cache::remember('site_settings', 3600, function () {
+            $settings = Cache::rememberForever('site_settings', function () {
                 try {
                     return Setting::all()->pluck('value', 'key')->toArray();
                 } catch (\Exception $e) {
                     return [];
                 }
             });
+            try {
+                $shopAvailable = ($settings['shop_enabled'] ?? '1') === '1'
+                    && Product::query()->publiclyVisible()->exists();
+            } catch (\Exception) {
+                $shopAvailable = false;
+            }
+
             $view->with('settings', $settings);
+            $view->with('shopAvailable', $shopAvailable);
         });
     }
 }

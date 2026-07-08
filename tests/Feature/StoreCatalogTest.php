@@ -283,7 +283,7 @@ class StoreCatalogTest extends TestCase
             ->assertSee('بوستر البطل')
             ->assertSee('النوع: A3')
             ->assertSee('الكمية: 2')
-            ->assertSee('100 ج.م');
+            ->assertSee('١٠٠ ج.م');
     }
 
     public function test_stock_limits_are_respected(): void

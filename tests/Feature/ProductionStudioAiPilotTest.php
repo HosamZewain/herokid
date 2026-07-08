@@ -14,7 +14,9 @@ use App\Models\ProductionProjectAsset;
 use App\Models\SceneGenerationJob;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -129,7 +131,7 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('character_sheet', $job->generation_mode);
         $this->assertStringContainsString('Character sheet requirements', $job->prompt_snapshot);
         $this->assertSame('0.0300', (string) $job->estimated_cost);
-        $this->assertSame('estimate', $job->cost_source);
+        $this->assertSame('estimated', $job->cost_source);
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
@@ -341,8 +343,17 @@ class ProductionStudioAiPilotTest extends TestCase
     private function enableFal(string $key = 'test-fal-key'): void
     {
         Config::set('production_studio.enabled', true);
-        Config::set('production_studio.ai.fal.enabled', true);
-        Config::set('production_studio.ai.fal.key', $key);
+
+        app(AiProviderRegistrySyncer::class)->sync();
+
+        $provider = AiProvider::where('driver', 'fal')->firstOrFail();
+        app(AiProviderCredentialService::class)->save($provider, $key);
+        $provider->update([
+            'is_active' => true,
+            'is_configured' => true,
+            'is_available' => true,
+            'last_health_check_status' => null,
+        ]);
     }
 
     private function generationPayload(array $overrides = []): array

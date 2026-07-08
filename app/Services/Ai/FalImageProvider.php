@@ -8,26 +8,36 @@ use App\DTOs\Ai\GenerationRequest;
 use App\DTOs\Ai\GenerationStatusResult;
 use App\DTOs\Ai\GenerationSubmissionResult;
 use App\DTOs\Ai\MoneyValue;
+use App\Models\AiProvider;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class FalImageProvider implements AiImageProvider
 {
+    public function __construct(
+        private readonly AiProviderCredentialService $credentials,
+        private readonly AiProviderAvailability $availability,
+    ) {}
+
     public function isAvailable(): bool
     {
-        return (bool) config('production_studio.enabled')
-            && (bool) config('production_studio.ai.fal.enabled')
-            && filled(config('production_studio.ai.fal.key'));
+        $provider = AiProvider::query()->where('driver', 'fal')->first();
+
+        return $provider ? $this->availability->providerAvailable($provider) : false;
     }
 
     public function listSupportedModels(): array
     {
-        return [
-            config('production_studio.ai.fal.default_model') => 'FLUX Kontext Dev',
-            config('production_studio.ai.fal.default_premium_model') => 'FLUX Kontext Pro',
-        ];
+        return AiProvider::query()
+            ->where('driver', 'fal')
+            ->first()
+            ?->models()
+            ->where('is_active', true)
+            ->pluck('display_name', 'code')
+            ->all() ?? [];
     }
 
     public function supportsCapability(string $capability): bool
@@ -37,14 +47,16 @@ class FalImageProvider implements AiImageProvider
 
     public function estimateCost(GenerationRequest $request): MoneyValue
     {
-        $amount = (string) config('production_studio.ai.costs.'.$request->model->code, $request->model->estimated_cost_per_output ?? '0.0000');
+        $amount = $request->model->estimatedCost();
 
-        return new MoneyValue($amount, 'USD', 'estimate');
+        return new MoneyValue($amount, $request->model->estimated_cost_currency ?? 'USD', $request->model->estimated_cost_type ?? 'estimate');
     }
 
     public function submitGeneration(GenerationRequest $request): GenerationSubmissionResult
     {
-        if (! $this->isAvailable()) {
+        $provider = $request->model->provider;
+
+        if (! $provider || ! $this->availability->providerAvailable($provider)) {
             throw new RuntimeException('AI generation is not configured yet.');
         }
 
@@ -60,7 +72,7 @@ class FalImageProvider implements AiImageProvider
             $payload['image_url'] = $payload['image_urls'][0];
         }
 
-        $response = $this->client()
+        $response = $this->client($provider)
             ->post('https://queue.fal.run/'.ltrim($request->model->code, '/'), $payload)
             ->throw()
             ->json();
@@ -76,7 +88,9 @@ class FalImageProvider implements AiImageProvider
 
     public function pollGeneration(string $externalRequestId, ?string $statusUrl = null, ?string $responseUrl = null): GenerationStatusResult
     {
-        if (! $this->isAvailable()) {
+        $provider = AiProvider::query()->where('driver', 'fal')->first();
+
+        if (! $provider || ! $this->availability->providerAvailable($provider)) {
             throw new RuntimeException('AI generation is not configured yet.');
         }
 
@@ -85,7 +99,7 @@ class FalImageProvider implements AiImageProvider
         }
 
         $statusResponse = $statusUrl
-            ? $this->client()->get($statusUrl)->throw()->json()
+            ? $this->client($provider)->get($statusUrl)->throw()->json()
             : ['status' => 'COMPLETED'];
 
         $status = (string) data_get($statusResponse, 'status', 'UNKNOWN');
@@ -99,7 +113,7 @@ class FalImageProvider implements AiImageProvider
         }
 
         $resultResponse = $responseUrl
-            ? $this->client()->get($responseUrl)->throw()->json()
+            ? $this->client($provider)->get($responseUrl)->throw()->json()
             : $statusResponse;
 
         $imageUrl = data_get($resultResponse, 'images.0.url')
@@ -121,8 +135,10 @@ class FalImageProvider implements AiImageProvider
             throw new RuntimeException('Completed fal response did not include an image URL.');
         }
 
-        $response = Http::timeout((int) config('production_studio.ai.fal.request_timeout', 180))
-            ->retry((int) config('production_studio.ai.fal.max_retries', 2), 500)
+        $provider = AiProvider::query()->where('driver', 'fal')->first();
+
+        $response = Http::timeout($this->timeout($provider))
+            ->retry($this->maxRetries($provider), 500)
             ->get($result->imageUrl)
             ->throw();
 
@@ -137,14 +153,63 @@ class FalImageProvider implements AiImageProvider
         );
     }
 
-    private function client(): PendingRequest
+    public function testConnection(AiProvider $provider, bool $allowBillable = false): array
     {
-        return Http::timeout((int) config('production_studio.ai.fal.request_timeout', 180))
-            ->retry((int) config('production_studio.ai.fal.max_retries', 2), 500)
+        if (! $allowBillable) {
+            return [
+                'status' => 'warning',
+                'message' => 'A billable validation request requires confirmation.',
+            ];
+        }
+
+        try {
+            $this->client($provider)->get('https://queue.fal.run/')->throw();
+
+            return [
+                'status' => 'passed',
+                'message' => 'Connection verified successfully.',
+            ];
+        } catch (RequestException $exception) {
+            $status = $exception->response?->status();
+
+            return [
+                'status' => in_array($status, [401, 403], true) ? 'failed' : 'warning',
+                'message' => in_array($status, [401, 403], true)
+                    ? 'Authentication failed. Please verify the API key.'
+                    : 'Provider is temporarily unavailable.',
+            ];
+        } catch (\Throwable) {
+            return [
+                'status' => 'failed',
+                'message' => 'Connection test could not be completed.',
+            ];
+        }
+    }
+
+    private function client(AiProvider $provider): PendingRequest
+    {
+        $secret = $this->credentials->secret($provider);
+
+        if (! $secret) {
+            throw new RuntimeException('AI generation is not configured yet.');
+        }
+
+        return Http::timeout($this->timeout($provider))
+            ->retry($this->maxRetries($provider), 500)
             ->withHeaders([
-                'Authorization' => 'Key '.config('production_studio.ai.fal.key'),
+                'Authorization' => 'Key '.$secret,
                 'Accept' => 'application/json',
             ]);
+    }
+
+    private function timeout(?AiProvider $provider): int
+    {
+        return (int) ($provider?->default_timeout_seconds ?: config('production_studio.ai.fal.request_timeout', 180));
+    }
+
+    private function maxRetries(?AiProvider $provider): int
+    {
+        return (int) ($provider?->default_max_retries ?? config('production_studio.ai.fal.max_retries', 2));
     }
 
     private function redact(array $payload): array

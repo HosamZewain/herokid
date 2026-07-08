@@ -30,7 +30,27 @@ class SettingsController extends Controller
             'settings.whatsapp_number'=> 'required|string|max:20',
             'settings.price_soft_cover' => 'required|numeric|min:1',
             'settings.price_hard_cover' => 'required|numeric|min:1',
+            'settings.currency_label' => 'sometimes|required|string|max:20',
+            'settings.delivery_days_min' => 'sometimes|required|integer|min:1',
+            'settings.delivery_days_max' => 'sometimes|required|integer|min:1',
+            'settings.shipping_coverage_text' => 'sometimes|required|string|max:255',
+            'settings.payment_methods' => 'nullable|string|max:2000',
+            'settings.shop_enabled' => 'nullable|boolean',
         ]);
+
+        if ($request->has('settings.shop_enabled')) {
+            $settingsInput['shop_enabled'] = $request->boolean('settings.shop_enabled') ? '1' : '0';
+        }
+
+        if (array_key_exists('payment_methods', $settingsInput)) {
+            $methods = collect(preg_split('/\r\n|\r|\n/', (string) $settingsInput['payment_methods']))
+                ->map(fn ($method) => trim($method))
+                ->filter()
+                ->values()
+                ->all();
+
+            $settingsInput['payment_methods'] = json_encode($methods, JSON_UNESCAPED_UNICODE);
+        }
 
         foreach ($settingsInput as $key => $value) {
             Setting::updateOrCreate(['key' => $key], ['value' => $value ?? '']);

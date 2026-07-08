@@ -1,8 +1,15 @@
 <x-front-layout>
 
 {{-- ══ Home page SEO ══ --}}
-<x-slot name="pageTitle">قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي</x-slot>
-<x-slot name="pageDescription">HeroKid — أول منصة في مصر لتحويل طفلك إلى بطل قصة مطبوعة بوجهه واسمه. اختر القصة، أرسل صورة طفلك، واستلم كتاباً فاخراً خلال {{ $settings['delivery_days'] ?? 5 }} أيام فقط.</x-slot>
+<x-slot name="pageTitle">{{ setting('seo_home_title', $settings['seo_home_title'] ?? '') }}</x-slot>
+<x-slot name="pageDescription">{{ setting('seo_home_description', $settings['seo_home_description'] ?? '') }}</x-slot>
+
+@php
+    $homeStoryCount = \App\Models\Story::where('active', true)->count();
+    $homeCategoryCount = \App\Models\StoryCategory::whereHas('stories', fn ($query) => $query->where('active', true))->count();
+    $homeLanguageCount = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->count('language');
+    $homeAgeRangeCount = count(setting_array('age_ranges')) ?: \App\Models\Story::where('active', true)->whereNotNull('age_range')->where('age_range', '!=', '')->distinct()->count('age_range');
+@endphp
 
 @if($faqs->count())
 @push('schema')
@@ -39,6 +46,15 @@
         }
         .hero-text-anim { opacity:0; animation: heroFadeUp .9s ease forwards; }
         .hero-stat      { opacity:0; animation: counterUp .65s ease forwards; }
+        @media (prefers-reduced-motion: reduce) {
+            .hero-text-anim,
+            .hero-stat,
+            .h-float {
+                opacity: 1 !important;
+                animation: none !important;
+                transform: none !important;
+            }
+        }
 
         /* Floating card */
         @keyframes h-float {
@@ -142,16 +158,16 @@
                 {{-- Eyebrow badge --}}
                 <div class="inline-flex items-center gap-2.5 px-5 py-2.5 mb-8 bg-white/80 backdrop-blur-sm border border-amber-200 rounded-full shadow-lg shadow-amber-100/40">
                     <span class="text-lg leading-none">✨</span>
-                    <span class="text-sm font-black text-amber-800">أول قصة أطفال بوجه طفلك الحقيقي في مصر</span>
+                    <span class="text-sm font-black text-amber-800">{{ setting('home_badge_text', $settings['home_badge_text'] ?? '') }}</span>
                     <span class="text-lg leading-none">✨</span>
                 </div>
 
                 {{-- Mega headline --}}
                 <h1 class="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.1] mb-6 text-slate-900">
-                    طفلك ليس قارئاً…<br>
+                    {{ setting('hero_title_1', $settings['hero_title_1'] ?? '') }}<br>
                     <span class="relative inline-block mt-1">
                         <span class="text-transparent bg-clip-text" style="background-image:linear-gradient(135deg,#f97316,#ec4899,#8b5cf6);">
-                            هو البطل الحقيقي!
+                            {{ setting('hero_title_2', $settings['hero_title_2'] ?? '') }}
                         </span>
                         <svg class="absolute -bottom-3 right-0 w-full" height="10" viewBox="0 0 500 10" preserveAspectRatio="none">
                             <path d="M0,8 Q125,1 250,6 Q375,11 500,4" fill="none" stroke="url(#heroGrad)" stroke-width="4" stroke-linecap="round"/>
@@ -162,18 +178,17 @@
 
                 {{-- Subtitle --}}
                 <p class="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed mb-8">
-                    نحوّل خيال طفلك إلى كتاب مطبوع يحمل <strong class="text-slate-800">اسمه ووجهه</strong> في كل صفحة —
-                    هدية تُخلَّد وذكرى تدوم، تُشحن لبابك خلال
-                    <strong class="text-orange-600">{{ $settings["delivery_days"] ?? 5 }} أيام</strong>.
+                    {{ setting('hero_subtitle', $settings['hero_subtitle'] ?? '') }}
+                    <strong class="text-orange-600">{{ delivery_range() }}</strong>.
                 </p>
 
                 {{-- Colorful feature pills --}}
                 <div class="flex flex-wrap gap-3 justify-center mb-10">
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-700 text-sm font-bold rounded-full border border-orange-200 shadow-sm">🎨 وجه طفلك في كل رسمة</span>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-700 text-sm font-bold rounded-full border border-pink-200 shadow-sm">📖 قصص بقيم تربوية</span>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 text-sm font-bold rounded-full border border-violet-200 shadow-sm">🚀 توصيل لبابك</span>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-full border border-emerald-200 shadow-sm">⏱ {{ $settings["delivery_days"] ?? 5 }} أيام فقط</span>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-700 text-sm font-bold rounded-full border border-sky-200 shadow-sm">🌐 عربي وإنجليزي</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-700 text-sm font-bold rounded-full border border-orange-200 shadow-sm">🎨 {{ setting('home_feature_face', $settings['home_feature_face'] ?? '') }}</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-700 text-sm font-bold rounded-full border border-pink-200 shadow-sm">📖 {{ setting('home_feature_values', $settings['home_feature_values'] ?? '') }}</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 text-sm font-bold rounded-full border border-violet-200 shadow-sm">🚀 {{ setting('home_feature_delivery', $settings['home_feature_delivery'] ?? '') }}</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-full border border-emerald-200 shadow-sm">⏱ {{ delivery_range() }}</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-700 text-sm font-bold rounded-full border border-sky-200 shadow-sm">🌐 {{ setting('home_feature_languages', $settings['home_feature_languages'] ?? '') }}</span>
                 </div>
 
                 {{-- CTA buttons --}}
@@ -204,17 +219,17 @@
                     <div class="grid grid-cols-3 gap-3">
                         <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
                             <div class="text-3xl mb-1">📚</div>
-                            <p class="text-2xl font-black text-slate-900 leading-none">{{ \App\Models\Story::where('active',true)->count() ?: '+10' }}</p>
+                            <p class="text-2xl font-black text-slate-900 leading-none">{{ arabic_number($homeStoryCount) }}</p>
                             <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">قصة</p>
                         </div>
                         <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
                             <div class="text-3xl mb-1">⭐</div>
-                            <p class="text-2xl font-black text-slate-900 leading-none">{{ $settings["rating"] ?? 4.9 }}</p>
+                            <p class="text-2xl font-black text-slate-900 leading-none">{{ setting('stat_rating', $settings['stat_rating'] ?? '') }}</p>
                             <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">تقييم</p>
                         </div>
                         <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
                             <div class="text-3xl mb-1">👨‍👩‍👧</div>
-                            <p class="text-2xl font-black text-slate-900 leading-none">+{{ $settings["happy_families"] ?? 100 }}</p>
+                            <p class="text-2xl font-black text-slate-900 leading-none">{{ setting('stat_orders', $settings['stat_orders'] ?? '') }}</p>
                             <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">عائلة</p>
                         </div>
                     </div>
@@ -234,18 +249,18 @@
                             </div>
                         </div>
                         <p class="text-slate-600 font-semibold text-sm leading-relaxed">"طفلي بقى يقرأها كل يوم! هدية لا تُنسى 🥹"</p>
-                        <p class="text-slate-400 text-xs font-bold mt-1.5">— ثقة أكثر من +{{ $settings["happy_families"] ?? 100 }} عائلة سعيدة</p>
+                        <p class="text-slate-400 text-xs font-bold mt-1.5">— {{ setting('stat_orders', $settings['stat_orders'] ?? '') }} عائلة سعيدة</p>
                     </div>
 
                     {{-- Price badge strip --}}
                     <div class="flex gap-3">
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#f97316,#ec4899);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">ابتداءً من</p>
-                            <p class="text-xl">{{ $settings["price_soft_cover"] ?? 99 }} ج.م</p>
+                            <p class="text-xl">{{ format_money(setting('price_soft_cover', $settings['price_soft_cover'] ?? 0)) }}</p>
                         </div>
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#8b5cf6,#3b82f6);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">شحن خلال</p>
-                            <p class="text-xl">{{ $settings["delivery_days"] ?? 5 }} أيام</p>
+                            <p class="text-xl">{{ delivery_range(false) }}</p>
                         </div>
                     </div>
 
@@ -286,7 +301,7 @@
                             </div>
                             @if($heroCard)
                             <div class="px-4 py-3 flex items-center justify-between bg-white">
-                                <span class="font-black text-lg" style="color:#f97316;">{{ number_format($heroCard->price,0) }} <small class="text-slate-400 text-xs">ج.م</small></span>
+                                <span class="font-black text-lg" style="color:#f97316;">{{ format_money($heroCard->price) }}</span>
                                 <span class="text-[9px] font-black px-2.5 py-1.5 rounded-xl" style="background:#fff7ed;color:#ea580c;">{{ $heroCard->age_range }} سنة</span>
                             </div>
                             @endif
@@ -343,7 +358,7 @@
                             <span class="text-lg leading-none">🚀</span>
                             <div>
                                 <p class="text-[8px] text-white/70 font-bold uppercase tracking-wider leading-none">شحن سريع</p>
-                                <p class="text-[11px] font-black leading-tight">{{ $settings["delivery_days"] ?? 5 }} أيام</p>
+                                <p class="text-[11px] font-black leading-tight">{{ delivery_range(false) }}</p>
                             </div>
                         </div>
                     </div>
@@ -354,7 +369,7 @@
                             <span class="text-lg leading-none">🎁</span>
                             <div>
                                 <p class="text-[8px] text-white/70 font-bold uppercase tracking-wider leading-none">ابتداءً من</p>
-                                <p class="text-[11px] font-black leading-tight">{{ $settings["price_soft_cover"] ?? 99 }} ج.م</p>
+                                <p class="text-[11px] font-black leading-tight">{{ format_money(setting('price_soft_cover', $settings['price_soft_cover'] ?? 0)) }}</p>
                             </div>
                         </div>
                     </div>
@@ -391,24 +406,24 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 mb-12">
                 <div class="text-right">
                     <span class="inline-flex items-center gap-2 bg-amber-100 text-amber-800 font-black text-xs px-4 py-2 rounded-full border border-amber-300 mb-3">📚 مكتبة القصص</span>
-                    <h2 class="text-4xl font-extrabold text-slate-900">قصص يعشقها الأطفال</h2>
+                    <h2 class="text-4xl font-extrabold text-slate-900">{{ setting('home_story_section_title', $settings['home_story_section_title'] ?? '') }}</h2>
                     <div class="w-24 h-1.5 mt-2 mb-3 rounded-full" style="background: linear-gradient(90deg, #f97316, #fbbf24);"></div>
-                    <p class="text-slate-600">كل قصة تغرس قيمة وتصنع ذكرى. طفلك هو البطل الحقيقي في كل صفحة.</p>
+                    <p class="text-slate-600">{{ setting('home_story_section_subtitle', $settings['home_story_section_subtitle'] ?? '') }}</p>
                 </div>
                 <div class="flex flex-col items-end gap-3 flex-shrink-0">
                     {{-- Quick stats --}}
                     <div class="flex flex-wrap items-center gap-2">
                         <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-amber-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">📖</span>
-                            <span class="text-xs font-black text-slate-700">{{ \App\Models\Story::where('active',true)->count() }}+ قصة</span>
+                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeStoryCount) }} قصة</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-orange-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🌐</span>
-                            <span class="text-xs font-black text-slate-700">٢ لغة</span>
+                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeLanguageCount) }} لغة</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-yellow-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🎯</span>
-                            <span class="text-xs font-black text-slate-700">٣ فئات عمرية</span>
+                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeAgeRangeCount) }} فئات عمرية</span>
                         </div>
                     </div>
                     <a href="{{ route('stories.index') }}"
@@ -508,8 +523,7 @@
                             {{-- Price + CTA --}}
                             <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
                                 <div class="text-right">
-                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ number_format($story->price, 0) }}</span>
-                                    <span class="text-[10px] text-slate-400 font-bold"> ج.م</span>
+                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($story->price) }}</span>
                                 </div>
                                 <a href="{{ route('stories.show', $story->slug) }}"
                                     class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"
@@ -547,8 +561,8 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
                 <div class="text-center max-w-2xl mx-auto">
                     <span class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 font-black text-xs px-4 py-2 rounded-full border border-indigo-100 mb-4">المتجر</span>
-                    <h2 class="text-3xl sm:text-4xl font-black text-slate-950">منتجات تكمل تجربة طفلك</h2>
-                    <p class="mt-3 text-slate-500 leading-8">كتب أنشطة، قصص جاهزة، وهدايا يمكن شراؤها مباشرة أو إضافتها مع القصة المخصصة.</p>
+                    <h2 class="text-3xl sm:text-4xl font-black text-slate-950">{{ setting('home_store_section_title', $settings['home_store_section_title'] ?? '') }}</h2>
+                    <p class="mt-3 text-slate-500 leading-8">{{ setting('home_store_section_subtitle', $settings['home_store_section_subtitle'] ?? '') }}</p>
                 </div>
 
                 @foreach($storeSections as $section)
@@ -655,7 +669,7 @@
                     </div>
                     <div class="bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-2xl p-5 text-right">
                         <span class="inline-block bg-amber-500/20 text-amber-300 font-black text-xs px-3 py-1 rounded-full mb-2">خطوة ٣</span>
-                        <p class="text-amber-200 leading-relaxed text-sm">نطبع ونشحن إلى بابك مباشرة خلال {{ $settings["delivery_days"] ?? 5 }} أيام.</p>
+                        <p class="text-amber-200 leading-relaxed text-sm">نطبع ونشحن إلى بابك مباشرة خلال {{ delivery_range() }}.</p>
                     </div>
                 </div>
             </div>
@@ -727,7 +741,7 @@
                             alt="قصص" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(4,120,87,.92) 0%,rgba(4,120,87,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
-                            <p class="font-extrabold text-3xl text-white">+25</p>
+                            <p class="font-extrabold text-3xl text-white">{{ arabic_number($homeStoryCount) }}</p>
                             <p class="text-emerald-200 text-sm mt-0.5">قصص متاحة</p>
                         </div>
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">📚</div>
@@ -737,7 +751,7 @@
                             alt="تقييم" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(14,116,144,.92) 0%,rgba(14,116,144,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
-                            <p class="font-extrabold text-3xl text-white">{{ $settings["rating"] ?? 4.8 }} ⭐</p>
+                            <p class="font-extrabold text-3xl text-white">{{ setting('stat_rating', $settings['stat_rating'] ?? '') }}</p>
                             <p class="text-cyan-200 text-sm mt-0.5">متوسط التقييم</p>
                         </div>
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">⭐</div>
@@ -747,7 +761,7 @@
                             alt="عائلات سعيدة" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(5,150,105,.92) 0%,rgba(5,150,105,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
-                            <p class="font-extrabold text-3xl text-white">+{{ $settings["happy_families"] ?? 100 }}</p>
+                            <p class="font-extrabold text-3xl text-white">{{ setting('stat_orders', $settings['stat_orders'] ?? '') }}</p>
                             <p class="text-emerald-200 text-sm mt-0.5">عائلة سعيدة</p>
                         </div>
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">👨‍👩‍👧</div>
@@ -757,7 +771,7 @@
                             alt="توصيل" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(8,145,178,.92) 0%,rgba(8,145,178,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
-                            <p class="font-extrabold text-3xl text-white">{{ $settings["delivery_days"] ?? 5 }} يوم</p>
+                            <p class="font-extrabold text-3xl text-white">{{ setting('stat_delivery', $settings['stat_delivery'] ?? delivery_range(false)) }}</p>
                             <p class="text-cyan-200 text-sm mt-0.5">متوسط التوصيل</p>
                         </div>
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">🚀</div>
@@ -1091,8 +1105,8 @@
                 ابدأ رحلة طفلك اليوم!
             </h2>
             <p class="text-white/85 text-xl mb-10 leading-relaxed">
-                انضم لأكثر من <strong class="text-yellow-300">{{ $settings["happy_families"] ?? 100 }} عائلة</strong> تصنع السحر مع HeroKid.<br>
-                قصتك المخصصة جاهزة خلال <strong class="text-yellow-300">{{ $settings["delivery_days"] ?? 5 }} أيام</strong> فقط.
+                انضم لأكثر من <strong class="text-yellow-300">{{ setting('stat_orders', $settings['stat_orders'] ?? '') }} عائلة</strong> تصنع السحر مع HeroKid.<br>
+                قصتك المخصصة جاهزة خلال <strong class="text-yellow-300">{{ delivery_range() }}</strong>.
             </p>
             <div class="flex flex-wrap justify-center gap-4">
                 <a href="{{ route('stories.index') }}"

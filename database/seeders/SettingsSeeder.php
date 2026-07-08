@@ -20,15 +20,19 @@ class SettingsSeeder extends Seeder
             ['key' => 'whatsapp_url',       'value' => 'https://wa.me/201000000000'],
 
             // Pricing
-            ['key' => 'price_soft_cover',   'value' => '99'],
-            ['key' => 'price_hard_cover',   'value' => '149'],
+            ['key' => 'price_soft_cover',   'value' => '299'],
+            ['key' => 'price_hard_cover',   'value' => '399'],
             ['key' => 'currency_symbol',    'value' => 'ج.م'],
+            ['key' => 'currency_label',     'value' => 'ج.م'],
             ['key' => 'delivery_fee',        'value' => '0'],
 
             // Delivery
             ['key' => 'delivery_days_min',  'value' => '7'],
             ['key' => 'delivery_days_max',  'value' => '10'],
             ['key' => 'production_days',    'value' => '3'],
+            ['key' => 'shipping_coverage_text', 'value' => 'شحن لجميع محافظات مصر'],
+            ['key' => 'payment_methods', 'value' => json_encode(['فودافون كاش', 'انستاباي', 'فيزا/ماستركارد', 'الدفع عند الاستلام'], JSON_UNESCAPED_UNICODE)],
+            ['key' => 'shop_enabled', 'value' => '1'],
 
             // Social Media
             ['key' => 'instagram_url',      'value' => 'https://instagram.com/herokid.eg'],
@@ -40,7 +44,74 @@ class SettingsSeeder extends Seeder
             ['key' => 'maintenance_mode',   'value' => '0'],
             ['key' => 'photo_delete_days',  'value' => '90'],
 
+            // Editable page SEO and marketing copy
+            ['key' => 'seo_home_title', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي'],
+            ['key' => 'seo_home_description', 'value' => 'HeroKid يحول طفلك إلى بطل قصة مطبوعة بوجهه واسمه. اختر القصة، أرسل صورة طفلك، واستلم كتاباً فاخراً.'],
+            ['key' => 'seo_stories_title', 'value' => 'مكتبة قصص الأطفال المخصصة'],
+            ['key' => 'seo_stories_description', 'value' => 'استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة بوجه طفلك واسمه، واختر القصة المناسبة لعمره واهتماماته.'],
+            ['key' => 'seo_pricing_title', 'value' => 'أسعار قصص الأطفال المخصصة'],
+            ['key' => 'seo_pricing_description', 'value' => 'اكتشف باقات HeroKid لقصص الأطفال المخصصة المطبوعة باسم طفلك ووجهه مع أسعار واضحة ورسوم شحن تظهر في السلة.'],
+            ['key' => 'seo_how_it_works_title', 'value' => 'كيف يعمل HeroKid؟'],
+            ['key' => 'seo_how_it_works_description', 'value' => 'اكتشف رحلة طلب قصة HeroKid المخصصة من اختيار القصة وإضافة بيانات الطفل حتى المراجعة والطباعة والشحن.'],
+            ['key' => 'seo_shop_title', 'value' => 'متجر HeroKid للأطفال'],
+            ['key' => 'seo_shop_description', 'value' => 'تسوق كتب أنشطة، قصص جاهزة، وهدايا مخصصة تكمل تجربة قصة طفلك من HeroKid.'],
+
+            ['key' => 'home_badge_text', 'value' => 'أول قصة أطفال بوجه طفلك الحقيقي في مصر'],
+            ['key' => 'home_feature_face', 'value' => 'وجه طفلك في كل رسمة'],
+            ['key' => 'home_feature_values', 'value' => 'قصص بقيم تربوية'],
+            ['key' => 'home_feature_delivery', 'value' => 'توصيل لبابك'],
+            ['key' => 'home_feature_languages', 'value' => 'عربي وإنجليزي'],
+            ['key' => 'home_story_section_title', 'value' => 'قصص يعشقها الأطفال'],
+            ['key' => 'home_story_section_subtitle', 'value' => 'كل قصة تغرس قيمة وتصنع ذكرى. طفلك هو البطل الحقيقي في كل صفحة.'],
+            ['key' => 'home_store_section_title', 'value' => 'منتجات تكمل تجربة طفلك'],
+            ['key' => 'home_store_section_subtitle', 'value' => 'كتب أنشطة، قصص جاهزة، وهدايا يمكن شراؤها مباشرة أو إضافتها مع القصة المخصصة.'],
+            ['key' => 'footer_brand_description', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي. نهدف لنشر الحب والقيم الجميلة عبر القصص المطبوعة.'],
+
         ];
+
+        $howItWorksDefaults = [
+            1 => [
+                'title' => 'اختر القصة المثالية لطفلك',
+                'desc' => 'تصفح مكتبتنا المتنوعة واختر القصة التي تناسب عمر طفلك واهتماماته وتغرس قيمة إنسانية أصيلة.',
+                'bullet1' => 'فلتر حسب العمر والجنس واللغة',
+                'bullet2' => 'كل قصة تحمل درساً تربوياً واضحاً',
+                'bullet3' => 'متاحة بالعربية والإنجليزية',
+            ],
+            2 => [
+                'title' => 'خصّص القصة لطفلك',
+                'desc' => 'أخبرنا باسم طفلك وعمره واهتماماته، وأرفق صوراً واضحة لوجهه ليصبح الشخصية الرئيسية في كل صفحة.',
+                'bullet1' => 'اسم الطفل في كل صفحة',
+                'bullet2' => 'وجه الطفل الحقيقي في رسومات القصة',
+                'bullet3' => 'إهداء مخصص في الصفحة الأولى',
+            ],
+            3 => [
+                'title' => 'نولّد القصة ونراجعها لك',
+                'desc' => 'يستخدم فريقنا أدوات الإنتاج لإعداد الرسومات ونص القصة بشكل مخصص، ثم يراجع التفاصيل يدوياً قبل إرسال المعاينة.',
+                'bullet1' => 'رسومات احترافية مخصصة بالكامل',
+                'bullet2' => 'مراجعة يدوية من فريق متخصص',
+                'bullet3' => 'تسلمك النسخة النهائية ضمن مدة التوصيل المحددة',
+            ],
+            4 => [
+                'title' => 'راجع ووافق على التصميم',
+                'desc' => 'نرسل لك معاينة من القصة قبل الطباعة لتراجعها وتطمئن على كل تفصيلة قبل الموافقة.',
+                'bullet1' => 'تراجع القصة كاملة قبل الطباعة',
+                'bullet2' => 'يحق لك طلب تعديلات معقولة',
+                'bullet3' => 'لن نطبع بدون موافقتك الصريحة',
+            ],
+            5 => [
+                'title' => 'اطبع واستلم الكتاب بباب منزلك',
+                'desc' => 'بعد الموافقة نطبع الكتاب بجودة عالية ونشحنه إلى عنوانك حسب منطقة التوصيل المختارة.',
+                'bullet1' => 'طباعة احترافية عالية الدقة',
+                'bullet2' => 'تغليف هدايا فاخر',
+                'bullet3' => 'شحن لجميع محافظات مصر',
+            ],
+        ];
+
+        foreach ($howItWorksDefaults as $step => $values) {
+            foreach ($values as $field => $value) {
+                $settings[] = ['key' => "hiw_step{$step}_{$field}", 'value' => $value];
+            }
+        }
 
         foreach (SiteImages::settingsDefaults() as $key => $value) {
             $settings[] = ['key' => $key, 'value' => $value];

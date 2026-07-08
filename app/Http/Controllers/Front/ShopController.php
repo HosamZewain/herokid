@@ -13,11 +13,14 @@ class ShopController extends Controller
 {
     public function index(Request $request)
     {
+        abort_unless(setting('shop_enabled', '1') === '1', 404);
+
         return $this->listing($request);
     }
 
     public function category(Request $request, ProductCategory $category)
     {
+        abort_unless(setting('shop_enabled', '1') === '1', 404);
         abort_unless($category->is_active && $category->show_in_store, 404);
 
         return $this->listing($request, $category);
@@ -25,6 +28,7 @@ class ShopController extends Controller
 
     public function show(Product $product)
     {
+        abort_unless(setting('shop_enabled', '1') === '1', 404);
         abort_unless($product->is_active && $product->category?->is_active && $product->category?->show_in_store, 404);
 
         $product->load(['category', 'activeVariants']);

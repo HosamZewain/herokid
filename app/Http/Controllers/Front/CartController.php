@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
-use App\Models\Setting;
 use App\Models\Story;
 use App\Support\ProductRecommendations;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -166,9 +164,7 @@ class CartController extends Controller
             return max(0, (float) $country->delivery_fee);
         }
 
-        $settings = Cache::remember('site_settings', 3600, fn () => Setting::all()->pluck('value', 'key')->toArray());
-
-        return max(0, (float) ($settings['delivery_fee'] ?? 0));
+        return max(0, (float) setting('delivery_fee', 0));
     }
 
     private function deliveryCountries()

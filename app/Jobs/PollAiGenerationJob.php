@@ -107,6 +107,8 @@ class PollAiGenerationJob implements ShouldQueue
 
     private function safeMessage(string $message): string
     {
-        return str_replace((string) config('production_studio.ai.fal.key'), '[redacted]', $message);
+        $message = preg_replace('/Key\s+[A-Za-z0-9_\-:.]+/', 'Key [redacted]', $message);
+
+        return preg_replace('/[A-Za-z0-9_\-:.]*secret[A-Za-z0-9_\-:.]*/i', '[redacted]', $message ?: '') ?: 'AI generation failed.';
     }
 }

@@ -16,6 +16,7 @@ use App\Models\ProductionStoryVersion;
 use App\Models\SceneGenerationJob;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Ai\AiProviderAvailability;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
@@ -78,7 +79,7 @@ class ProductionStudioController extends Controller
             ->with('success', 'تم إنشاء مشروع استوديو الإنتاج بدون تغيير حالة الطلب الأصلي.');
     }
 
-    public function show(ProductionProject $project)
+    public function show(ProductionProject $project, AiProviderAvailability $availability)
     {
         $this->ensureEnabled();
 
@@ -108,9 +109,12 @@ class ProductionStudioController extends Controller
         $aiModels = AiModel::query()
             ->with('provider')
             ->where('is_active', true)
-            ->whereHas('provider', fn ($query) => $query->where('driver', 'fal'))
+            ->orderBy('sort_order')
             ->orderBy('display_name')
-            ->get();
+            ->get()
+            ->filter(fn (AiModel $model): bool => collect($model->generation_capabilities_json ?? [])
+                ->contains(fn (string $capability): bool => $availability->modelAvailable($model, $capability)))
+            ->values();
 
         return view('admin.production-studio.show', [
             'project' => $project,
@@ -120,6 +124,20 @@ class ProductionStudioController extends Controller
             'assignees' => User::where('role', 'admin')->orderBy('name')->get(['id', 'name']),
             'aiModels' => $aiModels,
             'aiAvailable' => ProductionStudio::aiAvailable(),
+            'aiModelsByCapability' => [
+                'character_sheet' => $availability->activeModelsForCapability('character_sheet'),
+                'scene_generation' => $availability->activeModelsForCapability('scene_generation'),
+                'cover_generation' => $availability->activeModelsForCapability('cover_generation'),
+                'premium_retry' => $availability->activeModelsForCapability('premium_retry'),
+            ],
+            'defaultModelsByCapability' => $aiModels
+                ->pluck('provider')
+                ->unique('id')
+                ->mapWithKeys(fn ($provider) => collect(['character_sheet', 'scene_generation', 'cover_generation', 'premium_retry'])
+                    ->mapWithKeys(fn ($capability) => [$capability => $availability->defaultModelFor($provider, $capability)?->code])
+                    ->filter()
+                    ->all())
+                ->all(),
             'stylePresets' => config('production_studio.ai.style_presets', []),
             'aiCostSummary' => $project->aiCostSummary(),
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
@@ -587,6 +605,6 @@ class ProductionStudioController extends Controller
 
     private function safeAiError(\Throwable $exception): string
     {
-        return str_replace((string) config('production_studio.ai.fal.key'), '[redacted]', $exception->getMessage());
+        return preg_replace('/Key\s+[A-Za-z0-9_\-:.]+/', 'Key [redacted]', $exception->getMessage()) ?: 'AI generation failed.';
     }
 }

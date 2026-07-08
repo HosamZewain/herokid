@@ -169,21 +169,21 @@
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                         <div class="bg-slate-950 p-6 text-white text-right">
                             <p class="text-sm font-bold text-indigo-200">ملخص الطلب</p>
-                            <p class="mt-2 text-3xl font-black"><span data-cart-total>{{ number_format($total, 0) }}</span> ج.م</p>
+                            <p class="mt-2 text-3xl font-black"><span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</p>
                             <p class="mt-1 text-sm text-slate-300">يشمل عناصر السلة ومصاريف التوصيل</p>
                         </div>
                         <div class="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
                                 <span class="block text-slate-500 mb-1">إجمالي العناصر</span>
-                                <span class="font-black text-slate-950">{{ number_format($subtotal, 0) }} ج.م</span>
+                                <span class="font-black text-slate-950">{{ format_money($subtotal) }}</span>
                             </div>
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
                                 <span class="block text-slate-500 mb-1">مصاريف التوصيل</span>
-                                <span class="font-black text-slate-950"><span data-delivery-fee>{{ number_format($deliveryFee, 0) }}</span> ج.م</span>
+                                <span class="font-black text-slate-950"><span data-delivery-fee>{{ arabic_number(number_format($deliveryFee, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</span>
                             </div>
                             <div class="rounded-2xl bg-indigo-50 p-4 text-right">
                                 <span class="block font-bold text-indigo-500 mb-1">الإجمالي</span>
-                                <span class="text-xl font-black text-indigo-700"><span data-cart-total>{{ number_format($total, 0) }}</span> ج.م</span>
+                                <span class="text-xl font-black text-indigo-700"><span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</span>
                             </div>
                         </div>
                     </section>
@@ -227,7 +227,7 @@
                                                     @endif
                                                 </div>
                                                 <p class="inline-flex w-fit rounded-2xl bg-indigo-50 px-4 py-2 text-base font-black text-indigo-700">
-                                                    {{ number_format($itemPrice, 0) }} ج.م
+                                                    {{ format_money($itemPrice) }}
                                                 </p>
                                             </div>
 
@@ -265,7 +265,7 @@
                                                                                 {{ !empty($addOn['variant_name']) ? 'النوع: '.$addOn['variant_name'].' · ' : '' }}
                                                                                 الكمية: {{ $addOn['quantity'] ?? 1 }}
                                                                             </p>
-                                                                            <p class="mt-1 text-xs font-black text-indigo-700">{{ number_format(((int) ($addOn['line_total_cents'] ?? 0)) / 100, 0) }} ج.م</p>
+                                                                            <p class="mt-1 text-xs font-black text-indigo-700">{{ format_money(((int) ($addOn['line_total_cents'] ?? 0)) / 100) }}</p>
                                                                         </div>
                                                                         <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST" class="shrink-0">
                                                                             @csrf
@@ -286,7 +286,7 @@
                                                     </div>
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">سعر الوحدة</p>
-                                                        <p class="font-black text-slate-900">{{ number_format((float) ($item['unit_price'] ?? 0), 0) }} ج.م</p>
+                                                        <p class="font-black text-slate-900">{{ format_money((float) ($item['unit_price'] ?? 0)) }}</p>
                                                     </div>
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">التخصيص</p>
@@ -349,12 +349,17 @@
                                 @foreach($recommendedProducts as $product)
                                     @php
                                         $isPersonalizedAddon = $product->isPersonalizedAddon();
-                                        $recommendedImage = $product->featured_image_url ?: '/images/logo-192.png';
                                     @endphp
                                     <div class="overflow-hidden rounded-3xl bg-white shadow-sm text-right border border-white">
                                         <div class="bg-slate-50">
-                                            <img src="{{ $recommendedImage }}" alt="{{ $product->name_ar }}"
-                                                class="aspect-[4/3] w-full object-cover">
+                                            @if($product->featured_image_url)
+                                                <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}"
+                                                    class="aspect-[4/3] w-full object-cover">
+                                            @else
+                                                <div class="aspect-[4/3]">
+                                                    <x-product-image-placeholder />
+                                                </div>
+                                            @endif
                                         </div>
                                         <div class="p-4">
                                             <div class="mb-3 flex flex-wrap justify-end gap-1.5">
@@ -366,7 +371,7 @@
                                             </div>
                                             <h3 class="text-lg font-black leading-7 text-slate-950">{{ $product->name_ar }}</h3>
                                             <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{{ $product->short_description_ar }}</p>
-                                            <p class="mt-3 text-xl font-black text-indigo-700">{{ number_format($product->effectivePrice(), 0) }} ج.م</p>
+                                            <p class="mt-3 text-xl font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
                                         </div>
                                         <form action="{{ route('cart.products.store', $product) }}" method="POST" class="border-t border-slate-100 p-4 space-y-3">
                                             @csrf
@@ -429,7 +434,7 @@
             const countrySelect = document.getElementById('delivery_country_id');
             const governorateSelect = document.getElementById('delivery_governorate_id');
             const subtotal = Number(@json((float) $subtotal));
-            const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('en-US', { maximumFractionDigits: 0 });
+            const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
 
             function selectedCountryFee() {
                 return Number(countrySelect?.selectedOptions?.[0]?.dataset?.fee || 0);
