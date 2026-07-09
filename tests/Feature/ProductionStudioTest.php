@@ -375,6 +375,20 @@ class ProductionStudioTest extends TestCase
         ] as $sectionId) {
             $response->assertSee('id="'.$sectionId.'"', false);
         }
+
+        $html = $response->getContent();
+        $profileUpdateAction = route('admin.production-studio.character-profile.update', $project);
+        $profileFormStart = strpos($html, 'action="'.$profileUpdateAction.'"');
+        $this->assertNotFalse($profileFormStart);
+
+        $profileFormEnd = strpos($html, '</form>', $profileFormStart);
+        $this->assertNotFalse($profileFormEnd);
+
+        $profileFormHtml = substr($html, $profileFormStart, $profileFormEnd - $profileFormStart);
+        $this->assertStringContainsString('name="appearance_summary"', $profileFormHtml);
+        $this->assertStringContainsString('حفظ ملف الشخصية', $profileFormHtml);
+        $this->assertStringNotContainsString(route('admin.production-studio.character-profile.analyze', $project), $profileFormHtml);
+        $this->assertStringNotContainsString(route('admin.production-studio.character-profile.apply-analysis', $project), $profileFormHtml);
     }
 
     private function adminUser(): User

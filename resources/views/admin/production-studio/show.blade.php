@@ -489,9 +489,7 @@
             'warning' => $profileReady ? null : 'ينقص: '.count($missingProfileFields),
             'summary' => $referencePhotoSummary,
         ])
-            <form method="POST" action="{{ route('admin.production-studio.character-profile.update', $project) }}" class="space-y-5">
-                @csrf
-                @method('PATCH')
+            <div class="space-y-5">
                 <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
                     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -562,7 +560,11 @@
                         @endif
                     </div>
                 @endcan
+            </div>
 
+            <form method="POST" action="{{ route('admin.production-studio.character-profile.update', $project) }}" class="mt-5 space-y-5">
+                @csrf
+                @method('PATCH')
                 @unless($profileReady)
                     <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-bold text-amber-800">
                         أكمل ملف الشخصية واختر صور مرجعية واضحة قبل التوليد.
