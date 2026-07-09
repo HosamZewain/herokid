@@ -186,25 +186,19 @@ class ProductionStudioController extends Controller
         $disk = Storage::disk('local');
 
         if ($disk->exists($photoPath)) {
-            return response()->file($disk->path($photoPath), [
-                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
-            ]);
+            return $this->privateCachedFileResponse($disk->path($photoPath));
         }
 
         $publicDisk = Storage::disk('public');
 
         if ($publicDisk->exists($photoPath)) {
-            return response()->file($publicDisk->path($photoPath), [
-                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
-            ]);
+            return $this->privateCachedFileResponse($publicDisk->path($photoPath));
         }
 
         $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
 
         if (file_exists($legacyPath) && is_file($legacyPath)) {
-            return response()->file($legacyPath, [
-                'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
-            ]);
+            return $this->privateCachedFileResponse($legacyPath);
         }
 
         abort(404);
@@ -225,9 +219,24 @@ class ProductionStudioController extends Controller
             abort(404);
         }
 
-        return response()->file($disk->path($asset->file_path), [
-            'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+        return $this->privateCachedFileResponse($disk->path($asset->file_path));
+    }
+
+    private function privateCachedFileResponse(string $path)
+    {
+        $lastModified = filemtime($path) ?: time();
+        $etag = sha1($path.'|'.$lastModified.'|'.filesize($path));
+
+        $response = response()->file($path, [
+            'X-Content-Type-Options' => 'nosniff',
         ]);
+
+        $response->setEtag($etag);
+        $response->setLastModified(new \DateTimeImmutable('@'.$lastModified));
+        $response->setPrivate();
+        $response->setMaxAge(604800);
+
+        return $response->isNotModified(request()) ? $response : $response;
     }
 
     public function generateCharacterSheet(Request $request, ProductionProject $project, CreateGenerationJobAction $action)

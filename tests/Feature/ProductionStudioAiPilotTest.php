@@ -263,9 +263,25 @@ class ProductionStudioAiPilotTest extends TestCase
             ->post(route('admin.production-studio.assets.approve', [$project, $asset]))
             ->assertForbidden();
 
-        $this->actingAs($owner)
+        $assetResponse = $this->actingAs($owner)
             ->get(route('admin.production-studio.assets.show', [$project, $asset]))
-            ->assertOk();
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $this->assertStringContainsString('private', $assetResponse->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=604800', $assetResponse->headers->get('Cache-Control'));
+
+        $etag = $this->actingAs($owner)
+            ->get(route('admin.production-studio.assets.show', [$project, $asset]))
+            ->headers
+            ->get('ETag');
+
+        $this->assertNotEmpty($etag);
+
+        $this->actingAs($owner)
+            ->withHeaders(['If-None-Match' => $etag])
+            ->get(route('admin.production-studio.assets.show', [$project, $asset]))
+            ->assertStatus(304);
     }
 
     public function test_authorized_user_can_create_queued_character_sheet_generation_job(): void

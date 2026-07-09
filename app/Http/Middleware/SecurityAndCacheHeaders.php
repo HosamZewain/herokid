@@ -45,6 +45,13 @@ class SecurityAndCacheHeaders
 
     private function applyCacheHeaders(Response $response, Request $request): void
     {
+        if ($this->isPrivateCachedAdminAssetRoute($request) && $response->headers->has('Cache-Control')) {
+            $response->headers->remove('Pragma');
+            $response->headers->remove('Expires');
+
+            return;
+        }
+
         if (! in_array($request->getMethod(), ['GET', 'HEAD'], true) || $this->isPrivateRoute($request)) {
             $response->headers->set('Cache-Control', self::PRIVATE_CACHE);
             $response->headers->set('Pragma', 'no-cache');
@@ -74,6 +81,14 @@ class SecurityAndCacheHeaders
         if ($this->isPublicRoute($request)) {
             $response->headers->set('Cache-Control', 'private, no-cache');
         }
+    }
+
+    private function isPrivateCachedAdminAssetRoute(Request $request): bool
+    {
+        return $request->routeIs([
+            'admin.production-studio.photo',
+            'admin.production-studio.assets.show',
+        ]);
     }
 
     private function isPrivateRoute(Request $request): bool

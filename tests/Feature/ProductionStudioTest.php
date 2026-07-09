@@ -203,9 +203,25 @@ class ProductionStudioTest extends TestCase
         $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
         $project = ProductionProject::firstOrFail();
 
-        $this->actingAs($admin)
+        $photoResponse = $this->actingAs($admin)
             ->get(route('admin.production-studio.photo', [$project, 0]))
-            ->assertOk();
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $this->assertStringContainsString('private', $photoResponse->headers->get('Cache-Control'));
+        $this->assertStringContainsString('max-age=604800', $photoResponse->headers->get('Cache-Control'));
+
+        $etag = $this->actingAs($admin)
+            ->get(route('admin.production-studio.photo', [$project, 0]))
+            ->headers
+            ->get('ETag');
+
+        $this->assertNotEmpty($etag);
+
+        $this->actingAs($admin)
+            ->withHeaders(['If-None-Match' => $etag])
+            ->get(route('admin.production-studio.photo', [$project, 0]))
+            ->assertStatus(304);
 
         $this->actingAs($admin)
             ->get(route('admin.production-studio.photo', [$project, 1]))
