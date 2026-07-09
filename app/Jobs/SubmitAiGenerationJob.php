@@ -37,7 +37,12 @@ class SubmitAiGenerationJob implements ShouldQueue
                 generationMode: $job->generation_mode,
                 prompt: $job->prompt_snapshot,
                 negativePrompt: $job->negative_prompt_snapshot ?? '',
-                inputAssets: $inputAssets->resolve($job->project, data_get($job->input_assets_json, 'reference_photo_indices', []), $characterSheet),
+                inputAssets: $inputAssets->resolve(
+                    $job->project,
+                    data_get($job->input_assets_json, 'reference_photo_indices', []),
+                    $characterSheet,
+                    (bool) data_get($job->input_assets_json, 'character_sheet_first', true),
+                ),
             );
 
             $result = $providers

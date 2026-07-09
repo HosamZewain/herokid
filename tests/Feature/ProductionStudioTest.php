@@ -397,6 +397,8 @@ class ProductionStudioTest extends TestCase
             ->assertSee('The child walks under moonlight.')
             ->assertSee('A quiet moonlit garden.')
             ->assertSee('كل مشهد يجب أن يكون سبريد A3 أفقي واحد متصل')
+            ->assertSee('معاينة برومبت توليد صورة هذا المشهد')
+            ->assertSee('Use reference images for identity only, not for composition.')
             ->assertSee(route('admin.production-studio.assets.show', [$project, $asset]), false);
 
         foreach ([

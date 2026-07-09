@@ -460,11 +460,34 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not transform the child into a different-looking character. Use the real photo-derived face as the identity anchor', $job->prompt_snapshot);
         $this->assertStringContainsString('The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions', $job->prompt_snapshot);
+        $this->assertStringContainsString('Use reference images for identity only, not for composition.', $job->prompt_snapshot);
+        $this->assertStringContainsString('If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.', $job->prompt_snapshot);
         $this->assertStringContainsString('Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language.', $job->prompt_snapshot);
         $this->assertStringContainsString('Korean text', $job->negative_prompt_snapshot);
         $this->assertStringContainsString('title-card layout', $job->negative_prompt_snapshot);
+        $this->assertFalse($job->input_assets_json['character_sheet_first']);
+        $this->assertSame('primary_face_reference', $job->input_assets_json['reference_assets'][0]['type']);
+        $this->assertSame('approved_child_reference_illustration', $job->input_assets_json['reference_assets'][1]['type']);
         Queue::assertPushed(SubmitAiGenerationJob::class);
+
+        Http::fake([
+            'https://queue.fal.run/*' => Http::response([
+                'request_id' => 'fal-scene-request',
+                'status' => 'IN_QUEUE',
+                'status_url' => 'https://fal.test/status',
+                'response_url' => 'https://fal.test/result',
+            ]),
+        ]);
+
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return str_contains((string) data_get($payload, 'image_url'), base64_encode('image-bytes'))
+                && ! str_contains((string) data_get($payload, 'image_url'), base64_encode('approved-reference-bytes'));
+        });
     }
 
     public function test_story_scenes_can_be_extracted_with_deterministic_parser_without_openai_call(): void

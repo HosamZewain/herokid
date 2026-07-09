@@ -10,17 +10,17 @@ use RuntimeException;
 
 class GenerationInputAssetResolver
 {
-    public function resolve(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null): array
+    public function resolve(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null, bool $characterSheetFirst = true): array
     {
-        return $this->resolveWithMetadata($project, $indices, $characterSheet)['assets'];
+        return $this->resolveWithMetadata($project, $indices, $characterSheet, $characterSheetFirst)['assets'];
     }
 
-    public function resolveWithMetadata(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null): array
+    public function resolveWithMetadata(ProductionProject $project, array $indices = [], ?ProductionProjectAsset $characterSheet = null, bool $characterSheetFirst = true): array
     {
         $assets = [];
         $metadata = [];
 
-        if ($characterSheet?->file_path) {
+        if ($characterSheetFirst && $characterSheet?->file_path) {
             $assets[] = $this->dataUriFromPath($characterSheet->file_path);
             $metadata[] = [
                 'type' => 'approved_child_reference_illustration',
@@ -42,6 +42,15 @@ class GenerationInputAssetResolver
                 'type' => $this->referenceRole($profile, $index),
                 'photo_index' => $index,
                 'path' => $photos[$index],
+            ];
+        }
+
+        if (! $characterSheetFirst && $characterSheet?->file_path) {
+            $assets[] = $this->dataUriFromPath($characterSheet->file_path);
+            $metadata[] = [
+                'type' => 'approved_child_reference_illustration',
+                'asset_id' => $characterSheet->id,
+                'path' => $characterSheet->file_path,
             ];
         }
 

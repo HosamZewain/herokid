@@ -43,7 +43,8 @@ class CreateGenerationJobAction
 
         $characterSheet = $this->resolveCharacterReference($project, $data);
         $referencePhotoIndices = $this->referencePhotoIndicesForJob($project, $data, $characterSheet);
-        $resolvedInputs = $this->inputAssets->resolveWithMetadata($project, $referencePhotoIndices, $characterSheet);
+        $characterSheetFirst = ($data['generation_mode'] ?? null) !== 'character_scene';
+        $resolvedInputs = $this->inputAssets->resolveWithMetadata($project, $referencePhotoIndices, $characterSheet, $characterSheetFirst);
         $inputAssets = $resolvedInputs['assets'];
 
         if ($providerModel->requiresImageUrl() && $inputAssets === []) {
@@ -88,6 +89,7 @@ class CreateGenerationJobAction
                 'character_sheet_id' => $characterSheet?->id,
                 'input_count' => count($inputAssets),
                 'reference_assets' => $resolvedInputs['metadata'],
+                'character_sheet_first' => $characterSheetFirst,
                 'primary_face_reference_index' => $project->characterProfile?->primaryFaceReferenceIndex(),
                 'body_reference_index' => $project->characterProfile?->bodyReferenceIndex(),
                 'style_reference_index' => $project->characterProfile?->styleReferenceIndex(),

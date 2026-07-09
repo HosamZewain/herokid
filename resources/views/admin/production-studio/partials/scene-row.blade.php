@@ -71,6 +71,23 @@
         @endcan
     </div>
 
+    @if($scenePromptPreview)
+        <details class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-right">
+            <summary class="cursor-pointer text-sm font-black text-indigo-800">معاينة برومبت توليد صورة هذا المشهد</summary>
+            <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div>
+                    <p class="mb-2 text-xs font-black text-indigo-700">Prompt</p>
+                    <pre dir="ltr" class="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-left text-xs leading-5 text-gray-800">{{ $scenePromptPreview['prompt'] }}</pre>
+                </div>
+                <div>
+                    <p class="mb-2 text-xs font-black text-indigo-700">Negative prompt</p>
+                    <pre dir="ltr" class="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-left text-xs leading-5 text-gray-800">{{ $scenePromptPreview['negative_prompt'] }}</pre>
+                </div>
+            </div>
+            <p class="mt-2 text-xs font-bold text-indigo-700">هذه المعاينة هي نفس تعليمات النص المستخدمة عند توليد صورة المشهد. المراجع المصورة تُرسل بشكل خاص ولا تظهر هنا.</p>
+        </details>
+    @endif
+
     @if($improvementPreview)
         <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

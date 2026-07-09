@@ -33,6 +33,16 @@
         $sceneImproveModelReady = filled($sceneImproveModel);
         $profileReady = (bool) $profile?->isReadyForAiGeneration();
         $missingProfileFields = $profile?->missingAiGenerationFields() ?? ['character_profile' => 'ملف الشخصية'];
+        $promptCompiler = app(\App\Services\Ai\ProductionPromptCompiler::class);
+        $scenePromptPreviews = $project->scenes->mapWithKeys(function ($scene) use ($promptCompiler, $project, $approvedCharacterSheet) {
+            return [$scene->id => $promptCompiler->compile(
+                project: $project,
+                scene: $scene,
+                jobType: 'scene_image',
+                stylePreset: 'premium_storybook',
+                characterSheet: $approvedCharacterSheet,
+            )];
+        });
         $hasStoryDraft = $project->storyVersions->isNotEmpty();
         $qaProgress = $project->qaProgress();
         $qaFailed = $project->qaChecks->where('result', 'fail')->count();
@@ -744,6 +754,7 @@
                         'sceneImproveModelReady' => $sceneImproveModelReady,
                         'sceneImproveModel' => $sceneImproveModel,
                         'sceneImprovementPreviews' => $sceneImprovementPreviews,
+                        'scenePromptPreview' => $scenePromptPreviews[$scene->id] ?? null,
                     ])
                 @empty
                     <p class="rounded-xl bg-gray-50 p-4 text-right text-sm text-gray-500">لا توجد مشاهد بعد. أنشئ مسودة من القصة الأصلية أو أضف مشهدًا يدويًا.</p>
