@@ -310,6 +310,10 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('portrait or half-body identity reference', $job->prompt_snapshot);
         $this->assertStringContainsString('No props of any kind: no book, no open pages', $job->prompt_snapshot);
         $this->assertStringContainsString('Use plain clothing with no visible logos, no school badge', $job->prompt_snapshot);
+        $this->assertStringContainsString('Preserve real-photo individuality and asymmetry', $job->prompt_snapshot);
+        $this->assertStringContainsString('Preserve the original hairstyle arrangement from the primary face reference', $job->prompt_snapshot);
+        $this->assertStringContainsString('remove it and replace that area with plain fabric', $job->prompt_snapshot);
+        $this->assertStringContainsString('Keep the face closer to a photo-derived portrait than a cartoon avatar', $job->prompt_snapshot);
         $this->assertStringNotContainsString('Selected story title for context only', $job->prompt_snapshot);
         $this->assertStringNotContainsString('A3 landscape two-page story spread', $job->prompt_snapshot);
         $this->assertSame('0.0300', (string) $job->estimated_cost);
@@ -864,6 +868,9 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('school badge', $job->negative_prompt_snapshot);
         $this->assertStringContainsString('decorative stars', $job->negative_prompt_snapshot);
         $this->assertStringContainsString('exaggerated cartoon face', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('loose center-parted hair if reference hair is tied or side-swept', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('idealized studio portrait', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('doll-like face', $job->negative_prompt_snapshot);
     }
 
     public function test_order_status_and_existing_prompt_remain_unchanged_after_ai_job_creation(): void
