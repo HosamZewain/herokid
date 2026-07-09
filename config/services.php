@@ -39,4 +39,8 @@ return [
         'id' => env('META_PIXEL_ID', '1241523867742555'),
     ],
 
+    'google_analytics' => [
+        'id' => env('GOOGLE_ANALYTICS_ID', 'G-NBQYMB9NT2'),
+    ],
+
 ];

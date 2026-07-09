@@ -109,6 +109,7 @@
 
     @php
         $metaPixelId = trim((string) config('services.meta_pixel.id', ''));
+        $googleAnalyticsId = trim((string) config('services.google_analytics.id', ''));
     @endphp
     @if($metaPixelId !== '')
         <!-- Meta Pixel Code -->
@@ -125,6 +126,17 @@
             fbq('track', 'PageView');
         </script>
         <!-- End Meta Pixel Code -->
+    @endif
+
+    @if($googleAnalyticsId !== '')
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id={{ urlencode($googleAnalyticsId) }}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', @json($googleAnalyticsId));
+        </script>
     @endif
 
     <!-- ══ Fonts ══ -->
