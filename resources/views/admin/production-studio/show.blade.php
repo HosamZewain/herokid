@@ -18,6 +18,10 @@
         $coverAssets = $project->assets->where('asset_type', 'cover_image');
         $approvedCharacterSheet = $characterSheets->firstWhere('is_primary', true);
         $primaryFaceIndex = $profile?->primaryFaceReferenceIndex();
+        $approvedReferencePhotoIndices = array_values(array_unique(array_map('intval', $profile?->approved_reference_photos ?? [])));
+        $analysisPhotoIndices = $approvedReferencePhotoIndices !== []
+            ? $approvedReferencePhotoIndices
+            : array_keys($photos);
         $defaultModel = $defaultModelsByCapability['scene_generation'] ?? null;
         $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
         $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
@@ -515,15 +519,20 @@
                                 @endforeach
                             </select>
                             <div class="flex flex-wrap justify-end gap-2 md:col-span-2">
-                                @foreach($profile?->approved_reference_photos ?? [] as $photoIndex)
+                                @forelse($analysisPhotoIndices as $photoIndex)
                                     <label class="rounded-xl bg-white px-3 py-2 text-sm font-bold text-gray-700 ring-1 ring-purple-100">
-                                        <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" @checked($profile?->primaryFaceReferenceIndex() === (int) $photoIndex)>
+                                        <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" @checked($profile?->primaryFaceReferenceIndex() === (int) $photoIndex || ($primaryFaceIndex === null && $loop->first))>
                                         صورة {{ ((int) $photoIndex) + 1 }}
                                     </label>
-                                @endforeach
+                                @empty
+                                    <p class="rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-700 ring-1 ring-amber-100">لا توجد صور طفل مرفوعة على الطلب.</p>
+                                @endforelse
                             </div>
-                            <button @disabled(!$visionModelReady || count($profile?->approved_reference_photos ?? []) === 0) class="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">تحليل صور الطفل بالذكاء الاصطناعي</button>
+                            <button @disabled(!$visionModelReady || count($analysisPhotoIndices) === 0) class="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">تحليل صور الطفل بالذكاء الاصطناعي</button>
                         </form>
+                        @if($approvedReferencePhotoIndices === [] && count($analysisPhotoIndices) > 0)
+                            <p class="mt-2 text-sm font-bold text-purple-800">لم يتم اعتماد صور مرجعية بعد؛ سيتم تحليل صور الطلب الأصلية مؤقتًا. بعد التحليل اختر صورة الوجه الأساسية واحفظ ملف الشخصية.</p>
+                        @endif
                         @unless($visionModelReady)
                             <p class="mt-2 text-sm font-bold text-amber-700">فعّل نموذج OpenAI افتراضي بقدرة vision_to_text قبل تحليل صور الطفل.</p>
                         @endunless

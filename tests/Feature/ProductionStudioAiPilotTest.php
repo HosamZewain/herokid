@@ -76,6 +76,29 @@ class ProductionStudioAiPilotTest extends TestCase
             ->assertSee('تعبئة مبدئية يدوية');
     }
 
+    public function test_character_ai_analysis_can_start_from_original_order_photos_before_references_are_approved(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableOpenAi();
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->characterProfile->update([
+            'approved_reference_photos' => [],
+            'reference_photo_selection' => [],
+            'primary_face_reference_index' => null,
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('OpenAI جاهز')
+            ->assertSee('لم يتم اعتماد صور مرجعية بعد؛ سيتم تحليل صور الطلب الأصلية مؤقتًا')
+            ->assertSee('name="reference_photo_indices[]" value="0"', false)
+            ->assertSee('تحليل صور الطفل بالذكاء الاصطناعي')
+            ->assertDontSee('disabled class="rounded-xl bg-purple-600', false);
+    }
+
     public function test_character_ai_analysis_sends_selected_images_and_applies_structured_fields(): void
     {
         Storage::fake('local');
