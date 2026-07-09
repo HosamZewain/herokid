@@ -171,7 +171,7 @@ class AiProviderSettingsController extends Controller
         return view('admin.settings.ai-providers.models', [
             'provider' => $provider,
             'definition' => $this->registry->provider($provider->driver),
-            'capabilities' => SupportedProviderRegistry::DEFAULT_CAPABILITIES,
+            'capabilities' => array_keys($this->registry->provider($provider->driver)['default_models'] ?? []),
         ]);
     }
 
@@ -231,7 +231,9 @@ class AiProviderSettingsController extends Controller
             }
         }
 
+        $allowedDefaultCapabilities = array_keys($definition['default_models'] ?? []);
         $defaults = collect($validated['default_models'] ?? [])
+            ->only($allowedDefaultCapabilities)
             ->filter(fn ($code): bool => filled($code))
             ->all();
 

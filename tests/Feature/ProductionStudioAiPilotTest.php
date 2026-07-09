@@ -18,6 +18,7 @@ use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
+use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -54,6 +55,7 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $this->assertSame('OpenAI', $provider->fresh()->display_name);
         $this->assertContains('vision_to_text', $provider->fresh()->capabilities_json);
+        $this->assertTrue(app(SupportedProviderRegistry::class)->modelSupportsCapability('openai', 'gpt-4.1-mini', 'scene_extraction'));
         $this->assertNotSame('sk-openai-secret-for-tests', $provider->credential()->first()->getRawOriginal('encrypted_value'));
         $this->assertSame('sk-openai-secret-for-tests', app(AiProviderCredentialService::class)->secret($provider));
     }

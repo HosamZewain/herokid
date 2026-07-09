@@ -108,6 +108,26 @@ class CartCheckoutTest extends TestCase
             ->assertSee('لم يتم اختيار صور');
     }
 
+    public function test_story_page_renders_wildcard_photo_validation_errors(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('invalid-photo-story', 'صورة غير صحيحة', 100);
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'photos' => [
+                    UploadedFile::fake()->create('child.txt', 4, 'text/plain'),
+                ],
+            ]))
+            ->assertRedirect(route('stories.show', $story->slug))
+            ->assertSessionHasErrors('photos.0');
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('يجب أن تكون صور الطفل ملفات صور صحيحة')
+            ->assertSee('اختيار الصور');
+    }
+
     public function test_parent_can_checkout_multiple_personalized_stories_with_shared_delivery_details(): void
     {
         Storage::fake('local');

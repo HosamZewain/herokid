@@ -2,8 +2,6 @@
 
 namespace App\Support\Ai;
 
-use Illuminate\Support\Arr;
-
 class SupportedProviderRegistry
 {
     public const DEFAULT_CAPABILITIES = [
@@ -141,7 +139,7 @@ class SupportedProviderRegistry
 
     public function model(string $driver, string $code): ?array
     {
-        return Arr::get($this->providers(), "{$driver}.models.{$code}");
+        return $this->providers()[$driver]['models'][$code] ?? null;
     }
 
     public function supportsModel(string $driver, string $code): bool

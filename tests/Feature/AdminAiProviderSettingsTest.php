@@ -217,6 +217,50 @@ class AdminAiProviderSettingsTest extends TestCase
             ->assertSessionHasErrors('models.0.code');
     }
 
+    public function test_openai_model_defaults_ignore_unsupported_capability_keys(): void
+    {
+        $admin = $this->adminWithPermissions([
+            'settings.ai_providers.view',
+            'settings.ai_providers.manage_models',
+            'settings.ai_providers.enable_disable',
+            'settings.ai_providers.view_costs',
+        ]);
+        $provider = $this->configuredOpenAiProvider('openai-secret-key');
+        $model = $provider->models()->where('code', 'gpt-4.1-mini')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->from(route('admin.settings.ai-providers.models', $provider))
+            ->put(route('admin.settings.ai-providers.models.update', $provider), [
+                'models' => [[
+                    'code' => $model->code,
+                    'display_name' => $model->display_name,
+                    'is_active' => '1',
+                    'estimated_cost_amount' => '0.0100',
+                    'estimated_cost_currency' => 'USD',
+                    'cost_unit' => 'per_request',
+                    'notes' => $model->notes,
+                    'sort_order' => '10',
+                ]],
+                'default_models' => [
+                    'text_to_image' => $model->code,
+                    'vision_to_text' => $model->code,
+                    'text_to_json' => $model->code,
+                    'prompt_enhancement' => $model->code,
+                    'scene_extraction' => $model->code,
+                    'image_analysis' => $model->code,
+                    'structured_json_generation' => $model->code,
+                ],
+            ])
+            ->assertRedirect(route('admin.settings.ai-providers.models', $provider))
+            ->assertSessionHas('success');
+
+        $defaults = $provider->fresh()->settings_json['default_models'];
+
+        $this->assertArrayNotHasKey('text_to_image', $defaults);
+        $this->assertSame($model->code, $defaults['scene_extraction']);
+        $this->assertSame($model->code, $defaults['vision_to_text']);
+    }
+
     public function test_generation_uses_database_credential_and_not_env_key(): void
     {
         Queue::fake();
@@ -296,6 +340,22 @@ class AdminAiProviderSettingsTest extends TestCase
     private function configuredFalProvider(string $secret): AiProvider
     {
         $provider = $this->falProvider();
+        app(AiProviderCredentialService::class)->save($provider, $secret);
+        $provider->update([
+            'is_active' => true,
+            'is_configured' => true,
+            'is_available' => true,
+            'last_health_check_status' => null,
+        ]);
+
+        return $provider->fresh(['credential', 'models']);
+    }
+
+    private function configuredOpenAiProvider(string $secret): AiProvider
+    {
+        app(AiProviderRegistrySyncer::class)->sync();
+
+        $provider = AiProvider::where('driver', 'openai')->firstOrFail();
         app(AiProviderCredentialService::class)->save($provider, $secret);
         $provider->update([
             'is_active' => true,

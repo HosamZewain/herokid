@@ -19,8 +19,10 @@ use App\Models\SceneGenerationJob;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
+use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
 use App\Support\AdminActivityLogger;
+use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\JsonResponse;
@@ -126,7 +128,11 @@ class ProductionStudioController extends Controller
         $imageModelsByCapability = collect($imageCapabilities)
             ->mapWithKeys(fn (string $capability) => [$capability => $availability->activeModelsForCapability($capability)]);
         $textModelsByCapability = collect($textCapabilities)
-            ->mapWithKeys(fn (string $capability) => [$capability => $availability->activeModelsForCapability($capability)]);
+            ->mapWithKeys(fn (string $capability) => [$capability => $this->activeModelsForDriverCapability('openai', $capability)]);
+        $openAiProvider = AiProvider::query()
+            ->where('driver', 'openai')
+            ->with('models')
+            ->first();
         $providers = $aiModels->pluck('provider')->unique('id');
 
         return view('admin.production-studio.show', [
@@ -146,12 +152,7 @@ class ProductionStudioController extends Controller
                     ->filter()
                     ->all())
                 ->all(),
-            'defaultTextModelsByCapability' => $providers
-                ->mapWithKeys(fn ($provider) => collect($textCapabilities)
-                    ->mapWithKeys(fn ($capability) => [$capability => $availability->defaultModelFor($provider, $capability)?->code])
-                    ->filter()
-                    ->all())
-                ->all(),
+            'defaultTextModelsByCapability' => $this->defaultModelCodesForDriverCapabilities($openAiProvider, $textCapabilities),
             'stylePresets' => config('production_studio.ai.style_presets', []),
             'aiCostSummary' => $project->aiCostSummary(),
             'characterAnalysisPreview' => session($this->characterAnalysisSessionKey($project)),
@@ -943,6 +944,60 @@ class ProductionStudioController extends Controller
         }
 
         return $rules;
+    }
+
+    private function activeModelsForDriverCapability(string $driver, string $capability)
+    {
+        $provider = AiProvider::query()
+            ->where('driver', $driver)
+            ->with('models')
+            ->first();
+
+        if (! $this->providerUsableForStudio($provider)) {
+            return collect();
+        }
+
+        $registry = app(SupportedProviderRegistry::class);
+
+        return $provider->models
+            ->filter(fn (AiModel $model): bool => $model->is_active
+                && $registry->modelSupportsCapability($driver, $model->code, $capability)
+                && $model->supportsCapability($capability))
+            ->sortBy([['sort_order', 'asc'], ['display_name', 'asc']])
+            ->values();
+    }
+
+    private function defaultModelCodesForDriverCapabilities(?AiProvider $provider, array $capabilities): array
+    {
+        if (! $this->providerUsableForStudio($provider)) {
+            return [];
+        }
+
+        $registry = app(SupportedProviderRegistry::class);
+
+        return collect($capabilities)
+            ->mapWithKeys(function (string $capability) use ($provider, $registry): array {
+                $code = data_get($provider->settings_json, "default_models.{$capability}");
+                $model = $code
+                    ? $provider->models->firstWhere('code', $code)
+                    : null;
+
+                if (! $model?->is_active || ! $model->supportsCapability($capability) || ! $registry->modelSupportsCapability($provider->driver, $model->code, $capability)) {
+                    return [$capability => null];
+                }
+
+                return [$capability => $model->code];
+            })
+            ->filter()
+            ->all();
+    }
+
+    private function providerUsableForStudio(?AiProvider $provider): bool
+    {
+        return (bool) config('production_studio.enabled', true)
+            && $provider?->is_active
+            && $provider->last_health_check_status !== 'failed'
+            && app(AiProviderCredentialService::class)->hasCredential($provider);
     }
 
     private function resolveTextModel(?string $modelCode, string $capability, AiProviderAvailability $availability): AiModel
