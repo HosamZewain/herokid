@@ -47,8 +47,11 @@
             <form method="POST" action="{{ route('admin.production-studio.scenes.improve', [$project, $scene]) }}" class="flex flex-wrap justify-end gap-2">
                 @csrf
                 <input type="hidden" name="model_code" value="{{ $sceneImproveModel }}">
-                <button @disabled(!$openAiAvailable || !$hasText) class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">تحسين التوجيه البصري بالذكاء الاصطناعي</button>
+                <button @disabled(!$sceneImproveModelReady || !$hasText) class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">تحسين التوجيه البصري بالذكاء الاصطناعي</button>
             </form>
+            @unless($sceneImproveModelReady)
+                <span class="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">فعّل نموذج OpenAI بقدرة prompt_enhancement</span>
+            @endunless
         @endcan
     </div>
 

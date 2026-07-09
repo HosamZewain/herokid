@@ -13,7 +13,6 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class OpenAiTextVisionProvider implements AiTextVisionProvider
@@ -223,7 +222,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
 
         return new StructuredAiResult(
             data: $data,
-            raw: $this->redact($response),
+            metadata: $this->safeResponseMetadata($response),
             usage: [
                 'input_tokens' => data_get($response, 'usage.input_tokens'),
                 'output_tokens' => data_get($response, 'usage.output_tokens'),
@@ -430,14 +429,13 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         return true;
     }
 
-    private function redact(array $payload): array
+    private function safeResponseMetadata(array $response): array
     {
-        array_walk_recursive($payload, function (&$value, $key): void {
-            if (is_string($key) && Str::contains(Str::lower($key), ['key', 'token', 'secret', 'authorization'])) {
-                $value = '[redacted]';
-            }
-        });
-
-        return $payload;
+        return [
+            'response_id' => data_get($response, 'id'),
+            'status' => data_get($response, 'status'),
+            'model' => data_get($response, 'model'),
+            'created_at' => data_get($response, 'created_at'),
+        ];
     }
 }

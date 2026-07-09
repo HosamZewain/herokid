@@ -947,19 +947,25 @@ class ProductionStudioController extends Controller
 
     private function resolveTextModel(?string $modelCode, string $capability, AiProviderAvailability $availability): AiModel
     {
-        if (! $modelCode) {
-            $model = AiProvider::query()
-                ->where('driver', 'openai')
+        $provider = AiProvider::query()
+            ->where('driver', 'openai')
+            ->where('is_active', true)
+            ->with('models')
+            ->first();
+        $defaultCode = $provider ? data_get($provider->settings_json, "default_models.{$capability}") : null;
+        $defaultModel = $provider && $defaultCode
+            ? $provider->models()
+                ->where('code', $defaultCode)
                 ->where('is_active', true)
-                ->with('models')
-                ->get()
-                ->map(fn ($provider) => $availability->defaultModelFor($provider, $capability))
-                ->filter()
-                ->first();
+                ->first()
+            : null;
 
-            if ($model) {
-                return $model->load('provider');
-            }
+        if (! $defaultModel || ! $defaultModel->supportsCapability($capability)) {
+            throw new \RuntimeException('OpenAI default model is not configured for this action.');
+        }
+
+        if (! $modelCode) {
+            return $defaultModel->load('provider');
         }
 
         $model = AiModel::query()
@@ -1015,7 +1021,7 @@ class ProductionStudioController extends Controller
             'provider_response_json' => [
                 'usage' => $result->usage,
                 'structured_result' => $result->data,
-                'raw' => $result->raw,
+                'metadata' => $result->metadata,
             ],
             'estimated_cost' => $model->estimatedCost(),
             'actual_cost' => $result->actualCost,

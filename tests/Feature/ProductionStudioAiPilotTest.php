@@ -69,7 +69,7 @@ class ProductionStudioAiPilotTest extends TestCase
             ->get(route('admin.production-studio.show', $project))
             ->assertOk()
             ->assertSee('تحليل صور الطفل بالذكاء الاصطناعي')
-            ->assertSee('OpenAI غير مهيأ')
+            ->assertSee('OpenAI أو نموذج تحليل الصور غير مهيأ')
             ->assertSee('disabled', false)
             ->assertSee('تعبئة مبدئية يدوية');
     }
@@ -115,6 +115,19 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('completed', $job->status);
         $this->assertSame('openai', $job->provider->driver);
         $this->assertNotEmpty($job->prompt_snapshot);
+        $storedPayload = json_encode([
+            'request' => $job->provider_request_json,
+            'response' => $job->provider_response_json,
+            'prompt' => $job->prompt_snapshot,
+            'inputs' => $job->input_assets_json,
+        ], JSON_UNESCAPED_SLASHES);
+        $this->assertStringNotContainsString('data:image/', $storedPayload);
+        $this->assertStringNotContainsString('image-bytes', $storedPayload);
+        $this->assertStringNotContainsString('output_text', $storedPayload);
+        $this->assertArrayNotHasKey('raw', $job->provider_response_json);
+        $this->assertSame('طفلة مصرية بملامح هادئة وابتسامة طبيعية.', data_get($job->provider_response_json, 'structured_result.appearance_summary'));
+        $this->assertSame(200, data_get($job->provider_response_json, 'usage.total_tokens'));
+        $this->assertSame('resp_test', data_get($job->provider_response_json, 'metadata.response_id'));
 
         $this->actingAs($this->adminUser())
             ->post(route('admin.production-studio.character-profile.apply-analysis', $project))
@@ -125,6 +138,45 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('طفلة مصرية بملامح هادئة وابتسامة طبيعية.', $profile->appearance_summary);
         $this->assertSame('عينان بنيتان وخدان ناعمان.', $profile->eye_color_traits);
         $this->assertSame('وجه طفولي مستدير قليلًا.', $profile->face_shape_notes);
+    }
+
+    public function test_openai_actions_require_active_default_model_for_capability(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableOpenAi();
+        Http::fake();
+
+        $provider = AiProvider::where('driver', 'openai')->firstOrFail();
+        $settings = $provider->settings_json;
+        $settings['default_models'] = [];
+        $provider->update(['settings_json' => $settings]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Moon',
+            'story_text' => 'The child looks at the moon.',
+        ]);
+        $model = AiModel::whereHas('provider', fn ($query) => $query->where('driver', 'openai'))->firstOrFail();
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('فعّل نموذج OpenAI افتراضي بقدرة vision_to_text قبل تحليل صور الطفل')
+            ->assertSee('فعّل نموذج OpenAI افتراضي بقدرة scene_extraction قبل استخدام استخراج المشاهد')
+            ->assertSee('فعّل نموذج OpenAI بقدرة prompt_enhancement');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.character-profile.analyze', $project), [
+                'model_code' => $model->code,
+                'reference_photo_indices' => [0],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('character_analysis');
+
+        $this->assertDatabaseMissing('scene_generation_jobs', ['job_type' => 'character_analysis']);
+        Http::assertNothingSent();
     }
 
     public function test_generation_cannot_start_when_fal_is_disabled_or_key_is_missing(): void

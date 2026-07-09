@@ -22,8 +22,11 @@
         $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
         $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
         $visionModel = $defaultTextModelsByCapability['vision_to_text'] ?? null;
-        $sceneExtractionModel = $defaultTextModelsByCapability['scene_extraction'] ?? ($defaultTextModelsByCapability['text_to_json'] ?? null);
-        $sceneImproveModel = $defaultTextModelsByCapability['prompt_enhancement'] ?? ($defaultTextModelsByCapability['text_to_json'] ?? null);
+        $sceneExtractionModel = $defaultTextModelsByCapability['scene_extraction'] ?? null;
+        $sceneImproveModel = $defaultTextModelsByCapability['prompt_enhancement'] ?? null;
+        $visionModelReady = filled($visionModel);
+        $sceneExtractionModelReady = filled($sceneExtractionModel);
+        $sceneImproveModelReady = filled($sceneImproveModel);
         $profileReady = (bool) $profile?->isReadyForAiGeneration();
         $missingProfileFields = $profile?->missingAiGenerationFields() ?? ['character_profile' => 'ملف الشخصية'];
         $hasStoryDraft = $project->storyVersions->isNotEmpty();
@@ -365,8 +368,8 @@
                             <h3 class="font-black text-gray-950">بناء المشاهد من مسودة القصة</h3>
                             <p class="mt-1 text-sm leading-7 text-indigo-900">يتم استخدام parser محلي أولًا عند وجود عناوين مشاهد واضحة. إذا لم يكفِ، يتم استخدام OpenAI لإرجاع JSON منظم.</p>
                         </div>
-                        @unless($openAiAvailable)
-                            @include('admin.production-studio.partials.status-badge', ['label' => 'OpenAI غير مهيأ', 'tone' => 'amber'])
+                        @unless($openAiAvailable && $sceneExtractionModelReady)
+                            @include('admin.production-studio.partials.status-badge', ['label' => 'OpenAI أو نموذج استخراج المشاهد غير مهيأ', 'tone' => 'amber'])
                         @endunless
                     </div>
                     <form method="POST" action="{{ route('admin.production-studio.story-versions.extract-scenes', $project) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -377,13 +380,16 @@
                                 <option value="{{ $version->id }}">مسودة {{ $version->version_number }} - {{ $version->title ?? 'بدون عنوان' }}</option>
                             @endforeach
                         </select>
-                        <select name="model_code" @disabled(!$openAiAvailable) class="rounded-xl border-gray-300 text-right">
+                        <select name="model_code" @disabled(!$sceneExtractionModelReady) class="rounded-xl border-gray-300 text-right">
                             @foreach($textModelsByCapability['scene_extraction'] ?? collect() as $model)
                                 <option value="{{ $model->code }}" @selected($model->code === $sceneExtractionModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
                             @endforeach
                         </select>
-                        <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white">بناء المشاهد من مسودة القصة</button>
+                        <button @disabled(!$sceneExtractionModelReady) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">بناء المشاهد من مسودة القصة</button>
                     </form>
+                    @unless($sceneExtractionModelReady)
+                        <p class="mt-2 text-sm font-bold text-amber-700">فعّل نموذج OpenAI افتراضي بقدرة scene_extraction قبل استخدام استخراج المشاهد.</p>
+                    @endunless
 
                     @if($sceneExtractionPreview)
                         <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
@@ -468,11 +474,11 @@
                                 <p class="font-black text-purple-950">تحليل صور الطفل بالذكاء الاصطناعي</p>
                                 <p class="mt-1 text-sm leading-7 text-purple-900">يستخدم OpenAI لتحليل الصور المختارة وإرجاع حقول منظمة قابلة للمراجعة قبل الحفظ.</p>
                             </div>
-                            @include('admin.production-studio.partials.status-badge', ['label' => $openAiAvailable ? 'OpenAI جاهز' : 'OpenAI غير مهيأ', 'tone' => $openAiAvailable ? 'emerald' : 'amber'])
+                            @include('admin.production-studio.partials.status-badge', ['label' => ($openAiAvailable && $visionModelReady) ? 'OpenAI جاهز' : 'OpenAI أو نموذج تحليل الصور غير مهيأ', 'tone' => ($openAiAvailable && $visionModelReady) ? 'emerald' : 'amber'])
                         </div>
                         <form method="POST" action="{{ route('admin.production-studio.character-profile.analyze', $project) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
                             @csrf
-                            <select name="model_code" @disabled(!$openAiAvailable) class="rounded-xl border-gray-300 text-right">
+                            <select name="model_code" @disabled(!$visionModelReady) class="rounded-xl border-gray-300 text-right">
                                 @foreach($textModelsByCapability['vision_to_text'] ?? collect() as $model)
                                     <option value="{{ $model->code }}" @selected($model->code === $visionModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
                                 @endforeach
@@ -485,8 +491,11 @@
                                     </label>
                                 @endforeach
                             </div>
-                            <button @disabled(!$openAiAvailable || count($profile?->approved_reference_photos ?? []) === 0) class="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">تحليل صور الطفل بالذكاء الاصطناعي</button>
+                            <button @disabled(!$visionModelReady || count($profile?->approved_reference_photos ?? []) === 0) class="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">تحليل صور الطفل بالذكاء الاصطناعي</button>
                         </form>
+                        @unless($visionModelReady)
+                            <p class="mt-2 text-sm font-bold text-amber-700">فعّل نموذج OpenAI افتراضي بقدرة vision_to_text قبل تحليل صور الطفل.</p>
+                        @endunless
 
                         @if($characterAnalysisPreview)
                             <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
@@ -680,6 +689,7 @@
                         'aiAvailable' => $aiAvailable,
                         'openAiAvailable' => $openAiAvailable,
                         'defaultModel' => $defaultModel,
+                        'sceneImproveModelReady' => $sceneImproveModelReady,
                         'sceneImproveModel' => $sceneImproveModel,
                         'sceneImprovementPreviews' => $sceneImprovementPreviews,
                     ])
