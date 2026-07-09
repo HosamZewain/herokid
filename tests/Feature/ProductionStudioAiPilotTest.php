@@ -289,6 +289,13 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('character_sheet', $job->job_type);
         $this->assertSame('character_sheet', $job->generation_mode);
         $this->assertStringContainsString('Approved Child Reference Illustration requirements', $job->prompt_snapshot);
+        $this->assertStringContainsString('clean child identity reference illustration', $job->prompt_snapshot);
+        $this->assertStringContainsString('This is not a story scene, book cover, poster, product mockup, or page layout', $job->prompt_snapshot);
+        $this->assertStringContainsString('portrait or half-body identity reference', $job->prompt_snapshot);
+        $this->assertStringContainsString('No props of any kind: no book, no open pages', $job->prompt_snapshot);
+        $this->assertStringContainsString('Use plain clothing with no visible logos, no school badge', $job->prompt_snapshot);
+        $this->assertStringNotContainsString('Selected story title for context only', $job->prompt_snapshot);
+        $this->assertStringNotContainsString('A3 landscape two-page story spread', $job->prompt_snapshot);
         $this->assertSame('0.0300', (string) $job->estimated_cost);
         $this->assertSame('estimated', $job->cost_source);
         Queue::assertPushed(SubmitAiGenerationJob::class);
@@ -430,6 +437,9 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('scene_image', $job->job_type);
         $this->assertSame('character_scene', $job->generation_mode);
         $this->assertStringContainsString('Moon Scene', $job->prompt_snapshot);
+        $this->assertStringContainsString('Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.', $job->prompt_snapshot);
+        $this->assertStringContainsString('Do not transform the child into a different-looking character. Use the real photo-derived face as the identity anchor', $job->prompt_snapshot);
+        $this->assertStringContainsString('The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions', $job->prompt_snapshot);
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
@@ -618,6 +628,8 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('cover_generation', $job->generation_mode);
         $this->assertStringContainsString('Cover artwork requirements', $job->prompt_snapshot);
         $this->assertStringContainsString('do not render final cover text', $job->prompt_snapshot);
+        $this->assertStringContainsString('Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.', $job->prompt_snapshot);
+        $this->assertStringContainsString('The cover child must use the same real photo-derived face and apparent age from the original references.', $job->prompt_snapshot);
         $this->assertSame('0.0800', (string) $job->estimated_cost);
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
@@ -832,6 +844,10 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('Preserve the exact face shape', $job->prompt_snapshot);
         $this->assertStringContainsString('No text, no letters, no words', $job->prompt_snapshot);
         $this->assertStringContainsString('fake HeroKid title', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('open book', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('school badge', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('decorative stars', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('exaggerated cartoon face', $job->negative_prompt_snapshot);
     }
 
     public function test_order_status_and_existing_prompt_remain_unchanged_after_ai_job_creation(): void
