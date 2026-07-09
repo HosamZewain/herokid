@@ -44,16 +44,15 @@
         $jobCompleted = $project->generationJobs->where('status', 'completed')->count();
         $jobFailed = $project->generationJobs->where('status', 'failed')->count();
         $jobProcessing = $project->generationJobs->whereIn('status', ['queued', 'processing'])->count();
-        $pendingSceneExtractionJob = $project->generationJobs
+        $sceneExtractionJobs = $project->generationJobs
+            ->where('job_type', 'scene_extraction')
+            ->sortByDesc('created_at');
+        $latestSceneExtractionJob = $sceneExtractionJobs->first();
+        $pendingSceneExtractionJob = $sceneExtractionJobs
             ->where('job_type', 'scene_extraction')
             ->whereIn('status', ['queued', 'processing'])
-            ->sortByDesc('created_at')
             ->first();
-        $failedSceneExtractionJob = $project->generationJobs
-            ->where('job_type', 'scene_extraction')
-            ->where('status', 'failed')
-            ->sortByDesc('created_at')
-            ->first();
+        $failedSceneExtractionJob = $latestSceneExtractionJob?->status === 'failed' ? $latestSceneExtractionJob : null;
         $pendingCharacterAnalysisJob = $project->generationJobs
             ->where('job_type', 'character_analysis')
             ->whereIn('status', ['queued', 'processing'])
@@ -390,7 +389,7 @@
                     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h3 class="font-black text-gray-950">بناء المشاهد من مسودة القصة</h3>
-                            <p class="mt-1 text-sm leading-7 text-indigo-900">يتم استخدام parser محلي أولًا عند وجود عناوين مشاهد واضحة. إذا لم يكفِ، يتم استخدام OpenAI لإرجاع JSON منظم.</p>
+                            <p class="mt-1 text-sm leading-7 text-indigo-900">هذه الخطوة تبني معاينة منظمة لـ 13 مشهدًا من نص القصة. بعد نجاح المهمة راجع المعاينة ثم اضغط “تأكيد واستبدال المشاهد الحالية” لحفظها في القائمة.</p>
                         </div>
                         @unless($openAiAvailable && $sceneExtractionModelReady)
                             @include('admin.production-studio.partials.status-badge', ['label' => 'OpenAI أو نموذج استخراج المشاهد غير مهيأ', 'tone' => 'amber'])
@@ -417,7 +416,7 @@
                     @if($pendingSceneExtractionJob)
                         <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-right text-sm font-bold text-blue-800">
                             مهمة استخراج المشاهد #{{ $pendingSceneExtractionJob->id }} حالتها: {{ $pendingSceneExtractionJob->status }}.
-                            شغّل الكرون/queue worker ثم حدّث الصفحة لظهور المعاينة.
+                            شغّل الكرون/queue worker ثم حدّث الصفحة لظهور المعاينة. هذه المهمة لا تحفظ المشاهد تلقائيًا إلا بعد التأكيد.
                         </div>
                     @endif
                     @if($failedSceneExtractionJob)

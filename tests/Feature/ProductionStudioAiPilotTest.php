@@ -531,11 +531,13 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertDatabaseHas('scene_generation_jobs', ['job_type' => 'scene_extraction', 'generation_mode' => 'scene_extraction']);
 
         Http::assertSent(function ($request): bool {
-            $body = json_encode($request->data(), JSON_THROW_ON_ERROR);
+            $data = $request->data();
+            $body = json_encode($data, JSON_THROW_ON_ERROR);
 
             return str_contains($body, 'HeroKid fixed booklet structure')
                 && str_contains($body, 'one single connected full-width A3 landscape illustration')
-                && str_contains($body, 'Do not ask for generated text, letters, labels, signs, titles, captions, or logos inside the image');
+                && str_contains($body, 'Do not ask for generated text, letters, labels, signs, titles, captions, or logos inside the image')
+                && ($data['max_output_tokens'] ?? null) === 6000;
         });
     }
 
@@ -581,11 +583,13 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('Use quiet sky area for text.', $scene->text_safe_area_notes);
 
         Http::assertSent(function ($request): bool {
-            $body = json_encode($request->data(), JSON_THROW_ON_ERROR);
+            $data = $request->data();
+            $body = json_encode($data, JSON_THROW_ON_ERROR);
 
             return str_contains($body, 'one connected A3 landscape two-page reader spread')
                 && str_contains($body, 'Do not describe two separate unrelated illustrations')
-                && str_contains($body, 'No Arabic text or any other visible text should be requested inside the image');
+                && str_contains($body, 'No Arabic text or any other visible text should be requested inside the image')
+                && ($data['max_output_tokens'] ?? null) === 1500;
         });
     }
 

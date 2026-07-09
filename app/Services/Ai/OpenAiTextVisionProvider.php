@@ -88,7 +88,9 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         $prompt = implode("\n", [
             'Extract exactly 13 HeroKid production scenes from the story draft.',
             'Return strict JSON only according to the schema.',
+            'Keep every field concise and production-ready. Avoid long paragraphs.',
             'Each scene must include written_text, visual_direction, child_action_pose, environment, mood_lighting, supporting_characters, key_objects, continuity_notes, safe_text_area_notes, and educational_value.',
+            'Limit written_text to 35-60 Arabic words per scene. Limit other fields to 1-2 clear sentences.',
             'HeroKid fixed booklet structure: the final book is exactly 28 A4 portrait reader pages. Page 1 is the front cover, page 28 is the back cover, and pages 2-27 contain exactly 13 story scenes.',
             'Each scene is one logical reader spread across two consecutive A4 portrait pages: scene 1 pages 2-3, scene 2 pages 4-5, continuing until scene 13 pages 26-27.',
             'Every visual_direction must describe one single connected full-width A3 landscape illustration across the two facing A4 pages. Do not describe two separate unrelated illustrations.',
@@ -106,6 +108,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
             schema: $this->sceneExtractionSchema(),
             content: [['type' => 'input_text', 'text' => $prompt]],
             validator: fn (array $data): bool => $this->validSceneExtraction($data),
+            maxOutputTokens: 6000,
         );
     }
 
@@ -150,6 +153,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
                 'continuity_notes',
                 'safe_text_area_notes',
             ]),
+            maxOutputTokens: 1500,
         );
     }
 
@@ -192,7 +196,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         }
     }
 
-    private function requestJson(AiModel $model, string $prompt, string $schemaName, array $schema, array $content, callable $validator): StructuredAiResult
+    private function requestJson(AiModel $model, string $prompt, string $schemaName, array $schema, array $content, callable $validator, int $maxOutputTokens = 2500): StructuredAiResult
     {
         $provider = $model->provider;
 
@@ -214,6 +218,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
                     'schema' => $schema,
                 ],
             ],
+            'max_output_tokens' => $maxOutputTokens,
         ];
 
         $response = $this->client($provider)
@@ -317,7 +322,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
             throw new RuntimeException('OpenAI provider is not configured yet.');
         }
 
-        return Http::timeout((int) ($provider->default_timeout_seconds ?: 60))
+        return Http::timeout(max(120, (int) ($provider->default_timeout_seconds ?: 60)))
             ->retry((int) ($provider->default_max_retries ?? 1), 500)
             ->withToken($secret)
             ->acceptJson();
