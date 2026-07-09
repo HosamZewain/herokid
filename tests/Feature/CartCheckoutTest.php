@@ -124,8 +124,46 @@ class CartCheckoutTest extends TestCase
 
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
-            ->assertSee('يجب أن تكون صور الطفل ملفات صور صحيحة')
+            ->assertSee('صيغة الصورة غير مدعومة')
             ->assertSee('اختيار الصور');
+    }
+
+    public function test_story_cart_accepts_mobile_image_formats_up_to_15_mb_each(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('mobile-photo-story', 'صورة موبايل', 100);
+
+        $this->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+            'photos' => [
+                UploadedFile::fake()->create('child.webp', 512, 'image/webp'),
+                UploadedFile::fake()->create('child.heic', 512, 'image/heic'),
+            ],
+        ]))
+            ->assertRedirect(route('cart.index'))
+            ->assertSessionDoesntHaveErrors();
+
+        $cart = session('cart.items');
+        $this->assertCount(1, $cart);
+        $this->assertCount(2, collect($cart)->first()['uploaded_photos']);
+    }
+
+    public function test_story_cart_rejects_images_larger_than_15_mb_with_clear_message(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('large-photo-story', 'صورة كبيرة', 100);
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'photos' => [
+                    UploadedFile::fake()->create('large-child.jpg', 15361, 'image/jpeg'),
+                ],
+            ]))
+            ->assertRedirect(route('stories.show', $story->slug))
+            ->assertSessionHasErrors('photos.0');
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('حجم كل صورة يجب ألا يزيد عن 15 ميجا');
     }
 
     public function test_parent_can_checkout_multiple_personalized_stories_with_shared_delivery_details(): void

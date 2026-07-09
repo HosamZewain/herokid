@@ -8,11 +8,34 @@ use App\Models\Order;
 use App\Models\Story;
 use App\Support\ProductRecommendations;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
+    private const PHOTO_MAX_KILOBYTES = 15360;
+
+    private const ALLOWED_PHOTO_EXTENSIONS = [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'heic',
+        'heif',
+    ];
+
+    private const ALLOWED_PHOTO_MIME_TYPES = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'image/heic-sequence',
+        'image/heif-sequence',
+    ];
+
     public function index()
     {
         $cart = $this->cart();
@@ -49,7 +72,29 @@ class CartController extends Controller
             'parent_notes' => 'nullable|string|max:1000',
             'privacy_consent' => 'required|accepted',
             'photos' => 'required|array|min:1|max:5',
-            'photos.*' => 'image|mimes:jpeg,png,jpg|max:5120',
+            'photos.*' => [
+                'file',
+                'max:'.self::PHOTO_MAX_KILOBYTES,
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! $value instanceof UploadedFile || ! $value->isValid()) {
+                        $fail('تعذر رفع الصورة. يرجى إعادة اختيار الصورة والمحاولة مرة أخرى.');
+
+                        return;
+                    }
+
+                    $extension = strtolower($value->getClientOriginalExtension());
+                    $clientMime = strtolower((string) $value->getClientMimeType());
+                    $detectedMime = strtolower((string) $value->getMimeType());
+
+                    $hasAllowedExtension = in_array($extension, self::ALLOWED_PHOTO_EXTENSIONS, true);
+                    $hasAllowedMime = in_array($clientMime, self::ALLOWED_PHOTO_MIME_TYPES, true)
+                        || in_array($detectedMime, self::ALLOWED_PHOTO_MIME_TYPES, true);
+
+                    if (! $hasAllowedExtension && ! $hasAllowedMime) {
+                        $fail('صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF من الموبايل.');
+                    }
+                },
+            ],
         ], [
             'child_name.required' => 'يرجى إدخال اسم الطفل.',
             'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفاً.',
@@ -68,9 +113,8 @@ class CartController extends Controller
             'photos.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
             'photos.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
             'photos.max' => 'يمكنك رفع 5 صور كحد أقصى.',
-            'photos.*.image' => 'يجب أن تكون صور الطفل ملفات صور صحيحة.',
-            'photos.*.mimes' => 'صور الطفل يجب أن تكون بصيغة JPG أو PNG.',
-            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن 5 ميجا.',
+            'photos.*.file' => 'تعذر رفع الصورة. تأكد أن الملف صورة صحيحة وأن الاتصال لم ينقطع أثناء الرفع.',
+            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن 15 ميجا.',
         ]);
 
         $itemKey = (string) Str::uuid();

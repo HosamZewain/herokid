@@ -40,6 +40,26 @@
         $jobCompleted = $project->generationJobs->where('status', 'completed')->count();
         $jobFailed = $project->generationJobs->where('status', 'failed')->count();
         $jobProcessing = $project->generationJobs->whereIn('status', ['queued', 'processing'])->count();
+        $pendingSceneExtractionJob = $project->generationJobs
+            ->where('job_type', 'scene_extraction')
+            ->whereIn('status', ['queued', 'processing'])
+            ->sortByDesc('created_at')
+            ->first();
+        $failedSceneExtractionJob = $project->generationJobs
+            ->where('job_type', 'scene_extraction')
+            ->where('status', 'failed')
+            ->sortByDesc('created_at')
+            ->first();
+        $pendingCharacterAnalysisJob = $project->generationJobs
+            ->where('job_type', 'character_analysis')
+            ->whereIn('status', ['queued', 'processing'])
+            ->sortByDesc('created_at')
+            ->first();
+        $failedCharacterAnalysisJob = $project->generationJobs
+            ->where('job_type', 'character_analysis')
+            ->where('status', 'failed')
+            ->sortByDesc('created_at')
+            ->first();
         $latestActivity = $project->activityLogs->sortByDesc('created_at')->first();
         $referencePhotoSummary = $primaryFaceIndex !== null ? 'صورة الوجه الأساسية #'.($primaryFaceIndex + 1) : 'لا توجد صورة وجه أساسية';
         $stageDefaultMap = [
@@ -390,6 +410,17 @@
                     @unless($sceneExtractionModelReady)
                         <p class="mt-2 text-sm font-bold text-amber-700">فعّل نموذج OpenAI افتراضي بقدرة scene_extraction قبل استخدام استخراج المشاهد.</p>
                     @endunless
+                    @if($pendingSceneExtractionJob)
+                        <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-right text-sm font-bold text-blue-800">
+                            مهمة استخراج المشاهد #{{ $pendingSceneExtractionJob->id }} حالتها: {{ $pendingSceneExtractionJob->status }}.
+                            شغّل الكرون/queue worker ثم حدّث الصفحة لظهور المعاينة.
+                        </div>
+                    @endif
+                    @if($failedSceneExtractionJob)
+                        <div class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-right text-sm font-bold text-red-700">
+                            آخر محاولة استخراج مشاهد فشلت: {{ $failedSceneExtractionJob->error_message ?: 'حدث خطأ غير معروف.' }}
+                        </div>
+                    @endif
 
                     @if($sceneExtractionPreview)
                         <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
@@ -496,6 +527,17 @@
                         @unless($visionModelReady)
                             <p class="mt-2 text-sm font-bold text-amber-700">فعّل نموذج OpenAI افتراضي بقدرة vision_to_text قبل تحليل صور الطفل.</p>
                         @endunless
+                        @if($pendingCharacterAnalysisJob)
+                            <div class="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-right text-sm font-bold text-blue-800">
+                                مهمة تحليل الصور #{{ $pendingCharacterAnalysisJob->id }} حالتها: {{ $pendingCharacterAnalysisJob->status }}.
+                                شغّل الكرون/queue worker ثم حدّث الصفحة لظهور المعاينة.
+                            </div>
+                        @endif
+                        @if($failedCharacterAnalysisJob)
+                            <div class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-right text-sm font-bold text-red-700">
+                                آخر محاولة تحليل صور فشلت: {{ $failedCharacterAnalysisJob->error_message ?: 'حدث خطأ غير معروف.' }}
+                            </div>
+                        @endif
 
                         @if($characterAnalysisPreview)
                             <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">

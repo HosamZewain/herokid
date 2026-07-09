@@ -7,6 +7,7 @@ use App\Actions\ProductionStudio\CreateGenerationJobAction;
 use App\Actions\ProductionStudio\RejectGeneratedAssetAction;
 use App\DTOs\Ai\StructuredAiResult;
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessStructuredAiJob;
 use App\Models\AiModel;
 use App\Models\AiProvider;
 use App\Models\Order;
@@ -155,9 +156,11 @@ class ProductionStudioController extends Controller
             'defaultTextModelsByCapability' => $this->defaultModelCodesForDriverCapabilities($openAiProvider, $textCapabilities),
             'stylePresets' => config('production_studio.ai.style_presets', []),
             'aiCostSummary' => $project->aiCostSummary(),
-            'characterAnalysisPreview' => session($this->characterAnalysisSessionKey($project)),
-            'sceneExtractionPreview' => session($this->sceneExtractionSessionKey($project)),
-            'sceneImprovementPreviews' => session($this->sceneImprovementSessionKey($project), []),
+            'characterAnalysisPreview' => session($this->characterAnalysisSessionKey($project))
+                ?: $this->latestStructuredAiPreview($project, 'character_analysis'),
+            'sceneExtractionPreview' => session($this->sceneExtractionSessionKey($project))
+                ?: $this->latestStructuredAiPreview($project, 'scene_extraction'),
+            'sceneImprovementPreviews' => $this->sceneImprovementPreviews($project),
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
                 ? StoryProductionPrompt::forOrder($project->order)
                 : null,
@@ -577,10 +580,12 @@ class ProductionStudioController extends Controller
 
             if (! $extracted) {
                 $model = $this->resolveTextModel($validated['model_code'] ?? null, 'scene_extraction', $availability);
-                $result = $providers->textVisionProvider($model->provider->driver)->extractScenesToJson($project, $model, $version ?: $storyText);
-                $extracted = $result->data;
-                $source = 'openai';
-                $job = $this->recordStructuredAiJob($project, $model, 'scene_extraction', 'scene_extraction', $result);
+                $job = $this->createQueuedStructuredAiJob($project, $model, 'scene_extraction', 'scene_extraction', [
+                    'source_version_id' => $version?->id,
+                ]);
+                $this->dispatchStructuredAiJob($job);
+
+                return back()->with('success', 'تم إرسال استخراج المشاهد إلى قائمة المعالجة. حدّث الصفحة بعد تشغيل المهمة أو انتظر الكرون.');
             }
         } catch (\Throwable $exception) {
             return back()->withErrors(['scene_extraction' => $this->safeAiError($exception)])->withInput();
@@ -604,7 +609,8 @@ class ProductionStudioController extends Controller
     {
         $this->ensureEnabled();
 
-        $preview = session($this->sceneExtractionSessionKey($project));
+        $preview = session($this->sceneExtractionSessionKey($project))
+            ?: $this->latestStructuredAiPreview($project, 'scene_extraction');
         $scenes = data_get($preview, 'data.scenes', []);
 
         if (! is_array($scenes) || count($scenes) !== 13) {
@@ -633,6 +639,7 @@ class ProductionStudioController extends Controller
         }
 
         session()->forget($this->sceneExtractionSessionKey($project));
+        $this->markStructuredAiPreviewApplied($preview);
 
         ProductionStudio::log($project, 'story_scenes.applied', 'تم حفظ المشاهد المستخرجة بعد المراجعة.', [
             'scene_count' => count($scenes),
@@ -713,33 +720,28 @@ class ProductionStudioController extends Controller
         try {
             $model = $this->resolveTextModel($validated['model_code'], 'vision_to_text', $availability);
             $indices = $this->approvedOrExistingPhotoIndices($project, $validated['reference_photo_indices']);
-            $result = $providers->textVisionProvider($model->provider->driver)->analyzeImagesToJson($project, $model, $indices);
-            $job = $this->recordStructuredAiJob($project, $model, 'character_analysis', 'vision_to_text', $result, [
+            $job = $this->createQueuedStructuredAiJob($project, $model, 'character_analysis', 'vision_to_text', [
                 'reference_photo_indices' => $indices,
             ]);
+            $this->dispatchStructuredAiJob($job);
         } catch (\Throwable $exception) {
             return back()->withErrors(['character_analysis' => $this->safeAiError($exception)])->withInput();
         }
 
-        session()->put($this->characterAnalysisSessionKey($project), [
-            'job_id' => $job->id,
-            'reference_photo_indices' => $indices,
-            'data' => $result->data,
-        ]);
-
-        ProductionStudio::log($project, 'character_profile.ai_previewed', 'تم تحليل صور الطفل وتجهيز معاينة ملف الشخصية.', [
+        ProductionStudio::log($project, 'character_profile.ai_queued', 'تم إرسال تحليل صور الطفل إلى قائمة المعالجة.', [
             'job_id' => $job->id,
             'reference_photo_indices' => $indices,
         ], auth()->user());
 
-        return back()->with('success', 'تم تحليل الصور. راجع الحقول ثم أكد تطبيقها.');
+        return back()->with('success', 'تم إرسال تحليل الصور إلى قائمة المعالجة. حدّث الصفحة بعد تشغيل المهمة أو انتظر الكرون.');
     }
 
     public function applyCharacterAnalysis(ProductionProject $project)
     {
         $this->ensureEnabled();
 
-        $preview = session($this->characterAnalysisSessionKey($project));
+        $preview = session($this->characterAnalysisSessionKey($project))
+            ?: $this->latestStructuredAiPreview($project, 'character_analysis');
         $data = data_get($preview, 'data');
 
         if (! is_array($data)) {
@@ -765,6 +767,7 @@ class ProductionStudioController extends Controller
         );
 
         session()->forget($this->characterAnalysisSessionKey($project));
+        $this->markStructuredAiPreviewApplied($preview);
 
         ProductionStudio::log($project, 'character_profile.ai_applied', 'تم تطبيق تحليل صور الطفل على ملف الشخصية.', [
             'job_id' => data_get($preview, 'job_id'),
@@ -814,25 +817,18 @@ class ProductionStudioController extends Controller
 
         try {
             $model = $this->resolveTextModel($validated['model_code'], 'prompt_enhancement', $availability);
-            $result = $providers->textVisionProvider($model->provider->driver)->improveSceneToJson($project, $scene, $model);
-            $job = $this->recordStructuredAiJob($project, $model, 'scene_improvement', 'prompt_enhancement', $result, [], $scene);
+            $job = $this->createQueuedStructuredAiJob($project, $model, 'scene_improvement', 'prompt_enhancement', [], $scene);
+            $this->dispatchStructuredAiJob($job);
         } catch (\Throwable $exception) {
             return back()->withErrors(['scene_improvement' => $this->safeAiError($exception)])->withInput();
         }
 
-        $previews = session($this->sceneImprovementSessionKey($project), []);
-        $previews[$scene->id] = [
-            'job_id' => $job->id,
-            'data' => $result->data,
-        ];
-        session()->put($this->sceneImprovementSessionKey($project), $previews);
-
-        ProductionStudio::log($project, 'scene.ai_improvement_previewed', 'تم تجهيز معاينة تحسين التوجيه البصري.', [
+        ProductionStudio::log($project, 'scene.ai_improvement_queued', 'تم إرسال تحسين التوجيه البصري إلى قائمة المعالجة.', [
             'scene_id' => $scene->id,
             'job_id' => $job->id,
         ], auth()->user());
 
-        return back()->with('success', 'تم إنشاء معاينة تحسين المشهد. راجعها ثم أكد التطبيق.');
+        return back()->with('success', 'تم إرسال تحسين المشهد إلى قائمة المعالجة. حدّث الصفحة بعد تشغيل المهمة أو انتظر الكرون.');
     }
 
     public function applySceneImprovement(ProductionProject $project, ProductionScene $scene)
@@ -841,7 +837,8 @@ class ProductionStudioController extends Controller
         abort_unless($scene->production_project_id === $project->id, 404);
 
         $previews = session($this->sceneImprovementSessionKey($project), []);
-        $data = data_get($previews, "{$scene->id}.data");
+        $preview = $previews[$scene->id] ?? $this->latestStructuredAiPreview($project, 'scene_improvement', $scene);
+        $data = data_get($preview, 'data');
 
         if (! is_array($data)) {
             return back()->withErrors(['scene_improvement' => 'لا توجد معاينة تحسين صالحة للتطبيق.']);
@@ -861,6 +858,7 @@ class ProductionStudioController extends Controller
 
         unset($previews[$scene->id]);
         session()->put($this->sceneImprovementSessionKey($project), $previews);
+        $this->markStructuredAiPreviewApplied($preview);
 
         ProductionStudio::log($project, 'scene.ai_improvement_applied', 'تم تطبيق تحسين التوجيه البصري على المشهد.', [
             'scene_id' => $scene->id,
@@ -1056,6 +1054,47 @@ class ProductionStudioController extends Controller
         return $indices;
     }
 
+    private function createQueuedStructuredAiJob(ProductionProject $project, AiModel $model, string $jobType, string $mode, array $inputAssets = [], ?ProductionScene $scene = null): SceneGenerationJob
+    {
+        $job = $project->generationJobs()->create([
+            'production_scene_id' => $scene?->id,
+            'ai_provider_id' => $model->ai_provider_id,
+            'ai_model_id' => $model->id,
+            'job_type' => $jobType,
+            'generation_mode' => $mode,
+            'input_assets_json' => $inputAssets,
+            'provider_request_json' => [
+                'provider_driver' => $model->provider->driver,
+                'provider_display_name' => $model->provider->public_name,
+                'model_code' => $model->code,
+                'model_display_name' => $model->display_name,
+                'capability' => $mode,
+            ],
+            'estimated_cost' => $model->estimatedCost(),
+            'cost_source' => 'estimated',
+            'status' => 'queued',
+            'initiated_by_user_id' => auth()->id(),
+        ]);
+
+        ProductionStudio::log($project, 'ai_text_vision.queued', 'تمت إضافة مهمة نص/رؤية إلى قائمة المعالجة.', [
+            'job_id' => $job->id,
+            'job_type' => $jobType,
+            'generation_mode' => $mode,
+            'model' => $model->code,
+        ], auth()->user());
+
+        return $job;
+    }
+
+    private function dispatchStructuredAiJob(SceneGenerationJob $job): void
+    {
+        $dispatch = ProcessStructuredAiJob::dispatch($job->id);
+
+        if (! app()->environment('testing')) {
+            $dispatch->onConnection('database');
+        }
+    }
+
     private function recordStructuredAiJob(ProductionProject $project, AiModel $model, string $jobType, string $mode, StructuredAiResult $result, array $inputAssets = [], ?ProductionScene $scene = null): SceneGenerationJob
     {
         $job = $project->generationJobs()->create([
@@ -1095,6 +1134,72 @@ class ProductionStudioController extends Controller
         ], auth()->user());
 
         return $job;
+    }
+
+    private function latestStructuredAiPreview(ProductionProject $project, string $jobType, ?ProductionScene $scene = null): ?array
+    {
+        $job = $project->generationJobs()
+            ->where('job_type', $jobType)
+            ->where('status', 'completed')
+            ->when($scene, fn ($query) => $query->where('production_scene_id', $scene->id))
+            ->where(function ($query) {
+                $query->whereNull('output_metadata_json')
+                    ->orWhere('output_metadata_json->applied_at', null);
+            })
+            ->latest()
+            ->first();
+
+        $data = data_get($job?->provider_response_json, 'structured_result');
+
+        if (! is_array($data)) {
+            return null;
+        }
+
+        return [
+            'source' => data_get($job->provider_request_json, 'provider_driver', 'openai'),
+            'job_id' => $job->id,
+            'data' => $data,
+        ];
+    }
+
+    private function sceneImprovementPreviews(ProductionProject $project): array
+    {
+        $previews = session($this->sceneImprovementSessionKey($project), []);
+
+        foreach ($project->scenes as $scene) {
+            if (isset($previews[$scene->id])) {
+                continue;
+            }
+
+            $preview = $this->latestStructuredAiPreview($project, 'scene_improvement', $scene);
+
+            if ($preview) {
+                $previews[$scene->id] = $preview;
+            }
+        }
+
+        return $previews;
+    }
+
+    private function markStructuredAiPreviewApplied(?array $preview): void
+    {
+        $jobId = data_get($preview, 'job_id');
+
+        if (! $jobId) {
+            return;
+        }
+
+        $job = SceneGenerationJob::find($jobId);
+
+        if (! $job) {
+            return;
+        }
+
+        $metadata = $job->output_metadata_json ?? [];
+        $metadata['applied_at'] = now()->toIso8601String();
+        $metadata['applied_by_user_id'] = auth()->id();
+
+        $job->update(['output_metadata_json' => $metadata]);
     }
 
     private function deterministicSceneExtraction(ProductionProject $project, ?string $storyText): ?array

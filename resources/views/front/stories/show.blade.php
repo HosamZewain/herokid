@@ -271,11 +271,11 @@
                                     <p class="font-bold text-indigo-800 mb-2">📸 ارفع ١–٥ صور واضحة للوجه</p>
                                     <ul class="text-xs text-indigo-600 space-y-1 mb-4">
                                         <li>• صور واضحة لوجه الطفل (بدون نظارة شمسية)</li>
-                                        <li>• تنسيق JPG أو PNG — حد أقصى ٥ ميجا للصورة</li>
+                                        <li>• تقبل صور JPG وPNG وWebP وHEIC/HEIF — حد أقصى ١٥ ميجا للصورة</li>
                                         <li>• كلما كانت الصور أوضح، كانت الرسومات أجمل</li>
                                     </ul>
                                     <input type="file" name="photos[]" id="photos" multiple
-                                        accept="image/jpeg,image/png,image/jpg" required
+                                        accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" required
                                         class="sr-only"
                                         data-photo-input>
                                     <div class="flex flex-col sm:flex-row-reverse sm:items-center gap-3">
