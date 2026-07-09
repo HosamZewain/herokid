@@ -364,6 +364,22 @@ class ProductionStudioTest extends TestCase
 
         $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
         $project = ProductionProject::firstOrFail();
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Moon Scene',
+            'story_text' => 'The child walks under moonlight.',
+            'visual_direction' => 'A quiet moonlit garden.',
+            'child_action_pose' => 'The child holds a small lantern.',
+            'text_safe_area_notes' => 'Keep blank sky area for text.',
+        ]);
+        $asset = $project->assets()->create([
+            'production_scene_id' => $scene->id,
+            'asset_type' => 'scene_image',
+            'label' => 'Scene 1 generated preview',
+            'status' => 'under_review',
+            'file_path' => 'production-studio/projects/'.$project->id.'/generated/scene-1.png',
+        ]);
+        Storage::disk('local')->put($asset->file_path, 'scene-image-bytes');
 
         $response = $this->actingAs($admin)
             ->get(route('admin.production-studio.show', $project))
@@ -375,7 +391,13 @@ class ProductionStudioTest extends TestCase
             ->assertSee(route('admin.production-studio.character-profile.update', $project), false)
             ->assertSee(route('admin.production-studio.ai.character-sheet', $project), false)
             ->assertSee('data-scene-filters', false)
-            ->assertSee('data-activity-filters', false);
+            ->assertSee('data-activity-filters', false)
+            ->assertSee('صور هذا المشهد')
+            ->assertSee('Scene 1 generated preview')
+            ->assertSee('The child walks under moonlight.')
+            ->assertSee('A quiet moonlit garden.')
+            ->assertSee('كل مشهد يجب أن يكون سبريد A3 أفقي واحد متصل')
+            ->assertSee(route('admin.production-studio.assets.show', [$project, $asset]), false);
 
         foreach ([
             'overview',

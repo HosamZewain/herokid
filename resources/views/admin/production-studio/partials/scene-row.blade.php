@@ -3,13 +3,14 @@
     $hasVisual = filled($scene->visual_direction);
     $hasPose = filled($scene->child_action_pose);
     $hasSafeArea = filled($scene->text_safe_area_notes);
+    $sceneGeneratedAssets = $sceneAssets->where('production_scene_id', $scene->id)->sortByDesc('created_at');
     $approvedImage = $sceneAssets->where('production_scene_id', $scene->id)->where('status', 'approved')->isNotEmpty();
     $ready = $hasText && $hasVisual && $hasPose && $approvedCharacterSheet && $profileReady;
     $improvementPreview = $sceneImprovementPreviews[$scene->id]['data'] ?? null;
 @endphp
 
 <div class="rounded-xl border border-gray-100 bg-white p-4 text-right"
-     data-scene-row
+     data-scene-row="{{ $scene->id }}"
      data-filter-missing-visual="{{ $hasVisual ? '0' : '1' }}"
      data-filter-ready="{{ $ready ? '1' : '0' }}"
      data-filter-has-image="{{ $sceneAssets->where('production_scene_id', $scene->id)->isNotEmpty() ? '1' : '0' }}"
@@ -26,6 +27,21 @@
             @include('admin.production-studio.partials.status-badge', ['label' => $hasPose ? 'وضع الطفل' : 'ينقص وضع الطفل', 'tone' => $hasPose ? 'emerald' : 'gray'])
             @include('admin.production-studio.partials.status-badge', ['label' => $hasSafeArea ? 'منطقة نص' : 'ينقص منطقة نص', 'tone' => $hasSafeArea ? 'emerald' : 'gray'])
             @include('admin.production-studio.partials.status-badge', ['label' => $approvedImage ? 'صورة معتمدة' : 'لا توجد صورة معتمدة', 'tone' => $approvedImage ? 'emerald' : 'gray'])
+        </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div class="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p class="text-xs font-black text-gray-500">نص المشهد</p>
+            <p class="mt-2 line-clamp-4 text-sm leading-7 text-gray-800">{{ $scene->story_text ?: 'لم يتم حفظ نص واضح لهذا المشهد بعد. استخدم بناء المشاهد أو التعديل السريع.' }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p class="text-xs font-black text-gray-500">الوصف / التوجيه البصري</p>
+            <p class="mt-2 line-clamp-4 text-sm leading-7 text-gray-800">{{ $scene->visual_direction ?: 'لا يوجد توجيه بصري محفوظ بعد. استخدم تحسين التوجيه ثم اضغط تطبيق التحسين.' }}</p>
+        </div>
+        <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+            <p class="text-xs font-black text-indigo-700">هيكل المشهد المطلوب</p>
+            <p class="mt-2 text-sm leading-7 text-indigo-950">كل مشهد يجب أن يكون سبريد A3 أفقي واحد متصل عبر صفحتين A4 متقابلتين، مع منطقة هادئة فارغة لاحقًا للنص العربي بدون توليد أي كتابة داخل الصورة.</p>
         </div>
     </div>
 
@@ -67,6 +83,18 @@
             <pre dir="ltr" class="mt-2 max-h-60 overflow-auto rounded-lg bg-white p-3 text-left text-xs">{{ json_encode($improvementPreview, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
         </div>
     @endif
+
+    <div class="mt-4 {{ $sceneGeneratedAssets->isEmpty() ? 'hidden' : '' }}" data-scene-assets>
+        <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <p class="font-black text-gray-900">صور هذا المشهد</p>
+            <p class="text-xs font-bold text-gray-500">اعتمد الصورة المناسبة لتظهر كصورة المشهد النهائية.</p>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3" data-scene-assets-grid>
+            @foreach($sceneGeneratedAssets as $asset)
+                @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
+            @endforeach
+        </div>
+    </div>
 
     <div class="mt-4 hidden" data-studio-scene-editor>
         <form method="POST" action="{{ route('admin.production-studio.scenes.update', [$project, $scene]) }}" class="rounded-xl bg-gray-50 p-4">

@@ -1008,6 +1008,36 @@
             }
         }
 
+        function appendSceneAssetPreview(job) {
+            if (!job || job.job_type !== 'scene_image' || !job.production_scene_id || !job.asset_url) return;
+
+            const row = document.querySelector(`[data-scene-row="${job.production_scene_id}"]`);
+            const section = row?.querySelector('[data-scene-assets]');
+            const grid = row?.querySelector('[data-scene-assets-grid]');
+
+            if (!row || !section || !grid || grid.querySelector(`[data-studio-inline-asset="${job.asset_id}"]`)) {
+                return;
+            }
+
+            section.classList.remove('hidden');
+            row.dataset.filterHasImage = '1';
+            row.dataset.filterNeedsReview = '1';
+
+            const card = document.createElement('div');
+            card.className = 'rounded-xl border border-indigo-100 bg-white p-3 text-right shadow-sm';
+            card.dataset.studioInlineAsset = job.asset_id || '';
+            card.innerHTML = `
+                <a href="${job.asset_url}" target="_blank" class="block overflow-hidden rounded-lg bg-gray-100">
+                    <img src="${job.asset_url}" alt="${job.asset_label || 'Generated scene image'}" class="aspect-square w-full object-cover">
+                </a>
+                <div class="mt-3 space-y-2">
+                    <p class="font-black text-gray-900">${job.asset_label || 'صورة مشهد جديدة'}</p>
+                    <p class="text-xs font-bold text-indigo-700">بانتظار المراجعة. حدّث الصفحة إذا كنت تريد أزرار الاعتماد والرفض هنا.</p>
+                </div>
+            `;
+            grid.prepend(card);
+        }
+
         async function pollStudioJob(statusUrl, feedback) {
             if (!statusUrl) return;
 
@@ -1031,7 +1061,10 @@
                 upsertStudioJob(job, statusUrl);
 
                 if (job.status === 'completed') {
-                    studioFeedback(feedback, 'success', 'اكتملت المهمة. يمكنك مراجعة المخرج في سجل التوليد أو تحديث الصفحة لعرض الصورة الجديدة.');
+                    appendSceneAssetPreview(job);
+                    studioFeedback(feedback, 'success', job.job_type === 'scene_image'
+                        ? 'اكتملت المهمة وظهرت الصورة داخل بطاقة المشهد. حدّث الصفحة إذا كنت تريد أزرار الاعتماد والرفض.'
+                        : 'اكتملت المهمة. يمكنك مراجعة المخرج في سجل التوليد أو تحديث الصفحة لعرض الصورة الجديدة.');
                     return;
                 }
 

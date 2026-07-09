@@ -1238,14 +1238,14 @@ class ProductionStudioController extends Controller
                 'scene_number' => $index + 1,
                 'scene_title' => $title,
                 'written_text' => $written,
-                'visual_direction' => 'Needs visual direction review for: '.$title,
-                'child_action_pose' => 'Needs child action / pose review.',
-                'environment' => 'Needs environment review.',
+                'visual_direction' => 'Create one connected A3 landscape two-page reader spread for this scene: '.$title.'. The artwork must continue naturally across both facing A4 pages and support the written scene without showing any text.',
+                'child_action_pose' => 'Define the child as the active hero in this scene. Review and refine the exact pose/action before image generation.',
+                'environment' => 'Define one cohesive environment across the full A3 landscape spread. Review and refine before image generation.',
                 'mood_lighting' => 'Warm premium children book lighting.',
                 'supporting_characters' => 'Original supporting characters only if needed.',
                 'key_objects' => 'Key objects should follow the written scene.',
                 'continuity_notes' => 'Maintain continuity from previous scene.',
-                'safe_text_area_notes' => 'Reserve a calm low-detail area for Arabic text overlay.',
+                'safe_text_area_notes' => 'Reserve a calm low-detail blank area within the same connected A3 spread for later Arabic text overlay. Do not generate any visible writing.',
                 'educational_value' => 'Review educational value.',
             ];
         })->all();
@@ -1299,10 +1299,15 @@ class ProductionStudioController extends Controller
 
     private function jobPayload(SceneGenerationJob $job): array
     {
+        $asset = data_get($job->output_metadata_json, 'asset_id')
+            ? ProductionProjectAsset::find((int) data_get($job->output_metadata_json, 'asset_id'))
+            : null;
+
         return [
             'id' => $job->id,
             'job_type' => $job->job_type,
             'generation_mode' => $job->generation_mode,
+            'production_scene_id' => $job->production_scene_id,
             'status' => $job->status,
             'model' => $job->model?->display_name,
             'provider' => $job->model?->provider?->public_name,
@@ -1314,6 +1319,9 @@ class ProductionStudioController extends Controller
             'completed_at' => $job->completed_at?->format('Y-m-d H:i:s'),
             'failed_at' => $job->failed_at?->format('Y-m-d H:i:s'),
             'asset_id' => data_get($job->output_metadata_json, 'asset_id'),
+            'asset_url' => $asset ? route('admin.production-studio.assets.show', [$job->project, $asset]) : null,
+            'asset_status' => $asset?->status,
+            'asset_label' => $asset?->label,
         ];
     }
 

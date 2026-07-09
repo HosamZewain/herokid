@@ -460,6 +460,10 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not transform the child into a different-looking character. Use the real photo-derived face as the identity anchor', $job->prompt_snapshot);
         $this->assertStringContainsString('The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions', $job->prompt_snapshot);
+        $this->assertStringContainsString('Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.', $job->prompt_snapshot);
+        $this->assertStringContainsString('Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language.', $job->prompt_snapshot);
+        $this->assertStringContainsString('Korean text', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('title-card layout', $job->negative_prompt_snapshot);
         Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
@@ -525,6 +529,14 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('Environment 1', $scene->environment);
         $this->assertSame('Safe text area 1', $scene->text_safe_area_notes);
         $this->assertDatabaseHas('scene_generation_jobs', ['job_type' => 'scene_extraction', 'generation_mode' => 'scene_extraction']);
+
+        Http::assertSent(function ($request): bool {
+            $body = json_encode($request->data(), JSON_THROW_ON_ERROR);
+
+            return str_contains($body, 'HeroKid fixed booklet structure')
+                && str_contains($body, 'one single connected full-width A3 landscape illustration')
+                && str_contains($body, 'Do not ask for generated text, letters, labels, signs, titles, captions, or logos inside the image');
+        });
     }
 
     public function test_improve_visual_direction_uses_openai_preview_then_apply(): void
@@ -567,6 +579,14 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('A calm rooftop under a soft moon.', $scene->visual_direction);
         $this->assertSame('The child points gently at the moon.', $scene->child_action_pose);
         $this->assertSame('Use quiet sky area for text.', $scene->text_safe_area_notes);
+
+        Http::assertSent(function ($request): bool {
+            $body = json_encode($request->data(), JSON_THROW_ON_ERROR);
+
+            return str_contains($body, 'one connected A3 landscape two-page reader spread')
+                && str_contains($body, 'Do not describe two separate unrelated illustrations')
+                && str_contains($body, 'No Arabic text or any other visible text should be requested inside the image');
+        });
     }
 
     public function test_scene_generation_is_blocked_when_scene_context_is_missing(): void
