@@ -65,6 +65,15 @@ return [
             'description_en' => 'View dashboard and overview metrics.',
             'sort_order' => 10,
         ],
+        'analytics.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض تحليلات الموقع',
+            'name_en' => 'View website analytics',
+            'description_ar' => 'عرض إحصاءات زيارات الموقع والتحويلات من Google Analytics.',
+            'description_en' => 'View website traffic and conversion analytics from Google Analytics.',
+            'sort_order' => 20,
+            'sensitive' => true,
+        ],
 
         'orders.view' => [
             'group_key' => 'orders',

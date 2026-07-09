@@ -62,6 +62,7 @@ class AdminPermissionRegistry
 
         $routes = [
             'dashboard.view' => 'admin.dashboard.index',
+            'analytics.view' => 'admin.analytics.index',
             'orders.view' => 'admin.orders.index',
             'stories.view' => 'admin.stories.index',
             'store.products.view' => 'admin.products.index',

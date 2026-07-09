@@ -47,6 +47,7 @@
                     'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
                     'production_studio.view',
                 ]);
+                $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view']);
                 $canContent = auth()->user()->hasAnyPermission([
                     'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
@@ -57,10 +58,15 @@
                 ]);
             @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
-                @can('dashboard.view')
+                @if($canDashboard)
                     <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الرئيسية</p>
-                    <a href="{{ route('admin.dashboard.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.dashboard.*') ? $activeLink : $idleLink }}">لوحة القيادة</a>
-                @endcan
+                    @can('dashboard.view')
+                        <a href="{{ route('admin.dashboard.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.dashboard.*') ? $activeLink : $idleLink }}">لوحة القيادة</a>
+                    @endcan
+                    @can('analytics.view')
+                        <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
+                    @endcan
+                @endif
 
                 @if($canOperations)
                     <div class="pt-4">

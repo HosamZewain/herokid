@@ -18,6 +18,20 @@
                     eventID: @json($facebookPurchaseEvent['event_id'])
                 });
             }
+            if (typeof gtag === 'function') {
+                const data = @json($facebookPurchaseEvent['data']);
+                gtag('event', 'purchase', {
+                    transaction_id: (data.order_numbers || []).join(','),
+                    currency: data.currency,
+                    value: data.value,
+                    shipping: @json($deliveryFee),
+                    items: (data.contents || []).map((item) => ({
+                        item_id: item.id,
+                        price: item.item_price,
+                        quantity: item.quantity || 1,
+                    })),
+                });
+            }
         </script>
     @endpush
 @endif

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
@@ -230,6 +231,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
         ->name('dashboard.index');
+    Route::get('analytics', [AnalyticsController::class, 'index'])
+        ->middleware('permission:analytics.view')
+        ->name('analytics.index');
+    Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])
+        ->middleware(['permission:analytics.view', 'throttle:6,1'])
+        ->name('analytics.refresh');
 
     Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
         ->middlewareFor(['index', 'show'], 'permission:stories.view')

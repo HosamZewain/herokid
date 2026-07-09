@@ -75,6 +75,39 @@
                 </div>
             </div>
 
+            @can('analytics.view')
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="text-right">
+                            <p class="text-xs font-black text-indigo-600">تحليلات الموقع</p>
+                            <h3 class="mt-1 text-xl font-black text-gray-900">ملخص Google Analytics</h3>
+                            <p class="mt-1 text-sm text-gray-500">بيانات مختصرة من GA4. التفاصيل الكاملة داخل صفحة التحليلات.</p>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 text-center">
+                            @if(($analyticsWidget['status'] ?? null) === 'ready')
+                                <div class="rounded-2xl bg-indigo-50 px-4 py-3">
+                                    <p class="text-xs font-bold text-indigo-500">نشطون الآن</p>
+                                    <p class="text-2xl font-black text-indigo-800">{{ $analyticsWidget['active_users_30m'] ?? '—' }}</p>
+                                </div>
+                                <div class="rounded-2xl bg-slate-50 px-4 py-3">
+                                    <p class="text-xs font-bold text-slate-500">مستخدمون اليوم</p>
+                                    <p class="text-2xl font-black text-slate-900">{{ $analyticsWidget['users_today'] ?? '—' }}</p>
+                                </div>
+                                <div class="rounded-2xl bg-slate-50 px-4 py-3">
+                                    <p class="text-xs font-bold text-slate-500">جلسات اليوم</p>
+                                    <p class="text-2xl font-black text-slate-900">{{ $analyticsWidget['sessions_today'] ?? '—' }}</p>
+                                </div>
+                            @else
+                                <div class="col-span-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                                    {{ ($analyticsWidget['status'] ?? null) === 'setup_required' ? 'تحليلات GA4 تحتاج إعداد credentials.' : 'تعذر تحميل ملخص التحليلات حالياً.' }}
+                                </div>
+                            @endif
+                        </div>
+                        <a href="{{ route('admin.analytics.index') }}" class="inline-flex justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">فتح التحليلات</a>
+                    </div>
+                </div>
+            @endcan
+
             <!-- Quick Actions -->
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h3 class="font-bold text-gray-800 text-lg mb-5 text-right">إجراءات سريعة</h3>
