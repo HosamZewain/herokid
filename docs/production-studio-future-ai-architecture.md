@@ -3,9 +3,9 @@
 Production Studio includes provider-ready database structures. Phase 2 adds controlled provider implementations for two separate job families:
 
 - fal.ai for image generation.
-- OpenAI for text/vision analysis and structured JSON.
+- OpenAI for text/vision analysis, structured JSON, and optional image generation.
 
-fal.ai remains the only image generation provider in this phase. OpenAI must not be used for final image generation.
+fal.ai remains the default image generation provider. OpenAI image models are available as explicit higher-cost alternatives in the Studio model selector when configured in Admin.
 
 ## Provider Abstraction
 
@@ -167,7 +167,7 @@ The abstraction can support:
 
 Each driver should translate the Studio scene, character profile, and approved references into the provider-specific request format without changing the Studio tables.
 
-OpenAI currently uses only the Responses API for text/vision structured JSON. If OpenAI image generation is added later, it should be a separate image-provider implementation and must not reuse the text/vision adapter directly.
+OpenAI text/vision uses the Responses API for structured JSON. OpenAI image generation uses a separate image-provider implementation, so the text/vision adapter and image-generation adapter stay independent.
 
 ## Future PDF and Print Automation
 

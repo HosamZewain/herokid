@@ -67,6 +67,8 @@ class FalImageProvider implements AiImageProvider
             'output_format' => 'png',
         ];
 
+        $payload = array_merge($payload, $this->generationModeOptions($request->generationMode));
+
         if ($request->model->requiresImageUrl() && $request->inputAssets === []) {
             throw new RuntimeException('هذا الموديل يحتاج صورة مرجعية. اختر صورة مرجعية أو صورة شخصية معتمدة أولًا.');
         }
@@ -208,6 +210,25 @@ class FalImageProvider implements AiImageProvider
                 'Authorization' => 'Key '.$secret,
                 'Accept' => 'application/json',
             ]);
+    }
+
+    private function generationModeOptions(string $generationMode): array
+    {
+        return match ($generationMode) {
+            'character_scene' => [
+                'resolution_mode' => '3:2',
+                'guidance_scale' => 4.5,
+                'num_inference_steps' => 32,
+                'acceleration' => 'none',
+            ],
+            'cover_generation', 'character_sheet' => [
+                'resolution_mode' => '2:3',
+                'guidance_scale' => 3.5,
+                'num_inference_steps' => 32,
+                'acceleration' => 'none',
+            ],
+            default => [],
+        };
     }
 
     private function timeout(?AiProvider $provider): int

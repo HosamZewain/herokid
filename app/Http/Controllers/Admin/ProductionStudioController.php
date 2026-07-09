@@ -147,12 +147,7 @@ class ProductionStudioController extends Controller
             'openAiAvailable' => $textModelsByCapability->flatten(1)->isNotEmpty(),
             'aiModelsByCapability' => $imageModelsByCapability->all(),
             'textModelsByCapability' => $textModelsByCapability->all(),
-            'defaultModelsByCapability' => $providers
-                ->mapWithKeys(fn ($provider) => collect($imageCapabilities)
-                    ->mapWithKeys(fn ($capability) => [$capability => $availability->defaultModelFor($provider, $capability)?->code])
-                    ->filter()
-                    ->all())
-                ->all(),
+            'defaultModelsByCapability' => $this->defaultImageModelCodes($providers, $imageCapabilities, $availability),
             'defaultTextModelsByCapability' => $this->defaultModelCodesForDriverCapabilities($openAiProvider, $textCapabilities),
             'stylePresets' => config('production_studio.ai.style_presets', []),
             'aiCostSummary' => $project->aiCostSummary(),
@@ -997,6 +992,27 @@ class ProductionStudioController extends Controller
             })
             ->filter()
             ->all();
+    }
+
+    private function defaultImageModelCodes($providers, array $capabilities, AiProviderAvailability $availability): array
+    {
+        $defaults = [];
+
+        foreach ($providers as $provider) {
+            foreach ($capabilities as $capability) {
+                if (isset($defaults[$capability])) {
+                    continue;
+                }
+
+                $code = $availability->defaultModelFor($provider, $capability)?->code;
+
+                if ($code) {
+                    $defaults[$capability] = $code;
+                }
+            }
+        }
+
+        return $defaults;
     }
 
     private function providerUsableForStudio(?AiProvider $provider): bool

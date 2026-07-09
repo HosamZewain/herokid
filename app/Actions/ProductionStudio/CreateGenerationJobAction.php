@@ -109,6 +109,9 @@ class CreateGenerationJobAction
                     'supports_multiple_references' => $providerModel->supportsMultipleReferences(),
                     'supports_text_to_image_only' => $providerModel->supportsTextToImageOnly(),
                     'supports_image_editing' => $providerModel->supportsImageEditing(),
+                    'quality' => data_get($providerModel->configuration_json, 'quality'),
+                    'scene_size' => data_get($providerModel->configuration_json, 'scene_size'),
+                    'portrait_size' => data_get($providerModel->configuration_json, 'portrait_size'),
                 ],
                 'provider_settings' => [
                     'timeout' => $providerModel->provider->default_timeout_seconds,

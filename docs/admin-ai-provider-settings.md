@@ -19,11 +19,13 @@ fal.ai models:
 OpenAI models:
 
 - `gpt-4.1-mini`
+- `gpt-image-2`
+- `gpt-image-1`
 
 Provider roles:
 
-- fal.ai: image generation only.
-- OpenAI: text/vision analysis and structured JSON only.
+- fal.ai: default image generation provider.
+- OpenAI: text/vision analysis, structured JSON, and optional image generation when OpenAI image models are enabled.
 
 Future providers must be added by code first:
 
@@ -166,8 +168,9 @@ OpenAI powers:
 - `تحليل صور الطفل بالذكاء الاصطناعي`
 - `بناء المشاهد من مسودة القصة`
 - `تحسين التوجيه البصري بالذكاء الاصطناعي`
+- optional child reference, cover, and single-scene image generation from the model selector
 
-OpenAI does not generate final images. Scene, cover, and child reference artwork are still generated through fal.ai.
+fal.ai remains the default image generator. OpenAI image models appear as optional paid alternatives in the model selector when they are active.
 
 For child photo analysis, selected photos are sent from the server as base64 image data. The system does not create permanent public child-photo URLs for OpenAI.
 

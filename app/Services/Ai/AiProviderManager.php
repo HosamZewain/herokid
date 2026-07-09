@@ -19,6 +19,7 @@ class AiProviderManager
 
         return match ($driver) {
             'fal' => app(FalImageProvider::class),
+            'openai' => app(OpenAiImageProvider::class),
             default => throw new InvalidArgumentException("Unsupported AI provider driver [{$driver}]."),
         };
     }

@@ -6,9 +6,9 @@ It does not change checkout, order status, customer pages, payment, delivery, PD
 
 Provider split:
 
-- fal.ai is used only for image generation: child reference illustration, cover artwork, and scene artwork.
+- fal.ai is the default image-generation provider: child reference illustration, cover artwork, and scene artwork.
 - OpenAI is used only for text/vision structured work: child photo analysis, story scene extraction, and visual-direction improvement.
-- OpenAI is not used for final image generation in this phase.
+- OpenAI can also be enabled as an optional image-generation provider for child reference, cover, and single-scene attempts when OpenAI image models are active in Admin.
 
 ## Environment
 
@@ -53,7 +53,6 @@ It does not support:
 - text overlay automation
 - final print-resolution export
 - public/customer access
-- OpenAI image generation
 
 ## Safe Test Generation
 
@@ -66,6 +65,8 @@ It does not support:
 7. Review the generated private asset.
 8. Approve one Character Sheet as primary.
 9. Generate one scene or one cover using the approved reference.
+
+The image model selector appears beside child-reference, cover, and scene generation actions. It shows the provider, model name, and estimated per-image cost. fal.ai Dev remains the low-cost default; choose fal.ai Pro or OpenAI image models only when a higher-cost retry is intentional.
 
 ## Character Analysis With OpenAI
 

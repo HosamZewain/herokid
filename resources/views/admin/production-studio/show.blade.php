@@ -677,7 +677,9 @@
                     @csrf
                     <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
                         @foreach($aiModelsByCapability['character_sheet'] ?? collect() as $model)
-                            <option value="{{ $model->code }}" @selected($model->code === $characterSheetModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                            <option value="{{ $model->code }}" @selected($model->code === $characterSheetModel)>
+                                {{ $model->provider->public_name }} — {{ $model->display_name }} · ${{ $model->estimatedCost() }}
+                            </option>
                         @endforeach
                     </select>
                     <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
@@ -751,6 +753,7 @@
                         'aiAvailable' => $aiAvailable,
                         'openAiAvailable' => $openAiAvailable,
                         'defaultModel' => $defaultModel,
+                        'sceneGenerationModels' => $aiModelsByCapability['scene_generation'] ?? collect(),
                         'sceneImproveModelReady' => $sceneImproveModelReady,
                         'sceneImproveModel' => $sceneImproveModel,
                         'sceneImprovementPreviews' => $sceneImprovementPreviews,
@@ -799,6 +802,10 @@
                 </div>
             @endunless
 
+            <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-right text-sm font-bold leading-7 text-blue-900">
+                يمكنك اختيار موديل توليد الصور لكل محاولة. fal.ai مناسب للتجارب السريعة، وOpenAI Image متاح كخيار إضافي عند تفعيله من إعدادات مزودي الذكاء الاصطناعي. السعر المعروض بجوار كل موديل تقديري لكل صورة.
+            </div>
+
             <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
                     <h3 class="font-black text-gray-950">توليد غلاف</h3>
@@ -816,7 +823,9 @@
                             @csrf
                             <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
                                 @foreach($aiModelsByCapability['cover_generation'] ?? collect() as $model)
-                                    <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                                    <option value="{{ $model->code }}" @selected($model->code === $premiumModel)>
+                                        {{ $model->provider->public_name }} — {{ $model->display_name }} · ${{ $model->estimatedCost() }}
+                                    </option>
                                 @endforeach
                             </select>
                             <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
@@ -854,7 +863,9 @@
                             </select>
                             <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
                                 @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
-                                    <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                                    <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>
+                                        {{ $model->provider->public_name }} — {{ $model->display_name }} · ${{ $model->estimatedCost() }}
+                                    </option>
                                 @endforeach
                             </select>
                             <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">

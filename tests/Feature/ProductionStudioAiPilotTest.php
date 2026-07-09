@@ -55,7 +55,10 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $this->assertSame('OpenAI', $provider->fresh()->display_name);
         $this->assertContains('vision_to_text', $provider->fresh()->capabilities_json);
+        $this->assertContains('text_to_image', $provider->fresh()->capabilities_json);
         $this->assertTrue(app(SupportedProviderRegistry::class)->modelSupportsCapability('openai', 'gpt-4.1-mini', 'scene_extraction'));
+        $this->assertTrue(app(SupportedProviderRegistry::class)->modelSupportsCapability('openai', 'gpt-image-2', 'scene_generation'));
+        $this->assertTrue(app(SupportedProviderRegistry::class)->modelSupportsCapability('openai', 'gpt-image-2', 'cover_generation'));
         $this->assertNotSame('sk-openai-secret-for-tests', $provider->credential()->first()->getRawOriginal('encrypted_value'));
         $this->assertSame('sk-openai-secret-for-tests', app(AiProviderCredentialService::class)->secret($provider));
     }
@@ -462,6 +465,7 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions', $job->prompt_snapshot);
         $this->assertStringContainsString('Use reference images for identity only, not for composition.', $job->prompt_snapshot);
         $this->assertStringContainsString('If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.', $job->prompt_snapshot);
+        $this->assertStringContainsString('Create a new wide landscape scene composition from scratch.', $job->prompt_snapshot);
         $this->assertStringContainsString('Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language.', $job->prompt_snapshot);
         $this->assertStringContainsString('Korean text', $job->negative_prompt_snapshot);
@@ -486,7 +490,10 @@ class ProductionStudioAiPilotTest extends TestCase
             $payload = $request->data();
 
             return str_contains((string) data_get($payload, 'image_url'), base64_encode('image-bytes'))
-                && ! str_contains((string) data_get($payload, 'image_url'), base64_encode('approved-reference-bytes'));
+                && ! str_contains((string) data_get($payload, 'image_url'), base64_encode('approved-reference-bytes'))
+                && data_get($payload, 'resolution_mode') === '3:2'
+                && data_get($payload, 'guidance_scale') === 4.5
+                && data_get($payload, 'num_inference_steps') === 32;
         });
     }
 
@@ -829,6 +836,78 @@ class ProductionStudioAiPilotTest extends TestCase
             return str_starts_with((string) data_get($payload, 'image_url'), 'data:image/')
                 && ! array_key_exists('image_urls', $payload);
         });
+    }
+
+    public function test_openai_image_model_can_generate_private_scene_asset_without_storing_image_payload(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableOpenAi('sk-openai-image-test');
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'id' => 'img_test_123',
+                'created' => 1234567890,
+                'data' => [
+                    ['b64_json' => base64_encode('openai-generated-image-bytes')],
+                ],
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 50, 'total_tokens' => 150],
+            ]),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Moon Scene',
+            'story_text' => 'The child watches a quiet moonlit castle from the window.',
+            'visual_direction' => 'A wide A3 landscape castle scene with fog and a blank quiet area for Arabic text.',
+            'child_action_pose' => 'The child stands naturally near the window looking at the distant lantern.',
+            'text_safe_area_notes' => 'Reserve a quiet lower-left blank area.',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', [
+            'status' => 'approved',
+            'is_primary' => true,
+            'file_path' => 'production-studio/projects/'.$project->id.'/generated/reference.png',
+        ]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'gpt-image-2',
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        $this->assertSame('openai', $job->provider->driver);
+        $this->assertSame('gpt-image-2', $job->model->code);
+        $this->assertSame('0.0410', (string) $job->estimated_cost);
+
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        $submitted = $job->fresh();
+        $this->assertSame('processing', $submitted->status);
+        $this->assertStringStartsWith('local://production-studio/projects/'.$project->id.'/openai-temp/', $submitted->external_response_url);
+        $this->assertStringNotContainsString(base64_encode('openai-generated-image-bytes'), json_encode($submitted->provider_response_json));
+        $this->assertSame('b64_json', data_get($submitted->provider_response_json, 'output_source'));
+
+        (new PollAiGenerationJob($job->id))->handle(app(AiProviderManager::class));
+
+        $completed = $job->fresh();
+        $asset = ProductionProjectAsset::where('scene_generation_job_id', $job->id)->firstOrFail();
+
+        $this->assertSame('completed', $completed->status);
+        $this->assertSame('estimate_fallback', $completed->cost_source);
+        $this->assertSame('openai', data_get($asset->metadata_json, 'provider'));
+        $this->assertSame('gpt-image-2', data_get($asset->metadata_json, 'model'));
+        Storage::disk('local')->assertExists($asset->file_path);
+        Storage::disk('public')->assertMissing($asset->file_path);
+
+        $this->assertSame('gpt-image-2', data_get($completed->provider_request_json, 'model_code'));
+        $this->assertSame('medium', data_get($completed->provider_request_json, 'model_settings.quality', 'medium'));
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits');
     }
 
     public function test_same_scene_can_have_multiple_versions_but_only_one_approved_final_image(): void

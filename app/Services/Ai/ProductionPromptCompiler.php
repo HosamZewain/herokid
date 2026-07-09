@@ -108,6 +108,8 @@ class ProductionPromptCompiler
                 'Priority order: 1. preserve child identity, 2. preserve approved reference illustration, 3. apply the scene environment, 4. keep a clean safe area for later text overlay.',
                 'Use reference images for identity only, not for composition. Do not copy the reference portrait framing, background, flowers, classroom wall, clothing badge, or plain portrait layout.',
                 'The final output must follow the scene story, visual direction, environment, key objects, mood, and child action below. If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.',
+                'Create a new wide landscape scene composition from scratch. The input face image is only an identity reference, not a base layout, not a poster template, and not a background to preserve.',
+                'Place the child as part of the described environment. Show the castle, fog, mountain, extinguished giant lantern, moonlight, and safe blank text area when they are part of this scene. Do not crop the child as a portrait.',
                 'The child should appear naturally inside the described scene, not as a pasted portrait in front of a decorative background.',
                 'Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.',
                 'Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language. This includes Arabic, English, Korean, Chinese, Japanese, Latin letters, numbers, and pseudo-text.',

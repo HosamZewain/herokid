@@ -50,7 +50,13 @@
         @can('production_studio.ai_generate')
             <form method="POST" action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-studio-ai-form class="flex flex-wrap justify-end gap-2">
                 @csrf
-                <input type="hidden" name="model_code" value="{{ $defaultModel }}">
+                <select name="model_code" @disabled(!$aiAvailable || !$ready) class="rounded-lg border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700">
+                    @foreach($sceneGenerationModels ?? collect() as $model)
+                        <option value="{{ $model->code }}" @selected($model->code === $defaultModel)>
+                            {{ $model->provider->public_name }} — {{ $model->display_name }} · ${{ $model->estimatedCost() }}
+                        </option>
+                    @endforeach
+                </select>
                 <input type="hidden" name="style_preset" value="premium_storybook">
                 @if($approvedCharacterSheet)
                     <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
