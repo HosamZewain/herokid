@@ -4,7 +4,8 @@
     $hasPose = filled($scene->child_action_pose);
     $hasSafeArea = filled($scene->text_safe_area_notes);
     $approvedImage = $sceneAssets->where('production_scene_id', $scene->id)->where('status', 'approved')->isNotEmpty();
-    $ready = $hasVisual && $approvedCharacterSheet && $profileReady;
+    $ready = $hasText && $hasVisual && $hasPose && $approvedCharacterSheet && $profileReady;
+    $improvementPreview = $sceneImprovementPreviews[$scene->id]['data'] ?? null;
 @endphp
 
 <div class="rounded-xl border border-gray-100 bg-white p-4 text-right"
@@ -42,7 +43,27 @@
                 <div data-studio-ai-feedback class="hidden rounded-lg border px-3 py-1.5 text-xs font-bold"></div>
             </form>
         @endcan
+        @can('production_studio.scene_edit')
+            <form method="POST" action="{{ route('admin.production-studio.scenes.improve', [$project, $scene]) }}" class="flex flex-wrap justify-end gap-2">
+                @csrf
+                <input type="hidden" name="model_code" value="{{ $sceneImproveModel }}">
+                <button @disabled(!$openAiAvailable || !$hasText) class="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">تحسين التوجيه البصري بالذكاء الاصطناعي</button>
+            </form>
+        @endcan
     </div>
+
+    @if($improvementPreview)
+        <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p class="font-black text-emerald-800">معاينة تحسين جاهزة للمشهد {{ $scene->scene_number }}</p>
+                <form method="POST" action="{{ route('admin.production-studio.scenes.apply-improvement', [$project, $scene]) }}">
+                    @csrf
+                    <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">تطبيق التحسين</button>
+                </form>
+            </div>
+            <pre dir="ltr" class="mt-2 max-h-60 overflow-auto rounded-lg bg-white p-3 text-left text-xs">{{ json_encode($improvementPreview, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+        </div>
+    @endif
 
     <div class="mt-4 hidden" data-studio-scene-editor>
         <form method="POST" action="{{ route('admin.production-studio.scenes.update', [$project, $scene]) }}" class="rounded-xl bg-gray-50 p-4">
@@ -67,6 +88,11 @@
                 <textarea name="visual_direction" rows="4" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="التوجيه البصري">{{ $scene->visual_direction }}</textarea>
                 <textarea name="educational_value" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="القيمة التعليمية">{{ $scene->educational_value }}</textarea>
                 <textarea name="child_action_pose" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="حركة أو وضع الطفل">{{ $scene->child_action_pose }}</textarea>
+                <textarea name="environment" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="البيئة">{{ $scene->environment }}</textarea>
+                <textarea name="mood_lighting" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="المزاج والإضاءة">{{ $scene->mood_lighting }}</textarea>
+                <textarea name="supporting_characters" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="الشخصيات المساندة">{{ $scene->supporting_characters }}</textarea>
+                <textarea name="key_objects" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="العناصر المهمة">{{ $scene->key_objects }}</textarea>
+                <textarea name="continuity_notes" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات الاستمرارية">{{ $scene->continuity_notes }}</textarea>
                 <textarea name="text_safe_area_notes" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات منطقة النص الآمنة">{{ $scene->text_safe_area_notes }}</textarea>
                 <textarea name="review_notes" rows="3" @cannot('production_studio.scene_edit') readonly @endcannot class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات المراجعة">{{ $scene->review_notes }}</textarea>
             </div>

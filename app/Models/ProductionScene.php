@@ -8,6 +8,13 @@ class ProductionScene extends Model
 {
     protected $guarded = [];
 
+    public function hasImagePromptContext(): bool
+    {
+        return filled($this->story_text)
+            && filled($this->visual_direction)
+            && filled($this->child_action_pose);
+    }
+
     public function project()
     {
         return $this->belongsTo(ProductionProject::class, 'production_project_id');

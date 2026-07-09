@@ -135,9 +135,11 @@ class AiProviderSettingsController extends Controller
         $this->guardSupported($provider);
         $this->rateLimit($request, 'connection-test:'.$provider->id, 5);
 
-        $result = $this->providers
-            ->imageProvider($provider->driver)
-            ->testConnection($provider, $request->boolean('confirm_billable_test'));
+        $adapter = in_array($provider->driver, ['openai'], true)
+            ? $this->providers->textVisionProvider($provider->driver)
+            : $this->providers->imageProvider($provider->driver);
+
+        $result = $adapter->testConnection($provider, $request->boolean('confirm_billable_test'));
 
         $provider->update([
             'last_health_check_at' => now(),

@@ -45,6 +45,88 @@ class ProductionStudioAiPilotTest extends TestCase
             ->assertDontSee('Generate Character Sheet');
     }
 
+    public function test_openai_provider_appears_in_supported_registry_and_can_store_encrypted_credentials(): void
+    {
+        app(AiProviderRegistrySyncer::class)->sync();
+
+        $provider = AiProvider::where('driver', 'openai')->firstOrFail();
+        app(AiProviderCredentialService::class)->save($provider, 'sk-openai-secret-for-tests');
+
+        $this->assertSame('OpenAI', $provider->fresh()->display_name);
+        $this->assertContains('vision_to_text', $provider->fresh()->capabilities_json);
+        $this->assertNotSame('sk-openai-secret-for-tests', $provider->credential()->first()->getRawOriginal('encrypted_value'));
+        $this->assertSame('sk-openai-secret-for-tests', app(AiProviderCredentialService::class)->secret($provider));
+    }
+
+    public function test_character_ai_analysis_button_is_disabled_when_openai_is_not_configured(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('تحليل صور الطفل بالذكاء الاصطناعي')
+            ->assertSee('OpenAI غير مهيأ')
+            ->assertSee('disabled', false)
+            ->assertSee('تعبئة مبدئية يدوية');
+    }
+
+    public function test_character_ai_analysis_sends_selected_images_and_applies_structured_fields(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableOpenAi();
+
+        Http::fake([
+            'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse([
+                'appearance_summary' => 'طفلة مصرية بملامح هادئة وابتسامة طبيعية.',
+                'hair_details' => 'شعر بني داكن مموج وطبيعي.',
+                'skin_tone' => 'بشرة قمحية فاتحة.',
+                'eyes_and_visible_traits' => 'عينان بنيتان وخدان ناعمان.',
+                'usual_expression' => 'ابتسامة هادئة وواثقة.',
+                'face_shape_notes' => 'وجه طفولي مستدير قليلًا.',
+                'body_proportion_notes' => 'نسب جسم طفولية مناسبة للعمر.',
+                'identity_rules' => 'حافظ على شكل الوجه والعينين والشعر والابتسامة.',
+                'negative_instructions' => 'لا تغير الوجه ولا تضف نصوصًا أو شعارات.',
+                'confidence_notes' => 'صورة الوجه واضحة.',
+                'reference_photo_recommendations' => 'استخدم صورة 1 كمرجع وجه أساسي.',
+                'warnings' => 'لا توجد تحذيرات مهمة.',
+            ])),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $model = AiModel::whereHas('provider', fn ($query) => $query->where('driver', 'openai'))->firstOrFail();
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.character-profile.analyze', $project), [
+                'model_code' => $model->code,
+                'reference_photo_indices' => [0],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn ($request) => data_get($request->data(), 'input.0.content.1.type') === 'input_image'
+            && str_starts_with((string) data_get($request->data(), 'input.0.content.1.image_url'), 'data:image/'));
+
+        $job = SceneGenerationJob::where('job_type', 'character_analysis')->firstOrFail();
+        $this->assertSame('completed', $job->status);
+        $this->assertSame('openai', $job->provider->driver);
+        $this->assertNotEmpty($job->prompt_snapshot);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.character-profile.apply-analysis', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $profile = $project->characterProfile()->firstOrFail();
+        $this->assertSame('طفلة مصرية بملامح هادئة وابتسامة طبيعية.', $profile->appearance_summary);
+        $this->assertSame('عينان بنيتان وخدان ناعمان.', $profile->eye_color_traits);
+        $this->assertSame('وجه طفولي مستدير قليلًا.', $profile->face_shape_notes);
+    }
+
     public function test_generation_cannot_start_when_fal_is_disabled_or_key_is_missing(): void
     {
         Queue::fake();
@@ -272,6 +354,139 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('character_scene', $job->generation_mode);
         $this->assertStringContainsString('Moon Scene', $job->prompt_snapshot);
         Queue::assertPushed(SubmitAiGenerationJob::class);
+    }
+
+    public function test_story_scenes_can_be_extracted_with_deterministic_parser_without_openai_call(): void
+    {
+        $project = $this->projectWithApprovedPhoto();
+        $content = collect(range(1, 13))
+            ->map(fn (int $i): string => "Scene {$i}: عنوان {$i}\nنص المشهد {$i}.")
+            ->implode("\n\n");
+        $project->storyVersions()->create([
+            'version_number' => 1,
+            'title' => 'Draft',
+            'full_story_content' => $content,
+            'status' => 'draft',
+            'created_by_user_id' => $this->adminUser()->id,
+        ]);
+
+        Http::fake();
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.extract-scenes', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertNothingSent();
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(13, $project->scenes()->count());
+        $this->assertSame('نص المشهد 1.', $project->scenes()->where('scene_number', 1)->first()->story_text);
+    }
+
+    public function test_story_scenes_can_be_extracted_through_mocked_openai_fallback(): void
+    {
+        $this->enableOpenAi();
+        $project = $this->projectWithApprovedPhoto();
+        $model = AiModel::whereHas('provider', fn ($query) => $query->where('driver', 'openai'))->firstOrFail();
+
+        Http::fake([
+            'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse($this->openAiScenePayload())),
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.extract-scenes', $project), [
+                'model_code' => $model->code,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $scene = $project->scenes()->where('scene_number', 1)->firstOrFail();
+        $this->assertSame('Scene title 1', $scene->title);
+        $this->assertSame('Written text 1', $scene->story_text);
+        $this->assertSame('Visual direction 1', $scene->visual_direction);
+        $this->assertSame('Child pose 1', $scene->child_action_pose);
+        $this->assertSame('Environment 1', $scene->environment);
+        $this->assertSame('Safe text area 1', $scene->text_safe_area_notes);
+        $this->assertDatabaseHas('scene_generation_jobs', ['job_type' => 'scene_extraction', 'generation_mode' => 'scene_extraction']);
+    }
+
+    public function test_improve_visual_direction_uses_openai_preview_then_apply(): void
+    {
+        $this->enableOpenAi();
+        $project = $this->projectWithApprovedPhoto();
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Moon',
+            'story_text' => 'The child looks at the moon.',
+        ]);
+        $model = AiModel::whereHas('provider', fn ($query) => $query->where('driver', 'openai'))->firstOrFail();
+
+        Http::fake([
+            'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse([
+                'visual_direction' => 'A calm rooftop under a soft moon.',
+                'child_action_pose' => 'The child points gently at the moon.',
+                'environment' => 'Rooftop garden',
+                'mood_lighting' => 'Soft blue moonlight',
+                'supporting_characters' => 'No extra children',
+                'key_objects' => 'Moon, small lantern',
+                'continuity_notes' => 'Keep pajamas consistent.',
+                'safe_text_area_notes' => 'Use quiet sky area for text.',
+            ])),
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.scenes.improve', [$project, $scene]), ['model_code' => $model->code])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertNull($scene->fresh()->visual_direction);
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.scenes.apply-improvement', [$project, $scene]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $scene->refresh();
+        $this->assertSame('A calm rooftop under a soft moon.', $scene->visual_direction);
+        $this->assertSame('The child points gently at the moon.', $scene->child_action_pose);
+        $this->assertSame('Use quiet sky area for text.', $scene->text_safe_area_notes);
+    }
+
+    public function test_scene_generation_is_blocked_when_scene_context_is_missing(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Missing context',
+            'visual_direction' => 'A nice garden.',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+
+        $this->actingAs($this->adminUser())
+            ->postJson(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
     }
 
     public function test_scene_generation_requires_approved_child_reference_illustration(): void
@@ -578,6 +793,22 @@ class ProductionStudioAiPilotTest extends TestCase
         ]);
     }
 
+    private function enableOpenAi(string $key = 'test-openai-key'): void
+    {
+        Config::set('production_studio.enabled', true);
+
+        app(AiProviderRegistrySyncer::class)->sync();
+
+        $provider = AiProvider::where('driver', 'openai')->firstOrFail();
+        app(AiProviderCredentialService::class)->save($provider, $key);
+        $provider->update([
+            'is_active' => true,
+            'is_configured' => true,
+            'is_available' => true,
+            'last_health_check_status' => null,
+        ]);
+    }
+
     private function generationPayload(array $overrides = []): array
     {
         return array_merge([
@@ -626,6 +857,43 @@ class ProductionStudioAiPilotTest extends TestCase
             'status' => 'under_review',
             'file_path' => 'production-studio/projects/'.$project->id.'/generated/'.Str::random(8).'.png',
         ], $overrides));
+    }
+
+    private function openAiJsonResponse(array $payload): array
+    {
+        return [
+            'id' => 'resp_test',
+            'output_text' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'usage' => [
+                'input_tokens' => 120,
+                'output_tokens' => 80,
+                'total_tokens' => 200,
+            ],
+        ];
+    }
+
+    private function openAiScenePayload(): array
+    {
+        return [
+            'story_title' => 'Story title',
+            'story_summary' => 'Story summary',
+            'target_age_range' => '6-9',
+            'educational_values' => ['confidence'],
+            'scenes' => collect(range(1, 13))->map(fn (int $i): array => [
+                'scene_number' => $i,
+                'scene_title' => 'Scene title '.$i,
+                'written_text' => 'Written text '.$i,
+                'visual_direction' => 'Visual direction '.$i,
+                'child_action_pose' => 'Child pose '.$i,
+                'environment' => 'Environment '.$i,
+                'mood_lighting' => 'Mood lighting '.$i,
+                'supporting_characters' => 'Supporting characters '.$i,
+                'key_objects' => 'Key objects '.$i,
+                'continuity_notes' => 'Continuity notes '.$i,
+                'safe_text_area_notes' => 'Safe text area '.$i,
+                'educational_value' => 'Educational value '.$i,
+            ])->all(),
+        ];
     }
 
     private function adminUser(): User

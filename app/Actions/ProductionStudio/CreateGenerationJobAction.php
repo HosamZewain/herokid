@@ -187,8 +187,20 @@ class CreateGenerationJobAction
             return;
         }
 
+        if (blank($scene->story_text)) {
+            throw new RuntimeException('أضف نص المشهد قبل توليد الصورة.');
+        }
+
         if (blank($scene->visual_direction) && ! (bool) ($data['confirm_missing_visual_direction'] ?? false)) {
             throw new RuntimeException('أضف التوجيه البصري للمشهد قبل التوليد.');
+        }
+
+        if (blank($scene->child_action_pose) && ! (bool) ($data['confirm_missing_child_action_pose'] ?? false)) {
+            throw new RuntimeException('أضف حركة أو وضع الطفل قبل توليد الصورة.');
+        }
+
+        if (blank($scene->project?->order?->story?->title) && blank($scene->project?->order?->story?->short_desc)) {
+            throw new RuntimeException('أضف سياق القصة قبل توليد صورة المشهد.');
         }
     }
 

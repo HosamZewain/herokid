@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use App\Contracts\AiImageProvider;
+use App\Contracts\AiTextVisionProvider;
 use App\Support\Ai\SupportedProviderRegistry;
 use InvalidArgumentException;
 
@@ -19,6 +20,18 @@ class AiProviderManager
         return match ($driver) {
             'fal' => app(FalImageProvider::class),
             default => throw new InvalidArgumentException("Unsupported AI provider driver [{$driver}]."),
+        };
+    }
+
+    public function textVisionProvider(string $driver): AiTextVisionProvider
+    {
+        if (! $this->registry->supportsProvider($driver)) {
+            throw new InvalidArgumentException("Unsupported AI provider driver [{$driver}].");
+        }
+
+        return match ($driver) {
+            'openai' => app(OpenAiTextVisionProvider::class),
+            default => throw new InvalidArgumentException("Unsupported text/vision AI provider driver [{$driver}]."),
         };
     }
 }

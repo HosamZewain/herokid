@@ -21,6 +21,9 @@
         $defaultModel = $defaultModelsByCapability['scene_generation'] ?? null;
         $characterSheetModel = $defaultModelsByCapability['character_sheet'] ?? $defaultModel;
         $premiumModel = $defaultModelsByCapability['cover_generation'] ?? ($defaultModelsByCapability['premium_retry'] ?? null);
+        $visionModel = $defaultTextModelsByCapability['vision_to_text'] ?? null;
+        $sceneExtractionModel = $defaultTextModelsByCapability['scene_extraction'] ?? ($defaultTextModelsByCapability['text_to_json'] ?? null);
+        $sceneImproveModel = $defaultTextModelsByCapability['prompt_enhancement'] ?? ($defaultTextModelsByCapability['text_to_json'] ?? null);
         $profileReady = (bool) $profile?->isReadyForAiGeneration();
         $missingProfileFields = $profile?->missingAiGenerationFields() ?? ['character_profile' => 'ملف الشخصية'];
         $hasStoryDraft = $project->storyVersions->isNotEmpty();
@@ -355,6 +358,54 @@
                 <p class="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600">{{ $order->story?->full_desc ?? $order->story?->short_desc ?? 'Not available' }}</p>
             </details>
 
+            @can('production_studio.story_edit')
+                <div class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 class="font-black text-gray-950">بناء المشاهد من مسودة القصة</h3>
+                            <p class="mt-1 text-sm leading-7 text-indigo-900">يتم استخدام parser محلي أولًا عند وجود عناوين مشاهد واضحة. إذا لم يكفِ، يتم استخدام OpenAI لإرجاع JSON منظم.</p>
+                        </div>
+                        @unless($openAiAvailable)
+                            @include('admin.production-studio.partials.status-badge', ['label' => 'OpenAI غير مهيأ', 'tone' => 'amber'])
+                        @endunless
+                    </div>
+                    <form method="POST" action="{{ route('admin.production-studio.story-versions.extract-scenes', $project) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        @csrf
+                        <select name="source_version_id" class="rounded-xl border-gray-300 text-right">
+                            <option value="">القصة الأصلية أو آخر مسودة</option>
+                            @foreach($project->storyVersions as $version)
+                                <option value="{{ $version->id }}">مسودة {{ $version->version_number }} - {{ $version->title ?? 'بدون عنوان' }}</option>
+                            @endforeach
+                        </select>
+                        <select name="model_code" @disabled(!$openAiAvailable) class="rounded-xl border-gray-300 text-right">
+                            @foreach($textModelsByCapability['scene_extraction'] ?? collect() as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $sceneExtractionModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                            @endforeach
+                        </select>
+                        <button class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white">بناء المشاهد من مسودة القصة</button>
+                    </form>
+
+                    @if($sceneExtractionPreview)
+                        <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
+                            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p class="font-black text-emerald-800">معاينة جاهزة للحفظ: {{ count(data_get($sceneExtractionPreview, 'data.scenes', [])) }} مشهد</p>
+                                    <p class="text-xs text-gray-500">المصدر: {{ data_get($sceneExtractionPreview, 'source') }}</p>
+                                </div>
+                                <form method="POST" action="{{ route('admin.production-studio.story-versions.apply-scenes', $project) }}">
+                                    @csrf
+                                    <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">تأكيد واستبدال المشاهد الحالية</button>
+                                </form>
+                            </div>
+                            <details class="mt-3">
+                                <summary class="cursor-pointer text-sm font-black text-indigo-700">عرض JSON المشاهد</summary>
+                                <pre dir="ltr" class="mt-2 max-h-72 overflow-auto rounded-lg bg-gray-50 p-3 text-left text-xs">{{ json_encode(data_get($sceneExtractionPreview, 'data'), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+                            </details>
+                        </div>
+                    @endif
+                </div>
+            @endcan
+
             <div class="mt-5 space-y-3">
                 @forelse($project->storyVersions as $version)
                     <div class="rounded-xl border border-gray-100 p-4 text-right">
@@ -403,12 +454,54 @@
                 <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
                     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <p class="font-black text-indigo-900">مساعد تعبئة وصف الهوية</p>
+                            <p class="font-black text-indigo-900">تعبئة مبدئية يدوية</p>
                             <p class="mt-1 text-sm leading-7 text-indigo-800">لا يستخدم AI خارجي. يملأ نصًا مبدئيًا يمكن تعديله قبل الحفظ.</p>
                         </div>
-                        <button type="button" data-fill-identity-summary class="rounded-xl bg-white px-4 py-2 text-sm font-black text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">توليد وصف الهوية من الصور</button>
+                        <button type="button" data-fill-identity-summary class="rounded-xl bg-white px-4 py-2 text-sm font-black text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">تعبئة مبدئية يدوية</button>
                     </div>
                 </div>
+
+                @can('production_studio.character_profile_edit')
+                    <div class="rounded-xl border border-purple-100 bg-purple-50 p-4 text-right">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <p class="font-black text-purple-950">تحليل صور الطفل بالذكاء الاصطناعي</p>
+                                <p class="mt-1 text-sm leading-7 text-purple-900">يستخدم OpenAI لتحليل الصور المختارة وإرجاع حقول منظمة قابلة للمراجعة قبل الحفظ.</p>
+                            </div>
+                            @include('admin.production-studio.partials.status-badge', ['label' => $openAiAvailable ? 'OpenAI جاهز' : 'OpenAI غير مهيأ', 'tone' => $openAiAvailable ? 'emerald' : 'amber'])
+                        </div>
+                        <form method="POST" action="{{ route('admin.production-studio.character-profile.analyze', $project) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                            @csrf
+                            <select name="model_code" @disabled(!$openAiAvailable) class="rounded-xl border-gray-300 text-right">
+                                @foreach($textModelsByCapability['vision_to_text'] ?? collect() as $model)
+                                    <option value="{{ $model->code }}" @selected($model->code === $visionModel)>{{ $model->provider->public_name }} — {{ $model->display_name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="flex flex-wrap justify-end gap-2 md:col-span-2">
+                                @foreach($profile?->approved_reference_photos ?? [] as $photoIndex)
+                                    <label class="rounded-xl bg-white px-3 py-2 text-sm font-bold text-gray-700 ring-1 ring-purple-100">
+                                        <input type="checkbox" name="reference_photo_indices[]" value="{{ $photoIndex }}" @checked($profile?->primaryFaceReferenceIndex() === (int) $photoIndex)>
+                                        صورة {{ ((int) $photoIndex) + 1 }}
+                                    </label>
+                                @endforeach
+                            </div>
+                            <button @disabled(!$openAiAvailable || count($profile?->approved_reference_photos ?? []) === 0) class="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">تحليل صور الطفل بالذكاء الاصطناعي</button>
+                        </form>
+
+                        @if($characterAnalysisPreview)
+                            <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <p class="font-black text-emerald-800">معاينة تحليل جاهزة. راجعها قبل التطبيق.</p>
+                                    <form method="POST" action="{{ route('admin.production-studio.character-profile.apply-analysis', $project) }}">
+                                        @csrf
+                                        <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">تطبيق التحليل على ملف الشخصية</button>
+                                    </form>
+                                </div>
+                                <pre dir="ltr" class="mt-3 max-h-72 overflow-auto rounded-lg bg-gray-50 p-3 text-left text-xs">{{ json_encode(data_get($characterAnalysisPreview, 'data'), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+                            </div>
+                        @endif
+                    </div>
+                @endcan
 
                 @unless($profileReady)
                     <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm font-bold text-amber-800">
@@ -430,7 +523,7 @@
 
                     <fieldset class="rounded-xl border border-gray-100 p-4">
                         <legend class="px-2 text-sm font-black text-gray-900">Hair & Body</legend>
-                        @foreach(['hair_details' => 'تفاصيل الشعر', 'wardrobe_direction' => 'اتجاه الملابس', 'approved_visual_style' => 'الأسلوب البصري المعتمد'] as $field => $label)
+                        @foreach(['hair_details' => 'تفاصيل الشعر', 'face_shape_notes' => 'ملاحظات شكل الوجه', 'body_proportion_notes' => 'ملاحظات نسب الجسم', 'wardrobe_direction' => 'اتجاه الملابس', 'approved_visual_style' => 'الأسلوب البصري المعتمد'] as $field => $label)
                             <label class="mt-3 block text-right">
                                 <span class="text-sm font-black text-gray-700">{{ $label }}</span>
                                 <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
@@ -440,7 +533,7 @@
 
                     <fieldset class="rounded-xl border border-gray-100 p-4">
                         <legend class="px-2 text-sm font-black text-gray-900">Identity Rules</legend>
-                        @foreach(['identity_rules' => 'قواعد الحفاظ على الهوية', 'negative_instructions' => 'تعليمات سلبية', 'reviewer_notes' => 'ملاحظات المراجع'] as $field => $label)
+                        @foreach(['identity_rules' => 'قواعد الحفاظ على الهوية', 'negative_instructions' => 'تعليمات سلبية', 'confidence_notes' => 'ملاحظات الثقة', 'reference_photo_recommendations' => 'توصيات الصور المرجعية', 'analysis_warnings' => 'تحذيرات التحليل', 'reviewer_notes' => 'ملاحظات المراجع'] as $field => $label)
                             <label class="mt-3 block text-right">
                                 <span class="text-sm font-black text-gray-700">{{ $label }}</span>
                                 <textarea name="{{ $field }}" rows="3" @cannot('production_studio.character_profile_edit') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 text-right">{{ old($field, $profile?->{$field}) }}</textarea>
@@ -585,7 +678,10 @@
                         'approvedCharacterSheet' => $approvedCharacterSheet,
                         'profileReady' => $profileReady,
                         'aiAvailable' => $aiAvailable,
+                        'openAiAvailable' => $openAiAvailable,
                         'defaultModel' => $defaultModel,
+                        'sceneImproveModel' => $sceneImproveModel,
+                        'sceneImprovementPreviews' => $sceneImprovementPreviews,
                     ])
                 @empty
                     <p class="rounded-xl bg-gray-50 p-4 text-right text-sm text-gray-500">لا توجد مشاهد بعد. أنشئ مسودة من القصة الأصلية أو أضف مشهدًا يدويًا.</p>
@@ -678,7 +774,7 @@
                             @csrf
                             <select data-scene-action-select class="rounded-xl border-gray-300 text-right" @disabled($project->scenes->isEmpty())>
                                 @forelse($project->scenes as $scene)
-                                    <option value="{{ $scene->id }}" data-action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-ready="{{ filled($scene->visual_direction) ? '1' : '0' }}">مشهد {{ $scene->scene_number }} - {{ $scene->title ?? 'بدون عنوان' }}</option>
+                                    <option value="{{ $scene->id }}" data-action="{{ route('admin.production-studio.ai.scene', [$project, $scene]) }}" data-ready="{{ $scene->hasImagePromptContext() ? '1' : '0' }}">مشهد {{ $scene->scene_number }} - {{ $scene->title ?? 'بدون عنوان' }}</option>
                                 @empty
                                     <option>لا توجد مشاهد</option>
                                 @endforelse

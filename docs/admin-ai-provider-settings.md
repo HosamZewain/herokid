@@ -9,9 +9,21 @@ Supported providers live in `App\Support\Ai\SupportedProviderRegistry`.
 Currently supported:
 
 - `fal` / fal.ai
-- Models:
-  - `fal-ai/flux-kontext/dev`
-  - `fal-ai/flux-pro/kontext`
+- `openai` / OpenAI
+
+fal.ai models:
+
+- `fal-ai/flux-kontext/dev`
+- `fal-ai/flux-pro/kontext`
+
+OpenAI models:
+
+- `gpt-4.1-mini`
+
+Provider roles:
+
+- fal.ai: image generation only.
+- OpenAI: text/vision analysis and structured JSON only.
 
 Future providers must be added by code first:
 
@@ -91,12 +103,21 @@ Models can be enabled/disabled independently. Disabled models remain in history 
 
 Default model mappings are stored in `ai_providers.settings_json.default_models`.
 
-Supported defaults:
+Supported fal defaults:
 
 - `character_sheet`
 - `scene_generation`
 - `cover_generation`
 - `premium_retry`
+
+Supported OpenAI defaults:
+
+- `vision_to_text`
+- `text_to_json`
+- `prompt_enhancement`
+- `scene_extraction`
+- `image_analysis`
+- `structured_json_generation`
 
 Estimated model costs are stored on `ai_models` and displayed only to users with `settings.ai_providers.view_costs`.
 
@@ -115,6 +136,42 @@ When confirmed, HeroKid performs a server-side provider check through the adapte
 - warning
 
 Raw provider responses and secrets are not stored.
+
+OpenAI connection tests use a lightweight server-side text request. They do not send child images and they never expose the API key, Authorization header, raw private payloads, or credentials to the browser.
+
+## OpenAI Setup
+
+1. Open `Admin -> Settings -> AI Providers & Models`.
+2. Configure the OpenAI provider.
+3. Paste the OpenAI API key into the credential field.
+4. Enable the provider.
+5. Enable an OpenAI model, such as `gpt-4.1-mini`.
+6. Make sure the model has the required capabilities:
+   - `vision_to_text`
+   - `text_to_json`
+   - `prompt_enhancement`
+   - `scene_extraction`
+   - `image_analysis`
+   - `structured_json_generation`
+7. Save and run the connection test.
+
+The key is encrypted at rest. After saving, the full key is never shown again.
+
+OpenAI actions in Production Studio are disabled when the provider, credential, or required model capability is missing.
+
+## OpenAI Production Studio Usage
+
+OpenAI powers:
+
+- `تحليل صور الطفل بالذكاء الاصطناعي`
+- `بناء المشاهد من مسودة القصة`
+- `تحسين التوجيه البصري بالذكاء الاصطناعي`
+
+OpenAI does not generate final images. Scene, cover, and child reference artwork are still generated through fal.ai.
+
+For child photo analysis, selected photos are sent from the server as base64 image data. The system does not create permanent public child-photo URLs for OpenAI.
+
+To disable OpenAI safely, disable the OpenAI provider or model, or remove the encrypted credential. This leaves fal image generation and existing Studio projects intact.
 
 ## Legacy `.env` Import
 

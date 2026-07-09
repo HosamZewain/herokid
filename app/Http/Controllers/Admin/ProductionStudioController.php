@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\ProductionStudio\ApproveGeneratedAssetAction;
 use App\Actions\ProductionStudio\CreateGenerationJobAction;
 use App\Actions\ProductionStudio\RejectGeneratedAssetAction;
+use App\DTOs\Ai\StructuredAiResult;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
+use App\Models\AiProvider;
 use App\Models\Order;
 use App\Models\ProductionProject;
 use App\Models\ProductionProjectAsset;
@@ -17,6 +19,7 @@ use App\Models\SceneGenerationJob;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
+use App\Services\Ai\AiProviderManager;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
@@ -118,6 +121,14 @@ class ProductionStudioController extends Controller
                 ->contains(fn (string $capability): bool => $availability->modelAvailable($model, $capability)))
             ->values();
 
+        $imageCapabilities = ['character_sheet', 'scene_generation', 'cover_generation', 'premium_retry'];
+        $textCapabilities = ['vision_to_text', 'text_to_json', 'prompt_enhancement', 'scene_extraction'];
+        $imageModelsByCapability = collect($imageCapabilities)
+            ->mapWithKeys(fn (string $capability) => [$capability => $availability->activeModelsForCapability($capability)]);
+        $textModelsByCapability = collect($textCapabilities)
+            ->mapWithKeys(fn (string $capability) => [$capability => $availability->activeModelsForCapability($capability)]);
+        $providers = $aiModels->pluck('provider')->unique('id');
+
         return view('admin.production-studio.show', [
             'project' => $project,
             'order' => $project->order,
@@ -125,23 +136,27 @@ class ProductionStudioController extends Controller
             'stages' => config('production_studio.stages', []),
             'assignees' => User::where('role', 'admin')->orderBy('name')->get(['id', 'name']),
             'aiModels' => $aiModels,
-            'aiAvailable' => ProductionStudio::aiAvailable(),
-            'aiModelsByCapability' => [
-                'character_sheet' => $availability->activeModelsForCapability('character_sheet'),
-                'scene_generation' => $availability->activeModelsForCapability('scene_generation'),
-                'cover_generation' => $availability->activeModelsForCapability('cover_generation'),
-                'premium_retry' => $availability->activeModelsForCapability('premium_retry'),
-            ],
-            'defaultModelsByCapability' => $aiModels
-                ->pluck('provider')
-                ->unique('id')
-                ->mapWithKeys(fn ($provider) => collect(['character_sheet', 'scene_generation', 'cover_generation', 'premium_retry'])
+            'aiAvailable' => $imageModelsByCapability->flatten(1)->isNotEmpty(),
+            'openAiAvailable' => $textModelsByCapability->flatten(1)->isNotEmpty(),
+            'aiModelsByCapability' => $imageModelsByCapability->all(),
+            'textModelsByCapability' => $textModelsByCapability->all(),
+            'defaultModelsByCapability' => $providers
+                ->mapWithKeys(fn ($provider) => collect($imageCapabilities)
+                    ->mapWithKeys(fn ($capability) => [$capability => $availability->defaultModelFor($provider, $capability)?->code])
+                    ->filter()
+                    ->all())
+                ->all(),
+            'defaultTextModelsByCapability' => $providers
+                ->mapWithKeys(fn ($provider) => collect($textCapabilities)
                     ->mapWithKeys(fn ($capability) => [$capability => $availability->defaultModelFor($provider, $capability)?->code])
                     ->filter()
                     ->all())
                 ->all(),
             'stylePresets' => config('production_studio.ai.style_presets', []),
             'aiCostSummary' => $project->aiCostSummary(),
+            'characterAnalysisPreview' => session($this->characterAnalysisSessionKey($project)),
+            'sceneExtractionPreview' => session($this->sceneExtractionSessionKey($project)),
+            'sceneImprovementPreviews' => session($this->sceneImprovementSessionKey($project), []),
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
                 ? StoryProductionPrompt::forOrder($project->order)
                 : null,
@@ -538,6 +553,94 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم تحديث نسخة القصة.');
     }
 
+    public function extractScenes(Request $request, ProductionProject $project, AiProviderAvailability $availability, AiProviderManager $providers)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'model_code' => ['nullable', 'string', 'exists:ai_models,code'],
+            'source_version_id' => ['nullable', 'integer', 'exists:production_story_versions,id'],
+        ]);
+
+        $project->loadMissing(['order.story', 'storyVersions']);
+        $version = isset($validated['source_version_id'])
+            ? $project->storyVersions()->whereKey($validated['source_version_id'])->firstOrFail()
+            : $project->storyVersions->sortByDesc('version_number')->first();
+        $storyText = $version?->full_story_content
+            ?: ($project->order->story?->full_story ?? $project->order->story?->full_desc ?? $project->order->story?->short_desc);
+
+        try {
+            $extracted = $this->deterministicSceneExtraction($project, $storyText);
+            $source = 'deterministic_parser';
+            $job = null;
+
+            if (! $extracted) {
+                $model = $this->resolveTextModel($validated['model_code'] ?? null, 'scene_extraction', $availability);
+                $result = $providers->textVisionProvider($model->provider->driver)->extractScenesToJson($project, $model, $version ?: $storyText);
+                $extracted = $result->data;
+                $source = 'openai';
+                $job = $this->recordStructuredAiJob($project, $model, 'scene_extraction', 'scene_extraction', $result);
+            }
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['scene_extraction' => $this->safeAiError($exception)])->withInput();
+        }
+
+        session()->put($this->sceneExtractionSessionKey($project), [
+            'source' => $source,
+            'job_id' => $job?->id,
+            'data' => $extracted,
+        ]);
+
+        ProductionStudio::log($project, 'story_scenes.previewed', 'تم تجهيز معاينة المشاهد قبل حفظها.', [
+            'source' => $source,
+            'job_id' => $job?->id,
+        ], auth()->user());
+
+        return back()->with('success', 'تم بناء معاينة المشاهد. راجعها ثم أكد الحفظ.');
+    }
+
+    public function applyExtractedScenes(ProductionProject $project)
+    {
+        $this->ensureEnabled();
+
+        $preview = session($this->sceneExtractionSessionKey($project));
+        $scenes = data_get($preview, 'data.scenes', []);
+
+        if (! is_array($scenes) || count($scenes) !== 13) {
+            return back()->withErrors(['scene_extraction' => 'لا توجد معاينة مشاهد صالحة للحفظ.']);
+        }
+
+        $project->scenes()->delete();
+
+        foreach ($scenes as $scene) {
+            $project->scenes()->create([
+                'scene_number' => (int) ($scene['scene_number'] ?? 1),
+                'title' => $scene['scene_title'] ?? null,
+                'story_text' => $scene['written_text'] ?? null,
+                'visual_direction' => $scene['visual_direction'] ?? null,
+                'child_action_pose' => $scene['child_action_pose'] ?? null,
+                'environment' => $scene['environment'] ?? null,
+                'mood_lighting' => $scene['mood_lighting'] ?? null,
+                'supporting_characters' => $scene['supporting_characters'] ?? null,
+                'key_objects' => $scene['key_objects'] ?? null,
+                'continuity_notes' => $scene['continuity_notes'] ?? null,
+                'text_safe_area_notes' => $scene['safe_text_area_notes'] ?? null,
+                'educational_value' => $scene['educational_value'] ?? null,
+                'status' => 'draft',
+                'ai_sync_status' => 'scenes_need_review',
+            ]);
+        }
+
+        session()->forget($this->sceneExtractionSessionKey($project));
+
+        ProductionStudio::log($project, 'story_scenes.applied', 'تم حفظ المشاهد المستخرجة بعد المراجعة.', [
+            'scene_count' => count($scenes),
+            'source' => data_get($preview, 'source'),
+        ], auth()->user());
+
+        return back()->with('success', 'تم حفظ المشاهد المستخرجة. راجعها قبل توليد الصور.');
+    }
+
     public function updateCharacterProfile(Request $request, ProductionProject $project)
     {
         $this->ensureEnabled();
@@ -552,6 +655,11 @@ class ProductionStudioController extends Controller
             'wardrobe_direction' => 'nullable|string|max:2000',
             'approved_visual_style' => 'nullable|string|max:2000',
             'negative_instructions' => 'nullable|string|max:3000',
+            'face_shape_notes' => 'nullable|string|max:2000',
+            'body_proportion_notes' => 'nullable|string|max:2000',
+            'confidence_notes' => 'nullable|string|max:2000',
+            'reference_photo_recommendations' => 'nullable|string|max:2000',
+            'analysis_warnings' => 'nullable|string|max:2000',
             'approved_reference_photos' => 'nullable|array',
             'approved_reference_photos.*' => 'integer|min:0',
             'primary_face_reference_index' => 'nullable|integer|min:0',
@@ -591,6 +699,79 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم حفظ ملف الشخصية.');
     }
 
+    public function analyzeCharacterProfile(Request $request, ProductionProject $project, AiProviderAvailability $availability, AiProviderManager $providers)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'model_code' => ['required', 'string', 'exists:ai_models,code'],
+            'reference_photo_indices' => ['required', 'array', 'min:1', 'max:4'],
+            'reference_photo_indices.*' => ['integer', 'min:0'],
+        ]);
+
+        try {
+            $model = $this->resolveTextModel($validated['model_code'], 'vision_to_text', $availability);
+            $indices = $this->approvedOrExistingPhotoIndices($project, $validated['reference_photo_indices']);
+            $result = $providers->textVisionProvider($model->provider->driver)->analyzeImagesToJson($project, $model, $indices);
+            $job = $this->recordStructuredAiJob($project, $model, 'character_analysis', 'vision_to_text', $result, [
+                'reference_photo_indices' => $indices,
+            ]);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['character_analysis' => $this->safeAiError($exception)])->withInput();
+        }
+
+        session()->put($this->characterAnalysisSessionKey($project), [
+            'job_id' => $job->id,
+            'reference_photo_indices' => $indices,
+            'data' => $result->data,
+        ]);
+
+        ProductionStudio::log($project, 'character_profile.ai_previewed', 'تم تحليل صور الطفل وتجهيز معاينة ملف الشخصية.', [
+            'job_id' => $job->id,
+            'reference_photo_indices' => $indices,
+        ], auth()->user());
+
+        return back()->with('success', 'تم تحليل الصور. راجع الحقول ثم أكد تطبيقها.');
+    }
+
+    public function applyCharacterAnalysis(ProductionProject $project)
+    {
+        $this->ensureEnabled();
+
+        $preview = session($this->characterAnalysisSessionKey($project));
+        $data = data_get($preview, 'data');
+
+        if (! is_array($data)) {
+            return back()->withErrors(['character_analysis' => 'لا توجد معاينة تحليل صالحة للتطبيق.']);
+        }
+
+        $project->characterProfile()->updateOrCreate(
+            ['production_project_id' => $project->id],
+            [
+                'appearance_summary' => $data['appearance_summary'] ?? null,
+                'hair_details' => $data['hair_details'] ?? null,
+                'skin_tone' => $data['skin_tone'] ?? null,
+                'eye_color_traits' => $data['eyes_and_visible_traits'] ?? null,
+                'typical_expression' => $data['usual_expression'] ?? null,
+                'face_shape_notes' => $data['face_shape_notes'] ?? null,
+                'body_proportion_notes' => $data['body_proportion_notes'] ?? null,
+                'identity_rules' => $data['identity_rules'] ?? null,
+                'negative_instructions' => $data['negative_instructions'] ?? null,
+                'confidence_notes' => $data['confidence_notes'] ?? null,
+                'reference_photo_recommendations' => $data['reference_photo_recommendations'] ?? null,
+                'analysis_warnings' => $data['warnings'] ?? null,
+            ]
+        );
+
+        session()->forget($this->characterAnalysisSessionKey($project));
+
+        ProductionStudio::log($project, 'character_profile.ai_applied', 'تم تطبيق تحليل صور الطفل على ملف الشخصية.', [
+            'job_id' => data_get($preview, 'job_id'),
+        ], auth()->user());
+
+        return back()->with('success', 'تم تطبيق تحليل الصور على ملف الشخصية.');
+    }
+
     public function storeScene(Request $request, ProductionProject $project)
     {
         $this->ensureEnabled();
@@ -619,6 +800,72 @@ class ProductionStudioController extends Controller
         ], auth()->user());
 
         return back()->with('success', 'تم تحديث المشهد.');
+    }
+
+    public function improveScene(Request $request, ProductionProject $project, ProductionScene $scene, AiProviderAvailability $availability, AiProviderManager $providers)
+    {
+        $this->ensureEnabled();
+        abort_unless($scene->production_project_id === $project->id, 404);
+
+        $validated = $request->validate([
+            'model_code' => ['required', 'string', 'exists:ai_models,code'],
+        ]);
+
+        try {
+            $model = $this->resolveTextModel($validated['model_code'], 'prompt_enhancement', $availability);
+            $result = $providers->textVisionProvider($model->provider->driver)->improveSceneToJson($project, $scene, $model);
+            $job = $this->recordStructuredAiJob($project, $model, 'scene_improvement', 'prompt_enhancement', $result, [], $scene);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['scene_improvement' => $this->safeAiError($exception)])->withInput();
+        }
+
+        $previews = session($this->sceneImprovementSessionKey($project), []);
+        $previews[$scene->id] = [
+            'job_id' => $job->id,
+            'data' => $result->data,
+        ];
+        session()->put($this->sceneImprovementSessionKey($project), $previews);
+
+        ProductionStudio::log($project, 'scene.ai_improvement_previewed', 'تم تجهيز معاينة تحسين التوجيه البصري.', [
+            'scene_id' => $scene->id,
+            'job_id' => $job->id,
+        ], auth()->user());
+
+        return back()->with('success', 'تم إنشاء معاينة تحسين المشهد. راجعها ثم أكد التطبيق.');
+    }
+
+    public function applySceneImprovement(ProductionProject $project, ProductionScene $scene)
+    {
+        $this->ensureEnabled();
+        abort_unless($scene->production_project_id === $project->id, 404);
+
+        $previews = session($this->sceneImprovementSessionKey($project), []);
+        $data = data_get($previews, "{$scene->id}.data");
+
+        if (! is_array($data)) {
+            return back()->withErrors(['scene_improvement' => 'لا توجد معاينة تحسين صالحة للتطبيق.']);
+        }
+
+        $scene->update([
+            'visual_direction' => $data['visual_direction'] ?? $scene->visual_direction,
+            'child_action_pose' => $data['child_action_pose'] ?? $scene->child_action_pose,
+            'environment' => $data['environment'] ?? $scene->environment,
+            'mood_lighting' => $data['mood_lighting'] ?? $scene->mood_lighting,
+            'supporting_characters' => $data['supporting_characters'] ?? $scene->supporting_characters,
+            'key_objects' => $data['key_objects'] ?? $scene->key_objects,
+            'continuity_notes' => $data['continuity_notes'] ?? $scene->continuity_notes,
+            'text_safe_area_notes' => $data['safe_text_area_notes'] ?? $scene->text_safe_area_notes,
+            'ai_sync_status' => 'scenes_need_review',
+        ]);
+
+        unset($previews[$scene->id]);
+        session()->put($this->sceneImprovementSessionKey($project), $previews);
+
+        ProductionStudio::log($project, 'scene.ai_improvement_applied', 'تم تطبيق تحسين التوجيه البصري على المشهد.', [
+            'scene_id' => $scene->id,
+        ], auth()->user());
+
+        return back()->with('success', 'تم تطبيق تحسين المشهد.');
     }
 
     public function updateQa(Request $request, ProductionProject $project, ProductionQaCheck $qaCheck)
@@ -659,7 +906,13 @@ class ProductionStudioController extends Controller
             'educational_value' => 'nullable|string|max:2000',
             'visual_direction' => 'nullable|string|max:5000',
             'child_action_pose' => 'nullable|string|max:3000',
+            'environment' => 'nullable|string|max:3000',
+            'mood_lighting' => 'nullable|string|max:3000',
+            'supporting_characters' => 'nullable|string|max:3000',
+            'key_objects' => 'nullable|string|max:3000',
+            'continuity_notes' => 'nullable|string|max:3000',
             'text_safe_area_notes' => 'nullable|string|max:3000',
+            'ai_sync_status' => 'nullable|string|max:100',
             'status' => 'nullable|string|max:100',
             'review_notes' => 'nullable|string|max:3000',
         ]);
@@ -690,6 +943,160 @@ class ProductionStudioController extends Controller
         }
 
         return $rules;
+    }
+
+    private function resolveTextModel(?string $modelCode, string $capability, AiProviderAvailability $availability): AiModel
+    {
+        if (! $modelCode) {
+            $model = AiProvider::query()
+                ->where('driver', 'openai')
+                ->where('is_active', true)
+                ->with('models')
+                ->get()
+                ->map(fn ($provider) => $availability->defaultModelFor($provider, $capability))
+                ->filter()
+                ->first();
+
+            if ($model) {
+                return $model->load('provider');
+            }
+        }
+
+        $model = AiModel::query()
+            ->with('provider')
+            ->where('code', $modelCode)
+            ->whereHas('provider', fn ($query) => $query->where('driver', 'openai'))
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        if (! $model->provider?->is_active || ! $model->is_active || ! $model->supportsCapability($capability)) {
+            throw new \RuntimeException('OpenAI model is not available for this action.');
+        }
+
+        return $model;
+    }
+
+    private function approvedOrExistingPhotoIndices(ProductionProject $project, array $indices): array
+    {
+        $photos = $project->order?->uploaded_photos ?? [];
+        $approved = array_values(array_unique(array_map('intval', $project->characterProfile?->approved_reference_photos ?? [])));
+        $indices = array_values(array_unique(array_map('intval', $indices)));
+
+        foreach ($indices as $index) {
+            if (! isset($photos[$index])) {
+                throw new \RuntimeException('Selected child photo does not exist.');
+            }
+
+            if ($approved !== [] && ! in_array($index, $approved, true)) {
+                throw new \RuntimeException('Selected child photo is not approved as a Studio reference.');
+            }
+        }
+
+        return $indices;
+    }
+
+    private function recordStructuredAiJob(ProductionProject $project, AiModel $model, string $jobType, string $mode, StructuredAiResult $result, array $inputAssets = [], ?ProductionScene $scene = null): SceneGenerationJob
+    {
+        $job = $project->generationJobs()->create([
+            'production_scene_id' => $scene?->id,
+            'ai_provider_id' => $model->ai_provider_id,
+            'ai_model_id' => $model->id,
+            'job_type' => $jobType,
+            'generation_mode' => $mode,
+            'prompt_snapshot' => $result->prompt,
+            'input_assets_json' => $inputAssets,
+            'provider_request_json' => [
+                'provider_driver' => $model->provider->driver,
+                'provider_display_name' => $model->provider->public_name,
+                'model_code' => $model->code,
+                'model_display_name' => $model->display_name,
+                'capability' => $mode,
+            ],
+            'provider_response_json' => [
+                'usage' => $result->usage,
+                'structured_result' => $result->data,
+                'raw' => $result->raw,
+            ],
+            'estimated_cost' => $model->estimatedCost(),
+            'actual_cost' => $result->actualCost,
+            'cost_source' => $result->costSource,
+            'status' => 'completed',
+            'initiated_by_user_id' => auth()->id(),
+            'submitted_at' => now(),
+            'completed_at' => now(),
+        ]);
+
+        ProductionStudio::log($project, 'ai_text_vision.completed', 'تم تنفيذ مهمة نص/رؤية بالذكاء الاصطناعي.', [
+            'job_id' => $job->id,
+            'job_type' => $jobType,
+            'generation_mode' => $mode,
+            'model' => $model->code,
+        ], auth()->user());
+
+        return $job;
+    }
+
+    private function deterministicSceneExtraction(ProductionProject $project, ?string $storyText): ?array
+    {
+        $text = trim((string) $storyText);
+
+        if ($text === '') {
+            return null;
+        }
+
+        preg_match_all('/(?:^|\R)\s*(?:Scene|مشهد)\s*([0-9٠-٩]+)\s*[:：\\-–]?\s*(.*?)(?=(?:\R\s*(?:Scene|مشهد)\s*[0-9٠-٩]+\s*[:：\\-–]?)|\z)/su', $text, $matches, PREG_SET_ORDER);
+
+        if (count($matches) !== 13) {
+            return null;
+        }
+
+        $scenes = collect($matches)->map(function (array $match, int $index): array {
+            $body = trim($match[2] ?? '');
+            $lines = collect(preg_split('/\R/u', $body) ?: [])
+                ->map(fn (string $line): string => trim($line))
+                ->filter()
+                ->values();
+            $title = $lines->first() ?: 'Scene '.($index + 1);
+            $written = $lines->slice(1)->implode("\n") ?: $body;
+
+            return [
+                'scene_number' => $index + 1,
+                'scene_title' => $title,
+                'written_text' => $written,
+                'visual_direction' => 'Needs visual direction review for: '.$title,
+                'child_action_pose' => 'Needs child action / pose review.',
+                'environment' => 'Needs environment review.',
+                'mood_lighting' => 'Warm premium children book lighting.',
+                'supporting_characters' => 'Original supporting characters only if needed.',
+                'key_objects' => 'Key objects should follow the written scene.',
+                'continuity_notes' => 'Maintain continuity from previous scene.',
+                'safe_text_area_notes' => 'Reserve a calm low-detail area for Arabic text overlay.',
+                'educational_value' => 'Review educational value.',
+            ];
+        })->all();
+
+        return [
+            'story_title' => $project->order?->story?->title ?? 'Not available',
+            'story_summary' => $project->order?->story?->short_desc ?? 'Not available',
+            'target_age_range' => $project->order?->story?->age_range ?? 'Not available',
+            'educational_values' => array_values(array_filter([$project->order?->lesson, $project->order?->story?->lesson_value])),
+            'scenes' => $scenes,
+        ];
+    }
+
+    private function characterAnalysisSessionKey(ProductionProject $project): string
+    {
+        return 'production_studio.character_analysis.'.$project->id;
+    }
+
+    private function sceneExtractionSessionKey(ProductionProject $project): string
+    {
+        return 'production_studio.scene_extraction.'.$project->id;
+    }
+
+    private function sceneImprovementSessionKey(ProductionProject $project): string
+    {
+        return 'production_studio.scene_improvement.'.$project->id;
     }
 
     private function safeAiError(\Throwable $exception): string

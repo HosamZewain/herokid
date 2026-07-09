@@ -1,8 +1,11 @@
 # Production Studio Future AI Architecture
 
-Production Studio includes provider-ready database structures. Phase 2 adds the first controlled provider implementation: fal.ai.
+Production Studio includes provider-ready database structures. Phase 2 adds controlled provider implementations for two separate job families:
 
-Fal is disabled unless `HERO_KID_PRODUCTION_STUDIO_ENABLED=true`, `FAL_ENABLED=true`, and `FAL_KEY` is present.
+- fal.ai for image generation.
+- OpenAI for text/vision analysis and structured JSON.
+
+fal.ai remains the only image generation provider in this phase. OpenAI must not be used for final image generation.
 
 ## Provider Abstraction
 
@@ -20,9 +23,9 @@ Provider configuration must be referenced indirectly. API keys must never be sto
 
 Use environment variables or a secrets manager for future provider credentials.
 
-The current provider contract is `App\Contracts\AiImageProvider`.
+The current image provider contract is `App\Contracts\AiImageProvider`.
 
-Required provider methods:
+Required image provider methods:
 
 - `isAvailable`
 - `listSupportedModels`
@@ -33,6 +36,18 @@ Required provider methods:
 - `downloadOutput`
 
 The first implementation is `App\Services\Ai\FalImageProvider`.
+
+The text/vision provider contract is `App\Contracts\AiTextVisionProvider`.
+
+Required text/vision provider methods:
+
+- `isAvailable`
+- `analyzeImagesToJson`
+- `extractScenesToJson`
+- `improveSceneToJson`
+- `testConnection`
+
+The first implementation is `App\Services\Ai\OpenAiTextVisionProvider`.
 
 ## Model Abstraction
 
@@ -53,6 +68,12 @@ Initial Fal model registry:
 
 - `fal-ai/flux-kontext/dev`: FLUX Kontext Dev
 - `fal-ai/flux-pro/kontext`: FLUX Kontext Pro
+
+Initial OpenAI model registry:
+
+- `gpt-4.1-mini`: vision analysis, structured JSON extraction, and prompt enhancement
+
+OpenAI models are managed through Admin. Controllers and Blade views request a model by capability instead of hardcoding a model name.
 
 ## Scene Generation Jobs
 
@@ -88,6 +109,15 @@ Phase 2 job lifecycle:
 6. A versioned `production_project_assets` row is created.
 7. The asset waits for review, approval, rejection, archive, or retry.
 
+Text/vision structured jobs use the same `scene_generation_jobs` audit trail for traceability, but they do not create generated image assets. They store:
+
+- provider and model snapshot
+- capability, such as `vision_to_text` or `scene_extraction`
+- prompt snapshot or input summary
+- structured JSON result metadata
+- token usage and cost metadata when available
+- sanitized failure reason if validation or provider calls fail
+
 ## Suggested Future Job Statuses
 
 - `queued`
@@ -104,15 +134,24 @@ The current implementation only prepares storage. It does not enqueue jobs or ca
 
 Use `estimated_cost` before running a job and `actual_cost` after receiving provider billing or usage metadata.
 
-Costs should be recorded per generated output when possible, then summarized at project level if reporting is needed.
+Costs should be recorded per generated output or text/vision task when possible, then summarized at project level if reporting is needed.
+
+Keep cost categories separate:
+
+- fal image generation cost
+- OpenAI text/vision analysis cost
+- total AI cost
 
 ## Security Rules
 
 - Do not expose child images publicly.
 - Do not put API keys in code, config files committed to Git, prompts, logs, or activity records.
-- Keep provider secrets in environment variables or managed secrets.
+- Keep provider secrets in encrypted Admin credentials or managed secrets.
 - Store input and output asset paths in private storage unless explicitly approved for public delivery.
 - Restrict job and asset views to authorized Studio users.
+- Send child photos to OpenAI only when an authorized admin explicitly selects them for analysis.
+- Prefer server-side base64 image payloads for OpenAI child-photo analysis so permanent public URLs are not created.
+- Never log OpenAI image payloads or Authorization headers.
 
 ## Future Provider Examples
 
@@ -127,6 +166,8 @@ The abstraction can support:
 - internal renderers
 
 Each driver should translate the Studio scene, character profile, and approved references into the provider-specific request format without changing the Studio tables.
+
+OpenAI currently uses only the Responses API for text/vision structured JSON. If OpenAI image generation is added later, it should be a separate image-provider implementation and must not reuse the text/vision adapter directly.
 
 ## Future PDF and Print Automation
 
@@ -154,6 +195,8 @@ Every generation job stores:
 - selected character sheet id when used
 
 Provider API keys are never included in prompt snapshots.
+
+OpenAI prompt snapshots may include sanitized story/scene/profile text and selected child-photo indexes. They must not include base64 image payloads or credentials.
 
 ## Asset Versioning Policy
 
@@ -183,9 +226,11 @@ Each job stores:
 
 Project-level totals are calculated from `scene_generation_jobs`.
 
+OpenAI token usage, when returned by the provider, is stored in job metadata. If an exact cost cannot be calculated from model pricing, the job should mark the cost source as estimate or unavailable rather than mixing it with fal image-provider actuals.
+
 ## Adding Future Providers
 
-To add Grok, Imagen, OpenAI, Replicate, or another provider:
+To add Grok, Imagen, Replicate, or another image provider:
 
 1. Create a class implementing `App\Contracts\AiImageProvider`.
 2. Add the provider and allowed model codes to `App\Support\Ai\SupportedProviderRegistry`.
@@ -194,6 +239,15 @@ To add Grok, Imagen, OpenAI, Replicate, or another provider:
 5. Configure credentials from Admin after deployment.
 6. Keep controller and Studio business logic unchanged.
 
+To add a new text/vision provider:
+
+1. Create a class implementing `App\Contracts\AiTextVisionProvider`.
+2. Add the provider and allowed model codes to `App\Support\Ai\SupportedProviderRegistry`.
+3. Register provider/model rows in `ai_providers` and `ai_models`.
+4. Extend `AiProviderManager::textVisionProvider`.
+5. Configure encrypted credentials from Admin.
+6. Keep Production Studio controllers working through the provider contract.
+
 ## Admin-Managed Provider Configuration
 
 Provider runtime configuration is database-backed and adapter-based:
@@ -201,7 +255,7 @@ Provider runtime configuration is database-backed and adapter-based:
 - `SupportedProviderRegistry` defines drivers, model codes, capabilities, and safe defaults supported by code.
 - `ai_providers` stores enabled/disabled state, safe provider settings, health status, and default model mappings.
 - `ai_models` stores allowed model codes, active state, capabilities, estimated costs, notes, and sort order.
-- `ai_provider_credentials` stores encrypted provider secrets.
+- `ai_provider_credentials` stores encrypted provider secrets, including OpenAI API keys.
 
 Admins cannot create arbitrary drivers, endpoints, callback URLs, PHP classes, shell commands, or arbitrary model IDs from the UI.
 
