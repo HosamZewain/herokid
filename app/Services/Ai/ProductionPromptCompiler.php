@@ -23,6 +23,12 @@ class ProductionPromptCompiler
         $profile = $project->characterProfile;
         $style = config('production_studio.ai.style_presets.'.$stylePreset, config('production_studio.ai.style_presets.premium_storybook'));
         $isCharacterReference = $jobType === 'character_sheet';
+        $templateHero = trim((string) ($scene?->template_hero_name ?: $project->template_hero_name));
+        $childHero = trim((string) ($scene?->personalized_hero_name ?: $project->personalized_hero_name ?: $order->child_name));
+        $personalizationApplied = $scene?->isPersonalizedForImageGeneration() ?? false;
+        $oldHeroRemaining = $scene ? $scene->oldHeroConflicts($templateHero) !== [] : false;
+        $storyTitle = $this->personalizedContext((string) ($order->story?->title ?: 'Not available'), $templateHero, $childHero);
+        $storySummary = $this->personalizedContext((string) ($order->story?->short_desc ?: $order->story?->full_desc ?: 'Not available'), $templateHero, $childHero);
         $orientation = match ($jobType) {
             'character_sheet' => 'portrait or half-body identity reference on a simple clean background',
             'cover_image' => 'A4 portrait cover artwork composition',
@@ -44,8 +50,8 @@ class ProductionPromptCompiler
             ]);
         } else {
             $lines = array_merge($lines, [
-                'Selected story title for context only, not visual text: '.($order->story?->title ?: 'Not available'),
-                'Selected story summary: '.($order->story?->short_desc ?: $order->story?->full_desc ?: 'Not available'),
+                'Selected story title for context only, not visual text: '.$storyTitle,
+                'Selected story summary: '.$storySummary,
                 'Educational value: '.($order->lesson ?: $order->story?->lesson_value ?: 'Not available'),
             ]);
         }
@@ -100,6 +106,17 @@ class ProductionPromptCompiler
             ]);
         } elseif ($scene) {
             $lines = array_merge($lines, [
+                '',
+                'Scene personalization debug:',
+                'personalization_applied: '.($personalizationApplied ? 'true' : 'false'),
+                'template_hero_name: '.($templateHero ? '[replaced before image generation]' : 'Not available'),
+                'child_hero_name: '.($childHero ?: 'Not available'),
+                'old_hero_name_remaining: '.($oldHeroRemaining ? 'true' : 'false'),
+                'personalized_scene_context_included: '.($personalizationApplied && ! $oldHeroRemaining ? 'true' : 'false'),
+                'The child '.$childHero.' is the main '.($this->isGirl((string) $order->child_gender) ? 'heroine' : 'hero').' of this story scene.',
+                'Approved story role for consistent use: '.($project->child_story_role ?: $childHero),
+                'Use that child name and story role consistently across the scene. Do not introduce a separate main princess or hero name.',
+                'The reusable template hero has already been replaced for this order. Do not invent or introduce another main hero name.',
                 '',
                 'Scene generation requirements:',
                 'Use the approved child reference illustration and primary face photo as identity references.',
@@ -216,6 +233,31 @@ class ProductionPromptCompiler
         return [
             'prompt' => implode("\n", $lines),
             'negative_prompt' => $negative,
+            'personalization_debug' => [
+                'personalization_applied' => $personalizationApplied,
+                'template_hero_name' => $templateHero ?: null,
+                'child_hero_name' => $childHero ?: null,
+                'old_hero_name_remaining' => $oldHeroRemaining,
+                'personalized_scene_context_included' => $personalizationApplied && ! $oldHeroRemaining,
+            ],
         ];
+    }
+
+    private function personalizedContext(string $value, string $templateHero, string $childHero): string
+    {
+        if ($templateHero === '' || $childHero === '' || $templateHero === $childHero) {
+            return $value;
+        }
+
+        return preg_replace(
+            '/(?<![\p{L}\p{N}_])'.preg_quote($templateHero, '/').'(?![\p{L}\p{N}_])/u',
+            $childHero,
+            $value
+        ) ?? $value;
+    }
+
+    private function isGirl(string $gender): bool
+    {
+        return in_array(mb_strtolower(trim($gender)), ['girl', 'female', 'f', 'بنت', 'أنثى', 'انثى'], true);
     }
 }

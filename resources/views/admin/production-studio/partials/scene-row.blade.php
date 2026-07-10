@@ -5,7 +5,9 @@
     $hasSafeArea = filled($scene->text_safe_area_notes);
     $sceneGeneratedAssets = $sceneAssets->where('production_scene_id', $scene->id)->sortByDesc('created_at');
     $approvedImage = $sceneAssets->where('production_scene_id', $scene->id)->where('status', 'approved')->isNotEmpty();
-    $ready = $hasText && $hasVisual && $hasPose && $approvedCharacterSheet && $profileReady;
+    $oldHeroConflicts = $scene->oldHeroConflicts();
+    $scenePersonalized = $scene->isPersonalizedForImageGeneration();
+    $ready = $hasText && $hasVisual && $hasPose && $approvedCharacterSheet && $profileReady && $scenePersonalized;
     $improvementPreview = $sceneImprovementPreviews[$scene->id]['data'] ?? null;
 @endphp
 
@@ -27,8 +29,19 @@
             @include('admin.production-studio.partials.status-badge', ['label' => $hasPose ? 'وضع الطفل' : 'ينقص وضع الطفل', 'tone' => $hasPose ? 'emerald' : 'gray'])
             @include('admin.production-studio.partials.status-badge', ['label' => $hasSafeArea ? 'منطقة نص' : 'ينقص منطقة نص', 'tone' => $hasSafeArea ? 'emerald' : 'gray'])
             @include('admin.production-studio.partials.status-badge', ['label' => $approvedImage ? 'صورة معتمدة' : 'لا توجد صورة معتمدة', 'tone' => $approvedImage ? 'emerald' : 'gray'])
+            @include('admin.production-studio.partials.status-badge', ['label' => $scenePersonalized ? 'مخصص باسم الطفل' : 'تخصيص غير مكتمل', 'tone' => $scenePersonalized ? 'emerald' : 'amber'])
         </div>
     </div>
+
+    @if($oldHeroConflicts !== [])
+        <div class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-800">
+            هذا المشهد يحتوي على اسم بطلة/بطل القالب الأصلي: {{ $scene->template_hero_name ?: $project->template_hero_name }}. عدّل الحقول المتعارضة قبل توليد الصورة.
+        </div>
+    @elseif(!$scenePersonalized)
+        <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+            المشهد يحتاج تأكيد أن {{ $project->order->child_name }} هو بطل القصة داخل النص والتوجيه البصري ووضع الطفل قبل التوليد.
+        </div>
+    @endif
 
     <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div class="rounded-xl border border-gray-100 bg-gray-50 p-3">
@@ -61,7 +74,7 @@
                 @if($approvedCharacterSheet)
                     <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
                 @endif
-                <button @disabled(!$aiAvailable || !$ready) class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">توليد</button>
+                <button @disabled(!$aiAvailable || !$ready) title="{{ !$scenePersonalized ? 'خصّص المشهد باسم الطفل أولًا' : '' }}" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">توليد</button>
                 <div data-studio-ai-feedback class="hidden rounded-lg border px-3 py-1.5 text-xs font-bold"></div>
             </form>
         @endcan

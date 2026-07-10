@@ -118,6 +118,7 @@ class CreateGenerationJobAction
                     'max_retries' => $providerModel->provider->default_max_retries,
                 ],
                 'style_preset' => $request->options['style_preset'],
+                'personalization_debug' => $compiled['personalization_debug'] ?? null,
             ],
             'estimated_cost' => $estimate->amount,
             'cost_source' => $estimate->source,
@@ -190,6 +191,18 @@ class CreateGenerationJobAction
     {
         if (! $scene || ($data['generation_mode'] ?? null) !== 'character_scene') {
             return;
+        }
+
+        $scene->loadMissing('project.order');
+
+        if (! $scene->isPersonalizedForImageGeneration()) {
+            $templateHero = $scene->template_hero_name ?: $scene->project?->template_hero_name;
+            $conflicts = $scene->oldHeroConflicts($templateHero);
+            $details = $conflicts !== []
+                ? ' اسم بطل القالب ما زال موجودًا في: '.implode('، ', $conflicts).'.'
+                : ' يجب أن يشير نص المشهد والتوجيه البصري أو وضع الطفل إلى طفل الطلب بصفته البطل.';
+
+            throw new RuntimeException('خصّص المشهد باسم الطفل قبل توليد الصورة.'.$details);
         }
 
         if (blank($scene->story_text)) {

@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
+use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\AdminActivityLogger;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\ProductionStudio;
@@ -86,7 +87,7 @@ class ProductionStudioController extends Controller
             ->with('success', 'تم إنشاء مشروع استوديو الإنتاج بدون تغيير حالة الطلب الأصلي.');
     }
 
-    public function show(ProductionProject $project, AiProviderAvailability $availability)
+    public function show(ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer)
     {
         $this->ensureEnabled();
 
@@ -136,6 +137,10 @@ class ProductionStudioController extends Controller
             ->first();
         $providers = $aiModels->pluck('provider')->unique('id');
 
+        $sceneExtractionPreview = session($this->sceneExtractionSessionKey($project))
+            ?: $this->latestStructuredAiPreview($project, 'scene_extraction');
+        $sceneExtractionPreview = $personalizer->decoratePreview($project, $sceneExtractionPreview);
+
         return view('admin.production-studio.show', [
             'project' => $project,
             'order' => $project->order,
@@ -153,8 +158,7 @@ class ProductionStudioController extends Controller
             'aiCostSummary' => $project->aiCostSummary(),
             'characterAnalysisPreview' => session($this->characterAnalysisSessionKey($project))
                 ?: $this->latestStructuredAiPreview($project, 'character_analysis'),
-            'sceneExtractionPreview' => session($this->sceneExtractionSessionKey($project))
-                ?: $this->latestStructuredAiPreview($project, 'scene_extraction'),
+            'sceneExtractionPreview' => $sceneExtractionPreview,
             'sceneImprovementPreviews' => $this->sceneImprovementPreviews($project),
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
                 ? StoryProductionPrompt::forOrder($project->order)
@@ -561,7 +565,7 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم تحديث نسخة القصة.');
     }
 
-    public function extractScenes(Request $request, ProductionProject $project, AiProviderAvailability $availability, AiProviderManager $providers)
+    public function extractScenes(Request $request, ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer)
     {
         $this->ensureEnabled();
 
@@ -582,6 +586,10 @@ class ProductionStudioController extends Controller
             $source = 'deterministic_parser';
             $job = null;
 
+            if ($extracted && $personalizer->analyze($project, $extracted)['requires_openai']) {
+                $extracted = null;
+            }
+
             if (! $extracted) {
                 $model = $this->resolveTextModel($validated['model_code'] ?? null, 'scene_extraction', $availability);
                 $job = $this->createQueuedStructuredAiJob($project, $model, 'scene_extraction', 'scene_extraction', [
@@ -595,11 +603,12 @@ class ProductionStudioController extends Controller
             return back()->withErrors(['scene_extraction' => $this->safeAiError($exception)])->withInput();
         }
 
-        session()->put($this->sceneExtractionSessionKey($project), [
+        $preview = $personalizer->decoratePreview($project, [
             'source' => $source,
             'job_id' => $job?->id,
             'data' => $extracted,
         ]);
+        session()->put($this->sceneExtractionSessionKey($project), $preview);
 
         ProductionStudio::log($project, 'story_scenes.previewed', 'تم تجهيز معاينة المشاهد قبل حفظها.', [
             'source' => $source,
@@ -609,22 +618,45 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم بناء معاينة المشاهد. راجعها ثم أكد الحفظ.');
     }
 
-    public function applyExtractedScenes(ProductionProject $project)
+    public function applyExtractedScenes(Request $request, ProductionProject $project, ScenePersonalizationService $personalizer)
     {
         $this->ensureEnabled();
 
+        $validated = $request->validate([
+            'detected_hero_name' => ['nullable', 'string', 'max:120'],
+            'personalization_action' => ['nullable', Rule::in(['confirm', 'skip'])],
+            'confirm_personalization' => ['nullable', 'boolean'],
+        ]);
+
         $preview = session($this->sceneExtractionSessionKey($project))
             ?: $this->latestStructuredAiPreview($project, 'scene_extraction');
-        $scenes = data_get($preview, 'data.scenes', []);
+        $skip = ($validated['personalization_action'] ?? 'confirm') === 'skip';
+        $preview = $personalizer->decoratePreview(
+            $project,
+            $preview,
+            $validated['detected_hero_name'] ?? null,
+            $skip,
+        );
+        $personalization = data_get($preview, 'personalization', []);
+        $scenes = data_get($preview, 'personalized_data.scenes', []);
+        $originalScenes = data_get($preview, 'data.scenes', []);
 
         if (! is_array($scenes) || count($scenes) !== 13) {
             return back()->withErrors(['scene_extraction' => 'لا توجد معاينة مشاهد صالحة للحفظ.']);
         }
 
+        if (! $skip && in_array(data_get($personalization, 'confidence'), ['low', 'unknown'], true) && ! (bool) ($validated['confirm_personalization'] ?? false)) {
+            return back()->withErrors(['scene_extraction' => 'راجع اسم بطل القالب ثم أكّد التخصيص قبل استبدال المشاهد.']);
+        }
+
+        if (! $skip && data_get($personalization, 'requires_openai')) {
+            return back()->withErrors(['scene_extraction' => 'التخصيص يحتاج إعادة بناء عبر OpenAI لضبط اسم البطل وصياغة الجنس قبل الحفظ.']);
+        }
+
         $project->scenes()->delete();
 
-        foreach ($scenes as $scene) {
-            $project->scenes()->create([
+        foreach ($scenes as $index => $scene) {
+            $createdScene = $project->scenes()->create([
                 'scene_number' => (int) ($scene['scene_number'] ?? 1),
                 'title' => $scene['scene_title'] ?? null,
                 'story_text' => $scene['written_text'] ?? null,
@@ -639,8 +671,30 @@ class ProductionStudioController extends Controller
                 'educational_value' => $scene['educational_value'] ?? null,
                 'status' => 'draft',
                 'ai_sync_status' => 'scenes_need_review',
+                'original_template_data_json' => $originalScenes[$index] ?? null,
+                'template_hero_name' => data_get($personalization, 'template_hero_name'),
+                'personalized_hero_name' => data_get($personalization, 'child_hero_name'),
+                'personalization_status' => $skip ? 'skipped' : data_get($personalization, 'status', 'needs_review'),
+                'personalization_warnings' => data_get($personalization, 'warnings', []),
             ]);
+
+            if (! $skip) {
+                $personalizer->refreshSceneStatus($createdScene);
+            }
         }
+
+        $projectPersonalizationStatus = $skip
+            ? 'skipped'
+            : ($project->scenes()->where('personalization_status', '!=', 'personalized')->exists() ? 'needs_review' : 'personalized');
+
+        $project->update([
+            'template_hero_name' => data_get($personalization, 'template_hero_name'),
+            'template_hero_gender' => data_get($personalization, 'template_hero_gender'),
+            'personalized_hero_name' => data_get($personalization, 'child_hero_name'),
+            'child_story_role' => data_get($personalization, 'child_story_role'),
+            'personalization_status' => $projectPersonalizationStatus,
+            'personalization_warnings' => data_get($personalization, 'warnings', []),
+        ]);
 
         session()->forget($this->sceneExtractionSessionKey($project));
         $this->markStructuredAiPreviewApplied($preview);
@@ -648,9 +702,14 @@ class ProductionStudioController extends Controller
         ProductionStudio::log($project, 'story_scenes.applied', 'تم حفظ المشاهد المستخرجة بعد المراجعة.', [
             'scene_count' => count($scenes),
             'source' => data_get($preview, 'source'),
+            'template_hero_name' => data_get($personalization, 'template_hero_name'),
+            'personalized_hero_name' => data_get($personalization, 'child_hero_name'),
+            'personalization_status' => $projectPersonalizationStatus,
         ], auth()->user());
 
-        return back()->with('success', 'تم حفظ المشاهد المستخرجة. راجعها قبل توليد الصور.');
+        return back()->with('success', $skip
+            ? 'تم حفظ المشاهد بدون تخصيص. ستظل صور المشاهد محجوبة حتى مراجعة تعارض أسماء الأبطال.'
+            : 'تم تخصيص المشاهد باسم الطفل وحفظها. راجعها قبل توليد الصور.');
     }
 
     public function updateCharacterProfile(Request $request, ProductionProject $project)
@@ -794,13 +853,14 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تمت إضافة المشهد.');
     }
 
-    public function updateScene(Request $request, ProductionProject $project, ProductionScene $scene)
+    public function updateScene(Request $request, ProductionProject $project, ProductionScene $scene, ScenePersonalizationService $personalizer)
     {
         $this->ensureEnabled();
         abort_unless($scene->production_project_id === $project->id, 404);
 
         $validated = $this->sceneValidation($request);
         $scene->update($validated);
+        $personalizer->refreshSceneStatus($scene->fresh());
 
         ProductionStudio::log($project, 'scene.updated', 'تم تحديث مشهد.', [
             'scene_id' => $scene->id,
@@ -835,7 +895,7 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم إرسال تحسين المشهد إلى قائمة المعالجة. حدّث الصفحة بعد تشغيل المهمة أو انتظر الكرون.');
     }
 
-    public function applySceneImprovement(ProductionProject $project, ProductionScene $scene)
+    public function applySceneImprovement(ProductionProject $project, ProductionScene $scene, ScenePersonalizationService $personalizer)
     {
         $this->ensureEnabled();
         abort_unless($scene->production_project_id === $project->id, 404);
@@ -859,6 +919,7 @@ class ProductionStudioController extends Controller
             'text_safe_area_notes' => $data['safe_text_area_notes'] ?? $scene->text_safe_area_notes,
             'ai_sync_status' => 'scenes_need_review',
         ]);
+        $personalizer->refreshSceneStatus($scene->fresh());
 
         unset($previews[$scene->id]);
         session()->put($this->sceneImprovementSessionKey($project), $previews);

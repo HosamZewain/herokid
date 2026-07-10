@@ -8,11 +8,69 @@ class ProductionScene extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'original_template_data_json' => 'array',
+        'personalization_warnings' => 'array',
+    ];
+
     public function hasImagePromptContext(): bool
     {
         return filled($this->story_text)
             && filled($this->visual_direction)
             && filled($this->child_action_pose);
+    }
+
+    public function oldHeroConflicts(?string $templateHero = null): array
+    {
+        $templateHero = trim((string) ($templateHero ?: $this->template_hero_name ?: $this->project?->template_hero_name));
+
+        if ($templateHero === '') {
+            return [];
+        }
+
+        $conflicts = [];
+        foreach (['title', 'story_text', 'visual_direction', 'child_action_pose', 'environment', 'continuity_notes'] as $field) {
+            $value = (string) ($this->{$field} ?? '');
+            if ($value !== '' && preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($templateHero, '/').'(?![\p{L}\p{N}_])/u', $value)) {
+                $conflicts[] = $field;
+            }
+        }
+
+        return $conflicts;
+    }
+
+    public function mentionsHero(?string $childName = null): bool
+    {
+        $childName = trim((string) ($childName ?: $this->personalized_hero_name ?: $this->project?->personalized_hero_name ?: $this->project?->order?->child_name));
+
+        if ($childName === '') {
+            return false;
+        }
+
+        $context = collect(['story_text', 'visual_direction', 'child_action_pose'])
+            ->map(fn (string $field): string => (string) ($this->{$field} ?? ''))
+            ->implode("\n");
+
+        return preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($childName, '/').'(?![\p{L}\p{N}_])/u', $context) === 1;
+    }
+
+    public function fieldMentionsHero(string $field, ?string $childName = null): bool
+    {
+        $childName = trim((string) ($childName ?: $this->personalized_hero_name ?: $this->project?->personalized_hero_name ?: $this->project?->order?->child_name));
+        $value = (string) ($this->{$field} ?? '');
+
+        return $childName !== ''
+            && $value !== ''
+            && preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($childName, '/').'(?![\p{L}\p{N}_])/u', $value) === 1;
+    }
+
+    public function isPersonalizedForImageGeneration(): bool
+    {
+        return $this->personalization_status === 'personalized'
+            && $this->oldHeroConflicts() === []
+            && $this->fieldMentionsHero('story_text')
+            && $this->fieldMentionsHero('visual_direction')
+            && $this->fieldMentionsHero('child_action_pose');
     }
 
     public function project()

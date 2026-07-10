@@ -13,6 +13,7 @@ class ProductionProject extends Model
 
     protected $casts = [
         'source_snapshot_json' => 'array',
+        'personalization_warnings' => 'array',
         'sent_to_studio_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',

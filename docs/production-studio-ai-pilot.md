@@ -91,6 +91,27 @@ The Story Workspace can build scenes from a story draft.
 1. The deterministic parser runs first when the story text has clear scene headings.
 2. If parsing fails or the story lacks enough structured scene data, OpenAI can extract strict JSON.
 3. The extracted scenes are shown as a preview.
+
+## Per-order story personalization
+
+The selected Story record remains a reusable global template and is never edited by this workflow. Production Studio creates a separate personalized scene set for the linked order.
+
+When **Build scenes from story draft** runs, Studio first inspects repeated protagonist names and role phrases such as `الأميرة جنا`. If deterministic detection is uncertain, or the template hero gender differs from the order child, the configured OpenAI `scene_extraction` model performs structured detection and conservative gender adaptation. The preview shows the detected template hero, confidence, supporting characters, target child, and warnings before anything replaces the current Studio scenes.
+
+After confirmation, only the Production Studio scene fields are personalized. Each scene keeps `original_template_data_json` for traceability while its working text, visual direction, pose, environment, and continuity fields use the order child's name. The global Story and the original order data remain unchanged.
+
+Image generation is blocked when a scene is not marked personalized, does not identify the order child as the hero, or still contains the old template hero in a main scene field. Supporting character names are preserved. A prompt snapshot records the template hero, child hero, whether personalization was applied, and whether an old hero conflict remains.
+
+Recommended workflow:
+
+1. Create a Studio story draft.
+2. Build scenes from the draft.
+3. Review the detected template hero and supporting characters.
+4. Confirm personalization with the order child's name.
+5. Review the 13 personalized scenes and resolve any conflict badge.
+6. Analyze the child photos and complete the Character Profile.
+7. Generate and approve the child reference illustration.
+8. Generate one personalized scene image at a time.
 4. Existing scene rows are replaced only after explicit confirmation.
 
 The expected scene fields include written text, visual direction, child action/pose, environment, lighting, supporting characters, key objects, continuity notes, safe text-area notes, and educational value.

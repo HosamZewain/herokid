@@ -49,7 +49,9 @@
         $qaPending = $project->qaChecks->where('result', 'not_reviewed')->count();
         $totalScenes = $project->scenes->count();
         $missingVisualScenes = $project->scenes->filter(fn ($scene) => blank($scene->visual_direction))->count();
-        $readyScenes = $project->scenes->filter(fn ($scene) => filled($scene->visual_direction))->count();
+        $readyScenes = $project->scenes->filter(fn ($scene) => $scene->hasImagePromptContext() && $scene->isPersonalizedForImageGeneration())->count();
+        $personalizedScenes = $project->scenes->filter(fn ($scene) => $scene->isPersonalizedForImageGeneration())->count();
+        $conflictingScenes = $project->scenes->filter(fn ($scene) => $scene->oldHeroConflicts() !== [])->count();
         $approvedSceneImages = $sceneAssets->where('status', 'approved')->count();
         $jobCompleted = $project->generationJobs->where('status', 'completed')->count();
         $jobFailed = $project->generationJobs->where('status', 'failed')->count();
@@ -63,6 +65,9 @@
             ->whereIn('status', ['queued', 'processing'])
             ->first();
         $failedSceneExtractionJob = $latestSceneExtractionJob?->status === 'failed' ? $latestSceneExtractionJob : null;
+        $scenePersonalization = data_get($sceneExtractionPreview, 'personalization', []);
+        $personalizedPreviewData = data_get($sceneExtractionPreview, 'personalized_data', data_get($sceneExtractionPreview, 'data'));
+        $personalizationNeedsAiGenderRewrite = data_get($scenePersonalization, 'gender_adaptation_needed') && ! data_get($scenePersonalization, 'gender_adaptation_applied');
         $pendingCharacterAnalysisJob = $project->generationJobs
             ->where('job_type', 'character_analysis')
             ->whereIn('status', ['queued', 'processing'])
@@ -442,14 +447,42 @@
                                     <p class="font-black text-emerald-800">معاينة جاهزة للحفظ: {{ count(data_get($sceneExtractionPreview, 'data.scenes', [])) }} مشهد</p>
                                     <p class="text-xs text-gray-500">المصدر: {{ data_get($sceneExtractionPreview, 'source') }}</p>
                                 </div>
-                                <form method="POST" action="{{ route('admin.production-studio.story-versions.apply-scenes', $project) }}">
-                                    @csrf
-                                    <button class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">تأكيد واستبدال المشاهد الحالية</button>
-                                </form>
                             </div>
+                            <div class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right md:grid-cols-2 xl:grid-cols-4">
+                                <div><p class="text-xs font-bold text-indigo-500">بطل القالب المكتشف</p><p class="mt-1 font-black text-indigo-950">{{ data_get($scenePersonalization, 'template_hero_name') ?: 'غير مؤكد' }}</p></div>
+                                <div><p class="text-xs font-bold text-indigo-500">درجة الثقة</p><p class="mt-1 font-black text-indigo-950">{{ data_get($scenePersonalization, 'confidence', 'low') }}</p></div>
+                                <div><p class="text-xs font-bold text-indigo-500">الطفل البديل</p><p class="mt-1 font-black text-indigo-950">{{ data_get($scenePersonalization, 'child_hero_name') ?: $order->child_name }}</p></div>
+                                <div><p class="text-xs font-bold text-indigo-500">تعديل صياغة الجنس</p><p class="mt-1 font-black text-indigo-950">{{ data_get($scenePersonalization, 'gender_adaptation_needed') ? (data_get($scenePersonalization, 'gender_adaptation_applied') ? 'تم عبر OpenAI' : 'مطلوب') : 'غير مطلوب' }}</p></div>
+                                <div class="md:col-span-2 xl:col-span-4"><p class="text-xs font-bold text-indigo-500">الشخصيات المساندة</p><p class="mt-1 text-sm font-bold text-indigo-950">{{ implode('، ', data_get($scenePersonalization, 'supporting_characters', [])) ?: 'لم يتم اكتشاف أسماء مساندة' }}</p></div>
+                            </div>
+                            @if(data_get($scenePersonalization, 'warnings'))
+                                <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-7 text-amber-800">
+                                    @foreach(data_get($scenePersonalization, 'warnings', []) as $warning)
+                                        <p>• {{ $warning }}</p>
+                                    @endforeach
+                                </div>
+                            @endif
+                            <form method="POST" action="{{ route('admin.production-studio.story-versions.apply-scenes', $project) }}" class="mt-4 rounded-xl border border-gray-100 p-4">
+                                @csrf
+                                <input type="hidden" name="confirm_personalization" value="1">
+                                <label class="block text-right">
+                                    <span class="text-sm font-black text-gray-800">اسم بطل القالب المراد استبداله</span>
+                                    <input name="detected_hero_name" value="{{ data_get($scenePersonalization, 'template_hero_name') }}" class="mt-2 w-full rounded-xl border-gray-300 text-right" placeholder="مثال: جنا">
+                                    <span class="mt-1 block text-xs text-gray-500">يمكنك تصحيح الاسم قبل الحفظ. سيتم التغيير داخل مشاهد هذا المشروع فقط.</span>
+                                </label>
+                                <div class="mt-3 flex flex-wrap justify-end gap-2">
+                                    <button name="personalization_action" value="skip" class="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-black text-gray-700">حفظ بدون تخصيص</button>
+                                    <button name="personalization_action" value="confirm" @disabled($personalizationNeedsAiGenderRewrite) class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:bg-gray-300">تأكيد تخصيص المشاهد باسم {{ $order->child_name }}</button>
+                                </div>
+                                @if($personalizationNeedsAiGenderRewrite)
+                                    <p class="mt-2 text-sm font-bold text-amber-700">اختلاف الجنس يحتاج إعادة بناء عبر OpenAI قبل السماح بتأكيد التخصيص.</p>
+                                @elseif(data_get($scenePersonalization, 'status') !== 'personalized')
+                                    <p class="mt-2 text-sm font-bold text-amber-700">راجع اسم بطل القالب أو صححه ثم اضغط تأكيد التخصيص.</p>
+                                @endif
+                            </form>
                             <details class="mt-3">
-                                <summary class="cursor-pointer text-sm font-black text-indigo-700">عرض JSON المشاهد</summary>
-                                <pre dir="ltr" class="mt-2 max-h-72 overflow-auto rounded-lg bg-gray-50 p-3 text-left text-xs">{{ json_encode(data_get($sceneExtractionPreview, 'data'), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+                                <summary class="cursor-pointer text-sm font-black text-indigo-700">عرض JSON المشاهد المخصصة</summary>
+                                <pre dir="ltr" class="mt-2 max-h-72 overflow-auto rounded-lg bg-gray-50 p-3 text-left text-xs">{{ json_encode($personalizedPreviewData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
                             </details>
                         </div>
                     @endif
@@ -726,13 +759,15 @@
             'status' => $totalScenes.' مشهد',
             'statusTone' => $missingVisualScenes ? 'amber' : 'emerald',
             'warning' => $missingVisualScenes ? $missingVisualScenes.' ناقصة توجيه بصري' : null,
-            'summary' => $readyScenes.' جاهزة للتوليد · '.$approvedSceneImages.' صور معتمدة',
+            'summary' => $personalizedScenes.' مخصصة · '.$conflictingScenes.' تعارض أسماء · '.$readyScenes.' مكتملة المحتوى · '.$approvedSceneImages.' صور معتمدة',
         ])
-            <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-4">
+            <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-3 xl:grid-cols-6">
                 <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-400">الإجمالي</p><p class="font-black">{{ $totalScenes }}</p></div>
                 <div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs text-emerald-600">جاهزة للتوليد</p><p class="font-black">{{ $readyScenes }}</p></div>
                 <div class="rounded-xl bg-amber-50 p-4"><p class="text-xs text-amber-600">ناقصة توجيه</p><p class="font-black">{{ $missingVisualScenes }}</p></div>
                 <div class="rounded-xl bg-indigo-50 p-4"><p class="text-xs text-indigo-600">صور معتمدة</p><p class="font-black">{{ $approvedSceneImages }}</p></div>
+                <div class="rounded-xl bg-blue-50 p-4"><p class="text-xs text-blue-600">مشاهد مخصصة</p><p class="font-black">{{ $personalizedScenes }}</p></div>
+                <div class="rounded-xl bg-red-50 p-4"><p class="text-xs text-red-600">تعارض أسماء</p><p class="font-black">{{ $conflictingScenes }}</p></div>
             </div>
             <div class="mt-4 flex flex-wrap justify-end gap-2 text-xs font-black" data-scene-filters>
                 <button type="button" data-scene-filter="all" class="rounded-xl bg-indigo-600 px-3 py-2 text-white">All</button>

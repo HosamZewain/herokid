@@ -18,6 +18,7 @@ use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
+use App\Services\Ai\ProductionPromptCompiler;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -436,13 +437,22 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $admin = $this->adminUser();
         $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->update([
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'رينا',
+            'child_story_role' => 'الأميرة رينا',
+            'personalization_status' => 'personalized',
+        ]);
         $scene = $project->scenes()->create([
             'scene_number' => 1,
             'title' => 'Moon Scene',
-            'story_text' => 'The child walks under moonlight.',
-            'visual_direction' => 'A calm magical night garden.',
-            'child_action_pose' => 'Holding a small lantern.',
+            'story_text' => 'رينا walks under moonlight.',
+            'visual_direction' => 'رينا appears in a calm magical night garden.',
+            'child_action_pose' => 'رينا holds a small lantern.',
             'text_safe_area_notes' => 'Keep calm sky area on the left.',
+            'personalized_hero_name' => 'رينا',
+            'template_hero_name' => 'جنا',
+            'personalization_status' => 'personalized',
         ]);
         $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
         Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
@@ -463,6 +473,9 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not transform the child into a different-looking character. Use the real photo-derived face as the identity anchor', $job->prompt_snapshot);
         $this->assertStringContainsString('The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions', $job->prompt_snapshot);
+        $this->assertStringNotContainsString('جنا', $job->prompt_snapshot);
+        $this->assertSame('جنا', data_get($job->provider_request_json, 'personalization_debug.template_hero_name'));
+        $this->assertSame('رينا', data_get($job->provider_request_json, 'personalization_debug.child_hero_name'));
         $this->assertStringContainsString('Use reference images for identity only, not for composition.', $job->prompt_snapshot);
         $this->assertStringContainsString('If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.', $job->prompt_snapshot);
         $this->assertStringContainsString('Create a new wide landscape scene composition from scratch.', $job->prompt_snapshot);
@@ -501,7 +514,7 @@ class ProductionStudioAiPilotTest extends TestCase
     {
         $project = $this->projectWithApprovedPhoto();
         $content = collect(range(1, 13))
-            ->map(fn (int $i): string => "Scene {$i}: عنوان {$i}\nنص المشهد {$i}.")
+            ->map(fn (int $i): string => "Scene {$i}: مغامرة جنا {$i}\nالأميرة جنا تحل اللغز {$i} بمساعدة بابا.")
             ->implode("\n\n");
         $project->storyVersions()->create([
             'version_number' => 1,
@@ -521,12 +534,194 @@ class ProductionStudioAiPilotTest extends TestCase
         Http::assertNothingSent();
 
         $this->actingAs($this->adminUser())
-            ->post(route('admin.production-studio.story-versions.apply-scenes', $project))
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project), [
+                'detected_hero_name' => 'جنا',
+                'personalization_action' => 'confirm',
+                'confirm_personalization' => true,
+            ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
         $this->assertSame(13, $project->scenes()->count());
-        $this->assertSame('نص المشهد 1.', $project->scenes()->where('scene_number', 1)->first()->story_text);
+        $this->assertSame('الأميرة رينا تحل اللغز 1 بمساعدة بابا.', $project->scenes()->where('scene_number', 1)->first()->story_text);
+    }
+
+    public function test_building_scenes_personalizes_template_hero_without_changing_story_master_or_supporting_characters(): void
+    {
+        $project = $this->projectWithApprovedPhoto(orderOverrides: [
+            'child_name' => 'ديدا',
+            'child_gender' => 'girl',
+        ]);
+        $originalStory = $project->order->story->full_desc;
+        $content = collect(range(1, 13))
+            ->map(fn (int $i): string => "مشهد {$i}: جنا واللغز {$i}\nالأميرة جنا تبحث عن المفتاح مع ريتاج، ثم يساعدهما بابا.")
+            ->implode("\n\n");
+        $version = $project->storyVersions()->create([
+            'version_number' => 1,
+            'title' => 'قالب جنا',
+            'full_story_content' => $content,
+            'status' => 'draft',
+            'created_by_user_id' => $this->adminUser()->id,
+        ]);
+
+        Http::fake();
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.extract-scenes', $project), [
+                'source_version_id' => $version->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('بطل القالب المكتشف')
+            ->assertSee('جنا')
+            ->assertSee('ديدا')
+            ->assertSee('تأكيد تخصيص المشاهد باسم ديدا');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project), [
+                'detected_hero_name' => 'جنا',
+                'personalization_action' => 'confirm',
+                'confirm_personalization' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $scene = $project->scenes()->where('scene_number', 1)->firstOrFail();
+        $this->assertStringContainsString('ديدا', $scene->story_text);
+        $this->assertStringNotContainsString('جنا', $scene->story_text);
+        $this->assertStringContainsString('ريتاج', $scene->story_text);
+        $this->assertStringContainsString('بابا', $scene->story_text);
+        $this->assertStringContainsString('ديدا', $scene->visual_direction);
+        $this->assertStringNotContainsString('جنا', $scene->visual_direction);
+        $this->assertSame('personalized', $scene->personalization_status);
+        $this->assertStringContainsString('جنا', (string) data_get($scene->original_template_data_json, 'written_text'));
+        $this->assertSame($originalStory, $project->order->story->fresh()->full_desc);
+        $this->assertSame($content, $version->fresh()->full_story_content);
+        Http::assertNothingSent();
+    }
+
+    public function test_gender_adaptation_uses_mocked_openai_and_keeps_supporting_characters(): void
+    {
+        $this->enableOpenAi();
+        $project = $this->projectWithApprovedPhoto(orderOverrides: [
+            'child_name' => 'آدم',
+            'child_gender' => 'boy',
+        ]);
+        $content = collect(range(1, 13))
+            ->map(fn (int $i): string => "مشهد {$i}: مغامرة جنا\nالأميرة جنا تقف مع ريتاج في المشهد {$i}.")
+            ->implode("\n\n");
+        $project->storyVersions()->create([
+            'version_number' => 1,
+            'title' => 'قالب أميرة',
+            'full_story_content' => $content,
+            'status' => 'draft',
+            'created_by_user_id' => $this->adminUser()->id,
+        ]);
+        $payload = $this->openAiScenePayload();
+        $payload['template_hero_gender'] = 'girl';
+        $payload['gender_adaptation_applied'] = true;
+        $payload['supporting_character_names'] = ['ريتاج'];
+        $payload['scenes'] = collect($payload['scenes'])->map(function (array $scene): array {
+            $scene['written_text'] = 'آدم يقف مع ريتاج ويتابع المغامرة.';
+            $scene['visual_direction'] = 'آدم هو البطل الرئيسي وريتاج شخصية مساندة.';
+            $scene['child_action_pose'] = 'آدم يتحرك بثقة داخل المشهد.';
+
+            return $scene;
+        })->all();
+
+        Http::fake([
+            'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse($payload)),
+        ]);
+
+        $model = AiModel::whereHas('provider', fn ($query) => $query->where('driver', 'openai'))->firstOrFail();
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.extract-scenes', $project), ['model_code' => $model->code])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project), [
+                'detected_hero_name' => 'جنا',
+                'personalization_action' => 'confirm',
+                'confirm_personalization' => true,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $scene = $project->scenes()->firstOrFail();
+        $this->assertStringContainsString('آدم', $scene->story_text);
+        $this->assertStringContainsString('ريتاج', $scene->story_text);
+        $this->assertStringNotContainsString('جنا', $scene->story_text);
+        $this->assertSame('personalized', $scene->personalization_status);
+        Http::assertSent(fn ($request): bool => str_contains(json_encode($request->data(), JSON_UNESCAPED_UNICODE), 'Current child name: آدم'));
+    }
+
+    public function test_scene_generation_is_blocked_when_old_template_hero_remains(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png'], ['child_name' => 'ديدا']);
+        $project->update(['template_hero_name' => 'جنا', 'personalized_hero_name' => 'ديدا']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'جنا في القصر',
+            'story_text' => 'جنا تقف في القصر.',
+            'visual_direction' => 'جنا هي البطلة الرئيسية.',
+            'child_action_pose' => 'جنا تمسك الفانوس.',
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'ديدا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+
+        $this->actingAs($this->adminUser())
+            ->postJson(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonFragment(['message' => 'خصّص المشهد باسم الطفل قبل توليد الصورة. اسم بطل القالب ما زال موجودًا في: title، story_text، visual_direction، child_action_pose.']);
+
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+    }
+
+    public function test_scene_prompt_uses_personalized_context_and_includes_debug_flags(): void
+    {
+        $project = $this->projectWithApprovedPhoto(orderOverrides: ['child_name' => 'ديدا']);
+        $project->update([
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'ديدا',
+            'personalization_status' => 'personalized',
+        ]);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'ديدا والفانوس',
+            'story_text' => 'ديدا تنظر إلى الفانوس.',
+            'visual_direction' => 'ديدا تقف أمام القصر في مشهد A3 أفقي.',
+            'child_action_pose' => 'ديدا تمسك الفانوس.',
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'ديدا',
+            'personalization_status' => 'personalized',
+        ]);
+
+        $compiled = app(ProductionPromptCompiler::class)->compile($project, $scene, 'scene_image', 'premium_storybook');
+
+        $this->assertStringContainsString('personalization_applied: true', $compiled['prompt']);
+        $this->assertStringContainsString('template_hero_name: [replaced before image generation]', $compiled['prompt']);
+        $this->assertStringContainsString('child_hero_name: ديدا', $compiled['prompt']);
+        $this->assertStringContainsString('old_hero_name_remaining: false', $compiled['prompt']);
+        $this->assertStringContainsString('personalized_scene_context_included: true', $compiled['prompt']);
+        $this->assertStringContainsString('Scene story text context: ديدا تنظر إلى الفانوس.', $compiled['prompt']);
+        $this->assertStringNotContainsString('جنا', $compiled['prompt']);
+        $this->assertSame('جنا', data_get($compiled, 'personalization_debug.template_hero_name'));
     }
 
     public function test_story_scenes_can_be_extracted_through_mocked_openai_fallback(): void
@@ -547,15 +742,19 @@ class ProductionStudioAiPilotTest extends TestCase
             ->assertSessionHas('success');
 
         $this->actingAs($this->adminUser())
-            ->post(route('admin.production-studio.story-versions.apply-scenes', $project))
+            ->post(route('admin.production-studio.story-versions.apply-scenes', $project), [
+                'detected_hero_name' => 'جنا',
+                'personalization_action' => 'confirm',
+                'confirm_personalization' => true,
+            ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
         $scene = $project->scenes()->where('scene_number', 1)->firstOrFail();
         $this->assertSame('Scene title 1', $scene->title);
-        $this->assertSame('Written text 1', $scene->story_text);
-        $this->assertSame('Visual direction 1', $scene->visual_direction);
-        $this->assertSame('Child pose 1', $scene->child_action_pose);
+        $this->assertSame('رينا completes scene 1', $scene->story_text);
+        $this->assertSame('Show رينا in visual direction 1', $scene->visual_direction);
+        $this->assertSame('رينا performs child pose 1', $scene->child_action_pose);
         $this->assertSame('Environment 1', $scene->environment);
         $this->assertSame('Safe text area 1', $scene->text_safe_area_notes);
         $this->assertDatabaseHas('scene_generation_jobs', ['job_type' => 'scene_extraction', 'generation_mode' => 'scene_extraction']);
@@ -860,10 +1059,12 @@ class ProductionStudioAiPilotTest extends TestCase
         $scene = $project->scenes()->create([
             'scene_number' => 1,
             'title' => 'Moon Scene',
-            'story_text' => 'The child watches a quiet moonlit castle from the window.',
-            'visual_direction' => 'A wide A3 landscape castle scene with fog and a blank quiet area for Arabic text.',
-            'child_action_pose' => 'The child stands naturally near the window looking at the distant lantern.',
+            'story_text' => 'رينا watches a quiet moonlit castle from the window.',
+            'visual_direction' => 'A wide A3 landscape castle scene with رينا, fog, and a blank quiet area for Arabic text.',
+            'child_action_pose' => 'رينا stands naturally near the window looking at the distant lantern.',
             'text_safe_area_notes' => 'Reserve a quiet lower-left blank area.',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
         ]);
         $sheet = $this->asset($project, 'character_sheet', [
             'status' => 'approved',
@@ -1117,6 +1318,14 @@ class ProductionStudioAiPilotTest extends TestCase
     private function openAiScenePayload(): array
     {
         return [
+            'template_hero_name' => 'جنا',
+            'template_hero_gender' => 'girl',
+            'hero_detection_confidence' => 'high',
+            'supporting_character_names' => ['بابا'],
+            'replacement_strategy' => 'replace_template_hero_with_child_name',
+            'personalization_applied' => true,
+            'gender_adaptation_applied' => false,
+            'personalization_warnings' => [],
             'story_title' => 'Story title',
             'story_summary' => 'Story summary',
             'target_age_range' => '6-9',
@@ -1124,9 +1333,9 @@ class ProductionStudioAiPilotTest extends TestCase
             'scenes' => collect(range(1, 13))->map(fn (int $i): array => [
                 'scene_number' => $i,
                 'scene_title' => 'Scene title '.$i,
-                'written_text' => 'Written text '.$i,
-                'visual_direction' => 'Visual direction '.$i,
-                'child_action_pose' => 'Child pose '.$i,
+                'written_text' => 'رينا completes scene '.$i,
+                'visual_direction' => 'Show رينا in visual direction '.$i,
+                'child_action_pose' => 'رينا performs child pose '.$i,
                 'environment' => 'Environment '.$i,
                 'mood_lighting' => 'Mood lighting '.$i,
                 'supporting_characters' => 'Supporting characters '.$i,

@@ -72,7 +72,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
 
     public function extractScenesToJson(ProductionProject $project, AiModel $model, ProductionStoryVersion|string|null $source): StructuredAiResult
     {
-        $project->loadMissing(['order.story']);
+        $project->loadMissing(['order.story', 'characterProfile']);
         $storyText = $source instanceof ProductionStoryVersion
             ? $source->full_story_content
             : (string) $source;
@@ -86,8 +86,20 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         }
 
         $prompt = implode("\n", [
-            'Extract exactly 13 HeroKid production scenes from the story draft.',
+            'Extract exactly 13 personalized HeroKid production scenes from the reusable story template.',
             'Return strict JSON only according to the schema.',
+            'First identify the original template main hero name and gender. Keep supporting characters separate.',
+            'The production scenes are for one specific child. Replace only the template main hero with the current child in every scene field.',
+            'If the child gender differs from the template hero gender, adapt pronouns and gendered Arabic wording conservatively without changing plot, sequence, educational value, or supporting characters.',
+            'Never leave the original template hero as the main character after personalization.',
+            'Current child name: '.($project->order?->child_name ?: 'Not available'),
+            'Current child gender: '.($project->order?->child_gender ?: 'Not available'),
+            'Current child age for personalization and visual appearance only: '.($project->order?->child_age ?: 'Not available'),
+            'Selected story age range remains the writing-complexity reference: '.($project->order?->story?->age_range ?: 'Not available'),
+            'Parent-provided interests: '.($project->order?->interests ?: 'Not available'),
+            'Educational value: '.($project->order?->lesson ?: $project->order?->story?->lesson_value ?: 'Not available'),
+            'Identity context for visual directions only: '.($project->characterProfile?->appearance_summary ?: 'Use the approved child references later.'),
+            'Visual directions must use the current child name and real-photo-derived identity, but clothing must follow the scene rather than the uploaded photo unless explicitly required by the scene.',
             'Keep every field concise and production-ready. Avoid long paragraphs.',
             'Each scene must include written_text, visual_direction, child_action_pose, environment, mood_lighting, supporting_characters, key_objects, continuity_notes, safe_text_area_notes, and educational_value.',
             'Limit written_text to 35-60 Arabic words per scene. Limit other fields to 1-2 clear sentences.',
@@ -349,6 +361,14 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
     private function sceneExtractionSchema(): array
     {
         return $this->objectSchema([
+            'template_hero_name' => ['type' => 'string'],
+            'template_hero_gender' => ['type' => 'string', 'enum' => ['girl', 'boy', 'unknown']],
+            'hero_detection_confidence' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']],
+            'supporting_character_names' => ['type' => 'array', 'items' => ['type' => 'string']],
+            'replacement_strategy' => ['type' => 'string'],
+            'personalization_applied' => ['type' => 'boolean'],
+            'gender_adaptation_applied' => ['type' => 'boolean'],
+            'personalization_warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
             'story_title' => ['type' => 'string'],
             'story_summary' => ['type' => 'string'],
             'target_age_range' => ['type' => 'string'],
