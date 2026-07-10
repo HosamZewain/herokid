@@ -1297,6 +1297,7 @@ class ProductionStudioAiPilotTest extends TestCase
 
     public function test_openai_invalid_image_response_is_sanitized_for_admins(): void
     {
+        Queue::fake();
         Storage::fake('local');
         Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
         $this->enableOpenAi('sk-private-openai-key');
@@ -1305,8 +1306,11 @@ class ProductionStudioAiPilotTest extends TestCase
             'https://api.openai.com/v1/images/edits' => Http::response([
                 'error' => [
                     'message' => 'Invalid image file or mode for image 1. Authorization sk-private-openai-key',
+                    'code' => 'invalid_image',
+                    'type' => 'invalid_request_error',
+                    'param' => 'image',
                 ],
-            ], 400),
+            ], 400, ['x-request-id' => 'req_safe_123']),
         ]);
 
         $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
@@ -1342,12 +1346,69 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $job->refresh();
         $this->assertSame('failed', $job->status);
-        $this->assertSame(
-            'رفض OpenAI الصورة المرجعية بعد تجهيزها. تأكد أن الصورة الأصلية PNG أو JPEG أو WebP سليمة ثم أعد المحاولة.',
-            $job->error_message
-        );
+        $this->assertStringContainsString('رفض OpenAI الصورة المرجعية بعد تجهيزها', $job->error_message);
+        $this->assertStringContainsString('code=invalid_image', $job->error_message);
+        $this->assertStringContainsString('request=req_safe_123', $job->error_message);
+        $this->assertStringContainsString('client=hero-kid-generation-'.$job->id, $job->error_message);
         $this->assertStringNotContainsString('sk-private-openai-key', $job->error_message);
         $this->assertStringNotContainsString('Authorization', $job->error_message);
+        $this->assertNull($job->provider_response_json);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request->header('X-Client-Request-Id')[0] === 'hero-kid-generation-'.$job->id);
+    }
+
+    public function test_openai_safety_rejection_shows_safe_diagnostics_without_automatic_retry(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableOpenAi('sk-never-log-this');
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'error' => [
+                    'message' => 'Request blocked by the safety system. sk-never-log-this',
+                    'code' => 'content_policy_violation',
+                    'type' => 'image_generation_error',
+                    'param' => 'prompt',
+                ],
+            ], 400, ['x-request-id' => 'req_policy_456']),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 4,
+            'story_text' => 'رينا تقف في القصر.',
+            'visual_direction' => 'تظهر رينا داخل مشهد قصر آمن ومناسب للأطفال.',
+            'child_action_pose' => 'رينا تقف بثبات.',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', [
+            'status' => 'approved',
+            'is_primary' => true,
+            'file_path' => 'production-studio/projects/'.$project->id.'/generated/reference.png',
+        ]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes());
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'gpt-image-2',
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        $job->refresh();
+        $this->assertSame('failed', $job->status);
+        $this->assertStringContainsString('رفض نظام أمان OpenAI هذا المشهد', $job->error_message);
+        $this->assertStringContainsString('code=content_policy_violation', $job->error_message);
+        $this->assertStringContainsString('request=req_policy_456', $job->error_message);
+        $this->assertStringNotContainsString('sk-never-log-this', $job->error_message);
+        Http::assertSentCount(1);
     }
 
     public function test_same_scene_can_have_multiple_versions_but_only_one_approved_final_image(): void

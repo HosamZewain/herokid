@@ -43,6 +43,9 @@ class SubmitAiGenerationJob implements ShouldQueue
                     $characterSheet,
                     (bool) data_get($job->input_assets_json, 'character_sheet_first', true),
                 ),
+                options: [
+                    'client_request_id' => 'hero-kid-generation-'.$job->id,
+                ],
             );
 
             $result = $providers
