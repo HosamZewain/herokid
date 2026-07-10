@@ -6,32 +6,6 @@
         <x-slot name="pageImage">{{ $product->featured_image_url }}</x-slot>
     @endif
 
-    @if(!empty($facebookViewContentEvent['data']))
-        @push('scripts')
-            <script>
-                if (typeof fbq === 'function') {
-                    fbq('track', 'ViewContent', @json($facebookViewContentEvent['data']), {
-                        eventID: @json($facebookViewContentEvent['event_id'])
-                    });
-                }
-                if (typeof gtag === 'function') {
-                    const data = @json($facebookViewContentEvent['data']);
-                    gtag('event', 'view_item', {
-                        currency: data.currency,
-                        value: data.value,
-                        items: (data.contents || []).map((item) => ({
-                            item_id: item.id,
-                            item_name: data.content_name,
-                            item_category: data.content_category,
-                            price: item.item_price,
-                            quantity: item.quantity || 1,
-                        })),
-                    });
-                }
-            </script>
-        @endpush
-    @endif
-
     @php
         $requiresStory = $product->personalization_mode === 'inherit_from_linked_story' || $product->purchase_mode === 'add_on_only';
         $canSubmit = ! $requiresStory || $storyItems->count() > 0;

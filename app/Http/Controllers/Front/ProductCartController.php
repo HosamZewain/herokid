@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\Cart\CartTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -87,32 +88,8 @@ class ProductCartController extends Controller
         ];
 
         session(['cart.items' => $cart]);
-        session()->flash('facebook_add_to_cart_event', $this->facebookAddToCartEvent($product, $variant, $quantity, $unitPriceCents));
+        app(CartTrackingService::class)->recordItemAdded($request, $itemKey);
 
         return redirect()->route('cart.index')->with('success', 'تمت إضافة المنتج إلى السلة.');
-    }
-
-    private function facebookAddToCartEvent(Product $product, ?ProductVariant $variant, int $quantity, int $unitPriceCents): array
-    {
-        $product->loadMissing('category');
-        $contentId = $variant ? 'product:'.$product->id.':variant:'.$variant->id : 'product:'.$product->id;
-        $unitPrice = round($unitPriceCents / 100, 2);
-
-        return [
-            'event_id' => 'hk-add-product-'.(string) Str::uuid(),
-            'data' => [
-                'content_type' => 'product',
-                'content_ids' => [$contentId],
-                'contents' => [[
-                    'id' => $contentId,
-                    'quantity' => $quantity,
-                    'item_price' => $unitPrice,
-                ]],
-                'content_name' => $product->name_ar,
-                'content_category' => $product->category?->name_ar,
-                'value' => round($unitPrice * $quantity, 2),
-                'currency' => 'EGP',
-            ],
-        ];
     }
 }

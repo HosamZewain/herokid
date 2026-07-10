@@ -8,6 +8,8 @@ use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
+use App\Models\VisitorCart;
+use App\Services\Cart\CartTrackingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -26,7 +28,7 @@ class CartCheckoutTest extends TestCase
             ->assertHeader('Set-Cookie');
     }
 
-    public function test_meta_pixel_tracks_page_views_and_purchase_once_after_checkout(): void
+    public function test_public_tracking_keeps_page_views_but_does_not_send_cart_ecommerce_events(): void
     {
         Storage::fake('local');
         config(['services.meta_pixel.id' => '1241523867742555']);
@@ -44,16 +46,17 @@ class CartCheckoutTest extends TestCase
 
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
-            ->assertSee("fbq('track', 'ViewContent'", false)
-            ->assertSee('"content_ids":["story:'.$story->id.'"]', false);
+            ->assertDontSee("fbq('track', 'ViewContent'", false)
+            ->assertDontSee('view_item', false);
 
         $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم والنجوم'))
             ->assertRedirect(route('cart.index'));
 
         $this->get(route('cart.index'))
             ->assertOk()
-            ->assertSee("fbq('track', 'AddToCart'", false)
-            ->assertSee('"content_ids":["story:'.$story->id.'"]', false);
+            ->assertDontSee("fbq('track', 'AddToCart'", false)
+            ->assertDontSee('add_to_cart', false)
+            ->assertDontSee('begin_checkout', false);
 
         $this->post(route('checkout.store'), [
             'parent_name' => 'Parent Name',
@@ -65,18 +68,13 @@ class CartCheckoutTest extends TestCase
             'address_details' => 'Building 2, Apartment 3',
         ])
             ->assertRedirect(route('checkout.success'))
-            ->assertSessionHas('facebook_purchase_event');
+            ->assertSessionMissing('facebook_purchase_event');
 
         $this->get(route('checkout.success'))
             ->assertOk()
-            ->assertSee("fbq('track', 'Purchase'", false)
-            ->assertSee('"currency":"EGP"', false)
-            ->assertSee('"value":140', false)
-            ->assertSee('"content_ids":["story:', false);
-
-        $this->get(route('checkout.success'))
-            ->assertOk()
-            ->assertDontSee("fbq('track', 'Purchase'", false);
+            ->assertDontSee("fbq('track', 'Purchase'", false)
+            ->assertDontSee("gtag('event'", false)
+            ->assertDontSee('purchase', false);
     }
 
     public function test_story_cart_validation_errors_are_readable_arabic_messages(): void
@@ -399,6 +397,115 @@ class CartCheckoutTest extends TestCase
             ->assertSee('Building 10, Apartment 4')
             ->assertSee('value="'.$egypt->id.'" data-fee', false)
             ->assertSee('value="'.$cairo->id.'"', false);
+    }
+
+    public function test_guest_cart_is_tracked_locally_without_raw_session_or_uploaded_photos(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('guest-cart-story', 'سلة زائر', 100);
+
+        $this->get(route('stories.show', [
+            'slug' => $story->slug,
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'utm_campaign' => 'summer',
+        ]))->assertOk();
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $cart = VisitorCart::with(['items', 'activities'])->firstOrFail();
+        $this->assertNull($cart->user_id);
+        $this->assertNotNull($cart->cart_identifier);
+        $this->assertNotNull($cart->visitor_hash);
+        $this->assertNotSame(session()->getId(), $cart->visitor_hash);
+        $this->assertSame('facebook', $cart->utm_source);
+        $this->assertSame('active', $cart->status);
+        $this->assertSame(1, $cart->items->count());
+        $this->assertArrayNotHasKey('uploaded_photos', $cart->items->first()->item_snapshot);
+        $this->assertDatabaseHas('visitor_cart_activities', ['type' => 'item_added']);
+    }
+
+    public function test_authenticated_cart_is_associated_with_customer_and_admin_page_requires_permission(): void
+    {
+        Storage::fake('local');
+        $user = User::factory()->create(['role' => 'user', 'phone' => '201555555555']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $story = $this->story('known-cart-story', 'سلة عميل', 100);
+
+        $this->actingAs($user)
+            ->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $this->assertDatabaseHas('visitor_carts', ['user_id' => $user->id, 'status' => 'active']);
+
+        $this->actingAs($user)->get(route('admin.visitor-carts.index'))->assertForbidden();
+        $this->actingAs($admin)
+            ->get(route('admin.visitor-carts.index'))
+            ->assertOk()
+            ->assertSee('سلات الزوار')
+            ->assertSee('سلة عميل');
+    }
+
+    public function test_guest_cart_associates_when_user_logs_in_before_checkout_and_converts_to_order(): void
+    {
+        Storage::fake('local');
+        $user = User::factory()->create(['role' => 'user', 'phone' => '201555555555']);
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $story = $this->story('guest-login-cart', 'سلة تتحول', 100);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $trackingId = session('cart.tracking_id');
+        $this->actingAs($user)
+            ->post(route('checkout.store'), [
+                'parent_name' => 'Parent Name',
+                'phone' => '201555555555',
+                'delivery_country_id' => $egypt->id,
+                'delivery_governorate_id' => $cairo->id,
+                'city' => 'Nasr City',
+                'street' => 'Street 1',
+                'address_details' => 'Building 2, Apartment 3',
+            ])->assertRedirect(route('checkout.success'));
+
+        $order = Order::firstOrFail();
+        $cart = VisitorCart::where('cart_identifier', $trackingId)->firstOrFail();
+        $this->assertSame($user->id, $cart->user_id);
+        $this->assertSame('converted', $cart->status);
+        $this->assertSame($order->id, $cart->related_order_id);
+        $this->assertDatabaseHas('visitor_cart_activities', ['visitor_cart_id' => $cart->id, 'type' => 'checkout_started']);
+        $this->assertDatabaseHas('visitor_cart_activities', ['visitor_cart_id' => $cart->id, 'type' => 'order_completed']);
+    }
+
+    public function test_cart_remove_abandonment_and_retention_cleanup_are_local_and_idempotent(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('cleanup-cart-story', 'سلة تنظيف', 100);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $key = array_key_first(session('cart.items'));
+        $this->delete(route('cart.destroy', $key))->assertRedirect(route('cart.index'));
+        $cart = VisitorCart::with('items')->firstOrFail();
+        $this->assertNotNull($cart->items->first()->removed_at);
+        $this->assertDatabaseHas('visitor_cart_activities', ['type' => 'item_removed']);
+
+        $cart->forceFill(['status' => 'active', 'last_activity_at' => now()->subHours(7)])->save();
+        $result = app(CartTrackingService::class)->maintainStatuses(abandonedAfterMinutes: 360, retentionDays: 60);
+        $this->assertSame(1, $result['abandoned']);
+        $this->assertSame('abandoned', $cart->refresh()->status);
+
+        $cart->forceFill(['status' => 'converted', 'last_activity_at' => now()->subHours(7)])->save();
+        $result = app(CartTrackingService::class)->maintainStatuses(abandonedAfterMinutes: 360, retentionDays: 60);
+        $this->assertSame(0, $result['abandoned']);
+        $this->assertSame('converted', $cart->refresh()->status);
+
+        $cart->activities()->update(['created_at' => now()->subDays(70)]);
+        $result = app(CartTrackingService::class)->maintainStatuses(abandonedAfterMinutes: 360, retentionDays: 60);
+        $this->assertGreaterThanOrEqual(1, $result['deletedActivities']);
     }
 
     private function story(string $slug, string $title, int $price): Story

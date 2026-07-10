@@ -425,32 +425,6 @@
         </footer>
     </div>
     @stack('scripts')
-    @php
-        $facebookAddToCartEvent = session()->pull('facebook_add_to_cart_event');
-    @endphp
-    @if(!empty($facebookAddToCartEvent['data']))
-        <script>
-            if (typeof fbq === 'function') {
-                fbq('track', 'AddToCart', @json($facebookAddToCartEvent['data']), {
-                    eventID: @json($facebookAddToCartEvent['event_id'])
-                });
-            }
-            if (typeof gtag === 'function') {
-                const data = @json($facebookAddToCartEvent['data']);
-                gtag('event', 'add_to_cart', {
-                    currency: data.currency,
-                    value: data.value,
-                    items: (data.contents || []).map((item) => ({
-                        item_id: item.id,
-                        item_name: data.content_name,
-                        item_category: data.content_category,
-                        price: item.item_price,
-                        quantity: item.quantity || 1,
-                    })),
-                });
-            }
-        </script>
-    @endif
 </body>
 
 </html>

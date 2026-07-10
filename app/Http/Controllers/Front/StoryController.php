@@ -7,7 +7,6 @@ use App\Models\CustomerStoryView;
 use App\Models\Story;
 use App\Models\StoryCategory;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class StoryController extends Controller
 {
@@ -90,23 +89,6 @@ class StoryController extends Controller
             'viewed_at' => now(),
         ]);
 
-        $facebookViewContentEvent = [
-            'event_id' => 'hk-view-story-'.(string) Str::uuid(),
-            'data' => [
-                'content_type' => 'product',
-                'content_ids' => ['story:'.$story->id],
-                'contents' => [[
-                    'id' => 'story:'.$story->id,
-                    'quantity' => 1,
-                    'item_price' => round((float) $story->price, 2),
-                ]],
-                'content_name' => $story->title,
-                'content_category' => 'Personalized Story',
-                'value' => round((float) $story->price, 2),
-                'currency' => 'EGP',
-            ],
-        ];
-
-        return view('front.stories.show', compact('story', 'facebookViewContentEvent'));
+        return view('front.stories.show', compact('story'));
     }
 }

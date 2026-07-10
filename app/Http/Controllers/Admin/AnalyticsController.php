@@ -25,6 +25,6 @@ class AnalyticsController extends Controller
     {
         $analytics->flushForProperty();
 
-        return back()->with('success', 'تم تحديث كاش تحليلات الموقع. سيتم جلب أحدث بيانات من Google Analytics.');
+        return back()->with('success', 'تم تحديث كاش تحليلات الموقع. سيتم جلب أحدث بيانات GA4 وإحصاءات السلات المحلية.');
     }
 }

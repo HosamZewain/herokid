@@ -2,7 +2,7 @@
     @slot('header')
         <div class="text-right">
             <h2 class="text-xl font-bold text-gray-800">تحليلات الموقع</h2>
-            <p class="text-xs text-gray-500">Google Analytics 4 - بيانات الزيارات والتحويلات</p>
+            <p class="text-xs text-gray-500">زيارات من GA4 + سلات وتحويلات محلية من قاعدة بيانات HeroKid</p>
         </div>
     @endslot
 
@@ -31,6 +31,23 @@
         };
         $chartRows = collect($analytics['chart'] ?? []);
         $chartMax = max(1, (int) $chartRows->max(fn ($row) => max((int) ($row['users'] ?? 0), (int) ($row['sessions'] ?? 0))));
+        $summaryCards = [
+            'active_users_30m' => ['icon' => '●', 'money' => false, 'percent' => false],
+            'users_today' => ['icon' => '👥', 'money' => false, 'percent' => false],
+            'sessions_today' => ['icon' => '🧭', 'money' => false, 'percent' => false],
+            'views_today' => ['icon' => '👁', 'money' => false, 'percent' => false],
+            'new_users_today' => ['icon' => '✨', 'money' => false, 'percent' => false],
+            'purchases_today' => ['icon' => '🛒', 'money' => false, 'percent' => false],
+            'revenue_today' => ['icon' => 'ج.م', 'money' => true, 'percent' => false],
+            'conversion_rate_today' => ['icon' => '%', 'money' => false, 'percent' => true],
+        ];
+        $breakdownTables = [
+            'source_details' => ['title' => 'تفاصيل source / medium', 'first' => 'المصدر / الوسيط'],
+            'devices' => ['title' => 'الأجهزة', 'first' => 'نوع الجهاز'],
+            'locations' => ['title' => 'الدول والمدن', 'first' => 'الموقع'],
+            'landing_pages' => ['title' => 'صفحات الهبوط', 'first' => 'الصفحة'],
+            'campaigns' => ['title' => 'الحملات و UTM', 'first' => 'الحملة / المصدر'],
+        ];
     @endphp
 
     <div class="mx-auto max-w-7xl space-y-6">
@@ -63,7 +80,7 @@
                 </p>
                 <form method="POST" action="{{ route('admin.analytics.refresh') }}">
                     @csrf
-                    <button class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-100">تحديث البيانات من Google</button>
+                    <button class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-100">تحديث بيانات التحليلات</button>
                 </form>
             </div>
         </div>
@@ -85,16 +102,7 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
             </div>
         @else
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                @foreach([
-                    'active_users_30m' => ['icon' => '●', 'money' => false, 'percent' => false],
-                    'users_today' => ['icon' => '👥', 'money' => false, 'percent' => false],
-                    'sessions_today' => ['icon' => '🧭', 'money' => false, 'percent' => false],
-                    'views_today' => ['icon' => '👁', 'money' => false, 'percent' => false],
-                    'new_users_today' => ['icon' => '✨', 'money' => false, 'percent' => false],
-                    'purchases_today' => ['icon' => '🛒', 'money' => false, 'percent' => false],
-                    'revenue_today' => ['icon' => 'ج.م', 'money' => true, 'percent' => false],
-                    'conversion_rate_today' => ['icon' => '%', 'money' => false, 'percent' => true],
-                ] as $key => $meta)
+                @foreach($summaryCards as $key => $meta)
                     @php
                         $card = $summary[$key] ?? ['label' => $key, 'value' => null, 'change' => null];
                     @endphp
@@ -104,10 +112,39 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                             <p class="text-sm font-bold text-gray-500">{{ $card['label'] }}</p>
                         </div>
                         <p class="mt-4 text-3xl font-black text-gray-950">{{ $formatValue($card['value'] ?? null, $meta['money'], $meta['percent']) }}</p>
+                        <p class="mt-1 text-[11px] font-black text-gray-400">{{ ($card['source'] ?? 'ga4') === 'local' ? 'المصدر: HeroKid DB' : 'المصدر: GA4' }}</p>
                         <div class="mt-3">{!! $changeBadge($card['change'] ?? null) !!}</div>
                     </div>
                 @endforeach
             </div>
+
+            @php
+                $localSummary = $analytics['local_cart_summary'] ?? null;
+            @endphp
+            @if($localSummary)
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
+                    <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 text-right">
+                        <p class="text-sm font-bold text-emerald-700">سلات نشطة محلياً</p>
+                        <p class="mt-2 text-3xl font-black text-emerald-900">{{ $formatValue($localSummary['active_carts'] ?? null) }}</p>
+                    </div>
+                    <div class="rounded-3xl border border-amber-100 bg-amber-50 p-5 text-right">
+                        <p class="text-sm font-bold text-amber-700">سلات متروكة</p>
+                        <p class="mt-2 text-3xl font-black text-amber-900">{{ $formatValue($localSummary['abandoned_carts'] ?? null) }}</p>
+                    </div>
+                    <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-right">
+                        <p class="text-sm font-bold text-indigo-700">سلات تحولت لطلبات</p>
+                        <p class="mt-2 text-3xl font-black text-indigo-900">{{ $formatValue($localSummary['converted_carts'] ?? null) }}</p>
+                    </div>
+                    <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
+                        <p class="text-sm font-bold text-gray-500">قيمة المتروك</p>
+                        <p class="mt-2 text-3xl font-black text-gray-950">{{ $formatValue($localSummary['abandoned_value'] ?? null, true) }}</p>
+                    </div>
+                    <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
+                        <p class="text-sm font-bold text-gray-500">تحويل السلات</p>
+                        <p class="mt-2 text-3xl font-black text-gray-950">{{ $formatValue($localSummary['conversion_rate'] ?? null, false, true) }}</p>
+                    </div>
+                </div>
+            @endif
 
             <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div class="mb-5 flex items-center justify-between">
@@ -141,7 +178,7 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 @include('admin.analytics.partials.simple-table', [
                     'title' => 'مصادر الزيارات',
-                    'headers' => ['المصدر', 'المستخدمون', 'الجلسات', 'التحويلات'],
+                    'headers' => ['المصدر', 'المستخدمون', 'الجلسات', 'تحويلات محلية'],
                     'rows' => collect($analytics['sources'] ?? [])->map(fn ($row) => [
                         $row['source'],
                         $formatValue($row['users']),
@@ -165,8 +202,8 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
             </div>
 
             <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-                <h3 class="text-right text-lg font-black text-gray-900">قمع التجارة الإلكترونية</h3>
-                <p class="mt-1 text-right text-sm text-gray-500">يعتمد على أحداث GA4 القياسية: view_item, add_to_cart, begin_checkout, purchase.</p>
+                <h3 class="text-right text-lg font-black text-gray-900">قمع السلة المحلي</h3>
+                <p class="mt-1 text-right text-sm text-gray-500">يعتمد على قاعدة بيانات HeroKid: إنشاء سلة، إضافة عناصر، بدء checkout، وإنشاء الطلب. لا يتم إرسال بيانات السلة إلى GA4 أو Meta.</p>
                 <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
                     @foreach($analytics['funnel'] ?? [] as $step)
                         <div class="rounded-2xl border border-indigo-50 bg-indigo-50/60 p-4 text-right">
@@ -179,13 +216,7 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
             </div>
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                @foreach([
-                    'source_details' => ['title' => 'تفاصيل source / medium', 'first' => 'المصدر / الوسيط'],
-                    'devices' => ['title' => 'الأجهزة', 'first' => 'نوع الجهاز'],
-                    'locations' => ['title' => 'الدول والمدن', 'first' => 'الموقع'],
-                    'landing_pages' => ['title' => 'صفحات الهبوط', 'first' => 'الصفحة'],
-                    'campaigns' => ['title' => 'الحملات و UTM', 'first' => 'الحملة / المصدر'],
-                ] as $key => $meta)
+                @foreach($breakdownTables as $key => $meta)
                     @include('admin.analytics.partials.simple-table', [
                         'title' => $meta['title'],
                         'headers' => [$meta['first'], 'المستخدمون', 'الجلسات'],

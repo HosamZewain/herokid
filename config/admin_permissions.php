@@ -74,6 +74,15 @@ return [
             'sort_order' => 20,
             'sensitive' => true,
         ],
+        'visitor_carts.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض سلات الزوار',
+            'name_en' => 'View visitor carts',
+            'description_ar' => 'عرض السلات المحلية النشطة والمتروكة والمتحولة لطلبات.',
+            'description_en' => 'View local active, abandoned, and converted visitor carts.',
+            'sort_order' => 30,
+            'sensitive' => true,
+        ],
 
         'orders.view' => [
             'group_key' => 'orders',

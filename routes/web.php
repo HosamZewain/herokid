@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\PageController;
@@ -237,6 +238,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])
         ->middleware(['permission:analytics.view', 'throttle:6,1'])
         ->name('analytics.refresh');
+    Route::get('visitor-carts', [VisitorCartController::class, 'index'])
+        ->middleware('permission:visitor_carts.view')
+        ->name('visitor-carts.index');
+    Route::get('visitor-carts/{visitorCart}', [VisitorCartController::class, 'show'])
+        ->middleware('permission:visitor_carts.view')
+        ->name('visitor-carts.show');
 
     Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
         ->middlewareFor(['index', 'show'], 'permission:stories.view')

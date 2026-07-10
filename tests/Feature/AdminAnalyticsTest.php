@@ -89,6 +89,8 @@ class AdminAnalyticsTest extends TestCase
         config(['analytics.ga4.property_id' => '123456']);
         Cache::put('analytics:ga4:123456:cache-keys', ['analytics:ga4:123456:test'], now()->addHour());
         Cache::put('analytics:ga4:123456:test', 'cached', now()->addHour());
+        Cache::put('analytics:local-cart:cache-keys', ['analytics:local-cart:test'], now()->addHour());
+        Cache::put('analytics:local-cart:test', 'cached', now()->addHour());
 
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -97,6 +99,7 @@ class AdminAnalyticsTest extends TestCase
             ->assertRedirect();
 
         $this->assertFalse(Cache::has('analytics:ga4:123456:test'));
+        $this->assertFalse(Cache::has('analytics:local-cart:test'));
     }
 
     private function configureFakeCredentials(): void

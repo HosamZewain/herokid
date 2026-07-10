@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
+use App\Services\Cart\CartTrackingService;
 use App\Support\ProductRecommendations;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -146,7 +147,7 @@ class CartController extends Controller
 
         session(['cart.items' => $cart]);
         session()->flash('upsell_story_key', $itemKey);
-        session()->flash('facebook_add_to_cart_event', $this->facebookAddToCartEvent($story));
+        app(CartTrackingService::class)->recordItemAdded($request, $itemKey);
 
         if ($request->input('next') === 'cart') {
             return redirect()->route('cart.index')->with('success', 'تمت إضافة القصة إلى السلة بنجاح.');
@@ -157,7 +158,7 @@ class CartController extends Controller
             ->with('success', 'تمت إضافة القصة إلى السلة. يمكنك اختيار قصة أخرى أو إتمام الطلب من السلة.');
     }
 
-    public function destroy(string $key)
+    public function destroy(Request $request, string $key)
     {
         $cart = $this->cart();
 
@@ -179,6 +180,7 @@ class CartController extends Controller
             }
 
             session(['cart.items' => $cart]);
+            app(CartTrackingService::class)->recordItemRemoved($request, $key, $item);
         }
 
         return redirect()->route('cart.index')->with('success', 'تم حذف العنصر من السلة.');
@@ -234,27 +236,5 @@ class CartController extends Controller
             ->first();
 
         return is_array($latestOrder?->delivery_details) ? $latestOrder->delivery_details : [];
-    }
-
-    private function facebookAddToCartEvent(Story $story): array
-    {
-        $price = round((float) $story->price, 2);
-
-        return [
-            'event_id' => 'hk-add-story-'.(string) Str::uuid(),
-            'data' => [
-                'content_type' => 'product',
-                'content_ids' => ['story:'.$story->id],
-                'contents' => [[
-                    'id' => 'story:'.$story->id,
-                    'quantity' => 1,
-                    'item_price' => $price,
-                ]],
-                'content_name' => $story->title,
-                'content_category' => 'Personalized Story',
-                'value' => $price,
-                'currency' => 'EGP',
-            ],
-        ];
     }
 }

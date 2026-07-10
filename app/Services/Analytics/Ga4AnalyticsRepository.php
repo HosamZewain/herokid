@@ -6,7 +6,10 @@ use Illuminate\Support\Facades\Cache;
 
 class Ga4AnalyticsRepository
 {
-    public function __construct(private readonly Ga4AnalyticsClient $client) {}
+    public function __construct(
+        private readonly Ga4AnalyticsClient $client,
+        private readonly LocalCartAnalyticsRepository $localCartAnalytics,
+    ) {}
 
     public function dashboard(AnalyticsDateRange $range): array
     {
@@ -31,7 +34,8 @@ class Ga4AnalyticsRepository
                 'sources' => $this->trafficSources($range),
                 'source_details' => $this->sourceDetails($range),
                 'popular_pages' => $this->popularPages($range),
-                'funnel' => $this->funnel($range),
+                'funnel' => $this->localCartAnalytics->funnel($range),
+                'local_cart_summary' => $this->localCartAnalytics->cartSummary(),
                 'devices' => $this->dimensionBreakdown($range, 'deviceCategory', 'devices'),
                 'locations' => $this->dimensionBreakdown($range, ['country', 'city'], 'locations'),
                 'landing_pages' => $this->landingPages($range),
@@ -80,6 +84,7 @@ class Ga4AnalyticsRepository
         }
 
         Cache::forget($registryKey);
+        $this->localCartAnalytics->flush();
     }
 
     private function summary(): array
@@ -123,13 +128,11 @@ class Ga4AnalyticsRepository
             })->all();
         });
 
-        $purchases = $this->eventCounts(new AnalyticsDateRange('summary', 'اليوم وأمس', $yesterday, $today), ['purchase'], 'summary-purchases');
         $todayKey = str_replace('-', '', $today);
         $yesterdayKey = str_replace('-', '', $yesterday);
         $todayData = $daily[$todayKey] ?? [];
         $yesterdayData = $daily[$yesterdayKey] ?? [];
-        $todayPurchases = $purchases['purchase']['by_date'][$todayKey] ?? null;
-        $yesterdayPurchases = $purchases['purchase']['by_date'][$yesterdayKey] ?? null;
+        $localSummary = $this->localCartAnalytics->todaySummary();
 
         return [
             'active_users_30m' => ['label' => 'نشطون آخر 30 دقيقة', 'value' => $realtime, 'change' => null],
@@ -137,16 +140,9 @@ class Ga4AnalyticsRepository
             'sessions_today' => $this->metricCard('الجلسات اليوم', $todayData['sessions'] ?? null, $yesterdayData['sessions'] ?? null),
             'views_today' => $this->metricCard('مشاهدات الصفحات اليوم', $todayData['views'] ?? null, $yesterdayData['views'] ?? null),
             'new_users_today' => $this->metricCard('مستخدمون جدد اليوم', $todayData['new_users'] ?? null, $yesterdayData['new_users'] ?? null),
-            'purchases_today' => $this->metricCard('مشتريات مكتملة اليوم', $todayPurchases, $yesterdayPurchases),
-            'revenue_today' => $this->metricCard('إيراد اليوم', $todayData['revenue'] ?? null, $yesterdayData['revenue'] ?? null),
-            'conversion_rate_today' => [
-                'label' => 'معدل التحويل اليوم',
-                'value' => AnalyticsMetricNormalizer::ratio($todayPurchases, $todayData['sessions'] ?? null),
-                'change' => AnalyticsMetricNormalizer::percentage(
-                    AnalyticsMetricNormalizer::ratio($todayPurchases, $todayData['sessions'] ?? null),
-                    AnalyticsMetricNormalizer::ratio($yesterdayPurchases, $yesterdayData['sessions'] ?? null),
-                ),
-            ],
+            'purchases_today' => $localSummary['purchases_today'],
+            'revenue_today' => $localSummary['revenue_today'],
+            'conversion_rate_today' => $localSummary['conversion_rate_today'],
         ];
     }
 
@@ -179,16 +175,16 @@ class Ga4AnalyticsRepository
                 'orderBys' => [['metric' => ['metricName' => 'sessions'], 'desc' => true]],
                 'limit' => 25,
             ]);
-            $purchaseCounts = $this->eventCountsByDimension($range, 'sessionDefaultChannelGroup', 'source-purchases');
+            $localConversions = $this->localCartAnalytics->sourceConversions($range);
 
-            return collect($report['rows'] ?? [])->map(function (array $row) use ($purchaseCounts): array {
+            return collect($report['rows'] ?? [])->map(function (array $row) use ($localConversions): array {
                 $source = (string) ($row['dimensionValues'][0]['value'] ?? 'Other');
 
                 return [
                     'source' => $source === '' ? 'Other' : $source,
                     'users' => AnalyticsMetricNormalizer::integer($row['metricValues'][0]['value'] ?? null),
                     'sessions' => AnalyticsMetricNormalizer::integer($row['metricValues'][1]['value'] ?? null),
-                    'conversions' => $purchaseCounts[$source] ?? null,
+                    'conversions' => $localConversions[$source] ?? null,
                 ];
             })->values()->all();
         });
@@ -225,35 +221,6 @@ class Ga4AnalyticsRepository
         });
     }
 
-    private function funnel(AnalyticsDateRange $range): array
-    {
-        $events = ['view_item', 'add_to_cart', 'begin_checkout', 'purchase'];
-        $counts = $this->eventCounts($range, $events, 'funnel');
-        $previous = null;
-
-        return collect($events)->map(function (string $event) use ($counts, &$previous): array {
-            $value = $counts[$event]['total'] ?? null;
-            $dropOff = ($previous !== null && $value !== null) ? max(0, round((($previous - $value) / max(1, $previous)) * 100, 1)) : null;
-            if ($value !== null) {
-                $previous = $value;
-            }
-
-            return [
-                'event' => $event,
-                'label' => match ($event) {
-                    'view_item' => 'مشاهدة منتج/قصة',
-                    'add_to_cart' => 'إضافة للسلة',
-                    'begin_checkout' => 'بدء checkout',
-                    'purchase' => 'شراء مكتمل',
-                    default => $event,
-                },
-                'value' => $value,
-                'available' => isset($counts[$event]),
-                'drop_off' => $dropOff,
-            ];
-        })->all();
-    }
-
     private function landingPages(AnalyticsDateRange $range): array
     {
         return $this->dimensionBreakdown($range, 'landingPagePlusQueryString', 'landing-pages', 10);
@@ -277,49 +244,6 @@ class Ga4AnalyticsRepository
                 'users' => AnalyticsMetricNormalizer::integer($row['metricValues'][0]['value'] ?? null),
                 'sessions' => AnalyticsMetricNormalizer::integer($row['metricValues'][1]['value'] ?? null),
             ])->values()->all();
-        });
-    }
-
-    private function eventCounts(AnalyticsDateRange $range, array $events, string $cacheName): array
-    {
-        return $this->remember('events:'.$cacheName.':'.$range->cacheSuffix(), (int) config('analytics.ga4.breakdown_cache_ttl'), function () use ($range, $events): array {
-            $report = $this->client->runReport([
-                'dateRanges' => [['startDate' => $range->startDate, 'endDate' => $range->endDate]],
-                'dimensions' => [['name' => 'eventName'], ['name' => 'date']],
-                'metrics' => [['name' => 'eventCount']],
-                'limit' => 10000,
-            ]);
-
-            return collect($report['rows'] ?? [])
-                ->filter(fn (array $row): bool => in_array((string) ($row['dimensionValues'][0]['value'] ?? ''), $events, true))
-                ->reduce(function (array $carry, array $row): array {
-                    $event = (string) ($row['dimensionValues'][0]['value'] ?? '');
-                    $date = (string) ($row['dimensionValues'][1]['value'] ?? '');
-                    $value = AnalyticsMetricNormalizer::integer($row['metricValues'][0]['value'] ?? null) ?? 0;
-                    $carry[$event]['total'] = ($carry[$event]['total'] ?? 0) + $value;
-                    $carry[$event]['by_date'][$date] = ($carry[$event]['by_date'][$date] ?? 0) + $value;
-
-                    return $carry;
-                }, []);
-        });
-    }
-
-    private function eventCountsByDimension(AnalyticsDateRange $range, string $dimension, string $cacheName): array
-    {
-        return $this->remember('events-by-dimension:'.$cacheName.':'.$range->cacheSuffix(), (int) config('analytics.ga4.breakdown_cache_ttl'), function () use ($range, $dimension): array {
-            $report = $this->client->runReport([
-                'dateRanges' => [['startDate' => $range->startDate, 'endDate' => $range->endDate]],
-                'dimensions' => [['name' => $dimension], ['name' => 'eventName']],
-                'metrics' => [['name' => 'eventCount']],
-                'limit' => 10000,
-            ]);
-
-            return collect($report['rows'] ?? [])
-                ->filter(fn (array $row): bool => (string) ($row['dimensionValues'][1]['value'] ?? '') === 'purchase')
-                ->mapWithKeys(fn (array $row): array => [
-                    (string) ($row['dimensionValues'][0]['value'] ?? 'Other') => AnalyticsMetricNormalizer::integer($row['metricValues'][0]['value'] ?? null) ?? 0,
-                ])
-                ->all();
         });
     }
 

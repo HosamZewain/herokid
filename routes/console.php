@@ -3,9 +3,11 @@
 use App\Models\AiProvider;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
+use App\Services\Cart\CartTrackingService;
 use App\Support\AdminPermissionSyncer;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 use Symfony\Component\Console\Command\Command;
 
 Artisan::command('inspire', function () {
@@ -59,3 +61,17 @@ Artisan::command('ai:import-provider-key {driver} {--force : Replace an existing
 
     return Command::SUCCESS;
 })->purpose('Import a legacy env provider key into encrypted AI provider credentials');
+
+Artisan::command('visitor-carts:maintain', function (CartTrackingService $tracking) {
+    $result = $tracking->maintainStatuses();
+    $this->info(sprintf(
+        'Visitor carts maintained. Abandoned: %d, expired: %d, deleted activities: %d.',
+        $result['abandoned'] ?? 0,
+        $result['expired'] ?? 0,
+        $result['deletedActivities'] ?? 0,
+    ));
+
+    return Command::SUCCESS;
+})->purpose('Mark inactive visitor carts as abandoned and clean old cart activity records');
+
+Schedule::command('visitor-carts:maintain')->hourly();

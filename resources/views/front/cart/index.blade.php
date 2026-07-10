@@ -14,34 +14,7 @@
     $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
     $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
     $addOnItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product_add_on');
-    $gaCartItems = $cartCollection->map(function ($item) {
-        $type = $item['item_type'] ?? 'story';
-        $price = $type === 'story' ? (float) ($item['story_price'] ?? 0) : (float) ($item['unit_price'] ?? 0);
-        $quantity = max(1, (int) ($item['quantity'] ?? 1));
-
-        return [
-            'item_id' => $type === 'story' ? 'story:'.($item['story_id'] ?? $item['key']) : 'product:'.($item['product_id'] ?? $item['key']),
-            'item_name' => $type === 'story' ? ($item['story_title'] ?? 'قصة مخصصة') : ($item['product_name'] ?? 'منتج'),
-            'item_category' => $type === 'story' ? 'Personalized Story' : 'Store Product',
-            'price' => $price,
-            'quantity' => $quantity,
-        ];
-    })->values();
 @endphp
-
-@if($cartCollection->isNotEmpty())
-    @push('scripts')
-        <script>
-            if (typeof gtag === 'function') {
-                gtag('event', 'begin_checkout', {
-                    currency: 'EGP',
-                    value: @json(round((float) $subtotal, 2)),
-                    items: @json($gaCartItems),
-                });
-            }
-        </script>
-    @endpush
-@endif
 
 <div class="min-h-[70vh] bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">

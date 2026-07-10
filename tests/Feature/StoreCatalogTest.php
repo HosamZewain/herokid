@@ -126,7 +126,7 @@ class StoreCatalogTest extends TestCase
         $this->assertSame('A3', $item['variant_name']);
     }
 
-    public function test_meta_pixel_tracks_product_views_and_product_add_to_cart(): void
+    public function test_product_views_and_add_to_cart_do_not_emit_external_ecommerce_events(): void
     {
         config(['services.meta_pixel.id' => '1241523867742555']);
         $product = $this->product('pixel-poster', 100);
@@ -139,9 +139,8 @@ class StoreCatalogTest extends TestCase
 
         $this->get(route('shop.product.show', $product))
             ->assertOk()
-            ->assertSee("fbq('track', 'ViewContent'", false)
-            ->assertSee('"content_ids":["product:'.$product->id.'"]', false)
-            ->assertSee('"value":100', false);
+            ->assertDontSee("fbq('track', 'ViewContent'", false)
+            ->assertDontSee('view_item', false);
 
         $this->post(route('cart.products.store', $product), [
             'variant_id' => $variant->id,
@@ -150,9 +149,9 @@ class StoreCatalogTest extends TestCase
 
         $this->get(route('cart.index'))
             ->assertOk()
-            ->assertSee("fbq('track', 'AddToCart'", false)
-            ->assertSee('"content_ids":["product:'.$product->id.':variant:'.$variant->id.'"]', false)
-            ->assertSee('"value":300', false);
+            ->assertDontSee("fbq('track', 'AddToCart'", false)
+            ->assertDontSee('add_to_cart', false)
+            ->assertDontSee('begin_checkout', false);
     }
 
     public function test_personalized_addons_require_and_inherit_story_context(): void
