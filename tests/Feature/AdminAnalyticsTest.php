@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\Analytics\AnalyticsDateRange;
+use App\Services\Analytics\Ga4AnalyticsClient;
 use App\Services\Analytics\Ga4AnalyticsRepository;
+use App\Services\Analytics\Ga4ApiException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class AdminAnalyticsTest extends TestCase
@@ -82,6 +85,63 @@ class AdminAnalyticsTest extends TestCase
         $secondCount = count(Http::recorded());
 
         $this->assertSame($firstCount, $secondCount);
+    }
+
+    public function test_ga4_client_uses_v1beta_endpoint_for_standard_and_realtime_reports(): void
+    {
+        Cache::flush();
+        $this->configureFakeCredentials();
+
+        Http::fake(function ($request) {
+            if (str_contains((string) $request->url(), 'oauth2.googleapis.com')) {
+                return Http::response(['access_token' => 'test-token'], 200);
+            }
+
+            return Http::response(['rows' => []], 200);
+        });
+
+        $client = app(Ga4AnalyticsClient::class);
+
+        $client->runReport(['metrics' => [['name' => 'activeUsers']]]);
+        $client->runRealtimeReport(['metrics' => [['name' => 'activeUsers']]]);
+
+        $urls = collect(Http::recorded())->map(fn (array $record) => (string) $record[0]->url());
+
+        $this->assertTrue($urls->contains('https://analyticsdata.googleapis.com/v1beta/properties/123456:runReport'));
+        $this->assertTrue($urls->contains('https://analyticsdata.googleapis.com/v1beta/properties/123456:runRealtimeReport'));
+    }
+
+    public function test_ga4_404_response_logs_diagnostic_endpoint_context(): void
+    {
+        Cache::flush();
+        $this->configureFakeCredentials();
+        Log::spy();
+
+        Http::fake(function ($request) {
+            if (str_contains((string) $request->url(), 'oauth2.googleapis.com')) {
+                return Http::response(['access_token' => 'test-token'], 200);
+            }
+
+            return Http::response(['error' => ['message' => 'Endpoint not found']], 404);
+        });
+
+        try {
+            app(Ga4AnalyticsClient::class)->runReport(['metrics' => [['name' => 'activeUsers']]]);
+            $this->fail('Expected GA4 API exception was not thrown.');
+        } catch (Ga4ApiException) {
+            // Expected.
+        }
+
+        Log::shouldHaveReceived('warning')
+            ->with('GA4 API returned an error.', \Mockery::on(function (array $context): bool {
+                return ($context['method'] ?? null) === 'runReport'
+                    && ($context['property_id'] ?? null) === '123456'
+                    && ($context['api_base_url'] ?? null) === 'https://analyticsdata.googleapis.com/v1beta'
+                    && ($context['url'] ?? null) === 'https://analyticsdata.googleapis.com/v1beta/properties/123456:runReport'
+                    && ($context['status'] ?? null) === 404
+                    && ($context['error'] ?? null) === 'Endpoint not found';
+            }))
+            ->once();
     }
 
     public function test_refresh_route_clears_analytics_cache(): void

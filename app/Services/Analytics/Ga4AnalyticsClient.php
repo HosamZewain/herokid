@@ -51,6 +51,8 @@ class Ga4AnalyticsClient
             Log::warning('GA4 API request failed before response.', [
                 'method' => $method,
                 'property_id' => $propertyId,
+                'api_base_url' => $baseUrl,
+                'url' => $url,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -61,6 +63,8 @@ class Ga4AnalyticsClient
             Log::warning('GA4 API returned an error.', [
                 'method' => $method,
                 'property_id' => $propertyId,
+                'api_base_url' => $baseUrl,
+                'url' => $url,
                 'status' => $response->status(),
                 'error' => $response->json('error.message') ?: $response->reason(),
             ]);
