@@ -267,6 +267,12 @@ class ProductionStudioAiPilotTest extends TestCase
             ->post(route('admin.production-studio.assets.approve', [$project, $asset]))
             ->assertForbidden();
 
+        $this->actingAs($limited)
+            ->delete(route('admin.production-studio.assets.delete', [$project, $asset]))
+            ->assertForbidden();
+
+        Storage::disk('local')->assertExists($asset->file_path);
+
         $assetResponse = $this->actingAs($owner)
             ->get(route('admin.production-studio.assets.show', [$project, $asset]))
             ->assertOk()
@@ -984,6 +990,33 @@ class ProductionStudioAiPilotTest extends TestCase
         Http::assertSent(fn ($request) => str_starts_with((string) data_get($request->data(), 'image_url'), 'data:image/'));
         Storage::disk('local')->assertExists($asset->file_path);
         Storage::disk('public')->assertMissing($asset->file_path);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('حذف نهائي');
+
+        $this->actingAs($this->adminUser())
+            ->deleteJson(route('admin.production-studio.assets.delete', [$project, $asset]))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('deleted_asset_id', $asset->id);
+
+        Storage::disk('local')->assertMissing($asset->file_path);
+        Storage::disk('local')->assertExists('orders/photos/kid.png');
+        $this->assertDatabaseMissing('production_project_assets', ['id' => $asset->id]);
+        $this->assertDatabaseHas('scene_generation_jobs', [
+            'id' => $job->id,
+            'status' => 'completed',
+            'actual_cost' => '0.0412',
+            'output_asset_path' => null,
+        ]);
+        $this->assertNull(data_get($job->fresh()->output_metadata_json, 'asset_id'));
+        $this->assertNotNull(data_get($job->fresh()->output_metadata_json, 'asset_deleted_at'));
+        $this->assertDatabaseHas('production_project_activity_logs', [
+            'production_project_id' => $project->id,
+            'action' => 'ai_asset.deleted',
+        ]);
     }
 
     public function test_fal_kontext_request_omits_unsupported_multiple_reference_field(): void

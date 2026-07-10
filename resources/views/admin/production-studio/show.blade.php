@@ -1331,6 +1331,10 @@
 
             event.preventDefault();
 
+            if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+                return;
+            }
+
             const button = form.querySelector('button[type="submit"], button:not([type])');
             const feedback = form.querySelector('[data-studio-ai-feedback]') || form.closest('[data-studio-asset-card]')?.querySelector('[data-studio-ai-feedback]');
             const originalButtonText = button?.textContent;
@@ -1374,6 +1378,16 @@
                     if (status) {
                         status.textContent = status.textContent.replace(/ - .+$/, ` - ${payload.asset.status}`);
                     }
+                }
+
+                if (payload.deleted_asset_id) {
+                    document.querySelectorAll(`[data-studio-asset-card="${payload.deleted_asset_id}"]`).forEach((card) => {
+                        const notice = document.createElement('div');
+                        notice.className = 'rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-black text-emerald-800';
+                        notice.textContent = payload.message || 'تم حذف الصورة المولدة نهائيًا.';
+                        card.replaceWith(notice);
+                        window.setTimeout(() => notice.remove(), 1500);
+                    });
                 }
             } catch (error) {
                 studioFeedback(feedback, 'error', 'حدث خطأ في الاتصال. حاول مرة أخرى.');

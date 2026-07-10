@@ -5,6 +5,9 @@
         'under_review', 'processing', 'queued' => 'indigo',
         default => 'gray',
     };
+    $deletableGeneratedImage = in_array($asset->asset_type, ['character_sheet', 'scene_image', 'cover_image'], true)
+        && is_string($asset->file_path)
+        && str_starts_with($asset->file_path, 'production-studio/projects/'.$project->id.'/generated/');
 @endphp
 
 <div class="rounded-xl border bg-white p-3 text-right shadow-sm {{ $asset->is_primary ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-gray-100' }}" data-studio-asset-card="{{ $asset->id }}">
@@ -73,6 +76,15 @@
                 <form method="POST" action="{{ route('admin.production-studio.ai.retry', [$project, $asset->generationJob]) }}" data-studio-ai-form>
                     @csrf
                     <button class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">Retry</button>
+                </form>
+            @endcan
+        @endif
+        @if($deletableGeneratedImage)
+            @can('production_studio.ai_approve')
+                <form method="POST" action="{{ route('admin.production-studio.assets.delete', [$project, $asset]) }}" data-studio-ai-form data-confirm="سيتم حذف ملف الصورة المولدة نهائيًا ولا يمكن استعادته. هل تريد المتابعة؟">
+                    @csrf
+                    @method('DELETE')
+                    <button class="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-black text-red-700 hover:bg-red-50">حذف نهائي</button>
                 </form>
             @endcan
         @endif

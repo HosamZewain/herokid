@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\ProductionStudio\ApproveGeneratedAssetAction;
 use App\Actions\ProductionStudio\CreateGenerationJobAction;
+use App\Actions\ProductionStudio\DeleteGeneratedAssetAction;
 use App\Actions\ProductionStudio\RejectGeneratedAssetAction;
 use App\DTOs\Ai\StructuredAiResult;
 use App\Http\Controllers\Controller;
@@ -390,6 +391,33 @@ class ProductionStudioController extends Controller
         }
 
         return back()->with('success', 'تم تحديث حالة المخرج.');
+    }
+
+    public function deleteAsset(Request $request, ProductionProject $project, ProductionProjectAsset $asset, DeleteGeneratedAssetAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($asset->production_project_id === $project->id, 404);
+
+        try {
+            $deleted = $action->execute($asset);
+        } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
+            return back()->withErrors(['generated_asset_delete' => $this->safeAiError($exception)]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'تم حذف الصورة المولدة وملفها نهائيًا.',
+                'deleted_asset_id' => $deleted['asset_id'],
+                'bytes_freed' => $deleted['bytes_freed'],
+            ]);
+        }
+
+        return back()->with('success', 'تم حذف الصورة المولدة وملفها نهائيًا.');
     }
 
     public function generationJobStatus(ProductionProject $project, SceneGenerationJob $generationJob): JsonResponse

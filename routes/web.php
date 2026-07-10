@@ -333,6 +333,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('production-studio/{project}/ai/jobs/{generationJob}/retry', [ProductionStudioController::class, 'retryGeneration'])->middleware('permission:production_studio.ai_retry')->name('production-studio.ai.retry');
     Route::post('production-studio/{project}/assets/{asset}/approve', [ProductionStudioController::class, 'approveAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.approve');
     Route::post('production-studio/{project}/assets/{asset}/reject', [ProductionStudioController::class, 'rejectAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.reject');
+    Route::delete('production-studio/{project}/assets/{asset}', [ProductionStudioController::class, 'deleteAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.delete');
 
     Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
     Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');
