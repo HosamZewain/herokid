@@ -19,22 +19,39 @@
     </style>
 </head>
 
-<body class="font-sans antialiased bg-gray-50">
+<body class="font-sans antialiased bg-gray-50 overflow-x-hidden">
 
-    <div class="flex min-h-screen" dir="rtl">
+    <div class="flex min-h-screen" dir="rtl" data-admin-shell>
+
+        {{-- Mobile sidebar backdrop --}}
+        <button type="button"
+            class="fixed inset-0 z-30 hidden bg-slate-950/50 backdrop-blur-[1px] lg:hidden"
+            aria-label="إغلاق قائمة الإدارة"
+            data-admin-sidebar-overlay></button>
 
         {{-- ===== SIDEBAR ===== --}}
         <aside
-            class="w-64 bg-indigo-800 text-white flex-shrink-0 flex flex-col fixed top-0 right-0 h-full z-30 overflow-y-auto">
+            id="admin-sidebar"
+            class="fixed inset-y-0 right-0 z-40 flex h-full w-72 max-w-[calc(100vw-3rem)] translate-x-full flex-col overflow-y-auto bg-indigo-800 text-white shadow-2xl transition-transform duration-200 ease-out lg:w-64 lg:max-w-none lg:translate-x-0 lg:shadow-none"
+            aria-label="قائمة الإدارة"
+            data-admin-sidebar>
 
             {{-- Logo --}}
-            <div class="px-6 py-5 border-b border-indigo-700">
-                <a href="{{ route('admin.home') }}" class="flex items-center gap-3">
+            <div class="flex items-center justify-between gap-3 border-b border-indigo-700 px-4 py-4 sm:px-6 sm:py-5">
+                <a href="{{ route('admin.home') }}" class="flex min-w-0 items-center gap-3">
                     <img src="/images/logo-192.png" alt="HeroKid"
                         class="h-8 md:h-16 w-8 md:w-16 rounded-lg object-contain bg-white p-0.5">
-                    <span class="font-extrabold text-lg text-white">HeroKid</span>
+                    <span class="truncate font-extrabold text-lg text-white">HeroKid</span>
                     <span class="text-indigo-300 text-xs font-bold">Admin</span>
                 </a>
+                <button type="button"
+                    class="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-indigo-100 transition hover:bg-indigo-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/70 lg:hidden"
+                    aria-label="إغلاق قائمة الإدارة"
+                    data-admin-sidebar-close>
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
 
             {{-- Navigation --}}
@@ -168,30 +185,42 @@
         </aside>
 
         {{-- ===== MAIN CONTENT AREA (offset by sidebar width) ===== --}}
-        <div class="flex-1 flex flex-col min-w-0 mr-64">
+        <div class="flex min-w-0 flex-1 flex-col lg:mr-64">
 
             {{-- Top bar --}}
             <header
-                class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-                <div>
+                class="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+                <div class="flex min-w-0 items-center gap-3">
+                    <button type="button"
+                        class="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:hidden"
+                        aria-label="فتح قائمة الإدارة"
+                        aria-controls="admin-sidebar"
+                        aria-expanded="false"
+                        data-admin-sidebar-toggle>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div class="min-w-0 [&_h1]:break-words [&_h2]:break-words">
                     @isset($header)
                         {{ $header }}
                     @endisset
+                    </div>
                 </div>
-                <div class="flex items-center gap-4">
+                <div class="flex flex-shrink-0 items-center gap-2 sm:gap-4">
                     <a href="{{ url('/') }}" target="_blank"
-                        class="text-xs text-gray-500 hover:text-indigo-600 font-semibold flex items-center gap-1 transition">
+                        class="flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
-                        عرض الموقع
+                        <span class="hidden sm:inline">عرض الموقع</span>
                     </a>
                 </div>
             </header>
 
             {{-- Page content --}}
-            <main class="flex-1 p-6 lg:p-8">
+            <main class="admin-content min-w-0 flex-1 overflow-x-hidden p-3 sm:p-6 lg:p-8">
                 @if(session('success'))
                     <div
                         class="bg-green-50 border border-green-300 text-green-800 px-5 py-3 rounded-xl flex items-center gap-2 mb-6">

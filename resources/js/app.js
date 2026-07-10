@@ -1,6 +1,42 @@
 import './bootstrap';
 
 document.addEventListener('DOMContentLoaded', () => {
+    const adminSidebar = document.querySelector('[data-admin-sidebar]');
+    const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
+    const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');
+    const adminSidebarOverlay = document.querySelector('[data-admin-sidebar-overlay]');
+    const adminMobileQuery = window.matchMedia('(max-width: 1023px)');
+
+    if (adminSidebar && adminSidebarToggle && adminSidebarOverlay) {
+        const setAdminSidebarOpen = (isOpen) => {
+            const mobileOpen = isOpen && adminMobileQuery.matches;
+
+            adminSidebar.classList.toggle('translate-x-full', !mobileOpen && adminMobileQuery.matches);
+            adminSidebar.classList.toggle('translate-x-0', mobileOpen);
+            adminSidebarOverlay.classList.toggle('hidden', !mobileOpen);
+            adminSidebarToggle.setAttribute('aria-expanded', mobileOpen ? 'true' : 'false');
+            adminSidebar.toggleAttribute('inert', adminMobileQuery.matches && !mobileOpen);
+            document.body.classList.toggle('overflow-hidden', mobileOpen);
+        };
+
+        adminSidebarToggle.addEventListener('click', () => {
+            setAdminSidebarOpen(adminSidebarToggle.getAttribute('aria-expanded') !== 'true');
+        });
+        adminSidebarClose?.addEventListener('click', () => setAdminSidebarOpen(false));
+        adminSidebarOverlay.addEventListener('click', () => setAdminSidebarOpen(false));
+        adminSidebar.querySelectorAll('a').forEach((link) => {
+            link.addEventListener('click', () => setAdminSidebarOpen(false));
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && adminSidebarToggle.getAttribute('aria-expanded') === 'true') {
+                setAdminSidebarOpen(false);
+                adminSidebarToggle.focus();
+            }
+        });
+        adminMobileQuery.addEventListener('change', () => setAdminSidebarOpen(false));
+        setAdminSidebarOpen(false);
+    }
+
     const toggle = document.querySelector('[data-front-menu-toggle]');
     const menu = document.querySelector('[data-front-mobile-menu]');
     const openIcon = document.querySelector('[data-front-menu-open-icon]');

@@ -42,6 +42,23 @@ class AdminPermissionsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_layout_exposes_mobile_sidebar_controls_without_mobile_content_offset(): void
+    {
+        $admin = $this->adminWithPermissions(['dashboard.view']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('data-admin-sidebar', false)
+            ->assertSee('data-admin-sidebar-toggle', false)
+            ->assertSee('data-admin-sidebar-close', false)
+            ->assertSee('data-admin-sidebar-overlay', false)
+            ->assertSee('translate-x-full', false)
+            ->assertSee('lg:translate-x-0', false)
+            ->assertSee('lg:mr-64', false)
+            ->assertDontSee('class="flex-1 flex flex-col min-w-0 mr-64"', false);
+    }
+
     public function test_order_sensitive_actions_require_separate_permissions(): void
     {
         Storage::fake('local');

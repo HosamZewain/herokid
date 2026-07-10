@@ -34,6 +34,23 @@
     .float-slow {
         animation: float 6s ease-in-out infinite;
     }
+
+    @media (max-width: 1023px) {
+        .admin-content table {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .admin-content input,
+        .admin-content select,
+        .admin-content textarea {
+            max-width: 100%;
+        }
+    }
 }
 
 @keyframes slideUpFade {
