@@ -141,13 +141,9 @@ class ScenePersonalizationService
 
             $visualDirection = (string) ($data['scenes'][$index]['visual_direction'] ?? '');
             if (! $this->containsName($visualDirection, $childName)) {
-                $identity = trim((string) $project->characterProfile?->appearance_summary);
                 $childGender = $this->normalizeGender((string) $project->order?->child_gender);
                 $identityWord = $childGender === 'girl' ? 'ملامحها' : 'ملامحه';
-                $identityContext = $identity !== ''
-                    ? ' مع الحفاظ على '.$identityWord.' المستخرجة من الصور المرجعية: '.$identity
-                    : ' مع الحفاظ على '.$identityWord.' من الصور المرجعية المعتمدة';
-                $data['scenes'][$index]['visual_direction'] = trim($visualDirection.' البطل الرئيسي هو '.$childName.'، بعمر ظاهري '.($project->order?->child_age ?: 'مناسب للطلب').' سنوات،'.$identityContext.'، والملابس يحددها سياق المشهد.');
+                $data['scenes'][$index]['visual_direction'] = trim($visualDirection.' البطل الرئيسي هو '.$childName.'، بعمر ظاهري '.($project->order?->child_age ?: 'مناسب للطلب').' سنوات، مع الحفاظ على '.$identityWord.' من الصور المرجعية المعتمدة فقط. تعبير الوجه والملابس والوضعية يحددها سياق هذا المشهد، ولا تُنسخ من صورة الطفل الأصلية.');
             }
 
             $pose = (string) ($data['scenes'][$index]['child_action_pose'] ?? '');

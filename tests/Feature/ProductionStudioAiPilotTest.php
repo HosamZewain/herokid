@@ -453,7 +453,7 @@ class ProductionStudioAiPilotTest extends TestCase
             'scene_number' => 1,
             'title' => 'Moon Scene',
             'story_text' => 'رينا walks under moonlight.',
-            'visual_direction' => 'رينا appears in a calm magical night garden.',
+            'visual_direction' => 'رينا مبتسمة appears in a calm magical night garden.',
             'child_action_pose' => 'رينا holds a small lantern.',
             'text_safe_area_notes' => 'Keep calm sky area on the left.',
             'personalized_hero_name' => 'رينا',
@@ -494,6 +494,11 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('centered portrait crop', $job->negative_prompt_snapshot);
         $this->assertStringNotContainsString('fantasy background', $job->negative_prompt_snapshot);
         $this->assertStringNotContainsString('no props', strtolower($job->prompt_snapshot));
+        $this->assertStringNotContainsString('Egyptian child with natural face and warm smile.', $job->prompt_snapshot);
+        $this->assertStringContainsString('A result is incorrect if it replaces this location, time, action, or any mandatory key object', $job->prompt_snapshot);
+        $this->assertStringContainsString('Do not reuse the usual smile when the scene requires worry', $job->prompt_snapshot);
+        $this->assertStringNotContainsString('رينا مبتسمة', $job->prompt_snapshot);
+        $this->assertLessThan(6500, mb_strlen($job->prompt_snapshot));
         $this->assertFalse($job->input_assets_json['character_sheet_first']);
         $this->assertSame('primary_face_reference', $job->input_assets_json['reference_assets'][0]['type']);
         $this->assertSame('approved_child_reference_illustration', $job->input_assets_json['reference_assets'][1]['type']);

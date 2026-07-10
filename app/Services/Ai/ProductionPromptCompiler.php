@@ -29,6 +29,21 @@ class ProductionPromptCompiler
         $oldHeroRemaining = $scene ? $scene->oldHeroConflicts($templateHero) !== [] : false;
         $storyTitle = $this->personalizedContext((string) ($order->story?->title ?: 'Not available'), $templateHero, $childHero);
         $storySummary = $this->personalizedContext((string) ($order->story?->short_desc ?: $order->story?->full_desc ?: 'Not available'), $templateHero, $childHero);
+
+        if ($scene && $jobType === 'scene_image') {
+            return $this->compileScenePrompt(
+                project: $project,
+                scene: $scene,
+                style: (string) $style,
+                templateHero: $templateHero,
+                childHero: $childHero,
+                manualNotes: $manualNotes,
+                characterSheet: $characterSheet,
+                personalizationApplied: $personalizationApplied,
+                oldHeroRemaining: $oldHeroRemaining,
+            );
+        }
+
         $orientation = match ($jobType) {
             'character_sheet' => 'portrait or half-body identity reference on a simple clean background',
             'cover_image' => 'A4 portrait cover artwork composition',
@@ -285,8 +300,160 @@ class ProductionPromptCompiler
         ) ?? $value;
     }
 
+    private function compileScenePrompt(
+        ProductionProject $project,
+        ProductionScene $scene,
+        string $style,
+        string $templateHero,
+        string $childHero,
+        ?string $manualNotes,
+        ?ProductionProjectAsset $characterSheet,
+        bool $personalizationApplied,
+        bool $oldHeroRemaining,
+    ): array {
+        $order = $project->order;
+        $profile = $project->characterProfile;
+        $role = trim((string) ($project->child_story_role ?: $childHero));
+        $negativeItems = array_filter([
+            'text',
+            'letters',
+            'words',
+            'captions',
+            'title',
+            'logo',
+            'watermark',
+            'school badge',
+            'clothing logo',
+            'studio portrait',
+            'centered portrait crop',
+            'flat portrait background',
+            'solid-color portrait background',
+            'copied source clothing',
+            'copied source pose',
+            'copied source background',
+            'generic forest substitution',
+            'Arabic text',
+            'English text',
+            'Korean text',
+            'Chinese text',
+            'Japanese text',
+            'Latin text',
+            'numbers',
+            'pseudo-text',
+            'title-card layout',
+            'changed face',
+            'changed hairstyle',
+            'adult-looking child',
+            'makeup',
+            'anime face',
+            'doll-like face',
+            'distorted hands',
+            'extra fingers',
+            'copyrighted characters',
+            $profile?->negative_instructions,
+        ]);
+
+        $lines = [
+            'TASK: Transform the supplied child identity reference into the exact story scene below.',
+            'This is a scene recreation task, not a generic image inspired by the story.',
+            'CRITICAL OUTPUT TYPE — WIDE STORY SCENE, NOT A CHARACTER PORTRAIT.',
+            '',
+            'MANDATORY SCENE CONTENT — ALL OF THESE MUST BE VISIBLE:',
+            '- Scene title: '.($scene->title ?: 'Not available'),
+            '- Exact child action and pose: '.($scene->child_action_pose ?: 'Not available'),
+            '- Exact environment and location: '.($scene->environment ?: 'Not available'),
+            '- Exact time, mood, and lighting: '.($scene->mood_lighting ?: 'Not available'),
+            '- Mandatory key objects: '.($scene->key_objects ?: 'Not available'),
+            '- Supporting characters: '.($scene->supporting_characters ?: 'None'),
+            '- Composition direction: '.$this->sceneVisualDirection((string) ($scene->visual_direction ?: 'Not available')),
+            '- Text-safe area: '.($scene->text_safe_area_notes ?: 'Reserve one calm, low-detail blank area for later Arabic text.'),
+            'A result is incorrect if it replaces this location, time, action, or any mandatory key object with a generic garden, forest, portrait, or unrelated scene.',
+            '',
+            'STORY MOMENT:',
+            'Scene story text context: '.($scene->story_text ?: 'Not available'),
+            'Continuity: '.($scene->continuity_notes ?: 'Not available'),
+            '',
+            'COMPOSITION AND FORMAT:',
+            'Create a wide 3:2 landscape cinematic children\'s-book illustration representing one connected A3 reader spread across two facing A4 pages.',
+            'Fill both halves of the landscape canvas with continuous artwork and one connected environment. Do not create two separate pictures.',
+            'The child must be naturally integrated into the scene at an appropriate environmental scale, not centered as a portrait or character card.',
+            'Create a new wide landscape scene composition from scratch.',
+            'Use reference images for identity only, not for composition.',
+            'If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.',
+            'Do not preserve the input photo background, pose, school uniform, badge, clothing, or usual smile.',
+            'The required scene action, facial emotion, wardrobe, time of day, and lighting override the source photo and any generic identity description.',
+            '',
+            'CHILD IDENTITY — PRESERVE ONLY THESE IDENTITY TRAITS:',
+            '- Child name for internal context only: '.($childHero ?: $order?->child_name ?: 'Not available'),
+            '- Story role: '.($role ?: 'main hero'),
+            '- Apparent age: '.($order?->child_age ?: 'Not available'),
+            '- Gender: '.($order?->child_gender ?: 'Not available'),
+            '- Hair: '.($profile?->hair_details ?: 'Use the approved reference'),
+            '- Skin tone: '.($profile?->skin_tone ?: 'Use the approved reference'),
+            '- Eyes and facial traits: '.($profile?->eye_color_traits ?: 'Use the approved reference'),
+            '- Face shape: '.($profile?->face_shape_notes ?: 'Use the approved reference'),
+            '- Body proportions: '.($profile?->body_proportion_notes ?: 'Natural proportions for the stated age'),
+            'Keep the child\'s real photo-derived face, hairstyle, skin tone, apparent age, and body proportions consistent in every illustration.',
+            'Do not transform the child into a different-looking character. Use the real photo-derived face as the identity anchor.',
+            'The scene child must use the same real photo-derived face, hairstyle, skin tone, apparent age, and body proportions from the references.',
+            'Expression must match this scene\'s action and mood. Do not reuse the usual smile when the scene requires worry, fear, concentration, sadness, or surprise.',
+            'Wardrobe must follow the story role and scene. Never copy the uploaded school clothes, badge, or logo.',
+            '',
+            'ART DIRECTION:',
+            $style,
+            'Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.',
+            'Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language.',
+            'Also exclude numbers, logos, watermarks, and pseudo-writing.',
+            'Forbidden: '.implode(', ', $negativeItems).'.',
+        ];
+
+        if ($characterSheet) {
+            $lines[] = 'The approved child reference illustration is supplied only to preserve identity and art consistency; do not copy its pose, outfit, crop, or background.';
+        }
+
+        if (filled($manualNotes)) {
+            $lines[] = 'Additional admin instruction, subordinate to the mandatory scene content: '.Str::squish((string) $manualNotes);
+        }
+
+        $lines = array_merge($lines, [
+            '',
+            'PRODUCTION DEBUG (do not visualize):',
+            'personalization_applied: '.($personalizationApplied ? 'true' : 'false'),
+            'template_hero_name: '.($templateHero ? '[replaced before image generation]' : 'Not available'),
+            'child_hero_name: '.($childHero ?: 'Not available'),
+            'old_hero_name_remaining: '.($oldHeroRemaining ? 'true' : 'false'),
+            'personalized_scene_context_included: '.($personalizationApplied && ! $oldHeroRemaining ? 'true' : 'false'),
+        ]);
+
+        return [
+            'prompt' => implode("\n", $lines),
+            'negative_prompt' => implode(', ', $negativeItems),
+            'personalization_debug' => [
+                'personalization_applied' => $personalizationApplied,
+                'template_hero_name' => $templateHero ?: null,
+                'child_hero_name' => $childHero ?: null,
+                'old_hero_name_remaining' => $oldHeroRemaining,
+                'personalized_scene_context_included' => $personalizationApplied && ! $oldHeroRemaining,
+            ],
+        ];
+    }
+
     private function isGirl(string $gender): bool
     {
         return in_array(mb_strtolower(trim($gender)), ['girl', 'female', 'f', 'بنت', 'أنثى', 'انثى'], true);
+    }
+
+    private function sceneVisualDirection(string $value): string
+    {
+        $value = preg_replace(
+            [
+                '/(?<![\p{L}\p{N}_])(?:مبتسمة|مبتسم|تبتسم|يبتسم)(?![\p{L}\p{N}_])/u',
+                '/\b(?:smiling|smiles|smile|happy expression)\b/i',
+            ],
+            '',
+            $value,
+        ) ?? $value;
+
+        return Str::squish($value);
     }
 }
