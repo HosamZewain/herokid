@@ -56,6 +56,19 @@ class ProductionPromptCompiler
             ]);
         }
 
+        if ($scene && ! $isCharacterReference) {
+            $lines = array_merge($lines, [
+                '',
+                'CRITICAL OUTPUT TYPE — WIDE STORY SCENE, NOT A CHARACTER PORTRAIT:',
+                'Create one wide landscape cinematic story illustration that fills the entire canvas with the scene environment described below.',
+                'This image represents one connected A3 landscape reader spread across two facing A4 portrait pages.',
+                'The child is a character acting inside the scene, not a centered portrait subject, profile card, studio photo, or character reference sheet.',
+                'Show a wide or medium-wide environmental composition. The environment, action, mood, and key story objects must be immediately recognizable.',
+                'Do not preserve the input photo composition, portrait crop, flat background, classroom wall, or source clothing. Preserve only the child identity.',
+                'Use scene-driven wardrobe and pose. Fill both halves of the landscape canvas with continuous artwork and reserve the requested calm text-safe area.',
+            ]);
+        }
+
         $lines = array_merge($lines, [
             '',
             'Child identity data:',
@@ -126,7 +139,7 @@ class ProductionPromptCompiler
                 'Use reference images for identity only, not for composition. Do not copy the reference portrait framing, background, flowers, classroom wall, clothing badge, or plain portrait layout.',
                 'The final output must follow the scene story, visual direction, environment, key objects, mood, and child action below. If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.',
                 'Create a new wide landscape scene composition from scratch. The input face image is only an identity reference, not a base layout, not a poster template, and not a background to preserve.',
-                'Place the child as part of the described environment. Show the castle, fog, mountain, extinguished giant lantern, moonlight, and safe blank text area when they are part of this scene. Do not crop the child as a portrait.',
+                'Place the child naturally inside the exact described environment and include the scene-specific key objects listed below. Do not crop the child as a portrait.',
                 'The child should appear naturally inside the described scene, not as a pasted portrait in front of a decorative background.',
                 'Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.',
                 'Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language. This includes Arabic, English, Korean, Chinese, Japanese, Latin letters, numbers, and pseudo-text.',
@@ -157,14 +170,16 @@ class ProductionPromptCompiler
         $lines = array_merge($lines, [
             '',
             'Forbidden visual output:',
-            'No text, no letters, no words, no Arabic text, no English text, no logo, no watermark, no fake HeroKid title, no profile card, no annotations, no measurement chart, no school badge text, no random symbols, no extra children.',
+            'No text, no letters, no words, no Arabic text, no English text, no logo, no watermark, no fake HeroKid title, no profile card, no annotations, no measurement chart, no school badge text, no random symbols.'.($isCharacterReference ? ' No extra children.' : ' Include only supporting characters explicitly required by the scene; never duplicate the main child.'),
             'No Korean text, no Chinese text, no Japanese text, no Latin text, no numbers, no pseudo-text, no captions, no headings, no speech bubbles, no signs, no title-card layout, no poster layout, no social graphic layout, no thumbnail layout.',
-            'No book, no open book, no pages, no readable book content, no props, no school badge, no clothing logo, no decorative stars, no sparkles, no fantasy background, no viewer hands, no waving hand toward camera.',
+            $isCharacterReference
+                ? 'No book, no open book, no pages, no readable book content, no props, no school badge, no clothing logo, no decorative stars, no sparkles, no fantasy background, no viewer hands, no waving hand toward camera.'
+                : 'No studio portrait, no centered character lineup, no flat or solid-color portrait background, no copied reference-photo background, no school badge, no clothing logo, and no unrequested duplicate of the child.',
             'No adult-looking child, no changed face, no changed hairstyle, no loose center-parted hair when the reference shows tied or side-swept hair, no makeup, no glamorous beauty redesign, no idealized studio portrait, no symmetrical beauty portrait, no exaggerated cartoon face, no anime face, no chibi face, no caricature, no doll-like face, no distorted hands, no extra fingers, no copyrighted characters, no franchise costumes.',
             'Never draw HeroKid as visible text. Never draw a title. Never draw labels. Never draw fake writing.',
         ]);
 
-        $negative = implode(', ', array_filter([
+        $negativeItems = [
             'text',
             'letters',
             'words',
@@ -197,17 +212,6 @@ class ProductionPromptCompiler
             'clothing logo',
             'readable clothing text',
             'random symbols',
-            'book',
-            'open book',
-            'pages',
-            'readable book content',
-            'props',
-            'decorative stars',
-            'sparkles',
-            'fantasy background',
-            'viewer hands',
-            'waving hand toward camera',
-            'extra children',
             'adult-looking child',
             'changed face',
             'changed hairstyle',
@@ -228,7 +232,32 @@ class ProductionPromptCompiler
             'unsafe content',
             'scary content',
             $profile?->negative_instructions,
-        ]));
+        ];
+
+        $negativeItems = array_merge($negativeItems, $isCharacterReference
+            ? [
+                'book',
+                'open book',
+                'pages',
+                'readable book content',
+                'props',
+                'decorative stars',
+                'sparkles',
+                'fantasy background',
+                'viewer hands',
+                'waving hand toward camera',
+                'extra children',
+            ]
+            : [
+                'studio portrait',
+                'centered portrait crop',
+                'flat portrait background',
+                'solid-color portrait background',
+                'copied reference-photo composition',
+                'unrequested duplicate child',
+            ]);
+
+        $negative = implode(', ', array_filter($negativeItems));
 
         return [
             'prompt' => implode("\n", $lines),

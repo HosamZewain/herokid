@@ -48,6 +48,12 @@ class PollAiGenerationJob implements ShouldQueue
             }
 
             $asset = $provider->downloadOutput($status);
+            $dimensions = @getimagesizefromstring($asset->contents) ?: null;
+
+            if ($job->job_type === 'scene_image' && $dimensions && $dimensions[0] <= $dimensions[1]) {
+                throw new \RuntimeException('رفض النظام صورة المشهد لأنها عمودية. يجب أن تكون صورة المشهد أفقية عريضة وتعرض الحدث والبيئة، وليست صورة شخصية للطفل.');
+            }
+
             $path = 'production-studio/projects/'.$job->production_project_id.'/generated/'.uniqid($job->job_type.'_', true).'.'.$asset->extension;
 
             Storage::disk('local')->put($path, $asset->contents);
@@ -69,6 +75,8 @@ class PollAiGenerationJob implements ShouldQueue
                     'provider' => $job->model->provider->driver,
                     'model' => $job->model->code,
                     'mime_type' => $asset->mimeType,
+                    'width' => $dimensions[0] ?? null,
+                    'height' => $dimensions[1] ?? null,
                 ],
                 'uploaded_by_user_id' => $job->initiated_by_user_id,
             ]);
@@ -76,7 +84,10 @@ class PollAiGenerationJob implements ShouldQueue
             $job->update([
                 'status' => 'completed',
                 'output_asset_path' => $path,
-                'output_metadata_json' => ['asset_id' => $createdAsset->id] + $asset->metadata,
+                'output_metadata_json' => ['asset_id' => $createdAsset->id] + $asset->metadata + [
+                    'width' => $dimensions[0] ?? null,
+                    'height' => $dimensions[1] ?? null,
+                ],
                 'actual_cost' => $status->actualCost ?: $job->estimated_cost,
                 'cost_source' => $status->actualCost ? 'provider_actual' : 'estimate_fallback',
                 'completed_at' => now(),

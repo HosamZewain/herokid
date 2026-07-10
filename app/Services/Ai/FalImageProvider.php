@@ -62,12 +62,11 @@ class FalImageProvider implements AiImageProvider
 
         $payload = [
             'prompt' => $request->prompt,
-            'negative_prompt' => $request->negativePrompt,
             'num_images' => 1,
             'output_format' => 'png',
         ];
 
-        $payload = array_merge($payload, $this->generationModeOptions($request->generationMode));
+        $payload = array_merge($payload, $this->generationModeOptions($request));
 
         if ($request->model->requiresImageUrl() && $request->inputAssets === []) {
             throw new RuntimeException('هذا الموديل يحتاج صورة مرجعية. اختر صورة مرجعية أو صورة شخصية معتمدة أولًا.');
@@ -212,23 +211,28 @@ class FalImageProvider implements AiImageProvider
             ]);
     }
 
-    private function generationModeOptions(string $generationMode): array
+    private function generationModeOptions(GenerationRequest $request): array
     {
-        return match ($generationMode) {
-            'character_scene' => [
-                'resolution_mode' => '3:2',
-                'guidance_scale' => 4.5,
+        $isDevKontext = Str::startsWith($request->model->code, 'fal-ai/flux-kontext/dev');
+        $isScene = $request->generationMode === 'character_scene';
+        $ratio = $isScene ? '3:2' : '2:3';
+
+        if ($isDevKontext) {
+            return [
+                'resolution_mode' => $ratio,
+                'guidance_scale' => $isScene ? 4.5 : 3.5,
                 'num_inference_steps' => 32,
                 'acceleration' => 'none',
-            ],
-            'cover_generation', 'character_sheet' => [
-                'resolution_mode' => '2:3',
-                'guidance_scale' => 3.5,
-                'num_inference_steps' => 32,
-                'acceleration' => 'none',
-            ],
-            default => [],
-        };
+                'enable_safety_checker' => true,
+            ];
+        }
+
+        return [
+            'aspect_ratio' => $ratio,
+            'guidance_scale' => $isScene ? 4.5 : 3.5,
+            'enhance_prompt' => false,
+            'safety_tolerance' => '2',
+        ];
     }
 
     private function timeout(?AiProvider $provider): int

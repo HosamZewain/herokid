@@ -485,10 +485,15 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertStringContainsString('Use reference images for identity only, not for composition.', $job->prompt_snapshot);
         $this->assertStringContainsString('If the reference image conflicts with the scene, keep only the child identity and replace the background/composition with the described scene.', $job->prompt_snapshot);
         $this->assertStringContainsString('Create a new wide landscape scene composition from scratch.', $job->prompt_snapshot);
+        $this->assertStringContainsString('CRITICAL OUTPUT TYPE — WIDE STORY SCENE, NOT A CHARACTER PORTRAIT', $job->prompt_snapshot);
+        $this->assertStringContainsString('Fill both halves of the landscape canvas with continuous artwork', $job->prompt_snapshot);
         $this->assertStringContainsString('Generate pure story illustration only. Do not create a poster, title card, social graphic, thumbnail, book cover, profile card, or educational flashcard.', $job->prompt_snapshot);
         $this->assertStringContainsString('Do not render any visible text, letters, captions, headings, labels, speech bubbles, signs, or symbols in any language.', $job->prompt_snapshot);
         $this->assertStringContainsString('Korean text', $job->negative_prompt_snapshot);
         $this->assertStringContainsString('title-card layout', $job->negative_prompt_snapshot);
+        $this->assertStringContainsString('centered portrait crop', $job->negative_prompt_snapshot);
+        $this->assertStringNotContainsString('fantasy background', $job->negative_prompt_snapshot);
+        $this->assertStringNotContainsString('no props', strtolower($job->prompt_snapshot));
         $this->assertFalse($job->input_assets_json['character_sheet_first']);
         $this->assertSame('primary_face_reference', $job->input_assets_json['reference_assets'][0]['type']);
         $this->assertSame('approved_child_reference_illustration', $job->input_assets_json['reference_assets'][1]['type']);
@@ -514,6 +519,101 @@ class ProductionStudioAiPilotTest extends TestCase
                 && data_get($payload, 'guidance_scale') === 4.5
                 && data_get($payload, 'num_inference_steps') === 32;
         });
+    }
+
+    public function test_fal_pro_scene_uses_supported_landscape_aspect_ratio_schema(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $project->update([
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'رينا',
+            'child_story_role' => 'الأميرة رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'مشهد القلعة',
+            'story_text' => 'رينا تراقب الفانوس من القلعة.',
+            'visual_direction' => 'مشهد واسع تظهر فيه رينا داخل القلعة مع الجبل والضباب.',
+            'child_action_pose' => 'رينا تقف عند نافذة القصر.',
+            'personalized_hero_name' => 'رينا',
+            'template_hero_name' => 'جنا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'fal-ai/flux-pro/kontext',
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::fake([
+            'https://queue.fal.run/*' => Http::response([
+                'request_id' => 'fal-pro-scene-request',
+                'status' => 'IN_QUEUE',
+                'status_url' => 'https://fal.test/status',
+                'response_url' => 'https://fal.test/result',
+            ]),
+        ]);
+
+        $job = SceneGenerationJob::firstOrFail();
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return data_get($payload, 'aspect_ratio') === '3:2'
+                && ! array_key_exists('resolution_mode', $payload)
+                && ! array_key_exists('negative_prompt', $payload)
+                && ! array_key_exists('num_inference_steps', $payload);
+        });
+    }
+
+    public function test_portrait_scene_output_is_rejected_before_it_becomes_an_asset(): void
+    {
+        Storage::fake('local');
+        $this->enableFal('secret-key');
+
+        $project = $this->projectWithApprovedPhoto();
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Landscape scene',
+            'story_text' => 'Scene story text.',
+        ]);
+        $job = $project->generationJobs()->create([
+            'production_scene_id' => $scene->id,
+            'job_type' => 'scene_image',
+            'generation_mode' => 'character_scene',
+            'ai_provider_id' => AiProvider::where('driver', 'fal')->value('id'),
+            'ai_model_id' => AiModel::where('code', 'fal-ai/flux-kontext/dev')->value('id'),
+            'status' => 'processing',
+            'external_request_id' => 'portrait-scene',
+            'external_status_url' => 'https://fal.test/status',
+            'external_response_url' => 'https://fal.test/result',
+            'prompt_snapshot' => 'Landscape scene prompt',
+        ]);
+        $portraitPng = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAUCAIAAAA7jDsBAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAD0lEQVQokWNgGAWjgD4AAAJsAAGClu6+AAAAAElFTkSuQmCC');
+
+        Http::fake([
+            'https://fal.test/status' => Http::response(['status' => 'COMPLETED']),
+            'https://fal.test/result' => Http::response(['images' => [['url' => 'https://fal.test/portrait.png']]]),
+            'https://fal.test/portrait.png' => Http::response($portraitPng, 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        (new PollAiGenerationJob($job->id))->handle(app(AiProviderManager::class));
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertStringContainsString('صورة المشهد لأنها عمودية', $job->fresh()->error_message);
+        $this->assertDatabaseCount('production_project_assets', 0);
     }
 
     public function test_story_scenes_can_be_extracted_with_deterministic_parser_without_openai_call(): void
