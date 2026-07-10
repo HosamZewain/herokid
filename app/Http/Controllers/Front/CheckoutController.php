@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ use Illuminate\Validation\Rule;
 
 class CheckoutController extends Controller
 {
-    public function store(Request $request)
+    public function store(Request $request, TemporaryPhotoUploadService $photoUploads)
     {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -73,7 +74,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, &$orderIds): void {
+            DB::transaction(function () use ($cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -127,6 +128,8 @@ class CheckoutController extends Controller
                         'status' => 'new',
                         'notes' => 'تم إنشاء الطلب بنجاح وسيتم مراجعته قريباً.',
                     ]);
+
+                    $photoUploads->markOrderAttached($item['uploaded_photos'] ?? [], $order);
 
                     $storyOrderItem = $order->items()->create([
                         'item_type' => 'story',

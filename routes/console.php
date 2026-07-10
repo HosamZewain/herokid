@@ -4,6 +4,7 @@ use App\Models\AiProvider;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -75,3 +76,16 @@ Artisan::command('visitor-carts:maintain', function (CartTrackingService $tracki
 })->purpose('Mark inactive visitor carts as abandoned and clean old cart activity records');
 
 Schedule::command('visitor-carts:maintain')->hourly();
+
+Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to process per chunk}', function (TemporaryPhotoUploadService $uploads) {
+    $result = $uploads->cleanupExpired((int) $this->option('batch'));
+    $this->info(sprintf(
+        'Temporary photo uploads cleaned. Expired: %d, deleted files: %d.',
+        $result['expired'] ?? 0,
+        $result['deleted_files'] ?? 0,
+    ));
+
+    return Command::SUCCESS;
+})->purpose('Expire and delete unattached temporary child photo uploads');
+
+Schedule::command('photo-uploads:cleanup')->hourly();

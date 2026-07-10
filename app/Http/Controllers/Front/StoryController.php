@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerStoryView;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Services\Uploads\TemporaryPhotoUploadService;
 use Illuminate\Http\Request;
 
 class StoryController extends Controller
@@ -76,9 +77,10 @@ class StoryController extends Controller
         return view('front.stories.index', compact('stories', 'categories', 'ageRanges'));
     }
 
-    public function show(Request $request, $slug)
+    public function show(Request $request, $slug, TemporaryPhotoUploadService $uploads)
     {
         $story = Story::where('slug', $slug)->where('active', true)->firstOrFail();
+        $uploadSession = $uploads->ensureSession($request);
 
         CustomerStoryView::create([
             'user_id' => $request->user()?->id,
@@ -89,6 +91,19 @@ class StoryController extends Controller
             'viewed_at' => now(),
         ]);
 
-        return view('front.stories.show', compact('story'));
+        return view('front.stories.show', [
+            'story' => $story,
+            'photoUploadConfig' => [
+                'sessionToken' => $uploadSession['token'],
+                'sessionUrl' => route('photo-uploads.session'),
+                'uploadUrl' => route('photo-uploads.store'),
+                'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
+                'maxFiles' => (int) config('photo_uploads.max_files', 5),
+                'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
+                'concurrency' => (int) config('photo_uploads.concurrency', 2),
+                'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
+                'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
+            ],
+        ]);
     }
 }

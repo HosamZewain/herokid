@@ -7,16 +7,17 @@ use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
-    private const PHOTO_MAX_KILOBYTES = 15360;
-
     private const ALLOWED_PHOTO_EXTENSIONS = [
         'jpg',
         'jpeg',
@@ -60,11 +61,11 @@ class CartController extends Controller
         ]);
     }
 
-    public function store(Request $request, Story $story)
+    public function store(Request $request, Story $story, TemporaryPhotoUploadService $uploads)
     {
         abort_unless($story->active, 404);
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'child_name' => 'required|string|max:255',
             'child_age' => 'required|integer|min:1|max:18',
             'child_gender' => 'required|in:boy,girl',
@@ -72,10 +73,12 @@ class CartController extends Controller
             'interests' => 'nullable|string|max:500',
             'parent_notes' => 'nullable|string|max:1000',
             'privacy_consent' => 'required|accepted',
-            'photos' => 'required|array|min:1|max:5',
+            'photo_upload_ids' => 'nullable|array|max:'.config('photo_uploads.max_files', 5),
+            'photo_upload_ids.*' => 'string|uuid',
+            'photos' => 'nullable|array|min:1|max:'.config('photo_uploads.max_files', 5),
             'photos.*' => [
                 'file',
-                'max:'.self::PHOTO_MAX_KILOBYTES,
+                'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024),
                 function (string $attribute, mixed $value, \Closure $fail): void {
                     if (! $value instanceof UploadedFile || ! $value->isValid()) {
                         $fail('تعذر رفع الصورة. يرجى إعادة اختيار الصورة والمحاولة مرة أخرى.');
@@ -110,19 +113,52 @@ class CartController extends Controller
             'parent_notes.max' => 'ملاحظات الفريق يجب ألا تزيد عن 1000 حرف.',
             'privacy_consent.required' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
             'privacy_consent.accepted' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
-            'photos.required' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photo_upload_ids.required' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photo_upload_ids.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
+            'photo_upload_ids.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photo_upload_ids.max' => 'يمكنك رفع '.config('photo_uploads.max_files', 5).' صور كحد أقصى.',
+            'photo_upload_ids.*.uuid' => 'بعض الصور المرفوعة غير صالحة. احذفها وارفعها مرة أخرى.',
             'photos.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
             'photos.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
-            'photos.max' => 'يمكنك رفع 5 صور كحد أقصى.',
+            'photos.max' => 'يمكنك رفع '.config('photo_uploads.max_files', 5).' صور كحد أقصى.',
             'photos.*.file' => 'تعذر رفع الصورة. تأكد أن الملف صورة صحيحة وأن الاتصال لم ينقطع أثناء الرفع.',
-            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن 15 ميجا.',
+            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن '.config('photo_uploads.max_size_mb', 15).' ميجا.',
         ]);
+
+        $validator->after(function ($validator) use ($request): void {
+            if ($request->filled('photo_upload_ids') || $request->hasFile('photos')) {
+                return;
+            }
+
+            $validator->errors()->add('photo_upload_ids', 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.');
+        });
+
+        $validated = $validator->validate();
 
         $itemKey = (string) Str::uuid();
         $photoPaths = [];
+        $photoUploadIds = $validated['photo_upload_ids'] ?? [];
 
-        foreach ($request->file('photos', []) as $photo) {
-            $photoPaths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$itemKey, 'local');
+        if ($photoUploadIds !== []) {
+            try {
+                $photoPaths = $uploads->attachIdsToCart($request, $photoUploadIds, $itemKey)
+                    ->pluck('path')
+                    ->all();
+            } catch (UploadValidationException $exception) {
+                return back()
+                    ->withInput()
+                    ->withErrors([$exception->field ?: 'photo_upload_ids' => $exception->getMessage()]);
+            }
+        } elseif ($request->hasFile('photos')) {
+            foreach ($request->file('photos', []) as $photo) {
+                $photoPaths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$itemKey, 'local');
+            }
+        }
+
+        if ($photoPaths === []) {
+            return back()
+                ->withInput()
+                ->withErrors(['photo_upload_ids' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.']);
         }
 
         $cart = $this->cart();

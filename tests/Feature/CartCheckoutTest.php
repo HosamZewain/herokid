@@ -89,7 +89,7 @@ class CartCheckoutTest extends TestCase
                 'child_age',
                 'child_gender',
                 'privacy_consent',
-                'photos',
+                'photo_upload_ids',
             ]);
 
         $this->get(route('stories.show', $story->slug))

@@ -31,6 +31,7 @@ use App\Http\Controllers\Front\PageController;
 use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\ShopController;
 use App\Http\Controllers\Front\StoryController;
+use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
 use App\Models\FaqItem;
@@ -93,6 +94,10 @@ Route::get('/shop/{category:slug}', [ShopController::class, 'category'])->name('
 
 // Cart and checkout routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::get('/photo-uploads/session', [TemporaryPhotoUploadController::class, 'session'])->name('photo-uploads.session');
+Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:20,1')->name('photo-uploads.store');
+Route::get('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'show'])->name('photo-uploads.show');
+Route::delete('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'destroy'])->name('photo-uploads.destroy');
 Route::post('/cart/stories/{story:slug}', [CartController::class, 'store'])->name('cart.store');
 Route::post('/cart/products/{product:slug}', [ProductCartController::class, 'store'])->name('cart.products.store');
 Route::delete('/cart/{key}', [CartController::class, 'destroy'])->name('cart.destroy');
