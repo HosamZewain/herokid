@@ -159,20 +159,34 @@ Use database queues on shared hosting:
 QUEUE_CONNECTION=database
 ```
 
-Add this cron job in Hostinger:
+Use the existing Hostinger wrapper cron instead of a long direct command:
 
 ```bash
-* * * * * cd /home/u470070883/domains/hero-kid.com/public_html && php artisan queue:work database --queue=default --stop-when-empty --tries=2 --timeout=240 >> storage/logs/queue-worker.log 2>&1
+* * * * * /bin/bash /home/u470070883/run-herokid-queue.sh
+```
+
+Recommended `/home/u470070883/run-herokid-queue.sh` content:
+
+```bash
+#!/bin/bash
+APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
+PHP_BIN="/usr/bin/php"
+
+cd "$APP_DIR" || exit 1
+mkdir -p storage/logs
+
+$PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
+$PHP_BIN artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
 Manual fallback:
 
 ```bash
 cd /home/u470070883/domains/hero-kid.com/public_html
-php artisan queue:work database --queue=default --stop-when-empty --tries=2 --timeout=240
+php artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300
 ```
 
-Do not assume Supervisor exists on shared hosting.
+Do not assume Supervisor exists on shared hosting. The queue command intentionally omits the `database` connection argument because `QUEUE_CONNECTION=database` should be configured in `.env`.
 
 ## Rollback
 

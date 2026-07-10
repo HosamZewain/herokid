@@ -138,13 +138,27 @@ The local cart maintenance command marks inactive carts as abandoned and cleans 
 php artisan visitor-carts:maintain
 ```
 
-It is registered in Laravel's scheduler and should run through the existing Hostinger cron:
+It is registered in Laravel's scheduler and should run through the existing Hostinger wrapper cron. Hostinger can be unreliable with long cron commands, so keep the cron entry short:
 
 ```bash
-* * * * * /usr/bin/php /home/u470070883/domains/hero-kid.com/public_html/artisan schedule:run >> /home/u470070883/domains/hero-kid.com/public_html/storage/logs/scheduler.log 2>&1
+* * * * * /bin/bash /home/u470070883/run-herokid-queue.sh
 ```
 
-If you use a wrapper script for queues/scheduler, keep the scheduler call there. The command is idempotent.
+The wrapper should run both the scheduler and one short queue drain:
+
+```bash
+#!/bin/bash
+APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
+PHP_BIN="/usr/bin/php"
+
+cd "$APP_DIR" || exit 1
+mkdir -p storage/logs
+
+$PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
+$PHP_BIN artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
+```
+
+The scheduler command is idempotent. The queue command intentionally omits the `database` connection argument because `QUEUE_CONNECTION=database` should be configured in `.env`.
 
 ## Troubleshooting
 
