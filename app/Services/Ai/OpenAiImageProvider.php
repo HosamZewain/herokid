@@ -297,6 +297,16 @@ class OpenAiImageProvider implements AiImageProvider
             return 'رفض OpenAI الصورة المرجعية بعد تجهيزها. تأكد أن الصورة الأصلية PNG أو JPEG أو WebP سليمة ثم أعد المحاولة.';
         }
 
+        if ($status === 400 && preg_match('/unknown parameter|unsupported parameter|unrecognized (request )?argument/i', $providerMessage)) {
+            $parameter = $this->safeParameterName($providerMessage);
+
+            return 'رفض OpenAI إعدادًا غير مدعوم في الطلب'.($parameter ? ': '.$parameter.'.' : '.');
+        }
+
+        if (in_array($status, [400, 404], true) && preg_match('/model.*(not found|does not exist|not supported|access)|access.*model/i', $providerMessage)) {
+            return 'موديل OpenAI المحدد غير متاح لهذا الحساب أو لهذا الـ endpoint. فعّل الموديل من حساب OpenAI أو استخدم GPT Image 1 مؤقتًا.';
+        }
+
         if (in_array($status, [401, 403], true)) {
             return 'تعذر اعتماد بيانات OpenAI. راجع مفتاح API وصلاحيات النموذج من إعدادات المزود.';
         }
@@ -306,5 +316,14 @@ class OpenAiImageProvider implements AiImageProvider
         }
 
         return 'تعذر تنفيذ توليد الصورة عبر OpenAI'.($status ? ' (HTTP '.$status.').' : '.');
+    }
+
+    private function safeParameterName(string $message): ?string
+    {
+        if (preg_match('/[`\'\"]([a-zA-Z0-9_.-]{1,80})[`\'\"]/', $message, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
     }
 }

@@ -143,7 +143,9 @@ class SupportedProviderRegistry
                             'supports_multiple_references' => true,
                             'supports_text_to_image_only' => false,
                             'supports_image_editing' => true,
-                            'supports_high_input_fidelity' => true,
+                            // GPT Image 2 supports high-fidelity inputs intrinsically, but the
+                            // Images Edits endpoint does not accept input_fidelity for every account.
+                            'supports_high_input_fidelity' => false,
                             'scene_size' => '1536x1024',
                             'portrait_size' => '1024x1536',
                             'quality' => 'medium',

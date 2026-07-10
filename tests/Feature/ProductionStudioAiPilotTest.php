@@ -1247,6 +1247,50 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertSame('gpt-image-2', data_get($completed->provider_request_json, 'model_code'));
         $this->assertSame('medium', data_get($completed->provider_request_json, 'model_settings.quality', 'medium'));
         Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits'
+            && ! str_contains($request->body(), 'input_fidelity'));
+    }
+
+    public function test_gpt_image_1_keeps_high_input_fidelity_setting(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableOpenAi('sk-openai-image-test');
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'id' => 'img_test_fidelity',
+                'data' => [['b64_json' => base64_encode($this->validPngBytes())]],
+            ]),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'story_text' => 'رينا تقف عند نافذة القصر.',
+            'visual_direction' => 'تظهر رينا في مشهد أفقي واسع داخل القصر.',
+            'child_action_pose' => 'رينا تنظر من النافذة.',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', [
+            'status' => 'approved',
+            'is_primary' => true,
+            'file_path' => 'production-studio/projects/'.$project->id.'/generated/reference.png',
+        ]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes());
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'gpt-image-1',
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits'
             && str_contains($request->body(), 'input_fidelity')
             && str_contains($request->body(), 'high'));
     }
