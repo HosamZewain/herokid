@@ -23,6 +23,7 @@ class OpenAiImageProvider implements AiImageProvider
     public function __construct(
         private readonly AiProviderCredentialService $credentials,
         private readonly AiProviderAvailability $availability,
+        private readonly OpenAiImageInputNormalizer $inputNormalizer,
     ) {}
 
     public function isAvailable(): bool
@@ -71,8 +72,12 @@ class OpenAiImageProvider implements AiImageProvider
         }
 
         $imageInputs = $this->imageInputsForModel($request);
-        $response = $this->postImageRequest($provider, $request, $imageInputs);
-        $json = $response->throw()->json();
+        try {
+            $response = $this->postImageRequest($provider, $request, $imageInputs);
+            $json = $response->throw()->json();
+        } catch (RequestException $exception) {
+            throw new RuntimeException($this->safeImageError($exception), previous: $exception);
+        }
         $output = $this->extractOutputImage($provider, $json);
         $localPath = $this->storeTemporaryOutput($request, $output['contents'], $output['extension']);
         $requestId = (string) (data_get($json, 'id') ?: 'openai-image-'.Str::uuid());
@@ -176,16 +181,27 @@ class OpenAiImageProvider implements AiImageProvider
         $client = $this->client($provider)->asMultipart();
 
         foreach ($imageInputs as $index => $input) {
-            $client = $client->attach('image[]', $input['contents'], 'reference-'.($index + 1).'.'.$input['extension']);
+            $client = $client->attach(
+                'image[]',
+                $input['contents'],
+                'reference-'.($index + 1).'.png',
+                ['Content-Type' => 'image/png']
+            );
         }
 
-        return $client->post('https://api.openai.com/v1/images/edits', [
+        $payload = [
             'model' => $request->model->code,
             'prompt' => $request->prompt,
             'size' => $this->sizeFor($request),
             'quality' => data_get($request->model->configuration_json, 'quality', 'medium'),
             'n' => 1,
-        ]);
+        ];
+
+        if ((bool) data_get($request->model->configuration_json, 'supports_high_input_fidelity', false)) {
+            $payload['input_fidelity'] = 'high';
+        }
+
+        return $client->post('https://api.openai.com/v1/images/edits', $payload);
     }
 
     private function imageInputsForModel(GenerationRequest $request): array
@@ -195,35 +211,9 @@ class OpenAiImageProvider implements AiImageProvider
             : array_slice($request->inputAssets, 0, 1);
 
         return collect($assets)
-            ->map(fn (string $asset): array => $this->decodeDataUri($asset))
+            ->map(fn (string $asset): array => $this->inputNormalizer->normalizeDataUri($asset))
             ->values()
             ->all();
-    }
-
-    private function decodeDataUri(string $dataUri): array
-    {
-        if (! preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/s', $dataUri, $matches)) {
-            throw new RuntimeException('OpenAI image generation requires private image data references.');
-        }
-
-        $contents = base64_decode($matches[2], true);
-
-        if ($contents === false || $contents === '') {
-            throw new RuntimeException('OpenAI image reference could not be decoded.');
-        }
-
-        $mime = $matches[1];
-        $extension = match (true) {
-            Str::contains($mime, 'jpeg'), Str::contains($mime, 'jpg') => 'jpg',
-            Str::contains($mime, 'webp') => 'webp',
-            default => 'png',
-        };
-
-        return [
-            'contents' => $contents,
-            'mime' => $mime,
-            'extension' => $extension,
-        ];
     }
 
     private function extractOutputImage(AiProvider $provider, array $response): array
@@ -296,5 +286,25 @@ class OpenAiImageProvider implements AiImageProvider
             'output_source' => $output['source'] ?? 'unknown',
             'usage' => data_get($response, 'usage'),
         ];
+    }
+
+    private function safeImageError(RequestException $exception): string
+    {
+        $status = $exception->response?->status();
+        $providerMessage = (string) data_get($exception->response?->json(), 'error.message', '');
+
+        if ($status === 400 && preg_match('/invalid image file|image.*mode|unsupported image/i', $providerMessage)) {
+            return 'رفض OpenAI الصورة المرجعية بعد تجهيزها. تأكد أن الصورة الأصلية PNG أو JPEG أو WebP سليمة ثم أعد المحاولة.';
+        }
+
+        if (in_array($status, [401, 403], true)) {
+            return 'تعذر اعتماد بيانات OpenAI. راجع مفتاح API وصلاحيات النموذج من إعدادات المزود.';
+        }
+
+        if ($status === 429) {
+            return 'تم تجاوز حد استخدام OpenAI مؤقتًا. انتظر قليلًا ثم أعد المحاولة.';
+        }
+
+        return 'تعذر تنفيذ توليد الصورة عبر OpenAI'.($status ? ' (HTTP '.$status.').' : '.');
     }
 }

@@ -1179,7 +1179,7 @@ class ProductionStudioAiPilotTest extends TestCase
     {
         Queue::fake();
         Storage::fake('local');
-        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
         $this->enableOpenAi('sk-openai-image-test');
 
         Http::fake([
@@ -1209,7 +1209,7 @@ class ProductionStudioAiPilotTest extends TestCase
             'is_primary' => true,
             'file_path' => 'production-studio/projects/'.$project->id.'/generated/reference.png',
         ]);
-        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes(24, 16, true));
 
         $this->actingAs($this->adminUser())
             ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
@@ -1246,7 +1246,64 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $this->assertSame('gpt-image-2', data_get($completed->provider_request_json, 'model_code'));
         $this->assertSame('medium', data_get($completed->provider_request_json, 'model_settings.quality', 'medium'));
-        Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits');
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits'
+            && str_contains($request->body(), 'input_fidelity')
+            && str_contains($request->body(), 'high'));
+    }
+
+    public function test_openai_invalid_image_response_is_sanitized_for_admins(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableOpenAi('sk-private-openai-key');
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'error' => [
+                    'message' => 'Invalid image file or mode for image 1. Authorization sk-private-openai-key',
+                ],
+            ], 400),
+        ]);
+
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'Castle scene',
+            'story_text' => 'رينا تقف عند نافذة القصر ليلًا.',
+            'visual_direction' => 'مشهد أفقي واسع تظهر فيه رينا داخل قصر ليلي أمام جبل وفانوس مطفأ.',
+            'child_action_pose' => 'رينا تقف عند النافذة بقلق.',
+            'environment' => 'قصر حجري وجبل ضباب.',
+            'mood_lighting' => 'ليل وضوء قمر خافت.',
+            'key_objects' => 'فانوس ضخم مطفأ.',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', [
+            'status' => 'approved',
+            'is_primary' => true,
+            'file_path' => 'production-studio/projects/'.$project->id.'/generated/reference.png',
+        ]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes(20, 20, true));
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'gpt-image-2',
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        $job->refresh();
+        $this->assertSame('failed', $job->status);
+        $this->assertSame(
+            'رفض OpenAI الصورة المرجعية بعد تجهيزها. تأكد أن الصورة الأصلية PNG أو JPEG أو WebP سليمة ثم أعد المحاولة.',
+            $job->error_message
+        );
+        $this->assertStringNotContainsString('sk-private-openai-key', $job->error_message);
+        $this->assertStringNotContainsString('Authorization', $job->error_message);
     }
 
     public function test_same_scene_can_have_multiple_versions_but_only_one_approved_final_image(): void
@@ -1451,6 +1508,20 @@ class ProductionStudioAiPilotTest extends TestCase
                 'total_tokens' => 200,
             ],
         ];
+    }
+
+    private function validPngBytes(int $width = 16, int $height = 16, bool $palette = false): string
+    {
+        $image = $palette ? imagecreate($width, $height) : imagecreatetruecolor($width, $height);
+        $background = imagecolorallocate($image, 231, 76, 120);
+        imagefilledrectangle($image, 0, 0, $width, $height, $background);
+
+        ob_start();
+        imagepng($image);
+        $contents = ob_get_clean();
+        imagedestroy($image);
+
+        return (string) $contents;
     }
 
     private function openAiScenePayload(): array

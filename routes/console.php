@@ -20,6 +20,13 @@ Artisan::command('admin-permissions:sync {--grant-existing-admins : Grant all re
     $this->info('Admin permissions synced.');
 })->purpose('Sync the system admin permission registry into the database');
 
+Artisan::command('ai:providers:sync', function (AiProviderRegistrySyncer $syncer) {
+    $syncer->sync();
+    $this->info('AI providers and model capabilities synced.');
+
+    return Command::SUCCESS;
+})->purpose('Sync supported AI providers and model capabilities without changing credentials');
+
 Artisan::command('ai:import-provider-key {driver} {--force : Replace an existing Admin-managed credential} {--yes : Run without interactive confirmation}', function (string $driver, AiProviderRegistrySyncer $syncer, AiProviderCredentialService $credentials) {
     $syncer->sync();
 
