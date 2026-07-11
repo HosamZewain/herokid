@@ -301,11 +301,9 @@ class ProductionLayoutBuilder
     {
         $pdf = $this->newPdf('A4');
 
-        foreach ($pages as $index => $page) {
-            if ($index > 1) {
-                $pdf->AddPage();
-            }
-            $pdf->WriteHTML($this->pageHtml($page, $settings, 0, 210));
+        foreach ($pages as $page) {
+            $pdf->AddPage();
+            $this->renderPage($pdf, $page, $settings, 0, 210);
         }
 
         $pdf->Output(Storage::disk('local')->path($path), Destination::FILE);
@@ -314,18 +312,14 @@ class ProductionLayoutBuilder
     private function writePrintPdf(array $pages, array $settings, array $manifest, string $path): void
     {
         $pdf = $this->newPdf('A3-L');
-        $sideIndex = 0;
 
         foreach ($manifest['sheets'] as $sheet) {
             foreach (['front', 'back'] as $side) {
-                if ($sideIndex > 0) {
-                    $pdf->AddPage('L');
-                }
+                $pdf->AddPage('L');
 
                 $pair = $sheet[$side];
-                $pdf->WriteHTML($this->pageHtml($pages[$pair['left_page']], $settings, 0, 210));
-                $pdf->WriteHTML($this->pageHtml($pages[$pair['right_page']], $settings, 210, 210));
-                $sideIndex++;
+                $this->renderPage($pdf, $pages[$pair['left_page']], $settings, 0, 210);
+                $this->renderPage($pdf, $pages[$pair['right_page']], $settings, 210, 210);
             }
         }
 
@@ -380,37 +374,74 @@ class ProductionLayoutBuilder
         return $pdf;
     }
 
-    private function pageHtml(array $page, array $settings, int $offsetMm, int $widthMm): string
+    private function renderPage(Mpdf $pdf, array $page, array $settings, int $offsetMm, int $widthMm): void
     {
-        $image = $page['image_path']
-            ? '<img src="'.$this->fileUri(Storage::disk('local')->path($page['image_path'])).'" style="position:absolute;left:0;top:0;width:'.$widthMm.'mm;height:297mm;" />'
-            : '<div style="position:absolute;inset:0;background:#111827;"></div>';
-        $content = '';
-
-        if (filled($page['text'])) {
-            $position = match ($page['text_position'] ?? 'bottom') {
-                'top' => 'top:12mm;',
-                'center' => 'top:104mm;',
-                default => 'bottom:12mm;',
-            };
-            $fontSize = max(14, min(30, (int) ($settings['font_size'] ?? 20)));
-            $opacity = max(70, min(100, (int) ($settings['text_panel_opacity'] ?? 92))) / 100;
-            $content .= '<div dir="rtl" style="position:absolute;'.$position.'left:12mm;width:'.($widthMm - 24).'mm;padding:7mm;box-sizing:border-box;background:rgba(255,255,255,'.$opacity.');color:#111827;font-family:dejavusans;font-size:'.$fontSize.'pt;line-height:1.65;text-align:right;border-radius:3mm;">'.nl2br(e((string) $page['text'])).'</div>';
+        if ($page['image_path']) {
+            $pdf->Image(
+                Storage::disk('local')->path($page['image_path']),
+                $offsetMm,
+                0,
+                $widthMm,
+                297,
+                '',
+                '',
+                true,
+                false
+            );
+        } else {
+            $pdf->SetFillColor(17, 24, 39);
+            $pdf->Rect($offsetMm, 0, $widthMm, 297, 'F');
         }
 
         if ($page['type'] === 'back_cover') {
-            $content .= '<div dir="rtl" style="position:absolute;top:110mm;left:20mm;width:'.($widthMm - 40).'mm;color:white;text-align:center;font-family:dejavusans;font-size:18pt;line-height:1.7;">'.e((string) ($page['text'] ?? '')).'<br><strong>'.e((string) ($page['website'] ?? '')).'</strong></div>';
+            $html = '<div dir="rtl" style="color:#ffffff;text-align:center;font-family:dejavusans;font-size:18pt;line-height:1.7;">'
+                .e((string) ($page['text'] ?? ''))
+                .'<br><strong>'.e((string) ($page['website'] ?? '')).'</strong></div>';
+            $pdf->WriteFixedPosHTML($html, $offsetMm + 20, 108, $widthMm - 40, 82, 'auto');
+
+            return;
         }
 
         if ($page['type'] === 'front_cover' && filled($page['cover_title'] ?? null)) {
-            $titlePosition = ($page['cover_title_position'] ?? 'top') === 'bottom' ? 'bottom:16mm;' : 'top:16mm;';
-            $content .= '<div dir="rtl" style="position:absolute;'.$titlePosition.'left:16mm;width:'.($widthMm - 32).'mm;padding:6mm;background:rgba(255,255,255,0.90);text-align:center;color:#111827;font-family:dejavusans;">'
+            $titleY = ($page['cover_title_position'] ?? 'top') === 'bottom' ? 226 : 16;
+            $this->drawTextPanel($pdf, $offsetMm + 16, $titleY, $widthMm - 32, 55, 0.9);
+            $html = '<div dir="rtl" style="text-align:center;color:#111827;font-family:dejavusans;">'
                 .'<div style="font-size:25pt;font-weight:bold;line-height:1.35;">'.e((string) $page['cover_title']).'</div>'
                 .(filled($page['cover_subtitle'] ?? null) ? '<div style="margin-top:3mm;font-size:15pt;">'.e((string) $page['cover_subtitle']).'</div>' : '')
                 .'</div>';
+            $pdf->WriteFixedPosHTML($html, $offsetMm + 22, $titleY + 6, $widthMm - 44, 43, 'auto');
+
+            return;
         }
 
-        return '<div style="position:absolute;left:'.$offsetMm.'mm;top:0;width:'.$widthMm.'mm;height:297mm;overflow:hidden;">'.$image.$content.'</div>';
+        if (! filled($page['text'])) {
+            return;
+        }
+
+        $panelHeight = 90;
+        $panelY = match ($page['text_position'] ?? 'bottom') {
+            'top' => 12,
+            'center' => 104,
+            default => 195,
+        };
+        $panelX = $offsetMm + 12;
+        $panelWidth = $widthMm - 24;
+        $opacity = max(70, min(100, (int) ($settings['text_panel_opacity'] ?? 92))) / 100;
+        $fontSize = max(14, min(30, (int) ($settings['font_size'] ?? 20)));
+
+        $this->drawTextPanel($pdf, $panelX, $panelY, $panelWidth, $panelHeight, $opacity);
+        $html = '<div dir="rtl" style="color:#111827;font-family:dejavusans;font-size:'.$fontSize.'pt;line-height:1.65;text-align:right;">'
+            .nl2br(e((string) $page['text']))
+            .'</div>';
+        $pdf->WriteFixedPosHTML($html, $panelX + 7, $panelY + 6, $panelWidth - 14, $panelHeight - 12, 'auto');
+    }
+
+    private function drawTextPanel(Mpdf $pdf, float $x, float $y, float $width, float $height, float $opacity): void
+    {
+        $pdf->SetAlpha($opacity);
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->Rect($x, $y, $width, $height, 'F');
+        $pdf->SetAlpha(1);
     }
 
     private function manifestCsv(array $manifest): string
@@ -452,10 +483,5 @@ class ProductionLayoutBuilder
         }
 
         return Storage::disk('local')->path($path);
-    }
-
-    private function fileUri(string $path): string
-    {
-        return 'file://'.str_replace('%2F', '/', rawurlencode($path));
     }
 }

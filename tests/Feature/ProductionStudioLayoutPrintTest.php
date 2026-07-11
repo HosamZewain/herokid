@@ -152,6 +152,8 @@ class ProductionStudioLayoutPrintTest extends TestCase
 
         $readerContents = Storage::disk('local')->get($layout->reader_pdf_path);
         $printContents = Storage::disk('local')->get($layout->print_pdf_path);
+        $this->assertGreaterThanOrEqual(15, $this->pdfTextBlockCount($readerContents), 'Reader PDF must contain cover, scene, and back-cover text blocks.');
+        $this->assertGreaterThanOrEqual(15, $this->pdfTextBlockCount($printContents), 'Print PDF must contain cover, scene, and back-cover text blocks.');
         preg_match_all('/\/Type\s*\/Page\b/', $readerContents, $readerPages);
         preg_match_all('/\/Type\s*\/Page\b/', $printContents, $printPages);
         $this->assertCount(28, $readerPages[0]);
@@ -318,5 +320,16 @@ class ProductionStudioLayoutPrintTest extends TestCase
         imagedestroy($image);
 
         return $bytes;
+    }
+
+    private function pdfTextBlockCount(string $contents): int
+    {
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $contents, $streams);
+
+        return collect($streams[1] ?? [])->sum(function (string $stream): int {
+            $decoded = @gzuncompress($stream);
+
+            return $decoded === false ? 0 : substr_count($decoded, 'BT');
+        });
     }
 }
