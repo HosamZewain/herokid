@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\ProductionStudio\ApproveGeneratedAssetAction;
 use App\Jobs\PollAiGenerationJob;
+use App\Jobs\ProcessStructuredAiJob;
 use App\Jobs\SubmitAiGenerationJob;
 use App\Models\AiModel;
 use App\Models\AiProvider;
@@ -19,6 +20,7 @@ use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
 use App\Services\Ai\ProductionPromptCompiler;
+use App\Services\ProductionStudio\IdentityReviewDispatcher;
 use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\StoryProductionPrompt;
@@ -1567,6 +1569,166 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $this->assertSame('under_review', $order->fresh()->status);
         $this->assertSame($promptBefore, StoryProductionPrompt::forOrder($order->fresh(['story'])));
+    }
+
+    public function test_identity_lock_uses_only_primary_face_and_approved_illustration_with_quality_and_variants(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        foreach (range(0, 2) as $index) {
+            Storage::disk('local')->put("orders/photos/kid-{$index}.png", $this->validPngBytes());
+        }
+        $this->enableOpenAi();
+
+        $project = $this->projectWithApprovedPhoto([
+            'orders/photos/kid-0.png',
+            'orders/photos/kid-1.png',
+            'orders/photos/kid-2.png',
+        ]);
+        $project->characterProfile->update([
+            'approved_reference_photos' => [0, 1, 2],
+            'body_reference_index' => 1,
+            'style_reference_index' => 2,
+        ]);
+        $project->update([
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'مشهد الهوية',
+            'story_text' => 'يبدأ الحدث داخل القصر.',
+            'visual_direction' => 'رينا تقف داخل القصر.',
+            'child_action_pose' => 'رينا تمسك الفانوس.',
+            'template_hero_name' => 'جنا',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes());
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'model_code' => 'gpt-image-2',
+                'character_sheet_id' => $sheet->id,
+                'reference_photo_indices' => [0, 1, 2],
+                'identity_lock' => true,
+                'generation_quality' => 'high',
+                'output_count' => 2,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $jobs = SceneGenerationJob::where('job_type', 'scene_image')->get();
+        $this->assertCount(2, $jobs);
+        foreach ($jobs as $job) {
+            $this->assertSame([0], $job->input_assets_json['reference_photo_indices']);
+            $this->assertSame(['primary_face_reference', 'approved_child_reference_illustration'], collect($job->input_assets_json['reference_assets'])->pluck('type')->all());
+            $this->assertTrue($job->input_assets_json['identity_lock']);
+            $this->assertSame('high', data_get($job->provider_request_json, 'generation_quality'));
+            $this->assertSame('0.1650', $job->estimated_cost);
+            $this->assertStringContainsString('Image 1: AUTHORITATIVE real-photo facial identity reference', $job->prompt_snapshot);
+            $this->assertStringContainsString('Image 2: approved illustration for secondary art consistency only', $job->prompt_snapshot);
+        }
+        Queue::assertPushed(SubmitAiGenerationJob::class, 2);
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'id' => 'img_identity_lock',
+                'data' => [['b64_json' => base64_encode($this->validPngBytes(32, 16))]],
+            ]),
+        ]);
+        (new SubmitAiGenerationJob($jobs->first()->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.openai.com/v1/images/edits'
+            && str_contains($request->body(), 'name="quality"')
+            && str_contains($request->body(), 'high')
+            && ! str_contains($request->body(), 'name="input_fidelity"')
+            && substr_count($request->body(), 'name="image[]"') === 2);
+    }
+
+    public function test_identity_correction_uses_primary_face_and_generated_scene_as_two_inputs(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableOpenAi();
+        $project = $this->projectWithApprovedPhoto();
+        $scene = $project->scenes()->create(['scene_number' => 1, 'title' => 'Scene', 'story_text' => 'Story']);
+        $source = $this->asset($project, 'scene_image', ['production_scene_id' => $scene->id]);
+        Storage::disk('local')->put($source->file_path, $this->validPngBytes(32, 16));
+
+        $this->actingAs($this->adminUser())
+            ->post(route('admin.production-studio.assets.identity-correction', [$project, $source]), [
+                'model_code' => 'gpt-image-2',
+                'generation_quality' => 'high',
+                'prompt_notes' => 'Restore the original eye shape.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        $this->assertSame('identity_correction', $job->generation_mode);
+        $this->assertSame(['primary_face_reference', 'generated_scene_base'], collect($job->input_assets_json['reference_assets'])->pluck('type')->all());
+        $this->assertSame($source->id, $job->input_assets_json['source_asset_id']);
+        $this->assertSame('0.1650', $job->estimated_cost);
+        $this->assertStringContainsString('Image 1 is the AUTHORITATIVE real child face reference.', $job->prompt_snapshot);
+        $this->assertStringContainsString('Image 2 is the generated scene', $job->prompt_snapshot);
+        Queue::assertPushed(SubmitAiGenerationJob::class);
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'id' => 'img_identity_correction',
+                'data' => [['b64_json' => base64_encode($this->validPngBytes(32, 16))]],
+            ]),
+        ]);
+        (new SubmitAiGenerationJob($job->id))->handle(app(AiProviderManager::class), app(GenerationInputAssetResolver::class));
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.openai.com/v1/images/edits'
+            && substr_count($request->body(), 'name="image[]"') === 2
+            && str_contains($request->body(), 'Image 1 is the AUTHORITATIVE real child face reference.'));
+    }
+
+    public function test_generated_scene_identity_review_stores_safe_structured_result_and_blocks_failed_approval(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableOpenAi();
+        $project = $this->projectWithApprovedPhoto();
+        $scene = $project->scenes()->create(['scene_number' => 1, 'title' => 'Scene']);
+        $asset = $this->asset($project, 'scene_image', ['production_scene_id' => $scene->id]);
+        Storage::disk('local')->put($asset->file_path, $this->validPngBytes(32, 16));
+
+        $job = app(IdentityReviewDispatcher::class)->dispatchFor($asset);
+        $this->assertNotNull($job);
+        Queue::assertPushed(ProcessStructuredAiJob::class);
+
+        $result = [
+            'decision' => 'fail',
+            'confidence' => 92,
+            'face_consistency' => 'Different face shape.',
+            'hair_consistency' => 'Hair differs.',
+            'age_consistency' => 'Consistent.',
+            'skin_tone_consistency' => 'Consistent.',
+            'concerns' => ['Eyes and jawline differ.'],
+            'recommendation' => 'Run identity correction.',
+        ];
+        Http::fake([
+            'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse($result)),
+        ]);
+
+        (new ProcessStructuredAiJob($job->id))->handle(app(AiProviderManager::class));
+
+        $asset->refresh();
+        $this->assertSame('completed', data_get($asset->metadata_json, 'identity_review.status'));
+        $this->assertSame('fail', data_get($asset->metadata_json, 'identity_review.result.decision'));
+        $this->assertSame(92, data_get($asset->metadata_json, 'identity_review.result.confidence'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('فشل فحص اتساق هوية الطفل');
+        app(ApproveGeneratedAssetAction::class)->execute($asset);
     }
 
     private function enableFal(string $key = 'test-fal-key'): void

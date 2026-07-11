@@ -144,6 +144,26 @@ Scene Images:
 
 - multiple versions are allowed for a scene
 - approving one final image unsets the previous final image for that scene
+- scene generation enables Identity Lock by default
+- Image 1 is always the original primary face reference and is authoritative for facial identity
+- Image 2 is the approved child reference illustration and is secondary for art consistency only
+- optional body and style references are not sent automatically while Identity Lock is enabled
+- the admin may request one or two independently billed variants
+- `Draft` uses medium quality and `Final` uses high quality when supported by the selected provider/model
+- when OpenAI vision is configured, a private structured identity-consistency review is queued after a scene image is created
+- a failed identity review blocks approval until the image is corrected or regenerated
+
+### Identity Correction
+
+Each generated scene asset has an optional `تصحيح هوية الطفل` action. It creates a new version instead of overwriting the source image.
+
+- Image 1: original primary face reference
+- Image 2: generated scene to preserve
+- the correction prompt asks OpenAI to preserve composition, environment, lighting, action, supporting characters, and key objects while correcting the child identity
+- high quality is the default for correction; medium remains available for a cheaper draft retry
+- automatic face masks are not fabricated because the current stack has no reliable face-region detector; this is a constrained full-image edit followed by identity review
+
+Identity review is a production consistency check, not biometric identification. Human approval remains mandatory.
 
 Cover Images:
 
@@ -156,7 +176,8 @@ Cover Images:
 - Generated child images are stored on the private `local` disk.
 - Generated assets are served only through authenticated admin routes with Production Studio AI review permission.
 - Generated assets are not written to `public/storage`.
-- Input child images are sent to Fal only when an authorized admin explicitly selects them in Studio.
+- Input child images are sent to the selected configured image provider only through server-side private requests initiated by an authorized Studio user.
+- OpenAI identity review receives the primary face reference and generated asset as server-side base64 inputs; image payloads and private paths are never stored in prompts, logs, or browser data.
 - API keys are redacted from stored error messages.
 
 ## Cost Tracking

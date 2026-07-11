@@ -7,6 +7,7 @@ use App\DTOs\Ai\StructuredAiResult;
 use App\Models\AiModel;
 use App\Models\AiProvider;
 use App\Models\ProductionProject;
+use App\Models\ProductionProjectAsset;
 use App\Models\ProductionScene;
 use App\Models\ProductionStoryVersion;
 use Illuminate\Http\Client\PendingRequest;
@@ -170,6 +171,53 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         );
     }
 
+    public function reviewGeneratedIdentityToJson(ProductionProject $project, ProductionProjectAsset $asset, AiModel $model, int $primaryPhotoIndex): StructuredAiResult
+    {
+        $project->loadMissing('order');
+        $photoInputs = $this->childPhotoInputs($project, [$primaryPhotoIndex]);
+        $generatedInput = $this->assetImageInput($asset);
+
+        if ($photoInputs === [] || ! $generatedInput) {
+            throw new RuntimeException('تعذر تجهيز صور مراجعة الهوية الخاصة.');
+        }
+
+        $prompt = implode("\n", [
+            'Review visual identity consistency for an internal children book production workflow.',
+            'Image 1 is the authoritative original child face reference. Image 2 is the generated story illustration.',
+            'This is not biometric identification. Evaluate only visible production consistency.',
+            'Compare face shape, eyes and spacing, nose, mouth and smile, cheeks, jawline, hairline, hairstyle, skin tone, apparent age, and natural proportions.',
+            'Return strict JSON. Do not identify the person, infer sensitive traits, or include image data or private paths.',
+            'Use decision pass when identity is clearly consistent, review when uncertain or the face is too small/obscured, and fail when it visibly depicts a different child.',
+        ]);
+
+        return $this->requestJson(
+            model: $model,
+            prompt: $prompt,
+            schemaName: 'herokid_generated_identity_review',
+            schema: [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'properties' => [
+                    'decision' => ['type' => 'string', 'enum' => ['pass', 'review', 'fail']],
+                    'confidence' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100],
+                    'face_consistency' => ['type' => 'string'],
+                    'hair_consistency' => ['type' => 'string'],
+                    'age_consistency' => ['type' => 'string'],
+                    'skin_tone_consistency' => ['type' => 'string'],
+                    'concerns' => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'recommendation' => ['type' => 'string'],
+                ],
+                'required' => ['decision', 'confidence', 'face_consistency', 'hair_consistency', 'age_consistency', 'skin_tone_consistency', 'concerns', 'recommendation'],
+            ],
+            content: array_merge([
+                ['type' => 'input_text', 'text' => $prompt],
+            ], $photoInputs, [$generatedInput]),
+            validator: fn (array $data): bool => $this->hasKeys($data, ['decision', 'confidence', 'face_consistency', 'hair_consistency', 'age_consistency', 'skin_tone_consistency', 'concerns', 'recommendation'])
+                && in_array($data['decision'], ['pass', 'review', 'fail'], true),
+            maxOutputTokens: 1000,
+        );
+    }
+
     public function testConnection(AiProvider $provider, bool $allowBillable = false): array
     {
         if (! $allowBillable) {
@@ -304,6 +352,17 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         }
 
         return null;
+    }
+
+    private function assetImageInput(ProductionProjectAsset $asset): ?array
+    {
+        if (! $asset->file_path || str_contains($asset->file_path, '..')) {
+            return null;
+        }
+
+        $dataUrl = $this->photoDataUrl($asset->file_path);
+
+        return $dataUrl ? ['type' => 'input_image', 'image_url' => $dataUrl] : null;
     }
 
     private function extractText(array $response): string

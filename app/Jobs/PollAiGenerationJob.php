@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
+use App\Services\ProductionStudio\IdentityReviewDispatcher;
 use App\Support\ProductionStudio;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -16,7 +17,7 @@ class PollAiGenerationJob implements ShouldQueue
 
     public function __construct(public int $generationJobId) {}
 
-    public function handle(AiProviderManager $providers): void
+    public function handle(AiProviderManager $providers, ?IdentityReviewDispatcher $identityReviews = null): void
     {
         $job = SceneGenerationJob::with(['project', 'scene', 'model.provider'])->findOrFail($this->generationJobId);
 
@@ -92,6 +93,8 @@ class PollAiGenerationJob implements ShouldQueue
                 'cost_source' => $status->actualCost ? 'provider_actual' : 'estimate_fallback',
                 'completed_at' => now(),
             ]);
+
+            $identityReviews?->dispatchFor($createdAsset);
 
             ProductionStudio::log($job->project, 'ai_generation.completed', 'اكتملت مهمة توليد صورة وأصبحت بانتظار المراجعة.', [
                 'job_id' => $job->id,

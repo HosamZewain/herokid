@@ -4,12 +4,24 @@ namespace App\Actions\ProductionStudio;
 
 use App\Models\ProductionProjectAsset;
 use App\Support\ProductionStudio;
+use RuntimeException;
 
 class ApproveGeneratedAssetAction
 {
     public function execute(ProductionProjectAsset $asset, ?string $notes = null): ProductionProjectAsset
     {
         $asset->loadMissing(['project']);
+
+        $identityReview = data_get($asset->metadata_json, 'identity_review');
+        if ($asset->asset_type === 'scene_image' && is_array($identityReview)) {
+            if (in_array(data_get($identityReview, 'status'), ['queued', 'processing'], true)) {
+                throw new RuntimeException('انتظر اكتمال فحص اتساق هوية الطفل قبل اعتماد الصورة.');
+            }
+
+            if (data_get($identityReview, 'status') === 'completed' && data_get($identityReview, 'result.decision') === 'fail') {
+                throw new RuntimeException('فشل فحص اتساق هوية الطفل. استخدم تصحيح الهوية أو أعد التوليد قبل الاعتماد.');
+            }
+        }
 
         if ($asset->asset_type === 'character_sheet') {
             $asset->project->assets()

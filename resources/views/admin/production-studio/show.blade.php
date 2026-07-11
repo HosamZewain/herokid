@@ -911,7 +911,17 @@
                             @if($approvedCharacterSheet)
                                 <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
                             @endif
+                            <input type="hidden" name="identity_lock" value="1">
+                            <select name="generation_quality" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                <option value="medium">Draft · medium</option>
+                                <option value="high">Final · high</option>
+                            </select>
+                            <select name="output_count" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right">
+                                <option value="1">نسخة واحدة</option>
+                                <option value="2">نسختان · تكلفة مضاعفة</option>
+                            </select>
                             <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-gray-300 text-right" placeholder="ملاحظات اختيارية">
+                            <p class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-800">Identity Lock مفعّل. صورة الوجه الأساسية هي المرجع الأول والحاكم، والرسم المعتمد مرجع ثانوي فقط.</p>
                             <p class="text-xs font-bold text-gray-500" data-scene-readiness-note>اختر مشهدًا جاهزًا يحتوي على توجيه بصري.</p>
                             <button @disabled(!$aiAvailable || !$profileReady || !$approvedCharacterSheet || !$firstScene) class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white disabled:bg-gray-300">توليد المشهد المحدد</button>
                             <div data-studio-ai-feedback class="hidden rounded-xl border p-3 text-sm font-bold"></div>

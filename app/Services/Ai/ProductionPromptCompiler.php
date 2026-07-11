@@ -9,6 +9,44 @@ use Illuminate\Support\Str;
 
 class ProductionPromptCompiler
 {
+    public function compileIdentityCorrection(ProductionProject $project, ProductionProjectAsset $asset, ?string $manualNotes = null): array
+    {
+        $project->loadMissing(['order.story', 'characterProfile']);
+        $scene = $asset->scene;
+        $profile = $project->characterProfile;
+
+        $lines = [
+            'TASK: Correct only the child identity inside the supplied generated story scene.',
+            'Image 1 is the AUTHORITATIVE real child face reference.',
+            'Image 2 is the generated scene that must keep its composition, environment, lighting, action, camera angle, supporting characters, and objects.',
+            'Replace only the depicted child identity so the child unmistakably matches Image 1.',
+            'Preserve exact real-photo-derived face shape, eyes, eye spacing, nose, mouth, smile characteristics, cheeks, jawline, hairline, hair texture, skin tone, apparent age, and natural proportions.',
+            'Do not redesign, beautify, age up, stylize into a different child, or copy clothing/background from Image 1.',
+            'Do not turn the result into a portrait. Keep the existing wide 3:2 landscape story-scene composition.',
+            'Do not add text, logos, labels, watermarks, badges, or pseudo-writing.',
+            'Scene title: '.($scene?->title ?: 'Not available'),
+            'Scene action: '.($scene?->child_action_pose ?: 'Keep the exact action from Image 2'),
+            'Child identity notes: '.($profile?->appearance_summary ?: 'Use Image 1'),
+            'Hair: '.($profile?->hair_details ?: 'Use Image 1'),
+            'Skin tone: '.($profile?->skin_tone ?: 'Use Image 1'),
+            'Facial traits: '.($profile?->eye_color_traits ?: 'Use Image 1'),
+        ];
+
+        if (filled($manualNotes)) {
+            $lines[] = 'Additional reviewer correction notes: '.Str::squish((string) $manualNotes);
+        }
+
+        return [
+            'prompt' => implode("\n", $lines),
+            'negative_prompt' => 'changed scene composition, changed environment, changed action, changed camera angle, changed supporting characters, different child, changed face, changed hairstyle, adult-looking child, makeup, glamour, portrait layout, text, logo, watermark, badge, pseudo-writing',
+            'personalization_debug' => [
+                'identity_correction' => true,
+                'source_asset_id' => $asset->id,
+                'child_hero_name' => $project->personalized_hero_name ?: $project->order?->child_name,
+            ],
+        ];
+    }
+
     public function compile(
         ProductionProject $project,
         ?ProductionScene $scene,
@@ -16,6 +54,7 @@ class ProductionPromptCompiler
         string $stylePreset,
         ?string $manualNotes = null,
         ?ProductionProjectAsset $characterSheet = null,
+        array $referenceMetadata = [],
     ): array {
         $project->loadMissing(['order.story', 'characterProfile']);
 
@@ -39,6 +78,7 @@ class ProductionPromptCompiler
                 childHero: $childHero,
                 manualNotes: $manualNotes,
                 characterSheet: $characterSheet,
+                referenceMetadata: $referenceMetadata,
                 personalizationApplied: $personalizationApplied,
                 oldHeroRemaining: $oldHeroRemaining,
             );
@@ -308,6 +348,7 @@ class ProductionPromptCompiler
         string $childHero,
         ?string $manualNotes,
         ?ProductionProjectAsset $characterSheet,
+        array $referenceMetadata,
         bool $personalizationApplied,
         bool $oldHeroRemaining,
     ): array {
@@ -357,6 +398,11 @@ class ProductionPromptCompiler
             'TASK: Transform the supplied child identity reference into the exact story scene below.',
             'This is a scene recreation task, not a generic image inspired by the story.',
             'CRITICAL OUTPUT TYPE — WIDE STORY SCENE, NOT A CHARACTER PORTRAIT.',
+            '',
+            'REFERENCE IMAGE AUTHORITY — FOLLOW THIS ORDER EXACTLY:',
+            ...$this->referenceInstructions($referenceMetadata),
+            'If any references conflict, Image 1 always wins for the real child facial identity.',
+            'Never blend facial features from different references into a new child.',
             '',
             'MANDATORY SCENE CONTENT — ALL OF THESE MUST BE VISIBLE:',
             '- Scene title: '.($scene->title ?: 'Not available'),
@@ -436,6 +482,29 @@ class ProductionPromptCompiler
                 'personalized_scene_context_included' => $personalizationApplied && ! $oldHeroRemaining,
             ],
         ];
+    }
+
+    private function referenceInstructions(array $referenceMetadata): array
+    {
+        if ($referenceMetadata === []) {
+            return ['No indexed reference metadata was supplied.'];
+        }
+
+        return collect($referenceMetadata)
+            ->values()
+            ->map(function (array $reference, int $index): string {
+                $number = $index + 1;
+                $type = data_get($reference, 'type');
+
+                return match ($type) {
+                    'primary_face_reference' => "Image {$number}: AUTHORITATIVE real-photo facial identity reference. Preserve this face above every other reference.",
+                    'approved_child_reference_illustration' => "Image {$number}: approved illustration for secondary art consistency only. It must never override Image 1 facial identity.",
+                    'optional_body_reference' => "Image {$number}: body-proportion reference only. Do not copy its face, clothing, pose, or background.",
+                    'optional_style_reference' => "Image {$number}: optional style reference only. Do not copy its face, clothing, pose, or background.",
+                    default => "Image {$number}: secondary child reference only. Image 1 remains authoritative for facial identity.",
+                };
+            })
+            ->all();
     }
 
     private function isGirl(string $gender): bool

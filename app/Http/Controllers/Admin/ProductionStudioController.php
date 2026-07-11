@@ -248,7 +248,8 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'character_sheet';
 
         try {
-            $job = $action->execute($project, $validated);
+            $jobs = $this->createImageGenerationCopies($action, $project, $validated);
+            $job = $jobs[0];
         } catch (\Throwable $exception) {
             if ($request->expectsJson()) {
                 return $this->studioJsonError($this->safeAiError($exception));
@@ -258,10 +259,10 @@ class ProductionStudioController extends Controller
         }
 
         if ($request->expectsJson()) {
-            return $this->studioJsonSuccess('تم إنشاء مهمة توليد الصورة المرجعية للطفل وهي الآن في قائمة الانتظار.', $project, $job);
+            return $this->studioJsonSuccess('تم إنشاء '.count($jobs).' مهمة توليد للصورة المرجعية وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
-        return back()->with('success', 'تم إنشاء مهمة توليد الصورة المرجعية للطفل وهي الآن في قائمة الانتظار.');
+        return back()->with('success', 'تم إنشاء '.count($jobs).' مهمة توليد للصورة المرجعية وهي الآن في قائمة الانتظار.');
     }
 
     public function generateSceneImage(Request $request, ProductionProject $project, ProductionScene $scene, CreateGenerationJobAction $action)
@@ -274,7 +275,8 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'character_scene';
 
         try {
-            $job = $action->execute($project, $validated, $scene);
+            $jobs = $this->createImageGenerationCopies($action, $project, $validated, $scene);
+            $job = $jobs[0];
         } catch (\Throwable $exception) {
             if ($request->expectsJson()) {
                 return $this->studioJsonError($this->safeAiError($exception));
@@ -284,10 +286,10 @@ class ProductionStudioController extends Controller
         }
 
         if ($request->expectsJson()) {
-            return $this->studioJsonSuccess('تم إنشاء مهمة توليد صورة المشهد وهي الآن في قائمة الانتظار.', $project, $job);
+            return $this->studioJsonSuccess('تم إنشاء '.count($jobs).' مهمة توليد للمشهد وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
-        return back()->with('success', 'تم إنشاء مهمة توليد صورة المشهد وهي الآن في قائمة الانتظار.');
+        return back()->with('success', 'تم إنشاء '.count($jobs).' مهمة توليد للمشهد وهي الآن في قائمة الانتظار.');
     }
 
     public function generateCoverImage(Request $request, ProductionProject $project, CreateGenerationJobAction $action)
@@ -299,7 +301,8 @@ class ProductionStudioController extends Controller
         $validated['generation_mode'] = 'cover_generation';
 
         try {
-            $job = $action->execute($project, $validated);
+            $jobs = $this->createImageGenerationCopies($action, $project, $validated);
+            $job = $jobs[0];
         } catch (\Throwable $exception) {
             if ($request->expectsJson()) {
                 return $this->studioJsonError($this->safeAiError($exception));
@@ -309,10 +312,10 @@ class ProductionStudioController extends Controller
         }
 
         if ($request->expectsJson()) {
-            return $this->studioJsonSuccess('تم إنشاء مهمة توليد الغلاف وهي الآن في قائمة الانتظار.', $project, $job);
+            return $this->studioJsonSuccess('تم إنشاء '.count($jobs).' مهمة توليد للغلاف وهي الآن في قائمة الانتظار.', $project, $job);
         }
 
-        return back()->with('success', 'تم إنشاء مهمة توليد الغلاف وهي الآن في قائمة الانتظار.');
+        return back()->with('success', 'تم إنشاء '.count($jobs).' مهمة توليد للغلاف وهي الآن في قائمة الانتظار.');
     }
 
     public function retryGeneration(Request $request, ProductionProject $project, SceneGenerationJob $generationJob, CreateGenerationJobAction $action)
@@ -332,6 +335,9 @@ class ProductionStudioController extends Controller
             'reference_photo_indices' => data_get($generationJob->input_assets_json, 'reference_photo_indices', []),
             'character_sheet_id' => data_get($generationJob->input_assets_json, 'character_sheet_id'),
             'prompt_notes' => $validated['prompt_notes'] ?? null,
+            'identity_lock' => data_get($generationJob->provider_request_json, 'identity_lock', true),
+            'generation_quality' => data_get($generationJob->provider_request_json, 'generation_quality', 'medium'),
+            'output_count' => 1,
         ];
 
         try {
@@ -351,13 +357,49 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم إنشاء محاولة جديدة بناءً على المهمة السابقة.');
     }
 
+    public function correctAssetIdentity(Request $request, ProductionProject $project, ProductionProjectAsset $asset, CreateGenerationJobAction $action)
+    {
+        $this->ensureEnabled();
+        abort_unless($asset->production_project_id === $project->id && $asset->asset_type === 'scene_image', 404);
+
+        $validated = $request->validate([
+            'model_code' => ['required', 'string', 'exists:ai_models,code'],
+            'generation_quality' => ['required', Rule::in(['medium', 'high'])],
+            'prompt_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $job = $action->executeIdentityCorrection($project, $asset, $validated);
+        } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
+            return back()->withErrors(['identity_correction' => $this->safeAiError($exception)])->withInput();
+        }
+
+        if ($request->expectsJson()) {
+            return $this->studioJsonSuccess('تم إنشاء مهمة تصحيح الهوية مع الحفاظ على المشهد.', $project, $job);
+        }
+
+        return back()->with('success', 'تم إنشاء مهمة تصحيح الهوية مع الحفاظ على المشهد.');
+    }
+
     public function approveAsset(Request $request, ProductionProject $project, ProductionProjectAsset $asset, ApproveGeneratedAssetAction $action)
     {
         $this->ensureEnabled();
         abort_unless($asset->production_project_id === $project->id, 404);
 
         $validated = $request->validate(['review_notes' => 'nullable|string|max:2000']);
-        $action->execute($asset, $validated['review_notes'] ?? null);
+        try {
+            $action->execute($asset, $validated['review_notes'] ?? null);
+        } catch (\Throwable $exception) {
+            if ($request->expectsJson()) {
+                return $this->studioJsonError($this->safeAiError($exception));
+            }
+
+            return back()->withErrors(['asset_approval' => $this->safeAiError($exception)]);
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -1024,6 +1066,9 @@ class ProductionStudioController extends Controller
             'reference_photo_indices.*' => ['integer', 'min:0'],
             'prompt_notes' => ['nullable', 'string', 'max:3000'],
             'negative_prompt' => ['nullable', 'string', 'max:2000'],
+            'identity_lock' => ['nullable', 'boolean'],
+            'generation_quality' => ['nullable', Rule::in(['medium', 'high'])],
+            'output_count' => ['nullable', 'integer', 'min:1', 'max:2'],
         ];
 
         if (in_array($assetType, ['scene_image', 'cover_image'], true)) {
@@ -1035,6 +1080,18 @@ class ProductionStudioController extends Controller
         }
 
         return $rules;
+    }
+
+    private function createImageGenerationCopies(CreateGenerationJobAction $action, ProductionProject $project, array $data, ?ProductionScene $scene = null): array
+    {
+        $count = max(1, min(2, (int) ($data['output_count'] ?? 1)));
+        $jobs = [];
+
+        for ($copy = 0; $copy < $count; $copy++) {
+            $jobs[] = $action->execute($project, $data, $scene);
+        }
+
+        return $jobs;
     }
 
     private function activeModelsForDriverCapability(string $driver, string $capability)

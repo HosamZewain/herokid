@@ -28,6 +28,17 @@ class SubmitAiGenerationJob implements ShouldQueue
             $characterSheet = data_get($job->input_assets_json, 'character_sheet_id')
                 ? ProductionProjectAsset::find((int) data_get($job->input_assets_json, 'character_sheet_id'))
                 : null;
+            $sourceAsset = data_get($job->input_assets_json, 'source_asset_id')
+                ? ProductionProjectAsset::findOrFail((int) data_get($job->input_assets_json, 'source_asset_id'))
+                : null;
+            $resolvedInputs = $job->generation_mode === 'identity_correction' && $sourceAsset
+                ? $inputAssets->resolveIdentityCorrectionWithMetadata($job->project, $sourceAsset)['assets']
+                : $inputAssets->resolve(
+                    $job->project,
+                    data_get($job->input_assets_json, 'reference_photo_indices', []),
+                    $characterSheet,
+                    (bool) data_get($job->input_assets_json, 'character_sheet_first', true),
+                );
 
             $request = new GenerationRequest(
                 project: $job->project,
@@ -37,14 +48,11 @@ class SubmitAiGenerationJob implements ShouldQueue
                 generationMode: $job->generation_mode,
                 prompt: $job->prompt_snapshot,
                 negativePrompt: $job->negative_prompt_snapshot ?? '',
-                inputAssets: $inputAssets->resolve(
-                    $job->project,
-                    data_get($job->input_assets_json, 'reference_photo_indices', []),
-                    $characterSheet,
-                    (bool) data_get($job->input_assets_json, 'character_sheet_first', true),
-                ),
+                inputAssets: $resolvedInputs,
                 options: [
                     'client_request_id' => 'hero-kid-generation-'.$job->id,
+                    'quality' => data_get($job->provider_request_json, 'generation_quality', 'medium'),
+                    'identity_lock' => (bool) data_get($job->provider_request_json, 'identity_lock', false),
                 ],
             );
 

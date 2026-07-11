@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\ProductionProjectAsset;
 use App\Models\ProductionStoryVersion;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
@@ -47,6 +48,13 @@ class ProcessStructuredAiJob implements ShouldQueue
                     $job->scene,
                     $job->model,
                 ),
+                'identity_review' => $provider->reviewGeneratedIdentityToJson(
+                    $job->project,
+                    ProductionProjectAsset::where('production_project_id', $job->production_project_id)
+                        ->findOrFail((int) data_get($job->input_assets_json, 'asset_id')),
+                    $job->model,
+                    (int) data_get($job->input_assets_json, 'primary_face_reference_index'),
+                ),
                 default => throw new \RuntimeException('Unsupported structured AI job type.'),
             };
 
@@ -62,6 +70,10 @@ class ProcessStructuredAiJob implements ShouldQueue
                 'status' => 'completed',
                 'completed_at' => now(),
             ]);
+
+            if ($job->job_type === 'identity_review') {
+                $this->storeIdentityReviewResult($job, $result->data);
+            }
 
             ProductionStudio::log($job->project, 'ai_text_vision.completed', 'تم تنفيذ مهمة نص/رؤية بالذكاء الاصطناعي.', [
                 'job_id' => $job->id,
@@ -95,11 +107,39 @@ class ProcessStructuredAiJob implements ShouldQueue
             'failed_at' => now(),
         ]);
 
+        if ($job->job_type === 'identity_review') {
+            $asset = ProductionProjectAsset::where('production_project_id', $job->production_project_id)
+                ->find((int) data_get($job->input_assets_json, 'asset_id'));
+            if ($asset) {
+                $metadata = $asset->metadata_json ?? [];
+                $metadata['identity_review'] = [
+                    'status' => 'failed',
+                    'job_id' => $job->id,
+                    'message' => $message,
+                ];
+                $asset->update(['metadata_json' => $metadata]);
+            }
+        }
+
         ProductionStudio::log($job->project, 'ai_text_vision.failed', 'فشلت مهمة نص/رؤية بالذكاء الاصطناعي.', [
             'job_id' => $job->id,
             'job_type' => $job->job_type,
             'error' => $message,
         ], $job->initiator);
+    }
+
+    private function storeIdentityReviewResult(SceneGenerationJob $job, array $result): void
+    {
+        $asset = ProductionProjectAsset::where('production_project_id', $job->production_project_id)
+            ->findOrFail((int) data_get($job->input_assets_json, 'asset_id'));
+        $metadata = $asset->metadata_json ?? [];
+        $metadata['identity_review'] = [
+            'status' => 'completed',
+            'job_id' => $job->id,
+            'result' => $result,
+            'reviewed_at' => now()->toIso8601String(),
+        ];
+        $asset->update(['metadata_json' => $metadata]);
     }
 
     private function safeMessage(Throwable $exception): string

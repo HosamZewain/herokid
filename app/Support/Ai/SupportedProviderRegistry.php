@@ -149,6 +149,10 @@ class SupportedProviderRegistry
                             'scene_size' => '1536x1024',
                             'portrait_size' => '1024x1536',
                             'quality' => 'medium',
+                            'quality_costs' => [
+                                'medium' => '0.0410',
+                                'high' => '0.1650',
+                            ],
                         ],
                         'notes' => 'OpenAI image generation/editing option for child reference, scene, and cover pilots. Medium quality estimated price is used for cost preview.',
                         'sort_order' => 30,
@@ -171,6 +175,10 @@ class SupportedProviderRegistry
                             'scene_size' => '1536x1024',
                             'portrait_size' => '1024x1536',
                             'quality' => 'medium',
+                            'quality_costs' => [
+                                'medium' => '0.0630',
+                                'high' => '0.2500',
+                            ],
                         ],
                         'notes' => 'Fallback OpenAI image model option when GPT Image 2 is unavailable on the account.',
                         'sort_order' => 40,

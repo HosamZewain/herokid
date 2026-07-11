@@ -71,12 +71,24 @@
                     @endforeach
                 </select>
                 <input type="hidden" name="style_preset" value="premium_storybook">
+                <input type="hidden" name="identity_lock" value="1">
                 @if($approvedCharacterSheet)
                     <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
                 @endif
+                <select name="generation_quality" @disabled(!$aiAvailable || !$ready) class="rounded-lg border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700">
+                    <option value="medium">Draft · medium</option>
+                    <option value="high">Final · high</option>
+                </select>
+                <select name="output_count" @disabled(!$aiAvailable || !$ready) class="rounded-lg border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700">
+                    <option value="1">نسخة واحدة</option>
+                    <option value="2">نسختان · تكلفة مضاعفة</option>
+                </select>
                 <button @disabled(!$aiAvailable || !$ready) title="{{ !$scenePersonalized ? 'خصّص المشهد باسم الطفل أولًا' : '' }}" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white disabled:bg-gray-300">توليد</button>
                 <div data-studio-ai-feedback class="hidden rounded-lg border px-3 py-1.5 text-xs font-bold"></div>
             </form>
+            <div class="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+                Identity Lock مفعّل: صورة الوجه الأساسية هي Image 1 والمرجع الحاكم للهوية، والصورة المرجعية المعتمدة هي Image 2 للاتساق الفني فقط. صور الجسم والستايل لن تُرسل تلقائيًا.
+            </div>
         @endcan
         @can('production_studio.scene_edit')
             <form method="POST" action="{{ route('admin.production-studio.scenes.improve', [$project, $scene]) }}" class="flex flex-wrap justify-end gap-2">

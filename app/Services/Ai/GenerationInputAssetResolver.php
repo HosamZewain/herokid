@@ -60,6 +60,34 @@ class GenerationInputAssetResolver
         ];
     }
 
+    public function resolveIdentityCorrectionWithMetadata(ProductionProject $project, ProductionProjectAsset $sceneAsset): array
+    {
+        if ($sceneAsset->production_project_id !== $project->id || $sceneAsset->asset_type !== 'scene_image') {
+            throw new RuntimeException('Identity correction requires a scene image from this project.');
+        }
+
+        $primary = $project->characterProfile?->primaryFaceReferenceIndex();
+
+        if ($primary === null) {
+            throw new RuntimeException('اختر صورة وجه أساسية قبل تصحيح الهوية.');
+        }
+
+        $resolved = $this->resolveWithMetadata($project, [$primary]);
+
+        if (! $sceneAsset->file_path || str_contains($sceneAsset->file_path, '..')) {
+            throw new RuntimeException('Generated scene image is not available for identity correction.');
+        }
+
+        $resolved['assets'][] = $this->dataUriFromPath($sceneAsset->file_path);
+        $resolved['metadata'][] = [
+            'type' => 'generated_scene_base',
+            'asset_id' => $sceneAsset->id,
+            'path' => $sceneAsset->file_path,
+        ];
+
+        return $resolved;
+    }
+
     private function referenceRole($profile, int $index): string
     {
         if ($profile?->primaryFaceReferenceIndex() === $index) {

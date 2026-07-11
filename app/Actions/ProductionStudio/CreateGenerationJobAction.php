@@ -42,7 +42,9 @@ class CreateGenerationJobAction
         $this->validateSceneReady($scene, $data);
 
         $characterSheet = $this->resolveCharacterReference($project, $data);
-        $referencePhotoIndices = $this->referencePhotoIndicesForJob($project, $data, $characterSheet);
+        $identityLock = ($data['generation_mode'] ?? null) === 'character_scene'
+            && (bool) ($data['identity_lock'] ?? true);
+        $referencePhotoIndices = $this->referencePhotoIndicesForJob($project, $data, $characterSheet, $identityLock);
         $characterSheetFirst = ($data['generation_mode'] ?? null) !== 'character_scene';
         $resolvedInputs = $this->inputAssets->resolveWithMetadata($project, $referencePhotoIndices, $characterSheet, $characterSheetFirst);
         $inputAssets = $resolvedInputs['assets'];
@@ -58,6 +60,7 @@ class CreateGenerationJobAction
             stylePreset: $data['style_preset'] ?? 'premium_storybook',
             manualNotes: $data['prompt_notes'] ?? null,
             characterSheet: $characterSheet,
+            referenceMetadata: $resolvedInputs['metadata'],
         );
 
         $request = new GenerationRequest(
@@ -71,6 +74,8 @@ class CreateGenerationJobAction
             inputAssets: $inputAssets,
             options: [
                 'style_preset' => $data['style_preset'] ?? 'premium_storybook',
+                'quality' => $data['generation_quality'] ?? 'medium',
+                'identity_lock' => $identityLock,
             ],
         );
 
@@ -90,6 +95,7 @@ class CreateGenerationJobAction
                 'input_count' => count($inputAssets),
                 'reference_assets' => $resolvedInputs['metadata'],
                 'character_sheet_first' => $characterSheetFirst,
+                'identity_lock' => $identityLock,
                 'primary_face_reference_index' => $project->characterProfile?->primaryFaceReferenceIndex(),
                 'body_reference_index' => $project->characterProfile?->bodyReferenceIndex(),
                 'style_reference_index' => $project->characterProfile?->styleReferenceIndex(),
@@ -109,7 +115,7 @@ class CreateGenerationJobAction
                     'supports_multiple_references' => $providerModel->supportsMultipleReferences(),
                     'supports_text_to_image_only' => $providerModel->supportsTextToImageOnly(),
                     'supports_image_editing' => $providerModel->supportsImageEditing(),
-                    'quality' => data_get($providerModel->configuration_json, 'quality'),
+                    'quality' => $request->options['quality'],
                     'scene_size' => data_get($providerModel->configuration_json, 'scene_size'),
                     'portrait_size' => data_get($providerModel->configuration_json, 'portrait_size'),
                 ],
@@ -118,6 +124,8 @@ class CreateGenerationJobAction
                     'max_retries' => $providerModel->provider->default_max_retries,
                 ],
                 'style_preset' => $request->options['style_preset'],
+                'identity_lock' => $identityLock,
+                'generation_quality' => $request->options['quality'],
                 'personalization_debug' => $compiled['personalization_debug'] ?? null,
             ],
             'estimated_cost' => $estimate->amount,
@@ -131,6 +139,82 @@ class CreateGenerationJobAction
             'job_type' => $job->job_type,
             'generation_mode' => $job->generation_mode,
             'model' => $providerModel->code,
+        ], auth()->user());
+
+        SubmitAiGenerationJob::dispatch($job->id);
+
+        return $job;
+    }
+
+    public function executeIdentityCorrection(ProductionProject $project, ProductionProjectAsset $sourceAsset, array $data): SceneGenerationJob
+    {
+        $project->loadMissing(['order', 'characterProfile']);
+        $sourceAsset->loadMissing('scene');
+        $model = $this->resolveModel($data['model_code'] ?? null, 'image_editing');
+
+        if ($model->provider?->driver !== 'openai' || ! $model->supportsMultipleReferences()) {
+            throw new RuntimeException('تصحيح الهوية يحتاج نموذج OpenAI يدعم أكثر من صورة مرجعية.');
+        }
+
+        $this->validateProfileReady($project);
+        $provider = $this->providers->imageProvider('openai');
+        $resolvedInputs = $this->inputAssets->resolveIdentityCorrectionWithMetadata($project, $sourceAsset);
+        $compiled = $this->compiler->compileIdentityCorrection($project, $sourceAsset, $data['prompt_notes'] ?? null);
+        $quality = $data['generation_quality'] ?? 'high';
+        $request = new GenerationRequest(
+            project: $project,
+            scene: $sourceAsset->scene,
+            model: $model,
+            jobType: 'scene_image',
+            generationMode: 'identity_correction',
+            prompt: $compiled['prompt'],
+            negativePrompt: $compiled['negative_prompt'],
+            inputAssets: $resolvedInputs['assets'],
+            options: [
+                'style_preset' => data_get($sourceAsset->generationJob?->provider_request_json, 'style_preset', 'premium_storybook'),
+                'quality' => $quality,
+                'identity_lock' => true,
+            ],
+        );
+        $estimate = $provider->estimateCost($request);
+
+        $job = $project->generationJobs()->create([
+            'production_scene_id' => $sourceAsset->production_scene_id,
+            'ai_provider_id' => $model->ai_provider_id,
+            'ai_model_id' => $model->id,
+            'job_type' => 'scene_image',
+            'generation_mode' => 'identity_correction',
+            'prompt_snapshot' => $request->prompt,
+            'negative_prompt_snapshot' => $request->negativePrompt,
+            'input_assets_json' => [
+                'source_asset_id' => $sourceAsset->id,
+                'input_count' => count($resolvedInputs['assets']),
+                'reference_assets' => $resolvedInputs['metadata'],
+                'identity_lock' => true,
+                'primary_face_reference_index' => $project->characterProfile?->primaryFaceReferenceIndex(),
+            ],
+            'provider_request_json' => [
+                'provider_driver' => 'openai',
+                'provider_display_name' => $model->provider->public_name,
+                'model_code' => $model->code,
+                'model_display_name' => $model->display_name,
+                'style_preset' => $request->options['style_preset'],
+                'identity_lock' => true,
+                'generation_quality' => $quality,
+                'identity_correction_source_asset_id' => $sourceAsset->id,
+                'personalization_debug' => $compiled['personalization_debug'],
+            ],
+            'estimated_cost' => $estimate->amount,
+            'cost_source' => $estimate->source,
+            'status' => 'queued',
+            'initiated_by_user_id' => auth()->id(),
+        ]);
+
+        ProductionStudio::log($project, 'ai_generation.identity_correction_queued', 'تم إنشاء مهمة تصحيح هوية للصورة المولدة.', [
+            'job_id' => $job->id,
+            'source_asset_id' => $sourceAsset->id,
+            'scene_id' => $sourceAsset->production_scene_id,
+            'model' => $model->code,
         ], auth()->user());
 
         SubmitAiGenerationJob::dispatch($job->id);
@@ -263,7 +347,7 @@ class CreateGenerationJobAction
         return null;
     }
 
-    private function referencePhotoIndicesForJob(ProductionProject $project, array $data, ?ProductionProjectAsset $characterSheet): array
+    private function referencePhotoIndicesForJob(ProductionProject $project, array $data, ?ProductionProjectAsset $characterSheet, bool $identityLock): array
     {
         $profile = $project->characterProfile;
         $requested = $data['reference_photo_indices'] ?? [];
@@ -272,6 +356,10 @@ class CreateGenerationJobAction
 
         if ($primary !== null && ! in_array($primary, $indices, true)) {
             array_unshift($indices, $primary);
+        }
+
+        if ($identityLock) {
+            return $this->approvedReferencePhotoIndices($project, $primary === null ? [] : [$primary]);
         }
 
         foreach ([$profile?->bodyReferenceIndex(), $profile?->styleReferenceIndex()] as $optionalIndex) {

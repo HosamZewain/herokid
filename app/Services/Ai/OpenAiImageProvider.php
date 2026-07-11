@@ -53,8 +53,11 @@ class OpenAiImageProvider implements AiImageProvider
 
     public function estimateCost(GenerationRequest $request): MoneyValue
     {
+        $quality = (string) ($request->options['quality'] ?? data_get($request->model->configuration_json, 'quality', 'medium'));
+        $qualityCost = data_get($request->model->configuration_json, "quality_costs.{$quality}");
+
         return new MoneyValue(
-            $request->model->estimatedCost(),
+            is_numeric($qualityCost) ? (string) $qualityCost : $request->model->estimatedCost(),
             $request->model->estimated_cost_currency ?? 'USD',
             $request->model->estimated_cost_type ?? 'estimate',
         );
@@ -199,11 +202,11 @@ class OpenAiImageProvider implements AiImageProvider
             'model' => $request->model->code,
             'prompt' => $request->prompt,
             'size' => $this->sizeFor($request),
-            'quality' => data_get($request->model->configuration_json, 'quality', 'medium'),
+            'quality' => $request->options['quality'] ?? data_get($request->model->configuration_json, 'quality', 'medium'),
             'n' => 1,
         ];
 
-        if ((bool) data_get($request->model->configuration_json, 'supports_high_input_fidelity', false)) {
+        if ($request->model->code !== 'gpt-image-2' && (bool) data_get($request->model->configuration_json, 'supports_high_input_fidelity', false)) {
             $payload['input_fidelity'] = 'high';
         }
 
