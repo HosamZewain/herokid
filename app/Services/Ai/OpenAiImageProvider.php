@@ -260,7 +260,7 @@ class OpenAiImageProvider implements AiImageProvider
 
     private function sizeFor(GenerationRequest $request): string
     {
-        if ($request->generationMode === 'character_scene') {
+        if ($request->jobType === 'scene_image') {
             return (string) data_get($request->model->configuration_json, 'scene_size', '1536x1024');
         }
 

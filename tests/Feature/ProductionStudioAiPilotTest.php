@@ -1687,6 +1687,8 @@ class ProductionStudioAiPilotTest extends TestCase
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.openai.com/v1/images/edits'
             && substr_count($request->body(), 'name="image[]"') === 2
+            && str_contains($request->body(), 'name="size"')
+            && str_contains($request->body(), '1536x1024')
             && str_contains($request->body(), 'Image 1 is the AUTHORITATIVE real child face reference.'));
     }
 
