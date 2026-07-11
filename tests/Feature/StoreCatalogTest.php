@@ -128,7 +128,7 @@ class StoreCatalogTest extends TestCase
 
     public function test_product_views_and_add_to_cart_do_not_emit_external_ecommerce_events(): void
     {
-        config(['services.meta_pixel.id' => '1241523867742555']);
+        config(['services.meta_pixel.id' => '1011553001490691']);
         $product = $this->product('pixel-poster', 100);
         $variant = ProductVariant::create([
             'product_id' => $product->id,

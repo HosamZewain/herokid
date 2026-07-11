@@ -31,13 +31,15 @@ class CartCheckoutTest extends TestCase
     public function test_public_tracking_keeps_page_views_but_does_not_send_cart_ecommerce_events(): void
     {
         Storage::fake('local');
-        config(['services.meta_pixel.id' => '1241523867742555']);
+        config(['services.meta_pixel.id' => '1011553001490691']);
 
         $this->get(route('home'))
             ->assertOk()
             ->assertSee('connect.facebook.net/en_US/fbevents.js', false)
             ->assertSee("fbq('track', 'PageView')", false)
-            ->assertSee('www.facebook.com/tr?id=1241523867742555', false);
+            ->assertSee("fbq('init', \"1011553001490691\")", false)
+            ->assertSee('www.facebook.com/tr?id=1011553001490691', false)
+            ->assertDontSee('1241523867742555', false);
 
         $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
         $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
@@ -75,6 +77,19 @@ class CartCheckoutTest extends TestCase
             ->assertDontSee("fbq('track', 'Purchase'", false)
             ->assertDontSee("gtag('event'", false)
             ->assertDontSee('purchase', false);
+    }
+
+    public function test_public_pages_initialize_only_the_configured_meta_pixel(): void
+    {
+        config(['services.meta_pixel.id' => '1011553001490691']);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('connect.facebook.net/en_US/fbevents.js', false)
+            ->assertSee("fbq('init', \"1011553001490691\")", false)
+            ->assertSee("fbq('track', 'PageView')", false)
+            ->assertSee('www.facebook.com/tr?id=1011553001490691', false)
+            ->assertDontSee('1241523867742555', false);
     }
 
     public function test_story_cart_validation_errors_are_readable_arabic_messages(): void
