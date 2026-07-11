@@ -7,6 +7,8 @@ use App\Models\ProductionProjectAsset;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\GenerationInputAssetResolver;
+use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
+use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
 use App\Support\ProductionStudio;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -18,12 +20,30 @@ class SubmitAiGenerationJob implements ShouldQueue
 
     public function __construct(public int $generationJobId) {}
 
-    public function handle(AiProviderManager $providers, GenerationInputAssetResolver $inputAssets): void
-    {
-        $job = SceneGenerationJob::with(['project.order', 'scene', 'model.provider'])->findOrFail($this->generationJobId);
+    public function handle(
+        AiProviderManager $providers,
+        GenerationInputAssetResolver $inputAssets,
+        ?ProductionAutomationLateResultGuard $lateResults = null,
+        ?ProductionAutomationProviderReconciler $automation = null,
+    ): void {
+        $lateResults ??= app(ProductionAutomationLateResultGuard::class);
+        $automation ??= app(ProductionAutomationProviderReconciler::class);
+        $job = SceneGenerationJob::with(['project.order', 'scene', 'model.provider', 'automationRun'])->findOrFail($this->generationJobId);
 
         try {
-            $job->update(['status' => 'processing', 'submitted_at' => now()]);
+            if (! $lateResults->canSubmit($job)) {
+                $job->update([
+                    'status' => 'cancelled',
+                    'safe_failure_code' => 'automation_not_active_for_submission',
+                    'safe_failure_summary' => 'Automation run was no longer active for this provider submission.',
+                    'failed_at' => now(),
+                ]);
+                $automation->markFailed($job, 'automation_not_active_for_submission', 'Automation run was no longer active for this provider submission.');
+
+                return;
+            }
+
+            $job->update(['status' => 'processing', 'submitted_at' => now(), 'heartbeat_at' => now()]);
 
             $characterSheet = data_get($job->input_assets_json, 'character_sheet_id')
                 ? ProductionProjectAsset::find((int) data_get($job->input_assets_json, 'character_sheet_id'))
@@ -62,11 +82,14 @@ class SubmitAiGenerationJob implements ShouldQueue
 
             $job->update([
                 'external_request_id' => $result->externalRequestId,
+                'provider_request_id' => $result->externalRequestId,
                 'external_status_url' => $result->statusUrl,
                 'external_response_url' => $result->responseUrl,
                 'provider_response_json' => $result->raw,
                 'status' => 'processing',
+                'heartbeat_at' => now(),
             ]);
+            $automation->markSubmitted($job->fresh(['automationAttempt']), $result->externalRequestId);
 
             ProductionStudio::log($job->project, 'ai_generation.submitted', 'تم إرسال مهمة التوليد إلى مزود الذكاء الاصطناعي.', [
                 'job_id' => $job->id,
@@ -76,6 +99,7 @@ class SubmitAiGenerationJob implements ShouldQueue
             PollAiGenerationJob::dispatch($job->id)->delay(now()->addSeconds(15));
         } catch (Throwable $exception) {
             $this->failJob($job, $exception);
+            $automation->markFailed($job, 'image_submission_failed', $this->safeMessage($exception), unknownExposure: true);
         }
     }
 

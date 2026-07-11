@@ -6,6 +6,8 @@ use App\Models\ProductionProjectAsset;
 use App\Models\ProductionStoryVersion;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
+use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
+use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
 use App\Support\ProductionStudio;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -17,18 +19,39 @@ class ProcessStructuredAiJob implements ShouldQueue
 
     public function __construct(public int $generationJobId) {}
 
-    public function handle(AiProviderManager $providers): void
-    {
+    public function handle(
+        AiProviderManager $providers,
+        ?ProductionAutomationLateResultGuard $lateResults = null,
+        ?ProductionAutomationProviderReconciler $automation = null,
+    ): void {
+        $lateResults ??= app(ProductionAutomationLateResultGuard::class);
+        $automation ??= app(ProductionAutomationProviderReconciler::class);
         $job = SceneGenerationJob::with([
             'project.order.story',
             'project.storyVersions',
             'scene',
             'model.provider',
             'initiator',
+            'automationRun',
+            'automationStep',
+            'automationAttempt',
         ])->findOrFail($this->generationJobId);
 
         try {
-            $job->update(['status' => 'processing', 'submitted_at' => now()]);
+            if (! $lateResults->canSubmit($job)) {
+                $job->update([
+                    'status' => 'cancelled',
+                    'safe_failure_code' => 'automation_not_active_for_submission',
+                    'safe_failure_summary' => 'Automation run was no longer active for this structured AI submission.',
+                    'failed_at' => now(),
+                ]);
+                $automation->markFailed($job, 'automation_not_active_for_submission', 'Automation run was no longer active for this structured AI submission.');
+
+                return;
+            }
+
+            $job->update(['status' => 'processing', 'submitted_at' => now(), 'heartbeat_at' => now()]);
+            $automation->markSubmitted($job);
 
             $provider = $providers->textVisionProvider($job->model->provider->driver);
 
@@ -58,6 +81,31 @@ class ProcessStructuredAiJob implements ShouldQueue
                 default => throw new \RuntimeException('Unsupported structured AI job type.'),
             };
 
+            if (! $lateResults->canApplyResult($job)) {
+                $job->update([
+                    'provider_response_json' => [
+                        'usage' => $result->usage,
+                        'structured_result' => $result->data,
+                        'metadata' => $result->metadata,
+                    ],
+                    'actual_cost' => $result->actualCost,
+                    'cost_source' => $result->costSource,
+                    'status' => 'completed_late',
+                    'safe_failure_code' => 'late_structured_result_not_applied',
+                    'safe_failure_summary' => 'Structured AI result arrived after the automation run or attempt was no longer current.',
+                    'completed_at' => now(),
+                    'heartbeat_at' => now(),
+                ]);
+
+                ProductionStudio::log($job->project, 'ai_text_vision.late_result_recorded', 'وصلت نتيجة نص/رؤية متأخرة وتم حفظها للتدقيق بدون تطبيقها.', [
+                    'job_id' => $job->id,
+                    'job_type' => $job->job_type,
+                ], $job->initiator);
+                $automation->markCompleted($job->fresh(['automationAttempt']), $job->actual_cost, $job->provider_request_id, late: true);
+
+                return;
+            }
+
             $job->update([
                 'prompt_snapshot' => $result->prompt,
                 'provider_response_json' => [
@@ -69,11 +117,13 @@ class ProcessStructuredAiJob implements ShouldQueue
                 'cost_source' => $result->costSource,
                 'status' => 'completed',
                 'completed_at' => now(),
+                'heartbeat_at' => now(),
             ]);
 
             if ($job->job_type === 'identity_review') {
                 $this->storeIdentityReviewResult($job, $result->data);
             }
+            $automation->markCompleted($job->fresh(['automationAttempt']), $job->actual_cost, $job->provider_request_id);
 
             ProductionStudio::log($job->project, 'ai_text_vision.completed', 'تم تنفيذ مهمة نص/رؤية بالذكاء الاصطناعي.', [
                 'job_id' => $job->id,
@@ -83,6 +133,7 @@ class ProcessStructuredAiJob implements ShouldQueue
             ], $job->initiator);
         } catch (Throwable $exception) {
             $this->failJob($job, $exception);
+            $automation->markFailed($job, 'structured_ai_failed', $this->safeMessage($exception), unknownExposure: true);
         }
     }
 

@@ -19,6 +19,8 @@ class ProductionLayoutBuilder
 
     public const SHEET_COUNT = 7;
 
+    public const PAGE_MAP_VERSION = ProductionAutomationLayoutValidator::PAGE_MAP_VERSION;
+
     public function defaults(ProductionProject $project): array
     {
         $project->loadMissing(['order.story', 'scenes']);
@@ -159,6 +161,17 @@ class ProductionLayoutBuilder
             'scene_count' => self::SCENE_COUNT,
             'sheet_count' => self::SHEET_COUNT,
             'printed_sides' => self::SHEET_COUNT * 2,
+            'pdf_page_representation' => 'one PDF page per printed A3 side',
+            'page_map_version' => self::PAGE_MAP_VERSION,
+            'layout_template_version' => config('production_studio.automation.layout_template_version', 'layout-print-v1'),
+            'renderer' => 'mpdf',
+            'font_package' => 'dejavusans',
+            'paper_recommendation' => [
+                'inner_pages' => 'A3 landscape duplex, fold to A4.',
+                'cover' => 'Use the approved HeroKid cover stock policy.',
+                'duplex_flip' => $settings['duplex_flip'] ?? 'short_edge',
+                'binding_direction' => $settings['binding_direction'] ?? 'rtl',
+            ],
             'binding_direction' => $settings['binding_direction'] ?? 'rtl',
             'duplex_flip' => $settings['duplex_flip'] ?? 'short_edge',
             'canvas' => 'A3 landscape 420 × 297 mm',
@@ -331,14 +344,25 @@ class ProductionLayoutBuilder
         $pdf = $this->newPdf('A4');
         $orderNumber = e((string) $project->order?->order_number);
         $rows = collect([
-            'تمت مراجعة الغلاف الأمامي والخلفي.',
-            'تمت مراجعة جميع المشاهد الثلاثة عشر.',
-            'النص العربي سليم وغير مقطوع.',
-            'لا يوجد نص فوق الوجه أو العناصر المهمة.',
-            'جميع الحواف ومنطقة الطي آمنة.',
-            'ترتيب الطباعة مطابق للمانيفست.',
+            'اتساق هوية الطفل في الغلاف وجميع المشاهد.',
+            'جودة الغلاف الأمامي وعدم وجود نص مولد داخل الصورة.',
+            'مطابقة كل مشهد للنص المقابل له.',
+            'سلامة النص العربي والتشكيل البصري واتجاه RTL.',
+            'الإملاء وعلامات الترقيم سليمة.',
+            'النص مقروء ولا يوجد قص أو فيضان خارج منطقة الأمان.',
+            'جودة الصور ودقتها بعد الطباعة.',
+            'ترتيب الصفحات في ملف Reader صحيح.',
+            'موضع الغلاف الأمامي صحيح.',
+            'موضع الغلاف الخلفي صحيح.',
             'إعداد الطباعة Duplex وFlip on short edge صحيح.',
+            'اتجاه الطي والربط صحيح للكتاب العربي.',
+            'الهوامش ومنطقة القص آمنة.',
+            'لا يوجد مشهد مفقود.',
+            'لا يوجد مشهد مكرر.',
+            'لا توجد صفحات فارغة غير مقصودة.',
             'تمت مراجعة نسخة مطبوعة تجريبية.',
+            'جودة الألوان مقبولة في العينة المطبوعة.',
+            'الملف جاهز للطي والتجليد بعد المراجعة البشرية النهائية.',
         ])->map(fn (string $item): string => '<div style="padding:4mm;border-bottom:0.3mm solid #ddd;">☐ '.e($item).'</div>')->implode('');
 
         $pdf->WriteHTML('<div dir="rtl" style="font-family:dejavusans;text-align:right;padding:12mm;">'
@@ -444,7 +468,7 @@ class ProductionLayoutBuilder
         $pdf->SetAlpha(1);
     }
 
-    private function manifestCsv(array $manifest): string
+    public function manifestCsv(array $manifest): string
     {
         $lines = [
             ['Sheet', 'Side', 'Left Page', 'Right Page', 'Flip Direction'],

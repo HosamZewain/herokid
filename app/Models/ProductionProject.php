@@ -75,6 +75,11 @@ class ProductionProject extends Model
         return $this->hasMany(ProductionPrintLayout::class);
     }
 
+    public function automationRuns(): HasMany
+    {
+        return $this->hasMany(ProductionAutomationRun::class);
+    }
+
     public function approvedCharacterSheet(): HasOne
     {
         return $this->hasOne(ProductionProjectAsset::class)

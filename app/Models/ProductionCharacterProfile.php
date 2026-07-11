@@ -11,6 +11,8 @@ class ProductionCharacterProfile extends Model
     protected $casts = [
         'reference_photo_selection' => 'array',
         'approved_reference_photos' => 'array',
+        'automation_metadata_json' => 'array',
+        'validation_summary_json' => 'array',
         'primary_face_reference_index' => 'integer',
         'body_reference_index' => 'integer',
         'style_reference_index' => 'integer',
@@ -79,5 +81,20 @@ class ProductionCharacterProfile extends Model
     public function styleReferenceIndex(): ?int
     {
         return $this->style_reference_index !== null ? (int) $this->style_reference_index : null;
+    }
+
+    public function automationRun()
+    {
+        return $this->belongsTo(ProductionAutomationRun::class, 'production_automation_run_id');
+    }
+
+    public function automationStep()
+    {
+        return $this->belongsTo(ProductionAutomationStep::class, 'production_automation_step_id');
+    }
+
+    public function automationAttempt()
+    {
+        return $this->belongsTo(ProductionAutomationAttempt::class, 'production_automation_attempt_id');
     }
 }

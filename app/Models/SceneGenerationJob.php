@@ -15,9 +15,12 @@ class SceneGenerationJob extends Model
         'provider_response_json' => 'array',
         'estimated_cost' => 'decimal:4',
         'actual_cost' => 'decimal:4',
+        'run_version' => 'integer',
+        'orchestration_generation' => 'integer',
         'submitted_at' => 'datetime',
         'completed_at' => 'datetime',
         'failed_at' => 'datetime',
+        'heartbeat_at' => 'datetime',
     ];
 
     public function project()
@@ -48,5 +51,20 @@ class SceneGenerationJob extends Model
     public function assets()
     {
         return $this->hasMany(ProductionProjectAsset::class);
+    }
+
+    public function automationRun()
+    {
+        return $this->belongsTo(ProductionAutomationRun::class, 'production_automation_run_id');
+    }
+
+    public function automationStep()
+    {
+        return $this->belongsTo(ProductionAutomationStep::class, 'production_automation_step_id');
+    }
+
+    public function automationAttempt()
+    {
+        return $this->belongsTo(ProductionAutomationAttempt::class, 'production_automation_attempt_id');
     }
 }

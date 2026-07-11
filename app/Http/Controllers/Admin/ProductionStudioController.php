@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
+use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\ProductionStudio\ProductionLayoutBuilder;
 use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\AdminActivityLogger;
@@ -94,7 +95,7 @@ class ProductionStudioController extends Controller
             ->with('success', 'تم إنشاء مشروع استوديو الإنتاج بدون تغيير حالة الطلب الأصلي.');
     }
 
-    public function show(ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer, ProductionLayoutBuilder $layoutBuilder)
+    public function show(ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer, ProductionLayoutBuilder $layoutBuilder, ProductionAutomationFinalProofService $finalProofs)
     {
         $this->ensureEnabled();
 
@@ -152,6 +153,10 @@ class ProductionStudioController extends Controller
         $sceneExtractionPreview = $personalizer->decoratePreview($project, $sceneExtractionPreview);
         $printLayout = $project->printLayouts->sortByDesc('version_number')->first();
         $layoutSettings = $layoutBuilder->normalizedSettings($project, $printLayout?->settings_json ?? []);
+        $automationRun = $project->automationRuns()
+            ->with(['currentProof.layout', 'currentProof.reviewer', 'proofs.reviewer', 'proofs.layout', 'steps'])
+            ->latest()
+            ->first();
 
         return view('admin.production-studio.show', [
             'project' => $project,
@@ -178,6 +183,8 @@ class ProductionStudioController extends Controller
             'printLayout' => $printLayout,
             'layoutSettings' => $layoutSettings,
             'layoutReadiness' => $layoutBuilder->readiness($project, $layoutSettings),
+            'automationRun' => $automationRun,
+            'finalProofChecklist' => $finalProofs->checklistItems(),
         ]);
     }
 

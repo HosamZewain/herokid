@@ -3,23 +3,44 @@
 namespace App\Actions\ProductionStudio;
 
 use App\Models\ProductionProjectAsset;
+use App\Services\ProductionStudio\ProductionAutomationIdentityValidator;
+use App\Services\ProductionStudio\ProductionAutomationVisualValidator;
 use App\Support\ProductionStudio;
 use RuntimeException;
 
 class ApproveGeneratedAssetAction
 {
+    public function __construct(
+        private readonly ProductionAutomationIdentityValidator $identityValidator,
+        private readonly ProductionAutomationVisualValidator $visualValidator,
+    ) {}
+
     public function execute(ProductionProjectAsset $asset, ?string $notes = null): ProductionProjectAsset
     {
         $asset->loadMissing(['project']);
 
         $identityReview = data_get($asset->metadata_json, 'identity_review');
-        if ($asset->asset_type === 'scene_image' && is_array($identityReview)) {
+        if (in_array($asset->asset_type, ['scene_image', 'cover_image'], true) && is_array($identityReview)) {
             if (in_array(data_get($identityReview, 'status'), ['queued', 'processing'], true)) {
                 throw new RuntimeException('انتظر اكتمال فحص اتساق هوية الطفل قبل اعتماد الصورة.');
             }
 
-            if (data_get($identityReview, 'status') === 'completed' && data_get($identityReview, 'result.decision') === 'fail') {
-                throw new RuntimeException('فشل فحص اتساق هوية الطفل. استخدم تصحيح الهوية أو أعد التوليد قبل الاعتماد.');
+            if (data_get($identityReview, 'status') === 'completed') {
+                $result = data_get($identityReview, 'result', []);
+                $decision = data_get($result, 'decision');
+                $visualType = data_get($result, 'identity_score') !== null
+                    ? ($asset->asset_type === 'cover_image' ? 'cover' : 'scene')
+                    : null;
+
+                $evaluatedDecision = is_array($result)
+                    ? ($visualType
+                        ? $this->visualValidator->evaluate($result, $visualType)['decision']
+                        : $this->identityValidator->evaluate($result)['decision'])
+                    : 'fail';
+
+                if ($decision === 'fail' || $evaluatedDecision === 'fail') {
+                    throw new RuntimeException('فشل فحص اتساق هوية الطفل أو يحتوي على علامة حظر. استخدم تصحيح الهوية أو أعد التوليد قبل الاعتماد.');
+                }
             }
         }
 

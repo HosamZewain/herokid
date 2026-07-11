@@ -1204,6 +1204,147 @@
             </div>
         @include('admin.production-studio.partials.workflow-card-close')
 
+        <?php
+            $finalProofRun = $automationRun ?? null;
+            $currentProof = $finalProofRun?->currentProof;
+            $canReviewFinalProof = auth()->user()->hasPermission('production_studio.final_proof_review');
+            $finalProofReviewable = $finalProofRun?->status === \App\Support\ProductionAutomation::STATUS_FILES_READY;
+            $finalProofCompleted = $finalProofRun?->status === \App\Support\ProductionAutomation::STATUS_COMPLETED;
+        ?>
+        @if($finalProofRun && in_array($finalProofRun->status, [\App\Support\ProductionAutomation::STATUS_FILES_READY, \App\Support\ProductionAutomation::STATUS_COMPLETED, \App\Support\ProductionAutomation::STATUS_PAUSED_REVIEW], true))
+            @include('admin.production-studio.partials.workflow-card-open', [
+                'id' => 'final-proof',
+                'title' => 'المراجعة النهائية قبل الطباعة',
+                'description' => 'اعتماد بشري إلزامي بعد ملفات Phase 4.',
+                'status' => $currentProof ? 'v'.$currentProof->proof_version.' — '.$currentProof->status : ($finalProofReviewable ? 'جاهز للمراجعة' : $finalProofRun->status),
+                'statusTone' => $finalProofCompleted ? 'emerald' : ($currentProof?->status === 'failed' ? 'red' : 'amber'),
+                'warning' => $finalProofCompleted ? null : 'لا تصل إلى 100% بدون اعتماد نهائي',
+                'summary' => $finalProofCompleted ? 'جاهز للطباعة اليدوية' : 'راجع الملفات، اطبع عينة، ثم أكمل القائمة',
+            ])
+                <div class="space-y-4 text-right">
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">Run</p><p class="font-black">#{{ $finalProofRun->id }}</p></div>
+                        <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">الحالة</p><p class="font-black">{{ $finalProofRun->status }}</p></div>
+                        <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">المرحلة</p><p class="font-black">{{ $finalProofRun->current_stage }}</p></div>
+                        <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">Proof</p><p class="font-black">{{ $currentProof ? 'v'.$currentProof->proof_version : 'غير منشأ' }}</p></div>
+                    </div>
+
+                    @if($printLayout?->isValidatedAutomationReady())
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'reader']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Reader PDF</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'print']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Imposed A3 PDF</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'manifest']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Manifest</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'proof']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Proof Checklist</a>
+                        </div>
+                    @endif
+
+                    @if($currentProof)
+                        <div class="grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
+                            <div class="rounded-xl bg-gray-50 p-3"><p class="font-black text-gray-600">Reader SHA-256</p><p class="break-all font-mono text-gray-800">{{ $currentProof->reader_pdf_checksum }}</p></div>
+                            <div class="rounded-xl bg-gray-50 p-3"><p class="font-black text-gray-600">Imposed SHA-256</p><p class="break-all font-mono text-gray-800">{{ $currentProof->imposed_pdf_checksum }}</p></div>
+                            <div class="rounded-xl bg-gray-50 p-3"><p class="font-black text-gray-600">Manifest SHA-256</p><p class="break-all font-mono text-gray-800">{{ $currentProof->manifest_checksum }}</p></div>
+                        </div>
+                    @endif
+
+                    @if($canReviewFinalProof && $finalProofReviewable && !$currentProof)
+                        <form method="POST" action="{{ route('admin.production-studio.automation.final-proof.draft', $project) }}">
+                            @csrf
+                            <button class="rounded-xl bg-indigo-600 px-5 py-3 font-black text-white">إنشاء مسودة مراجعة نهائية</button>
+                        </form>
+                    @endif
+
+                    @if($canReviewFinalProof && $finalProofReviewable && $currentProof && in_array($currentProof->status, ['draft', 'in_review'], true))
+                        <form method="POST" action="{{ route('admin.production-studio.automation.final-proof.approve', [$project, $currentProof]) }}" data-final-proof-form class="space-y-4">
+                            @csrf
+                            <input type="hidden" name="reviewed_checksums[reader_pdf]" value="{{ $currentProof->reader_pdf_checksum }}">
+                            <input type="hidden" name="reviewed_checksums[imposed_pdf]" value="{{ $currentProof->imposed_pdf_checksum }}">
+                            <input type="hidden" name="reviewed_checksums[manifest]" value="{{ $currentProof->manifest_checksum }}">
+
+                            <details class="rounded-xl border border-gray-100 bg-gray-50" open>
+                                <summary class="cursor-pointer p-4 font-black text-gray-900">قائمة المراجعة الإلزامية</summary>
+                                <div class="grid grid-cols-1 gap-3 border-t border-gray-100 p-4 md:grid-cols-2">
+                                    @foreach($finalProofChecklist as $key => $item)
+                                        <label class="rounded-xl bg-white p-3 ring-1 ring-gray-100">
+                                            <span class="block text-xs font-black text-gray-500">{{ $item['group'] }}</span>
+                                            <span class="mt-1 block text-sm font-black text-gray-900">{{ $item['label'] }}</span>
+                                            <select name="checklist[{{ $key }}][value]" required data-final-proof-check class="mt-2 w-full rounded-lg border-gray-200">
+                                                <option value="">اختر</option>
+                                                <option value="pass">pass</option>
+                                                <option value="fail">fail</option>
+                                                <option value="not_applicable">not_applicable</option>
+                                            </select>
+                                            <input name="checklist[{{ $key }}][reason]" class="mt-2 w-full rounded-lg border-gray-200 text-sm" placeholder="سبب عند الفشل أو عدم الانطباق">
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </details>
+
+                            <details class="rounded-xl border border-gray-100 bg-gray-50" open>
+                                <summary class="cursor-pointer p-4 font-black text-gray-900">بيانات الطباعة التجريبية والرفض</summary>
+                                <div class="grid grid-cols-1 gap-3 border-t border-gray-100 p-4 md:grid-cols-3">
+                                    <input name="print_test_metadata[proof_print_date]" type="date" required class="rounded-lg border-gray-200">
+                                    <input name="print_test_metadata[printer_name]" required class="rounded-lg border-gray-200" placeholder="Printer name">
+                                    <input name="print_test_metadata[printer_model]" class="rounded-lg border-gray-200" placeholder="Printer model">
+                                    <input name="print_test_metadata[paper_size]" required value="A3 landscape" class="rounded-lg border-gray-200">
+                                    <input name="print_test_metadata[cover_paper_type]" class="rounded-lg border-gray-200" placeholder="Cover paper">
+                                    <input name="print_test_metadata[cover_paper_gsm]" class="rounded-lg border-gray-200" placeholder="Cover GSM">
+                                    <input name="print_test_metadata[inner_paper_type]" class="rounded-lg border-gray-200" placeholder="Inner paper">
+                                    <input name="print_test_metadata[inner_paper_gsm]" class="rounded-lg border-gray-200" placeholder="Inner GSM">
+                                    <input name="print_test_metadata[duplex_setting]" required class="rounded-lg border-gray-200" placeholder="Duplex setting">
+                                    <input name="print_test_metadata[flip_edge]" required value="short_edge" class="rounded-lg border-gray-200">
+                                    <input name="print_test_metadata[print_quality]" required class="rounded-lg border-gray-200" placeholder="Print quality">
+                                    <input name="print_test_metadata[test_copies]" type="number" min="1" max="20" required value="1" class="rounded-lg border-gray-200">
+                                    <textarea name="print_test_metadata[reviewer_notes]" rows="2" class="rounded-lg border-gray-200 md:col-span-3" placeholder="Reviewer notes"></textarea>
+                                    <select name="affected_component" class="rounded-lg border-gray-200">
+                                        <option value="">Affected component for rejection</option>
+                                        <option value="story_text">story_text</option>
+                                        <option value="cover">cover</option>
+                                        <option value="specific_scene">specific_scene</option>
+                                        <option value="reader_layout">reader_layout</option>
+                                        <option value="imposition">imposition</option>
+                                        <option value="font_or_arabic_rendering">font_or_arabic_rendering</option>
+                                        <option value="image_quality">image_quality</option>
+                                        <option value="color_output">color_output</option>
+                                        <option value="duplex_or_binding">duplex_or_binding</option>
+                                        <option value="other">other</option>
+                                    </select>
+                                    <input name="affected_scene_number" type="number" min="1" max="13" class="rounded-lg border-gray-200" placeholder="Scene number">
+                                    <input name="failure_category" class="rounded-lg border-gray-200" placeholder="Failure category">
+                                    <textarea name="decision_reason" rows="2" class="rounded-lg border-gray-200 md:col-span-3" placeholder="Approval reason"></textarea>
+                                    <textarea name="reason" rows="2" class="rounded-lg border-gray-200 md:col-span-3" placeholder="Rejection reason"></textarea>
+                                    <textarea name="notes" rows="2" class="rounded-lg border-gray-200 md:col-span-3" placeholder="Final notes"></textarea>
+                                </div>
+                            </details>
+
+                            <div class="flex flex-col gap-3 md:flex-row">
+                                <button type="submit" data-final-proof-approve disabled class="rounded-xl bg-emerald-600 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">اعتماد نهائي وجاهز للطباعة</button>
+                                <button type="submit" formaction="{{ route('admin.production-studio.automation.final-proof.reject', [$project, $currentProof]) }}" class="rounded-xl bg-red-600 px-5 py-3 font-black text-white">رفض وإرجاع للتصحيح</button>
+                            </div>
+                        </form>
+                    @endif
+
+                    @if($currentProof?->hasReport())
+                        <a href="{{ \Illuminate\Support\Facades\URL::temporarySignedRoute('admin.production-studio.automation.proof-report', now()->addMinutes(10), [$project, $finalProofRun, $currentProof]) }}" class="inline-block rounded-xl bg-gray-900 px-5 py-3 font-black text-white">تنزيل تقرير المراجعة النهائي</a>
+                    @endif
+
+                    @if($finalProofRun->proofs->isNotEmpty())
+                        <div class="space-y-2">
+                            <p class="font-black text-gray-900">محاولات المراجعة السابقة</p>
+                            @foreach($finalProofRun->proofs->sortByDesc('proof_version') as $proofAttempt)
+                                <div class="rounded-xl bg-gray-50 p-3 text-sm">
+                                    <span class="font-black">v{{ $proofAttempt->proof_version }}</span>
+                                    <span class="mx-2 text-gray-400">|</span>
+                                    <span>{{ $proofAttempt->status }}</span>
+                                    @if($proofAttempt->reviewed_at)<span class="mx-2 text-gray-400">|</span><span>{{ $proofAttempt->reviewed_at->format('Y-m-d H:i') }}</span>@endif
+                                    @if($proofAttempt->affected_component)<span class="mx-2 text-gray-400">|</span><span>{{ $proofAttempt->affected_component }}</span>@endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @include('admin.production-studio.partials.workflow-card-close')
+        @endif
+
         @include('admin.production-studio.partials.workflow-card-open', [
             'id' => 'qa-checklist',
             'title' => 'مراجعة الجودة',
@@ -1606,6 +1747,19 @@
             setOpenSection(initialSection, Boolean(hashSection));
 
             document.querySelectorAll('[data-studio-bulk-ai-form]').forEach(updateBulkCostSummary);
+
+            const finalProofForm = document.querySelector('[data-final-proof-form]');
+            if (finalProofForm) {
+                const approveButton = finalProofForm.querySelector('[data-final-proof-approve]');
+                const checks = Array.from(finalProofForm.querySelectorAll('[data-final-proof-check]'));
+                const syncFinalProofApproval = () => {
+                    if (!approveButton) return;
+                    approveButton.disabled = checks.length === 0 || checks.some(select => select.value !== 'pass');
+                };
+
+                checks.forEach(select => select.addEventListener('change', syncFinalProofApproval));
+                syncFinalProofApproval();
+            }
 
             document.addEventListener('click', function (event) {
                 const jobDrawerOpener = event.target.closest('[data-studio-job-drawer-open]');

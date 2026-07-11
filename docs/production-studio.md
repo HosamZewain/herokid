@@ -140,6 +140,18 @@ This is structured for image production tools. The optional Phase 2 AI pilot onl
 
 Phase 2 AI generation is documented separately in `docs/production-studio-ai-pilot.md`.
 
+## One-Click Automation Foundation
+
+Production Studio now has a guarded automation foundation documented in `docs/production-studio-automatic-lifecycle.md`.
+
+Automation is controlled separately from the manual Studio feature:
+
+```env
+HERO_KID_PRODUCTION_STUDIO_AUTOMATION_ENABLED=false
+```
+
+When disabled, manual Studio remains available, historical automation runs remain inspectable, and no new automation run or automation provider submission can start.
+
 ## Layout & Print
 
 The Layout & Print phase is implemented as an asynchronous, private production workflow. It validates the approved cover and all 13 final scene images, provides a 28-page reader preview, and generates:
@@ -210,6 +222,8 @@ HERO_KID_PRODUCTION_STUDIO_ENABLED=false
 
 ```bash
 php artisan test tests/Feature/ProductionStudioTest.php
+php artisan test tests/Unit/ProductionAutomationFoundationTest.php
+php artisan test tests/Feature/ProductionAutomationTest.php
 php artisan test tests/Feature/ProductionStudioLayoutPrintTest.php
 php artisan test
 npm run build

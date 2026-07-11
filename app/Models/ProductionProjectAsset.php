@@ -31,6 +31,21 @@ class ProductionProjectAsset extends Model
         return $this->belongsTo(SceneGenerationJob::class, 'scene_generation_job_id');
     }
 
+    public function automationRun()
+    {
+        return $this->belongsTo(ProductionAutomationRun::class, 'production_automation_run_id');
+    }
+
+    public function automationStep()
+    {
+        return $this->belongsTo(ProductionAutomationStep::class, 'production_automation_step_id');
+    }
+
+    public function automationAttempt()
+    {
+        return $this->belongsTo(ProductionAutomationAttempt::class, 'production_automation_attempt_id');
+    }
+
     public function uploader()
     {
         return $this->belongsTo(User::class, 'uploaded_by_user_id');

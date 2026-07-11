@@ -184,6 +184,8 @@ Cover Images:
 
 Before image generation, each fal job stores an estimated cost based on the selected model.
 
+The one-click automation layer adds a stricter reservation ledger before automation-owned provider requests. Manual AI generation still uses the existing job cost fields, while automation-owned jobs must reserve budget in `production_automation_cost_entries` before provider submission.
+
 After fal generation:
 
 - if Fal returns actual cost metadata, it is saved as `provider_actual`
@@ -244,6 +246,12 @@ To disable all Studio routes and UI:
 
 ```env
 HERO_KID_PRODUCTION_STUDIO_ENABLED=false
+```
+
+To disable only one-click automation while preserving manual Studio and AI controls:
+
+```env
+HERO_KID_PRODUCTION_STUDIO_AUTOMATION_ENABLED=false
 ```
 
 Existing orders and existing production prompts are unaffected.

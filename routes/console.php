@@ -1,11 +1,15 @@
 <?php
 
+use App\Jobs\AdvanceProductionAutomationRun;
 use App\Models\AiProvider;
+use App\Models\ProductionAutomationRun;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
+use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
+use App\Support\ProductionAutomation;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -96,3 +100,38 @@ Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to proc
 })->purpose('Expire and delete unattached temporary child photo uploads');
 
 Schedule::command('photo-uploads:cleanup')->hourly();
+
+Artisan::command('production-automation:recover {--limit= : Maximum active runs to inspect}', function (ProductionAutomationFinalProofService $finalProofs) {
+    if (! ProductionAutomation::enabled()) {
+        $this->warn('Production automation is disabled.');
+
+        return Command::SUCCESS;
+    }
+
+    $limit = (int) ($this->option('limit') ?: config('production_studio.automation.queue.recovery_limit', 20));
+    $staleBefore = now()->subMinutes((int) config('production_studio.automation.queue.heartbeat_stale_minutes', 15));
+    $runs = ProductionAutomationRun::query()
+        ->whereNotNull('active_project_id')
+        ->whereIn('status', ProductionAutomation::activeStatuses())
+        ->where(function ($query) use ($staleBefore) {
+            $query->whereNull('last_heartbeat_at')
+                ->orWhere('last_heartbeat_at', '<=', $staleBefore);
+        })
+        ->orderBy('last_heartbeat_at')
+        ->limit($limit)
+        ->get();
+
+    foreach ($runs as $run) {
+        AdvanceProductionAutomationRun::dispatch($run->id);
+    }
+
+    $this->info('Queued recovery for '.$runs->count().' production automation run(s).');
+    $this->info('Recovered '.$finalProofs->recoverProofReports($limit).' final proof report(s).');
+    $this->info('Invalidated '.$finalProofs->invalidateChangedPassedProofs($limit).' stale passed proof(s).');
+
+    return Command::SUCCESS;
+})->purpose('Recover stalled Production Studio automation runs safely');
+
+Schedule::command('production-automation:recover')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10);

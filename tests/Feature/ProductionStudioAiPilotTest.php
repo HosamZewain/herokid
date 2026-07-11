@@ -21,6 +21,7 @@ use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
 use App\Services\Ai\ProductionPromptCompiler;
 use App\Services\ProductionStudio\IdentityReviewDispatcher;
+use App\Services\ProductionStudio\ProductionAutomationIdentityValidator;
 use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\StoryProductionPrompt;
@@ -124,6 +125,16 @@ class ProductionStudioAiPilotTest extends TestCase
                 'identity_rules' => 'حافظ على شكل الوجه والعينين والشعر والابتسامة.',
                 'negative_instructions' => 'لا تغير الوجه ولا تضف نصوصًا أو شعارات.',
                 'confidence_notes' => 'صورة الوجه واضحة.',
+                'field_confidence' => [
+                    'approximate_age_group' => 'high',
+                    'face_shape_notes' => 'high',
+                    'skin_tone' => 'high',
+                    'hair_details' => 'high',
+                    'eyes_and_visible_traits' => 'high',
+                    'glasses_or_accessories' => 'medium',
+                    'body_proportion_notes' => 'medium',
+                    'gender_presentation_if_needed' => 'medium',
+                ],
                 'reference_photo_recommendations' => 'استخدم صورة 1 كمرجع وجه أساسي.',
                 'warnings' => 'لا توجد تحذيرات مهمة.',
             ])),
@@ -1707,15 +1718,22 @@ class ProductionStudioAiPilotTest extends TestCase
         $this->assertNotNull($job);
         Queue::assertPushed(ProcessStructuredAiJob::class);
 
+        $criteria = collect(app(ProductionAutomationIdentityValidator::class)->requiredCriteria())
+            ->mapWithKeys(fn (string $key): array => [$key => [
+                'status' => 'pass',
+                'evidence' => 'No issue.',
+                'blocking' => false,
+            ]])
+            ->all();
+        $criteria['face_structure'] = [
+            'status' => 'fail',
+            'evidence' => 'Different face shape.',
+            'blocking' => true,
+        ];
         $result = [
-            'decision' => 'fail',
-            'confidence' => 92,
-            'face_consistency' => 'Different face shape.',
-            'hair_consistency' => 'Hair differs.',
-            'age_consistency' => 'Consistent.',
-            'skin_tone_consistency' => 'Consistent.',
-            'concerns' => ['Eyes and jawline differ.'],
-            'recommendation' => 'Run identity correction.',
+            'score' => 92,
+            'summary' => 'High score but face structure blocks approval.',
+            'criteria' => $criteria,
         ];
         Http::fake([
             'https://api.openai.com/v1/responses' => Http::response($this->openAiJsonResponse($result)),
@@ -1725,8 +1743,8 @@ class ProductionStudioAiPilotTest extends TestCase
 
         $asset->refresh();
         $this->assertSame('completed', data_get($asset->metadata_json, 'identity_review.status'));
-        $this->assertSame('fail', data_get($asset->metadata_json, 'identity_review.result.decision'));
-        $this->assertSame(92, data_get($asset->metadata_json, 'identity_review.result.confidence'));
+        $this->assertSame(92, data_get($asset->metadata_json, 'identity_review.result.score'));
+        $this->assertTrue(data_get($asset->metadata_json, 'identity_review.result.criteria.face_structure.blocking'));
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('فشل فحص اتساق هوية الطفل');

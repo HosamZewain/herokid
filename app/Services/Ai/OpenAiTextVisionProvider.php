@@ -10,6 +10,8 @@ use App\Models\ProductionProject;
 use App\Models\ProductionProjectAsset;
 use App\Models\ProductionScene;
 use App\Models\ProductionStoryVersion;
+use App\Services\ProductionStudio\ProductionAutomationIdentityValidator;
+use App\Services\ProductionStudio\ProductionAutomationVisualValidator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -42,7 +44,9 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
         $prompt = implode("\n", [
             'Analyze only the selected child photos for HeroKid production identity preparation.',
             'Return objective, child-safe observations for an illustrator. Do not identify the child or infer sensitive traits.',
-            'Prioritize stable visual identity: face shape, eyes, hair, skin tone, expression, apparent age, and proportions.',
+            'Prioritize stable visual identity: approximate age group, face shape, eyes, hair, skin tone, expression, visible accessories, and proportions.',
+            'For every required identity field, include a conservative confidence value: high, medium, low, or unavailable.',
+            'Pause-worthy uncertainty belongs in warnings: unclear photos, multiple children, contradictory photos, missing required identity evidence, or anything requiring human interpretation.',
             'Write Arabic production notes. Do not include private file paths.',
         ]);
 
@@ -65,6 +69,7 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
                 'identity_rules',
                 'negative_instructions',
                 'confidence_notes',
+                'field_confidence',
                 'reference_photo_recommendations',
                 'warnings',
             ]),
@@ -173,7 +178,8 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
 
     public function reviewGeneratedIdentityToJson(ProductionProject $project, ProductionProjectAsset $asset, AiModel $model, int $primaryPhotoIndex): StructuredAiResult
     {
-        $project->loadMissing('order');
+        $project->loadMissing(['order.story']);
+        $asset->loadMissing('scene');
         $photoInputs = $this->childPhotoInputs($project, [$primaryPhotoIndex]);
         $generatedInput = $this->assetImageInput($asset);
 
@@ -181,41 +187,85 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
             throw new RuntimeException('تعذر تجهيز صور مراجعة الهوية الخاصة.');
         }
 
+        $automationReviewType = $asset->production_automation_run_id
+            ? match ($asset->asset_type) {
+                'cover_image' => 'cover',
+                'scene_image' => 'scene',
+                default => null,
+            }
+        : null;
+
         $prompt = implode("\n", [
             'Review visual identity consistency for an internal children book production workflow.',
-            'Image 1 is the authoritative original child face reference. Image 2 is the generated story illustration.',
+            'Image 1 is the authoritative original child face reference. Image 2 is the generated production illustration.',
+            $this->reviewInstructionFor($project, $asset, $automationReviewType),
             'This is not biometric identification. Evaluate only visible production consistency.',
+            'Verification model: '.$model->code.'. Generation model is recorded separately on the image generation attempt; do not treat generation metadata as validation evidence.',
+            'Use this as an independent validation prompt. Do not approve the output merely because the generation request asked for the child.',
             'Compare face shape, eyes and spacing, nose, mouth and smile, cheeks, jawline, hairline, hairstyle, skin tone, apparent age, and natural proportions.',
             'Return strict JSON. Do not identify the person, infer sensitive traits, or include image data or private paths.',
-            'Use decision pass when identity is clearly consistent, review when uncertain or the face is too small/obscured, and fail when it visibly depicts a different child.',
+            'Score is only a heuristic. Any blocking criterion must set blocking=true even if the numeric score is high.',
+            'Blocking examples: more than one child when one is required, unrelated characters, adult-looking child, visible text, logos, watermarks, unsafe content, or missing required identity evidence.',
         ]);
+        $validator = app(ProductionAutomationIdentityValidator::class);
+        $visualValidator = app(ProductionAutomationVisualValidator::class);
+        $schema = $automationReviewType
+            ? $visualValidator->schema($automationReviewType)
+            : $validator->schema();
 
         return $this->requestJson(
             model: $model,
             prompt: $prompt,
-            schemaName: 'herokid_generated_identity_review',
-            schema: [
-                'type' => 'object',
-                'additionalProperties' => false,
-                'properties' => [
-                    'decision' => ['type' => 'string', 'enum' => ['pass', 'review', 'fail']],
-                    'confidence' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100],
-                    'face_consistency' => ['type' => 'string'],
-                    'hair_consistency' => ['type' => 'string'],
-                    'age_consistency' => ['type' => 'string'],
-                    'skin_tone_consistency' => ['type' => 'string'],
-                    'concerns' => ['type' => 'array', 'items' => ['type' => 'string']],
-                    'recommendation' => ['type' => 'string'],
-                ],
-                'required' => ['decision', 'confidence', 'face_consistency', 'hair_consistency', 'age_consistency', 'skin_tone_consistency', 'concerns', 'recommendation'],
-            ],
+            schemaName: $automationReviewType ? 'herokid_generated_'.$automationReviewType.'_review' : 'herokid_generated_identity_review',
+            schema: $schema,
             content: array_merge([
                 ['type' => 'input_text', 'text' => $prompt],
             ], $photoInputs, [$generatedInput]),
-            validator: fn (array $data): bool => $this->hasKeys($data, ['decision', 'confidence', 'face_consistency', 'hair_consistency', 'age_consistency', 'skin_tone_consistency', 'concerns', 'recommendation'])
-                && in_array($data['decision'], ['pass', 'review', 'fail'], true),
+            validator: function (array $data) use ($validator, $visualValidator, $automationReviewType): bool {
+                if ($automationReviewType) {
+                    $evaluation = $visualValidator->evaluate($data, $automationReviewType);
+
+                    return ! in_array($evaluation['safe_failure_code'], [
+                        'missing_visual_criteria',
+                        'missing_required_visual_fields',
+                        'invalid_identity_score',
+                        'invalid_adherence_score',
+                    ], true);
+                }
+
+                return $validator->evaluate($data)['safe_failure_code'] !== 'missing_criteria';
+            },
             maxOutputTokens: 1000,
         );
+    }
+
+    private function reviewInstructionFor(ProductionProject $project, ProductionProjectAsset $asset, ?string $automationReviewType): string
+    {
+        if ($asset->asset_type === 'character_sheet') {
+            return 'Image 2 should be a clean child reference illustration with one child only, no scene text, no logos, and no props that obscure identity.';
+        }
+
+        if ($automationReviewType === 'cover') {
+            return implode(' ', [
+                'Image 2 should be final-quality portrait cover artwork for the approved story, but without any generated title, captions, logos, or watermark.',
+                'Validate story relevance, portrait orientation, safe cover crop/trim composition, one child only unless the story explicitly needs otherwise, and no important faces or objects in unsafe trim/fold areas.',
+                'Story title: '.($project->storyVersions()->where('status', 'approved')->latest('version_number')->value('title') ?: $project->order?->story?->title ?: 'Not available').'.',
+            ]);
+        }
+
+        if ($automationReviewType === 'scene' && $asset->scene) {
+            return implode(' ', [
+                'Image 2 should be a generated A3 landscape story-spread illustration that keeps the child recognizable while following the specific scene.',
+                'Validate the child action, environment, story moment, landscape composition, safe text area, continuity, and absence of generated text/logos/watermarks.',
+                'Scene number: '.$asset->scene->scene_number.'.',
+                'Scene text: '.mb_substr((string) $asset->scene->story_text, 0, 500).'.',
+                'Visual direction: '.mb_substr((string) $asset->scene->visual_direction, 0, 500).'.',
+                'Child action: '.mb_substr((string) $asset->scene->child_action_pose, 0, 300).'.',
+                'Safe text area: '.mb_substr((string) $asset->scene->text_safe_area_notes, 0, 300).'.',
+            ]);
+        }
+
+        return 'Image 2 should be a generated story illustration that keeps the child recognizable while following the scene.';
     }
 
     public function testConnection(AiProvider $provider, bool $allowBillable = false): array
@@ -413,6 +463,16 @@ class OpenAiTextVisionProvider implements AiTextVisionProvider
             'identity_rules' => ['type' => 'string'],
             'negative_instructions' => ['type' => 'string'],
             'confidence_notes' => ['type' => 'string'],
+            'field_confidence' => $this->objectSchema([
+                'approximate_age_group' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'face_shape_notes' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'skin_tone' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'hair_details' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'eyes_and_visible_traits' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'glasses_or_accessories' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'body_proportion_notes' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+                'gender_presentation_if_needed' => ['type' => 'string', 'enum' => ['high', 'medium', 'low', 'unavailable']],
+            ]),
             'reference_photo_recommendations' => ['type' => 'string'],
             'warnings' => ['type' => 'string'],
         ]);

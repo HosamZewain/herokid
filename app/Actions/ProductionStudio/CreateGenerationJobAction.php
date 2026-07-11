@@ -127,12 +127,12 @@ class CreateGenerationJobAction
                 'identity_lock' => $identityLock,
                 'generation_quality' => $request->options['quality'],
                 'personalization_debug' => $compiled['personalization_debug'] ?? null,
-            ],
+            ] + $this->automationProviderMetadata($data),
             'estimated_cost' => $estimate->amount,
             'cost_source' => $estimate->source,
             'status' => 'queued',
-            'initiated_by_user_id' => auth()->id(),
-        ]);
+            'initiated_by_user_id' => auth()->id() ?: ($data['initiated_by_user_id'] ?? null),
+        ] + $this->automationJobMetadata($data));
 
         ProductionStudio::log($project, 'ai_generation.queued', 'تم إنشاء مهمة توليد صورة بالذكاء الاصطناعي.', [
             'job_id' => $job->id,
@@ -203,12 +203,12 @@ class CreateGenerationJobAction
                 'generation_quality' => $quality,
                 'identity_correction_source_asset_id' => $sourceAsset->id,
                 'personalization_debug' => $compiled['personalization_debug'],
-            ],
+            ] + $this->automationProviderMetadata($data),
             'estimated_cost' => $estimate->amount,
             'cost_source' => $estimate->source,
             'status' => 'queued',
-            'initiated_by_user_id' => auth()->id(),
-        ]);
+            'initiated_by_user_id' => auth()->id() ?: ($data['initiated_by_user_id'] ?? null),
+        ] + $this->automationJobMetadata($data));
 
         ProductionStudio::log($project, 'ai_generation.identity_correction_queued', 'تم إنشاء مهمة تصحيح هوية للصورة المولدة.', [
             'job_id' => $job->id,
@@ -249,6 +249,38 @@ class CreateGenerationJobAction
         }
 
         return $model;
+    }
+
+    private function automationJobMetadata(array $data): array
+    {
+        if (! isset($data['production_automation_run_id'])) {
+            return [];
+        }
+
+        return [
+            'production_automation_run_id' => $data['production_automation_run_id'],
+            'production_automation_step_id' => $data['production_automation_step_id'] ?? null,
+            'production_automation_attempt_id' => $data['production_automation_attempt_id'] ?? null,
+            'input_fingerprint' => $data['input_fingerprint'] ?? null,
+            'output_fingerprint' => $data['output_fingerprint'] ?? null,
+            'run_version' => $data['run_version'] ?? null,
+            'orchestration_generation' => $data['orchestration_generation'] ?? null,
+            'validation_policy_version' => $data['validation_policy_version'] ?? null,
+        ];
+    }
+
+    private function automationProviderMetadata(array $data): array
+    {
+        if (! isset($data['production_automation_run_id'])) {
+            return [];
+        }
+
+        return [
+            'automation_cost_entry_id' => $data['automation_cost_entry_id'] ?? null,
+            'automation_attempt_uuid' => $data['automation_attempt_uuid'] ?? null,
+            'automation_input_fingerprint' => $data['input_fingerprint'] ?? null,
+            'automation_output_fingerprint' => $data['output_fingerprint'] ?? null,
+        ];
     }
 
     private function resolveAsset(ProductionProject $project, int $assetId): ProductionProjectAsset

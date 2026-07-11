@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
 use App\Services\ProductionStudio\IdentityReviewDispatcher;
+use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
+use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
 use App\Support\ProductionStudio;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -17,9 +19,14 @@ class PollAiGenerationJob implements ShouldQueue
 
     public function __construct(public int $generationJobId) {}
 
-    public function handle(AiProviderManager $providers, ?IdentityReviewDispatcher $identityReviews = null): void
-    {
-        $job = SceneGenerationJob::with(['project', 'scene', 'model.provider'])->findOrFail($this->generationJobId);
+    public function handle(
+        AiProviderManager $providers,
+        ?IdentityReviewDispatcher $identityReviews = null,
+        ?ProductionAutomationLateResultGuard $lateResults = null,
+        ?ProductionAutomationProviderReconciler $automation = null,
+    ): void {
+        $automation ??= app(ProductionAutomationProviderReconciler::class);
+        $job = SceneGenerationJob::with(['project', 'scene', 'model.provider', 'automationRun', 'automationStep', 'automationAttempt'])->findOrFail($this->generationJobId);
 
         if (! in_array($job->status, ['processing', 'queued'], true)) {
             return;
@@ -30,12 +37,14 @@ class PollAiGenerationJob implements ShouldQueue
             $status = $provider->pollGeneration($job->external_request_id, $job->external_status_url, $job->external_response_url);
 
             $job->provider_response_json = $status->raw;
+            $job->heartbeat_at = now();
 
             if ($status->isFailed()) {
                 $job->status = 'failed';
                 $job->error_message = $this->safeMessage($status->errorMessage ?: 'AI provider reported a failed generation.');
                 $job->failed_at = now();
                 $job->save();
+                $automation->markFailed($job, 'provider_reported_failed_generation', $job->error_message, unknownExposure: true);
 
                 return;
             }
@@ -44,6 +53,27 @@ class PollAiGenerationJob implements ShouldQueue
                 $job->status = 'processing';
                 $job->save();
                 self::dispatch($job->id)->delay(now()->addSeconds(20));
+
+                return;
+            }
+
+            if ($lateResults && ! $lateResults->canApplyResult($job)) {
+                $job->update([
+                    'status' => 'completed_late',
+                    'provider_response_json' => $status->raw,
+                    'actual_cost' => $status->actualCost ?: $job->estimated_cost,
+                    'cost_source' => $status->actualCost ? 'provider_actual' : 'estimate_fallback',
+                    'safe_failure_code' => 'late_provider_result_not_applied',
+                    'safe_failure_summary' => 'Provider result arrived after the automation run or attempt was no longer current.',
+                    'completed_at' => now(),
+                    'heartbeat_at' => now(),
+                ]);
+
+                ProductionStudio::log($job->project, 'ai_generation.late_result_recorded', 'وصلت نتيجة مزود متأخرة وتم حفظها للتدقيق بدون اعتمادها.', [
+                    'job_id' => $job->id,
+                    'external_request_id' => $job->external_request_id,
+                ]);
+                $automation->markCompleted($job->fresh(['automationAttempt']), $job->actual_cost, $job->provider_request_id, late: true);
 
                 return;
             }
@@ -79,6 +109,12 @@ class PollAiGenerationJob implements ShouldQueue
                     'width' => $dimensions[0] ?? null,
                     'height' => $dimensions[1] ?? null,
                 ],
+                'production_automation_run_id' => $job->production_automation_run_id,
+                'production_automation_step_id' => $job->production_automation_step_id,
+                'production_automation_attempt_id' => $job->production_automation_attempt_id,
+                'input_fingerprint' => $job->input_fingerprint,
+                'output_fingerprint' => $job->output_fingerprint ?: $job->input_fingerprint,
+                'validation_policy_version' => $job->validation_policy_version,
                 'uploaded_by_user_id' => $job->initiated_by_user_id,
             ]);
 
@@ -92,7 +128,9 @@ class PollAiGenerationJob implements ShouldQueue
                 'actual_cost' => $status->actualCost ?: $job->estimated_cost,
                 'cost_source' => $status->actualCost ? 'provider_actual' : 'estimate_fallback',
                 'completed_at' => now(),
+                'heartbeat_at' => now(),
             ]);
+            $automation->markCompleted($job->fresh(['automationAttempt']), $job->actual_cost, $job->provider_request_id);
 
             $identityReviews?->dispatchFor($createdAsset);
 
@@ -107,6 +145,7 @@ class PollAiGenerationJob implements ShouldQueue
                 'error_message' => $this->safeMessage($exception->getMessage()),
                 'failed_at' => now(),
             ]);
+            $automation->markFailed($job, 'image_poll_failed', $this->safeMessage($exception->getMessage()), unknownExposure: true);
         }
     }
 
