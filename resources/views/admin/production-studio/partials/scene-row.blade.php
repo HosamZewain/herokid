@@ -39,7 +39,7 @@
         </div>
     @elseif(!$scenePersonalized)
         <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-            المشهد يحتاج تأكيد أن {{ $project->order->child_name }} هو بطل القصة داخل النص والتوجيه البصري ووضع الطفل قبل التوليد.
+            المشهد يحتاج تأكيد أن {{ $project->order->child_name }} هو بطل القصة داخل التوجيه البصري ووضع الطفل قبل التوليد. لا يلزم تكرار الاسم داخل النص السردي.
         </div>
     @endif
 

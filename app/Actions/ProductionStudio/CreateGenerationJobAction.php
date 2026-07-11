@@ -200,7 +200,7 @@ class CreateGenerationJobAction
             $conflicts = $scene->oldHeroConflicts($templateHero);
             $details = $conflicts !== []
                 ? ' اسم بطل القالب ما زال موجودًا في: '.implode('، ', $conflicts).'.'
-                : ' يجب أن يشير نص المشهد والتوجيه البصري أو وضع الطفل إلى طفل الطلب بصفته البطل.';
+                : ' يجب أن يشير التوجيه البصري ووضع الطفل إلى طفل الطلب بصفته البطل.';
 
             throw new RuntimeException('خصّص المشهد باسم الطفل قبل توليد الصورة.'.$details);
         }

@@ -66,11 +66,13 @@ class ProductionScene extends Model
 
     public function isPersonalizedForImageGeneration(): bool
     {
-        return $this->personalization_status === 'personalized'
+        $childHero = trim((string) ($this->personalized_hero_name ?: $this->project?->personalized_hero_name ?: $this->project?->order?->child_name));
+
+        return $this->personalization_status !== 'skipped'
+            && $childHero !== ''
             && $this->oldHeroConflicts() === []
-            && $this->fieldMentionsHero('story_text')
-            && $this->fieldMentionsHero('visual_direction')
-            && $this->fieldMentionsHero('child_action_pose');
+            && $this->fieldMentionsHero('visual_direction', $childHero)
+            && $this->fieldMentionsHero('child_action_pose', $childHero);
     }
 
     public function project()

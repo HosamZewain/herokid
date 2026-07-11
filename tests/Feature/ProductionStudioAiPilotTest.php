@@ -19,6 +19,7 @@ use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Ai\GenerationInputAssetResolver;
 use App\Services\Ai\ProductionPromptCompiler;
+use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -581,6 +582,54 @@ class ProductionStudioAiPilotTest extends TestCase
                 && ! array_key_exists('negative_prompt', $payload)
                 && ! array_key_exists('num_inference_steps', $payload);
         });
+    }
+
+    public function test_scene_generation_allows_narrative_text_without_repeating_child_name(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', 'image-bytes');
+        $this->enableFal();
+
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto(['orders/photos/kid.png'], ['child_name' => 'رقية']);
+        $project->update([
+            'template_hero_name' => 'مريم',
+            'personalized_hero_name' => 'رقية',
+            'child_story_role' => 'الأميرة رقية',
+            'personalization_status' => 'needs_review',
+        ]);
+        $scene = $project->scenes()->create([
+            'scene_number' => 2,
+            'title' => 'ثلاث ليالٍ فقط',
+            'story_text' => 'باب القصر انفتح بقوة، ودخل رجل عجوز مقطوع النفس يحذر من انطفاء الفانوس.',
+            'visual_direction' => 'رقية واقفة بجانب رجل عجوز داخل قاعة القصر وتراقبه بقلق.',
+            'child_action_pose' => 'رقية تقف بثبات وتنظر إلى الرجل العجوز باهتمام.',
+            'text_safe_area_notes' => 'اترك مساحة هادئة للنص في الجانب الأيسر.',
+            'personalized_hero_name' => 'رقية',
+            'template_hero_name' => 'مريم',
+            'personalization_status' => 'needs_review',
+        ]);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, 'approved-reference-bytes');
+
+        $this->assertStringNotContainsString('رقية', $scene->story_text);
+        $this->assertTrue($scene->isPersonalizedForImageGeneration());
+
+        $this->actingAs($admin)
+            ->post(route('admin.production-studio.ai.scene', [$project, $scene]), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+            ]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $job = SceneGenerationJob::firstOrFail();
+        $this->assertStringContainsString($scene->story_text, $job->prompt_snapshot);
+        $this->assertStringContainsString('رقية', $job->prompt_snapshot);
+
+        app(ScenePersonalizationService::class)->refreshSceneStatus($scene);
+        $this->assertSame('personalized', $scene->fresh()->personalization_status);
+        Queue::assertPushed(SubmitAiGenerationJob::class);
     }
 
     public function test_portrait_scene_output_is_rejected_before_it_becomes_an_asset(): void

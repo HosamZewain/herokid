@@ -102,7 +102,7 @@ class ScenePersonalizationService
         $templateHero = trim((string) ($scene->template_hero_name ?: $scene->project?->template_hero_name));
         $childName = trim((string) ($scene->personalized_hero_name ?: $scene->project?->personalized_hero_name ?: $scene->project?->order?->child_name));
         $conflicts = $scene->oldHeroConflicts($templateHero);
-        $missingHeroFields = collect(['story_text', 'visual_direction', 'child_action_pose'])
+        $missingHeroFields = collect(['visual_direction', 'child_action_pose'])
             ->reject(fn (string $field): bool => $scene->fieldMentionsHero($field, $childName))
             ->values()
             ->all();
@@ -113,7 +113,13 @@ class ScenePersonalizationService
         }
 
         if ($missingHeroFields !== []) {
-            $warnings[] = 'لا تشير الحقول التالية إلى الطفل بصفته بطل المشهد: '.implode('، ', $missingHeroFields);
+            $fieldLabels = [
+                'visual_direction' => 'التوجيه البصري',
+                'child_action_pose' => 'وضع الطفل',
+            ];
+            $warnings[] = 'لا تشير الحقول التالية إلى الطفل بصفته بطل المشهد: '.collect($missingHeroFields)
+                ->map(fn (string $field): string => $fieldLabels[$field] ?? $field)
+                ->implode('، ');
         }
 
         $scene->forceFill([
