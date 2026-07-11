@@ -70,6 +70,11 @@ class ProductionProject extends Model
         return $this->hasMany(SceneGenerationJob::class);
     }
 
+    public function printLayouts(): HasMany
+    {
+        return $this->hasMany(ProductionPrintLayout::class);
+    }
+
     public function approvedCharacterSheet(): HasOne
     {
         return $this->hasOne(ProductionProjectAsset::class)

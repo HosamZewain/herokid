@@ -13,6 +13,7 @@ class SettingsController extends Controller
     public function index()
     {
         $settings = Setting::all()->pluck('value', 'key');
+
         return view('admin.settings.index', compact('settings'));
     }
 
@@ -24,10 +25,10 @@ class SettingsController extends Controller
             ->toArray();
 
         $request->validate([
-            'settings'                => 'required|array',
-            'settings.site_name'      => 'required|string|max:100',
-            'settings.site_email'     => 'required|email',
-            'settings.whatsapp_number'=> 'required|string|max:20',
+            'settings' => 'required|array',
+            'settings.site_name' => 'required|string|max:100',
+            'settings.site_email' => 'required|email',
+            'settings.whatsapp_number' => 'required|string|max:20',
             'settings.price_soft_cover' => 'required|numeric|min:1',
             'settings.price_hard_cover' => 'required|numeric|min:1',
             'settings.currency_label' => 'sometimes|required|string|max:20',
@@ -36,6 +37,9 @@ class SettingsController extends Controller
             'settings.shipping_coverage_text' => 'sometimes|required|string|max:255',
             'settings.payment_methods' => 'nullable|string|max:2000',
             'settings.shop_enabled' => 'nullable|boolean',
+            'settings.production_layout_website' => 'nullable|string|max:255',
+            'settings.production_back_cover_text' => 'nullable|string|max:1000',
+            'settings.production_cover_subtitle_template' => 'nullable|string|max:255',
         ]);
 
         if ($request->has('settings.shop_enabled')) {

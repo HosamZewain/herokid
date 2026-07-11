@@ -68,6 +68,25 @@
                 </div>
             </div>
 
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b">إعدادات إخراج كتب الاستوديو</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">الموقع على الغلاف الخلفي</label>
+                        <input type="text" name="settings[production_layout_website]" value="{{ $s('production_layout_website') }}" class="w-full rounded-lg border-gray-300 text-sm" dir="ltr">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">قالب سطر اسم الطفل على الغلاف</label>
+                        <input type="text" name="settings[production_cover_subtitle_template]" value="{{ $s('production_cover_subtitle_template') }}" class="w-full rounded-lg border-gray-300 text-sm">
+                        <p class="mt-1 text-xs text-gray-400">استخدم &#123;&#123;child_name&#125;&#125; لمكان اسم الطفل.</p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">النص الافتراضي للغلاف الخلفي</label>
+                        <textarea name="settings[production_back_cover_text]" rows="3" class="w-full rounded-lg border-gray-300 text-sm">{{ $s('production_back_cover_text') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
             {{-- ===== Contact & WhatsApp ===== --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">

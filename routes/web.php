@@ -335,6 +335,13 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('production-studio/{project}/assets/{asset}/approve', [ProductionStudioController::class, 'approveAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.approve');
     Route::post('production-studio/{project}/assets/{asset}/reject', [ProductionStudioController::class, 'rejectAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.reject');
     Route::delete('production-studio/{project}/assets/{asset}', [ProductionStudioController::class, 'deleteAsset'])->middleware('permission:production_studio.ai_approve')->name('production-studio.assets.delete');
+    Route::post('production-studio/{project}/layout/assets', [ProductionStudioController::class, 'uploadLayoutAsset'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.assets.store');
+    Route::get('production-studio/{project}/layout/assets/{asset}/preview', [ProductionStudioController::class, 'serveGeneratedAsset'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.assets.preview');
+    Route::post('production-studio/{project}/layout/save', [ProductionStudioController::class, 'saveLayout'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.save');
+    Route::post('production-studio/{project}/layout/generate', [ProductionStudioController::class, 'generateLayout'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.generate');
+    Route::get('production-studio/{project}/layout/preview', [ProductionStudioController::class, 'previewLayout'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.preview');
+    Route::get('production-studio/{project}/layout/{layout}/status', [ProductionStudioController::class, 'layoutStatus'])->middleware('permission:production_studio.layout_manage')->name('production-studio.layout.status');
+    Route::get('production-studio/{project}/layout/{layout}/download/{file}', [ProductionStudioController::class, 'downloadLayoutFile'])->middleware('permission:production_studio.layout_download')->name('production-studio.layout.download');
 
     Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
     Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');

@@ -113,7 +113,9 @@
             'qa-checklist' => 'مراجعة الجودة',
             'activity-log' => 'سجل النشاط',
         ];
-        $layoutPrintItems = ['Reader Order PDF', 'Print-Ready Booklet PDF', 'Print Manifest', 'Proof Print Checklist'];
+        $approvedCoverAssets = $coverAssets->where('status', 'approved');
+        $backCoverAssets = $project->assets->where('asset_type', 'back_cover_image')->where('status', 'approved');
+        $layoutStatusLabels = ['draft' => 'مسودة', 'queued' => 'في قائمة الانتظار', 'processing' => 'جارٍ التوليد', 'ready' => 'جاهز', 'failed' => 'فشل'];
         $activityFilters = ['all' => 'All', 'project' => 'project', 'story' => 'story', 'character' => 'character', 'ai' => 'AI', 'asset' => 'asset', 'qa' => 'QA', 'status' => 'status'];
         $activityLogs = $project->activityLogs->sortByDesc('created_at')->values()->map(function ($log, $index) {
             $action = $log->action;
@@ -954,18 +956,154 @@
         @include('admin.production-studio.partials.workflow-card-open', [
             'id' => 'layout-print',
             'title' => 'الإخراج والطباعة',
-            'description' => 'مكان compact لمخرجات Reader PDF وPrint PDF والمانيفست.',
-            'status' => 'قادم لاحقًا',
-            'statusTone' => 'gray',
-            'summary' => 'لا يتم توليد PDF تلقائيًا في هذه المرحلة',
+            'description' => 'تجهيز 28 صفحة A4 ثم إنشاء Reader PDF ونسخة A3 مفروضة للطباعة.',
+            'status' => $printLayout ? ($layoutStatusLabels[$printLayout->status] ?? $printLayout->status) : 'لم يبدأ',
+            'statusTone' => $printLayout?->status === 'ready' ? 'emerald' : ($printLayout?->status === 'failed' ? 'red' : 'amber'),
+            'warning' => $layoutReadiness['ready'] ? null : count($layoutReadiness['errors']).' متطلبات ناقصة',
+            'summary' => $layoutReadiness['approved_scenes'].'/13 صورة مشهد معتمدة | 7 شيت A3 Duplex | 14 وجه طباعة',
         ])
-            <div class="grid grid-cols-1 gap-4 text-right md:grid-cols-4">
-                @foreach($layoutPrintItems as $assetLabel)
-                    <div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
-                        <p class="font-black text-gray-800">{{ $assetLabel }}</p>
-                        <p class="mt-2 text-sm text-gray-500">مكان مخصص للمرحلة القادمة.</p>
+            <div class="space-y-5 text-right" data-layout-workspace>
+                <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                    <p class="font-black text-indigo-950">ترتيب العمل</p>
+                    <p class="mt-2 text-sm leading-7 text-indigo-800">1. اعتمد الغلاف و13 صورة مشهد. 2. راجع نص ومكانه لكل مشهد. 3. احفظ وافتح المعاينة. 4. ولّد الملفات وانتظر الـ Queue. 5. نزّل الملفات وراجع Proof Checklist.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">المشاهد المعتمدة</p><p class="mt-1 text-xl font-black">{{ $layoutReadiness['approved_scenes'] }}/13</p></div>
+                    <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">صفحات القارئ</p><p class="mt-1 text-xl font-black">28 A4</p></div>
+                    <div class="rounded-xl bg-gray-50 p-4"><p class="text-xs text-gray-500">شيتات الطباعة</p><p class="mt-1 text-xl font-black">7 A3</p></div>
+                    <div class="rounded-xl {{ $layoutReadiness['ready'] ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800' }} p-4"><p class="text-xs">الجاهزية</p><p class="mt-1 text-lg font-black">{{ $layoutReadiness['ready'] ? 'جاهز للتوليد' : 'يحتاج استكمال' }}</p></div>
+                </div>
+
+                @if(!$layoutReadiness['ready'])
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-7 text-amber-900">
+                        <p class="font-black">أكمل المتطلبات التالية:</p>
+                        <ul class="mt-2 list-inside list-disc">
+                            @foreach($layoutReadiness['errors'] as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
                     </div>
-                @endforeach
+                @endif
+
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <form method="POST" action="{{ route('admin.production-studio.layout.assets.store', $project) }}" enctype="multipart/form-data" class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        @csrf
+                        <input type="hidden" name="asset_type" value="cover_image">
+                        <label class="block text-sm font-black text-gray-800">رفع غلاف أمامي يدوي</label>
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" required class="mt-3 block w-full rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                        <button class="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-black text-white">رفع الغلاف الأمامي</button>
+                    </form>
+                    <form method="POST" action="{{ route('admin.production-studio.layout.assets.store', $project) }}" enctype="multipart/form-data" class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        @csrf
+                        <input type="hidden" name="asset_type" value="back_cover_image">
+                        <label class="block text-sm font-black text-gray-800">رفع غلاف خلفي اختياري</label>
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" required class="mt-3 block w-full rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                        <button class="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-black text-white">رفع الغلاف الخلفي</button>
+                    </form>
+                </div>
+
+                <form method="POST" action="{{ route('admin.production-studio.layout.generate', $project) }}" data-studio-layout-form class="space-y-5">
+                    @csrf
+                    <div class="grid grid-cols-1 gap-4 rounded-xl border border-gray-100 p-4 md:grid-cols-2 lg:grid-cols-4">
+                        <label class="text-sm font-black text-gray-700 lg:col-span-2">عنوان الكتاب
+                            <input name="book_title" value="{{ old('book_title', $layoutSettings['book_title']) }}" required class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                        </label>
+                        <label class="text-sm font-black text-gray-700">سطر اسم الطفل على الغلاف
+                            <input name="cover_subtitle" value="{{ old('cover_subtitle', $layoutSettings['cover_subtitle']) }}" class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                        </label>
+                        <label class="text-sm font-black text-gray-700">مكان عنوان الغلاف
+                            <select name="cover_title_position" class="mt-2 w-full rounded-lg border-gray-200">
+                                <option value="top" @selected($layoutSettings['cover_title_position'] === 'top')>أعلى الغلاف</option>
+                                <option value="bottom" @selected($layoutSettings['cover_title_position'] === 'bottom')>أسفل الغلاف</option>
+                            </select>
+                        </label>
+                        <label class="text-sm font-black text-gray-700">الغلاف الأمامي
+                            <select name="cover_asset_id" required class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                                <option value="">اختر غلافًا معتمدًا</option>
+                                @foreach($approvedCoverAssets as $asset)
+                                    <option value="{{ $asset->id }}" @selected((int) old('cover_asset_id', $layoutSettings['cover_asset_id']) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm font-black text-gray-700">الغلاف الخلفي
+                            <select name="back_cover_asset_id" class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                                <option value="">تصميم HeroKid تلقائي</option>
+                                @foreach($backCoverAssets as $asset)
+                                    <option value="{{ $asset->id }}" @selected((int) old('back_cover_asset_id', $layoutSettings['back_cover_asset_id']) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm font-black text-gray-700 lg:col-span-2">نص الغلاف الخلفي
+                            <textarea name="back_cover_text" rows="2" class="mt-2 w-full rounded-lg border-gray-200 text-right">{{ old('back_cover_text', $layoutSettings['back_cover_text']) }}</textarea>
+                        </label>
+                        <label class="text-sm font-black text-gray-700">الموقع
+                            <input name="website" value="{{ old('website', $layoutSettings['website']) }}" class="mt-2 w-full rounded-lg border-gray-200 text-left" dir="ltr">
+                        </label>
+                        <label class="text-sm font-black text-gray-700">اتجاه التجليد
+                            <select name="binding_direction" class="mt-2 w-full rounded-lg border-gray-200">
+                                <option value="rtl" @selected($layoutSettings['binding_direction'] === 'rtl')>عربي — التجليد من اليمين</option>
+                                <option value="ltr" @selected($layoutSettings['binding_direction'] === 'ltr')>يسار إلى يمين</option>
+                            </select>
+                        </label>
+                        <input type="hidden" name="duplex_flip" value="short_edge">
+                        <label class="text-sm font-black text-gray-700">حجم النص
+                            <input type="number" name="font_size" min="14" max="30" value="{{ old('font_size', $layoutSettings['font_size']) }}" class="mt-2 w-full rounded-lg border-gray-200">
+                        </label>
+                        <label class="text-sm font-black text-gray-700">وضوح خلفية النص %
+                            <input type="number" name="text_panel_opacity" min="70" max="100" value="{{ old('text_panel_opacity', $layoutSettings['text_panel_opacity']) }}" class="mt-2 w-full rounded-lg border-gray-200">
+                        </label>
+                    </div>
+
+                    <details class="rounded-xl border border-gray-100 bg-gray-50" open>
+                        <summary class="cursor-pointer p-4 font-black text-gray-900">نصوص المشاهد ومكان النص</summary>
+                        <div class="space-y-3 border-t border-gray-100 p-4">
+                            @foreach($project->scenes->sortBy('scene_number') as $scene)
+                                @php($sceneLayout = data_get($layoutSettings, 'scenes.'.$scene->id, []))
+                                <div class="grid grid-cols-1 gap-3 rounded-xl bg-white p-4 ring-1 ring-gray-100 lg:grid-cols-6">
+                                    <div class="lg:col-span-1"><p class="font-black">مشهد {{ $scene->scene_number }}</p><p class="text-xs text-gray-500">صفحتا {{ $scene->scene_number * 2 }}–{{ $scene->scene_number * 2 + 1 }}</p></div>
+                                    <textarea name="scenes[{{ $scene->id }}][text_content]" rows="4" required class="rounded-lg border-gray-200 text-right lg:col-span-3">{{ old('scenes.'.$scene->id.'.text_content', $sceneLayout['text_content'] ?? $scene->story_text) }}</textarea>
+                                    <label class="text-xs font-black text-gray-600">صفحة النص
+                                        <select name="scenes[{{ $scene->id }}][text_side]" class="mt-2 w-full rounded-lg border-gray-200">
+                                            <option value="right" @selected(($sceneLayout['text_side'] ?? null) === 'right')>اليمنى</option>
+                                            <option value="left" @selected(($sceneLayout['text_side'] ?? null) === 'left')>اليسرى</option>
+                                        </select>
+                                    </label>
+                                    <label class="text-xs font-black text-gray-600">موضع النص
+                                        <select name="scenes[{{ $scene->id }}][text_position]" class="mt-2 w-full rounded-lg border-gray-200">
+                                            <option value="top" @selected(($sceneLayout['text_position'] ?? null) === 'top')>أعلى</option>
+                                            <option value="center" @selected(($sceneLayout['text_position'] ?? null) === 'center')>منتصف</option>
+                                            <option value="bottom" @selected(($sceneLayout['text_position'] ?? 'bottom') === 'bottom')>أسفل</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            @endforeach
+                        </div>
+                    </details>
+
+                    <div data-layout-feedback class="hidden rounded-xl border p-4 text-sm font-black"></div>
+                    <div class="flex flex-col gap-3 md:flex-row">
+                        <button type="submit" data-layout-action="generate" class="rounded-xl bg-indigo-600 px-6 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300" @disabled(!$layoutReadiness['ready'])>توليد ملفات الإخراج والطباعة</button>
+                        <button type="submit" data-layout-action="save" formaction="{{ route('admin.production-studio.layout.save', $project) }}" class="rounded-xl bg-gray-900 px-6 py-3 font-black text-white">حفظ الإعدادات</button>
+                        <a href="{{ route('admin.production-studio.layout.preview', $project) }}" target="_blank" class="rounded-xl bg-gray-100 px-6 py-3 text-center font-black text-gray-700">معاينة 28 صفحة</a>
+                    </div>
+                </form>
+
+                <div class="rounded-xl border border-gray-100 bg-gray-50 p-4" data-layout-status-card data-layout-status-url="{{ $printLayout ? route('admin.production-studio.layout.status', [$project, $printLayout]) : '' }}">
+                    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div><p class="font-black text-gray-950">آخر إصدار</p><p class="text-sm text-gray-500" data-layout-status-label>{{ $printLayout ? 'v'.$printLayout->version_number.' — '.($layoutStatusLabels[$printLayout->status] ?? $printLayout->status) : 'لا يوجد إصدار بعد' }}</p></div>
+                        @if($printLayout?->generated_at)<p class="text-xs text-gray-500">{{ $printLayout->generated_at->format('Y-m-d H:i') }}</p>@endif
+                    </div>
+                    <p data-layout-error class="mt-3 text-sm font-bold text-red-600">{{ $printLayout?->error_message }}</p>
+                    <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4" data-layout-downloads>
+                        @if($printLayout?->isReady())
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'reader']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Reader Order PDF</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'print']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Print-Ready A3 PDF</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'manifest']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Print Manifest</a>
+                            <a href="{{ route('admin.production-studio.layout.download', [$project, $printLayout, 'proof']) }}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Proof Checklist</a>
+                        @endif
+                    </div>
+                </div>
             </div>
         @include('admin.production-studio.partials.workflow-card-close')
 
@@ -1140,6 +1278,49 @@
                 }
 
                 studioFeedback(feedback, 'info', `حالة المهمة #${job.id}: ${job.status}. إذا بقيت Queued تأكد من تشغيل Queue Worker على السيرفر.`);
+            }
+        }
+
+        function renderLayoutStatus(layout) {
+            const card = document.querySelector('[data-layout-status-card]');
+            if (!card || !layout) return;
+
+            const labels = { draft: 'مسودة', queued: 'في قائمة الانتظار', processing: 'جارٍ التوليد', ready: 'جاهز', failed: 'فشل' };
+            card.dataset.layoutStatusUrl = card.dataset.layoutStatusUrl || '';
+            card.querySelector('[data-layout-status-label]').textContent = `v${layout.version} — ${labels[layout.status] || layout.status}`;
+            card.querySelector('[data-layout-error]').textContent = layout.error_message || '';
+
+            const downloads = card.querySelector('[data-layout-downloads]');
+            if (downloads && layout.downloads && Object.keys(layout.downloads).length) {
+                downloads.innerHTML = `
+                    <a href="${layout.downloads.reader}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Reader Order PDF</a>
+                    <a href="${layout.downloads.print}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Print-Ready A3 PDF</a>
+                    <a href="${layout.downloads.manifest}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Print Manifest</a>
+                    <a href="${layout.downloads.proof}" class="rounded-lg bg-white px-4 py-3 text-center font-black text-indigo-700 ring-1 ring-indigo-100">Proof Checklist</a>
+                `;
+            }
+        }
+
+        async function pollLayout(statusUrl, feedback) {
+            for (let attempt = 0; attempt < 30; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 1200 : 5000));
+                const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!response.ok) {
+                    studioFeedback(feedback, 'error', 'تعذر قراءة حالة الإخراج.');
+                    return;
+                }
+                const payload = await response.json();
+                renderLayoutStatus(payload.layout);
+
+                if (payload.layout.status === 'ready') {
+                    studioFeedback(feedback, 'success', 'اكتملت ملفات الإخراج. روابط التنزيل جاهزة أسفل البطاقة.');
+                    return;
+                }
+                if (payload.layout.status === 'failed') {
+                    studioFeedback(feedback, 'error', payload.layout.error_message || 'فشل توليد ملفات الإخراج.');
+                    return;
+                }
+                studioFeedback(feedback, 'info', `حالة الإخراج: ${payload.layout.status}. تأكد من تشغيل Queue Worker إذا بقيت المهمة في الانتظار.`);
             }
         }
 
@@ -1336,6 +1517,47 @@
         });
 
         document.addEventListener('submit', async function (event) {
+            const layoutForm = event.target.closest('[data-studio-layout-form]');
+            if (layoutForm) {
+                event.preventDefault();
+                const button = event.submitter;
+                const feedback = layoutForm.querySelector('[data-layout-feedback]');
+                const originalText = button?.textContent;
+                const action = button?.formAction || layoutForm.action;
+
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'جارٍ التنفيذ...';
+                }
+                studioFeedback(feedback, 'info', 'جارٍ حفظ إعدادات الإخراج...');
+
+                try {
+                    const response = await fetch(action, {
+                        method: 'POST',
+                        body: new FormData(layoutForm),
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || payload.ok === false) {
+                        const validationMessage = payload.errors ? Object.values(payload.errors).flat().join(' ') : null;
+                        studioFeedback(feedback, 'error', validationMessage || payload.message || 'تعذر تنفيذ الإخراج.');
+                        return;
+                    }
+
+                    renderLayoutStatus(payload.layout);
+                    studioFeedback(feedback, 'success', payload.message || 'تم حفظ إعدادات الإخراج.');
+                    if (payload.status_url) pollLayout(payload.status_url, feedback);
+                } catch (error) {
+                    studioFeedback(feedback, 'error', 'حدث خطأ في الاتصال أثناء حفظ الإخراج.');
+                } finally {
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = originalText;
+                    }
+                }
+                return;
+            }
+
             const form = event.target.closest('[data-studio-ai-form]');
             if (!form) return;
 

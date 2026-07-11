@@ -169,18 +169,18 @@ Each driver should translate the Studio scene, character profile, and approved r
 
 OpenAI text/vision uses the Responses API for structured JSON. OpenAI image generation uses a separate image-provider implementation, so the text/vision adapter and image-generation adapter stay independent.
 
-## Future PDF and Print Automation
+## PDF and Print Automation
 
-PDF automation should be separate from image generation.
+Layout and print automation is now implemented separately from image generation through `ProductionLayoutBuilder`, `GenerateProductionLayoutJob`, and versioned `production_print_layouts` records.
 
-Recommended future outputs:
+Current outputs:
 
-- Reader-order A4 portrait preview PDF
+- Reader-order A4 portrait PDF
 - Print-imposed A3 landscape booklet PDF
 - Print manifest with sheet order, page numbers, and flip direction
-- Proof checklist asset
+- Proof checklist PDF
 
-Automation should write versioned assets and never overwrite original order files silently.
+The renderer consumes approved Studio image assets and never overwrites original order files. Future AI providers must remain independent from this deterministic PDF pipeline.
 
 ## Prompt Snapshot Policy
 

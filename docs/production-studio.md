@@ -80,6 +80,7 @@ Core tables:
 - `production_qa_checks`: mandatory and optional QA checklist rows.
 - `production_project_activity_logs`: Studio-specific project activity history.
 - `production_project_assets`: future/manual asset references.
+- `production_print_layouts`: versioned Reader PDF, imposed print PDF, manifest, and proof checklist outputs.
 
 Future AI foundation:
 
@@ -104,6 +105,8 @@ Permissions added:
 - `production_studio.archive`
 - `production_studio.delete_or_cancel`
 - `production_studio.settings`
+- `production_studio.layout_manage`
+- `production_studio.layout_download`
 
 The UI hides menu items and actions when permissions are missing. Routes enforce permissions server-side.
 
@@ -136,6 +139,17 @@ Staff can manually record:
 This is structured for image production tools. The optional Phase 2 AI pilot only calls Fal when explicitly configured and enabled.
 
 Phase 2 AI generation is documented separately in `docs/production-studio-ai-pilot.md`.
+
+## Layout & Print
+
+The Layout & Print phase is implemented as an asynchronous, private production workflow. It validates the approved cover and all 13 final scene images, provides a 28-page reader preview, and generates:
+
+- Reader-order A4 PDF
+- Seven-sheet duplex A3 booklet PDF
+- Print-order CSV manifest
+- Proof-print checklist PDF
+
+It changes only the Studio stage to `quality_check`; the original order status remains unchanged. Full setup and operating instructions are in `docs/production-studio-layout-print.md`.
 
 ## QA Behavior
 
@@ -196,6 +210,7 @@ HERO_KID_PRODUCTION_STUDIO_ENABLED=false
 
 ```bash
 php artisan test tests/Feature/ProductionStudioTest.php
+php artisan test tests/Feature/ProductionStudioLayoutPrintTest.php
 php artisan test
 npm run build
 ```

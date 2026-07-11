@@ -8,10 +8,12 @@ use App\Actions\ProductionStudio\DeleteGeneratedAssetAction;
 use App\Actions\ProductionStudio\RejectGeneratedAssetAction;
 use App\DTOs\Ai\StructuredAiResult;
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateProductionLayoutJob;
 use App\Jobs\ProcessStructuredAiJob;
 use App\Models\AiModel;
 use App\Models\AiProvider;
 use App\Models\Order;
+use App\Models\ProductionPrintLayout;
 use App\Models\ProductionProject;
 use App\Models\ProductionProjectAsset;
 use App\Models\ProductionQaCheck;
@@ -23,6 +25,7 @@ use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
+use App\Services\ProductionStudio\ProductionLayoutBuilder;
 use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\AdminActivityLogger;
 use App\Support\Ai\SupportedProviderRegistry;
@@ -30,8 +33,11 @@ use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ProductionStudioController extends Controller
 {
@@ -88,7 +94,7 @@ class ProductionStudioController extends Controller
             ->with('success', 'تم إنشاء مشروع استوديو الإنتاج بدون تغيير حالة الطلب الأصلي.');
     }
 
-    public function show(ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer)
+    public function show(ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer, ProductionLayoutBuilder $layoutBuilder)
     {
         $this->ensureEnabled();
 
@@ -114,6 +120,7 @@ class ProductionStudioController extends Controller
             'generationJobs.model',
             'generationJobs.initiator',
             'activityLogs.actor',
+            'printLayouts.generatedBy',
         ]);
 
         $aiModels = AiModel::query()
@@ -141,6 +148,8 @@ class ProductionStudioController extends Controller
         $sceneExtractionPreview = session($this->sceneExtractionSessionKey($project))
             ?: $this->latestStructuredAiPreview($project, 'scene_extraction');
         $sceneExtractionPreview = $personalizer->decoratePreview($project, $sceneExtractionPreview);
+        $printLayout = $project->printLayouts->sortByDesc('version_number')->first();
+        $layoutSettings = $layoutBuilder->normalizedSettings($project, $printLayout?->settings_json ?? []);
 
         return view('admin.production-studio.show', [
             'project' => $project,
@@ -164,6 +173,9 @@ class ProductionStudioController extends Controller
             'existingProductionPrompt' => auth()->user()->hasPermission('orders.production_prompt.manage')
                 ? StoryProductionPrompt::forOrder($project->order)
                 : null,
+            'printLayout' => $printLayout,
+            'layoutSettings' => $layoutSettings,
+            'layoutReadiness' => $layoutBuilder->readiness($project, $layoutSettings),
         ]);
     }
 
@@ -220,6 +232,161 @@ class ProductionStudioController extends Controller
         }
 
         return $this->privateCachedFileResponse($disk->path($asset->file_path));
+    }
+
+    public function uploadLayoutAsset(Request $request, ProductionProject $project)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'asset_type' => ['required', Rule::in(['cover_image', 'back_cover_image'])],
+            'image' => ['required', 'file', 'max:15360'],
+        ]);
+        $file = $request->file('image');
+        $contents = file_get_contents($file->getRealPath());
+        $imageInfo = $contents === false ? false : @getimagesizefromstring($contents);
+        $mime = $imageInfo['mime'] ?? null;
+        $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+
+        if (! $imageInfo || ! isset($extensions[$mime])) {
+            return back()->withErrors(['image' => 'ارفع صورة صالحة بصيغة JPG أو PNG أو WebP.']);
+        }
+
+        $type = $validated['asset_type'];
+        $path = "production-studio/projects/{$project->id}/layout/manual/".Str::uuid().'.'.$extensions[$mime];
+        Storage::disk('local')->put($path, $contents);
+
+        if ($type === 'cover_image') {
+            $project->assets()->where('asset_type', 'cover_image')->update(['is_final' => false]);
+        }
+
+        $asset = $project->assets()->create([
+            'asset_type' => $type,
+            'label' => $type === 'cover_image' ? 'Manual Front Cover' : 'Manual Back Cover',
+            'file_path' => $path,
+            'status' => 'approved',
+            'is_final' => $type === 'cover_image',
+            'metadata_json' => [
+                'source' => 'manual_layout_upload',
+                'mime_type' => $mime,
+                'width' => $imageInfo[0],
+                'height' => $imageInfo[1],
+                'size_bytes' => strlen($contents),
+            ],
+            'uploaded_by_user_id' => auth()->id(),
+            'reviewed_by_user_id' => auth()->id(),
+            'reviewed_at' => now(),
+        ]);
+
+        ProductionStudio::log($project, 'layout.asset_uploaded', 'تم رفع أصل يدوي للإخراج والطباعة.', [
+            'asset_id' => $asset->id,
+            'asset_type' => $type,
+        ], auth()->user());
+
+        return back()->with('success', 'تم رفع صورة الإخراج وحفظها بصورة خاصة.');
+    }
+
+    public function saveLayout(Request $request, ProductionProject $project, ProductionLayoutBuilder $builder)
+    {
+        $this->ensureEnabled();
+        $settings = $builder->normalizedSettings($project, $this->validatedLayoutSettings($request, $project));
+        $layout = $this->editablePrintLayout($project, $settings);
+        $layout->update(['settings_json' => $settings]);
+
+        ProductionStudio::log($project, 'layout.settings_saved', 'تم حفظ إعدادات الإخراج والطباعة.', [
+            'layout_id' => $layout->id,
+            'version' => $layout->version_number,
+        ], auth()->user());
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'تم حفظ إعدادات الإخراج.', 'layout' => $this->layoutPayload($layout)]);
+        }
+
+        return back()->with('success', 'تم حفظ إعدادات الإخراج والطباعة.');
+    }
+
+    public function generateLayout(Request $request, ProductionProject $project, ProductionLayoutBuilder $builder)
+    {
+        $this->ensureEnabled();
+        $settings = $builder->normalizedSettings($project, $this->validatedLayoutSettings($request, $project));
+        $readiness = $builder->readiness($project, $settings);
+
+        if (! $readiness['ready']) {
+            $message = implode(' ', $readiness['errors']);
+
+            return $request->expectsJson()
+                ? response()->json(['ok' => false, 'message' => $message], 422)
+                : back()->withErrors(['layout' => $message])->withInput();
+        }
+
+        $layout = $this->editablePrintLayout($project, $settings);
+        $layout->update([
+            'settings_json' => $settings,
+            'status' => 'queued',
+            'error_message' => null,
+            'generated_by_user_id' => auth()->id(),
+        ]);
+        GenerateProductionLayoutJob::dispatch($layout->id);
+
+        ProductionStudio::log($project, 'layout.queued', 'تم إرسال ملفات الإخراج والطباعة إلى قائمة المعالجة.', [
+            'layout_id' => $layout->id,
+            'version' => $layout->version_number,
+        ], auth()->user());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'تم إرسال ملفات الإخراج إلى قائمة المعالجة.',
+                'layout' => $this->layoutPayload($layout),
+                'status_url' => route('admin.production-studio.layout.status', [$project, $layout]),
+            ], 201);
+        }
+
+        return back()->with('success', 'تم إرسال ملفات الإخراج إلى قائمة المعالجة.');
+    }
+
+    public function layoutStatus(ProductionProject $project, ProductionPrintLayout $layout): JsonResponse
+    {
+        $this->ensureEnabled();
+        abort_unless($layout->production_project_id === $project->id, 404);
+
+        return response()->json(['ok' => true, 'layout' => $this->layoutPayload($layout->fresh())]);
+    }
+
+    public function previewLayout(ProductionProject $project, ProductionLayoutBuilder $builder)
+    {
+        $this->ensureEnabled();
+        $project->load(['order.story', 'scenes.approvedFinalImage', 'assets', 'printLayouts']);
+        $layout = $project->printLayouts->sortByDesc('version_number')->first();
+        $settings = $builder->normalizedSettings($project, $layout?->settings_json ?? []);
+
+        return view('admin.production-studio.layout-preview', [
+            'project' => $project,
+            'layout' => $layout,
+            'settings' => $settings,
+            'coverAsset' => $project->assets->firstWhere('id', (int) ($settings['cover_asset_id'] ?? 0)),
+            'backCoverAsset' => $project->assets->firstWhere('id', (int) ($settings['back_cover_asset_id'] ?? 0)),
+        ]);
+    }
+
+    public function downloadLayoutFile(ProductionProject $project, ProductionPrintLayout $layout, string $file)
+    {
+        $this->ensureEnabled();
+        abort_unless($layout->production_project_id === $project->id && $layout->isReady(), 404);
+        $paths = [
+            'reader' => [$layout->reader_pdf_path, 'reader-order.pdf'],
+            'print' => [$layout->print_pdf_path, 'print-ready-a3-booklet.pdf'],
+            'manifest' => [$layout->manifest_path, 'print-manifest.csv'],
+            'proof' => [$layout->proof_checklist_path, 'proof-print-checklist.pdf'],
+        ];
+        abort_unless(isset($paths[$file]), 404);
+        [$path, $name] = $paths[$file];
+        abort_unless(is_string($path) && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->download($path, $project->order?->order_number.'-'.$name, [
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 
     private function privateCachedFileResponse(string $path)
@@ -1501,6 +1668,85 @@ class ProductionStudioController extends Controller
             'is_final' => $asset->is_final,
             'review_notes' => $asset->review_notes,
             'rejection_reason' => $asset->rejection_reason,
+        ];
+    }
+
+    private function validatedLayoutSettings(Request $request, ProductionProject $project): array
+    {
+        $validated = $request->validate([
+            'book_title' => ['required', 'string', 'max:255'],
+            'cover_subtitle' => ['nullable', 'string', 'max:255'],
+            'cover_title_position' => ['required', Rule::in(['top', 'bottom'])],
+            'back_cover_text' => ['nullable', 'string', 'max:1000'],
+            'website' => ['nullable', 'string', 'max:255'],
+            'binding_direction' => ['required', Rule::in(['rtl', 'ltr'])],
+            'duplex_flip' => ['required', Rule::in(['short_edge', 'long_edge'])],
+            'font_size' => ['required', 'integer', 'min:14', 'max:30'],
+            'text_panel_opacity' => ['required', 'integer', 'min:70', 'max:100'],
+            'cover_asset_id' => ['required', 'integer'],
+            'back_cover_asset_id' => ['nullable', 'integer'],
+            'scenes' => ['required', 'array', 'size:13'],
+            'scenes.*.text_content' => ['required', 'string', 'max:10000'],
+            'scenes.*.text_side' => ['required', Rule::in(['left', 'right'])],
+            'scenes.*.text_position' => ['required', Rule::in(['top', 'center', 'bottom'])],
+        ]);
+
+        $sceneIds = $project->scenes()->pluck('id')->map(fn ($id): string => (string) $id)->sort()->values()->all();
+        $submittedSceneIds = collect(array_keys($validated['scenes']))->map(fn ($id): string => (string) $id)->sort()->values()->all();
+
+        if ($sceneIds !== $submittedSceneIds) {
+            throw ValidationException::withMessages(['scenes' => 'إعدادات المشاهد لا تطابق مشاهد هذا المشروع.']);
+        }
+
+        $cover = $project->assets()->whereKey($validated['cover_asset_id'])->where('asset_type', 'cover_image')->where('status', 'approved')->first();
+        if (! $cover) {
+            throw ValidationException::withMessages(['cover_asset_id' => 'الغلاف المحدد غير معتمد أو لا ينتمي إلى هذا المشروع.']);
+        }
+
+        if (! empty($validated['back_cover_asset_id'])) {
+            $backCover = $project->assets()->whereKey($validated['back_cover_asset_id'])->where('asset_type', 'back_cover_image')->where('status', 'approved')->first();
+            if (! $backCover) {
+                throw ValidationException::withMessages(['back_cover_asset_id' => 'الغلاف الخلفي المحدد غير معتمد أو لا ينتمي إلى هذا المشروع.']);
+            }
+        }
+
+        return $validated;
+    }
+
+    private function editablePrintLayout(ProductionProject $project, array $settings): ProductionPrintLayout
+    {
+        return DB::transaction(function () use ($project, $settings): ProductionPrintLayout {
+            $latest = $project->printLayouts()->lockForUpdate()->orderByDesc('version_number')->first();
+
+            if ($latest && in_array($latest->status, ['draft', 'failed'], true)) {
+                return $latest;
+            }
+
+            return $project->printLayouts()->create([
+                'version_number' => ($latest?->version_number ?? 0) + 1,
+                'status' => 'draft',
+                'settings_json' => $settings,
+                'generated_by_user_id' => auth()->id(),
+            ]);
+        });
+    }
+
+    private function layoutPayload(ProductionPrintLayout $layout): array
+    {
+        $project = $layout->project ?: $layout->project()->firstOrFail();
+
+        return [
+            'id' => $layout->id,
+            'version' => $layout->version_number,
+            'status' => $layout->status,
+            'error_message' => $layout->error_message,
+            'generated_at' => $layout->generated_at?->format('Y-m-d H:i:s'),
+            'downloads' => $layout->isReady() ? [
+                'reader' => route('admin.production-studio.layout.download', [$project, $layout, 'reader']),
+                'print' => route('admin.production-studio.layout.download', [$project, $layout, 'print']),
+                'manifest' => route('admin.production-studio.layout.download', [$project, $layout, 'manifest']),
+                'proof' => route('admin.production-studio.layout.download', [$project, $layout, 'proof']),
+            ] : [],
         ];
     }
 }
