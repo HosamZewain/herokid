@@ -1,9 +1,17 @@
+@php
+    $bookTitle = data_get($settings, 'book_title') ?: ($project->order?->story?->title ?: 'HeroKid');
+    $coverSubtitle = data_get($settings, 'cover_subtitle');
+    $coverTitlePosition = data_get($settings, 'cover_title_position', 'top');
+    $backCoverText = data_get($settings, 'back_cover_text', '');
+    $website = data_get($settings, 'website', 'hero-kid.com');
+@endphp
+
 <x-admin-layout>
     <div dir="rtl" class="space-y-6">
         <div class="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
             <div class="text-right">
                 <p class="text-sm font-bold text-indigo-600">معاينة ترتيب القارئ</p>
-                <h1 class="text-2xl font-black text-gray-950">{{ $settings['book_title'] }}</h1>
+                <h1 class="text-2xl font-black text-gray-950">{{ $bookTitle }}</h1>
                 <p class="mt-1 text-sm text-gray-500">28 صفحة A4: غلاف أمامي، 13 سبريد قصة، وغلاف خلفي.</p>
             </div>
             <a href="{{ route('admin.production-studio.show', $project) }}#layout-print" class="rounded-xl bg-gray-100 px-5 py-3 text-center font-black text-gray-700">العودة إلى الإخراج والطباعة</a>
@@ -15,9 +23,9 @@
                 @if($coverAsset)
                     <div class="relative aspect-[210/297] overflow-hidden">
                         <img src="{{ route('admin.production-studio.layout.assets.preview', [$project, $coverAsset]) }}" alt="الغلاف الأمامي" class="h-full w-full object-cover">
-                        <div class="absolute inset-x-5 {{ $settings['cover_title_position'] === 'bottom' ? 'bottom-5' : 'top-5' }} rounded-lg bg-white/90 p-4 text-center text-gray-950">
-                            <p class="text-2xl font-black">{{ $settings['book_title'] }}</p>
-                            @if($settings['cover_subtitle'])<p class="mt-2 font-bold">{{ $settings['cover_subtitle'] }}</p>@endif
+                        <div class="absolute inset-x-5 {{ $coverTitlePosition === 'bottom' ? 'bottom-5' : 'top-5' }} rounded-lg bg-white/90 p-4 text-center text-gray-950">
+                            <p class="text-2xl font-black">{{ $bookTitle }}</p>
+                            @if($coverSubtitle)<p class="mt-2 font-bold">{{ $coverSubtitle }}</p>@endif
                         </div>
                     </div>
                 @else
@@ -55,8 +63,8 @@
                     <img src="{{ route('admin.production-studio.layout.assets.preview', [$project, $backCoverAsset]) }}" alt="الغلاف الخلفي" class="aspect-[210/297] w-full object-cover">
                 @else
                     <div class="flex aspect-[210/297] flex-col items-center justify-center bg-gray-900 p-8 text-center text-xl font-black leading-9 text-white">
-                        <span>{{ $settings['back_cover_text'] }}</span>
-                        <span class="mt-5 text-indigo-200">{{ $settings['website'] }}</span>
+                        <span>{{ $backCoverText }}</span>
+                        <span class="mt-5 text-indigo-200">{{ $website }}</span>
                     </div>
                 @endif
             </article>

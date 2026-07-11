@@ -51,6 +51,12 @@ class ProductionLayoutBuilder
         $normalized = array_replace($defaults, $settings);
         $normalized['scenes'] = array_replace($defaults['scenes'], $settings['scenes'] ?? []);
 
+        foreach (['book_title', 'cover_title_position', 'binding_direction', 'duplex_flip', 'font_size', 'text_panel_opacity'] as $requiredKey) {
+            if (! array_key_exists($requiredKey, $normalized) || $normalized[$requiredKey] === null || $normalized[$requiredKey] === '') {
+                $normalized[$requiredKey] = $defaults[$requiredKey];
+            }
+        }
+
         return $normalized;
     }
 

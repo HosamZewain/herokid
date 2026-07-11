@@ -36,10 +36,42 @@ class ProductionStudioLayoutPrintTest extends TestCase
             ->get(route('admin.production-studio.show', $project))
             ->assertOk()
             ->assertSee('توليد ملفات الإخراج والطباعة')
+            ->assertSee('formaction="'.route('admin.production-studio.layout.generate', $project).'"', false)
             ->assertSee('معاينة 28 صفحة')
             ->assertSee('Reader Order PDF')
             ->assertSee('7 A3')
             ->assertDontSee('مكان مخصص للمرحلة القادمة');
+    }
+
+    public function test_layout_preview_uses_normalized_defaults_when_no_layout_exists(): void
+    {
+        [$admin, $project] = $this->project();
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.layout.preview', $project))
+            ->assertOk()
+            ->assertSee('قصة اختبار الإخراج')
+            ->assertSee('28 صفحة A4');
+    }
+
+    public function test_layout_preview_handles_incomplete_legacy_settings_without_error(): void
+    {
+        [$admin, $project] = $this->project();
+        $project->printLayouts()->create([
+            'version_number' => 1,
+            'status' => 'draft',
+            'settings_json' => [
+                'book_title' => null,
+                'scenes' => [],
+            ],
+            'generated_by_user_id' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.layout.preview', $project))
+            ->assertOk()
+            ->assertSee('قصة اختبار الإخراج')
+            ->assertSee('hero-kid.com');
     }
 
     public function test_layout_generation_is_blocked_before_paid_or_queued_work_when_assets_are_missing(): void

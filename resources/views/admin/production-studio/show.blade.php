@@ -1168,7 +1168,7 @@
 
                     <div data-layout-feedback class="hidden rounded-xl border p-4 text-sm font-black"></div>
                     <div class="flex flex-col gap-3 md:flex-row">
-                        <button type="submit" data-layout-action="generate" class="rounded-xl bg-indigo-600 px-6 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300" @disabled(!$layoutReadiness['ready'])>توليد ملفات الإخراج والطباعة</button>
+                        <button type="submit" data-layout-action="generate" formaction="{{ route('admin.production-studio.layout.generate', $project) }}" class="rounded-xl bg-indigo-600 px-6 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300" @disabled(!$layoutReadiness['ready'])>توليد ملفات الإخراج والطباعة</button>
                         <button type="submit" data-layout-action="save" formaction="{{ route('admin.production-studio.layout.save', $project) }}" class="rounded-xl bg-gray-900 px-6 py-3 font-black text-white">حفظ الإعدادات</button>
                         <a href="{{ route('admin.production-studio.layout.preview', $project) }}" target="_blank" class="rounded-xl bg-gray-100 px-6 py-3 text-center font-black text-gray-700">معاينة 28 صفحة</a>
                     </div>
@@ -1677,7 +1677,7 @@
                 const button = event.submitter;
                 const feedback = layoutForm.querySelector('[data-layout-feedback]');
                 const originalText = button?.textContent;
-                const action = button?.formAction || layoutForm.action;
+                const action = button?.getAttribute('formaction') || layoutForm.action;
 
                 if (button) {
                     button.disabled = true;
