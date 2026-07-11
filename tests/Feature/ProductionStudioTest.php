@@ -139,6 +139,7 @@ class ProductionStudioTest extends TestCase
         $this->actingAs($admin)->get(route('admin.production-studio.index'))->assertNotFound();
         $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertNotFound();
         $this->actingAs($admin)->get(route('admin.production-studio.show', $project))->assertNotFound();
+        $this->actingAs($admin)->get(route('admin.production-studio.ai.jobs.log', $project))->assertNotFound();
         $this->actingAs($admin)->get(route('admin.production-studio.photo', [$project, 0]))->assertNotFound();
         $this->actingAs($admin)->patch(route('admin.production-studio.update', $project), ['status' => 'in_progress'])->assertNotFound();
         $this->actingAs($admin)->post(route('admin.production-studio.archive', $project))->assertNotFound();
@@ -187,6 +188,10 @@ class ProductionStudioTest extends TestCase
 
         $this->actingAs($limitedAdmin)
             ->get(route('admin.production-studio.photo', [$project, 0]))
+            ->assertForbidden();
+
+        $this->actingAs($limitedAdmin)
+            ->get(route('admin.production-studio.ai.jobs.log', $project))
             ->assertForbidden();
     }
 
@@ -385,6 +390,9 @@ class ProductionStudioTest extends TestCase
             ->get(route('admin.production-studio.show', $project))
             ->assertOk()
             ->assertSee('data-studio-project="'.$project->id.'"', false)
+            ->assertSee('data-studio-job-drawer-open', false)
+            ->assertSee('id="production-job-log-drawer"', false)
+            ->assertSee(route('admin.production-studio.ai.jobs.log', $project), false)
             ->assertSee('production-studio:${root.dataset.studioProject}:open-section', false)
             ->assertSee('عرض برومبت الطلب الأصلي')
             ->assertSee(route('admin.orders.show', $order), false)
@@ -417,6 +425,12 @@ class ProductionStudioTest extends TestCase
         }
 
         $html = $response->getContent();
+        $aiSectionStart = strpos($html, 'id="ai-production"');
+        $layoutSectionStart = strpos($html, 'id="layout-print"');
+        $this->assertNotFalse($aiSectionStart);
+        $this->assertNotFalse($layoutSectionStart);
+        $this->assertStringNotContainsString('data-studio-job-list', substr($html, $aiSectionStart, $layoutSectionStart - $aiSectionStart));
+
         $profileUpdateAction = route('admin.production-studio.character-profile.update', $project);
         $profileFormStart = strpos($html, 'action="'.$profileUpdateAction.'"');
         $this->assertNotFalse($profileFormStart);
@@ -429,6 +443,42 @@ class ProductionStudioTest extends TestCase
         $this->assertStringContainsString('حفظ ملف الشخصية', $profileFormHtml);
         $this->assertStringNotContainsString(route('admin.production-studio.character-profile.analyze', $project), $profileFormHtml);
         $this->assertStringNotContainsString(route('admin.production-studio.character-profile.apply-analysis', $project), $profileFormHtml);
+    }
+
+    public function test_generation_job_drawer_refresh_returns_latest_project_jobs(): void
+    {
+        $admin = $this->adminUser();
+        $order = $this->orderWithStory();
+
+        $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
+        $project = ProductionProject::firstOrFail();
+        $older = $project->generationJobs()->create([
+            'job_type' => 'scene_image',
+            'generation_mode' => 'character_scene',
+            'prompt_snapshot' => 'Older prompt',
+            'status' => 'completed',
+            'created_at' => now()->subMinute(),
+        ]);
+        $latest = $project->generationJobs()->create([
+            'job_type' => 'identity_review',
+            'generation_mode' => 'identity_review',
+            'prompt_snapshot' => 'Latest prompt',
+            'status' => 'processing',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('admin.production-studio.ai.jobs.log', $project))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('count', 2)
+            ->assertJsonPath('active_count', 1);
+
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
+        $html = (string) $response->json('html');
+        $this->assertStringContainsString('#'.$latest->id, $html);
+        $this->assertStringContainsString('#'.$older->id, $html);
+        $this->assertLessThan(strpos($html, '#'.$older->id), strpos($html, '#'.$latest->id));
     }
 
     private function adminUser(): User

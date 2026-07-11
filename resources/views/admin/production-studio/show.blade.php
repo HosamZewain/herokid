@@ -3,6 +3,28 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">استوديو الإنتاج #{{ $project->id }}</h2>
     </x-slot>
 
+    <x-slot name="headerActions">
+        @can('production_studio.ai_review')
+            <button type="button"
+                    class="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-controls="production-job-log-drawer"
+                    aria-expanded="false"
+                    data-studio-job-drawer-open>
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="hidden sm:inline">سجل التوليد</span>
+                <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700" data-studio-active-job-count>{{ $project->generationJobs->whereIn('status', ['queued', 'processing'])->count() }}</span>
+            </button>
+        @endcan
+    </x-slot>
+
+    <x-slot name="leftDrawer">
+        @can('production_studio.ai_review')
+            @include('admin.production-studio.partials.generation-job-drawer', ['project' => $project])
+        @endcan
+    </x-slot>
+
     @php
         $statusTone = match ($project->status) {
             'completed', 'ready_for_print', 'approved' => 'emerald',
@@ -1026,16 +1048,6 @@
                 @endforeach
             </div>
 
-            <div class="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-right">
-                <h3 class="font-black text-gray-950">سجل مهام التوليد</h3>
-                <div class="mt-3 space-y-2" data-studio-job-list>
-                    @forelse($project->generationJobs->sortByDesc('created_at') as $job)
-                        @include('admin.production-studio.partials.generation-job-row', ['job' => $job])
-                    @empty
-                        <p class="text-sm text-gray-500" data-studio-empty-jobs>لا توجد مهام توليد بعد.</p>
-                    @endforelse
-                </div>
-            </div>
         @include('admin.production-studio.partials.workflow-card-close')
 
         @include('admin.production-studio.partials.workflow-card-open', [
@@ -1474,6 +1486,81 @@
             const root = document.querySelector('[data-studio-project]');
             if (!root) return;
 
+            const jobDrawer = document.querySelector('[data-studio-job-drawer]');
+            const jobDrawerOverlay = document.querySelector('[data-studio-job-drawer-overlay]');
+            const jobDrawerPanel = document.getElementById('production-job-log-drawer');
+            const jobDrawerRefresh = document.querySelector('[data-studio-job-log-refresh]');
+            const jobDrawerStatus = document.querySelector('[data-studio-job-log-status]');
+            let jobDrawerReturnFocus = null;
+
+            function setJobDrawerOpen(open, trigger = null) {
+                if (!jobDrawer || !jobDrawerPanel || !jobDrawerOverlay) return;
+
+                if (open) {
+                    jobDrawerReturnFocus = trigger || document.activeElement;
+                }
+
+                jobDrawer.classList.toggle('pointer-events-none', !open);
+                jobDrawerOverlay.classList.toggle('opacity-0', !open);
+                jobDrawerOverlay.classList.toggle('opacity-100', open);
+                jobDrawerPanel.classList.toggle('-translate-x-full', !open);
+                jobDrawerPanel.classList.toggle('translate-x-0', open);
+                jobDrawerPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+                document.querySelectorAll('[data-studio-job-drawer-open]').forEach(button => {
+                    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                document.body.classList.toggle('overflow-hidden', open);
+
+                if (open) {
+                    window.setTimeout(() => document.querySelector('[data-studio-job-drawer-close]')?.focus(), 180);
+                } else if (jobDrawerReturnFocus instanceof HTMLElement) {
+                    jobDrawerReturnFocus.focus();
+                }
+            }
+
+            async function refreshJobLog() {
+                if (!jobDrawer || !jobDrawerRefresh) return;
+
+                const url = jobDrawer.dataset.jobLogUrl;
+                const list = jobDrawer.querySelector('[data-studio-job-list]');
+                const originalText = jobDrawerRefresh.querySelector('[data-refresh-label]')?.textContent || 'تحديث';
+                jobDrawerRefresh.disabled = true;
+                jobDrawerRefresh.querySelector('[data-refresh-icon]')?.classList.add('animate-spin');
+                if (jobDrawerRefresh.querySelector('[data-refresh-label]')) {
+                    jobDrawerRefresh.querySelector('[data-refresh-label]').textContent = 'جارٍ التحديث';
+                }
+                if (jobDrawerStatus) jobDrawerStatus.textContent = 'جارٍ تحميل أحدث مهام التوليد...';
+
+                try {
+                    const response = await fetch(url, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        cache: 'no-store',
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'تعذر تحديث سجل التوليد.');
+                    }
+
+                    if (list) list.innerHTML = payload.html || '';
+                    jobDrawer.dataset.loaded = '1';
+                    document.querySelectorAll('[data-studio-active-job-count]').forEach(badge => {
+                        badge.textContent = payload.active_count ?? 0;
+                    });
+                    if (jobDrawerStatus) {
+                        jobDrawerStatus.textContent = `آخر تحديث: ${payload.refreshed_at} · عرض ${payload.count} مهمة`;
+                    }
+                } catch (error) {
+                    if (jobDrawerStatus) jobDrawerStatus.textContent = error.message || 'تعذر تحديث سجل التوليد.';
+                } finally {
+                    jobDrawerRefresh.disabled = false;
+                    jobDrawerRefresh.querySelector('[data-refresh-icon]')?.classList.remove('animate-spin');
+                    if (jobDrawerRefresh.querySelector('[data-refresh-label]')) {
+                        jobDrawerRefresh.querySelector('[data-refresh-label]').textContent = originalText;
+                    }
+                }
+            }
+
             const storageKey = `production-studio:${root.dataset.studioProject}:open-section`;
             const sections = Array.from(document.querySelectorAll('[data-studio-section]'));
 
@@ -1521,6 +1608,23 @@
             document.querySelectorAll('[data-studio-bulk-ai-form]').forEach(updateBulkCostSummary);
 
             document.addEventListener('click', function (event) {
+                const jobDrawerOpener = event.target.closest('[data-studio-job-drawer-open]');
+                if (jobDrawerOpener) {
+                    setJobDrawerOpen(true, jobDrawerOpener);
+                    if (jobDrawer?.dataset.loaded !== '1') refreshJobLog();
+                    return;
+                }
+
+                if (event.target.closest('[data-studio-job-drawer-close], [data-studio-job-drawer-overlay]')) {
+                    setJobDrawerOpen(false);
+                    return;
+                }
+
+                if (event.target.closest('[data-studio-job-log-refresh]')) {
+                    refreshJobLog();
+                    return;
+                }
+
                 const toggle = event.target.closest('[data-studio-section-toggle]');
                 const opener = event.target.closest('[data-studio-open-section]');
                 const nav = event.target.closest('[data-studio-nav]');
@@ -1530,6 +1634,12 @@
                     event.preventDefault();
                     history.replaceState(null, '', `#${target}`);
                     setOpenSection(target, true);
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && jobDrawerPanel?.getAttribute('aria-hidden') === 'false') {
+                    setJobDrawerOpen(false);
                 }
             });
         });

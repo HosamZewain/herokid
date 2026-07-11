@@ -700,6 +700,25 @@ class ProductionStudioController extends Controller
         ]);
     }
 
+    public function generationJobLog(ProductionProject $project): JsonResponse
+    {
+        $this->ensureEnabled();
+
+        $jobs = $project->generationJobs()
+            ->with(['model.provider', 'scene', 'assets'])
+            ->latest()
+            ->limit(100)
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'html' => view('admin.production-studio.partials.generation-job-list', compact('jobs'))->render(),
+            'count' => $jobs->count(),
+            'active_count' => $jobs->whereIn('status', ['queued', 'processing'])->count(),
+            'refreshed_at' => now()->format('Y-m-d H:i:s'),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
     public function generationJobsStatus(Request $request, ProductionProject $project): JsonResponse
     {
         $this->ensureEnabled();
