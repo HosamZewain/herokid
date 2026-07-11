@@ -1731,6 +1731,118 @@ class ProductionStudioAiPilotTest extends TestCase
         app(ApproveGeneratedAssetAction::class)->execute($asset);
     }
 
+    public function test_admin_can_queue_all_missing_scene_images_without_duplicating_reviewable_or_active_scenes(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableFal();
+
+        $project = $this->projectWithApprovedPhoto(orderOverrides: ['child_name' => 'رينا']);
+        $project->update(['personalized_hero_name' => 'رينا', 'personalization_status' => 'personalized']);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes());
+
+        $scenes = collect(range(1, 5))->map(fn (int $number) => $project->scenes()->create([
+            'scene_number' => $number,
+            'title' => 'المشهد '.$number,
+            'story_text' => 'نص المشهد '.$number,
+            'visual_direction' => 'رينا داخل بيئة المشهد '.$number,
+            'child_action_pose' => 'رينا تنفذ حركة المشهد '.$number,
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]));
+
+        $this->asset($project, 'scene_image', ['production_scene_id' => $scenes[0]->id, 'status' => 'approved', 'is_final' => true]);
+        $this->asset($project, 'scene_image', ['production_scene_id' => $scenes[1]->id, 'status' => 'under_review']);
+
+        $model = AiModel::query()->where('code', config('production_studio.ai.fal.default_model'))->firstOrFail();
+        $project->generationJobs()->create([
+            'production_scene_id' => $scenes[2]->id,
+            'ai_provider_id' => $model->ai_provider_id,
+            'ai_model_id' => $model->id,
+            'job_type' => 'scene_image',
+            'generation_mode' => 'character_scene',
+            'prompt_snapshot' => 'Existing active job',
+            'status' => 'processing',
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->postJson(route('admin.production-studio.ai.scenes.bulk', $project), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+                'confirm_bulk_generation' => true,
+                'generation_quality' => 'medium',
+            ]))
+            ->assertCreated()
+            ->assertJsonCount(2, 'jobs')
+            ->assertJsonPath('jobs.0.scene_number', 4)
+            ->assertJsonPath('jobs.0.scene_title', 'المشهد 4')
+            ->assertJsonPath('jobs.1.scene_number', 5);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 3);
+        Queue::assertPushed(SubmitAiGenerationJob::class, 2);
+    }
+
+    public function test_bulk_scene_generation_is_all_or_nothing_when_a_missing_scene_is_not_ready(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
+        $this->enableFal();
+
+        $project = $this->projectWithApprovedPhoto(orderOverrides: ['child_name' => 'رينا']);
+        $project->update(['personalized_hero_name' => 'رينا', 'personalization_status' => 'personalized']);
+        $sheet = $this->asset($project, 'character_sheet', ['status' => 'approved', 'is_primary' => true]);
+        Storage::disk('local')->put($sheet->file_path, $this->validPngBytes());
+
+        $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'جاهز',
+            'story_text' => 'نص جاهز',
+            'visual_direction' => 'رينا داخل القصر',
+            'child_action_pose' => 'رينا تمسك الفانوس',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+        $project->scenes()->create([
+            'scene_number' => 2,
+            'title' => 'ناقص',
+            'story_text' => 'نص فقط',
+            'personalized_hero_name' => 'رينا',
+            'personalization_status' => 'personalized',
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->postJson(route('admin.production-studio.ai.scenes.bulk', $project), $this->generationPayload([
+                'character_sheet_id' => $sheet->id,
+                'confirm_bulk_generation' => true,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonFragment(['message' => 'لا يمكن بدء التوليد الجماعي. أكمل النص والتوجيه البصري ووضع الطفل والتخصيص في: مشهد 2 — ناقص']);
+
+        $this->assertDatabaseCount('scene_generation_jobs', 0);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_generated_scene_cards_show_scene_number_title_and_version(): void
+    {
+        Storage::fake('local');
+        $project = $this->projectWithApprovedPhoto(orderOverrides: ['child_name' => 'رينا']);
+        $scene = $project->scenes()->create(['scene_number' => 7, 'title' => 'بوابة القصر']);
+        $this->asset($project, 'scene_image', [
+            'production_scene_id' => $scene->id,
+            'label' => 'Scene Image v3',
+            'version_number' => 3,
+        ]);
+
+        $this->actingAs($this->adminUser())
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('المشهد 7 — بوابة القصر')
+            ->assertSee('صورة المشهد — الإصدار v3');
+    }
+
     private function enableFal(string $key = 'test-fal-key'): void
     {
         Config::set('production_studio.enabled', true);

@@ -69,7 +69,7 @@ class PollAiGenerationJob implements ShouldQueue
                 'scene_generation_job_id' => $job->id,
                 'asset_type' => $job->job_type,
                 'version_number' => $version,
-                'label' => $this->labelFor($job->job_type, $version),
+                'label' => $this->labelFor($job, $version),
                 'status' => 'under_review',
                 'file_path' => $path,
                 'metadata_json' => $asset->metadata + [
@@ -110,12 +110,14 @@ class PollAiGenerationJob implements ShouldQueue
         }
     }
 
-    private function labelFor(string $type, int $version): string
+    private function labelFor(SceneGenerationJob $job, int $version): string
     {
-        return match ($type) {
+        return match ($job->job_type) {
             'character_sheet' => 'Approved Child Reference Illustration v'.$version,
             'cover_image' => 'Cover Image v'.$version,
-            default => 'Scene Image v'.$version,
+            default => $job->scene
+                ? 'Scene '.$job->scene->scene_number.': '.($job->scene->title ?: 'Untitled').' — v'.$version
+                : 'Scene Image v'.$version,
         };
     }
 

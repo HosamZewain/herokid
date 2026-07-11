@@ -118,6 +118,8 @@ class ProductionStudioController extends Controller
             'assets.generationJob.model',
             'generationJobs.provider',
             'generationJobs.model',
+            'generationJobs.scene',
+            'generationJobs.assets',
             'generationJobs.initiator',
             'activityLogs.actor',
             'printLayouts.generatedBy',
@@ -459,6 +461,64 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم إنشاء '.count($jobs).' مهمة توليد للمشهد وهي الآن في قائمة الانتظار.');
     }
 
+    public function generateAllSceneImages(Request $request, ProductionProject $project, CreateGenerationJobAction $action): JsonResponse
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate($this->generationValidation('scene_image') + [
+            'confirm_bulk_generation' => ['required', 'accepted'],
+        ]);
+        $validated['job_type'] = 'scene_image';
+        $validated['generation_mode'] = 'character_scene';
+        $validated['output_count'] = 1;
+
+        try {
+            $jobs = DB::transaction(function () use ($project, $validated, $action): array {
+                ProductionProject::query()->whereKey($project->id)->lockForUpdate()->firstOrFail();
+
+                $project->load(['order.story', 'characterProfile', 'assets', 'generationJobs', 'scenes']);
+                $candidateScenes = $this->bulkSceneGenerationCandidates($project);
+
+                if ($candidateScenes->isEmpty()) {
+                    return [];
+                }
+
+                $blocked = $candidateScenes
+                    ->reject(fn (ProductionScene $scene): bool => $scene->hasImagePromptContext() && $scene->isPersonalizedForImageGeneration())
+                    ->map(fn (ProductionScene $scene): string => 'مشهد '.$scene->scene_number.' — '.($scene->title ?: 'بدون عنوان'))
+                    ->values();
+
+                if ($blocked->isNotEmpty()) {
+                    throw new \RuntimeException('لا يمكن بدء التوليد الجماعي. أكمل النص والتوجيه البصري ووضع الطفل والتخصيص في: '.$blocked->implode('، '));
+                }
+
+                return $candidateScenes
+                    ->map(fn (ProductionScene $scene): SceneGenerationJob => $action->execute($project, $validated, $scene))
+                    ->all();
+            });
+        } catch (\Throwable $exception) {
+            return $this->studioJsonError($this->safeAiError($exception));
+        }
+
+        if ($jobs === []) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'لا توجد مشاهد ناقصة تحتاج إلى توليد. المشاهد التي لها صورة معتمدة أو بانتظار المراجعة أو مهمة جارية تم تجاوزها.',
+                'jobs' => [],
+            ]);
+        }
+
+        $jobIds = collect($jobs)->pluck('id')->all();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'تم إرسال '.count($jobs).' مشهد إلى قائمة التوليد. تم تجاوز الصور المعتمدة والمخرجات المنتظرة والمهام الجارية.',
+            'jobs' => collect($jobs)->map(fn (SceneGenerationJob $job): array => $this->jobPayload($job->fresh(['model.provider', 'scene', 'assets'])))->all(),
+            'status_url' => route('admin.production-studio.ai.jobs.bulk-status', ['project' => $project, 'job_ids' => $jobIds]),
+            'estimated_total_cost' => number_format((float) collect($jobs)->sum(fn (SceneGenerationJob $job) => (float) $job->estimated_cost), 4, '.', ''),
+        ], 201);
+    }
+
     public function generateCoverImage(Request $request, ProductionProject $project, CreateGenerationJobAction $action)
     {
         $this->ensureEnabled();
@@ -636,7 +696,29 @@ class ProductionStudioController extends Controller
 
         return response()->json([
             'ok' => true,
-            'job' => $this->jobPayload($generationJob->fresh(['model.provider'])),
+            'job' => $this->jobPayload($generationJob->fresh(['model.provider', 'scene', 'assets'])),
+        ]);
+    }
+
+    public function generationJobsStatus(Request $request, ProductionProject $project): JsonResponse
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'job_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'job_ids.*' => ['required', 'integer'],
+        ]);
+
+        $jobs = $project->generationJobs()
+            ->whereIn('id', array_values(array_unique($validated['job_ids'])))
+            ->with(['model.provider', 'scene', 'assets'])
+            ->get();
+
+        abort_unless($jobs->count() === count(array_unique($validated['job_ids'])), 404);
+
+        return response()->json([
+            'ok' => true,
+            'jobs' => $jobs->map(fn (SceneGenerationJob $job): array => $this->jobPayload($job))->values(),
         ]);
     }
 
@@ -1249,6 +1331,34 @@ class ProductionStudioController extends Controller
         return $rules;
     }
 
+    private function bulkSceneGenerationCandidates(ProductionProject $project)
+    {
+        $scenesWithReviewableImages = $project->assets
+            ->where('asset_type', 'scene_image')
+            ->whereIn('status', ['under_review', 'approved'])
+            ->pluck('production_scene_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+
+        $scenesWithActiveJobs = $project->generationJobs
+            ->where('job_type', 'scene_image')
+            ->whereIn('status', ['queued', 'processing'])
+            ->pluck('production_scene_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique();
+
+        $excludedSceneIds = $scenesWithReviewableImages
+            ->merge($scenesWithActiveJobs)
+            ->unique();
+
+        return $project->scenes
+            ->reject(fn (ProductionScene $scene): bool => $excludedSceneIds->contains((int) $scene->id))
+            ->sortBy('scene_number')
+            ->values();
+    }
+
     private function createImageGenerationCopies(CreateGenerationJobAction $action, ProductionProject $project, array $data, ?ProductionScene $scene = null): array
     {
         $count = max(1, min(2, (int) ($data['output_count'] ?? 1)));
@@ -1628,15 +1738,17 @@ class ProductionStudioController extends Controller
 
     private function jobPayload(SceneGenerationJob $job): array
     {
-        $asset = data_get($job->output_metadata_json, 'asset_id')
-            ? ProductionProjectAsset::find((int) data_get($job->output_metadata_json, 'asset_id'))
-            : null;
+        $job->loadMissing(['project', 'scene', 'assets']);
+        $asset = $job->assets->firstWhere('id', (int) data_get($job->output_metadata_json, 'asset_id'))
+            ?? $job->assets->sortByDesc('version_number')->first();
 
         return [
             'id' => $job->id,
             'job_type' => $job->job_type,
             'generation_mode' => $job->generation_mode,
             'production_scene_id' => $job->production_scene_id,
+            'scene_number' => $job->scene?->scene_number,
+            'scene_title' => $job->scene?->title,
             'status' => $job->status,
             'model' => $job->model?->display_name,
             'provider' => $job->model?->provider?->public_name,
@@ -1651,6 +1763,7 @@ class ProductionStudioController extends Controller
             'asset_url' => $asset ? route('admin.production-studio.assets.show', [$job->project, $asset]) : null,
             'asset_status' => $asset?->status,
             'asset_label' => $asset?->label,
+            'asset_version' => $asset?->version_number,
         ];
     }
 

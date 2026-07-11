@@ -56,6 +56,23 @@
         $jobCompleted = $project->generationJobs->where('status', 'completed')->count();
         $jobFailed = $project->generationJobs->where('status', 'failed')->count();
         $jobProcessing = $project->generationJobs->whereIn('status', ['queued', 'processing'])->count();
+        $bulkExcludedSceneIds = $sceneAssets
+            ->whereIn('status', ['under_review', 'approved'])
+            ->pluck('production_scene_id')
+            ->merge($project->generationJobs
+                ->where('job_type', 'scene_image')
+                ->whereIn('status', ['queued', 'processing'])
+                ->pluck('production_scene_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+        $bulkCandidateScenes = $project->scenes
+            ->reject(fn ($scene) => $bulkExcludedSceneIds->contains((int) $scene->id))
+            ->sortBy('scene_number')
+            ->values();
+        $bulkBlockedScenes = $bulkCandidateScenes
+            ->reject(fn ($scene) => $scene->hasImagePromptContext() && $scene->isPersonalizedForImageGeneration())
+            ->values();
         $sceneExtractionJobs = $project->generationJobs
             ->where('job_type', 'scene_extraction')
             ->sortByDesc('created_at');
@@ -821,7 +838,7 @@
             'description' => 'توليد الغلاف أو مشهد واحد ومراجعة سجل المهام دون تكرار كل المشاهد.',
             'status' => $jobCompleted.' مكتملة / '.$jobFailed.' فاشلة / '.$jobProcessing.' قيد التنفيذ',
             'statusTone' => $jobFailed ? 'amber' : 'indigo',
-            'summary' => 'لا يوجد توليد جماعي في هذه المرحلة',
+            'summary' => $bulkCandidateScenes->count().' مشهد يحتاج توليدًا | '.$bulkBlockedScenes->count().' غير جاهز',
         ])
             <div class="grid grid-cols-1 gap-3 text-right md:grid-cols-4">
                 @include('admin.production-studio.partials.status-badge', ['label' => $aiAvailable ? 'المزود جاهز' : 'AI غير مهيأ', 'tone' => $aiAvailable ? 'emerald' : 'amber'])
@@ -842,6 +859,74 @@
             <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-right text-sm font-bold leading-7 text-blue-900">
                 يمكنك اختيار موديل توليد الصور لكل محاولة. fal.ai مناسب للتجارب السريعة، وOpenAI Image متاح كخيار إضافي عند تفعيله من إعدادات مزودي الذكاء الاصطناعي. السعر المعروض بجوار كل موديل تقديري لكل صورة.
             </div>
+
+            @can('production_studio.ai_generate')
+                <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <h3 class="font-black text-emerald-950">توليد كل المشاهد الناقصة</h3>
+                            <p class="mt-1 text-sm leading-7 text-emerald-900">
+                                سيتم إنشاء مهمة Queue مستقلة لكل مشهد. لن يعاد توليد مشهد له صورة معتمدة، أو صورة بانتظار المراجعة، أو مهمة جارية.
+                            </p>
+                            <p class="mt-2 text-sm font-black text-emerald-950">
+                                {{ $bulkCandidateScenes->count() }} مشهد يحتاج توليدًا
+                                @if($bulkBlockedScenes->isNotEmpty())
+                                    · {{ $bulkBlockedScenes->count() }} غير جاهز
+                                @endif
+                            </p>
+                        </div>
+                        @include('admin.production-studio.partials.status-badge', [
+                            'label' => $bulkBlockedScenes->isEmpty() && $bulkCandidateScenes->isNotEmpty() ? 'جاهز للتوليد الجماعي' : 'يحتاج استكمال',
+                            'tone' => $bulkBlockedScenes->isEmpty() && $bulkCandidateScenes->isNotEmpty() ? 'emerald' : 'amber',
+                        ])
+                    </div>
+
+                    @if($bulkBlockedScenes->isNotEmpty())
+                        <p class="mt-3 rounded-lg border border-amber-200 bg-white p-3 text-xs font-bold leading-6 text-amber-900">
+                            أكمل أولًا:
+                            {{ $bulkBlockedScenes->map(fn ($scene) => 'مشهد '.$scene->scene_number.' — '.($scene->title ?: 'بدون عنوان'))->implode('، ') }}
+                        </p>
+                    @endif
+
+                    <form method="POST" action="{{ route('admin.production-studio.ai.scenes.bulk', $project) }}"
+                          data-studio-ai-form data-studio-bulk-ai-form data-scene-count="{{ $bulkCandidateScenes->count() }}"
+                          class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
+                        @csrf
+                        <input type="hidden" name="confirm_bulk_generation" value="1">
+                        <input type="hidden" name="identity_lock" value="1">
+                        @if($approvedCharacterSheet)
+                            <input type="hidden" name="character_sheet_id" value="{{ $approvedCharacterSheet->id }}">
+                        @endif
+                        <select name="model_code" @disabled(!$aiAvailable) class="rounded-xl border-emerald-200 text-right" data-bulk-model>
+                            @foreach($aiModelsByCapability['scene_generation'] ?? collect() as $model)
+                                <option value="{{ $model->code }}" @selected($model->code === $defaultModel)
+                                        data-cost-medium="{{ data_get($model->configuration_json, 'quality_costs.medium', $model->estimatedCost()) }}"
+                                        data-cost-high="{{ data_get($model->configuration_json, 'quality_costs.high', $model->estimatedCost()) }}">
+                                    {{ $model->provider->public_name }} — {{ $model->display_name }} · ${{ $model->estimatedCost() }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <select name="style_preset" @disabled(!$aiAvailable) class="rounded-xl border-emerald-200 text-right">
+                            @foreach($stylePresets as $key => $label)
+                                <option value="{{ $key }}">{{ $key }}</option>
+                            @endforeach
+                        </select>
+                        <select name="generation_quality" @disabled(!$aiAvailable) class="rounded-xl border-emerald-200 text-right" data-bulk-quality>
+                            <option value="medium">Draft · medium</option>
+                            <option value="high">Final · high</option>
+                        </select>
+                        <input name="prompt_notes" @disabled(!$aiAvailable) class="rounded-xl border-emerald-200 text-right" placeholder="ملاحظة تطبق على كل المشاهد">
+                        <p class="rounded-xl border border-emerald-200 bg-white p-3 text-sm font-black text-emerald-900 lg:col-span-3" data-bulk-cost-summary>
+                            اختر الموديل والجودة لعرض التكلفة الإجمالية التقديرية.
+                        </p>
+                        <button @disabled(!$aiAvailable || !$profileReady || !$approvedCharacterSheet || $bulkCandidateScenes->isEmpty() || $bulkBlockedScenes->isNotEmpty())
+                                class="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">
+                            توليد {{ $bulkCandidateScenes->count() }} مشهد دفعة واحدة
+                        </button>
+                        <div data-studio-ai-feedback class="hidden rounded-xl border p-3 text-sm font-bold lg:col-span-4"></div>
+                    </form>
+                </div>
+            @endcan
 
             <div class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
@@ -936,7 +1021,7 @@
                 @foreach($coverAssets as $asset)
                     @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
                 @endforeach
-                @foreach($sceneAssets as $asset)
+                @foreach($sceneAssets->sortBy(fn ($asset) => sprintf('%04d-%04d', $asset->scene?->scene_number ?? 9999, $asset->version_number)) as $asset)
                     @include('admin.production-studio.partials.asset-card', ['asset' => $asset, 'project' => $project])
                 @endforeach
             </div>
@@ -1178,7 +1263,11 @@
 
         function studioJobLabel(job) {
             const cost = job.actual_cost || job.estimated_cost || '0.0000';
-            return `#${job.id} - ${job.job_type} - ${job.status} - $${cost}`;
+            const scene = job.scene_number
+                ? ` - المشهد ${job.scene_number}: ${job.scene_title || 'بدون عنوان'}`
+                : '';
+            const version = job.asset_version ? ` - v${job.asset_version}` : '';
+            return `#${job.id} - ${job.job_type}${scene}${version} - ${job.status} - $${cost}`;
         }
 
         function upsertStudioJob(job, statusUrl) {
@@ -1235,7 +1324,8 @@
                     <img src="${job.asset_url}" alt="${job.asset_label || 'Generated scene image'}" class="aspect-square w-full object-cover">
                 </a>
                 <div class="mt-3 space-y-2">
-                    <p class="font-black text-gray-900">${job.asset_label || 'صورة مشهد جديدة'}</p>
+                    <p class="font-black text-gray-900">المشهد ${job.scene_number || ''} — ${job.scene_title || 'بدون عنوان'}</p>
+                    <p class="text-xs font-bold text-gray-500">صورة المشهد — الإصدار v${job.asset_version || 1}</p>
                     <p class="text-xs font-bold text-indigo-700">بانتظار المراجعة. حدّث الصفحة إذا كنت تريد أزرار الاعتماد والرفض هنا.</p>
                 </div>
             `;
@@ -1278,6 +1368,62 @@
                 }
 
                 studioFeedback(feedback, 'info', `حالة المهمة #${job.id}: ${job.status}. إذا بقيت Queued تأكد من تشغيل Queue Worker على السيرفر.`);
+            }
+        }
+
+        async function pollBulkStudioJobs(statusUrl, feedback) {
+            if (!statusUrl) return;
+
+            for (let attempt = 0; attempt < 180; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 1200 : 10000));
+
+                try {
+                    const response = await fetch(statusUrl, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    if (!response.ok) {
+                        studioFeedback(feedback, 'error', 'تعذر قراءة حالة مهام التوليد الجماعي. المهام محفوظة ويمكن متابعة حالتها بعد تحديث الصفحة.');
+                        return;
+                    }
+
+                    const payload = await response.json();
+                    const jobs = payload.jobs || [];
+                    jobs.forEach(job => {
+                        upsertStudioJob(job, '');
+                        if (job.status === 'completed') appendSceneAssetPreview(job);
+                    });
+
+                    const completed = jobs.filter(job => job.status === 'completed').length;
+                    const failed = jobs.filter(job => job.status === 'failed').length;
+                    const pending = jobs.length - completed - failed;
+
+                    if (pending === 0) {
+                        studioFeedback(feedback, failed > 0 ? 'error' : 'success',
+                            `انتهى التوليد الجماعي: ${completed} مكتملة، ${failed} فاشلة. الصور ظهرت داخل بطاقات المشاهد.`);
+                        return;
+                    }
+
+                    studioFeedback(feedback, 'info',
+                        `التوليد الجماعي مستمر: ${completed} مكتملة، ${failed} فاشلة، ${pending} في الانتظار أو المعالجة.`);
+                } catch (error) {
+                    studioFeedback(feedback, 'error', 'انقطع الاتصال أثناء متابعة المهام. المهام مستمرة داخل Queue ويمكن مراجعتها بعد تحديث الصفحة.');
+                    return;
+                }
+            }
+
+            studioFeedback(feedback, 'info', 'المهام ما زالت محفوظة داخل Queue. يمكنك تحديث الصفحة لاحقًا لمراجعة النتائج.');
+        }
+
+        function updateBulkCostSummary(form) {
+            if (!form) return;
+
+            const model = form.querySelector('[data-bulk-model]')?.selectedOptions[0];
+            const quality = form.querySelector('[data-bulk-quality]')?.value || 'medium';
+            const count = Number(form.dataset.sceneCount || 0);
+            const unitCost = Number(model?.dataset[quality === 'high' ? 'costHigh' : 'costMedium'] || 0);
+            const summary = form.querySelector('[data-bulk-cost-summary]');
+            if (summary) {
+                summary.textContent = `${count} مشهد × $${unitCost.toFixed(4)} = تكلفة إجمالية تقديرية $${(count * unitCost).toFixed(4)}. ستنشأ نسخة واحدة لكل مشهد.`;
             }
         }
 
@@ -1371,6 +1517,8 @@
                 : (savedSection && sectionExists(savedSection) ? savedSection : root.dataset.defaultSection || 'overview');
 
             setOpenSection(initialSection, Boolean(hashSection));
+
+            document.querySelectorAll('[data-studio-bulk-ai-form]').forEach(updateBulkCostSummary);
 
             document.addEventListener('click', function (event) {
                 const toggle = event.target.closest('[data-studio-section-toggle]');
@@ -1498,6 +1646,12 @@
         });
 
         document.addEventListener('change', function (event) {
+            const bulkControl = event.target.closest('[data-bulk-model], [data-bulk-quality]');
+            if (bulkControl) {
+                updateBulkCostSummary(bulkControl.closest('[data-studio-bulk-ai-form]'));
+                return;
+            }
+
             const select = event.target.closest('[data-scene-action-select]');
             if (!select) return;
 
@@ -1563,6 +1717,17 @@
 
             event.preventDefault();
 
+            if (form.matches('[data-studio-bulk-ai-form]')) {
+                const model = form.querySelector('[data-bulk-model]')?.selectedOptions[0];
+                const quality = form.querySelector('[data-bulk-quality]')?.value || 'medium';
+                const count = Number(form.dataset.sceneCount || 0);
+                const unitCost = Number(model?.dataset[quality === 'high' ? 'costHigh' : 'costMedium'] || 0);
+                const totalCost = count * unitCost;
+                if (!window.confirm(`سيتم إنشاء ${count} مهمة توليد مستقلة بتكلفة إجمالية تقديرية $${totalCost.toFixed(4)}. هل تريد المتابعة؟`)) {
+                    return;
+                }
+            }
+
             if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
                 return;
             }
@@ -1602,6 +1767,14 @@
                 if (payload.job) {
                     upsertStudioJob(payload.job, payload.status_url);
                     pollStudioJob(payload.status_url, feedback);
+                }
+
+                if (Array.isArray(payload.jobs)) {
+                    payload.jobs.forEach(job => upsertStudioJob(job, ''));
+                    if (payload.jobs.length > 0) {
+                        studioFeedback(feedback, 'success', `${payload.message} التكلفة الإجمالية التقديرية: $${payload.estimated_total_cost}.`);
+                        pollBulkStudioJobs(payload.status_url, feedback);
+                    }
                 }
 
                 if (payload.asset) {

@@ -14,6 +14,9 @@
     $identityDecision = data_get($identityReview, 'result.decision');
     $identityReviewStatus = data_get($identityReview, 'status');
     $identityBlocksApproval = in_array($identityReviewStatus, ['queued', 'processing'], true) || $identityDecision === 'fail';
+    $sceneLabel = $asset->asset_type === 'scene_image' && $asset->scene
+        ? 'المشهد '.$asset->scene->scene_number.' — '.($asset->scene->title ?: 'بدون عنوان')
+        : null;
 @endphp
 
 <div class="rounded-xl border bg-white p-3 text-right shadow-sm {{ $asset->is_primary ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-gray-100' }}" data-studio-asset-card="{{ $asset->id }}">
@@ -23,7 +26,12 @@
         </a>
     @endif
     <div class="mt-3 space-y-1">
-        <p class="font-black text-gray-900">{{ $asset->label ?? $asset->asset_type }}</p>
+        @if($sceneLabel)
+            <p class="font-black text-gray-900">{{ $sceneLabel }}</p>
+            <p class="text-xs font-bold text-gray-500">صورة المشهد — الإصدار v{{ $asset->version_number }}</p>
+        @else
+            <p class="font-black text-gray-900">{{ $asset->label ?? $asset->asset_type }}</p>
+        @endif
         <div class="flex flex-wrap justify-end gap-2">
             @include('admin.production-studio.partials.status-badge', ['label' => 'v'.$asset->version_number, 'tone' => 'gray'])
             @include('admin.production-studio.partials.status-badge', ['label' => $asset->status, 'tone' => $assetTone])

@@ -10,7 +10,15 @@
 <div class="rounded-xl bg-white p-3 text-sm ring-1 ring-gray-100" data-studio-job-row="{{ $job->id }}">
     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div class="text-right">
-            <p class="font-black text-gray-900" data-studio-job-label>#{{ $job->id }} - {{ $job->job_type }}</p>
+            <p class="font-black text-gray-900" data-studio-job-label>
+                #{{ $job->id }} - {{ $job->job_type }}
+                @if($job->scene)
+                    — المشهد {{ $job->scene->scene_number }}: {{ $job->scene->title ?: 'بدون عنوان' }}
+                @endif
+                @if(data_get($job->output_metadata_json, 'asset_id') && $job->assets->first())
+                    — v{{ $job->assets->first()->version_number }}
+                @endif
+            </p>
             <p class="mt-1 text-xs text-gray-500">{{ $job->model?->display_name ?? $job->generation_mode }} · {{ $job->created_at?->diffForHumans() }}</p>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2">

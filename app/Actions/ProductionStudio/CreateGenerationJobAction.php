@@ -141,7 +141,7 @@ class CreateGenerationJobAction
             'model' => $providerModel->code,
         ], auth()->user());
 
-        SubmitAiGenerationJob::dispatch($job->id);
+        SubmitAiGenerationJob::dispatch($job->id)->afterCommit();
 
         return $job;
     }
@@ -217,7 +217,7 @@ class CreateGenerationJobAction
             'model' => $model->code,
         ], auth()->user());
 
-        SubmitAiGenerationJob::dispatch($job->id);
+        SubmitAiGenerationJob::dispatch($job->id)->afterCommit();
 
         return $job;
     }
