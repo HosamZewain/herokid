@@ -6,6 +6,17 @@
     $sceneGeneratedAssets = $sceneAssets->where('production_scene_id', $scene->id)->sortByDesc('created_at');
     $approvedImage = $sceneAssets->where('production_scene_id', $scene->id)->where('status', 'approved')->isNotEmpty();
     $oldHeroConflicts = $scene->oldHeroConflicts();
+    $sceneConflictFieldLabels = [
+        'title' => 'العنوان',
+        'story_text' => 'نص المشهد',
+        'visual_direction' => 'التوجيه البصري',
+        'child_action_pose' => 'وضع الطفل',
+        'environment' => 'البيئة',
+        'continuity_notes' => 'ملاحظات الاستمرارية',
+    ];
+    $oldHeroConflictLabels = collect($oldHeroConflicts)
+        ->map(fn ($field) => $sceneConflictFieldLabels[$field] ?? $field)
+        ->implode('، ');
     $scenePersonalized = $scene->isPersonalizedForImageGeneration();
     $ready = $hasText && $hasVisual && $hasPose && $approvedCharacterSheet && $profileReady && $scenePersonalized;
     $improvementPreview = $sceneImprovementPreviews[$scene->id]['data'] ?? null;
@@ -36,6 +47,7 @@
     @if($oldHeroConflicts !== [])
         <div class="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-800">
             هذا المشهد يحتوي على اسم بطلة/بطل القالب الأصلي: {{ $scene->template_hero_name ?: $project->template_hero_name }}. عدّل الحقول المتعارضة قبل توليد الصورة.
+            <span class="mt-1 block text-xs text-red-700">الحقول المتعارضة: {{ $oldHeroConflictLabels }}</span>
         </div>
     @elseif(!$scenePersonalized)
         <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">

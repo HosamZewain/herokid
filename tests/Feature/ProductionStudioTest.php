@@ -149,6 +149,7 @@ class ProductionStudioTest extends TestCase
         $this->actingAs($admin)->patch(route('admin.production-studio.story-versions.review', [$project, $version]), ['status' => 'approved'])->assertNotFound();
         $this->actingAs($admin)->patch(route('admin.production-studio.character-profile.update', $project))->assertNotFound();
         $this->actingAs($admin)->post(route('admin.production-studio.scenes.store', $project), ['scene_number' => 2])->assertNotFound();
+        $this->actingAs($admin)->post(route('admin.production-studio.scenes.replace-template-hero', $project), ['template_hero_name' => 'جنا', 'replacement_name' => 'رينا'])->assertNotFound();
         $this->actingAs($admin)->patch(route('admin.production-studio.scenes.update', [$project, $scene]), ['scene_number' => 1])->assertNotFound();
         $this->actingAs($admin)->patch(route('admin.production-studio.qa.update', [$project, $qaCheck]), ['result' => 'pass'])->assertNotFound();
 
@@ -267,6 +268,61 @@ class ProductionStudioTest extends TestCase
             'title' => 'القصة الأصلية',
         ]);
         $this->assertSame($originalStoryData, $story->fresh()->only(['title', 'full_desc']));
+    }
+
+    public function test_bulk_template_hero_replacement_updates_project_scenes_only(): void
+    {
+        $admin = $this->adminUser();
+        $story = $this->story([
+            'title' => 'قالب جنا',
+            'full_desc' => 'القصة الأصلية عن جنا لا يجب تعديلها.',
+        ]);
+        $order = $this->orderWithStory(['story_id' => $story->id, 'child_name' => 'رينا'], $story);
+        $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
+        $project = ProductionProject::firstOrFail();
+        $project->update(['template_hero_name' => 'جنا']);
+        $scene = $project->scenes()->create([
+            'scene_number' => 1,
+            'title' => 'جنا والبوابة',
+            'story_text' => 'الأميرة جنا تبحث عن المفتاح مع ريتاج.',
+            'visual_direction' => 'جنا تقف أمام بوابة كبيرة.',
+            'child_action_pose' => 'جنا ترفع المفتاح بثقة.',
+            'environment' => 'قصر جنا الهادئ',
+            'continuity_notes' => 'حافظ على ملامح جنا.',
+            'text_safe_area_notes' => 'اترك مساحة للنص.',
+            'status' => 'draft',
+        ]);
+
+        $this->assertSame(['title', 'story_text', 'visual_direction', 'child_action_pose', 'environment', 'continuity_notes'], $scene->oldHeroConflicts('جنا'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('استبدال اسم البطل القديم في المشاهد')
+            ->assertSee('الحقول المتعارضة')
+            ->assertSee(route('admin.production-studio.scenes.replace-template-hero', $project), false);
+
+        $this->actingAs($admin)
+            ->post(route('admin.production-studio.scenes.replace-template-hero', $project), [
+                'template_hero_name' => 'جنا',
+                'replacement_name' => 'رينا',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $scene->refresh();
+        $this->assertSame([], $scene->oldHeroConflicts('جنا'));
+        $this->assertSame('personalized', $scene->personalization_status);
+        $this->assertStringContainsString('رينا', $scene->story_text);
+        $this->assertStringContainsString('ريتاج', $scene->story_text);
+        $this->assertStringNotContainsString('جنا', $scene->story_text);
+        $this->assertStringContainsString('رينا', $scene->visual_direction);
+        $this->assertStringContainsString('رينا', $scene->child_action_pose);
+        $this->assertSame('القصة الأصلية عن جنا لا يجب تعديلها.', $story->fresh()->full_desc);
+        $this->assertDatabaseHas('production_project_activity_logs', [
+            'production_project_id' => $project->id,
+            'action' => 'scene.template_hero_replaced',
+        ]);
     }
 
     public function test_qa_blocker_prevents_ready_for_print_without_override_and_allows_with_reason(): void

@@ -963,6 +963,32 @@
                 <div class="rounded-xl bg-blue-50 p-4"><p class="text-xs text-blue-600">مشاهد مخصصة</p><p class="font-black">{{ $personalizedScenes }}</p></div>
                 <div class="rounded-xl bg-red-50 p-4"><p class="text-xs text-red-600">تعارض أسماء</p><p class="font-black">{{ $conflictingScenes }}</p></div>
             </div>
+            @if($conflictingScenes > 0)
+                @can('production_studio.scene_edit')
+                    <form method="POST"
+                          action="{{ route('admin.production-studio.scenes.replace-template-hero', $project) }}"
+                          onsubmit="return window.confirm('سيتم استبدال اسم بطل القالب داخل الحقول المتعارضة فقط في مشاهد هذا المشروع. لن يتم تعديل القصة الأصلية. هل تريد المتابعة؟')"
+                          class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-right">
+                        @csrf
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+                            <label class="block flex-1">
+                                <span class="text-xs font-black text-red-700">اسم بطل القالب المراد استبداله</span>
+                                <input name="template_hero_name" value="{{ $project->template_hero_name }}" class="mt-1 w-full rounded-xl border-red-200 bg-white text-right" placeholder="مثال: جنا أو الأميرة">
+                            </label>
+                            <label class="block flex-1">
+                                <span class="text-xs font-black text-red-700">اسم الطفل البديل</span>
+                                <input name="replacement_name" value="{{ $order->child_name }}" class="mt-1 w-full rounded-xl border-red-200 bg-white text-right">
+                            </label>
+                            <button class="rounded-xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-700">
+                                استبدال اسم البطل القديم في المشاهد
+                            </button>
+                        </div>
+                        <p class="mt-2 text-xs font-bold leading-6 text-red-800">
+                            استخدم هذا الزر عندما تظهر كل المشاهد تقريبًا بتعارض اسم البطل. بعد نجاحه راجع التحذيرات، ثم ارجع إلى الإنتاج التلقائي واضغط اعتماد تحضير القصة يدويًا.
+                        </p>
+                    </form>
+                @endcan
+            @endif
             <div class="mt-4 flex flex-wrap justify-end gap-2 text-xs font-black" data-scene-filters>
                 <button type="button" data-scene-filter="all" class="rounded-xl bg-indigo-600 px-3 py-2 text-white">All</button>
                 <button type="button" data-scene-filter="missing-visual" class="rounded-xl bg-gray-100 px-3 py-2 text-gray-700">Missing visual direction</button>

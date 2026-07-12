@@ -1215,6 +1215,89 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم تحديث المشهد.');
     }
 
+    public function replaceTemplateHeroInScenes(Request $request, ProductionProject $project, ScenePersonalizationService $personalizer)
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'template_hero_name' => ['required', 'string', 'max:255'],
+            'replacement_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $templateHero = trim($validated['template_hero_name']);
+        $replacementName = trim($validated['replacement_name']);
+
+        if ($templateHero === $replacementName) {
+            return back()->withErrors(['template_hero_name' => 'اسم بطل القالب مطابق لاسم الطفل، لا يوجد ما يمكن استبداله.']);
+        }
+
+        $fieldLabels = $this->sceneConflictFieldLabels();
+        $changedScenes = [];
+        $changedFields = [];
+
+        DB::transaction(function () use ($project, $personalizer, $templateHero, $replacementName, $fieldLabels, &$changedScenes, &$changedFields): void {
+            $project->loadMissing('order');
+
+            $project->scenes()
+                ->orderBy('scene_number')
+                ->get()
+                ->each(function (ProductionScene $scene) use ($personalizer, $templateHero, $replacementName, $fieldLabels, &$changedScenes, &$changedFields): void {
+                    $conflicts = $scene->oldHeroConflicts($templateHero);
+                    if ($conflicts === []) {
+                        return;
+                    }
+
+                    $updates = [];
+                    foreach ($conflicts as $field) {
+                        $current = (string) ($scene->{$field} ?? '');
+                        $updates[$field] = $this->replaceNameToken($current, $templateHero, $replacementName);
+                        $changedFields[$field] = $fieldLabels[$field] ?? $field;
+                    }
+
+                    if (filled($scene->visual_direction) && ! $this->containsNameToken((string) $scene->visual_direction, $replacementName)) {
+                        $updates['visual_direction'] = trim((string) ($updates['visual_direction'] ?? $scene->visual_direction).' البطل الرئيسي في هذا المشهد هو '.$replacementName.'، مع الحفاظ على ملامحه من الصور المرجعية المعتمدة.');
+                        $changedFields['visual_direction'] = $fieldLabels['visual_direction'];
+                    }
+
+                    if (filled($scene->child_action_pose) && ! $this->containsNameToken((string) $scene->child_action_pose, $replacementName)) {
+                        $updates['child_action_pose'] = $replacementName.': '.($updates['child_action_pose'] ?? $scene->child_action_pose);
+                        $changedFields['child_action_pose'] = $fieldLabels['child_action_pose'];
+                    }
+
+                    $updates['personalized_hero_name'] = $replacementName;
+                    $updates['template_hero_name'] = $templateHero;
+                    $updates['ai_sync_status'] = 'scenes_need_review';
+                    $updates['review_notes'] = trim((string) $scene->review_notes."\n".'تم استبدال اسم بطل القالب "'.$templateHero.'" باسم الطفل "'.$replacementName.'" يدويًا.');
+
+                    $scene->update($updates);
+                    $personalizer->refreshSceneStatus($scene->fresh(['project.order']));
+                    $changedScenes[] = (int) $scene->scene_number;
+                });
+
+            if ($changedScenes !== []) {
+                $project->update([
+                    'template_hero_name' => $templateHero,
+                    'personalized_hero_name' => $replacementName,
+                    'personalization_status' => $project->scenes()->where('personalization_status', '!=', 'personalized')->exists() ? 'needs_review' : 'personalized',
+                    'personalization_warnings' => [],
+                ]);
+
+                ProductionStudio::log($project, 'scene.template_hero_replaced', 'تم استبدال اسم بطل القالب داخل مشاهد المشروع.', [
+                    'template_hero_name' => $templateHero,
+                    'replacement_name' => $replacementName,
+                    'scene_numbers' => $changedScenes,
+                    'fields' => array_values($changedFields),
+                ], auth()->user());
+            }
+        });
+
+        if ($changedScenes === []) {
+            return back()->withErrors(['template_hero_name' => 'لم يتم العثور على هذا الاسم داخل الحقول المتعارضة للمشاهد.']);
+        }
+
+        return back()->with('success', 'تم تحديث '.count($changedScenes).' مشهد واستبدال اسم بطل القالب باسم الطفل. راجع المشاهد ثم اعتمد تحضير القصة يدويًا.');
+    }
+
     public function improveScene(Request $request, ProductionProject $project, ProductionScene $scene, AiProviderAvailability $availability, AiProviderManager $providers)
     {
         $this->ensureEnabled();
@@ -1325,6 +1408,33 @@ class ProductionStudioController extends Controller
             'status' => 'nullable|string|max:100',
             'review_notes' => 'nullable|string|max:3000',
         ]);
+    }
+
+    private function sceneConflictFieldLabels(): array
+    {
+        return [
+            'title' => 'العنوان',
+            'story_text' => 'نص المشهد',
+            'visual_direction' => 'التوجيه البصري',
+            'child_action_pose' => 'وضع الطفل',
+            'environment' => 'البيئة',
+            'continuity_notes' => 'ملاحظات الاستمرارية',
+        ];
+    }
+
+    private function replaceNameToken(string $text, string $from, string $to): string
+    {
+        return preg_replace(
+            '/(?<![\p{L}\p{N}_])'.preg_quote($from, '/').'(?![\p{L}\p{N}_])/u',
+            $to,
+            $text
+        ) ?? $text;
+    }
+
+    private function containsNameToken(string $text, string $name): bool
+    {
+        return $name !== ''
+            && preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($name, '/').'(?![\p{L}\p{N}_])/u', $text) === 1;
     }
 
     private function ensureEnabled(): void
