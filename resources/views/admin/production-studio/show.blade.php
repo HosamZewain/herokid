@@ -371,7 +371,9 @@
                      data-status-url="{{ route('admin.production-studio.automation.status', $project) }}"
                      data-pause-url="{{ route('admin.production-studio.automation.pause', $project) }}"
                      data-resume-url="{{ route('admin.production-studio.automation.resume', $project) }}"
-                     data-cancel-url="{{ route('admin.production-studio.automation.cancel', $project) }}">
+                     data-cancel-url="{{ route('admin.production-studio.automation.cancel', $project) }}"
+                     data-story-approve-url="{{ route('admin.production-studio.automation.story-preparation.approve', $project) }}"
+                     data-retry-step-url="{{ route('admin.production-studio.automation.retry-step', $project) }}">
                     @unless($automationEnabled)
                         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-black text-amber-900">
                             الإنتاج التلقائي غير مفعل في الكاش الحالي. فعّل <span dir="ltr">HERO_KID_PRODUCTION_STUDIO_AUTOMATION_ENABLED=true</span> ثم شغّل <span dir="ltr">php artisan config:cache</span>.
@@ -421,6 +423,7 @@
                             <div>100%: اعتماد بشري نهائي</div>
                         </div>
                         <div class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900" data-automation-blockers></div>
+                        <div class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-4" data-automation-review-actions></div>
                         <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4" data-automation-phase-grid>
                             <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm font-bold text-gray-500 lg:col-span-4">
                                 اضغط "تحديث الحالة" أو انتظر التحديث التلقائي لعرض مراحل الدورة.
@@ -1954,6 +1957,16 @@
                     return payload.message || 'تم تنفيذ الطلب.';
                 }
 
+                function automationEscape(value) {
+                    return String(value ?? '').replace(/[&<>"']/g, char => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;',
+                    }[char]));
+                }
+
                 function automationPhaseTone(status) {
                     return {
                         completed: 'border-emerald-200 bg-emerald-50 text-emerald-900',
@@ -2067,6 +2080,75 @@
                     }).join('');
                 }
 
+                function renderAutomationReviewActions(automation) {
+                    const reviewBox = automationPanel.querySelector('[data-automation-review-actions]');
+                    if (!reviewBox) return;
+
+                    const run = automation?.run || {};
+                    const story = automation?.phase2?.story_preparation || {};
+                    const actions = story.available_actions || {};
+                    const isStoryReview = (run.status === 'paused_review' && run.current_step_key === 'story_preparation')
+                        || story.status === 'waiting_review';
+
+                    if (!isStoryReview) {
+                        reviewBox.classList.add('hidden');
+                        reviewBox.innerHTML = '';
+                        return;
+                    }
+
+                    const code = story.safe_failure_code || run.safe_failure_code || 'story_preparation_review';
+                    const summary = story.safe_failure_summary || run.safe_failure_summary || 'تحضير القصة يحتاج مراجعة بشرية قبل متابعة الإنتاج.';
+                    const sceneCount = story.scene_count ?? 0;
+                    const versionLabel = story.story_version_number ? `مسودة #${story.story_version_number}` : (story.story_version_id ? `مسودة #${story.story_version_id}` : 'لا توجد مسودة معتمدة بعد');
+                    const validationMessages = [];
+                    const validation = story.validation || {};
+
+                    if (Array.isArray(validation.errors)) {
+                        validationMessages.push(...validation.errors.slice(0, 4));
+                    }
+                    if (Array.isArray(validation.blocking_flags)) {
+                        validationMessages.push(...validation.blocking_flags.slice(0, 4));
+                    }
+
+                    reviewBox.classList.remove('hidden');
+                    reviewBox.innerHTML = `
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="min-w-0">
+                                <p class="text-sm font-black text-amber-950">مراجعة تحضير القصة مطلوبة</p>
+                                <p class="mt-2 text-sm font-bold leading-7 text-amber-900">${automationEscape(summary)}</p>
+                                <div class="mt-3 flex flex-wrap gap-2 text-xs font-black text-amber-900">
+                                    <span class="rounded-full bg-white px-3 py-1 ring-1 ring-amber-200" dir="ltr">${automationEscape(code)}</span>
+                                    <span class="rounded-full bg-white px-3 py-1 ring-1 ring-amber-200">المشاهد الحالية: ${automationEscape(sceneCount)}/13</span>
+                                    <span class="rounded-full bg-white px-3 py-1 ring-1 ring-amber-200">${automationEscape(versionLabel)}</span>
+                                </div>
+                                ${validationMessages.length ? `
+                                    <ul class="mt-3 list-inside list-disc space-y-1 text-xs font-bold leading-6 text-amber-900">
+                                        ${validationMessages.map(message => `<li>${automationEscape(message)}</li>`).join('')}
+                                    </ul>
+                                ` : ''}
+                                <p class="mt-3 text-xs font-bold leading-6 text-amber-800">
+                                    الاعتماد اليدوي يتطلب وجود 13 مشهدًا مكتملة الحقول في مساحة القصة. لا تضغط استئناف فقط إذا كان سبب الوقف يحتاج تصحيحًا.
+                                </p>
+                            </div>
+                            <div class="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                                <button type="button" data-studio-open-section="story-workspace" class="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100">
+                                    افتح مساحة القصة
+                                </button>
+                                ${actions.manual_review ? `
+                                    <button type="button" data-automation-approve-story class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700">
+                                        اعتماد تحضير القصة يدويًا
+                                    </button>
+                                ` : ''}
+                                ${actions.retry ? `
+                                    <button type="button" data-automation-retry-story class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">
+                                        إعادة محاولة تحضير القصة
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+
                 function updateAutomationSummary(automation) {
                     if (!automation?.run) return;
 
@@ -2081,6 +2163,7 @@
                     if (step) step.textContent = run.current_step_key || '-';
                     if (budget && automation.costs?.hard_budget) budget.textContent = `$${automation.costs.hard_budget}`;
                     renderAutomationLifecycle(automation);
+                    renderAutomationReviewActions(automation);
                 }
 
                 async function automationRequest(url, options = {}) {
@@ -2198,6 +2281,54 @@
                         studioFeedback(automationFeedback, 'success', 'تم إلغاء دورة الإنتاج التلقائي.');
                     } catch (error) {
                         studioFeedback(automationFeedback, 'error', error.message || 'تعذر الإلغاء.');
+                    }
+                });
+
+                automationPanel.addEventListener('click', async function (event) {
+                    const approveStoryButton = event.target.closest('[data-automation-approve-story]');
+                    const retryStoryButton = event.target.closest('[data-automation-retry-story]');
+
+                    if (approveStoryButton) {
+                        const reason = window.prompt('سبب اعتماد تحضير القصة يدويًا بعد المراجعة', 'manual_story_review_after_correction');
+                        if (!reason) return;
+
+                        approveStoryButton.disabled = true;
+                        studioFeedback(automationFeedback, 'info', 'جارٍ اعتماد تحضير القصة يدويًا...');
+                        try {
+                            const payload = await automationRequest(automationPanel.dataset.storyApproveUrl, { body: { reason } });
+                            updateAutomationSummary(payload.automation);
+                            studioFeedback(automationFeedback, 'success', 'تم اعتماد تحضير القصة، وسيكمل الإنتاج من الخطوة الآمنة التالية.');
+                            refreshAutomationStatus(false).catch(() => {});
+                        } catch (error) {
+                            studioFeedback(automationFeedback, 'error', error.message || 'تعذر اعتماد تحضير القصة.');
+                        } finally {
+                            approveStoryButton.disabled = false;
+                        }
+                    }
+
+                    if (retryStoryButton) {
+                        if (!window.confirm('إعادة محاولة تحضير القصة قد تستخدم تكلفة إضافية حسب المزود. هل تريد المتابعة؟')) {
+                            return;
+                        }
+
+                        retryStoryButton.disabled = true;
+                        studioFeedback(automationFeedback, 'info', 'جارٍ إعادة محاولة تحضير القصة...');
+                        try {
+                            const payload = await automationRequest(automationPanel.dataset.retryStepUrl, {
+                                body: {
+                                    step_key: 'story_preparation',
+                                    confirm_additional_budget_exposure: true,
+                                    reason: 'retry_story_preparation_after_review',
+                                },
+                            });
+                            updateAutomationSummary(payload.automation);
+                            studioFeedback(automationFeedback, 'success', 'تمت جدولة إعادة محاولة تحضير القصة.');
+                            refreshAutomationStatus(false).catch(() => {});
+                        } catch (error) {
+                            studioFeedback(automationFeedback, 'error', error.message || 'تعذر إعادة محاولة تحضير القصة.');
+                        } finally {
+                            retryStoryButton.disabled = false;
+                        }
                     }
                 });
 

@@ -111,6 +111,59 @@ class ProductionAutomationTest extends TestCase
             ->assertSee(route('admin.production-studio.automation.start', $project), false);
     }
 
+    public function test_story_preparation_review_controls_are_visible_for_paused_run(): void
+    {
+        [$admin, $project] = $this->projectWithPhoto();
+        $run = ProductionAutomationRun::create([
+            'production_project_id' => $project->id,
+            'active_project_id' => $project->id,
+            'status' => ProductionAutomation::STATUS_PAUSED_REVIEW,
+            'current_stage' => 'story_preparation',
+            'current_step_key' => 'story_preparation',
+            'hard_budget' => '2.0000',
+            'currency' => 'USD',
+            'pause_reason' => 'human_review',
+            'safe_failure_code' => 'story_scene_count_invalid',
+            'safe_failure_summary' => 'Story preparation must produce exactly 13 complete scenes.',
+            'last_transition_at' => now(),
+            'last_heartbeat_at' => now(),
+            'blockers_json' => [[
+                'code' => 'story_scene_count_invalid',
+                'summary' => 'Story preparation must produce exactly 13 complete scenes.',
+            ]],
+        ]);
+        $run->steps()->create([
+            'production_project_id' => $project->id,
+            'step_key' => 'story_preparation',
+            'name' => 'Story Preparation',
+            'sequence' => 20,
+            'stage' => 'story_preparation',
+            'status' => ProductionAutomation::STEP_WAITING_REVIEW,
+            'weight' => 15,
+            'safe_failure_code' => 'story_scene_count_invalid',
+            'safe_failure_summary' => 'Story preparation must produce exactly 13 complete scenes.',
+            'validation_summary_json' => ['errors' => ['Only 1 scene was extracted.']],
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.production-studio.automation.status', $project))
+            ->assertOk()
+            ->assertJsonPath('automation.run.status', ProductionAutomation::STATUS_PAUSED_REVIEW)
+            ->assertJsonPath('automation.phase2.story_preparation.status', ProductionAutomation::STEP_WAITING_REVIEW)
+            ->assertJsonPath('automation.phase2.story_preparation.available_actions.manual_review', true)
+            ->assertJsonPath('automation.phase2.story_preparation.available_actions.retry', true);
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('data-automation-review-actions', false)
+            ->assertSee('مراجعة تحضير القصة مطلوبة')
+            ->assertSee('اعتماد تحضير القصة يدويًا')
+            ->assertSee('إعادة محاولة تحضير القصة')
+            ->assertSee(route('admin.production-studio.automation.story-preparation.approve', $project), false)
+            ->assertSee(route('admin.production-studio.automation.retry-step', $project), false);
+    }
+
     public function test_status_endpoint_sanitizes_costs_for_users_without_cost_permission(): void
     {
         [$admin, $project] = $this->projectWithPhoto(['production_studio.view']);
