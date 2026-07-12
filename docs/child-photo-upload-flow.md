@@ -92,16 +92,24 @@ For Hostinger, keep using the wrapper script instead of adding long artisan comm
 
 ```bash
 #!/bin/bash
-cd /home/u470070883/domains/hero-kid.com/public_html || exit 1
+APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
+PHP_BIN="/usr/bin/php"
+LOCK_FILE="/tmp/herokid-queue.lock"
 
-/usr/bin/php artisan queue:work database --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
-/usr/bin/php artisan schedule:run >> storage/logs/scheduler.log 2>&1
+cd "$APP_DIR" || exit 1
+mkdir -p storage/logs
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+$PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
+$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
 Cron entry:
 
 ```bash
-/bin/bash /home/u470070883/run-herokid-queue.sh
+* * * * * /bin/bash /home/u470070883/run-herokid-queue.sh
 ```
 
 Do not duplicate `#!/bin/bash` blocks inside the script.

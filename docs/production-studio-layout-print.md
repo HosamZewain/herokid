@@ -64,25 +64,28 @@ Before a production run, confirm the printer's duplex orientation with a low-cos
 
 Layout generation is asynchronous and uses the existing database queue. No additional cron entry is required when the current queue script processes the `default` queue.
 
-The existing `/home/u470070883/run-herokid-queue.sh` should contain one worker command only:
+The existing `/home/u470070883/run-herokid-queue.sh` should run the scheduler and one locked queue drain:
 
 ```bash
 #!/bin/bash
+APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
+PHP_BIN="/usr/bin/php"
+LOCK_FILE="/tmp/herokid-queue.lock"
 
-cd /home/u470070883/domains/hero-kid.com/public_html || exit 1
+cd "$APP_DIR" || exit 1
+mkdir -p storage/logs
 
-/usr/bin/php artisan queue:work database \
-  --queue=default \
-  --stop-when-empty \
-  --tries=2 \
-  --timeout=300 \
-  >> storage/logs/queue.log 2>&1
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+$PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
+$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
 Hostinger cron can continue calling:
 
 ```text
-/bin/bash /home/u470070883/run-herokid-queue.sh
+* * * * * /bin/bash /home/u470070883/run-herokid-queue.sh
 ```
 
 The web UI polls the layout status and displays download links when the queue job finishes.

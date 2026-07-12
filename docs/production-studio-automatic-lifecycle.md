@@ -809,12 +809,16 @@ Recommended `/home/u470070883/run-herokid-queue.sh`:
 #!/bin/bash
 APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
 PHP_BIN="/usr/bin/php"
+LOCK_FILE="/tmp/herokid-queue.lock"
 
 cd "$APP_DIR" || exit 1
 mkdir -p storage/logs
 
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
 $PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
-$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
+$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
 Scheduler overlap protection is configured for recovery:
@@ -827,7 +831,8 @@ Worker behavior:
 
 - Worker timeout: 300 seconds.
 - Job timeout: `HERO_KID_AUTOMATION_JOB_TIMEOUT`, default 300.
-- Tries: `HERO_KID_AUTOMATION_JOB_TRIES`, default 1.
+- Queue worker tries: 3 in the Hostinger wrapper to absorb transient worker failures.
+- Automation job tries: `HERO_KID_AUTOMATION_JOB_TRIES`, default 1. Automation provider retry limits are controlled by the automation attempt policy, not by blindly replaying paid requests.
 - Backoff: `30,90,180`.
 - Max exceptions: 1.
 - Failed jobs use Laravel's configured failed-job table.
@@ -848,7 +853,7 @@ Safe restart:
 cd /home/u470070883/domains/hero-kid.com/public_html
 php artisan queue:restart
 php artisan production-automation:recover
-php artisan queue:work database --queue=default --stop-when-empty --tries=1 --timeout=300
+php artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300
 ```
 
 ## Deployment Commands
@@ -856,28 +861,56 @@ php artisan queue:work database --queue=default --stop-when-empty --tries=1 --ti
 Do not deploy from Codex automatically. On Hostinger, run:
 
 ```bash
-cd /home/u470070883/domains/hero-kid.com/public_html
+cd /home/u470070883/domains/hero-kid.com/public_html || exit 1
 
-php artisan down || true
+set -e
 
+PHP_BIN="/usr/bin/php"
+BACKUP_DIR="$HOME/backups/hero-kid/$(date +%Y%m%d-%H%M%S)"
+
+mkdir -p "$BACKUP_DIR"
+cp .env "$BACKUP_DIR/.env.backup"
+
+# Replace these values with the production database credentials from .env.
+mysqldump \
+  --single-transaction \
+  --quick \
+  --lock-tables=false \
+  -h YOUR_DB_HOST \
+  -u YOUR_DB_USER \
+  -p \
+  YOUR_DB_NAME > "$BACKUP_DIR/database.sql"
+
+git status --short
 git fetch origin
-git pull --ff-only origin codex/seo-security-order-photos
+git rev-parse origin/main
+
+$PHP_BIN artisan down --retry=60
+trap '$PHP_BIN artisan up' EXIT
+
+git checkout main
+git fetch origin
+git pull --ff-only origin main
 
 composer install --no-dev --optimize-autoloader --no-interaction
 
-php artisan migrate --force
-php artisan admin-permissions:sync --grant-existing-admins
-php artisan ai:providers:sync
-php artisan optimize:clear
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan storage:link || true
+$PHP_BIN artisan optimize:clear
+$PHP_BIN artisan migrate --force
+$PHP_BIN artisan admin-permissions:sync --grant-existing-admins
+$PHP_BIN artisan ai:providers:sync
+$PHP_BIN artisan config:cache
+$PHP_BIN artisan route:cache
+$PHP_BIN artisan view:cache
+$PHP_BIN artisan storage:link || true
 
 chmod -R 775 storage bootstrap/cache
 
-php artisan up
+$PHP_BIN artisan production-automation:recover
+$PHP_BIN artisan up
+trap - EXIT
 ```
+
+After deployment, run `migrate:status`, `about`, `queue:failed`, `production-automation:recover`, and inspect the last 100 lines of `storage/logs/laravel.log` and `storage/logs/queue.log`. Then smoke test the homepage, story/photo flow, cart, checkout, admin login, manual Production Studio controls, automation start/pause/resume/cancel on a pilot order, signed downloads, and private storage access.
 
 Keep automation disabled until smoke testing passes:
 

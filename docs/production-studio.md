@@ -191,26 +191,54 @@ The Vite production assets under `public/build` are generated locally and commit
 Use these commands from the application root on Hostinger:
 
 ```bash
-cd /home/u470070883/domains/hero-kid.com/public_html
+cd /home/u470070883/domains/hero-kid.com/public_html || exit 1
 
-php artisan down || true
+set -e
+
+PHP_BIN="/usr/bin/php"
+BACKUP_DIR="$HOME/backups/hero-kid/$(date +%Y%m%d-%H%M%S)"
+
+mkdir -p "$BACKUP_DIR"
+cp .env "$BACKUP_DIR/.env.backup"
+
+# Replace these values with the production database credentials from .env.
+mysqldump \
+  --single-transaction \
+  --quick \
+  --lock-tables=false \
+  -h YOUR_DB_HOST \
+  -u YOUR_DB_USER \
+  -p \
+  YOUR_DB_NAME > "$BACKUP_DIR/database.sql"
 
 git fetch origin
-git pull --ff-only origin codex/seo-security-order-photos
+git rev-parse origin/main
+
+$PHP_BIN artisan down --retry=60
+trap '$PHP_BIN artisan up' EXIT
+
+git checkout main
+git pull --ff-only origin main
 
 composer install --no-dev --optimize-autoloader --no-interaction
 
-php artisan migrate --force
-php artisan optimize:clear
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan storage:link || true
+$PHP_BIN artisan optimize:clear
+$PHP_BIN artisan migrate --force
+$PHP_BIN artisan admin-permissions:sync --grant-existing-admins
+$PHP_BIN artisan ai:providers:sync
+$PHP_BIN artisan config:cache
+$PHP_BIN artisan route:cache
+$PHP_BIN artisan view:cache
+$PHP_BIN artisan storage:link || true
 
 chmod -R 775 storage bootstrap/cache
 
-php artisan up
+$PHP_BIN artisan production-automation:recover
+$PHP_BIN artisan up
+trap - EXIT
 ```
+
+After deployment, inspect `migrate:status`, `queue:failed`, `storage/logs/laravel.log`, and `storage/logs/queue.log`, then smoke test the public story/photo flow, cart, checkout, admin login, manual Production Studio, and a pilot automation run before broadly enabling automation.
 
 Production Studio can be disabled without rollback by setting:
 

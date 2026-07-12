@@ -215,22 +215,26 @@ Recommended `/home/u470070883/run-herokid-queue.sh` content:
 #!/bin/bash
 APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
 PHP_BIN="/usr/bin/php"
+LOCK_FILE="/tmp/herokid-queue.lock"
 
 cd "$APP_DIR" || exit 1
 mkdir -p storage/logs
 
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
 $PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
-$PHP_BIN artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
+$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
 Manual fallback:
 
 ```bash
 cd /home/u470070883/domains/hero-kid.com/public_html
-php artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300
+php artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300
 ```
 
-Do not assume Supervisor exists on shared hosting. The queue command intentionally omits the `database` connection argument because `QUEUE_CONNECTION=database` should be configured in `.env`.
+Do not assume Supervisor exists on shared hosting. The wrapper still passes the `database` connection explicitly so a misconfigured shell environment does not accidentally use a different queue connection.
 
 ## Rollback
 

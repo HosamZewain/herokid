@@ -150,15 +150,19 @@ The wrapper should run both the scheduler and one short queue drain:
 #!/bin/bash
 APP_DIR="/home/u470070883/domains/hero-kid.com/public_html"
 PHP_BIN="/usr/bin/php"
+LOCK_FILE="/tmp/herokid-queue.lock"
 
 cd "$APP_DIR" || exit 1
 mkdir -p storage/logs
 
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
 $PHP_BIN artisan schedule:run >> storage/logs/scheduler.log 2>&1
-$PHP_BIN artisan queue:work --queue=default --stop-when-empty --tries=1 --timeout=300 >> storage/logs/queue.log 2>&1
+$PHP_BIN artisan queue:work database --queue=default --stop-when-empty --tries=3 --backoff=30 --timeout=300 >> storage/logs/queue.log 2>&1
 ```
 
-The scheduler command is idempotent. The queue command intentionally omits the `database` connection argument because `QUEUE_CONNECTION=database` should be configured in `.env`.
+The scheduler command is idempotent. The queue command passes the `database` connection explicitly so a misconfigured shell environment does not accidentally use a different queue connection.
 
 ## Troubleshooting
 
