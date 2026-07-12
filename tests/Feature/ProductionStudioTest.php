@@ -7,6 +7,7 @@ use App\Models\Permission;
 use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -323,6 +324,40 @@ class ProductionStudioTest extends TestCase
             'production_project_id' => $project->id,
             'action' => 'scene.template_hero_replaced',
         ]);
+    }
+
+    public function test_child_first_name_matching_template_hero_is_not_reported_as_old_hero_conflict(): void
+    {
+        $admin = $this->adminUser();
+        $order = $this->orderWithStory(['child_name' => 'علي امير ابو عيسى']);
+        $this->actingAs($admin)->post(route('admin.production-studio.from-order', $order))->assertRedirect();
+        $project = ProductionProject::firstOrFail();
+        $project->update([
+            'template_hero_name' => 'علي',
+            'personalized_hero_name' => 'علي امير ابو عيسى',
+        ]);
+        $scene = $project->scenes()->create([
+            'scene_number' => 11,
+            'title' => 'المفاجأة',
+            'story_text' => 'تأثر علي كثيرًا بهذه الهدية.',
+            'visual_direction' => 'البطل الرئيسي هو علي امير ابو عيسى داخل غرفة هادئة.',
+            'child_action_pose' => 'علي: يجلس ويمسك الصورة بيديه متأثرًا.',
+            'environment' => 'غرفة داخلية هادئة.',
+            'continuity_notes' => 'حافظ على ملامح علي امير ابو عيسى.',
+            'text_safe_area_notes' => 'اترك مساحة للنص.',
+            'status' => 'draft',
+            'template_hero_name' => 'علي',
+            'personalized_hero_name' => 'علي امير ابو عيسى',
+        ]);
+
+        app(ScenePersonalizationService::class)->refreshSceneStatus($scene->fresh(['project.order']));
+
+        $scene->refresh();
+        $this->assertSame([], $scene->oldHeroConflicts('علي'));
+        $this->assertTrue($scene->fieldMentionsHero('visual_direction', 'علي امير ابو عيسى'));
+        $this->assertTrue($scene->fieldMentionsHero('child_action_pose', 'علي امير ابو عيسى'));
+        $this->assertTrue($scene->isPersonalizedForImageGeneration());
+        $this->assertSame('personalized', $scene->personalization_status);
     }
 
     public function test_qa_blocker_prevents_ready_for_print_without_override_and_allows_with_reason(): void

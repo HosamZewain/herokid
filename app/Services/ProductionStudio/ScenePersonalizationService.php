@@ -74,7 +74,7 @@ class ScenePersonalizationService
         $data = $preview['data'];
         $analysis = $this->analyze($project, $data, $heroOverride);
         $personalized = $skip ? $data : $this->personalizeData($project, $data, $analysis);
-        $remaining = $this->oldHeroRemainingInData($personalized, (string) $analysis['template_hero_name']);
+        $remaining = $this->oldHeroRemainingInData($personalized, (string) $analysis['template_hero_name'], (string) $analysis['child_hero_name']);
         $status = match (true) {
             $skip => 'skipped',
             $analysis['requires_openai'] => 'needs_review',
@@ -233,9 +233,9 @@ class ScenePersonalizationService
         ];
     }
 
-    private function oldHeroRemainingInData(array $data, string $templateHero): bool
+    private function oldHeroRemainingInData(array $data, string $templateHero, string $childName = ''): bool
     {
-        if ($templateHero === '') {
+        if ($templateHero === '' || $this->isChildNameAlias($templateHero, $childName)) {
             return false;
         }
 
@@ -279,6 +279,33 @@ class ScenePersonalizationService
     private function containsName(string $text, string $name): bool
     {
         return $name !== '' && preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($name, '/').'(?![\p{L}\p{N}_])/u', $text) === 1;
+    }
+
+    private function isChildNameAlias(string $templateHero, string $childName): bool
+    {
+        if ($templateHero === '' || $childName === '') {
+            return false;
+        }
+
+        return in_array($templateHero, $this->childNameAliases($childName), true);
+    }
+
+    private function childNameAliases(string $childName): array
+    {
+        $childName = trim($childName);
+        if ($childName === '') {
+            return [];
+        }
+
+        $aliases = [$childName];
+        $parts = preg_split('/\s+/u', $childName) ?: [];
+        $firstName = trim((string) ($parts[0] ?? ''));
+
+        if (mb_strlen($firstName) >= 2) {
+            $aliases[] = $firstName;
+        }
+
+        return array_values(array_unique($aliases));
     }
 
     private function normalizeGender(string $gender): ?string

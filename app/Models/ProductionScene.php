@@ -23,8 +23,9 @@ class ProductionScene extends Model
     public function oldHeroConflicts(?string $templateHero = null): array
     {
         $templateHero = trim((string) ($templateHero ?: $this->template_hero_name ?: $this->project?->template_hero_name));
+        $childName = trim((string) ($this->personalized_hero_name ?: $this->project?->personalized_hero_name ?: $this->project?->order?->child_name));
 
-        if ($templateHero === '') {
+        if ($templateHero === '' || $this->isChildNameAlias($templateHero, $childName)) {
             return [];
         }
 
@@ -59,9 +60,17 @@ class ProductionScene extends Model
         $childName = trim((string) ($childName ?: $this->personalized_hero_name ?: $this->project?->personalized_hero_name ?: $this->project?->order?->child_name));
         $value = (string) ($this->{$field} ?? '');
 
-        return $childName !== ''
-            && $value !== ''
-            && preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($childName, '/').'(?![\p{L}\p{N}_])/u', $value) === 1;
+        if ($childName === '' || $value === '') {
+            return false;
+        }
+
+        foreach ($this->childNameAliases($childName) as $alias) {
+            if (preg_match('/(?<![\p{L}\p{N}_])'.preg_quote($alias, '/').'(?![\p{L}\p{N}_])/u', $value) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isPersonalizedForImageGeneration(): bool
@@ -100,5 +109,32 @@ class ProductionScene extends Model
         return $this->hasOne(ProductionProjectAsset::class)
             ->where('asset_type', 'scene_image')
             ->where('is_final', true);
+    }
+
+    private function isChildNameAlias(string $templateHero, string $childName): bool
+    {
+        if ($templateHero === '' || $childName === '') {
+            return false;
+        }
+
+        return in_array($templateHero, $this->childNameAliases($childName), true);
+    }
+
+    private function childNameAliases(string $childName): array
+    {
+        $childName = trim($childName);
+        if ($childName === '') {
+            return [];
+        }
+
+        $aliases = [$childName];
+        $parts = preg_split('/\s+/u', $childName) ?: [];
+        $firstName = trim((string) ($parts[0] ?? ''));
+
+        if (mb_strlen($firstName) >= 2) {
+            $aliases[] = $firstName;
+        }
+
+        return array_values(array_unique($aliases));
     }
 }
