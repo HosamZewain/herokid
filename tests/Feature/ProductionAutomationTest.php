@@ -104,6 +104,8 @@ class ProductionAutomationTest extends TestCase
             ->get(route('admin.production-studio.show', $project))
             ->assertOk()
             ->assertSee('الإنتاج التلقائي')
+            ->assertSee('مسار الإنتاج التلقائي')
+            ->assertSee('التقدم المعتمد')
             ->assertSee('فحص قبل التشغيل')
             ->assertSee('بدء الإنتاج التلقائي')
             ->assertSee(route('admin.production-studio.automation.start', $project), false);

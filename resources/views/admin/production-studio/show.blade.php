@@ -161,6 +161,9 @@
         $automationStatusText = $automationRun
             ? '#'.$automationRun->id.' · '.$automationRun->status.' · '.($automationRun->current_stage ?: $automationRun->current_step_key)
             : ($automationEnabled ? 'جاهز للفحص قبل التشغيل' : 'معطل من الإعدادات');
+        $automationInitialProgress = $automationRun
+            ? app(\App\Services\ProductionStudio\ProductionAutomationProgress::class)->percentage($automationRun)
+            : 0;
         $automationStatusTone = $automationRun
             ? match ($automationRun->status) {
                 \App\Support\ProductionAutomation::STATUS_COMPLETED => 'emerald',
@@ -391,6 +394,37 @@
                         <div class="rounded-xl bg-gray-50 p-4">
                             <p class="text-xs font-bold text-gray-400">الميزانية</p>
                             <p class="mt-1 font-black text-gray-900" data-automation-run-budget>{{ $automationRun?->hard_budget ? '$'.$automationRun->hard_budget : '-' }}</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-indigo-100 bg-white p-4 shadow-sm" data-automation-lifecycle>
+                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <p class="text-xs font-black uppercase tracking-wide text-indigo-500">Live lifecycle</p>
+                                <h3 class="mt-1 text-lg font-black text-gray-950">مسار الإنتاج التلقائي</h3>
+                                <p class="mt-1 text-sm font-bold text-gray-500" data-automation-current-stage>
+                                    {{ $automationRun ? ($automationRun->current_stage ?: $automationRun->current_step_key) : 'لم تبدأ دورة بعد' }}
+                                </p>
+                            </div>
+                            <div class="rounded-2xl bg-indigo-50 px-5 py-3 text-center">
+                                <p class="text-xs font-black text-indigo-500">التقدم المعتمد</p>
+                                <p class="text-3xl font-black text-indigo-700" data-automation-progress-label>{{ $automationInitialProgress }}%</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 h-4 overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200">
+                            <div class="h-full rounded-full bg-indigo-600 transition-all duration-500" data-automation-progress-bar style="width: {{ $automationInitialProgress }}%"></div>
+                        </div>
+                        <div class="mt-3 grid grid-cols-1 gap-2 text-xs font-bold text-gray-500 md:grid-cols-4">
+                            <div>0-40%: تحضير القصة والهوية</div>
+                            <div>40-80%: الغلاف والمشاهد</div>
+                            <div>80-95%: ملفات الطباعة</div>
+                            <div>100%: اعتماد بشري نهائي</div>
+                        </div>
+                        <div class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900" data-automation-blockers></div>
+                        <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4" data-automation-phase-grid>
+                            <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm font-bold text-gray-500 lg:col-span-4">
+                                اضغط "تحديث الحالة" أو انتظر التحديث التلقائي لعرض مراحل الدورة.
+                            </div>
                         </div>
                     </div>
 
@@ -1881,6 +1915,28 @@
             if (automationPanel) {
                 const automationFeedback = automationPanel.querySelector('[data-automation-feedback]');
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const automationPhaseDefinitions = [
+                    { key: 'preflight', label: 'الفحص المسبق', steps: ['preflight'] },
+                    { key: 'story', label: 'تحضير القصة', steps: ['story_preparation'] },
+                    { key: 'profile', label: 'ملف الشخصية', steps: ['character_profile'] },
+                    { key: 'reference', label: 'مرجع الطفل', steps: ['child_reference'] },
+                    { key: 'cover', label: 'الغلاف', steps: ['cover'] },
+                    { key: 'scenes', label: 'المشاهد 13', prefix: 'scene_' },
+                    { key: 'layout', label: 'الإخراج والطباعة', steps: ['layout_print'] },
+                    { key: 'proof', label: 'المراجعة النهائية', steps: ['final_proof'] },
+                ];
+                const automationStepStatusLabels = {
+                    pending: 'لم يبدأ',
+                    queued: 'في الانتظار',
+                    running: 'قيد التنفيذ',
+                    waiting_review: 'بانتظار مراجعة',
+                    completed: 'مكتمل',
+                    skipped: 'متجاوز',
+                    failed_recoverable: 'تعثر قابل للاستئناف',
+                    provider_failed: 'فشل مزود',
+                    failed: 'فشل',
+                    cancelled: 'ملغي',
+                };
 
                 function automationPayload() {
                     const form = automationPanel.querySelector('[data-automation-start-form]');
@@ -1898,6 +1954,119 @@
                     return payload.message || 'تم تنفيذ الطلب.';
                 }
 
+                function automationPhaseTone(status) {
+                    return {
+                        completed: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                        running: 'border-indigo-200 bg-indigo-50 text-indigo-900',
+                        review: 'border-amber-200 bg-amber-50 text-amber-900',
+                        failed: 'border-red-200 bg-red-50 text-red-900',
+                        cancelled: 'border-gray-300 bg-gray-100 text-gray-700',
+                        partial: 'border-blue-200 bg-blue-50 text-blue-900',
+                        pending: 'border-gray-100 bg-gray-50 text-gray-600',
+                    }[status] || 'border-gray-100 bg-gray-50 text-gray-600';
+                }
+
+                function automationPhaseSummary(steps) {
+                    const total = steps.length;
+                    if (total === 0) return { status: 'pending', label: 'غير متاح', detail: '0/0' };
+
+                    const completed = steps.filter(step => ['completed', 'skipped'].includes(step.status)).length;
+                    const active = steps.filter(step => ['queued', 'running'].includes(step.status)).length;
+                    const review = steps.filter(step => step.status === 'waiting_review').length;
+                    const failed = steps.filter(step => ['failed_recoverable', 'provider_failed', 'failed'].includes(step.status)).length;
+                    const cancelled = steps.filter(step => step.status === 'cancelled').length;
+                    const latestIssue = steps.find(step => step.safe_failure_summary || step.safe_failure_code);
+
+                    if (completed === total) {
+                        return { status: 'completed', label: 'مكتمل', detail: `${completed}/${total}` };
+                    }
+
+                    if (failed > 0) {
+                        return { status: 'failed', label: 'يحتاج تدخل', detail: `${completed}/${total}`, issue: latestIssue?.safe_failure_summary || latestIssue?.safe_failure_code };
+                    }
+
+                    if (review > 0) {
+                        return { status: 'review', label: 'بانتظار مراجعة', detail: `${completed}/${total}`, issue: latestIssue?.safe_failure_summary || latestIssue?.safe_failure_code };
+                    }
+
+                    if (active > 0) {
+                        return { status: 'running', label: 'قيد التنفيذ', detail: `${completed}/${total}` };
+                    }
+
+                    if (cancelled > 0) {
+                        return { status: 'cancelled', label: 'ملغي', detail: `${completed}/${total}` };
+                    }
+
+                    if (completed > 0) {
+                        return { status: 'partial', label: 'جزئي', detail: `${completed}/${total}` };
+                    }
+
+                    return { status: 'pending', label: 'لم يبدأ', detail: `${completed}/${total}` };
+                }
+
+                function automationBlockers(automation) {
+                    const blockers = automation?.blockers || [];
+                    if (!Array.isArray(blockers)) return [];
+
+                    return blockers.map(blocker => typeof blocker === 'string' ? blocker : (blocker.summary || blocker.code || '')).filter(Boolean);
+                }
+
+                function renderAutomationLifecycle(automation) {
+                    const run = automation?.run;
+                    const progress = Number(run?.progress || 0);
+                    const progressLabel = automationPanel.querySelector('[data-automation-progress-label]');
+                    const progressBar = automationPanel.querySelector('[data-automation-progress-bar]');
+                    const currentStage = automationPanel.querySelector('[data-automation-current-stage]');
+                    const blockerBox = automationPanel.querySelector('[data-automation-blockers]');
+                    const phaseGrid = automationPanel.querySelector('[data-automation-phase-grid]');
+
+                    if (progressLabel) progressLabel.textContent = `${progress}%`;
+                    if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+                    if (currentStage) {
+                        currentStage.textContent = run
+                            ? `المرحلة الحالية: ${run.current_stage || '-'} | الخطوة: ${run.current_step_key || '-'} | الحالة: ${run.status || '-'}`
+                            : 'لم تبدأ دورة بعد';
+                    }
+
+                    const blockers = automationBlockers(automation);
+                    if (blockerBox) {
+                        blockerBox.classList.toggle('hidden', blockers.length === 0);
+                        blockerBox.textContent = blockers.length ? `العوائق الحالية: ${blockers.join(' | ')}` : '';
+                    }
+
+                    if (!phaseGrid) return;
+
+                    const steps = Array.isArray(automation?.steps) ? automation.steps : [];
+                    if (!run || steps.length === 0) {
+                        phaseGrid.innerHTML = '<div class="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm font-bold text-gray-500 lg:col-span-4">لا توجد دورة إنتاج تلقائي بعد. ابدأ بالفحص قبل التشغيل.</div>';
+                        return;
+                    }
+
+                    phaseGrid.innerHTML = automationPhaseDefinitions.map(phase => {
+                        const phaseSteps = phase.prefix
+                            ? steps.filter(step => String(step.key || '').startsWith(phase.prefix))
+                            : steps.filter(step => phase.steps.includes(step.key));
+                        const summary = automationPhaseSummary(phaseSteps);
+                        const activeMarker = phaseSteps.some(step => step.key === run.current_step_key) ? 'ring-2 ring-indigo-300' : '';
+                        const statusList = phaseSteps.slice(0, 4).map(step => automationStepStatusLabels[step.status] || step.status).join('، ');
+                        const extra = phaseSteps.length > 4 ? ` +${phaseSteps.length - 4}` : '';
+
+                        return `
+                            <div class="rounded-xl border p-4 ${automationPhaseTone(summary.status)} ${activeMarker}">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p class="font-black">${phase.label}</p>
+                                        <p class="mt-1 text-xs font-bold opacity-80">${statusList}${extra}</p>
+                                    </div>
+                                    <span class="rounded-full bg-white/70 px-2 py-1 text-xs font-black">${summary.detail}</span>
+                                </div>
+                                <p class="mt-3 text-sm font-black">${summary.label}</p>
+                                ${summary.issue ? `<p class="mt-2 text-xs font-bold leading-5">${summary.issue}</p>` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                }
+
                 function updateAutomationSummary(automation) {
                     if (!automation?.run) return;
 
@@ -1911,6 +2080,7 @@
                     if (stage) stage.textContent = run.current_stage || '-';
                     if (step) step.textContent = run.current_step_key || '-';
                     if (budget && automation.costs?.hard_budget) budget.textContent = `$${automation.costs.hard_budget}`;
+                    renderAutomationLifecycle(automation);
                 }
 
                 async function automationRequest(url, options = {}) {
@@ -1934,6 +2104,29 @@
                     return payload;
                 }
 
+                async function refreshAutomationStatus(showFeedback = false) {
+                    if (showFeedback) {
+                        studioFeedback(automationFeedback, 'info', 'جارٍ تحديث حالة الإنتاج التلقائي...');
+                    }
+
+                    const response = await fetch(automationPanel.dataset.statusUrl, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        cache: 'no-store',
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'تعذر تحديث حالة الإنتاج التلقائي.');
+                    }
+
+                    updateAutomationSummary(payload.automation);
+                    if (showFeedback) {
+                        studioFeedback(automationFeedback, 'success', payload.automation?.run ? `الحالة الحالية: ${payload.automation.run.status}` : 'لا توجد دورة إنتاج تلقائي لهذا المشروع.');
+                    }
+
+                    return payload.automation;
+                }
+
                 automationPanel.querySelector('[data-automation-preflight]')?.addEventListener('click', async function () {
                     studioFeedback(automationFeedback, 'info', 'جارٍ تنفيذ الفحص قبل التشغيل...');
                     try {
@@ -1955,22 +2148,16 @@
                     try {
                         const payload = await automationRequest(automationPanel.dataset.startUrl);
                         updateAutomationSummary(payload.automation);
-                        studioFeedback(automationFeedback, 'success', payload.message || 'تم إنشاء دورة الإنتاج التلقائي. حدّث الصفحة لمشاهدة أزرار الإدارة الكاملة.');
+                        studioFeedback(automationFeedback, 'success', payload.message || 'تم إنشاء دورة الإنتاج التلقائي. سيظهر التقدم هنا تلقائيًا.');
+                        refreshAutomationStatus(false).catch(() => {});
                     } catch (error) {
                         studioFeedback(automationFeedback, 'error', error.message || 'تعذر بدء الإنتاج التلقائي.');
                     }
                 });
 
                 automationPanel.querySelector('[data-automation-status]')?.addEventListener('click', async function () {
-                    studioFeedback(automationFeedback, 'info', 'جارٍ تحديث حالة الإنتاج التلقائي...');
                     try {
-                        const response = await fetch(automationPanel.dataset.statusUrl, {
-                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                            cache: 'no-store',
-                        });
-                        const payload = await response.json();
-                        updateAutomationSummary(payload.automation);
-                        studioFeedback(automationFeedback, 'success', payload.automation?.run ? `الحالة الحالية: ${payload.automation.run.status}` : 'لا توجد دورة إنتاج تلقائي لهذا المشروع.');
+                        await refreshAutomationStatus(true);
                     } catch (error) {
                         studioFeedback(automationFeedback, 'error', 'تعذر تحديث حالة الإنتاج التلقائي.');
                     }
@@ -2013,6 +2200,11 @@
                         studioFeedback(automationFeedback, 'error', error.message || 'تعذر الإلغاء.');
                     }
                 });
+
+                refreshAutomationStatus(false).catch(() => {});
+                window.setInterval(() => {
+                    refreshAutomationStatus(false).catch(() => {});
+                }, 10000);
             }
 
             document.addEventListener('click', function (event) {
