@@ -95,6 +95,20 @@ class ProductionAutomationTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_automation_start_controls_are_visible_in_studio_workspace(): void
+    {
+        $this->enableProviders();
+        [$admin, $project] = $this->projectWithPhoto();
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('الإنتاج التلقائي')
+            ->assertSee('فحص قبل التشغيل')
+            ->assertSee('بدء الإنتاج التلقائي')
+            ->assertSee(route('admin.production-studio.automation.start', $project), false);
+    }
+
     public function test_status_endpoint_sanitizes_costs_for_users_without_cost_permission(): void
     {
         [$admin, $project] = $this->projectWithPhoto(['production_studio.view']);

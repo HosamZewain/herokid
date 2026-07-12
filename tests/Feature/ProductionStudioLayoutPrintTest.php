@@ -74,6 +74,25 @@ class ProductionStudioLayoutPrintTest extends TestCase
             ->assertSee('hero-kid.com');
     }
 
+    public function test_layout_workspace_handles_incomplete_legacy_settings_without_error(): void
+    {
+        [$admin, $project] = $this->project();
+        $project->printLayouts()->create([
+            'version_number' => 1,
+            'status' => 'draft',
+            'settings_json' => [
+                'scenes' => [],
+            ],
+            'generated_by_user_id' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee('توليد ملفات الإخراج والطباعة')
+            ->assertSee('قصة اختبار الإخراج');
+    }
+
     public function test_layout_generation_is_blocked_before_paid_or_queued_work_when_assets_are_missing(): void
     {
         Queue::fake();

@@ -156,6 +156,24 @@
         $backCoverAssets = $project->assets->where('asset_type', 'back_cover_image')->where('status', 'approved');
         $layoutStatusLabels = ['draft' => 'مسودة', 'queued' => 'في قائمة الانتظار', 'processing' => 'جارٍ التوليد', 'ready' => 'جاهز', 'failed' => 'فشل'];
         $activityFilters = ['all' => 'All', 'project' => 'project', 'story' => 'story', 'character' => 'character', 'ai' => 'AI', 'asset' => 'asset', 'qa' => 'QA', 'status' => 'status'];
+        $canManageAutomation = auth()->user()->hasPermission('production_studio.automation_manage');
+        $automationEnabled = \App\Support\ProductionAutomation::enabled();
+        $automationStatusText = $automationRun
+            ? '#'.$automationRun->id.' · '.$automationRun->status.' · '.($automationRun->current_stage ?: $automationRun->current_step_key)
+            : ($automationEnabled ? 'جاهز للفحص قبل التشغيل' : 'معطل من الإعدادات');
+        $automationStatusTone = $automationRun
+            ? match ($automationRun->status) {
+                \App\Support\ProductionAutomation::STATUS_COMPLETED => 'emerald',
+                \App\Support\ProductionAutomation::STATUS_CANCELLED, \App\Support\ProductionAutomation::STATUS_FAILED => 'red',
+                \App\Support\ProductionAutomation::STATUS_PAUSED_BUDGET, \App\Support\ProductionAutomation::STATUS_PAUSED_REVIEW, \App\Support\ProductionAutomation::STATUS_PROVIDER_FAILED => 'amber',
+                default => 'indigo',
+            }
+            : ($automationEnabled ? 'emerald' : 'amber');
+        if ($canManageAutomation || $automationRun) {
+            $sectionNav = array_slice($sectionNav, 0, 1, true)
+                + ['automation-run' => 'الإنتاج التلقائي']
+                + array_slice($sectionNav, 1, null, true);
+        }
         $activityLogs = $project->activityLogs->sortByDesc('created_at')->values()->map(function ($log, $index) {
             $action = $log->action;
             $type = 'project';
@@ -333,6 +351,104 @@
                 </div>
             </details>
         @include('admin.production-studio.partials.workflow-card-close')
+
+        @if($canManageAutomation || $automationRun)
+            @include('admin.production-studio.partials.workflow-card-open', [
+                'id' => 'automation-run',
+                'title' => 'الإنتاج التلقائي',
+                'description' => 'تشغيل دورة الإنتاج الآلية مع الفحص المسبق، الميزانية، الإيقاف، الاستئناف، والإلغاء.',
+                'status' => $automationStatusText,
+                'statusTone' => $automationStatusTone,
+                'warning' => $automationEnabled ? null : 'Automation flag disabled',
+                'summary' => $automationRun ? 'تابع الدورة الحالية أو أوقفها بأمان' : 'ابدأ بفحص قبل التشغيل ثم شغّل Pilot بميزانية محدودة',
+            ])
+                <div class="space-y-4 text-right" data-automation-panel
+                     data-preflight-url="{{ route('admin.production-studio.automation.preflight', $project) }}"
+                     data-start-url="{{ route('admin.production-studio.automation.start', $project) }}"
+                     data-status-url="{{ route('admin.production-studio.automation.status', $project) }}"
+                     data-pause-url="{{ route('admin.production-studio.automation.pause', $project) }}"
+                     data-resume-url="{{ route('admin.production-studio.automation.resume', $project) }}"
+                     data-cancel-url="{{ route('admin.production-studio.automation.cancel', $project) }}">
+                    @unless($automationEnabled)
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-black text-amber-900">
+                            الإنتاج التلقائي غير مفعل في الكاش الحالي. فعّل <span dir="ltr">HERO_KID_PRODUCTION_STUDIO_AUTOMATION_ENABLED=true</span> ثم شغّل <span dir="ltr">php artisan config:cache</span>.
+                        </div>
+                    @endunless
+
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <div class="rounded-xl bg-gray-50 p-4">
+                            <p class="text-xs font-bold text-gray-400">الحالة</p>
+                            <p class="mt-1 font-black text-gray-900" data-automation-run-status>{{ $automationRun?->status ?? 'لا توجد دورة' }}</p>
+                        </div>
+                        <div class="rounded-xl bg-gray-50 p-4">
+                            <p class="text-xs font-bold text-gray-400">المرحلة</p>
+                            <p class="mt-1 font-black text-gray-900" data-automation-run-stage>{{ $automationRun?->current_stage ?? '-' }}</p>
+                        </div>
+                        <div class="rounded-xl bg-gray-50 p-4">
+                            <p class="text-xs font-bold text-gray-400">الخطوة</p>
+                            <p class="mt-1 font-black text-gray-900" data-automation-run-step>{{ $automationRun?->current_step_key ?? '-' }}</p>
+                        </div>
+                        <div class="rounded-xl bg-gray-50 p-4">
+                            <p class="text-xs font-bold text-gray-400">الميزانية</p>
+                            <p class="mt-1 font-black text-gray-900" data-automation-run-budget>{{ $automationRun?->hard_budget ? '$'.$automationRun->hard_budget : '-' }}</p>
+                        </div>
+                    </div>
+
+                    @can('production_studio.automation_manage')
+                        @if(! $automationRun)
+                            <form data-automation-start-form class="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                                    <label class="text-sm font-black text-indigo-950">Hard budget USD
+                                        <input name="hard_budget" type="number" min="0" step="0.01" value="2.00" required class="mt-2 w-full rounded-xl border-indigo-200 text-left" dir="ltr">
+                                    </label>
+                                    <label class="text-sm font-black text-indigo-950">الجودة
+                                        <select name="generation_quality" class="mt-2 w-full rounded-xl border-indigo-200">
+                                            <option value="high">high</option>
+                                            <option value="medium">medium</option>
+                                        </select>
+                                    </label>
+                                    <label class="text-sm font-black text-indigo-950">تزامن المشاهد
+                                        <input name="scene_concurrency" type="number" min="1" max="5" value="{{ config('production_studio.automation.scene_concurrency', 2) }}" class="mt-2 w-full rounded-xl border-indigo-200 text-left" dir="ltr">
+                                    </label>
+                                    <label class="text-sm font-black text-indigo-950">النمط
+                                        <select name="style_preset" class="mt-2 w-full rounded-xl border-indigo-200">
+                                            @foreach($stylePresets as $key => $label)
+                                                <option value="{{ $key }}" @selected($key === config('production_studio.automation.default_style_preset', 'premium_storybook'))>{{ $key }}</option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="mt-4 flex flex-col gap-3 md:flex-row">
+                                    <button type="button" data-automation-preflight class="rounded-xl bg-white px-5 py-3 text-sm font-black text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50">فحص قبل التشغيل</button>
+                                    <button type="button" data-automation-start @disabled(!$automationEnabled) class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300">بدء الإنتاج التلقائي</button>
+                                </div>
+                            </form>
+                        @else
+                            <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                                <p class="text-sm font-bold leading-7 text-gray-700">
+                                    توجد دورة إنتاج تلقائي حالية. استخدم الأزرار التالية فقط عند الحاجة، فالاستئناف سيكمل من آخر خطوة آمنة ولا يعيد إنشاء الأصول المتوافقة.
+                                </p>
+                                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                                    <button type="button" data-automation-status class="rounded-xl bg-white px-4 py-3 text-sm font-black text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50">تحديث الحالة</button>
+                                    <button type="button" data-automation-pause class="rounded-xl bg-amber-600 px-4 py-3 text-sm font-black text-white hover:bg-amber-700">إيقاف مؤقت</button>
+                                    <button type="button" data-automation-resume @disabled(!$automationEnabled) class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-300">استئناف</button>
+                                    <div class="flex gap-2">
+                                        <input name="cancel_reason" data-automation-cancel-reason value="pilot_cancelled" class="min-w-0 flex-1 rounded-xl border-gray-200 text-right text-sm">
+                                        <button type="button" data-automation-cancel class="rounded-xl bg-red-600 px-4 py-3 text-sm font-black text-white hover:bg-red-700">إلغاء</button>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+                    @else
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-black text-amber-900">
+                            تحتاج صلاحية <span dir="ltr">production_studio.automation_manage</span> لبدء أو إدارة الإنتاج التلقائي.
+                        </div>
+                    @endcan
+
+                    <div data-automation-feedback class="hidden rounded-xl border p-4 text-sm font-bold leading-7"></div>
+                </div>
+            @include('admin.production-studio.partials.workflow-card-close')
+        @endif
 
         @include('admin.production-studio.partials.workflow-card-open', [
             'id' => 'order-child-data',
@@ -1104,22 +1220,22 @@
                     @csrf
                     <div class="grid grid-cols-1 gap-4 rounded-xl border border-gray-100 p-4 md:grid-cols-2 lg:grid-cols-4">
                         <label class="text-sm font-black text-gray-700 lg:col-span-2">عنوان الكتاب
-                            <input name="book_title" value="{{ old('book_title', $layoutSettings['book_title']) }}" required class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                            <input name="book_title" value="{{ old('book_title', data_get($layoutSettings, 'book_title', $project->order?->story?->title ?: 'HeroKid')) }}" required class="mt-2 w-full rounded-lg border-gray-200 text-right">
                         </label>
                         <label class="text-sm font-black text-gray-700">سطر اسم الطفل على الغلاف
-                            <input name="cover_subtitle" value="{{ old('cover_subtitle', $layoutSettings['cover_subtitle']) }}" class="mt-2 w-full rounded-lg border-gray-200 text-right">
+                            <input name="cover_subtitle" value="{{ old('cover_subtitle', data_get($layoutSettings, 'cover_subtitle', '')) }}" class="mt-2 w-full rounded-lg border-gray-200 text-right">
                         </label>
                         <label class="text-sm font-black text-gray-700">مكان عنوان الغلاف
                             <select name="cover_title_position" class="mt-2 w-full rounded-lg border-gray-200">
-                                <option value="top" @selected($layoutSettings['cover_title_position'] === 'top')>أعلى الغلاف</option>
-                                <option value="bottom" @selected($layoutSettings['cover_title_position'] === 'bottom')>أسفل الغلاف</option>
+                                <option value="top" @selected(data_get($layoutSettings, 'cover_title_position', 'top') === 'top')>أعلى الغلاف</option>
+                                <option value="bottom" @selected(data_get($layoutSettings, 'cover_title_position', 'top') === 'bottom')>أسفل الغلاف</option>
                             </select>
                         </label>
                         <label class="text-sm font-black text-gray-700">الغلاف الأمامي
                             <select name="cover_asset_id" required class="mt-2 w-full rounded-lg border-gray-200 text-right">
                                 <option value="">اختر غلافًا معتمدًا</option>
                                 @foreach($approvedCoverAssets as $asset)
-                                    <option value="{{ $asset->id }}" @selected((int) old('cover_asset_id', $layoutSettings['cover_asset_id']) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
+                                    <option value="{{ $asset->id }}" @selected((int) old('cover_asset_id', data_get($layoutSettings, 'cover_asset_id')) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
                                 @endforeach
                             </select>
                         </label>
@@ -1127,28 +1243,28 @@
                             <select name="back_cover_asset_id" class="mt-2 w-full rounded-lg border-gray-200 text-right">
                                 <option value="">تصميم HeroKid تلقائي</option>
                                 @foreach($backCoverAssets as $asset)
-                                    <option value="{{ $asset->id }}" @selected((int) old('back_cover_asset_id', $layoutSettings['back_cover_asset_id']) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
+                                    <option value="{{ $asset->id }}" @selected((int) old('back_cover_asset_id', data_get($layoutSettings, 'back_cover_asset_id')) === $asset->id)>#{{ $asset->id }} — {{ $asset->label }}</option>
                                 @endforeach
                             </select>
                         </label>
                         <label class="text-sm font-black text-gray-700 lg:col-span-2">نص الغلاف الخلفي
-                            <textarea name="back_cover_text" rows="2" class="mt-2 w-full rounded-lg border-gray-200 text-right">{{ old('back_cover_text', $layoutSettings['back_cover_text']) }}</textarea>
+                            <textarea name="back_cover_text" rows="2" class="mt-2 w-full rounded-lg border-gray-200 text-right">{{ old('back_cover_text', data_get($layoutSettings, 'back_cover_text', '')) }}</textarea>
                         </label>
                         <label class="text-sm font-black text-gray-700">الموقع
-                            <input name="website" value="{{ old('website', $layoutSettings['website']) }}" class="mt-2 w-full rounded-lg border-gray-200 text-left" dir="ltr">
+                            <input name="website" value="{{ old('website', data_get($layoutSettings, 'website', '')) }}" class="mt-2 w-full rounded-lg border-gray-200 text-left" dir="ltr">
                         </label>
                         <label class="text-sm font-black text-gray-700">اتجاه التجليد
                             <select name="binding_direction" class="mt-2 w-full rounded-lg border-gray-200">
-                                <option value="rtl" @selected($layoutSettings['binding_direction'] === 'rtl')>عربي — التجليد من اليمين</option>
-                                <option value="ltr" @selected($layoutSettings['binding_direction'] === 'ltr')>يسار إلى يمين</option>
+                                <option value="rtl" @selected(data_get($layoutSettings, 'binding_direction', 'rtl') === 'rtl')>عربي — التجليد من اليمين</option>
+                                <option value="ltr" @selected(data_get($layoutSettings, 'binding_direction', 'rtl') === 'ltr')>يسار إلى يمين</option>
                             </select>
                         </label>
                         <input type="hidden" name="duplex_flip" value="short_edge">
                         <label class="text-sm font-black text-gray-700">حجم النص
-                            <input type="number" name="font_size" min="14" max="30" value="{{ old('font_size', $layoutSettings['font_size']) }}" class="mt-2 w-full rounded-lg border-gray-200">
+                            <input type="number" name="font_size" min="14" max="30" value="{{ old('font_size', data_get($layoutSettings, 'font_size', 20)) }}" class="mt-2 w-full rounded-lg border-gray-200">
                         </label>
                         <label class="text-sm font-black text-gray-700">وضوح خلفية النص %
-                            <input type="number" name="text_panel_opacity" min="70" max="100" value="{{ old('text_panel_opacity', $layoutSettings['text_panel_opacity']) }}" class="mt-2 w-full rounded-lg border-gray-200">
+                            <input type="number" name="text_panel_opacity" min="70" max="100" value="{{ old('text_panel_opacity', data_get($layoutSettings, 'text_panel_opacity', 92)) }}" class="mt-2 w-full rounded-lg border-gray-200">
                         </label>
                     </div>
 
@@ -1759,6 +1875,144 @@
 
                 checks.forEach(select => select.addEventListener('change', syncFinalProofApproval));
                 syncFinalProofApproval();
+            }
+
+            const automationPanel = document.querySelector('[data-automation-panel]');
+            if (automationPanel) {
+                const automationFeedback = automationPanel.querySelector('[data-automation-feedback]');
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+                function automationPayload() {
+                    const form = automationPanel.querySelector('[data-automation-start-form]');
+                    if (!form) return {};
+
+                    return Object.fromEntries(new FormData(form).entries());
+                }
+
+                function automationBlockerText(payload) {
+                    const blockers = payload.preflight?.blockers || payload.automation?.blockers || [];
+                    if (Array.isArray(blockers) && blockers.length) {
+                        return blockers.map(blocker => typeof blocker === 'string' ? blocker : (blocker.summary || blocker.code || JSON.stringify(blocker))).join(' | ');
+                    }
+
+                    return payload.message || 'تم تنفيذ الطلب.';
+                }
+
+                function updateAutomationSummary(automation) {
+                    if (!automation?.run) return;
+
+                    const run = automation.run;
+                    const status = automationPanel.querySelector('[data-automation-run-status]');
+                    const stage = automationPanel.querySelector('[data-automation-run-stage]');
+                    const step = automationPanel.querySelector('[data-automation-run-step]');
+                    const budget = automationPanel.querySelector('[data-automation-run-budget]');
+
+                    if (status) status.textContent = run.status || '-';
+                    if (stage) stage.textContent = run.current_stage || '-';
+                    if (step) step.textContent = run.current_step_key || '-';
+                    if (budget && automation.costs?.hard_budget) budget.textContent = `$${automation.costs.hard_budget}`;
+                }
+
+                async function automationRequest(url, options = {}) {
+                    const response = await fetch(url, {
+                        method: options.method || 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: options.body === undefined ? JSON.stringify(automationPayload()) : JSON.stringify(options.body),
+                        cache: 'no-store',
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(automationBlockerText(payload) || 'Automation request failed.');
+                    }
+
+                    return payload;
+                }
+
+                automationPanel.querySelector('[data-automation-preflight]')?.addEventListener('click', async function () {
+                    studioFeedback(automationFeedback, 'info', 'جارٍ تنفيذ الفحص قبل التشغيل...');
+                    try {
+                        const payload = await automationRequest(automationPanel.dataset.preflightUrl);
+                        const warnings = payload.preflight?.warnings?.length ? ` تحذيرات: ${payload.preflight.warnings.join(' | ')}` : '';
+                        const estimate = payload.preflight?.base_estimated_cost ? ` التكلفة الأساسية: $${payload.preflight.base_estimated_cost}.` : '';
+                        studioFeedback(automationFeedback, payload.preflight?.ok ? 'success' : 'error', `${automationBlockerText(payload)}.${estimate}${warnings}`);
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', error.message || 'فشل الفحص قبل التشغيل.');
+                    }
+                });
+
+                automationPanel.querySelector('[data-automation-start]')?.addEventListener('click', async function () {
+                    if (!window.confirm('بدء الإنتاج التلقائي سيستخدم الميزانية المحددة وقد يرسل طلبات مزود مدفوعة. هل تريد المتابعة؟')) {
+                        return;
+                    }
+
+                    studioFeedback(automationFeedback, 'info', 'جارٍ بدء الإنتاج التلقائي...');
+                    try {
+                        const payload = await automationRequest(automationPanel.dataset.startUrl);
+                        updateAutomationSummary(payload.automation);
+                        studioFeedback(automationFeedback, 'success', payload.message || 'تم إنشاء دورة الإنتاج التلقائي. حدّث الصفحة لمشاهدة أزرار الإدارة الكاملة.');
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', error.message || 'تعذر بدء الإنتاج التلقائي.');
+                    }
+                });
+
+                automationPanel.querySelector('[data-automation-status]')?.addEventListener('click', async function () {
+                    studioFeedback(automationFeedback, 'info', 'جارٍ تحديث حالة الإنتاج التلقائي...');
+                    try {
+                        const response = await fetch(automationPanel.dataset.statusUrl, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            cache: 'no-store',
+                        });
+                        const payload = await response.json();
+                        updateAutomationSummary(payload.automation);
+                        studioFeedback(automationFeedback, 'success', payload.automation?.run ? `الحالة الحالية: ${payload.automation.run.status}` : 'لا توجد دورة إنتاج تلقائي لهذا المشروع.');
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', 'تعذر تحديث حالة الإنتاج التلقائي.');
+                    }
+                });
+
+                automationPanel.querySelector('[data-automation-pause]')?.addEventListener('click', async function () {
+                    studioFeedback(automationFeedback, 'info', 'جارٍ الإيقاف المؤقت...');
+                    try {
+                        const payload = await automationRequest(automationPanel.dataset.pauseUrl, { body: { reason: 'manual_pause_from_studio' } });
+                        updateAutomationSummary(payload.automation);
+                        studioFeedback(automationFeedback, 'success', 'تم إيقاف الإنتاج التلقائي مؤقتًا.');
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', error.message || 'تعذر الإيقاف المؤقت.');
+                    }
+                });
+
+                automationPanel.querySelector('[data-automation-resume]')?.addEventListener('click', async function () {
+                    studioFeedback(automationFeedback, 'info', 'جارٍ الاستئناف...');
+                    try {
+                        const payload = await automationRequest(automationPanel.dataset.resumeUrl, { body: {} });
+                        updateAutomationSummary(payload.automation);
+                        studioFeedback(automationFeedback, 'success', 'تم استئناف الإنتاج التلقائي.');
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', error.message || 'تعذر الاستئناف.');
+                    }
+                });
+
+                automationPanel.querySelector('[data-automation-cancel]')?.addEventListener('click', async function () {
+                    const reason = automationPanel.querySelector('[data-automation-cancel-reason]')?.value || 'manual_cancel';
+                    if (!window.confirm('إلغاء دورة الإنتاج التلقائي لا يحذف الأصول التاريخية، لكنه يوقف الدورة الحالية. هل تريد الإلغاء؟')) {
+                        return;
+                    }
+
+                    studioFeedback(automationFeedback, 'info', 'جارٍ إلغاء الدورة...');
+                    try {
+                        const payload = await automationRequest(automationPanel.dataset.cancelUrl, { body: { reason } });
+                        updateAutomationSummary(payload.automation);
+                        studioFeedback(automationFeedback, 'success', 'تم إلغاء دورة الإنتاج التلقائي.');
+                    } catch (error) {
+                        studioFeedback(automationFeedback, 'error', error.message || 'تعذر الإلغاء.');
+                    }
+                });
             }
 
             document.addEventListener('click', function (event) {
