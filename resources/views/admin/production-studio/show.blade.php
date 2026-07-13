@@ -371,6 +371,7 @@
                      data-status-url="{{ route('admin.production-studio.automation.status', $project) }}"
                      data-pause-url="{{ route('admin.production-studio.automation.pause', $project) }}"
                      data-resume-url="{{ route('admin.production-studio.automation.resume', $project) }}"
+                     data-budget-url="{{ route('admin.production-studio.automation.budget', $project) }}"
                      data-cancel-url="{{ route('admin.production-studio.automation.cancel', $project) }}"
                      data-story-approve-url="{{ route('admin.production-studio.automation.story-preparation.approve', $project) }}"
                      data-retry-step-url="{{ route('admin.production-studio.automation.retry-step', $project) }}">
@@ -2111,6 +2112,49 @@
                     if (!reviewBox) return;
 
                     const run = automation?.run || {};
+                    const costs = automation?.costs || {};
+
+                    if (run.status === 'paused_budget') {
+                        const currentBudget = Number(costs.hard_budget || 0);
+                        const incurred = Number(costs.incurred_cost || 0);
+                        const reserved = Number(costs.reserved_cost || 0);
+                        const unknown = Number(costs.unknown_billing_exposure || 0);
+                        const exposure = incurred + reserved + unknown;
+                        const suggestedBudget = Math.max(currentBudget + 5, exposure + 5).toFixed(2);
+                        const summary = run.safe_failure_summary || automationBlockers(automation)[0] || 'الميزانية الحالية لا تكفي لإرسال طلب المزود التالي.';
+
+                        reviewBox.classList.remove('hidden');
+                        reviewBox.innerHTML = `
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-black text-amber-950">توقفت الدورة بسبب الميزانية</p>
+                                    <p class="mt-2 text-sm font-bold leading-7 text-amber-900">${automationEscape(summary)}</p>
+                                    <div class="mt-3 grid grid-cols-1 gap-2 text-xs font-black text-amber-900 sm:grid-cols-4">
+                                        <span class="rounded-xl bg-white px-3 py-2 ring-1 ring-amber-200">الميزانية الحالية: $${automationEscape(costs.hard_budget || run.hard_budget || '0.0000')}</span>
+                                        <span class="rounded-xl bg-white px-3 py-2 ring-1 ring-amber-200">محجوز: $${automationEscape(costs.reserved_cost || '0.0000')}</span>
+                                        <span class="rounded-xl bg-white px-3 py-2 ring-1 ring-amber-200">منفق: $${automationEscape(costs.incurred_cost || '0.0000')}</span>
+                                        <span class="rounded-xl bg-white px-3 py-2 ring-1 ring-amber-200">متبقٍ: $${automationEscape(costs.remaining_budget || '0.0000')}</span>
+                                    </div>
+                                    <p class="mt-3 text-xs font-bold leading-6 text-amber-800">
+                                        الاستئناف وحده سيقف مرة أخرى إذا لم ترفع الميزانية. ارفع الحد الصلب ثم سيكمل النظام من نفس الخطوة بدون إعادة إنشاء الأصول المتوافقة.
+                                    </p>
+                                </div>
+                                <div class="grid shrink-0 gap-2 rounded-xl bg-white p-3 ring-1 ring-amber-200 sm:min-w-80">
+                                    <label class="text-xs font-black text-amber-950">الميزانية الجديدة بالدولار
+                                        <input type="number" min="0.01" step="0.01" value="${suggestedBudget}" data-automation-new-budget class="mt-1 w-full rounded-lg border-amber-200 text-left text-sm font-bold" dir="ltr">
+                                    </label>
+                                    <label class="text-xs font-black text-amber-950">سبب رفع الميزانية
+                                        <input type="text" value="continue_after_budget_pause" data-automation-budget-reason class="mt-1 w-full rounded-lg border-amber-200 text-sm font-bold">
+                                    </label>
+                                    <button type="button" data-automation-increase-budget class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700">
+                                        رفع الميزانية والاستئناف
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        return;
+                    }
+
                     const story = automation?.phase2?.story_preparation || {};
                     const actions = story.available_actions || {};
                     const isStoryReview = (run.status === 'paused_review' && run.current_step_key === 'story_preparation')
@@ -2313,6 +2357,45 @@
                 automationPanel.addEventListener('click', async function (event) {
                     const approveStoryButton = event.target.closest('[data-automation-approve-story]');
                     const retryStoryButton = event.target.closest('[data-automation-retry-story]');
+                    const increaseBudgetButton = event.target.closest('[data-automation-increase-budget]');
+
+                    if (increaseBudgetButton) {
+                        const newBudget = automationPanel.querySelector('[data-automation-new-budget]')?.value;
+                        const reason = automationPanel.querySelector('[data-automation-budget-reason]')?.value?.trim();
+
+                        if (!newBudget || Number(newBudget) <= 0) {
+                            studioFeedback(automationFeedback, 'error', 'أدخل ميزانية جديدة صحيحة قبل الاستئناف.');
+                            return;
+                        }
+
+                        if (!reason) {
+                            studioFeedback(automationFeedback, 'error', 'اكتب سبب رفع الميزانية قبل الاستئناف.');
+                            return;
+                        }
+
+                        if (!window.confirm('رفع الميزانية قد يسمح بإرسال طلبات مزود مدفوعة إضافية. هل تريد المتابعة؟')) {
+                            return;
+                        }
+
+                        increaseBudgetButton.disabled = true;
+                        studioFeedback(automationFeedback, 'info', 'جارٍ رفع الميزانية واستئناف الدورة...');
+                        try {
+                            const payload = await automationRequest(automationPanel.dataset.budgetUrl, {
+                                body: {
+                                    hard_budget: newBudget,
+                                    reason,
+                                    confirm_additional_budget_exposure: true,
+                                },
+                            });
+                            updateAutomationSummary(payload.automation);
+                            studioFeedback(automationFeedback, 'success', 'تم رفع الميزانية واستئناف الإنتاج من آخر خطوة آمنة.');
+                            refreshAutomationStatus(false).catch(() => {});
+                        } catch (error) {
+                            studioFeedback(automationFeedback, 'error', error.message || 'تعذر رفع الميزانية.');
+                        } finally {
+                            increaseBudgetButton.disabled = false;
+                        }
+                    }
 
                     if (approveStoryButton) {
                         const reason = window.prompt('سبب اعتماد تحضير القصة يدويًا بعد المراجعة', 'manual_story_review_after_correction');

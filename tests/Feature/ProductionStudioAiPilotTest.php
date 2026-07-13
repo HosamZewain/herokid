@@ -1751,6 +1751,59 @@ class ProductionStudioAiPilotTest extends TestCase
         app(ApproveGeneratedAssetAction::class)->execute($asset);
     }
 
+    public function test_admin_can_explicitly_override_failed_identity_review_with_reason(): void
+    {
+        Storage::fake('local');
+        $admin = $this->adminUser();
+        $project = $this->projectWithApprovedPhoto();
+        $scene = $project->scenes()->create(['scene_number' => 1, 'title' => 'Scene']);
+        $criteria = collect(app(ProductionAutomationIdentityValidator::class)->requiredCriteria())
+            ->mapWithKeys(fn (string $key): array => [$key => [
+                'status' => 'pass',
+                'evidence' => 'No issue.',
+                'blocking' => false,
+            ]])
+            ->all();
+        $criteria['face_structure'] = [
+            'status' => 'fail',
+            'evidence' => 'Different face shape.',
+            'blocking' => true,
+        ];
+        $asset = $this->asset($project, 'scene_image', [
+            'production_scene_id' => $scene->id,
+            'status' => 'rejected',
+            'rejection_reason' => 'Visual validation found blocking issues.',
+            'metadata_json' => [
+                'identity_review' => [
+                    'status' => 'completed',
+                    'result' => [
+                        'score' => 92,
+                        'summary' => 'High score but face structure blocks approval.',
+                        'criteria' => $criteria,
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.production-studio.show', $project))
+            ->post(route('admin.production-studio.assets.approve', [$project, $asset]), [
+                'identity_override' => '1',
+                'confirm_identity_override' => '1',
+                'identity_override_reason' => 'Reviewed manually and accepted for this scene.',
+                'review_notes' => 'Manual visual approval.',
+            ])
+            ->assertRedirect(route('admin.production-studio.show', $project));
+
+        $asset->refresh();
+        $this->assertSame('approved', $asset->status);
+        $this->assertTrue($asset->is_final);
+        $this->assertNull($asset->rejection_reason);
+        $this->assertTrue(data_get($asset->metadata_json, 'identity_review.manual_override.approved'));
+        $this->assertSame('Reviewed manually and accepted for this scene.', data_get($asset->metadata_json, 'identity_review.manual_override.reason'));
+        $this->assertStringContainsString('Manual identity validation override', (string) $asset->review_notes);
+    }
+
     public function test_admin_can_queue_all_missing_scene_images_without_duplicating_reviewable_or_active_scenes(): void
     {
         Queue::fake();

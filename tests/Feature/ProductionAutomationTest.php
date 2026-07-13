@@ -164,6 +164,68 @@ class ProductionAutomationTest extends TestCase
             ->assertSee(route('admin.production-studio.automation.retry-step', $project), false);
     }
 
+    public function test_budget_pause_can_be_increased_and_resumed_from_studio(): void
+    {
+        Queue::fake();
+        [$admin, $project] = $this->projectWithPhoto();
+        $run = ProductionAutomationRun::create([
+            'production_project_id' => $project->id,
+            'active_project_id' => $project->id,
+            'status' => ProductionAutomation::STATUS_PAUSED_BUDGET,
+            'current_stage' => 'scenes',
+            'current_step_key' => 'scene_04',
+            'hard_budget' => '2.0000',
+            'currency' => 'USD',
+            'pause_reason' => 'hard_budget_exhausted',
+            'safe_failure_code' => 'hard_budget_exhausted',
+            'safe_failure_summary' => 'Automation hard budget would be exceeded by this provider request.',
+            'last_transition_at' => now(),
+            'last_heartbeat_at' => now(),
+            'blockers_json' => [[
+                'code' => 'hard_budget_exhausted',
+                'summary' => 'Automation hard budget would be exceeded by this provider request.',
+                'step_key' => 'scene_04',
+            ]],
+        ]);
+
+        $run->steps()->create([
+            'production_project_id' => $project->id,
+            'step_key' => 'scene_04',
+            'name' => 'Scene 4',
+            'sequence' => 54,
+            'stage' => 'scenes',
+            'status' => ProductionAutomation::STEP_FAILED_RECOVERABLE,
+            'weight' => 3,
+            'safe_failure_code' => 'hard_budget_exhausted',
+            'safe_failure_summary' => 'Automation hard budget would be exceeded by this provider request.',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.production-studio.show', $project))
+            ->assertOk()
+            ->assertSee(route('admin.production-studio.automation.budget', $project), false)
+            ->assertSee('رفع الميزانية والاستئناف');
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.production-studio.automation.budget', $project), [
+                'hard_budget' => '12.00',
+                'reason' => 'continue_after_budget_pause',
+                'confirm_additional_budget_exposure' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('automation.run.status', ProductionAutomation::STATUS_RUNNING)
+            ->assertJsonPath('automation.costs.hard_budget', '12.0000')
+            ->assertJsonPath('automation.blockers', []);
+
+        $run->refresh();
+        $this->assertSame(ProductionAutomation::STATUS_RUNNING, $run->status);
+        $this->assertSame('12.0000', $run->hard_budget);
+        $this->assertNull($run->safe_failure_code);
+        $this->assertSame([], $run->blockers_json);
+        $this->assertSame('12.0000', data_get($run->options_snapshot_json, 'hard_budget'));
+        Queue::assertPushed(AdvanceProductionAutomationRun::class, fn ($job): bool => $job->automationRunId === $run->id);
+    }
+
     public function test_status_endpoint_sanitizes_costs_for_users_without_cost_permission(): void
     {
         [$admin, $project] = $this->projectWithPhoto(['production_studio.view']);

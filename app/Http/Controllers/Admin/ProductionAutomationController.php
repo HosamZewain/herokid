@@ -11,6 +11,7 @@ use App\Models\ProductionPrintLayout;
 use App\Models\ProductionProject;
 use App\Models\ProductionProjectAsset;
 use App\Models\ProductionScene;
+use App\Services\ProductionStudio\ProductionAutomationCostLedger;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\ProductionStudio\ProductionAutomationPhase2Service;
 use App\Services\ProductionStudio\ProductionAutomationPhase3Service;
@@ -132,6 +133,91 @@ class ProductionAutomationController extends Controller
         }
 
         return response()->json(['ok' => true, 'automation' => $presenter->present($run, $request->user())])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function increaseBudget(Request $request, ProductionProject $project, ProductionAutomationStateMachine $stateMachine, ProductionAutomationStatusPresenter $presenter, ProductionAutomationCostLedger $ledger): JsonResponse
+    {
+        $this->ensureStudioEnabled();
+        $this->ensureAutomationEnabled();
+        $run = $this->activeRun($project);
+
+        $validated = $request->validate([
+            'hard_budget' => ['required', 'numeric', 'min:0.01'],
+            'confirm_additional_budget_exposure' => ['required', 'accepted'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $run = DB::transaction(function () use ($run, $project, $request, $validated, $ledger): ProductionAutomationRun {
+                $locked = ProductionAutomationRun::query()
+                    ->with(['project', 'costEntries'])
+                    ->whereKey($run->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $newBudget = (float) $validated['hard_budget'];
+                $oldBudget = (float) $locked->hard_budget;
+                $summary = $ledger->summary($locked);
+                $currentExposure = (float) $summary['reserved_cost']
+                    + (float) $summary['incurred_cost']
+                    + (float) $summary['unknown_billing_exposure'];
+
+                if ($newBudget <= $oldBudget + 0.00001) {
+                    throw new \RuntimeException('أدخل ميزانية أعلى من الميزانية الحالية قبل الاستئناف.');
+                }
+
+                if ($newBudget <= $currentExposure + 0.00001) {
+                    throw new \RuntimeException('الميزانية الجديدة يجب أن تكون أعلى من التكلفة المحجوزة أو المنفقة حاليًا.');
+                }
+
+                $snapshot = $locked->options_snapshot_json ?? [];
+                $snapshot['hard_budget'] = number_format($newBudget, 4, '.', '');
+                $snapshot['manual_budget_updates'][] = [
+                    'old_hard_budget' => number_format($oldBudget, 4, '.', ''),
+                    'new_hard_budget' => number_format($newBudget, 4, '.', ''),
+                    'actor_user_id' => $request->user()?->id,
+                    'reason' => $validated['reason'],
+                    'updated_at' => now()->toIso8601String(),
+                ];
+
+                $locked->update([
+                    'hard_budget' => number_format($newBudget, 4, '.', ''),
+                    'options_snapshot_json' => $snapshot,
+                    'blockers_json' => collect($locked->blockers_json ?? [])
+                        ->reject(fn ($blocker): bool => data_get($blocker, 'code') === 'hard_budget_exhausted')
+                        ->values()
+                        ->all(),
+                ]);
+
+                ProductionStudio::log($project, 'automation.budget_increased', 'تم رفع ميزانية دورة الإنتاج التلقائي.', [
+                    'run_id' => $locked->id,
+                    'old_hard_budget' => number_format($oldBudget, 4, '.', ''),
+                    'new_hard_budget' => number_format($newBudget, 4, '.', ''),
+                    'current_exposure' => number_format($currentExposure, 4, '.', ''),
+                    'reason' => $validated['reason'],
+                ], $request->user());
+
+                return $locked->fresh(['steps', 'project.printLayouts', 'costEntries']);
+            });
+
+            if ($run->status === ProductionAutomation::STATUS_PAUSED_BUDGET) {
+                $run = $stateMachine->transitionRun($run, ProductionAutomation::STATUS_RUNNING, [
+                    'pause_reason' => null,
+                    'safe_failure_code' => null,
+                    'safe_failure_summary' => null,
+                    'blockers' => [],
+                    'current_stage' => $run->current_stage,
+                    'current_step_key' => $run->current_step_key,
+                ], $request->user(), 'admin_budget_increase');
+            }
+
+            AdvanceProductionAutomationRun::dispatch($run->id)->afterCommit();
+        } catch (Throwable $exception) {
+            return $this->jsonError($exception, 422);
+        }
+
+        return response()->json(['ok' => true, 'automation' => $presenter->present($run->fresh(['steps', 'project.printLayouts', 'costEntries']), $request->user())])
             ->header('Cache-Control', 'no-store, private');
     }
 

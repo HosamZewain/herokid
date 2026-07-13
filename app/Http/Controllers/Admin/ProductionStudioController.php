@@ -624,9 +624,28 @@ class ProductionStudioController extends Controller
         $this->ensureEnabled();
         abort_unless($asset->production_project_id === $project->id, 404);
 
-        $validated = $request->validate(['review_notes' => 'nullable|string|max:2000']);
+        $validated = $request->validate([
+            'review_notes' => 'nullable|string|max:2000',
+            'identity_override' => 'nullable|boolean',
+            'confirm_identity_override' => 'nullable|accepted',
+            'identity_override_reason' => 'nullable|string|max:2000',
+        ]);
+        $identityOverride = $request->boolean('identity_override');
+
+        if ($identityOverride) {
+            $request->validate([
+                'confirm_identity_override' => 'required|accepted',
+                'identity_override_reason' => 'required|string|max:2000',
+            ]);
+        }
+
         try {
-            $action->execute($asset, $validated['review_notes'] ?? null);
+            $action->execute(
+                $asset,
+                $validated['review_notes'] ?? null,
+                $identityOverride,
+                $validated['identity_override_reason'] ?? null
+            );
         } catch (\Throwable $exception) {
             if ($request->expectsJson()) {
                 return $this->studioJsonError($this->safeAiError($exception));

@@ -15,10 +15,15 @@ class ApproveGeneratedAssetAction
         private readonly ProductionAutomationVisualValidator $visualValidator,
     ) {}
 
-    public function execute(ProductionProjectAsset $asset, ?string $notes = null): ProductionProjectAsset
-    {
+    public function execute(
+        ProductionProjectAsset $asset,
+        ?string $notes = null,
+        bool $identityOverride = false,
+        ?string $identityOverrideReason = null,
+    ): ProductionProjectAsset {
         $asset->loadMissing(['project']);
 
+        $manualIdentityOverride = false;
         $identityReview = data_get($asset->metadata_json, 'identity_review');
         if (in_array($asset->asset_type, ['scene_image', 'cover_image'], true) && is_array($identityReview)) {
             if (in_array(data_get($identityReview, 'status'), ['queued', 'processing'], true)) {
@@ -39,9 +44,26 @@ class ApproveGeneratedAssetAction
                     : 'fail';
 
                 if ($decision === 'fail' || $evaluatedDecision === 'fail') {
-                    throw new RuntimeException('فشل فحص اتساق هوية الطفل أو يحتوي على علامة حظر. استخدم تصحيح الهوية أو أعد التوليد قبل الاعتماد.');
+                    if ($identityOverride && filled($identityOverrideReason)) {
+                        $manualIdentityOverride = true;
+                    } else {
+                        throw new RuntimeException('فشل فحص اتساق هوية الطفل أو يحتوي على علامة حظر. استخدم تصحيح الهوية أو أعد التوليد قبل الاعتماد.');
+                    }
                 }
             }
+        }
+
+        if ($manualIdentityOverride) {
+            $metadata = $asset->metadata_json ?? [];
+            data_set($metadata, 'identity_review.manual_override', [
+                'approved' => true,
+                'reason' => $identityOverrideReason,
+                'actor_user_id' => auth()->id(),
+                'approved_at' => now()->toIso8601String(),
+            ]);
+            $asset->metadata_json = $metadata;
+            $notes = trim((string) ($notes ?: ''));
+            $notes = trim($notes."\n".'Manual identity validation override: '.$identityOverrideReason);
         }
 
         if ($asset->asset_type === 'character_sheet') {
@@ -74,6 +96,7 @@ class ApproveGeneratedAssetAction
 
         $asset->status = 'approved';
         $asset->review_notes = $notes;
+        $asset->rejection_reason = null;
         $asset->reviewed_by_user_id = auth()->id();
         $asset->reviewed_at = now();
         $asset->save();
@@ -82,6 +105,7 @@ class ApproveGeneratedAssetAction
             'asset_id' => $asset->id,
             'asset_type' => $asset->asset_type,
             'scene_id' => $asset->production_scene_id,
+            'manual_identity_override' => $manualIdentityOverride,
         ], auth()->user());
 
         return $asset;

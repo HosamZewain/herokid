@@ -13,7 +13,15 @@
     $identityReview = data_get($asset->metadata_json, 'identity_review');
     $identityDecision = data_get($identityReview, 'result.decision');
     $identityReviewStatus = data_get($identityReview, 'status');
-    $identityBlocksApproval = in_array($identityReviewStatus, ['queued', 'processing'], true) || $identityDecision === 'fail';
+    $identityBlockingFlags = collect(data_get($identityReview, 'result.blocking_flags', []))->filter()->values();
+    $identityCriteria = collect(data_get($identityReview, 'result.criteria', []));
+    $identityHasBlockingCriterion = $identityCriteria->contains(
+        fn ($criterion): bool => is_array($criterion) && (bool) data_get($criterion, 'blocking')
+    );
+    $identityPendingReview = in_array($identityReviewStatus, ['queued', 'processing'], true);
+    $identityReviewFailed = $identityReviewStatus === 'completed'
+        && ($identityDecision === 'fail' || $identityBlockingFlags->isNotEmpty() || $identityHasBlockingCriterion);
+    $identityBlocksApproval = $identityPendingReview || $identityReviewFailed;
     $sceneLabel = $asset->asset_type === 'scene_image' && $asset->scene
         ? 'المشهد '.$asset->scene->scene_number.' — '.($asset->scene->title ?: 'بدون عنوان')
         : null;
@@ -85,6 +93,15 @@
         @if($asset->rejection_reason)
             <p class="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-700">سبب الرفض: {{ $asset->rejection_reason }}</p>
         @endif
+        @if($identityPendingReview)
+            <p class="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">
+                الاعتماد مقفل مؤقتًا لأن فحص اتساق الهوية ما زال {{ $identityReviewStatus }}. شغّل الكرون/الـqueue أو انتظر اكتمال الفحص ثم حدّث الصفحة.
+            </p>
+        @elseif($identityReviewFailed)
+            <p class="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700">
+                فشل فحص الهوية أو ظهرت علامة حظر. الاعتماد العادي مقفل؛ يمكن استخدام اعتماد يدوي بتجاوز الفحص فقط إذا راجعت الصورة بصريًا وتقبل المسؤولية.
+            </p>
+        @endif
     </div>
     @if($asset->generationJob)
         <details class="mt-3 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
@@ -114,6 +131,18 @@
                 @csrf
                 <button @disabled($identityBlocksApproval) title="{{ $identityBlocksApproval ? 'أكمل فحص أو تصحيح الهوية أولًا' : '' }}" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:bg-gray-300">اعتماد</button>
             </form>
+            @if($identityReviewFailed)
+                <form method="POST" action="{{ route('admin.production-studio.assets.approve', [$project, $asset]) }}" data-studio-ai-form class="grid w-full gap-2 rounded-lg border border-red-200 bg-red-50 p-2 sm:max-w-sm">
+                    @csrf
+                    <input type="hidden" name="identity_override" value="1">
+                    <label class="flex items-center justify-end gap-2 text-xs font-black text-red-800">
+                        <span>أؤكد اعتماد الصورة يدويًا رغم فشل الفحص الآلي</span>
+                        <input type="checkbox" name="confirm_identity_override" value="1" required class="rounded border-red-300 text-red-600">
+                    </label>
+                    <input name="identity_override_reason" required class="rounded-lg border-red-200 text-xs" placeholder="سبب التجاوز اليدوي بعد المراجعة">
+                    <button class="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-black text-white">اعتماد يدوي بتجاوز فحص الهوية</button>
+                </form>
+            @endif
             <form method="POST" action="{{ route('admin.production-studio.assets.reject', [$project, $asset]) }}" data-studio-ai-form class="flex gap-1">
                 @csrf
                 <input name="rejection_reason" required class="w-28 rounded-lg border-gray-300 text-xs" placeholder="سبب الرفض">
