@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Notifications\NotificationBudgetMonitor;
 use App\Services\ProductionStudio\IdentityReviewDispatcher;
 use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
 use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
@@ -45,6 +47,10 @@ class PollAiGenerationJob implements ShouldQueue
                 $job->failed_at = now();
                 $job->save();
                 $automation->markFailed($job, 'provider_reported_failed_generation', $job->error_message, unknownExposure: true);
+                app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.failed', $job->fresh(['project.order', 'scene', 'model']), [
+                    'dedupe_key' => 'ai.generation.failed:'.$job->id,
+                    'status' => 'failed',
+                ], 'error');
 
                 return;
             }
@@ -139,6 +145,13 @@ class PollAiGenerationJob implements ShouldQueue
                 'asset_id' => $createdAsset->id,
                 'asset_type' => $createdAsset->asset_type,
             ]);
+            $freshJob = $job->fresh(['project.generationJobs', 'scene', 'model']);
+            app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.completed', $freshJob, [
+                'dedupe_key' => 'ai.generation.completed:'.$job->id,
+                'status' => 'completed',
+            ], 'success');
+            app(NotificationBudgetMonitor::class)->checkAiJob($freshJob);
+            app(NotificationBudgetMonitor::class)->checkProject($freshJob->project);
         } catch (Throwable $exception) {
             $job->update([
                 'status' => 'failed',
@@ -146,6 +159,10 @@ class PollAiGenerationJob implements ShouldQueue
                 'failed_at' => now(),
             ]);
             $automation->markFailed($job, 'image_poll_failed', $this->safeMessage($exception->getMessage()), unknownExposure: true);
+            app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.failed', $job->fresh(['project.order', 'scene', 'model']), [
+                'dedupe_key' => 'ai.generation.failed:'.$job->id,
+                'status' => 'failed',
+            ], 'error');
         }
     }
 

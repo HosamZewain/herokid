@@ -6,6 +6,8 @@ use App\Models\ProductionAutomationRun;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Notifications\NotificationCredentialService;
+use App\Services\Notifications\NotificationStuckChecker;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
@@ -74,6 +76,59 @@ Artisan::command('ai:import-provider-key {driver} {--force : Replace an existing
     return Command::SUCCESS;
 })->purpose('Import a legacy env provider key into encrypted AI provider credentials');
 
+Artisan::command('notifications:import-telegram {--force : Replace an existing Admin-managed Telegram token} {--yes : Run without interactive confirmation}', function (NotificationCredentialService $credentials) {
+    $legacyToken = (string) config('admin_notifications.telegram.legacy_token');
+    $legacyChatId = (string) config('admin_notifications.telegram.legacy_default_chat_id');
+
+    if (blank($legacyToken)) {
+        $this->error('No legacy TELEGRAM_BOT_TOKEN is configured.');
+
+        return Command::FAILURE;
+    }
+
+    $channel = $credentials->channel('telegram');
+
+    if ($credentials->hasToken($channel) && ! $this->option('force')) {
+        $this->error('Admin-managed Telegram token already exists. Re-run with --force to replace it.');
+
+        return Command::FAILURE;
+    }
+
+    if (! $this->option('yes') && ! $this->confirm('Import the legacy Telegram token into encrypted database credentials? The token will not be printed.')) {
+        $this->warn('Import cancelled.');
+
+        return Command::FAILURE;
+    }
+
+    $credentials->saveToken($channel, $legacyToken);
+    $settings = $channel->settings_json ?? [];
+
+    if (filled($legacyChatId) && blank($settings['default_chat_id'] ?? null)) {
+        $settings['default_chat_id'] = $legacyChatId;
+    }
+
+    $channel->forceFill([
+        'is_active' => filled($settings['default_chat_id'] ?? null),
+        'settings_json' => $settings,
+    ])->save();
+
+    $this->info('Telegram credential imported securely.');
+
+    return Command::SUCCESS;
+})->purpose('Import legacy Telegram env settings into encrypted Admin Notification Center credentials');
+
+Artisan::command('notifications:check-stuck-production', function (NotificationStuckChecker $checker) {
+    $result = $checker->run();
+
+    $this->info(sprintf(
+        'Stuck notification check complete. Production projects inspected: %d. AI jobs inspected: %d.',
+        $result['production_projects'] ?? 0,
+        $result['ai_jobs'] ?? 0,
+    ));
+
+    return Command::SUCCESS;
+})->purpose('Check stuck Production Studio projects and AI generation jobs and notify admins');
+
 Artisan::command('visitor-carts:maintain', function (CartTrackingService $tracking) {
     $result = $tracking->maintainStatuses();
     $this->info(sprintf(
@@ -100,6 +155,9 @@ Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to proc
 })->purpose('Expire and delete unattached temporary child photo uploads');
 
 Schedule::command('photo-uploads:cleanup')->hourly();
+Schedule::command('notifications:check-stuck-production')
+    ->everyTenMinutes()
+    ->withoutOverlapping(10);
 
 Artisan::command('production-automation:recover {--limit= : Maximum active runs to inspect}', function (ProductionAutomationFinalProofService $finalProofs) {
     if (! ProductionAutomation::enabled()) {

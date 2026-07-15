@@ -7,6 +7,7 @@ use App\Models\ProductionProjectAsset;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Ai\GenerationInputAssetResolver;
+use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
 use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
 use App\Support\ProductionStudio;
@@ -115,6 +116,11 @@ class SubmitAiGenerationJob implements ShouldQueue
             'job_id' => $job->id,
             'error' => $this->safeMessage($exception),
         ]);
+
+        app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.failed', $job->fresh(['project.order', 'scene', 'model']), [
+            'dedupe_key' => 'ai.generation.failed:'.$job->id,
+            'status' => 'failed',
+        ], 'error');
     }
 
     private function safeMessage(Throwable $exception): string

@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use Illuminate\Http\Request;
@@ -250,6 +251,15 @@ class CheckoutController extends Controller
         if ($orderIds === []) {
             return redirect()->route('cart.index')->with('error', 'تعذر إنشاء الطلب لأن بعض القصص لم تعد متاحة.');
         }
+
+        Order::query()
+            ->with('story')
+            ->whereKey($orderIds)
+            ->get()
+            ->each(fn (Order $order) => app(AdminNotificationDispatcher::class)->dispatchSafely('order.created', $order, [
+                'dedupe_key' => 'order.created:'.$order->id,
+                'status' => $order->status,
+            ]));
 
         session()->forget('cart.items');
         session(['checkout.last_order_ids' => $orderIds]);

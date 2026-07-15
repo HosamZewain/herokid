@@ -6,6 +6,8 @@ use App\Models\ProductionProjectAsset;
 use App\Models\ProductionStoryVersion;
 use App\Models\SceneGenerationJob;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Notifications\NotificationBudgetMonitor;
 use App\Services\ProductionStudio\ProductionAutomationLateResultGuard;
 use App\Services\ProductionStudio\ProductionAutomationProviderReconciler;
 use App\Support\ProductionStudio;
@@ -131,6 +133,13 @@ class ProcessStructuredAiJob implements ShouldQueue
                 'generation_mode' => $job->generation_mode,
                 'model' => $job->model->code,
             ], $job->initiator);
+            $freshJob = $job->fresh(['project.generationJobs', 'scene', 'model']);
+            app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.completed', $freshJob, [
+                'dedupe_key' => 'ai.generation.completed:'.$job->id,
+                'status' => 'completed',
+            ], 'success');
+            app(NotificationBudgetMonitor::class)->checkAiJob($freshJob);
+            app(NotificationBudgetMonitor::class)->checkProject($freshJob->project);
         } catch (Throwable $exception) {
             $this->failJob($job, $exception);
             $automation->markFailed($job, 'structured_ai_failed', $this->safeMessage($exception), unknownExposure: true);
@@ -177,6 +186,11 @@ class ProcessStructuredAiJob implements ShouldQueue
             'job_type' => $job->job_type,
             'error' => $message,
         ], $job->initiator);
+
+        app(AdminNotificationDispatcher::class)->dispatchSafely('ai.generation.failed', $job->fresh(['project.order', 'scene', 'model']), [
+            'dedupe_key' => 'ai.generation.failed:'.$job->id,
+            'status' => 'failed',
+        ], 'error');
     }
 
     private function storeIdentityReviewResult(SceneGenerationJob $job, array $result): void

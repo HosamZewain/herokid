@@ -25,6 +25,8 @@ use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
+use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Notifications\NotificationBudgetMonitor;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\ProductionStudio\ProductionLayoutBuilder;
 use App\Services\ProductionStudio\ScenePersonalizationService;
@@ -813,6 +815,24 @@ class ProductionStudioController extends Controller
         ProductionStudio::log($project, 'project.updated', 'تم تحديث بيانات مشروع الاستوديو.', [
             'changes' => AdminActivityLogger::changedValues($before, $project->only(array_keys($before))),
         ], auth()->user());
+
+        $freshProject = $project->fresh(['order.story', 'generationJobs']);
+
+        if (($before['status'] ?? null) !== 'in_progress' && $freshProject->status === 'in_progress') {
+            app(AdminNotificationDispatcher::class)->dispatchSafely('production.project.started', $freshProject, [
+                'dedupe_key' => 'production.project.started:'.$freshProject->id,
+                'status' => $freshProject->status,
+            ]);
+        }
+
+        if (($before['status'] ?? null) !== 'completed' && $freshProject->status === 'completed') {
+            app(AdminNotificationDispatcher::class)->dispatchSafely('production.project.completed', $freshProject, [
+                'dedupe_key' => 'production.project.completed:'.$freshProject->id,
+                'status' => $freshProject->status,
+            ]);
+        }
+
+        app(NotificationBudgetMonitor::class)->checkProject($freshProject);
 
         return back()->with('success', 'تم تحديث مشروع الاستوديو.');
     }

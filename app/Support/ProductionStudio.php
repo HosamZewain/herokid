@@ -7,6 +7,7 @@ use App\Models\ProductionProject;
 use App\Models\ProductionQaCheck;
 use App\Models\User;
 use App\Services\Ai\AiProviderAvailability;
+use App\Services\Notifications\AdminNotificationDispatcher;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -58,6 +59,11 @@ class ProductionStudio
             admin: $creator,
             request: request(),
         );
+
+        app(AdminNotificationDispatcher::class)->dispatchSafely('production.project.created', $project->fresh(['order.story']), [
+            'dedupe_key' => 'production.project.created:'.$project->id,
+            'status' => $project->status,
+        ]);
 
         return $project;
     }
