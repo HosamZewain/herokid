@@ -9,6 +9,7 @@
     <x-slot name="pageDescription">{{ $story->seo_description }}</x-slot>
     <x-slot name="pageImage">{{ $storyCoverUrl }}</x-slot>
     <x-slot name="ogType">product</x-slot>
+    <x-slot name="canonical">/stories/{{ $story->slug }}</x-slot>
 
     @push('schema')
         @php
@@ -43,7 +44,7 @@
                         '@type' => 'BreadcrumbList',
                         'itemListElement' => [
                             ['@type' => 'ListItem', 'position' => 1, 'name' => 'الرئيسية', 'item' => \App\Support\Seo::url('/')],
-                            ['@type' => 'ListItem', 'position' => 2, 'name' => 'مكتبة القصص', 'item' => \App\Support\Seo::url('/stories')],
+                            ['@type' => 'ListItem', 'position' => 2, 'name' => 'متجر القصص والمنتجات', 'item' => \App\Support\Seo::url('/shop')],
                             ['@type' => 'ListItem', 'position' => 3, 'name' => $story->title, 'item' => $storyUrl],
                         ],
                     ],
@@ -60,15 +61,24 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
             <!-- Breadcrumb -->
+            <nav aria-label="مسار التنقل" class="mb-4 text-sm font-bold text-slate-500">
+                <ol class="flex flex-wrap items-center gap-2">
+                    <li><a href="{{ route('home') }}" class="hover:text-indigo-700">الرئيسية</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li><a href="{{ route('shop.index') }}" class="hover:text-indigo-700">متجر القصص والمنتجات</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li class="text-slate-800" aria-current="page">{{ $story->title }}</li>
+                </ol>
+            </nav>
             <div class="mb-8">
-                <a href="{{ route('stories.index') }}"
+                <a href="{{ route('shop.index', ['type' => 'stories']) }}"
                     class="text-indigo-600 hover:text-indigo-800 flex items-center gap-2 font-medium text-sm w-fit">
                     <svg class="w-4 h-4 rtl:rotate-180 flex-shrink-0" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
-                    العودة لمكتبة القصص
+                    العودة إلى متجر القصص والمنتجات
                 </a>
             </div>
 

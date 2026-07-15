@@ -53,8 +53,11 @@ class SettingsSeeder extends Seeder
             ['key' => 'seo_pricing_description', 'value' => 'اكتشف باقات HeroKid لقصص الأطفال المخصصة المطبوعة باسم طفلك ووجهه مع أسعار واضحة ورسوم شحن تظهر في السلة.'],
             ['key' => 'seo_how_it_works_title', 'value' => 'كيف يعمل HeroKid؟'],
             ['key' => 'seo_how_it_works_description', 'value' => 'اكتشف رحلة طلب قصة HeroKid المخصصة من اختيار القصة وإضافة بيانات الطفل حتى المراجعة والطباعة والشحن.'],
-            ['key' => 'seo_shop_title', 'value' => 'متجر HeroKid للأطفال'],
-            ['key' => 'seo_shop_description', 'value' => 'تسوق كتب أنشطة، قصص جاهزة، وهدايا مخصصة تكمل تجربة قصة طفلك من HeroKid.'],
+            ['key' => 'seo_shop_title', 'value' => 'متجر القصص والمنتجات'],
+            ['key' => 'seo_shop_description', 'value' => 'Browse personalized children’s stories, activity books, coloring books, mazes, posters, and gifts from HeroKid.'],
+            ['key' => 'unified_store_title', 'value' => 'متجر القصص والمنتجات'],
+            ['key' => 'unified_store_subtitle', 'value' => 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.'],
+            ['key' => 'unified_store_default_sort', 'value' => 'featured'],
 
             ['key' => 'home_badge_text', 'value' => 'أول قصة أطفال بوجه طفلك الحقيقي في مصر'],
             ['key' => 'home_feature_face', 'value' => 'وجه طفلك في كل رسمة'],

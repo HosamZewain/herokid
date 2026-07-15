@@ -5,24 +5,22 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\Catalog\UnifiedStorefrontService;
 use Illuminate\Http\Request;
 
 class ShopController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, UnifiedStorefrontService $storefront)
     {
-        abort_unless(setting('shop_enabled', '1') === '1', 404);
-
-        return $this->listing($request);
+        return $this->listing($request, $storefront);
     }
 
-    public function category(Request $request, ProductCategory $category)
+    public function category(Request $request, ProductCategory $category, UnifiedStorefrontService $storefront)
     {
         abort_unless(setting('shop_enabled', '1') === '1', 404);
         abort_unless($category->is_active && $category->show_in_store, 404);
 
-        return $this->listing($request, $category);
+        return $this->listing($request, $storefront, $category);
     }
 
     public function show(Product $product)
@@ -47,37 +45,21 @@ class ShopController extends Controller
         return view('front.shop.show', compact('product', 'storyItems', 'relatedProducts'));
     }
 
-    private function listing(Request $request, ?ProductCategory $category = null)
+    private function listing(Request $request, UnifiedStorefrontService $storefront, ?ProductCategory $category = null)
     {
-        $categories = ProductCategory::query()
-            ->where('is_active', true)
-            ->where('show_in_store', true)
-            ->whereHas('activeProducts')
-            ->orderBy('sort_order')
-            ->get();
+        if ($category) {
+            $request->merge([
+                'type' => 'products',
+                'category' => 'product:'.$category->slug,
+            ]);
+        }
 
-        $products = Product::query()
-            ->with('category')
-            ->publiclyVisible()
-            ->when($category, fn (Builder $query) => $query->where('product_category_id', $category->id))
-            ->when($request->filled('category'), fn (Builder $query) => $query->whereHas('category', fn (Builder $categoryQuery) => $categoryQuery->where('slug', $request->category)))
-            ->forAgeGroup($request->input('age'))
-            ->when($request->filled('personalization'), fn (Builder $query) => $query->where('personalization_mode', $request->personalization))
-            ->when($request->input('availability') === 'available', fn (Builder $query) => $query->where(function (Builder $builder) {
-                $builder->where('inventory_mode', '!=', 'track_stock')->orWhere('stock_quantity', '>', 0)->orWhereNull('stock_quantity');
-            }));
-
-        match ($request->input('sort', 'featured')) {
-            'newest' => $products->latest(),
-            'price_asc' => $products->orderByRaw('coalesce(sale_price_cents, price_cents) asc'),
-            'price_desc' => $products->orderByRaw('coalesce(sale_price_cents, price_cents) desc'),
-            default => $products->orderByDesc('is_featured')->orderBy('sort_order')->latest(),
-        };
-
-        return view('front.shop.index', [
-            'categories' => $categories,
-            'products' => $products->paginate(12)->withQueryString(),
-            'currentCategory' => $category,
-        ]);
+        return view('front.shop.index', array_merge(
+            $storefront->storefront($request, productsEnabled: setting('shop_enabled', '1') === '1'),
+            [
+                'currentCategory' => $category,
+                'isStoriesAlias' => false,
+            ],
+        ));
     }
 }

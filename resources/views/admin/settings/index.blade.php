@@ -187,8 +187,27 @@
                     <label class="md:col-span-2 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm font-bold text-gray-700">
                         <input type="checkbox" name="settings[shop_enabled]" value="1" @checked($s('shop_enabled', '1') === '1')
                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                        <span>تفعيل رابط وصفحات المتجر عند وجود منتجات منشورة</span>
+                        <span>إظهار المنتجات المنشورة داخل متجر القصص والمنتجات</span>
                     </label>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">عنوان متجر القصص والمنتجات</label>
+                        <input type="text" name="settings[unified_store_title]" value="{{ $s('unified_store_title', 'متجر القصص والمنتجات') }}"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">وصف متجر القصص والمنتجات</label>
+                        <input type="text" name="settings[unified_store_subtitle]" value="{{ $s('unified_store_subtitle', 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.') }}"
+                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">الترتيب الافتراضي للمتجر</label>
+                        <select name="settings[unified_store_default_sort]" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                            <option value="featured" @selected($s('unified_store_default_sort', 'featured') === 'featured')>المميزة</option>
+                            <option value="newest" @selected($s('unified_store_default_sort') === 'newest')>الأحدث</option>
+                            <option value="price_asc" @selected($s('unified_store_default_sort') === 'price_asc')>السعر من الأقل</option>
+                            <option value="price_desc" @selected($s('unified_store_default_sort') === 'price_desc')>السعر من الأعلى</option>
+                        </select>
+                    </div>
                     <div class="md:col-span-2 rounded-lg bg-indigo-50 border border-indigo-100 p-4 text-sm text-indigo-800">
                         يتم تحديد رسوم التوصيل حسب الدولة والمحافظة من صفحة
                         <a href="{{ route('admin.delivery-zones.index') }}" class="font-bold underline">مناطق التوصيل</a>.
