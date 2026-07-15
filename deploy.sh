@@ -26,8 +26,16 @@ composer install --no-dev --optimize-autoloader --no-interaction
 
 # ── 2. Install / build frontend assets ───────────────────────────────────────
 echo "🎨 Building frontend assets..."
-npm ci --prefer-offline
-npm run build
+if command -v npm >/dev/null 2>&1; then
+    npm ci --prefer-offline
+    npm run build
+elif [[ -f public/build/manifest.json ]]; then
+    echo "ℹ️  npm not found; using committed public/build assets."
+else
+    echo "❌ npm not found and public/build/manifest.json is missing."
+    echo "   Build assets locally, commit public/build, or enable Node/NPM on the server."
+    exit 1
+fi
 
 # ── 3. Clear and re-cache config / routes / views ────────────────────────────
 echo "🧹 Clearing old caches..."
