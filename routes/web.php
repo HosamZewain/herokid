@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\ProductionAutomationController;
 use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
@@ -241,6 +242,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])
         ->middleware(['permission:analytics.view', 'throttle:6,1'])
         ->name('analytics.refresh');
+    Route::get('sales-report', [SalesReportController::class, 'index'])
+        ->middleware('permission:sales_reports.view')
+        ->name('sales-report.index');
+    Route::get('sales-report/export', [SalesReportController::class, 'export'])
+        ->middleware(['permission:sales_reports.view', 'throttle:10,1'])
+        ->name('sales-report.export');
     Route::get('visitor-carts', [VisitorCartController::class, 'index'])
         ->middleware('permission:visitor_carts.view')
         ->name('visitor-carts.index');

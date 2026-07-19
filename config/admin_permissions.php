@@ -74,6 +74,15 @@ return [
             'sort_order' => 20,
             'sensitive' => true,
         ],
+        'sales_reports.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض تقرير المبيعات',
+            'name_en' => 'View sales report',
+            'description_ar' => 'عرض وتصفية وتصدير قيم الطلبات ومؤشرات المبيعات التفصيلية.',
+            'description_en' => 'View, filter, and export detailed order-value and sales metrics.',
+            'sort_order' => 25,
+            'sensitive' => true,
+        ],
         'visitor_carts.view' => [
             'group_key' => 'dashboard',
             'name_ar' => 'عرض سلات الزوار',
