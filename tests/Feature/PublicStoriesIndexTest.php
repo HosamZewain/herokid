@@ -11,7 +11,7 @@ class PublicStoriesIndexTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_stories_index_defaults_to_twenty_stories_per_page(): void
+    public function test_public_stories_index_defaults_to_twenty_four_stories_per_page(): void
     {
         for ($i = 1; $i <= 25; $i++) {
             Story::create([
@@ -32,8 +32,8 @@ class PublicStoriesIndexTest extends TestCase
         $stories = $response->viewData('items');
 
         $this->assertInstanceOf(LengthAwarePaginator::class, $stories);
-        $this->assertSame(20, $stories->perPage());
-        $this->assertCount(20, $stories->items());
+        $this->assertSame(24, $stories->perPage());
+        $this->assertCount(24, $stories->items());
     }
 
     public function test_public_stories_index_still_allows_explicit_page_size(): void

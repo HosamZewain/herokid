@@ -4,6 +4,7 @@
         $storeSubtitle = setting('unified_store_subtitle', 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.');
         $activeType = request('type', 'all');
         $hasFilters = request()->hasAny(['type', 'age', 'category', 'personalization', 'sort', 'q']);
+        $hasAdvancedFilters = request()->hasAny(['age', 'category', 'personalization', 'sort', 'q']);
         $canonicalPath = $isStoriesAlias
             ? '/shop?type=stories'
             : ($currentCategory ? '/shop/' . $currentCategory->slug : '/shop');
@@ -106,67 +107,22 @@
                 @endforeach
             </nav>
 
-            <details class="group mb-8 rounded-3xl border border-slate-100 bg-white shadow-sm" open>
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-black text-slate-800 lg:hidden">
+            <div class="mb-8 hidden rounded-3xl border border-slate-100 bg-white shadow-sm lg:block">
+                @include('front.shop._filters', [
+                    'filterId' => 'desktop-store',
+                    'formClasses' => 'grid grid-cols-6 gap-3 p-4',
+                ])
+            </div>
+
+            <details class="group mb-8 rounded-3xl border border-slate-100 bg-white shadow-sm lg:hidden" data-mobile-store-filters data-expanded="{{ $hasAdvancedFilters ? 'true' : 'false' }}" @if($hasAdvancedFilters) open @endif>
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-black text-slate-800">
                     <span>فلترة وترتيب النتائج</span>
                     <span class="text-indigo-600 transition group-open:rotate-180">⌄</span>
                 </summary>
-                <form method="GET" action="{{ route('shop.index') }}" class="grid grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-6 lg:border-t-0">
-                    <input type="hidden" name="type" value="{{ $activeType }}">
-                    <label class="sr-only" for="store-search">ابحث في المتجر</label>
-                    <input id="store-search" type="search" name="q" value="{{ request('q') }}" placeholder="ابحث عن قصة أو منتج"
-                           class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
-
-                    <label class="sr-only" for="store-age">العمر</label>
-                    <select id="store-age" name="age" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">كل الأعمار</option>
-                        @foreach($ageRanges as $age)
-                            <option value="{{ $age }}" @selected(request('age') === $age)>{{ $age }}</option>
-                        @endforeach
-                    </select>
-
-                    <label class="sr-only" for="store-category">التصنيف</label>
-                    <select id="store-category" name="category" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">كل التصنيفات</option>
-                        @if($storyCategories->isNotEmpty())
-                            <optgroup label="تصنيفات القصص">
-                                @foreach($storyCategories as $category)
-                                    <option value="story:{{ $category->slug }}" @selected(request('category') === 'story:'.$category->slug || request('category') === $category->slug)>{{ $category->name }}</option>
-                                @endforeach
-                            </optgroup>
-                        @endif
-                        @if($productCategories->isNotEmpty())
-                            <optgroup label="تصنيفات المنتجات">
-                                @foreach($productCategories as $category)
-                                    <option value="product:{{ $category->slug }}" @selected(request('category') === 'product:'.$category->slug || request('category') === $category->slug)>{{ $category->name_ar }}</option>
-                                @endforeach
-                            </optgroup>
-                        @endif
-                    </select>
-
-                    <label class="sr-only" for="store-personalization">نوع التخصيص</label>
-                    <select id="store-personalization" name="personalization" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">كل أنواع التخصيص</option>
-                        <option value="requires_child_photos" @selected(request('personalization') === 'requires_child_photos')>يتطلب بيانات أو صورة الطفل</option>
-                        <option value="story_context" @selected(request('personalization') === 'story_context')>يستخدم قصة الطفل</option>
-                        <option value="none" @selected(request('personalization') === 'none')>بدون تخصيص</option>
-                    </select>
-
-                    <label class="sr-only" for="store-sort">الترتيب</label>
-                    <select id="store-sort" name="sort" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="featured" @selected(request('sort', setting('unified_store_default_sort', 'featured')) === 'featured')>المميزة</option>
-                        <option value="newest" @selected(request('sort') === 'newest')>الأحدث</option>
-                        <option value="price_asc" @selected(request('sort') === 'price_asc')>السعر من الأقل</option>
-                        <option value="price_desc" @selected(request('sort') === 'price_desc')>السعر من الأعلى</option>
-                    </select>
-
-                    <div class="flex gap-2">
-                        <button class="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700">تطبيق</button>
-                        @if($hasFilters)
-                            <a href="{{ route('shop.index') }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-500 hover:bg-slate-50" aria-label="مسح الفلاتر">×</a>
-                        @endif
-                    </div>
-                </form>
+                @include('front.shop._filters', [
+                    'filterId' => 'mobile-store',
+                    'formClasses' => 'grid grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2',
+                ])
             </details>
 
             <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -174,8 +130,9 @@
                     <h2 class="text-2xl font-black text-slate-950">اختيارات لطفلك</h2>
                     <p class="mt-1 text-sm font-bold text-slate-500">{{ $items->total() }} نتيجة من القصص والمنتجات المتاحة</p>
                 </div>
-                <select onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
-                    @foreach([12, 20, 30] as $perPage)
+                <label class="sr-only" for="store-per-page">عدد النتائج في الصفحة</label>
+                <select id="store-per-page" onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
+                    @foreach([12, 20, 24, 30] as $perPage)
                         <option value="{{ route('shop.index', array_merge(request()->query(), ['per_page' => $perPage, 'page' => null])) }}" @selected($items->perPage() === $perPage)>{{ $perPage }} في الصفحة</option>
                     @endforeach
                 </select>
