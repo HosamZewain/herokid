@@ -24,7 +24,7 @@ class UnifiedStorefrontService
      *     totalProducts: int
      * }
      */
-    public function storefront(Request $request, bool $productsEnabled = true, int $defaultPerPage = 12): array
+    public function storefront(Request $request, bool $productsEnabled = true, int $defaultPerPage = 24): array
     {
         $type = $this->validatedType($request->input('type'));
         $needsStories = in_array($type, ['all', 'stories'], true);
@@ -55,7 +55,7 @@ class UnifiedStorefrontService
         $items = $this->filter($items, $request);
         $items = $this->sort($items, $request->input('sort', setting('unified_store_default_sort', 'featured')));
 
-        $perPage = in_array((int) $request->input('per_page'), [12, 20, 30], true)
+        $perPage = in_array((int) $request->input('per_page'), [12, 20, 24, 30], true)
             ? (int) $request->input('per_page')
             : $defaultPerPage;
         $page = max(1, (int) $request->input('page', 1));
@@ -123,7 +123,7 @@ class UnifiedStorefrontService
             sortOrder: 0,
             detailUrl: route('stories.show', $story->slug),
             ctaLabel: 'خصّص القصة',
-            badgeLabel: 'قصة مخصصة',
+            badgeLabel: $category?->name ?: 'قصة مخصصة',
             searchableText: Str::lower(implode(' ', array_filter([
                 $story->title,
                 $shortDescription,
@@ -178,7 +178,7 @@ class UnifiedStorefrontService
             sortOrder: (int) $product->sort_order,
             detailUrl: route('shop.product.show', $product),
             ctaLabel: $ctaLabel,
-            badgeLabel: $this->productBadge($product, $section),
+            badgeLabel: $categoryName ?: $this->productBadge($product, $section),
             searchableText: Str::lower(implode(' ', array_filter([
                 $product->name_ar,
                 $product->name_en,
@@ -248,13 +248,44 @@ class UnifiedStorefrontService
             'newest' => $items->sortByDesc('createdTimestamp')->values(),
             'price_asc' => $items->sortBy(fn (UnifiedCatalogItem $item) => [$item->price, $item->title])->values(),
             'price_desc' => $items->sortByDesc(fn (UnifiedCatalogItem $item) => [$item->price, $item->createdTimestamp])->values(),
-            default => $items->sortBy(fn (UnifiedCatalogItem $item) => [
-                $item->isFeatured ? 0 : 1,
-                $item->sortOrder,
-                -$item->createdTimestamp,
-                $item->title,
-            ])->values(),
+            default => $this->featuredSort($items),
         };
+    }
+
+    /** @param Collection<int, UnifiedCatalogItem> $items */
+    private function featuredSort(Collection $items): Collection
+    {
+        $sorted = $items->sortBy(fn (UnifiedCatalogItem $item) => [
+            $item->isFeatured ? 0 : 1,
+            $item->sortOrder,
+            -$item->createdTimestamp,
+            $item->title,
+        ])->values();
+
+        $stories = $sorted->where('type', 'story')->values();
+        $products = $sorted->where('type', 'product')->values();
+
+        if ($stories->isEmpty() || $products->isEmpty()) {
+            return $sorted;
+        }
+
+        $firstType = $sorted->first()->type;
+        $primary = $firstType === 'product' ? $products : $stories;
+        $secondary = $firstType === 'product' ? $stories : $products;
+        $interleaved = collect();
+        $maximum = max($primary->count(), $secondary->count());
+
+        for ($index = 0; $index < $maximum; $index++) {
+            if ($primary->has($index)) {
+                $interleaved->push($primary->get($index));
+            }
+
+            if ($secondary->has($index)) {
+                $interleaved->push($secondary->get($index));
+            }
+        }
+
+        return $interleaved;
     }
 
     /**

@@ -19,7 +19,7 @@ class StoryController extends Controller
             $storefront->storefront(
                 $request,
                 productsEnabled: setting('shop_enabled', '1') === '1',
-                defaultPerPage: 20,
+                defaultPerPage: 24,
             ),
             [
                 'currentCategory' => null,

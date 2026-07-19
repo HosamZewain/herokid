@@ -9,7 +9,7 @@
             @else
                 <x-product-image-placeholder />
             @endif
-            <span class="absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-black shadow-sm {{ $item->type === 'story' ? 'bg-pink-600 text-white' : 'bg-indigo-700 text-white' }}">{{ $item->badgeLabel }}</span>
+            <span data-catalog-category-badge="{{ $item->category }}" class="absolute right-3 top-3 max-w-[calc(100%-1.5rem)] truncate rounded-full px-3 py-1.5 text-xs font-black shadow-sm {{ $item->type === 'story' ? 'bg-pink-600 text-white' : 'bg-indigo-700 text-white' }}">{{ $item->badgeLabel }}</span>
         </div>
     </a>
 
@@ -19,9 +19,6 @@
             <span class="rounded-full px-3 py-1 text-xs font-bold {{ $item->personalizationType === 'none' ? 'bg-emerald-50 text-emerald-700' : ($item->personalizationType === 'story_context' ? 'bg-amber-50 text-amber-700' : 'bg-violet-50 text-violet-700') }}">{{ $item->personalizationLabel }}</span>
         </div>
 
-        @if($item->category)
-            <p class="mb-1 text-xs font-black {{ $item->type === 'story' ? 'text-pink-600' : 'text-indigo-600' }}">{{ $item->category }}</p>
-        @endif
         <h3 class="text-lg font-black leading-7 text-slate-950 transition group-hover:text-indigo-700">
             <a href="{{ $item->detailUrl }}">{{ $item->title }}</a>
         </h3>

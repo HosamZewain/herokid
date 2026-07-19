@@ -28,13 +28,57 @@ class UnifiedStorefrontTest extends TestCase
         $this->get(route('shop.index'))
             ->assertOk()
             ->assertViewIs('front.shop.index')
-            ->assertViewHas('items', fn ($items) => $items->total() === 2)
+            ->assertViewHas('items', fn ($items) => $items->total() === 2 && $items->perPage() === 24)
             ->assertSee($story->title)
             ->assertSee($product->name_ar)
             ->assertDontSee('قصة مخفية')
             ->assertDontSee('منتج مخفي')
             ->assertSee('data-catalog-type="story"', false)
             ->assertSee('data-catalog-type="product"', false);
+    }
+
+    public function test_default_featured_view_balances_stories_and_products_on_the_first_page(): void
+    {
+        foreach (range(1, 30) as $index) {
+            $this->story('balanced-story-'.$index, 'قصة متوازنة '.$index);
+        }
+
+        $this->product('balanced-product-one', 'منتج متوازن أول', 80);
+        $this->product('balanced-product-two', 'منتج متوازن ثان', 90);
+
+        $response = $this->get(route('shop.index'))
+            ->assertOk()
+            ->assertSee('24 في الصفحة')
+            ->assertSee('عرض')
+            ->assertSee('من أصل')
+            ->assertSee('نتيجة')
+            ->assertDontSee('Showing');
+
+        $items = collect($response->viewData('items')->items());
+        $firstTypes = $items->take(4)->pluck('type')->values();
+
+        $this->assertSame(24, $response->viewData('items')->perPage());
+        $this->assertSame(24, $items->count());
+        $this->assertContains('story', $firstTypes);
+        $this->assertContains('product', $firstTypes);
+        $this->assertNotSame($firstTypes[0], $firstTypes[1]);
+        $this->assertNotSame($firstTypes[1], $firstTypes[2]);
+    }
+
+    public function test_page_size_can_be_changed_and_mobile_filters_only_open_for_active_criteria(): void
+    {
+        foreach (range(1, 25) as $index) {
+            $this->story('page-size-story-'.$index, 'قصة حجم الصفحة '.$index);
+        }
+
+        $this->get(route('shop.index', ['per_page' => 20]))
+            ->assertOk()
+            ->assertViewHas('items', fn ($items) => $items->perPage() === 20 && count($items->items()) === 20)
+            ->assertSee('data-mobile-store-filters data-expanded="false"', false);
+
+        $this->get(route('shop.index', ['q' => 'حجم']))
+            ->assertOk()
+            ->assertSee('data-mobile-store-filters data-expanded="true"', false);
     }
 
     public function test_type_filters_keep_story_and_product_flows_separate_inside_the_same_page(): void
@@ -53,6 +97,43 @@ class UnifiedStorefrontTest extends TestCase
             ->assertDontSee($story->title)
             ->assertSee($product->name_ar)
             ->assertSee(route('shop.product.show', $product), false);
+    }
+
+    public function test_catalog_cards_use_assigned_categories_as_image_badges(): void
+    {
+        $storyCategory = StoryCategory::create(['name' => 'تطوير سلوك', 'slug' => 'behavior']);
+        $story = $this->story('category-badge-story', 'قصة التصنيف');
+        $story->categories()->attach($storyCategory);
+
+        $productCategory = ProductCategory::create([
+            'name_ar' => 'هدايا مخصصة',
+            'slug' => 'category-badge-products',
+            'is_active' => true,
+            'show_in_store' => true,
+        ]);
+        $this->product('category-badge-product', 'منتج التصنيف', 75, [
+            'product_category_id' => $productCategory->id,
+        ]);
+
+        $response = $this->get(route('shop.index'))->assertOk();
+        $items = collect($response->viewData('items')->items());
+
+        $this->assertSame('تطوير سلوك', $items->firstWhere('type', 'story')->badgeLabel);
+        $this->assertSame('هدايا مخصصة', $items->firstWhere('type', 'product')->badgeLabel);
+        $response
+            ->assertSee('data-catalog-category-badge="تطوير سلوك"', false)
+            ->assertSee('data-catalog-category-badge="هدايا مخصصة"', false);
+    }
+
+    public function test_uncategorized_story_keeps_the_generic_story_badge(): void
+    {
+        $this->story('uncategorized-story', 'قصة بلا تصنيف');
+
+        $response = $this->get(route('shop.index'))->assertOk();
+        $storyItem = collect($response->viewData('items')->items())->firstWhere('type', 'story');
+
+        $this->assertNull($storyItem->category);
+        $this->assertSame('قصة مخصصة', $storyItem->badgeLabel);
     }
 
     public function test_age_category_and_personalization_filters_apply_to_mixed_items(): void
