@@ -1,61 +1,201 @@
 <x-front-layout>
-    <x-slot name="pageTitle">{{ setting('seo_shop_title', $settings['seo_shop_title'] ?? '') }}</x-slot>
-    <x-slot name="pageDescription">{{ setting('seo_shop_description', $settings['seo_shop_description'] ?? '') }}</x-slot>
-    <x-slot name="canonical">{{ $currentCategory ? '/shop/' . $currentCategory->slug : '/shop' }}</x-slot>
+    @php
+        $storeTitle = setting('unified_store_title', 'متجر القصص والمنتجات');
+        $storeSubtitle = setting('unified_store_subtitle', 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.');
+        $activeType = request('type', 'all');
+        $hasFilters = request()->hasAny(['type', 'age', 'category', 'personalization', 'sort', 'q']);
+        $canonicalPath = $isStoriesAlias
+            ? '/shop?type=stories'
+            : ($currentCategory ? '/shop/' . $currentCategory->slug : '/shop');
+        $typeUrl = fn (string $type) => route('shop.index', array_merge(
+            request()->except(['page', 'category', 'type']),
+            ['type' => $type],
+        ));
+    @endphp
 
-    <div class="bg-slate-50 py-10 lg:py-14">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div class="mb-8 text-right">
-                <p class="mb-3 inline-flex rounded-full bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-700">المتجر</p>
-                <h1 class="text-3xl font-black text-slate-950 sm:text-4xl">{{ $currentCategory?->name_ar ?? 'متجر HeroKid' }}</h1>
-                <p class="mt-3 max-w-3xl text-lg leading-8 text-slate-500">منتجات مطبوعة وأنشطة وهدايا يمكن شراؤها مباشرة أو إضافتها مع قصة طفلك المخصصة.</p>
+    <x-slot name="pageTitle">متجر القصص والمنتجات</x-slot>
+    <x-slot name="pageDescription">Browse personalized children’s stories, activity books, coloring books, mazes, posters, and gifts from HeroKid.</x-slot>
+    <x-slot name="canonical">{{ $canonicalPath }}</x-slot>
+
+    @push('schema')
+        @php
+            $storeSchema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'CollectionPage',
+                'name' => $storeTitle,
+                'description' => $storeSubtitle,
+                'url' => \App\Support\Seo::url($canonicalPath),
+                'inLanguage' => 'ar',
+                'breadcrumb' => [
+                    '@type' => 'BreadcrumbList',
+                    'itemListElement' => [
+                        ['@type' => 'ListItem', 'position' => 1, 'name' => 'الرئيسية', 'item' => \App\Support\Seo::url('/')],
+                        ['@type' => 'ListItem', 'position' => 2, 'name' => $storeTitle, 'item' => \App\Support\Seo::url('/shop')],
+                    ],
+                ],
+                'mainEntity' => [
+                    '@type' => 'ItemList',
+                    'numberOfItems' => $items->total(),
+                    'itemListElement' => collect($items->items())->values()->map(fn ($item, $index) => [
+                        '@type' => 'ListItem',
+                        'position' => ($items->firstItem() ?? 1) + $index,
+                        'url' => \App\Support\Seo::url($item->detailUrl),
+                        'name' => $item->title,
+                    ])->all(),
+                ],
+            ];
+        @endphp
+        <script type="application/ld+json">
+        @json($storeSchema, \App\Support\Seo::jsonFlags())
+        </script>
+    @endpush
+
+    <div class="min-h-screen bg-slate-50" dir="rtl">
+        <section class="relative overflow-hidden bg-gradient-to-bl from-indigo-950 via-violet-950 to-slate-950 text-white">
+            <div class="absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 26px 26px;"></div>
+            <div class="absolute -right-32 -top-40 h-96 w-96 rounded-full bg-fuchsia-500/20 blur-3xl"></div>
+            <div class="absolute -bottom-40 left-0 h-96 w-96 rounded-full bg-cyan-400/15 blur-3xl"></div>
+
+            <div class="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+                <div class="max-w-4xl text-right">
+                    <p class="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-black text-indigo-100 backdrop-blur">قصص مخصصة • كتب وأنشطة • هدايا</p>
+                    <h1 class="text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">{{ $storeTitle }}</h1>
+                    <p class="mt-5 max-w-3xl text-base font-medium leading-8 text-slate-300 sm:text-lg">{{ $storeSubtitle }}</p>
+                </div>
+
+                <div class="mt-10 grid gap-3 sm:grid-cols-3">
+                    <a href="{{ $typeUrl('stories') }}" class="group rounded-3xl border border-pink-300/20 bg-white/10 p-5 text-right backdrop-blur transition hover:-translate-y-1 hover:bg-white/15">
+                        <span class="text-3xl" aria-hidden="true">📖</span>
+                        <h2 class="mt-3 text-lg font-black">قصص مخصصة</h2>
+                        <p class="mt-1 text-sm leading-6 text-slate-300">باسم وصورة الطفل</p>
+                    </a>
+                    <a href="{{ $typeUrl('activities') }}" class="group rounded-3xl border border-cyan-300/20 bg-white/10 p-5 text-right backdrop-blur transition hover:-translate-y-1 hover:bg-white/15">
+                        <span class="text-3xl" aria-hidden="true">🎨</span>
+                        <h2 class="mt-3 text-lg font-black">كتب أنشطة وتلوين</h2>
+                        <p class="mt-1 text-sm leading-6 text-slate-300">جاهزة أو مخصصة حسب المنتج</p>
+                    </a>
+                    <a href="{{ $typeUrl('gifts') }}" class="group rounded-3xl border border-amber-300/20 bg-white/10 p-5 text-right backdrop-blur transition hover:-translate-y-1 hover:bg-white/15">
+                        <span class="text-3xl" aria-hidden="true">🎁</span>
+                        <h2 class="mt-3 text-lg font-black">هدايا ومنتجات</h2>
+                        <p class="mt-1 text-sm leading-6 text-slate-300">بوسترات ومنتجات مباشرة</p>
+                    </a>
+                </div>
             </div>
+        </section>
 
-            <div class="mb-6 flex flex-wrap justify-end gap-3">
-                <a href="{{ route('shop.index') }}" class="rounded-2xl border px-4 py-2 text-sm font-black {{ request()->routeIs('shop.index') && !request('category') ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700' }}">كل المنتجات</a>
-                @foreach($categories as $category)
-                    <a href="{{ route('shop.category', $category) }}" class="rounded-2xl border px-4 py-2 text-sm font-black {{ ($currentCategory?->id === $category->id || request('category') === $category->slug) ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-indigo-50' }}">{{ $category->name_ar }}</a>
+        <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+            @if($isStoriesAlias)
+                <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-900">
+                    <p><strong>مكتبة القصص أصبحت جزءاً من متجر HeroKid الموحد.</strong> أنت تشاهد القصص المخصصة فقط.</p>
+                    <a href="{{ route('shop.index') }}" class="font-black text-indigo-700 hover:text-indigo-900">عرض القصص والمنتجات</a>
+                </div>
+            @endif
+
+            <nav aria-label="نوع المنتجات" class="mb-6 flex gap-2 overflow-x-auto pb-2">
+                @foreach([
+                    'all' => 'الكل',
+                    'stories' => 'قصص مخصصة',
+                    'products' => 'كل المنتجات',
+                    'activities' => 'كتب وأنشطة',
+                    'gifts' => 'هدايا ومنتجات',
+                ] as $value => $label)
+                    <a href="{{ $typeUrl($value) }}"
+                       class="shrink-0 rounded-full border px-5 py-2.5 text-sm font-black transition {{ $activeType === $value ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-700' }}">
+                        {{ $label }}
+                    </a>
                 @endforeach
+            </nav>
+
+            <details class="group mb-8 rounded-3xl border border-slate-100 bg-white shadow-sm" open>
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-black text-slate-800 lg:hidden">
+                    <span>فلترة وترتيب النتائج</span>
+                    <span class="text-indigo-600 transition group-open:rotate-180">⌄</span>
+                </summary>
+                <form method="GET" action="{{ route('shop.index') }}" class="grid grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-6 lg:border-t-0">
+                    <input type="hidden" name="type" value="{{ $activeType }}">
+                    <label class="sr-only" for="store-search">ابحث في المتجر</label>
+                    <input id="store-search" type="search" name="q" value="{{ request('q') }}" placeholder="ابحث عن قصة أو منتج"
+                           class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
+
+                    <label class="sr-only" for="store-age">العمر</label>
+                    <select id="store-age" name="age" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">كل الأعمار</option>
+                        @foreach($ageRanges as $age)
+                            <option value="{{ $age }}" @selected(request('age') === $age)>{{ $age }}</option>
+                        @endforeach
+                    </select>
+
+                    <label class="sr-only" for="store-category">التصنيف</label>
+                    <select id="store-category" name="category" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">كل التصنيفات</option>
+                        @if($storyCategories->isNotEmpty())
+                            <optgroup label="تصنيفات القصص">
+                                @foreach($storyCategories as $category)
+                                    <option value="story:{{ $category->slug }}" @selected(request('category') === 'story:'.$category->slug || request('category') === $category->slug)>{{ $category->name }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endif
+                        @if($productCategories->isNotEmpty())
+                            <optgroup label="تصنيفات المنتجات">
+                                @foreach($productCategories as $category)
+                                    <option value="product:{{ $category->slug }}" @selected(request('category') === 'product:'.$category->slug || request('category') === $category->slug)>{{ $category->name_ar }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endif
+                    </select>
+
+                    <label class="sr-only" for="store-personalization">نوع التخصيص</label>
+                    <select id="store-personalization" name="personalization" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">كل أنواع التخصيص</option>
+                        <option value="requires_child_photos" @selected(request('personalization') === 'requires_child_photos')>يتطلب بيانات أو صورة الطفل</option>
+                        <option value="story_context" @selected(request('personalization') === 'story_context')>يستخدم قصة الطفل</option>
+                        <option value="none" @selected(request('personalization') === 'none')>بدون تخصيص</option>
+                    </select>
+
+                    <label class="sr-only" for="store-sort">الترتيب</label>
+                    <select id="store-sort" name="sort" class="rounded-2xl border-slate-200 text-right text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="featured" @selected(request('sort', setting('unified_store_default_sort', 'featured')) === 'featured')>المميزة</option>
+                        <option value="newest" @selected(request('sort') === 'newest')>الأحدث</option>
+                        <option value="price_asc" @selected(request('sort') === 'price_asc')>السعر من الأقل</option>
+                        <option value="price_desc" @selected(request('sort') === 'price_desc')>السعر من الأعلى</option>
+                    </select>
+
+                    <div class="flex gap-2">
+                        <button class="flex-1 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700">تطبيق</button>
+                        @if($hasFilters)
+                            <a href="{{ route('shop.index') }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-500 hover:bg-slate-50" aria-label="مسح الفلاتر">×</a>
+                        @endif
+                    </div>
+                </form>
+            </details>
+
+            <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-950">اختيارات لطفلك</h2>
+                    <p class="mt-1 text-sm font-bold text-slate-500">{{ $items->total() }} نتيجة من القصص والمنتجات المتاحة</p>
+                </div>
+                <select onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
+                    @foreach([12, 20, 30] as $perPage)
+                        <option value="{{ route('shop.index', array_merge(request()->query(), ['per_page' => $perPage, 'page' => null])) }}" @selected($items->perPage() === $perPage)>{{ $perPage }} في الصفحة</option>
+                    @endforeach
+                </select>
             </div>
 
-            <form method="GET" class="mb-8 grid grid-cols-1 gap-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
-                <select name="category" class="rounded-2xl border-slate-200 text-right">
-                    <option value="">كل التصنيفات</option>
-                    @foreach($categories as $category)
-                        <option value="{{ $category->slug }}" @selected(request('category') === $category->slug)>{{ $category->name_ar }}</option>
-                    @endforeach
-                </select>
-                <select name="age" class="rounded-2xl border-slate-200 text-right">
-                    <option value="">كل الأعمار</option>
-                    @foreach(setting_array('age_ranges') as $age)
-                        <option value="{{ $age }}" @selected(request('age') === $age)>{{ $age }}</option>
-                    @endforeach
-                </select>
-                <select name="personalization" class="rounded-2xl border-slate-200 text-right">
-                    <option value="">كل أنواع التخصيص</option>
-                    <option value="none" @selected(request('personalization') === 'none')>بدون تخصيص</option>
-                    <option value="inherit_from_linked_story" @selected(request('personalization') === 'inherit_from_linked_story')>يستخدم قصة الطفل</option>
-                </select>
-                <select name="sort" class="rounded-2xl border-slate-200 text-right">
-                    <option value="featured" @selected(request('sort') === 'featured')>المميزة</option>
-                    <option value="newest" @selected(request('sort') === 'newest')>الأحدث</option>
-                    <option value="price_asc" @selected(request('sort') === 'price_asc')>السعر من الأقل</option>
-                    <option value="price_desc" @selected(request('sort') === 'price_desc')>السعر من الأعلى</option>
-                </select>
-                <button class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
-            </form>
-
-            @if($products->count())
+            @if($items->count())
                 <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    @foreach($products as $product)
-                        @include('front.shop._product-card', ['product' => $product])
+                    @foreach($items as $item)
+                        @include('front.shop._catalog-card', ['item' => $item])
                     @endforeach
                 </div>
-                <div class="mt-8">{{ $products->links() }}</div>
+                @if($items->hasPages())
+                    <div class="mt-10">{{ $items->links() }}</div>
+                @endif
             @else
-                <div class="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center">
-                    <h2 class="text-xl font-black text-slate-950">لا توجد منتجات متاحة حالياً</h2>
-                    <p class="mt-2 text-slate-500">سيتم عرض المنتجات هنا بعد تفعيلها من لوحة الإدارة.</p>
+                <div class="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+                    <div class="text-5xl" aria-hidden="true">🧩</div>
+                    <h2 class="mt-5 text-xl font-black text-slate-950">لم نجد اختيارات تطابق الفلاتر</h2>
+                    <p class="mt-2 text-slate-500">جرّب فئة عمرية أو نوعاً مختلفاً، أو ارجع لعرض المتجر بالكامل.</p>
+                    <a href="{{ route('shop.index') }}" class="mt-6 inline-flex rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black text-white hover:bg-indigo-700">عرض كل القصص والمنتجات</a>
                 </div>
             @endif
         </div>

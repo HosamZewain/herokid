@@ -14,6 +14,19 @@
 
     <div class="bg-slate-50 py-10 lg:py-14">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <nav aria-label="مسار التنقل" class="mb-4 text-sm font-bold text-slate-500">
+                <ol class="flex flex-wrap items-center gap-2">
+                    <li><a href="{{ route('home') }}" class="hover:text-indigo-700">الرئيسية</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li><a href="{{ route('shop.index') }}" class="hover:text-indigo-700">متجر القصص والمنتجات</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li class="text-slate-800" aria-current="page">{{ $product->name_ar }}</li>
+                </ol>
+            </nav>
+            <a href="{{ route('shop.index') }}" class="mb-8 inline-flex items-center gap-2 text-sm font-bold text-indigo-700 hover:text-indigo-900">
+                <svg class="h-4 w-4 rtl:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                العودة إلى متجر القصص والمنتجات
+            </a>
             <div class="grid grid-cols-1 gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                 <div class="space-y-4">
                     <div class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
@@ -57,7 +70,7 @@
                             <p class="text-xs font-black text-amber-600">منتج مخصص مرتبط بقصة</p>
                             <p class="mt-1 font-black text-amber-900">أضف قصة مخصصة أولًا لاستخدام صورة طفلك في هذا المنتج</p>
                             <p class="mt-2 text-sm leading-6 text-amber-800">بعد إضافة القصة للسلة سيظهر هذا المنتج كهدية إضافية، وسيستخدم نفس بيانات الطفل والصور بدون رفعها مرة أخرى.</p>
-                            <a href="{{ route('stories.index') }}" class="mt-4 inline-flex rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">اختيار قصة مخصصة</a>
+                            <a href="{{ route('shop.index', ['type' => 'stories']) }}" class="mt-4 inline-flex rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">اختيار قصة مخصصة</a>
                         </div>
                     @endif
 

@@ -56,7 +56,7 @@
                         '@type' => 'SearchAction',
                         'target' => [
                             '@type' => 'EntryPoint',
-                            'urlTemplate' => \App\Support\Seo::url('/stories?search={search_term_string}'),
+                            'urlTemplate' => \App\Support\Seo::url('/shop?q={search_term_string}'),
                         ],
                         'query-input' => 'required name=search_term_string',
                     ],
@@ -181,12 +181,8 @@
                         </a>
                         <div class="hidden lg:flex items-center gap-10">
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
-                            <x-nav-link :href="route('stories.index')"
-                                :active="request()->routeIs('stories.*')">القصص</x-nav-link>
-                            @if($shopAvailable ?? false)
-                                <x-nav-link :href="route('shop.index')"
-                                    :active="request()->routeIs('shop.*')">المتجر</x-nav-link>
-                            @endif
+                            <x-nav-link :href="route('shop.index')"
+                                :active="request()->routeIs('shop.*') || request()->routeIs('stories.*')">متجر القصص والمنتجات</x-nav-link>
                             <x-nav-link :href="route('how-it-works')" :active="request()->routeIs('how-it-works')">كيف
                                 يعمل؟</x-nav-link>
                             <x-nav-link :href="route('pricing')"
@@ -223,7 +219,7 @@
                                     class="text-gray-600 hover:text-indigo-600 font-bold text-sm px-3">دخول</a>
                                 <a href="{{ route('register') }}"
                                     class="text-gray-600 hover:text-indigo-600 font-bold text-sm px-3">إنشاء حساب</a>
-                                <a href="{{ route('stories.index') }}"
+                                <a href="{{ route('shop.index', ['type' => 'stories']) }}"
                                     class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-5 py-2.5 rounded-xl font-bold shadow-sm shadow-indigo-200 transition hover:-translate-y-0.5">
                                     ابدأ الآن
                                 </a>
@@ -263,12 +259,8 @@
                 class="hidden lg:hidden border-t border-gray-100 bg-white px-4 py-4 space-y-2">
                 <a href="{{ route('home') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الرئيسية</a>
-                <a href="{{ route('stories.index') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">القصص</a>
-                @if($shopAvailable ?? false)
-                    <a href="{{ route('shop.index') }}"
-                        class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">المتجر</a>
-                @endif
+                <a href="{{ route('shop.index') }}"
+                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">متجر القصص والمنتجات</a>
                 <a href="{{ route('how-it-works') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">كيف
                     يعمل؟</a>
@@ -383,11 +375,7 @@
                         <h4 class="font-bold mb-4 text-white">روابط سريعة</h4>
                         <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
-                            <li><a href="{{ route('stories.index') }}" class="hover:text-white transition">القصص
-                                    المتاحة</a></li>
-                            @if($shopAvailable ?? false)
-                                <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">المتجر</a></li>
-                            @endif
+                            <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">متجر القصص والمنتجات</a></li>
                             <li><a href="{{ route('how-it-works') }}" class="hover:text-white transition">كيف يعمل؟</a>
                             </li>
                             <li><a href="{{ route('pricing') }}" class="hover:text-white transition">الأسعار</a></li>

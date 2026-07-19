@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use App\Models\Setting;
-use App\Models\Product;
 use App\Support\AdminPermissionRegistry;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Cache;
@@ -47,15 +46,7 @@ class AppServiceProvider extends ServiceProvider
                     return [];
                 }
             });
-            try {
-                $shopAvailable = ($settings['shop_enabled'] ?? '1') === '1'
-                    && Product::query()->publiclyVisible()->exists();
-            } catch (\Exception) {
-                $shopAvailable = false;
-            }
-
             $view->with('settings', $settings);
-            $view->with('shopAvailable', $shopAvailable);
         });
     }
 }

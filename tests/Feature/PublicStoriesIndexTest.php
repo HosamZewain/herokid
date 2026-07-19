@@ -26,9 +26,10 @@ class PublicStoriesIndexTest extends TestCase
 
         $response = $this->get(route('stories.index'))
             ->assertOk()
-            ->assertViewHas('stories');
+            ->assertViewIs('front.shop.index')
+            ->assertViewHas('items');
 
-        $stories = $response->viewData('stories');
+        $stories = $response->viewData('items');
 
         $this->assertInstanceOf(LengthAwarePaginator::class, $stories);
         $this->assertSame(20, $stories->perPage());
@@ -50,9 +51,10 @@ class PublicStoriesIndexTest extends TestCase
 
         $response = $this->get(route('stories.index', ['per_page' => 12]))
             ->assertOk()
-            ->assertViewHas('stories');
+            ->assertViewIs('front.shop.index')
+            ->assertViewHas('items');
 
-        $stories = $response->viewData('stories');
+        $stories = $response->viewData('items');
 
         $this->assertSame(12, $stories->perPage());
         $this->assertCount(12, $stories->items());
