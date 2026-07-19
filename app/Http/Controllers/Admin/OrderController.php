@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
+use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
@@ -166,6 +167,45 @@ class OrderController extends Controller
         );
 
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم رفع التصميم وتحديث حالة الطلب إلى "في انتظار موافقة العميل".');
+    }
+
+    /**
+     * Append supplemental child photos supplied after the order was placed.
+     */
+    public function uploadPhotos(Request $request, Order $order, OrderPhotoUploadService $photoUploads)
+    {
+        $maximum = (int) config('photo_uploads.admin_max_files', 10);
+        $validated = $request->validate([
+            'photos' => 'required|array|min:1|max:'.$maximum,
+            'photos.*' => 'required|file|max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024),
+        ], [
+            'photos.required' => 'اختر صورة واحدة واضحة على الأقل لإضافتها إلى الطلب.',
+            'photos.array' => 'تعذر قراءة الصور المرفوعة.',
+            'photos.min' => 'اختر صورة واحدة واضحة على الأقل لإضافتها إلى الطلب.',
+            'photos.max' => 'يمكن رفع '.$maximum.' صور كحد أقصى في المرة الواحدة.',
+            'photos.*.file' => 'تعذر قراءة إحدى الصور المرفوعة.',
+            'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن '.config('photo_uploads.max_size_mb', 15).' ميجا.',
+        ]);
+
+        $result = $photoUploads->append($order, $validated['photos']);
+
+        AdminActivityLogger::log(
+            action: 'order.child_photos_added',
+            description: 'إضافة صور جديدة للطفل إلى الطلب: '.$order->order_number,
+            subject: $order,
+            properties: [
+                'order_number' => $order->order_number,
+                'added_count' => $result['added_count'],
+                'total_count' => $result['total_count'],
+                'files' => $result['files'],
+                'production_project_id' => $order->productionProject?->id,
+            ],
+            request: $request,
+        );
+
+        return redirect()
+            ->route('admin.orders.show', $order)
+            ->with('success', 'تمت إضافة '.$result['added_count'].' صورة جديدة. برومبت الإنتاج يعرض الآن جميع صور الطفل وعددها '.$result['total_count'].'.');
     }
 
     /**

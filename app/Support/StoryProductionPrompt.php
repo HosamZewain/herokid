@@ -16,15 +16,22 @@ class StoryProductionPrompt
 
     private const NOT_AVAILABLE = 'Not available';
 
+    private const CHILD_IMAGES_START = '<!-- HERO_KID_CHILD_IMAGES_START -->';
+
+    private const CHILD_IMAGES_END = '<!-- HERO_KID_CHILD_IMAGES_END -->';
+
     public static function forOrder(Order $order, bool $useOverride = true): string
     {
         $order->loadMissing(['story', 'productionPromptOverride']);
 
         if ($useOverride && $order->productionPromptOverride) {
-            return $order->productionPromptOverride->prompt_text;
+            return self::withCurrentChildImageReferences($order->productionPromptOverride->prompt_text, $order);
         }
 
-        return self::renderForOrder($order, self::activeTemplate());
+        return self::withCurrentChildImageReferences(
+            self::renderForOrder($order, self::activeTemplate()),
+            $order,
+        );
     }
 
     public static function renderForOrder(Order $order, string $template): string
@@ -185,11 +192,33 @@ class StoryProductionPrompt
             return 'No child images were attached to this order.';
         }
 
-        return collect($photos)
+        $references = collect($photos)
             ->map(fn (string $photo, int $index): string => ($index + 1).'. '.URL::signedRoute('orders.production-photo', [
                 'order' => $order,
                 'index' => $index,
             ]))
             ->implode("\n");
+
+        return self::CHILD_IMAGES_START."\n".$references."\n".self::CHILD_IMAGES_END;
+    }
+
+    private static function withCurrentChildImageReferences(string $prompt, Order $order): string
+    {
+        $photos = array_values(array_filter($order->uploaded_photos ?? [], 'is_string'));
+
+        if ($photos === []) {
+            return $prompt;
+        }
+
+        $references = self::childImageReferences($order);
+        $pattern = '/'.preg_quote(self::CHILD_IMAGES_START, '/').'.*?'.preg_quote(self::CHILD_IMAGES_END, '/').'/s';
+
+        if (preg_match($pattern, $prompt) === 1) {
+            return preg_replace($pattern, $references, $prompt, 1) ?? $prompt;
+        }
+
+        return rtrim($prompt)."\n\n## Current Child Image References\n"
+            .'This managed list is updated automatically from the order photos.'
+            ."\n\n".$references;
     }
 }
