@@ -26,7 +26,7 @@ class VisitorCart extends Model
 
     public function relatedOrder(): BelongsTo
     {
-        return $this->belongsTo(Order::class, 'related_order_id');
+        return $this->belongsTo(Order::class, 'related_order_id')->withTrashed();
     }
 
     public function items(): HasMany

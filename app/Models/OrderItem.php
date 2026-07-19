@@ -12,6 +12,7 @@ class OrderItem extends Model
         'item_snapshot' => 'array',
         'variant_snapshot' => 'array',
         'personalization_snapshot' => 'array',
+        'stock_released_at' => 'datetime',
     ];
 
     public function order()
@@ -42,6 +43,11 @@ class OrderItem extends Model
     public function linkedAddOns()
     {
         return $this->hasMany(OrderItem::class, 'linked_order_item_id');
+    }
+
+    public function stockReleasedBy()
+    {
+        return $this->belongsTo(User::class, 'stock_released_by_user_id');
     }
 
     public function getTotalPriceAttribute(): float

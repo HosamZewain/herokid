@@ -135,6 +135,15 @@ return [
             'sort_order' => 50,
             'sensitive' => true,
         ],
+        'orders.delete' => [
+            'group_key' => 'orders',
+            'name_ar' => 'حذف واستعادة الطلبات',
+            'name_en' => 'Delete and restore orders',
+            'description_ar' => 'نقل عمليات الشراء أو القصص إلى سلة المحذوفات واستعادتها.',
+            'description_en' => 'Move checkouts or story orders to trash and restore them.',
+            'sort_order' => 60,
+            'sensitive' => true,
+        ],
 
         'production_studio.view' => ['group_key' => 'production_studio', 'name_ar' => 'عرض استوديو الإنتاج', 'name_en' => 'View Production Studio', 'description_ar' => 'عرض مشاريع استوديو الإنتاج والبيانات المرجعية.', 'description_en' => 'View Production Studio projects and reference data.', 'sort_order' => 10, 'sensitive' => true],
         'production_studio.create_from_order' => ['group_key' => 'production_studio', 'name_ar' => 'إرسال الطلب للاستوديو', 'name_en' => 'Send orders to Studio', 'description_ar' => 'إنشاء مشروع إنتاج معزول مرتبط بطلب موجود.', 'description_en' => 'Create an isolated production project linked to an existing order.', 'sort_order' => 20, 'sensitive' => true],

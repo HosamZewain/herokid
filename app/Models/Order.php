@@ -3,15 +3,32 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = [];
 
     protected $casts = [
         'delivery_details' => 'array',
         'uploaded_photos' => 'array',
+        'deleted_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function (Order $order): void {
+            if (filled($order->checkout_group_key)) {
+                return;
+            }
+
+            $order->forceFill([
+                'checkout_group_key' => data_get($order->delivery_details, 'checkout_group') ?: 'ORDER-'.$order->id,
+            ])->saveQuietly();
+        });
+    }
 
     public function user()
     {
@@ -51,5 +68,16 @@ class Order extends Model
     public function productionProject()
     {
         return $this->hasOne(ProductionProject::class);
+    }
+
+    public function deletedBy()
+    {
+        return $this->belongsTo(User::class, 'deleted_by_user_id');
+    }
+
+    public function checkoutGroupKey(): string
+    {
+        return $this->checkout_group_key
+            ?: (string) (data_get($this->delivery_details, 'checkout_group') ?: 'ORDER-'.$this->id);
     }
 }

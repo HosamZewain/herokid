@@ -5,6 +5,14 @@
         : 'guest-' . sha1($customerPhone ?: 'order-' . $order->id);
 @endphp
 
+@php
+    $checkoutGroup ??= [
+        'representative_id' => $order->id,
+        'story_orders' => collect([$order]),
+        'key' => $order->checkoutGroupKey(),
+    ];
+@endphp
+
 <x-admin-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
@@ -26,10 +34,15 @@
             @endif
 
             <!-- Top Bar -->
-            <div class="flex items-center justify-between">
-                <a href="{{ route('admin.orders.index') }}" class="text-gray-600 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition text-sm font-bold flex items-center gap-1">
-                    ← العودة للطلبات
-                </a>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('admin.orders.groups.show', $checkoutGroup['representative_id']) }}" class="text-gray-600 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition text-sm font-bold flex items-center gap-1">
+                        العودة لعملية الشراء
+                    </a>
+                    <a href="{{ route('admin.orders.index') }}" class="text-indigo-600 border border-indigo-100 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition text-sm font-bold">
+                        كل الطلبات
+                    </a>
+                </div>
                 @php
                     $statusColors = [
                         'new'                => 'bg-orange-100 text-orange-700 border-orange-200',
@@ -48,6 +61,20 @@
                     {{ __('order_status.' . $order->status) }}
                 </span>
             </div>
+
+            @if($checkoutGroup['story_orders']->count() > 1)
+                <div class="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-right">
+                    <p class="mb-3 text-xs font-black text-violet-700">قصص أخرى في نفس عملية الشراء {{ $checkoutGroup['key'] }}</p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach($checkoutGroup['story_orders'] as $sibling)
+                            <a href="{{ route('admin.orders.show', $sibling) }}"
+                               class="rounded-xl px-3 py-2 text-xs font-black {{ $sibling->is($order) ? 'bg-violet-600 text-white' : 'bg-white text-violet-700 hover:bg-violet-100' }}">
+                                {{ $sibling->child_name ?: 'طلب متجر' }} — {{ $sibling->story?->title ?: $sibling->order_number }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 

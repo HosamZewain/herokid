@@ -90,6 +90,7 @@ class CheckoutController extends Controller
 
                     $order = Order::create([
                         'order_number' => $this->newOrderNumber(),
+                        'checkout_group_key' => $checkoutGroup,
                         'user_id' => auth()->id(),
                         'parent_name' => $validated['parent_name'],
                         'story_id' => $story->id,
@@ -163,6 +164,7 @@ class CheckoutController extends Controller
                 if ($storyItems->isEmpty() && $productItems->isNotEmpty()) {
                     $firstOrder = Order::create([
                         'order_number' => $this->newOrderNumber(),
+                        'checkout_group_key' => $checkoutGroup,
                         'user_id' => auth()->id(),
                         'parent_name' => $validated['parent_name'],
                         'story_id' => null,

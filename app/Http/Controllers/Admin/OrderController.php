@@ -5,29 +5,26 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
+use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderStatusService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, AdminOrderGroupService $groups)
     {
-        $query = Order::with(['user', 'story', 'items.product', 'items.variant'])->latest();
+        $result = $groups->paginate($request);
 
-        // Filter by status
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $orders = $query->paginate(15)->withQueryString();
-
-        return view('admin.orders.index', compact('orders'));
+        return view('admin.orders.index', $result);
     }
 
-    public function show(Order $order)
+    public function show(Order $order, AdminOrderGroupService $groups)
     {
         $order->load([
             'user',
@@ -63,59 +60,45 @@ class OrderController extends Controller
             request: request(),
         );
 
-        return view('admin.orders.show', compact('order', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting'));
+        $checkoutGroup = $groups->findByRepresentative($order->id);
+
+        return view('admin.orders.show', compact('order', 'checkoutGroup', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting'));
     }
 
-    public function update(Request $request, Order $order)
+    public function update(Request $request, Order $order, OrderStatusService $statuses)
     {
         $validated = $request->validate([
             'status' => 'required|string|in:new,under_review,generating,preview_uploaded,approved_for_print,printing,shipped,delivered,cancelled',
             'admin_notes' => 'nullable|string|max:2000',
         ]);
 
-        $oldStatus = $order->status;
-        $oldNotes = $order->notes;
-        $statusChanged = $oldStatus !== $validated['status'];
-
-        $order->update([
-            'status' => $validated['status'],
-            'notes' => $validated['admin_notes'] ?? $order->notes,
-        ]);
-
-        if ($statusChanged) {
-            $order->statusLogs()->create([
-                'status' => $validated['status'],
-                'notes' => $request->admin_notes ?? 'تم تحديث الحالة من لوحة الإدارة.',
-            ]);
-
-            if (in_array($validated['status'], ['generating', 'approved_for_print', 'printing'], true) && ! $order->productionPromptSnapshots()->exists()) {
-                $order->productionPromptSnapshots()->create([
-                    'prompt_text' => StoryProductionPrompt::forOrder($order->fresh(['story', 'productionPromptOverride'])),
-                    'template_updated_at' => StoryProductionPrompt::templateUpdatedAt(),
-                    'snapshot_reason' => 'status:'.$validated['status'],
-                    'created_by' => auth()->id(),
-                ]);
-            }
-        }
-
-        AdminActivityLogger::log(
-            action: $statusChanged ? 'order.status_updated' : 'order.updated',
-            description: 'تحديث الطلب: '.$order->order_number,
-            subject: $order,
-            properties: [
-                'order_number' => $order->order_number,
-                'status' => [
-                    'old' => $oldStatus,
-                    'new' => $order->status,
-                    'changed' => $statusChanged,
-                ],
-                'notes_changed' => $oldNotes !== $order->notes,
-                'admin_notes' => $validated['admin_notes'] ?? null,
-            ],
-            request: $request,
-        );
+        $statuses->update($order, $validated['status'], $validated['admin_notes'] ?? null, $request);
 
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم تحديث الطلب بنجاح!');
+    }
+
+    public function destroy(Request $request, Order $order, OrderDeletionService $deletions)
+    {
+        $validated = $request->validate([
+            'deletion_reason' => 'required|string|min:5|max:1000',
+            'confirmation' => 'required|string',
+        ]);
+
+        if (! hash_equals($order->order_number, trim($validated['confirmation']))) {
+            throw ValidationException::withMessages(['confirmation' => 'اكتب رقم الطلب كما هو لتأكيد الحذف.']);
+        }
+
+        $deletions->deleteOrder($order, $validated['deletion_reason'], $request->user(), $request);
+
+        return redirect()->route('admin.orders.groups.show', $order->id)->with('success', 'تم نقل القصة/الطلب إلى سلة المحذوفات مع الاحتفاظ بكل البيانات.');
+    }
+
+    public function restore(Request $request, int $order, OrderDeletionService $deletions)
+    {
+        $trashed = Order::onlyTrashed()->findOrFail($order);
+        $deletions->restoreOrder($trashed, $request->user(), $request);
+
+        return redirect()->route('admin.orders.groups.show', $trashed->id)->with('success', 'تمت استعادة القصة/الطلب بنجاح.');
     }
 
     /**
@@ -270,6 +253,4 @@ class OrderController extends Controller
     public function store(Request $request) {}
 
     public function edit(string $id) {}
-
-    public function destroy(string $id) {}
 }
