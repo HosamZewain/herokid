@@ -296,6 +296,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
     Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
+    Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');
     Route::post('orders/{order}/preview', [OrderController::class, 'uploadPreview'])->middleware('permission:orders.preview.upload')->name('orders.upload-preview');
     Route::get('orders/{order}/photos/{index}', [OrderController::class, 'servePhoto'])->middleware('permission:orders.photos.view')->name('orders.photo')->where('index', '[0-9]+');
     Route::get('orders/{order}/production-prompt/regenerate', [OrderProductionPromptController::class, 'regenerate'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.regenerate');

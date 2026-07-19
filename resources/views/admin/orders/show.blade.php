@@ -223,7 +223,15 @@
                     <!-- Child Photos -->
                     @can('orders.photos.view')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                        <h3 class="text-lg font-bold mb-4 text-right border-b pb-3">📸 صور الطفل المرفقة</h3>
+                        <div class="mb-4 flex flex-col gap-2 border-b pb-3 text-right md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold">📸 صور الطفل المرفقة</h3>
+                                <p class="mt-1 text-xs text-gray-500">كل الصور هنا تظهر تلقائياً داخل برومبت الإنتاج.</p>
+                            </div>
+                            <span class="text-xs font-black text-indigo-600">
+                                {{ count($order->uploaded_photos ?? []) }} / {{ config('photo_uploads.admin_max_files', 10) }} صور
+                            </span>
+                        </div>
                         @if($order->uploaded_photos && count($order->uploaded_photos) > 0)
                         <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
                             @foreach($order->uploaded_photos as $photo)
@@ -245,6 +253,53 @@
                         <p class="text-xs text-gray-400 mt-3 text-right">{{ count($order->uploaded_photos) }} صورة مرفقة — اضغط للعرض الكامل</p>
                         @else
                         <p class="text-gray-400 text-sm text-right">لا توجد صور مرفقة.</p>
+                        @endif
+
+                        @if(auth()->user()->hasPermission('orders.update'))
+                            @php
+                                $photoCount = count($order->uploaded_photos ?? []);
+                                $remainingPhotoSlots = max(0, (int) config('photo_uploads.admin_max_files', 10) - $photoCount);
+                            @endphp
+                            <div class="mt-5 border-t border-gray-100 pt-5 text-right">
+                                <h4 class="text-sm font-black text-gray-900">إضافة صور أوضح من العميل</h4>
+                                <p class="mt-1 text-xs leading-5 text-gray-500">
+                                    سيتم الاحتفاظ بالصور الحالية وإضافة الصور الجديدة إليها، وستظهر جميعها تلقائياً داخل برومبت الإنتاج.
+                                    @if(config('production_studio.enabled'))
+                                        الصور الجديدة تظهر أيضاً في استوديو الإنتاج، وتحتاج اعتمادها هناك قبل استخدامها كصور مرجعية للذكاء الاصطناعي.
+                                    @endif
+                                </p>
+
+                                @if($remainingPhotoSlots > 0)
+                                    <form action="{{ route('admin.orders.photos.store', $order) }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-3">
+                                        @csrf
+                                        <input
+                                            type="file"
+                                            name="photos[]"
+                                            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                                            multiple
+                                            required
+                                            class="block w-full rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-700 file:ml-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-black file:text-indigo-700 hover:file:bg-indigo-100"
+                                        >
+                                        <p class="text-xs text-gray-400">
+                                            يمكنك إضافة {{ $remainingPhotoSlots }} صورة أخرى — JPG أو PNG أو WebP أو HEIC/HEIF، وبحد أقصى {{ config('photo_uploads.max_size_mb', 15) }} ميجا للصورة.
+                                        </p>
+                                        @if($errors->has('photos') || $errors->has('photos.*'))
+                                            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                                                @foreach(array_merge($errors->get('photos'), $errors->get('photos.*')) as $message)
+                                                    <p>{{ $message }}</p>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                        <button class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">
+                                            رفع وإضافة الصور إلى الطلب
+                                        </button>
+                                    </form>
+                                @else
+                                    <p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                                        وصل الطلب إلى الحد الأقصى للصور. الحد الحالي {{ config('photo_uploads.admin_max_files', 10) }} صور.
+                                    </p>
+                                @endif
+                            </div>
                         @endif
                     </div>
                     @endcan
