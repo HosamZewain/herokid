@@ -147,6 +147,54 @@
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
                     <span class="text-xl">💰</span> الأسعار والتوصيل
                 </h3>
+                <div class="mb-6 rounded-2xl border-2 border-pink-100 bg-gradient-to-l from-pink-50 to-orange-50 p-5">
+                    <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h4 class="font-black text-gray-900">سعر جميع القصص المخصصة</h4>
+                            <p class="mt-1 text-sm text-gray-600">تحكم في سعر كل القصص من هنا، مع إمكانية تشغيل عرض مؤقت وإيقافه لاحقاً.</p>
+                        </div>
+                        <span class="w-fit rounded-full bg-white px-3 py-1 text-xs font-black text-pink-700 shadow-sm">للقصص فقط</span>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <label class="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-4 text-sm font-bold text-gray-700">
+                            <input type="hidden" name="settings[story_global_price_enabled]" value="0">
+                            <input type="checkbox" name="settings[story_global_price_enabled]" value="1"
+                                   @checked((string) old('settings.story_global_price_enabled', $s('story_global_price_enabled', '0')) === '1')
+                                   class="rounded border-gray-300 text-pink-600 focus:ring-pink-500">
+                            <span>تطبيق سعر موحّد على كل القصص</span>
+                        </label>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">السعر الأساسي للقصة</label>
+                            <input type="number" step="0.01" min="1" name="settings[story_regular_price]"
+                                   value="{{ old('settings.story_regular_price', $s('story_regular_price', 399)) }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-pink-500 focus:ring-pink-500 text-sm">
+                        </div>
+                        <label class="flex items-center gap-3 rounded-xl border border-white bg-white/80 p-4 text-sm font-bold text-gray-700">
+                            <input type="hidden" name="settings[story_offer_enabled]" value="0">
+                            <input type="checkbox" name="settings[story_offer_enabled]" value="1"
+                                   @checked((string) old('settings.story_offer_enabled', $s('story_offer_enabled', '0')) === '1')
+                                   class="rounded border-gray-300 text-pink-600 focus:ring-pink-500">
+                            <span>تشغيل سعر العرض</span>
+                        </label>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">سعر العرض</label>
+                            <input type="number" step="0.01" min="1" name="settings[story_offer_price]"
+                                   value="{{ old('settings.story_offer_price', $s('story_offer_price', 349)) }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-pink-500 focus:ring-pink-500 text-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">عبارة العرض</label>
+                            <input type="text" maxlength="50" name="settings[story_offer_label]"
+                                   value="{{ old('settings.story_offer_label', $s('story_offer_label', 'عرض خاص')) }}"
+                                   class="w-full rounded-lg border-gray-300 focus:border-pink-500 focus:ring-pink-500 text-sm">
+                        </div>
+                        <div class="md:col-span-2 rounded-xl border border-pink-100 bg-white p-4 text-sm text-gray-700">
+                            <p class="font-black text-pink-700">مثال العرض: <span class="line-through text-gray-400">٣٩٩ ج.م</span> ← ٣٤٩ ج.م</p>
+                            <p class="mt-1 text-xs leading-5 text-gray-500">لا يغيّر هذا الإعداد أسعار منتجات المتجر أو الإضافات. وعند إيقاف السعر الموحّد يعود كل Story إلى سعره المسجل في صفحة القصة.</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">سعر الغلاف الناعم</label>

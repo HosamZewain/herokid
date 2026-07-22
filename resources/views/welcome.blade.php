@@ -9,6 +9,9 @@
     $homeCategoryCount = \App\Models\StoryCategory::whereHas('stories', fn ($query) => $query->where('active', true))->count();
     $homeLanguageCount = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->count('language');
     $homeAgeRangeCount = count(setting_array('age_ranges')) ?: \App\Models\Story::where('active', true)->whereNotNull('age_range')->where('age_range', '!=', '')->distinct()->count('age_range');
+    $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
+    $homePricingStory = $featuredStories->first() ?? new \App\Models\Story(['price' => setting('price_soft_cover', 0)]);
+    $homeStoryPrice = $storyPricing->effectivePrice($homePricingStory);
 @endphp
 
 @if($faqs->count())
@@ -256,7 +259,7 @@
                     <div class="flex gap-3">
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#f97316,#ec4899);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">ابتداءً من</p>
-                            <p class="text-xl">{{ format_money(setting('price_soft_cover', $settings['price_soft_cover'] ?? 0)) }}</p>
+                            <p class="text-xl">{{ format_money($homeStoryPrice) }}</p>
                         </div>
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#8b5cf6,#3b82f6);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">شحن خلال</p>
@@ -369,7 +372,7 @@
                             <span class="text-lg leading-none">🎁</span>
                             <div>
                                 <p class="text-[8px] text-white/70 font-bold uppercase tracking-wider leading-none">ابتداءً من</p>
-                                <p class="text-[11px] font-black leading-tight">{{ format_money(setting('price_soft_cover', $settings['price_soft_cover'] ?? 0)) }}</p>
+                                <p class="text-[11px] font-black leading-tight">{{ format_money($homeStoryPrice) }}</p>
                             </div>
                         </div>
                     </div>
@@ -462,7 +465,12 @@
 
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
                 @forelse($featuredStories as $story)
-                    @php $accent = $cardAccents[$loop->index % 8]; @endphp
+                    @php
+                        $accent = $cardAccents[$loop->index % 8];
+                        $storyCardPrice = $storyPricing->effectivePrice($story);
+                        $storyCardRegularPrice = $storyPricing->regularPrice($story);
+                        $storyCardHasOffer = $storyPricing->hasActiveOffer($story);
+                    @endphp
                     <div class="group bg-white rounded-[1.75rem] overflow-hidden hover:shadow-2xl {{ $accent['shadow'] }} transition-all duration-500 hover:-translate-y-2 flex flex-col border border-orange-100/80">
                         {{-- Colorful top stripe --}}
                         <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
@@ -483,7 +491,11 @@
                             </div>
 
                             {{-- NEW badge for first 2 stories --}}
-                            @if($loop->index < 2)
+                            @if($storyCardHasOffer)
+                                <div class="absolute top-3 left-3">
+                                    <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-amber-300 text-amber-950 shadow">{{ $storyPricing->offerLabel() }}</span>
+                                </div>
+                            @elseif($loop->index < 2)
                                 <div class="absolute top-3 left-3">
                                     <span class="text-[10px] font-black px-2.5 py-1 rounded-full text-white shadow"
                                         style="background: linear-gradient(135deg, #f97316, #ec4899);">✨ جديد</span>
@@ -523,7 +535,10 @@
                             {{-- Price + CTA --}}
                             <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
                                 <div class="text-right">
-                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($story->price) }}</span>
+                                    @if($storyCardHasOffer)
+                                        <span class="block text-[10px] font-bold text-slate-400 line-through">{{ format_money($storyCardRegularPrice) }}</span>
+                                    @endif
+                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($storyCardPrice) }}</span>
                                 </div>
                                 <a href="{{ route('stories.show', $story->slug) }}"
                                     class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"

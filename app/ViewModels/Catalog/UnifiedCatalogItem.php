@@ -37,5 +37,8 @@ final readonly class UnifiedCatalogItem
         public string $searchableText,
         public string $section,
         public int $createdTimestamp,
+        public ?float $originalPrice = null,
+        public ?string $originalPriceLabel = null,
+        public ?string $offerLabel = null,
     ) {}
 }

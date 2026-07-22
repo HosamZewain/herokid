@@ -2,6 +2,10 @@
     @php
         $fallbackStoryCover = \App\Support\Seo::imageUrl('/images/site/featured_generic.png');
         $storyCoverUrl = $story->cover_url ?: $fallbackStoryCover;
+        $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
+        $storyRegularPrice = $storyPricing->regularPrice($story);
+        $storyPrice = $storyPricing->effectivePrice($story);
+        $storyHasOffer = $storyPricing->hasActiveOffer($story);
     @endphp
 
     {{-- ══ Per-page SEO slots ══ --}}
@@ -23,7 +27,7 @@
                 'offers' => [
                     '@type' => 'Offer',
                     'priceCurrency' => 'EGP',
-                    'price' => (string) $story->price,
+                    'price' => (string) $storyPrice,
                     'availability' => 'https://schema.org/InStock',
                     'url' => $storyUrl,
                 ],
@@ -100,7 +104,15 @@
                     <!-- Title & Price -->
                     <h1 class="text-4xl font-extrabold text-slate-900 mb-4">{{ $story->title }}</h1>
                     <div class="flex items-center gap-4 mb-6 justify-end">
-                        <span class="text-4xl font-extrabold text-indigo-600">{{ format_money($story->price) }}</span>
+                        <div class="text-right">
+                            @if($storyHasOffer)
+                                <div class="mb-1 flex items-center justify-end gap-2">
+                                    <span class="rounded-full bg-pink-100 px-2.5 py-1 text-xs font-black text-pink-700">{{ $storyPricing->offerLabel() }}</span>
+                                    <span class="text-lg font-bold text-slate-400 line-through">{{ format_money($storyRegularPrice) }}</span>
+                                </div>
+                            @endif
+                            <span class="text-4xl font-extrabold text-indigo-600">{{ format_money($storyPrice) }}</span>
+                        </div>
                         <div class="flex gap-2 flex-wrap justify-end">
                             @if($story->age_range)
                                 <span class="bg-indigo-50 text-indigo-700 text-sm font-bold px-3 py-1.5 rounded-full">👶
@@ -358,7 +370,7 @@
                                 </button>
                             </div>
                             <p class="text-center text-xs text-slate-400 mt-3">
-                                بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ format_money($story->price) }}
+                                بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ format_money($storyPrice) }}
                             </p>
                         </form>
                     </div>

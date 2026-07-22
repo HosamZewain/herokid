@@ -10,6 +10,9 @@
                 <x-product-image-placeholder />
             @endif
             <span data-catalog-category-badge="{{ $item->category }}" class="absolute right-3 top-3 max-w-[calc(100%-1.5rem)] truncate rounded-full px-3 py-1.5 text-xs font-black shadow-sm {{ $item->type === 'story' ? 'bg-pink-600 text-white' : 'bg-indigo-700 text-white' }}">{{ $item->badgeLabel }}</span>
+            @if($item->type === 'story' && $item->offerLabel)
+                <span class="absolute left-3 top-3 rounded-full bg-amber-300 px-3 py-1.5 text-xs font-black text-amber-950 shadow-sm">{{ $item->offerLabel }}</span>
+            @endif
         </div>
     </a>
 
@@ -27,7 +30,12 @@
         @endif
 
         <div class="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-5 {{ $item->shortDescription ? 'mt-5' : 'mt-8' }}">
-            <span class="text-lg font-black {{ $item->type === 'story' ? 'text-pink-700' : 'text-indigo-700' }}">{{ $item->priceLabel }}</span>
+            <div class="text-right">
+                @if($item->originalPriceLabel)
+                    <span class="block text-xs font-bold text-slate-400 line-through">{{ $item->originalPriceLabel }}</span>
+                @endif
+                <span class="text-lg font-black {{ $item->type === 'story' ? 'text-pink-700' : 'text-indigo-700' }}">{{ $item->priceLabel }}</span>
+            </div>
             <a href="{{ $item->detailUrl }}" class="rounded-xl px-4 py-2.5 text-xs font-black text-white transition hover:scale-105 {{ $item->type === 'story' ? 'bg-gradient-to-l from-pink-600 to-orange-500' : 'bg-indigo-600 hover:bg-indigo-700' }}">{{ $item->ctaLabel }}</a>
         </div>
     </div>

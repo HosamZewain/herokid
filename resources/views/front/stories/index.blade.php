@@ -43,6 +43,7 @@
         $hasFilter = request()->hasAny(['gender', 'lang', 'age', 'category']);
         $ageRangeLabels = setting_array('age_ranges') ?: $ageRanges->values()->all();
         $languageCount = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->count('language');
+        $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
         $fallbacks = [
             \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_main')),
             \App\Support\Seo::imageUrl(\App\Support\SiteImages::url('img_hero_mini1')),
@@ -155,7 +156,7 @@
                                     <p class="text-[10px] font-black text-indigo-500 mb-1">{{ $heroStory->categories->first()->name ?? 'قصة مخصصة' }}</p>
                                     <h4 class="text-sm font-black text-slate-900 leading-snug line-clamp-1">{{ $heroStory->title }}</h4>
                                     <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
-                                        <span class="text-xs font-black text-indigo-600">{{ format_money($heroStory->price) }}</span>
+                                        <span class="text-xs font-black text-indigo-600">{{ format_money($storyPricing->effectivePrice($heroStory)) }}</span>
                                         <span class="text-[9px] bg-indigo-50 text-indigo-600 font-black px-2 py-1 rounded-lg">{{ $heroStory->age_range }} سنة</span>
                                     </div>
                                 @else
@@ -465,7 +466,12 @@
                     @endphp
                     <div class="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5 pb-12">
                         @foreach($stories as $idx => $story)
-                            @php $accent = $cardAccents[$loop->index % 8]; @endphp
+                            @php
+                                $accent = $cardAccents[$loop->index % 8];
+                                $storyCardPrice = $storyPricing->effectivePrice($story);
+                                $storyCardRegularPrice = $storyPricing->regularPrice($story);
+                                $storyCardHasOffer = $storyPricing->hasActiveOffer($story);
+                            @endphp
                             <div class="group bg-white rounded-[1.75rem] overflow-hidden hover:shadow-2xl {{ $accent['shadow'] }} transition-all duration-500 hover:-translate-y-2 flex flex-col border border-orange-100/80">
                                 <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
                                 <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
@@ -477,6 +483,11 @@
                                     <div class="absolute top-3 right-3">
                                         <span class="bg-white/92 backdrop-blur-sm text-[10px] font-black px-2.5 py-1 rounded-full shadow border {{ $accent['badge'] }}">{{ $story->age_range }}</span>
                                     </div>
+                                    @if($storyCardHasOffer)
+                                        <div class="absolute top-3 left-3">
+                                            <span class="bg-amber-300 text-amber-950 text-[10px] font-black px-2.5 py-1 rounded-full shadow">{{ $storyPricing->offerLabel() }}</span>
+                                        </div>
+                                    @endif
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end pb-4 justify-center">
                                         <span class="text-white text-xs font-black bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full">🔍 معاينة سريعة</span>
                                     </div>
@@ -500,7 +511,10 @@
                                     @endif
                                     <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
                                         <div class="text-right">
-                                            <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($story->price) }}</span>
+                                            @if($storyCardHasOffer)
+                                                <span class="block text-[10px] font-bold text-slate-400 line-through">{{ format_money($storyCardRegularPrice) }}</span>
+                                            @endif
+                                            <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($storyCardPrice) }}</span>
                                         </div>
                                         <a href="{{ route('stories.show', $story->slug) }}"
                                             class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"

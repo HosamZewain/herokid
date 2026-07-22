@@ -15,10 +15,31 @@
 
     <div class="py-8" dir="rtl">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            @php
+                $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
+                $pricingExampleStory = collect($stories->items())->first() ?? new \App\Models\Story(['price' => 0]);
+            @endphp
 
             @if(session('success'))
                 <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
                     <span class="block sm:inline">{{ session('success') }}</span>
+                </div>
+            @endif
+
+            @if($storyPricing->usesGlobalPrice())
+                <div class="flex flex-col gap-3 rounded-xl border border-pink-200 bg-pink-50 px-5 py-4 text-sm text-pink-900 md:flex-row md:items-center md:justify-between">
+                    <p class="font-bold">
+                        السعر الموحّد للقصص مفعّل:
+                        @if($storyPricing->hasActiveOffer($pricingExampleStory))
+                            <span class="line-through text-pink-400">{{ format_money($storyPricing->regularPrice($pricingExampleStory)) }}</span>
+                            <span class="mr-1 text-lg font-black">{{ format_money($storyPricing->effectivePrice($pricingExampleStory)) }}</span>
+                        @else
+                            <span class="text-lg font-black">{{ format_money($storyPricing->regularPrice($pricingExampleStory)) }}</span>
+                        @endif
+                    </p>
+                    @can('settings.site.view')
+                        <a href="{{ route('admin.settings.index') }}" class="w-fit rounded-lg bg-white px-4 py-2 font-black text-pink-700 shadow-sm hover:bg-pink-100">تعديل سعر جميع القصص</a>
+                    @endcan
                 </div>
             @endif
 
@@ -262,10 +283,17 @@
 
                                     {{-- Price --}}
                                     <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-800">
-                                        @if($story->price == 0)
+                                        @php
+                                            $effectiveStoryPrice = $storyPricing->effectivePrice($story);
+                                            $hasStoryOffer = $storyPricing->hasActiveOffer($story);
+                                        @endphp
+                                        @if($effectiveStoryPrice == 0)
                                             <span class="text-green-600 text-xs font-semibold">مجاني</span>
                                         @else
-                                            {{ number_format($story->price, 2) }}
+                                            @if($hasStoryOffer)
+                                                <span class="ml-1 text-xs text-gray-400 line-through">{{ number_format($storyPricing->regularPrice($story), 2) }}</span>
+                                            @endif
+                                            {{ number_format($effectiveStoryPrice, 2) }}
                                         @endif
                                     </td>
 

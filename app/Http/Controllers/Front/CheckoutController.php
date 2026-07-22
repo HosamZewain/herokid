@@ -11,6 +11,7 @@ use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ use Illuminate\Validation\Rule;
 
 class CheckoutController extends Controller
 {
-    public function store(Request $request, TemporaryPhotoUploadService $photoUploads)
+    public function store(Request $request, TemporaryPhotoUploadService $photoUploads, StoryPricingService $storyPricing)
     {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -57,9 +58,11 @@ class CheckoutController extends Controller
         $productItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') !== 'story');
         $stories = Story::whereIn('id', $storyItems->pluck('story_id')->filter()->all())->get()->keyBy('id');
         $products = Product::with('variants')->whereIn('id', $productItems->pluck('product_id')->filter()->all())->get()->keyBy('id');
-        $subtotal = collect($cart)->sum(function (array $item) use ($stories): float {
+        $subtotal = collect($cart)->sum(function (array $item) use ($stories, $storyPricing): float {
             if (($item['item_type'] ?? 'story') === 'story') {
-                return (float) ($stories->get($item['story_id'] ?? null)?->price ?? $item['story_price'] ?? 0);
+                $story = $stories->get($item['story_id'] ?? null);
+
+                return (float) ($item['story_price'] ?? ($story ? $storyPricing->effectivePrice($story) : 0));
             }
 
             return ((int) ($item['line_total_cents'] ?? 0)) / 100;
@@ -75,7 +78,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, &$orderIds): void {
+            DB::transaction(function () use ($cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -87,6 +90,14 @@ class CheckoutController extends Controller
                     if (! $story) {
                         continue;
                     }
+
+                    $currentPriceSnapshot = $storyPricing->snapshot($story);
+                    $storyPrice = (float) ($item['story_price'] ?? $currentPriceSnapshot['effective_price']);
+                    $storyRegularPrice = (float) ($item['story_regular_price'] ?? $currentPriceSnapshot['regular_price']);
+                    $storyOfferApplied = (bool) ($item['story_offer_applied'] ?? ($storyPrice < $storyRegularPrice));
+                    $storyOfferLabel = $storyOfferApplied
+                        ? ($item['story_offer_label'] ?? $currentPriceSnapshot['offer_label'] ?? $storyPricing->offerLabel())
+                        : null;
 
                     $order = Order::create([
                         'order_number' => $this->newOrderNumber(),
@@ -117,7 +128,10 @@ class CheckoutController extends Controller
                             'checkout_session_id' => $checkoutSessionId,
                             'cart_item_index' => count($orderIds) + 1,
                             'cart_items_count' => $itemCount,
-                            'item_price' => (float) $story->price,
+                            'item_price' => $storyPrice,
+                            'story_regular_price' => $storyRegularPrice,
+                            'story_offer_applied' => $storyOfferApplied,
+                            'story_offer_label' => $storyOfferLabel,
                             'subtotal' => $subtotal,
                             'delivery_fee' => $deliveryFee,
                             'total' => $subtotal + $deliveryFee,
@@ -137,14 +151,17 @@ class CheckoutController extends Controller
                         'item_type' => 'story',
                         'story_id' => $story->id,
                         'title' => $story->title,
-                        'unit_price_cents' => (int) round(((float) $story->price) * 100),
+                        'unit_price_cents' => (int) round($storyPrice * 100),
                         'quantity' => 1,
-                        'total_price_cents' => (int) round(((float) $story->price) * 100),
+                        'total_price_cents' => (int) round($storyPrice * 100),
                         'personalization_mode' => 'collect_child_details',
                         'item_snapshot' => [
                             'story_slug' => $story->slug,
                             'story_language' => $story->language,
                             'lesson' => $story->lesson_value,
+                            'regular_price' => $storyRegularPrice,
+                            'offer_applied' => $storyOfferApplied,
+                            'offer_label' => $storyOfferLabel,
                         ],
                         'personalization_snapshot' => [
                             'cart_item_key' => $cartKey,

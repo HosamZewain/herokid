@@ -19,6 +19,9 @@
 
 @push('schema')
 @php
+    $howToPricing = app(\App\Services\Pricing\StoryPricingService::class);
+    $howToPricingStory = \App\Models\Story::query()->where('active', true)->first()
+        ?? new \App\Models\Story(['price' => setting('price_soft_cover', 0)]);
     $howToSchema = [
         '@context' => 'https://schema.org',
         '@type' => 'HowTo',
@@ -28,7 +31,7 @@
         'estimatedCost' => [
             '@type' => 'MonetaryAmount',
             'currency' => 'EGP',
-            'value' => (string) setting('price_soft_cover', 0),
+            'value' => (string) $howToPricing->effectivePrice($howToPricingStory),
         ],
         'supply' => [
             ['@type' => 'HowToSupply', 'name' => 'صورة واضحة لوجه الطفل'],

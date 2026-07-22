@@ -226,9 +226,17 @@
                                                         @endif
                                                     @endif
                                                 </div>
-                                                <p class="inline-flex w-fit rounded-2xl bg-indigo-50 px-4 py-2 text-base font-black text-indigo-700">
-                                                    {{ format_money($itemPrice) }}
-                                                </p>
+                                                <div class="text-right">
+                                                    <p class="inline-flex w-fit rounded-2xl bg-indigo-50 px-4 py-2 text-base font-black text-indigo-700">
+                                                        {{ format_money($itemPrice) }}
+                                                    </p>
+                                                    @if($itemType === 'story' && !empty($item['story_offer_applied']))
+                                                        <p class="mt-1 text-xs font-bold text-pink-600">
+                                                            {{ $item['story_offer_label'] ?? 'عرض خاص' }}
+                                                            <span class="mr-1 text-slate-400 line-through">{{ format_money($item['story_regular_price'] ?? $itemPrice) }}</span>
+                                                        </p>
+                                                    @endif
+                                                </div>
                                             </div>
 
                                             @if($itemType === 'story')

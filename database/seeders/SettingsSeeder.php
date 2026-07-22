@@ -22,6 +22,11 @@ class SettingsSeeder extends Seeder
             // Pricing
             ['key' => 'price_soft_cover',   'value' => '299'],
             ['key' => 'price_hard_cover',   'value' => '399'],
+            ['key' => 'story_global_price_enabled', 'value' => '1'],
+            ['key' => 'story_regular_price', 'value' => '399'],
+            ['key' => 'story_offer_enabled', 'value' => '1'],
+            ['key' => 'story_offer_price', 'value' => '349'],
+            ['key' => 'story_offer_label', 'value' => 'عرض خاص'],
             ['key' => 'currency_symbol',    'value' => 'ج.م'],
             ['key' => 'currency_label',     'value' => 'ج.م'],
             ['key' => 'delivery_fee',        'value' => '0'],

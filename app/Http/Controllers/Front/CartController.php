@@ -7,6 +7,7 @@ use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
@@ -61,7 +62,7 @@ class CartController extends Controller
         ]);
     }
 
-    public function store(Request $request, Story $story, TemporaryPhotoUploadService $uploads)
+    public function store(Request $request, Story $story, TemporaryPhotoUploadService $uploads, StoryPricingService $storyPricing)
     {
         abort_unless($story->active, 404);
 
@@ -161,6 +162,7 @@ class CartController extends Controller
                 ->withErrors(['photo_upload_ids' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.']);
         }
 
+        $priceSnapshot = $storyPricing->snapshot($story);
         $cart = $this->cart();
         $cart[$itemKey] = [
             'key' => $itemKey,
@@ -168,7 +170,10 @@ class CartController extends Controller
             'story_id' => $story->id,
             'story_title' => $story->title,
             'story_slug' => $story->slug,
-            'story_price' => (float) $story->price,
+            'story_price' => $priceSnapshot['effective_price'],
+            'story_regular_price' => $priceSnapshot['regular_price'],
+            'story_offer_applied' => $priceSnapshot['offer_applied'],
+            'story_offer_label' => $priceSnapshot['offer_label'],
             'story_cover_url' => $story->cover_url,
             'story_language' => $story->language,
             'story_lesson' => $story->lesson_value,

@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\Rule;
 
 class SettingsController extends Controller
 {
@@ -31,6 +32,22 @@ class SettingsController extends Controller
             'settings.whatsapp_number' => 'required|string|max:20',
             'settings.price_soft_cover' => 'required|numeric|min:1',
             'settings.price_hard_cover' => 'required|numeric|min:1',
+            'settings.story_global_price_enabled' => 'nullable|boolean',
+            'settings.story_regular_price' => [
+                'nullable',
+                Rule::requiredIf(fn () => $request->boolean('settings.story_global_price_enabled')),
+                'numeric',
+                'min:1',
+            ],
+            'settings.story_offer_enabled' => 'nullable|boolean',
+            'settings.story_offer_price' => [
+                'nullable',
+                Rule::requiredIf(fn () => $request->boolean('settings.story_offer_enabled')),
+                'numeric',
+                'min:1',
+                'lt:settings.story_regular_price',
+            ],
+            'settings.story_offer_label' => 'nullable|string|max:50',
             'settings.currency_label' => 'sometimes|required|string|max:20',
             'settings.delivery_days_min' => 'sometimes|required|integer|min:1',
             'settings.delivery_days_max' => 'sometimes|required|integer|min:1',
@@ -44,6 +61,12 @@ class SettingsController extends Controller
 
         if ($request->has('settings.shop_enabled')) {
             $settingsInput['shop_enabled'] = $request->boolean('settings.shop_enabled') ? '1' : '0';
+        }
+
+        foreach (['story_global_price_enabled', 'story_offer_enabled'] as $booleanSetting) {
+            if (array_key_exists($booleanSetting, $settingsInput)) {
+                $settingsInput[$booleanSetting] = $request->boolean("settings.{$booleanSetting}") ? '1' : '0';
+            }
         }
 
         if (array_key_exists('payment_methods', $settingsInput)) {

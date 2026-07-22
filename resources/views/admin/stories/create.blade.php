@@ -31,6 +31,7 @@
                         <div>
                             <x-input-label for="price" :value="__('السعر')" />
                             <x-text-input id="price" class="block mt-1 w-full" type="number" step="0.01" name="price" :value="old('price', 0)" required />
+                            <p class="mt-1 text-xs text-gray-500">سعر احتياطي للقصة؛ السعر الموحّد من إعدادات الموقع له الأولوية عند تشغيله.</p>
                             <x-input-error :messages="$errors->get('price')" class="mt-2" />
                         </div>
 

@@ -12,6 +12,7 @@ use App\Models\VisitorCart;
 use App\Services\Cart\CartTrackingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -273,6 +274,55 @@ class CartCheckoutTest extends TestCase
             'key' => 'delivery_fee',
             'value' => '65',
         ]);
+    }
+
+    public function test_story_offer_price_is_snapshotted_in_cart_and_order_while_products_remain_separate(): void
+    {
+        Storage::fake('local');
+        foreach ([
+            'story_global_price_enabled' => '1',
+            'story_regular_price' => '399',
+            'story_offer_enabled' => '1',
+            'story_offer_price' => '349',
+            'story_offer_label' => 'عرض خاص',
+        ] as $key => $value) {
+            Setting::updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+        Cache::forget('site_settings');
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $story = $this->story('global-offer-checkout', 'قصة العرض', 120);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'القراءة'))
+            ->assertRedirect(route('cart.index'));
+
+        $cartItem = collect(session('cart.items'))->first();
+        $this->assertSame(349.0, $cartItem['story_price']);
+        $this->assertSame(399.0, $cartItem['story_regular_price']);
+        $this->assertTrue($cartItem['story_offer_applied']);
+
+        Setting::where('key', 'story_offer_price')->update(['value' => '329']);
+        Cache::forget('site_settings');
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'Parent Name',
+            'phone' => '201000000000',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'city' => 'Nasr City',
+            'street' => 'Street 1',
+            'address_details' => 'Building 2',
+        ])->assertRedirect(route('checkout.success'));
+
+        $order = Order::with('items')->latest('id')->firstOrFail();
+        $storyOrderItem = $order->items->firstWhere('item_type', 'story');
+
+        $this->assertSame(349.0, (float) $order->delivery_details['item_price']);
+        $this->assertSame(399.0, (float) $order->delivery_details['story_regular_price']);
+        $this->assertSame(34900, $storyOrderItem->unit_price_cents);
+        $this->assertSame(34900, $storyOrderItem->total_price_cents);
+        $this->assertSame(399.0, (float) $storyOrderItem->item_snapshot['regular_price']);
     }
 
     public function test_admin_order_details_show_new_delivery_address_fields_without_checkout_email(): void

@@ -32,6 +32,7 @@
                         <div>
                             <x-input-label for="price" :value="__('السعر')" />
                             <x-text-input id="price" class="block mt-1 w-full" type="number" step="0.01" name="price" :value="old('price', $story->price)" required />
+                            <p class="mt-1 text-xs text-gray-500">يُستخدم هذا السعر فقط عند إيقاف السعر الموحّد للقصص من إعدادات الموقع.</p>
                             <x-input-error :messages="$errors->get('price')" class="mt-2" />
                         </div>
 

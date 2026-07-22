@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Services\Pricing\StoryPricingService;
 use App\ViewModels\Catalog\UnifiedCatalogItem;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -14,6 +15,8 @@ use Illuminate\Support\Str;
 
 class UnifiedStorefrontService
 {
+    public function __construct(private readonly StoryPricingService $storyPricing) {}
+
     /**
      * @return array{
      *     items: LengthAwarePaginator,
@@ -99,6 +102,9 @@ class UnifiedStorefrontService
         $category = $categories->first();
         $ageRange = trim((string) $story->age_range) ?: 'كل الأعمار';
         $shortDescription = trim((string) $story->short_desc);
+        $regularPrice = $this->storyPricing->regularPrice($story);
+        $effectivePrice = $this->storyPricing->effectivePrice($story);
+        $hasOffer = $this->storyPricing->hasActiveOffer($story);
 
         return new UnifiedCatalogItem(
             id: 'story:'.$story->id,
@@ -109,8 +115,8 @@ class UnifiedStorefrontService
             description: trim((string) $story->full_desc),
             shortDescription: $shortDescription,
             imageUrl: $story->cover_url,
-            price: (float) $story->price,
-            priceLabel: format_money((float) $story->price),
+            price: $effectivePrice,
+            priceLabel: format_money($effectivePrice),
             ageRange: $ageRange,
             ageValues: $ageRange === 'كل الأعمار' ? [] : [$ageRange],
             category: $category?->name,
@@ -132,6 +138,9 @@ class UnifiedStorefrontService
             ]))),
             section: 'stories',
             createdTimestamp: $story->created_at?->timestamp ?? 0,
+            originalPrice: $hasOffer ? $regularPrice : null,
+            originalPriceLabel: $hasOffer ? format_money($regularPrice) : null,
+            offerLabel: $hasOffer ? $this->storyPricing->offerLabel() : null,
         );
     }
 
