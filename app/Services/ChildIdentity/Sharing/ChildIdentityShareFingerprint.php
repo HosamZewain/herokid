@@ -53,7 +53,7 @@ class ChildIdentityShareFingerprint
             'attempt' => $attempt?->id,
             'output_checksum' => $attempt?->output_checksum,
             'template' => $templateVersion,
-            'layout' => 'reference-template-v3',
+            'layout' => 'reference-template-v4-visible-identity',
             'headline' => $this->settings->cardHeadline(),
             'cta' => $this->settings->cardCta(),
             'footer' => $this->settings->cardFooter(),

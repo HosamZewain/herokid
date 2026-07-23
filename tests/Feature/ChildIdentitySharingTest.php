@@ -232,6 +232,14 @@ class ChildIdentitySharingTest extends TestCase
             hash('sha256', Storage::disk('local')->get($paths['feed'])),
             hash('sha256', Storage::disk('local')->get($paths['og'])),
         );
+
+        $feed = new \Imagick;
+        $feed->readImageBlob(Storage::disk('local')->get($paths['feed']));
+        $identityCenter = $feed->getImagePixelColor(600, 495)->getColor();
+        $feed->clear();
+
+        $this->assertGreaterThan(45, $identityCenter['b'] - $identityCenter['r']);
+        $this->assertGreaterThan(30, $identityCenter['b'] - $identityCenter['g']);
         Http::assertNothingSent();
     }
 

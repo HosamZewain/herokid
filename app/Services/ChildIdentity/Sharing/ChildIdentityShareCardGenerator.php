@@ -314,19 +314,10 @@ HTML);
         int $height,
     ): void {
         $this->roundedPanel($canvas, $x - 10, $y - 10, $width + 20, $height + 20, '#ddd6fe', 34);
-        $roundedIdentity = clone $identity;
-        $mask = new \Imagick;
-        $mask->newImage($width, $height, new \ImagickPixel('transparent'), 'png');
-        $draw = new \ImagickDraw;
-        $draw->setFillColor('#ffffff');
-        $draw->roundRectangle(0, 0, $width - 1, $height - 1, 25, 25);
-        $mask->drawImage($draw);
-        $roundedIdentity->setImageAlphaChannel(\Imagick::ALPHACHANNEL_ACTIVATE);
-        $roundedIdentity->compositeImage($mask, \Imagick::COMPOSITE_DSTIN, 0, 0);
-        $canvas->compositeImage($roundedIdentity, \Imagick::COMPOSITE_OVER, $x, $y);
-        $draw->clear();
-        $mask->clear();
-        $roundedIdentity->clear();
+        // Composite the normalized output directly. Alpha-mask composition behaves
+        // differently across the ImageMagick 6 builds used locally and in production
+        // and can turn the entire child image transparent.
+        $canvas->compositeImage($identity, \Imagick::COMPOSITE_OVER, $x, $y);
     }
 
     private function roundedPanel(
