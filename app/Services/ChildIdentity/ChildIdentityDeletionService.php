@@ -3,6 +3,7 @@
 namespace App\Services\ChildIdentity;
 
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildIdentityShare;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
@@ -31,6 +32,12 @@ class ChildIdentityDeletionService
                 fromStatus: $locked->status,
                 toStatus: $locked->status,
             );
+            $locked->share()->update([
+                'share_enabled' => false,
+                'status' => 'revoked',
+                'revoked_at' => now(),
+                'updated_at' => now(),
+            ]);
             $locked->delete();
 
             AdminActivityLogger::log(
@@ -77,7 +84,7 @@ class ChildIdentityDeletionService
         User $admin,
         Request $request,
     ): void {
-        $identity->load(['photos', 'attempts']);
+        $identity->load(['photos', 'attempts', 'share']);
         $media = $identity->photos
             ->flatMap(fn ($photo) => collect([
                 [
@@ -107,6 +114,16 @@ class ChildIdentityDeletionService
                     'kind' => 'preview',
                 ] : null,
             ])->filter()))
+            ->merge($identity->share
+                ? collect(ChildIdentityShare::VARIANTS)->map(fn (string $variant) => $identity->share->cardPath($variant)
+                    ? [
+                        'disk' => $identity->share->card_disk,
+                        'path' => $identity->share->cardPath($variant),
+                        'checksum' => null,
+                        'kind' => 'public_share_'.$variant,
+                    ]
+                    : null)->filter()
+                : collect())
             ->values();
         $manifest = [
             'identity_id' => $identity->id,

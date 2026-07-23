@@ -89,6 +89,16 @@ class ChildIdentityRequest extends Model
         return $this->hasMany(Order::class)->withTrashed();
     }
 
+    public function share()
+    {
+        return $this->hasOne(ChildIdentityShare::class);
+    }
+
+    public function referredByShare(): BelongsTo
+    {
+        return $this->belongsTo(ChildIdentityShare::class, 'referred_by_child_identity_share_id')->withTrashed();
+    }
+
     public function successfulOutputsUsed(): int
     {
         return $this->attempts()->whereNotNull('output_storage_path')->count();

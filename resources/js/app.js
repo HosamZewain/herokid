@@ -1,6 +1,7 @@
 import './bootstrap';
 import { initializeIdentityHeicRecovery, initializeIdentityPhotoUploader } from './identity-photo-uploader';
 import { prepareImageForUpload } from './image-upload-preparer';
+import { initializeIdentitySharing } from './identity-sharing';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -9,6 +10,7 @@ window.HeroKidImageUpload = Object.freeze({
 document.addEventListener('DOMContentLoaded', () => {
     initializeIdentityPhotoUploader();
     initializeIdentityHeicRecovery();
+    initializeIdentitySharing();
     const adminSidebar = document.querySelector('[data-admin-sidebar]');
     const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
     const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');

@@ -6,6 +6,7 @@ use App\Jobs\GenerateChildIdentityAttemptJob;
 use App\Models\AiProvider;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildIdentityShare;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
@@ -532,6 +533,26 @@ class ChildIdentityTest extends TestCase
         ])->save();
         Storage::disk('local')->put($attempt->output_storage_path, $this->tinyPngContents());
         app(ChildIdentityAggregateService::class)->recalculate($identity);
+        $referralShare = ChildIdentityShare::create([
+            'child_identity_request_id' => $identity->id,
+            'generation_attempt_id' => $attempt->id,
+            'public_token' => Str::random(64),
+            'status' => 'ready',
+            'share_enabled' => true,
+            'display_child_first_name' => false,
+            'consent_accepted_at' => now(),
+            'consent_version' => 'test-v1',
+            'created_by_type' => 'customer',
+            'card_disk' => 'local',
+            'template_version' => 'test-v1',
+            'card_fingerprint' => hash('sha256', 'checkout-referral'),
+            'generated_fingerprint' => hash('sha256', 'checkout-referral'),
+            'generation_version' => 1,
+            'caption_snapshot' => 'HeroKid referral',
+            'hashtags_snapshot' => '#HeroKid',
+            'cards_generated_at' => now(),
+        ]);
+        $identity->forceFill(['referred_by_child_identity_share_id' => $referralShare->id])->save();
 
         $this->post(route('child-identity.approve', [$identity->uuid, $attempt]))->assertRedirect();
         $category = StoryCategory::create(['name' => 'مغامرات', 'slug' => 'adventures']);
@@ -601,6 +622,7 @@ class ChildIdentityTest extends TestCase
         $this->assertNotNull(Order::whereNull('child_identity_request_id')->first());
         $this->assertSame($identity->id, $order->child_identity_request_id);
         $this->assertSame($attempt->id, $order->child_identity_approved_attempt_id);
+        $this->assertSame($referralShare->id, $order->referred_by_child_identity_share_id);
         $this->assertNull($order->child_gender);
         $this->assertSame('converted', $identity->status);
         $this->assertSame($order->id, $identity->converted_order_id);
@@ -614,6 +636,12 @@ class ChildIdentityTest extends TestCase
             $this->assertSame($count, DB::table($table)->count(), "Unexpected Production Studio record in {$table}.");
         }
         $this->assertNull($order->productionProject);
+        $this->assertSame(1, $referralShare->fresh()->total_orders);
+        $this->assertDatabaseHas('child_identity_share_events', [
+            'child_identity_share_id' => $referralShare->id,
+            'event_type' => 'share.order_created',
+            'referred_order_id' => $order->id,
+        ]);
 
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $replacement = app(ChildIdentityAttemptService::class)->create(

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityPhoto;
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildIdentityShare;
 use Illuminate\Support\Facades\Storage;
 
 class ChildIdentityMediaController extends Controller
@@ -31,6 +32,15 @@ class ChildIdentityMediaController extends Controller
             $attempt->output_storage_path,
             (string) data_get($attempt->response_metadata, 'output_mime_type', 'image/png'),
         );
+    }
+
+    public function shareCard(ChildIdentityShare $share, string $variant)
+    {
+        abort_unless(in_array($variant, ChildIdentityShare::VARIANTS, true), 404);
+        $path = $share->cardPath($variant);
+        abort_unless(filled($path), 404);
+
+        return $this->respond($share->card_disk, $path, 'image/jpeg');
     }
 
     private function respond(string $disk, string $path, string $mime)

@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildIdentityShare;
+use App\Models\ChildIdentityShareEvent;
+use App\Models\Order;
 use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityDeletionService;
@@ -90,12 +93,14 @@ class ChildIdentityController extends Controller
                 'selectedCategory',
                 'selectedStory',
                 'convertedOrder',
+                'share.generationAttempt',
                 'events.actor',
                 'events.attempt',
                 'events.order',
             ])
             ->findOrFail($identity);
         $media = ['photos' => collect(), 'attempts' => collect()];
+        $shareMedia = collect();
 
         if (auth()->user()->hasPermission('child_identities.view_media')) {
             $media['photos'] = $identity->photos->mapWithKeys(fn ($photo) => [
@@ -114,6 +119,17 @@ class ChildIdentityController extends Controller
                         ['identity' => $identity->id, 'attempt' => $attempt->id],
                     ),
                 ]);
+            if ($identity->share) {
+                $shareMedia = collect(ChildIdentityShare::VARIANTS)
+                    ->filter(fn (string $variant): bool => filled($identity->share->cardPath($variant)))
+                    ->mapWithKeys(fn (string $variant): array => [
+                        $variant => URL::temporarySignedRoute(
+                            'admin.child-identities.media.share-card',
+                            now()->addMinutes(10),
+                            ['share' => $identity->share->id, 'variant' => $variant],
+                        ),
+                    ]);
+            }
         }
         AdminActivityLogger::log(
             'child_identity.viewed',
@@ -123,7 +139,43 @@ class ChildIdentityController extends Controller
         );
         $nextPrompt = $attempts->promptFor($identity);
 
-        return view('admin.child-identities.show', compact('identity', 'media', 'nextPrompt'));
+        $sharePublicUrl = $identity->share
+            ? route('child-identity-shares.show', $identity->share->public_token)
+            : null;
+        $shareChannelBreakdown = $identity->share
+            ? ChildIdentityShareEvent::query()
+                ->where('child_identity_share_id', $identity->share->id)
+                ->whereNotNull('channel')
+                ->selectRaw('channel, COUNT(*) as events_count')
+                ->groupBy('channel')
+                ->orderByDesc('events_count')
+                ->pluck('events_count', 'channel')
+            : collect();
+        $referredIdentities = $identity->share
+            ? ChildIdentityRequest::withTrashed()
+                ->where('referred_by_child_identity_share_id', $identity->share->id)
+                ->latest()
+                ->limit(100)
+                ->get(['id', 'status', 'created_at'])
+            : collect();
+        $referredOrders = $identity->share
+            ? Order::withTrashed()
+                ->where('referred_by_child_identity_share_id', $identity->share->id)
+                ->latest()
+                ->limit(100)
+                ->get(['id', 'order_number', 'status', 'created_at'])
+            : collect();
+
+        return view('admin.child-identities.show', compact(
+            'identity',
+            'media',
+            'nextPrompt',
+            'shareMedia',
+            'sharePublicUrl',
+            'shareChannelBreakdown',
+            'referredIdentities',
+            'referredOrders',
+        ));
     }
 
     public function updatePrompt(

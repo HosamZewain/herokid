@@ -138,6 +138,7 @@
                         </a>
                     </div>
                 </section>
+                @include('front.child-identity._share-section')
             @elseif($wizardStep === 'category')
                 <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-indigo-100/50 sm:p-8">
                     <div class="text-center">

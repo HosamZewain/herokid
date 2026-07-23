@@ -62,7 +62,7 @@
                 $canOperations = auth()->user()->hasAnyPermission([
                     'orders.view', 'visitor_carts.view', 'stories.view', 'story_categories.view', 'store.products.view',
                     'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
-                    'production_studio.view', 'child_identities.view',
+                    'production_studio.view', 'child_identities.view', 'child_identities.view_share_report',
                 ]);
                 $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view', 'sales_reports.view', 'visitor_carts.view']);
                 $canContent = auth()->user()->hasAnyPermission([
@@ -103,7 +103,10 @@
                             @endcan
                         @endif
                         @can('child_identities.view')
-                            <a href="{{ route('admin.child-identities.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.*') && !request()->routeIs('admin.child-identities.settings.*') ? $activeLink : $idleLink }}">هويات الأطفال</a>
+                            <a href="{{ route('admin.child-identities.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.*') && !request()->routeIs('admin.child-identities.settings.*') && !request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">هويات الأطفال</a>
+                        @endcan
+                        @can('child_identities.view_share_report')
+                            <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>
                         @endcan
                         @can('stories.view')
                             <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>

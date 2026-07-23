@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ChildIdentityController as AdminChildIdentityController;
 use App\Http\Controllers\Admin\ChildIdentityMediaController as AdminChildIdentityMediaController;
 use App\Http\Controllers\Admin\ChildIdentitySettingsController;
+use App\Http\Controllers\Admin\ChildIdentityShareController as AdminChildIdentityShareController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -36,8 +37,10 @@ use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
+use App\Http\Controllers\Front\ChildIdentityShareController;
 use App\Http\Controllers\Front\PageController;
 use App\Http\Controllers\Front\ProductCartController;
+use App\Http\Controllers\Front\PublicChildIdentityShareController;
 use App\Http\Controllers\Front\ShopController;
 use App\Http\Controllers\Front\StoryController;
 use App\Http\Controllers\Front\TemporaryPhotoUploadController;
@@ -140,6 +143,36 @@ Route::prefix('child-identity')->name('child-identity.')->group(function (): voi
     Route::get('{identity:uuid}/media/attempts/{attempt}', [ChildIdentityMediaController::class, 'attempt'])
         ->middleware('signed')
         ->name('media.attempt');
+    Route::post('{identity:uuid}/shares', [ChildIdentityShareController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('shares.store');
+    Route::patch('{identity:uuid}/shares/{share}', [ChildIdentityShareController::class, 'update'])
+        ->name('shares.update');
+    Route::post('{identity:uuid}/shares/{share}/revoke', [ChildIdentityShareController::class, 'revoke'])
+        ->name('shares.revoke');
+    Route::post('{identity:uuid}/shares/{share}/reenable', [ChildIdentityShareController::class, 'reenable'])
+        ->name('shares.reenable');
+    Route::post('{identity:uuid}/shares/{share}/regenerate', [ChildIdentityShareController::class, 'regenerate'])
+        ->middleware('throttle:6,1')
+        ->name('shares.regenerate');
+    Route::post('{identity:uuid}/shares/{share}/events', [ChildIdentityShareController::class, 'event'])
+        ->middleware('throttle:60,1')
+        ->name('shares.events');
+    Route::get('{identity:uuid}/shares/{share}/status', [ChildIdentityShareController::class, 'status'])
+        ->middleware('throttle:60,1')
+        ->name('shares.status');
+});
+
+Route::prefix('s')->name('child-identity-shares.')->group(function (): void {
+    Route::get('{share:public_token}', [PublicChildIdentityShareController::class, 'show'])
+        ->middleware('throttle:120,1')
+        ->name('show');
+    Route::get('{share:public_token}/card/{variant}', [PublicChildIdentityShareController::class, 'card'])
+        ->middleware('throttle:240,1')
+        ->name('card');
+    Route::get('{share:public_token}/start', [PublicChildIdentityShareController::class, 'cta'])
+        ->middleware('throttle:60,1')
+        ->name('cta');
 });
 
 // Cart and checkout routes
@@ -318,6 +351,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('child-identities/settings', [ChildIdentitySettingsController::class, 'update'])
         ->middleware('permission:child_identities.settings')
         ->name('child-identities.settings.update');
+    Route::get('child-identities/share-report', [AdminChildIdentityShareController::class, 'report'])
+        ->middleware('permission:child_identities.view_share_report')
+        ->name('child-identities.share-report');
     Route::get('child-identities/{identity}', [AdminChildIdentityController::class, 'show'])
         ->whereNumber('identity')
         ->middleware('permission:child_identities.view')
@@ -358,6 +394,24 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->whereNumber('identity')
         ->middleware(['permission:child_identities.view_media', 'signed'])
         ->name('child-identities.media.attempt');
+    Route::get('child-identity-shares/{share}/media/{variant}', [AdminChildIdentityMediaController::class, 'shareCard'])
+        ->middleware(['permission:child_identities.view_media', 'signed'])
+        ->name('child-identities.media.share-card');
+    Route::post('child-identity-shares/{share}/regenerate', [AdminChildIdentityShareController::class, 'regenerate'])
+        ->middleware(['permission:child_identities.manage_shares', 'throttle:10,1'])
+        ->name('child-identity-shares.regenerate');
+    Route::post('child-identity-shares/{share}/revoke', [AdminChildIdentityShareController::class, 'revoke'])
+        ->middleware('permission:child_identities.manage_shares')
+        ->name('child-identity-shares.revoke');
+    Route::post('child-identity-shares/{share}/reenable', [AdminChildIdentityShareController::class, 'reenable'])
+        ->middleware('permission:child_identities.manage_shares')
+        ->name('child-identity-shares.reenable');
+    Route::patch('child-identity-shares/{share}', [AdminChildIdentityShareController::class, 'update'])
+        ->middleware('permission:child_identities.manage_shares')
+        ->name('child-identity-shares.update');
+    Route::delete('child-identity-shares/{share}/cards', [AdminChildIdentityShareController::class, 'removeCards'])
+        ->middleware('permission:child_identities.manage_shares')
+        ->name('child-identity-shares.cards.destroy');
 
     Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
         ->middlewareFor(['index', 'show'], 'permission:stories.view')

@@ -108,6 +108,8 @@
                 @endif
             </section>
 
+            @include('admin.child-identities._sharing')
+
             <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div><h3 class="text-lg font-black text-slate-900">الصور الأصلية</h3><p class="mt-1 text-xs text-slate-500">تبقى الصور المرفوضة أو المزالة مسجلة ومحفوظة.</p></div>

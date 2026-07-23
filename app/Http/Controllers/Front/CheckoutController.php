@@ -132,6 +132,7 @@ class CheckoutController extends Controller
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
                         'user_id' => auth()->id(),
+                        'referred_by_child_identity_share_id' => $identity?->referred_by_child_identity_share_id,
                         'parent_name' => $validated['parent_name'],
                         'story_id' => $story->id,
                         'child_identity_request_id' => $identity?->id,

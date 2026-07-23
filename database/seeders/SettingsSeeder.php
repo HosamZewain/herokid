@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Setting;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareSettings;
 use App\Support\SiteImages;
 use Illuminate\Database\Seeder;
 
@@ -98,6 +99,28 @@ class SettingsSeeder extends Seeder
             ['key' => 'child_identity_processing_generating_waiting_description', 'value' => 'تبدأ بعد تجهيز الطلب'],
             ['key' => 'child_identity_processing_result_title', 'value' => 'عرض النتيجة'],
             ['key' => 'child_identity_processing_result_description', 'value' => 'ستظهر الهوية تلقائيًا عند اكتمالها'],
+            ['key' => 'child_identity_sharing_enabled', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_native', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_whatsapp', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_facebook', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_instagram', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_copy_link', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_copy_caption', 'value' => '1'],
+            ['key' => 'child_identity_share_channel_download', 'value' => '1'],
+            ['key' => 'child_identity_share_caption_ar', 'value' => ChildIdentityShareSettings::DEFAULT_CAPTION],
+            ['key' => 'child_identity_share_caption_en', 'value' => ''],
+            ['key' => 'child_identity_share_hashtags', 'value' => ChildIdentityShareSettings::DEFAULT_HASHTAGS],
+            ['key' => 'child_identity_share_card_headline', 'value' => 'شوفوا هوية طفلي من HeroKid ✨'],
+            ['key' => 'child_identity_share_card_cta', 'value' => 'اصنع هوية طفلك مجانًا'],
+            ['key' => 'child_identity_share_landing_title', 'value' => 'شوفوا هوية طفلي من HeroKid ✨'],
+            ['key' => 'child_identity_share_landing_description', 'value' => 'اصنع هوية طفلك مجانًا، وشوفه بطلًا في قصة مخصصة له.'],
+            ['key' => 'child_identity_share_landing_cta', 'value' => 'اصنع هوية طفلك مجانًا'],
+            ['key' => 'child_identity_share_attribution_days', 'value' => '30'],
+            ['key' => 'child_identity_share_allow_first_name', 'value' => '1'],
+            ['key' => 'child_identity_share_qr_enabled', 'value' => '1'],
+            ['key' => 'child_identity_share_feed_quality', 'value' => '90'],
+            ['key' => 'child_identity_share_story_quality', 'value' => '88'],
+            ['key' => 'child_identity_share_template_version', 'value' => 'identity-share-v1'],
             ['key' => 'footer_brand_description', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي. نهدف لنشر الحب والقيم الجميلة عبر القصص المطبوعة.'],
 
         ];

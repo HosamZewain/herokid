@@ -17,6 +17,9 @@ use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\ChildIdentity\ChildIdentityPhotoService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
+use App\Services\ChildIdentity\Sharing\ChildIdentityReferralService;
+use App\Services\ChildIdentity\Sharing\ChildIdentitySharePresenter;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareSettings;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\Phone;
@@ -66,6 +69,7 @@ class ChildIdentityController extends Controller
         ChildIdentityPhotoService $photos,
         TemporaryPhotoUploadService $uploads,
         ChildIdentityAttemptService $attempts,
+        ChildIdentityReferralService $referrals,
     ) {
         abort_unless($settings->enabled(), 404);
         $request->merge(['parent_phone' => Phone::normalize($request->input('parent_phone'))]);
@@ -85,6 +89,7 @@ class ChildIdentityController extends Controller
             'utm_term' => ['nullable', 'string', 'max:255'],
         ]);
         $ageRange = $ageRanges->selected($validated['age_range']);
+        $referralShare = $referrals->resolve($request);
 
         try {
             $temporaryPhotos = $uploads->validatedUploadedIds(
@@ -102,6 +107,7 @@ class ChildIdentityController extends Controller
         $identity = ChildIdentityRequest::create([
             'uuid' => (string) Str::uuid(),
             'user_id' => auth()->id(),
+            'referred_by_child_identity_share_id' => $referralShare?->id,
             'resume_token_hash' => hash('sha256', Str::random(80)),
             'parent_name' => $validated['parent_name'],
             'parent_phone' => $validated['parent_phone'],
@@ -173,9 +179,11 @@ class ChildIdentityController extends Controller
         ChildIdentityAccessService $access,
         AgeRangeResolver $ageRanges,
         ChildIdentitySettings $settings,
+        ChildIdentityShareSettings $shareSettings,
+        ChildIdentitySharePresenter $sharePresenter,
     ) {
         $this->authorizeIdentity($identity, $request, $access);
-        $identity->load(['photos', 'attempts', 'approvedAttempt', 'selectedCategory', 'selectedStory']);
+        $identity->load(['photos', 'attempts', 'approvedAttempt', 'selectedCategory', 'selectedStory', 'share.generationAttempt']);
         $media = [
             'photos' => $identity->photos->mapWithKeys(fn ($photo) => [
                 $photo->id => URL::temporarySignedRoute(
@@ -222,9 +230,25 @@ class ChildIdentityController extends Controller
         };
 
         $processingCopy = $settings->processingCopy();
+        $share = $identity->share;
+        $sharePayload = $share ? $sharePresenter->customerPayload($share) : null;
+        $shareNeedsAttemptUpdate = $share
+            && $identity->approved_attempt_id
+            && $share->generation_attempt_id !== $identity->approved_attempt_id;
 
         return response()
-            ->view('front.child-identity.show', compact('identity', 'media', 'stories', 'categories', 'wizardStep', 'processingCopy'))
+            ->view('front.child-identity.show', compact(
+                'identity',
+                'media',
+                'stories',
+                'categories',
+                'wizardStep',
+                'processingCopy',
+                'share',
+                'sharePayload',
+                'shareNeedsAttemptUpdate',
+                'shareSettings',
+            ))
             ->header('Cache-Control', 'private, no-store, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Robots-Tag', 'noindex, nofollow');

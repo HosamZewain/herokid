@@ -80,6 +80,11 @@ class Order extends Model
         return $this->belongsTo(ChildIdentityGenerationAttempt::class, 'child_identity_approved_attempt_id');
     }
 
+    public function referredByChildIdentityShare()
+    {
+        return $this->belongsTo(ChildIdentityShare::class, 'referred_by_child_identity_share_id')->withTrashed();
+    }
+
     public function deletedBy()
     {
         return $this->belongsTo(User::class, 'deleted_by_user_id');
