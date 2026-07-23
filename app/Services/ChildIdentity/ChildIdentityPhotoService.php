@@ -175,7 +175,7 @@ class ChildIdentityPhotoService
             || ! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)
             || ! is_array($imageInfo)) {
             throw ValidationException::withMessages([
-                'prepared_photo' => 'تعذر تجهيز نسخة متوافقة من صورة iPhone. أعد اختيار الصورة الأصلية.',
+                'prepared_photo' => 'تعذر تجهيز نسخة متوافقة من الصورة. أعد اختيار الصورة الأصلية.',
             ]);
         }
 

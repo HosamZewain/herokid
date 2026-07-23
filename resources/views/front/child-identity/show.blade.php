@@ -25,6 +25,9 @@
             $heicRecoveryConfig,
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );
+        $failureMessage = $recoverableHeicPhotos->isNotEmpty()
+            ? 'تعذر تجهيز إحدى الصور في المحاولة السابقة. صورك محفوظة ويمكنك إعادة المحاولة.'
+            : ($latest?->safe_error_message ?: 'حدث خطأ مؤقت. الصور محفوظة ولن تحتاج إلى رفعها مرة أخرى.');
         $selectedCategoryStories = $identity->selected_story_category_id
             ? $stories->filter(fn($story) => $story->categories->contains('id', $identity->selected_story_category_id))
             : collect();
@@ -102,7 +105,7 @@
                 <section class="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm sm:p-10">
                     <span class="inline-flex rounded-full bg-red-100 px-4 py-2 text-sm font-black text-red-700">لم تكتمل المحاولة</span>
                     <h2 class="mt-4 text-2xl font-black text-slate-950">تعذر إنشاء الهوية هذه المرة</h2>
-                    <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">{{ $latest?->safe_error_message ?: 'حدث خطأ مؤقت. الصور محفوظة ولن تحتاج إلى رفعها مرة أخرى.' }}</p>
+                    <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">{{ $failureMessage }}</p>
                     <form method="POST" action="{{ route('child-identity.generate', $identity->uuid) }}"
                           class="mx-auto mt-6 max-w-md"
                           @if($recoverableHeicPhotos->isNotEmpty()) data-identity-heic-recovery @endif>
@@ -112,7 +115,7 @@
                             <script type="application/json" data-identity-heic-recovery-config>{!! $heicRecoveryJson !!}</script>
                         @endif
                         <button type="submit" class="w-full rounded-2xl bg-indigo-600 px-6 py-4 font-black text-white disabled:opacity-60">
-                            {{ $recoverableHeicPhotos->isNotEmpty() ? 'تجهيز صور iPhone وإعادة المحاولة' : 'إعادة المحاولة بنفس الصور' }}
+                            {{ $recoverableHeicPhotos->isNotEmpty() ? 'تجهيز الصور وإعادة المحاولة' : 'إعادة المحاولة بنفس الصور' }}
                         </button>
                         <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
                              data-identity-heic-recovery-error></div>

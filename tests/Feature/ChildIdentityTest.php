@@ -177,7 +177,9 @@ class ChildIdentityTest extends TestCase
 
         $this->get(route('child-identity.show', $identity->uuid))
             ->assertOk()
-            ->assertSee('تجهيز صور iPhone وإعادة المحاولة')
+            ->assertSee('تعذر تجهيز إحدى الصور في المحاولة السابقة')
+            ->assertSee('تجهيز الصور وإعادة المحاولة')
+            ->assertDontSee('iPhone')
             ->assertSee('data-identity-heic-recovery', false)
             ->assertSee(route('child-identity.photos.ai-input', [$identity->uuid, $photo]), false);
 

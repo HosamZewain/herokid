@@ -406,6 +406,17 @@ export function initializeIdentityHeicRecovery() {
     let recovered = false;
     let working = false;
 
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+            window.clearTimeout(timeoutId);
+        }
+    }
+
     form.addEventListener('submit', async (event) => {
         if (recovered) {
             return;
@@ -419,19 +430,20 @@ export function initializeIdentityHeicRecovery() {
 
         working = true;
         submit.disabled = true;
-        submit.textContent = 'جاري تجهيز صور iPhone...';
+        submit.textContent = 'جاري تجهيز الصور...';
         error?.classList.add('hidden');
         const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         try {
-            for (const photo of photos) {
-                const sourceResponse = await fetch(photo.sourceUrl, {
+            for (const [index, photo] of photos.entries()) {
+                submit.textContent = `جاري تجهيز الصورة ${(index + 1).toLocaleString('ar-EG')} من ${photos.length.toLocaleString('ar-EG')}...`;
+                const sourceResponse = await fetchWithTimeout(photo.sourceUrl, {
                     credentials: 'same-origin',
                     headers: { Accept: photo.mimeType || 'application/octet-stream' },
                 });
 
                 if (!sourceResponse.ok) {
-                    throw new Error('تعذر قراءة إحدى صور iPhone المحفوظة.');
+                    throw new Error('تعذر قراءة إحدى الصور المحفوظة.');
                 }
 
                 const sourceBlob = await sourceResponse.blob();
@@ -446,7 +458,7 @@ export function initializeIdentityHeicRecovery() {
                 });
                 const payload = new FormData();
                 payload.append('prepared_photo', prepared);
-                const uploadResponse = await fetch(photo.uploadUrl, {
+                const uploadResponse = await fetchWithTimeout(photo.uploadUrl, {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {
@@ -458,7 +470,7 @@ export function initializeIdentityHeicRecovery() {
 
                 if (!uploadResponse.ok) {
                     const body = await uploadResponse.json().catch(() => ({}));
-                    throw new Error(body.message || 'تعذر حفظ النسخة المتوافقة من صورة iPhone.');
+                    throw new Error(body.message || 'تعذر حفظ الصورة بعد تجهيزها.');
                 }
             }
 
@@ -468,10 +480,12 @@ export function initializeIdentityHeicRecovery() {
         } catch (recoveryError) {
             working = false;
             submit.disabled = false;
-            submit.textContent = 'تجهيز صور iPhone وإعادة المحاولة';
+            submit.textContent = 'تجهيز الصور وإعادة المحاولة';
 
             if (error) {
-                error.textContent = recoveryError.message || 'تعذر تجهيز صور iPhone. أعد فتح الصفحة وحاول مرة أخرى.';
+                error.textContent = recoveryError.name === 'AbortError'
+                    ? 'استغرق تجهيز الصور وقتًا أطول من المتوقع. حاول مرة أخرى.'
+                    : (recoveryError.message || 'تعذر تجهيز الصور. أعد فتح الصفحة وحاول مرة أخرى.');
                 error.classList.remove('hidden');
             }
         }

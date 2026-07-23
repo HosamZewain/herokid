@@ -8,18 +8,31 @@ function isHeic(file) {
         || name.endsWith('.heif');
 }
 
+function withTimeout(promise, timeoutMs) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error('conversion_timeout')), timeoutMs);
+    });
+
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
 export async function prepareImageForUpload(file, options = {}) {
     const maxLongEdge = Number(options.maxLongEdge || 2560);
     const jpegQuality = Math.min(1, Math.max(0.5, Number(options.jpegQuality || 0.9)));
+    const conversionTimeoutMs = Number(options.conversionTimeoutMs || 60000);
 
     if (isHeic(file)) {
         try {
             const { default: heic2any } = await import('heic2any');
-            const converted = await heic2any({
-                blob: file,
-                toType: 'image/jpeg',
-                quality: jpegQuality,
-            });
+            const converted = await withTimeout(
+                heic2any({
+                    blob: file,
+                    toType: 'image/jpeg',
+                    quality: jpegQuality,
+                }),
+                conversionTimeoutMs,
+            );
             const jpeg = Array.isArray(converted) ? converted[0] : converted;
 
             if (!(jpeg instanceof Blob) || jpeg.size === 0) {
@@ -32,7 +45,7 @@ export async function prepareImageForUpload(file, options = {}) {
                 { type: 'image/jpeg', lastModified: file.lastModified || Date.now() },
             );
         } catch {
-            throw new Error('تعذر تجهيز صورة HEIC/HEIF داخل المتصفح. جرّب اختيار الصورة الأصلية مرة أخرى.');
+            throw new Error('تعذر تجهيز إحدى الصور. جرّب مرة أخرى أو اختر نسخة JPG من الصورة.');
         }
     }
 

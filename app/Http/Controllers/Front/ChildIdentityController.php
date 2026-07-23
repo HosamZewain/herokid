@@ -302,7 +302,7 @@ class ChildIdentityController extends Controller
         $events->record(
             $identity,
             'photo.ai_input_prepared',
-            'تم تجهيز نسخة متوافقة من صورة iPhone مع الاحتفاظ بالصورة الأصلية.',
+            'تم تجهيز نسخة متوافقة من الصورة مع الاحتفاظ بالصورة الأصلية.',
             ['photo_id' => $photo->id, 'ai_input_mime_type' => $prepared->ai_input_mime_type],
         );
 

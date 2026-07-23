@@ -188,6 +188,10 @@ class TemporaryPhotoUploadTest extends TestCase
             "img-src 'self' https: data: blob:",
             (string) $response->headers->get('Content-Security-Policy'),
         );
+        $this->assertStringContainsString(
+            "worker-src 'self' blob:",
+            (string) $response->headers->get('Content-Security-Policy'),
+        );
     }
 
     public function test_upload_ids_from_another_session_or_expired_uploads_cannot_be_attached(): void
