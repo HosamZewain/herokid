@@ -31,7 +31,7 @@ class ChildIdentitySharingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_share_section_requires_a_successful_approved_attempt_and_explicit_consent(): void
+    public function test_share_buttons_require_a_successful_approved_attempt_without_an_extra_consent_dialog(): void
     {
         Storage::fake('local');
         [$identity, $attempt] = $this->approvedIdentity(900, 600);
@@ -46,8 +46,11 @@ class ChildIdentitySharingTest extends TestCase
         $this->withSession(['child_identity_grants' => [$identity->uuid]])
             ->get(route('child-identity.show', $identity->uuid))
             ->assertOk()
-            ->assertSee('شارك النتيجة')
-            ->assertSee('تفعيل مشاركة النتيجة')
+            ->assertSee('واتساب')
+            ->assertSee('فيسبوك')
+            ->assertSee('تحميل')
+            ->assertDontSee('خلّي أصحابك يجربوا HeroKid')
+            ->assertDontSee('موافق، أظهر أزرار المشاركة')
             ->assertDontSee('data-share-payload=', false);
 
         $this->post(route('child-identity.shares.store', $identity->uuid), [])
@@ -71,6 +74,39 @@ class ChildIdentitySharingTest extends TestCase
         foreach (ChildIdentityShare::VARIANTS as $variant) {
             Storage::disk('local')->assertExists($share->cardPath($variant));
         }
+    }
+
+    public function test_first_share_button_click_creates_the_public_share_and_redirects_immediately(): void
+    {
+        Storage::fake('local');
+        [$identity, $attempt] = $this->approvedIdentity(900, 600);
+        app(ChildIdentityShareDraftService::class)->prepare($attempt);
+
+        $response = $this->withSession(['child_identity_grants' => [$identity->uuid]])
+            ->post(route('child-identity.shares.store', $identity->uuid), [
+                'share_action' => 'whatsapp',
+            ])
+            ->assertRedirect();
+
+        $share = ChildIdentityShare::firstOrFail();
+        $this->assertStringStartsWith(
+            'https://wa.me/?text=',
+            (string) $response->headers->get('Location'),
+            json_encode([
+                'share_status' => $share->status,
+                'events' => $share->events()->pluck('event_type')->all(),
+                'session' => $response->getSession()->all(),
+            ]),
+        );
+        $this->assertSame('ready', $share->status);
+        $this->assertDatabaseHas('child_identity_share_events', [
+            'child_identity_share_id' => $share->id,
+            'event_type' => 'share.whatsapp_clicked',
+        ]);
+        $this->assertNotContains(
+            'throttle:6,1',
+            app('router')->getRoutes()->getByName('child-identity.shares.store')->gatherMiddleware(),
+        );
     }
 
     public function test_prebuilt_generation_card_is_reused_immediately_when_customer_enables_sharing(): void

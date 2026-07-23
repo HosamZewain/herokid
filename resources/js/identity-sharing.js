@@ -59,13 +59,6 @@ export const initializeIdentitySharing = () => {
             toast._timer = window.setTimeout(() => toast.classList.add('hidden'), 3200);
         };
 
-        const modal = document.querySelector('[data-share-consent-modal]');
-        root.querySelector('[data-share-consent-open]')?.addEventListener('click', () => {
-            if (typeof modal?.showModal === 'function') modal.showModal();
-            else modal?.setAttribute('open', '');
-        });
-        modal?.querySelector('[data-share-consent-close]')?.addEventListener('click', () => modal.close?.());
-
         const statusUrl = root.dataset.shareStatusUrl;
         if (statusUrl) {
             const poll = async () => {

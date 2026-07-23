@@ -9,9 +9,11 @@ use App\Models\ChildIdentityShare;
 use App\Services\ChildIdentity\ChildIdentityAccessService;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareEventService;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareManager;
+use App\Services\ChildIdentity\Sharing\ChildIdentitySharePresenter;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareSettings;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ChildIdentityShareController extends Controller
 {
@@ -20,11 +22,19 @@ class ChildIdentityShareController extends Controller
         ChildIdentityRequest $identity,
         ChildIdentityAccessService $access,
         ChildIdentityShareManager $manager,
+        ChildIdentitySharePresenter $presenter,
+        ChildIdentityShareEventService $events,
     ) {
         $this->authorizeIdentity($identity, $request, $access);
         $validated = $request->validate([
-            'share_consent' => ['required', 'accepted'],
+            'share_consent' => ['sometimes', 'accepted'],
+            'share_action' => ['nullable', Rule::in(['whatsapp', 'facebook', 'download'])],
         ]);
+        if (! $request->boolean('share_consent') && blank($validated['share_action'] ?? null)) {
+            throw ValidationException::withMessages([
+                'share_consent' => 'اختر وسيلة المشاركة للمتابعة.',
+            ]);
+        }
         $attempt = $identity->approvedAttempt()->firstOrFail();
         $share = $manager->createOrUpdate(
             $identity,
@@ -38,6 +48,23 @@ class ChildIdentityShareController extends Controller
 
         if ($share->status === 'failed') {
             return back()->with('error', $share->generation_error);
+        }
+
+        $action = $validated['share_action'] ?? null;
+        if ($action && $share->status === 'ready') {
+            $payload = $presenter->customerPayload($share);
+            $event = match ($action) {
+                'whatsapp' => ['share.whatsapp_clicked', 'whatsapp', null],
+                'facebook' => ['share.facebook_clicked', 'facebook', null],
+                'download' => ['share.image_saved', 'download_feed', 'feed'],
+            };
+            $events->record($share, $event[0], $request, $event[1], metadata: ['variant' => $event[2]]);
+
+            return match ($action) {
+                'whatsapp' => redirect()->away($payload['whatsapp']),
+                'facebook' => redirect()->away($payload['facebook']),
+                'download' => redirect()->to($payload['cards']['feed'].'&download=1'),
+            };
         }
 
         return back()

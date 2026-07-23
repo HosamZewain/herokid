@@ -144,7 +144,6 @@ Route::prefix('child-identity')->name('child-identity.')->group(function (): voi
         ->middleware('signed')
         ->name('media.attempt');
     Route::post('{identity:uuid}/shares', [ChildIdentityShareController::class, 'store'])
-        ->middleware('throttle:6,1')
         ->name('shares.store');
     Route::patch('{identity:uuid}/shares/{share}', [ChildIdentityShareController::class, 'update'])
         ->name('shares.update');
