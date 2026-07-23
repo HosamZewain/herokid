@@ -247,6 +247,7 @@ export function initializeIdentityPhotoUploader() {
         const data = new FormData();
         data.append('photo', file);
         data.append('upload_session_token', config.sessionToken);
+        data.append('upload_batch_token', config.batchToken || '');
         const xhr = new XMLHttpRequest();
         item.xhr = xhr;
         xhr.open('POST', config.uploadUrl);

@@ -9,6 +9,7 @@ use App\Services\Uploads\UploadValidationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TemporaryPhotoUploadController extends Controller
 {
@@ -18,6 +19,7 @@ class TemporaryPhotoUploadController extends Controller
 
         return response()->json([
             'upload_session_token' => $session['token'],
+            'upload_batch_token' => Str::random(48),
             'max_files' => (int) config('photo_uploads.max_files', 5),
             'max_size_mb' => (int) config('photo_uploads.max_size_mb', 15),
             'concurrency' => (int) config('photo_uploads.concurrency', 2),

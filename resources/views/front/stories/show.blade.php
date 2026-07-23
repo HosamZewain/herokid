@@ -583,6 +583,7 @@
                     const formData = new FormData();
                     formData.append('photo', file);
                     formData.append('upload_session_token', config.sessionToken);
+                    formData.append('upload_batch_token', config.batchToken || '');
 
                     const xhr = new XMLHttpRequest();
                     item.xhr = xhr;

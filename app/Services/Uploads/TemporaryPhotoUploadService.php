@@ -32,6 +32,11 @@ class TemporaryPhotoUploadService
         return hash_hmac('sha256', $token, (string) config('app.key'));
     }
 
+    public function batchHash(string $token): string
+    {
+        return hash_hmac('sha256', $token !== '' ? $token : 'legacy', (string) config('app.key'));
+    }
+
     public function validateToken(Request $request): string
     {
         $session = $this->ensureSession($request);
@@ -47,7 +52,8 @@ class TemporaryPhotoUploadService
     public function upload(Request $request, UploadedFile $file): TemporaryPhotoUpload
     {
         $sessionHash = $this->validateToken($request);
-        $this->assertSessionCapacity($sessionHash);
+        $batchHash = $this->batchHash((string) $request->input('upload_batch_token'));
+        $this->assertBatchCapacity($sessionHash, $batchHash);
         $this->assertValidImage($file);
 
         $publicId = (string) Str::uuid();
@@ -74,6 +80,7 @@ class TemporaryPhotoUploadService
         return TemporaryPhotoUpload::create([
             'public_id' => $publicId,
             'session_hash' => $sessionHash,
+            'batch_hash' => $batchHash,
             'user_id' => $request->user()?->id,
             'disk' => $diskName,
             'path' => $path,
@@ -183,10 +190,11 @@ class TemporaryPhotoUploadService
         return ['expired' => $expired, 'deleted_files' => $deleted];
     }
 
-    private function assertSessionCapacity(string $sessionHash): void
+    private function assertBatchCapacity(string $sessionHash, string $batchHash): void
     {
         $count = TemporaryPhotoUpload::where('session_hash', $sessionHash)
-            ->whereIn('status', ['uploaded', 'attached'])
+            ->where('batch_hash', $batchHash)
+            ->where('status', 'uploaded')
             ->where('expires_at', '>', now())
             ->count();
 

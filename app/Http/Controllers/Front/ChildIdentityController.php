@@ -41,6 +41,7 @@ class ChildIdentityController extends Controller
                 'ageRanges' => $ageRanges->available(),
                 'photoUploadConfig' => [
                     'sessionToken' => $uploadSession['token'],
+                    'batchToken' => Str::random(48),
                     'uploadUrl' => route('photo-uploads.store'),
                     'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
                     'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),

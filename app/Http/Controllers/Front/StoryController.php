@@ -8,6 +8,7 @@ use App\Models\Story;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class StoryController extends Controller
 {
@@ -46,6 +47,7 @@ class StoryController extends Controller
             'story' => $story,
             'photoUploadConfig' => [
                 'sessionToken' => $uploadSession['token'],
+                'batchToken' => Str::random(48),
                 'sessionUrl' => route('photo-uploads.session'),
                 'uploadUrl' => route('photo-uploads.store'),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),

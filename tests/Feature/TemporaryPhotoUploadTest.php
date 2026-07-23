@@ -140,6 +140,47 @@ class TemporaryPhotoUploadTest extends TestCase
             ->assertJsonPath('message', 'يمكنك رفع 1 صور كحد أقصى.');
     }
 
+    public function test_new_upload_batch_is_not_blocked_by_abandoned_photos_from_the_same_session(): void
+    {
+        Storage::fake('local');
+        config(['photo_uploads.max_files' => 1]);
+        $sessionToken = $this->uploadSessionToken();
+
+        $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'upload_batch_token' => 'first-form-batch',
+            'photo' => $this->tinyPngUpload('first.png'),
+        ])->assertCreated();
+
+        $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'upload_batch_token' => 'first-form-batch',
+            'photo' => $this->tinyPngUpload('same-batch.png'),
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'يمكنك رفع 1 صور كحد أقصى.');
+
+        $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'upload_batch_token' => 'new-form-batch',
+            'photo' => $this->tinyPngUpload('new-batch.png'),
+        ])->assertCreated();
+
+        $this->assertSame(2, TemporaryPhotoUpload::query()->distinct()->count('batch_hash'));
+    }
+
+    public function test_child_identity_page_allows_blob_image_previews_and_issues_a_fresh_upload_batch(): void
+    {
+        $response = $this->get(route('child-identity.index'))
+            ->assertOk()
+            ->assertSee('"batchToken":', false);
+
+        $this->assertStringContainsString(
+            "img-src 'self' https: data: blob:",
+            (string) $response->headers->get('Content-Security-Policy'),
+        );
+    }
+
     public function test_upload_ids_from_another_session_or_expired_uploads_cannot_be_attached(): void
     {
         Storage::fake('local');

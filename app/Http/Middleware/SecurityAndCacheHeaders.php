@@ -39,7 +39,7 @@ class SecurityAndCacheHeaders
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set(
             'Content-Security-Policy',
-            "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+            "default-src 'self'; img-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
         );
     }
 
