@@ -14,7 +14,7 @@ class ChildIdentityShareCardGenerator
     private const VARIANTS = [
         'feed' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 66]],
         'story' => ['pixels' => [1080, 1920], 'mm' => [108, 192], 'image_mm' => [91, 105]],
-        'og' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 66]],
+        'og' => ['pixels' => [1200, 630], 'mm' => [120, 63], 'image_mm' => [80, 53]],
     ];
 
     public function __construct(
@@ -101,8 +101,8 @@ class ChildIdentityShareCardGenerator
         $identity = $this->normalizedImage($identityContents, $identityWidth, $identityHeight);
         $logo = $this->normalizedLogo(
             $logoContents,
-            in_array($variant, ['feed', 'og'], true) ? 150 : 230,
-            in_array($variant, ['feed', 'og'], true) ? 110 : 210,
+            $variant === 'feed' ? 150 : 230,
+            $variant === 'feed' ? 110 : 210,
         );
         $globeDataUri = 'data:image/svg+xml;base64,'.base64_encode($globeContents);
         $firstName = $displayFirstName
@@ -121,7 +121,7 @@ class ChildIdentityShareCardGenerator
         $canvas->newImage($widthPx, $heightPx, new \ImagickPixel('#f8f7ff'), 'jpeg');
         $this->drawAccent($canvas, $widthPx, $heightPx);
 
-        if (in_array($variant, ['feed', 'og'], true)) {
+        if ($variant === 'feed') {
             $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 1035, 18);
             $headlineBlock = $this->textBlock(
                 "<div>{$headline}</div>",
@@ -161,6 +161,46 @@ class ChildIdentityShareCardGenerator
             );
             $canvas->compositeImage($siteBlock, \Imagick::COMPOSITE_OVER, 80, 838);
             $this->verticalDivider($canvas, 565, 848, 890);
+        } elseif ($variant === 'og') {
+            $this->framedIdentity($canvas, $identity, 30, 50, $identityWidth, $identityHeight);
+            $this->verticalDivider($canvas, 860, 40, 590);
+            $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 940, 22);
+            $headlineBlock = $this->textBlock(
+                "<div>{$headline}</div>",
+                330,
+                130,
+                31,
+                '#312e81',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($headlineBlock, \Imagick::COMPOSITE_OVER, 850, 175);
+            $ctaBlock = $this->textBlock(
+                "<div>{$cta}{$referenceName}</div>",
+                300,
+                78,
+                22,
+                '#2aa8b2',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 865, 310);
+            $footerBlock = $this->textBlock(
+                "<div>{$footer}</div>",
+                330,
+                72,
+                20,
+                '#4f46e5',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($footerBlock, \Imagick::COMPOSITE_OVER, 850, 410);
+            $siteBlock = $this->textBlock(
+                '<div style="direction:ltr">hero-kid.com&nbsp; <img src="'.$globeDataUri.'" style="width:22px;height:22px;vertical-align:middle"></div>',
+                290,
+                70,
+                20,
+                '#4f46e5',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($siteBlock, \Imagick::COMPOSITE_OVER, 870, 505);
         } else {
             $isStory = $variant === 'story';
             $headerHeight = $isStory ? 285 : 210;

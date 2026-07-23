@@ -19,11 +19,17 @@ class ChildIdentitySharePresenter
             return $url;
         }
 
-        return $url.'?'.http_build_query([
+        $parameters = [
             'utm_source' => $source,
             'utm_medium' => 'identity_share',
             'utm_campaign' => 'free_child_identity',
-        ]);
+        ];
+
+        if ($source === 'facebook') {
+            $parameters['share_card_v'] = $share->generation_version;
+        }
+
+        return $url.'?'.http_build_query($parameters);
     }
 
     public function cardUrl(ChildIdentityShare $share, string $variant): string

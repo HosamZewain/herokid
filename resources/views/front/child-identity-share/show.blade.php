@@ -3,7 +3,7 @@
     <x-slot name="pageDescription">{{ $public['description'] }}</x-slot>
     <x-slot name="pageImage">{{ $public['og_image'] }}</x-slot>
     <x-slot name="ogImageWidth">1200</x-slot>
-    <x-slot name="ogImageHeight">900</x-slot>
+    <x-slot name="ogImageHeight">630</x-slot>
     <x-slot name="canonical">{{ $public['url'] }}</x-slot>
     <x-slot name="robots">noindex, follow</x-slot>
     <x-slot name="ogType">website</x-slot>

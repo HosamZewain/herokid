@@ -188,7 +188,7 @@ class ChildIdentitySharingTest extends TestCase
             ->assertSee('noindex, follow', false)
             ->assertSee('/card/og', false)
             ->assertSee('width="1200" height="900"', false)
-            ->assertSee('<meta property="og:image:height" content="900">', false)
+            ->assertSee('<meta property="og:image:height" content="630">', false)
             ->assertDontSee($identity->parent_name)
             ->assertDontSee($identity->parent_phone)
             ->assertDontSee($identity->parent_email)
@@ -217,7 +217,7 @@ class ChildIdentitySharingTest extends TestCase
         foreach ([
             'feed' => [1200, 900],
             'story' => [1080, 1920],
-            'og' => [1200, 900],
+            'og' => [1200, 630],
         ] as $variant => $expected) {
             Storage::disk('local')->assertExists($paths[$variant]);
             $image = new \Imagick;
@@ -228,7 +228,7 @@ class ChildIdentitySharingTest extends TestCase
             $this->assertEmpty($image->getImageProperties('exif:*'));
             $image->clear();
         }
-        $this->assertSame(
+        $this->assertNotSame(
             hash('sha256', Storage::disk('local')->get($paths['feed'])),
             hash('sha256', Storage::disk('local')->get($paths['og'])),
         );
@@ -240,6 +240,14 @@ class ChildIdentitySharingTest extends TestCase
 
         $this->assertGreaterThan(45, $identityCenter['b'] - $identityCenter['r']);
         $this->assertGreaterThan(30, $identityCenter['b'] - $identityCenter['g']);
+
+        $og = new \Imagick;
+        $og->readImageBlob(Storage::disk('local')->get($paths['og']));
+        $ogIdentityCenter = $og->getImagePixelColor(430, 315)->getColor();
+        $og->clear();
+
+        $this->assertGreaterThan(45, $ogIdentityCenter['b'] - $ogIdentityCenter['r']);
+        $this->assertGreaterThan(30, $ogIdentityCenter['b'] - $ogIdentityCenter['g']);
         Http::assertNothingSent();
     }
 
@@ -332,6 +340,7 @@ class ChildIdentitySharingTest extends TestCase
         $this->assertStringContainsString(rawurlencode('#HeroKid'), $payload['whatsapp']);
         $this->assertStringContainsString('sharer.php?u=', $payload['facebook']);
         $this->assertStringContainsString('utm_source%3Dfacebook', $payload['facebook']);
+        $this->assertStringContainsString('share_card_v%3D'.$share->generation_version, $payload['facebook']);
         $this->assertStringNotContainsString('quote=', $payload['facebook']);
         $this->assertStringNotContainsString(rawurlencode($payload['caption']), $payload['facebook']);
         $this->assertStringContainsString('utm_source=copy_link', urldecode($payload['copyUrl']));
