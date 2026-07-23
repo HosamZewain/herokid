@@ -34,7 +34,7 @@ class ChildIdentityAttemptService
             }
 
             [$provider, $model] = $this->settings->providerAndModel();
-            $prompt = $this->compilePrompt($locked);
+            $prompt = $this->promptFor($locked);
             $photos = $locked->validPhotos()->get();
             $attempt = $locked->attempts()->create([
                 'attempt_number' => ((int) $locked->attempts()->max('attempt_number')) + 1,
@@ -54,6 +54,7 @@ class ChildIdentityAttemptService
                     'provider_id' => $provider?->id,
                     'model_id' => $model?->id,
                     'source' => $initiatedBy,
+                    'prompt_source' => filled($locked->prompt_override) ? 'request_override' : 'global_template',
                 ],
             ]);
 
@@ -169,9 +170,13 @@ class ChildIdentityAttemptService
         return null;
     }
 
-    private function compilePrompt(ChildIdentityRequest $identity): string
+    public function promptFor(ChildIdentityRequest $identity): string
     {
+        if (filled($identity->prompt_override)) {
+            return trim((string) $identity->prompt_override);
+        }
+
         return trim($this->settings->promptTemplate())."\n\n".
-            'Child profile: exact age '.$identity->child_age.'; gender '.($identity->gender ?: 'not specified').'.';
+            'Child profile: age range '.$identity->age_range.'; gender '.($identity->gender ?: 'not specified').'.';
     }
 }

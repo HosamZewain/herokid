@@ -248,7 +248,7 @@
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">
                                                         <p class="text-xs font-bold text-slate-400 mb-1">العمر والجنس</p>
                                                         <p class="font-black text-slate-900">
-                                                            {{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? null) === 'boy' ? 'ولد' : (($item['child_gender'] ?? null) === 'girl' ? 'بنت' : 'غير محدد') }}
+                                                            {{ $item['child_age_range'] ?? (($item['child_age'] ?? '-') . ' سنة') }} · {{ ($item['child_gender'] ?? null) === 'boy' ? 'ولد' : (($item['child_gender'] ?? null) === 'girl' ? 'بنت' : 'غير محدد') }}
                                                         </p>
                                                     </div>
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">

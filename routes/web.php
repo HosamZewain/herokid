@@ -315,6 +315,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->whereNumber('identity')
         ->middleware(['permission:child_identities.generate', 'throttle:10,1'])
         ->name('child-identities.generate');
+    Route::patch('child-identities/{identity}/prompt', [AdminChildIdentityController::class, 'updatePrompt'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.generate')
+        ->name('child-identities.prompt.update');
     Route::post('child-identities/{identity}/attempts/{attempt}/approve', [AdminChildIdentityController::class, 'approve'])
         ->whereNumber('identity')
         ->middleware('permission:child_identities.approve')

@@ -1,6 +1,8 @@
 import './bootstrap';
+import { initializeIdentityPhotoUploader } from './identity-photo-uploader';
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeIdentityPhotoUploader();
     const adminSidebar = document.querySelector('[data-admin-sidebar]');
     const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
     const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');

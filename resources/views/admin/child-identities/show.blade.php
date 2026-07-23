@@ -29,7 +29,14 @@
                         <div><dt class="font-bold text-slate-500">الهاتف / واتساب</dt><dd class="mt-1"><a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $identity->parent_phone) }}" class="font-black text-emerald-600" target="_blank">{{ $identity->parent_phone }}</a></dd></div>
                         <div><dt class="font-bold text-slate-500">البريد</dt><dd class="mt-1">{{ $identity->parent_email ?: '—' }}</dd></div>
                         <div><dt class="font-bold text-slate-500">حساب العميل</dt><dd class="mt-1">{{ $identity->user?->name ?: 'زائر' }}</dd></div>
-                        <div><dt class="font-bold text-slate-500">الطفل</dt><dd class="mt-1 font-black">{{ $identity->child_name }} • {{ arabic_number($identity->child_age) }} سنوات • {{ $identity->genderLabel() }}</dd></div>
+                        <div>
+                            <dt class="font-bold text-slate-500">الطفل</dt>
+                            <dd class="mt-1 font-black">
+                                {{ $identity->child_name }} •
+                                {{ $identity->child_age !== null ? arabic_number($identity->child_age).' سنوات' : $identity->age_range }}
+                                @if($identity->gender) • {{ $identity->genderLabel() }} @endif
+                            </dd>
+                        </div>
                         <div><dt class="font-bold text-slate-500">الفئة العمرية المحفوظة</dt><dd class="mt-1">{{ $identity->age_range }}</dd></div>
                         <div><dt class="font-bold text-slate-500">التصنيف والقصة</dt><dd class="mt-1">{{ $identity->selectedCategory?->name ?: '—' }} / {{ $identity->selectedStory?->title ?: '—' }}</dd></div>
                         <div><dt class="font-bold text-slate-500">الطلب المرتبط</dt><dd class="mt-1">{{ $identity->convertedOrder?->order_number ?: 'لم يتحول' }}{{ $identity->convertedOrder ? ' • '.$identity->convertedOrder->status : '' }}</dd></div>
@@ -58,6 +65,48 @@
                     </dl>
                 </section>
             </div>
+
+            <section class="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900">برومبت OpenAI لهذا الطلب</h3>
+                        <p class="mt-1 text-xs leading-6 text-slate-500">
+                            هذا هو النص الكامل الذي سيُرسل في المحاولة القادمة. أي تعديل هنا لا يغيّر لقطات البرومبت الثابتة للمحاولات السابقة.
+                        </p>
+                    </div>
+                    <span class="rounded-full px-3 py-1 text-xs font-black {{ $identity->prompt_override ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600' }}">
+                        {{ $identity->prompt_override ? 'مخصص لهذا الطلب' : 'البرومبت العام' }}
+                    </span>
+                </div>
+
+                @if(!$identity->trashed())
+                    @can('child_identities.generate')
+                        <form method="POST" action="{{ route('admin.child-identities.prompt.update', $identity->id) }}" class="mt-5">
+                            @csrf
+                            @method('PATCH')
+                            <textarea name="prompt_override" rows="13" dir="ltr" required minlength="50" maxlength="20000"
+                                      class="w-full rounded-xl border-slate-300 font-mono text-xs leading-6 focus:border-violet-500 focus:ring-violet-500">{{ old('prompt_override', $nextPrompt) }}</textarea>
+                            <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                <p class="text-xs font-bold text-amber-700">احفظ أولًا، ثم استخدم «توليد / إعادة توليد إداري» لإنشاء محاولة جديدة بالنص المعدّل.</p>
+                                <button class="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-black text-white">حفظ برومبت الطلب</button>
+                            </div>
+                        </form>
+
+                        @if($identity->prompt_override)
+                            <form method="POST" action="{{ route('admin.child-identities.prompt.update', $identity->id) }}" class="mt-3">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="use_global_prompt" value="1">
+                                <button class="text-xs font-black text-slate-500 underline decoration-dotted underline-offset-4">إلغاء التخصيص والعودة للبرومبت العام</button>
+                            </form>
+                        @endif
+                    @else
+                        <pre class="mt-5 whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100" dir="ltr">{{ $nextPrompt }}</pre>
+                    @endcan
+                @else
+                    <pre class="mt-5 whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100" dir="ltr">{{ $nextPrompt }}</pre>
+                @endif
+            </section>
 
             <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">

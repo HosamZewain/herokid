@@ -142,14 +142,22 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
                 ])->save();
                 $request = $identity->fresh();
                 $fromStatus = $request->status;
-                $targetStatus = $request->statusDuringGeneration('generated');
-                $request->forceFill(['status' => $targetStatus])->save();
+                $autoApprove = $locked->initiated_by === 'customer' && ! $request->approved_attempt_id;
+                $targetStatus = $request->statusDuringGeneration($autoApprove ? 'approved' : 'generated');
+                $request->forceFill([
+                    'status' => $targetStatus,
+                    'approved_attempt_id' => $autoApprove ? $locked->id : $request->approved_attempt_id,
+                ])->save();
                 $aggregates->recalculate($request);
                 $events->record(
                     $request,
                     'generation.succeeded',
                     'تم إنشاء هوية طفل قابلة للاستخدام.',
-                    ['attempt_number' => $locked->attempt_number, 'billing_status' => $locked->billing_status],
+                    [
+                        'attempt_number' => $locked->attempt_number,
+                        'billing_status' => $locked->billing_status,
+                        'auto_approved' => $autoApprove,
+                    ],
                     $locked,
                     actorType: $locked->initiated_by === 'admin' ? 'admin' : 'customer',
                     source: 'queue',

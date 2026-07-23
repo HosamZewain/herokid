@@ -22,7 +22,13 @@ class OpenAiImageInputNormalizer
             throw new RuntimeException('تعذر قراءة الصورة المرجعية قبل إرسالها إلى OpenAI.');
         }
 
+        $sourceMime = strtolower($matches[1]);
         $imageInfo = @getimagesizefromstring($contents);
+
+        if (! is_array($imageInfo) && (str_contains($sourceMime, 'heic') || str_contains($sourceMime, 'heif'))) {
+            $contents = $this->convertHeicToPng($contents);
+            $imageInfo = @getimagesizefromstring($contents);
+        }
 
         if (! is_array($imageInfo) || empty($imageInfo[0]) || empty($imageInfo[1])) {
             throw new RuntimeException('الصورة المرجعية غير صالحة أو ليست ملف صورة قابلًا للقراءة.');
@@ -84,8 +90,46 @@ class OpenAiImageInputNormalizer
             'extension' => 'png',
             'width' => $targetWidth,
             'height' => $targetHeight,
-            'source_mime' => $imageInfo['mime'] ?? $matches[1],
+            'source_mime' => $sourceMime,
         ];
+    }
+
+    private function convertHeicToPng(string $contents): string
+    {
+        if (! class_exists(\Imagick::class) || \Imagick::queryFormats('HEI*') === []) {
+            throw new RuntimeException('دعم HEIC/HEIF غير متاح على خادم الصور حاليًا.');
+        }
+
+        try {
+            $probe = new \Imagick;
+            $probe->pingImageBlob($contents);
+            $width = $probe->getImageWidth();
+            $height = $probe->getImageHeight();
+            $probe->clear();
+
+            if ($width < 1 || $height < 1 || ($width * $height) > self::MAX_PIXELS) {
+                throw new RuntimeException('أبعاد صورة HEIC/HEIF غير صالحة أو كبيرة جدًا.');
+            }
+
+            $image = new \Imagick;
+            $image->readImageBlob($contents);
+            $image->setIteratorIndex(0);
+            $image->autoOrientImage();
+            $image->setImageFormat('png');
+            $image->stripImage();
+            $png = $image->getImageBlob();
+            $image->clear();
+
+            if ($png === '') {
+                throw new RuntimeException('تعذر تحويل صورة HEIC/HEIF.');
+            }
+
+            return $png;
+        } catch (RuntimeException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new RuntimeException('تعذر تحويل صورة HEIC/HEIF إلى صيغة متوافقة.', previous: $exception);
+        }
     }
 
     private function targetDimensions(int $width, int $height): array

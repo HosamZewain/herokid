@@ -17,18 +17,41 @@ use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\ChildIdentity\ChildIdentityPhotoService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
+use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Services\Uploads\UploadValidationException;
 use App\Support\Phone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ChildIdentityController extends Controller
 {
-    public function index(ChildIdentitySettings $settings)
-    {
+    public function index(
+        Request $request,
+        ChildIdentitySettings $settings,
+        AgeRangeResolver $ageRanges,
+        TemporaryPhotoUploadService $uploads,
+    ) {
+        $uploadSession = $uploads->ensureSession($request);
+
         return response()
-            ->view('front.child-identity.start', ['enabled' => $settings->enabled()])
+            ->view('front.child-identity.start', [
+                'enabled' => $settings->enabled(),
+                'ageRanges' => $ageRanges->available(),
+                'photoUploadConfig' => [
+                    'sessionToken' => $uploadSession['token'],
+                    'uploadUrl' => route('photo-uploads.store'),
+                    'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
+                    'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
+                    'maxFiles' => 5,
+                    'minimumFiles' => 2,
+                    'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
+                    'concurrency' => (int) config('photo_uploads.concurrency', 2),
+                    'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
+                    'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
+                ],
+            ])
             ->header('Cache-Control', 'private, no-store, max-age=0')
             ->header('X-Robots-Tag', 'noindex, nofollow');
     }
@@ -39,40 +62,57 @@ class ChildIdentityController extends Controller
         AgeRangeResolver $ageRanges,
         ChildIdentityAccessService $access,
         ChildIdentityEventLogger $events,
+        ChildIdentityPhotoService $photos,
+        TemporaryPhotoUploadService $uploads,
+        ChildIdentityAttemptService $attempts,
     ) {
         abort_unless($settings->enabled(), 404);
         $request->merge(['parent_phone' => Phone::normalize($request->input('parent_phone'))]);
         $validated = $request->validate([
             'parent_name' => ['required', 'string', 'max:255'],
             'parent_phone' => ['required', 'string', 'max:30'],
-            'parent_email' => ['nullable', 'email', 'max:255'],
             'child_name' => ['required', 'string', 'max:255'],
-            'child_age' => ['required', 'integer', 'min:1', 'max:18'],
-            'gender' => ['nullable', Rule::in(['boy', 'girl'])],
+            'age_range' => ['required', 'string', 'max:100'],
+            'upload_session_token' => ['required', 'string'],
+            'photo_upload_ids' => ['required', 'array', 'min:2', 'max:5'],
+            'photo_upload_ids.*' => ['required', 'uuid', 'distinct'],
             'processing_consent' => ['required', 'accepted'],
-            'marketing_consent' => ['sometimes', 'accepted'],
             'utm_source' => ['nullable', 'string', 'max:255'],
             'utm_medium' => ['nullable', 'string', 'max:255'],
             'utm_campaign' => ['nullable', 'string', 'max:255'],
             'utm_content' => ['nullable', 'string', 'max:255'],
             'utm_term' => ['nullable', 'string', 'max:255'],
         ]);
-        $ageRange = $ageRanges->resolve((int) $validated['child_age']);
+        $ageRange = $ageRanges->selected($validated['age_range']);
+
+        try {
+            $temporaryPhotos = $uploads->validatedUploadedIds(
+                $request,
+                $validated['photo_upload_ids'],
+                minimum: 2,
+                maximum: 5,
+            );
+        } catch (UploadValidationException $exception) {
+            throw ValidationException::withMessages([
+                $exception->field ?: 'photo_upload_ids' => $exception->getMessage(),
+            ]);
+        }
+
         $identity = ChildIdentityRequest::create([
             'uuid' => (string) Str::uuid(),
             'user_id' => auth()->id(),
             'resume_token_hash' => hash('sha256', Str::random(80)),
             'parent_name' => $validated['parent_name'],
             'parent_phone' => $validated['parent_phone'],
-            'parent_email' => $validated['parent_email'] ?? null,
+            'parent_email' => null,
             'child_name' => $validated['child_name'],
-            'child_age' => $validated['child_age'],
+            'child_age' => null,
             'age_range' => $ageRange,
-            'gender' => $validated['gender'] ?? null,
+            'gender' => null,
             'status' => 'incomplete',
             'consent_accepted_at' => now(),
             'consent_version' => 'child-identity-v1-2026-07',
-            'marketing_consent_at' => $request->boolean('marketing_consent') ? now() : null,
+            'marketing_consent_at' => null,
             'utm_source' => $validated['utm_source'] ?? null,
             'utm_medium' => $validated['utm_medium'] ?? null,
             'utm_campaign' => $validated['utm_campaign'] ?? null,
@@ -83,11 +123,33 @@ class ChildIdentityController extends Controller
         ]);
         $token = $access->issue($identity, $request);
         $events->record($identity, 'request.created', 'تم إنشاء طلب هوية الطفل وحفظه بشكل دائم.');
+        $storedPhotos = $photos->adoptTemporaryUploads($identity, $temporaryPhotos);
+        $identity->forceFill(['status' => 'photos_uploaded', 'last_activity_at' => now()])->save();
+        $events->record(
+            $identity,
+            'photos.batch_uploaded',
+            'تم تثبيت صور الطفل المرفوعة داخل طلب الهوية.',
+            ['photos_count' => $storedPhotos->count()],
+            fromStatus: 'incomplete',
+            toStatus: 'photos_uploaded',
+        );
+
+        $generationError = null;
+
+        try {
+            $attempts->create($identity, (string) Str::uuid());
+        } catch (ValidationException $exception) {
+            $generationError = collect($exception->errors())->flatten()->first();
+        }
+
         $resumeUrl = route('child-identity.resume', ['identity' => $identity->uuid, 'token' => $token]);
 
         return redirect()
             ->route('child-identity.show', $identity->uuid)
-            ->with('success', 'تم حفظ الطلب. ارفع من صورتين إلى ٥ صور واضحة.')
+            ->with(
+                $generationError ? 'error' : 'success',
+                $generationError ?: 'تم استلام الصور وبدأ إنشاء هوية طفلك تلقائيًا.',
+            )
             ->with('resume_url', $resumeUrl);
     }
 
@@ -143,9 +205,22 @@ class ChildIdentityController extends Controller
             ->get()
             ->filter(fn (StoryCategory $category) => $stories->contains(fn (Story $story) => $story->categories->contains($category)))
             ->values();
+        $requestedStep = $request->string('step')->toString();
+        $wizardStep = match (true) {
+            $identity->status === 'converted' => 'complete',
+            $identity->status === 'in_cart' => 'cart',
+            $requestedStep === 'stories' && $identity->selected_story_category_id !== null => 'stories',
+            $requestedStep === 'category' && $identity->approved_attempt_id !== null => 'category',
+            $requestedStep === 'confirm' && $identity->selected_story_id !== null => 'confirm',
+            $identity->selected_story_id !== null => 'confirm',
+            $identity->selected_story_category_id !== null => 'stories',
+            $identity->approved_attempt_id !== null => 'identity',
+            $identity->status === 'generation_failed' => 'failed',
+            default => 'processing',
+        };
 
         return response()
-            ->view('front.child-identity.show', compact('identity', 'media', 'stories', 'categories'))
+            ->view('front.child-identity.show', compact('identity', 'media', 'stories', 'categories', 'wizardStep'))
             ->header('Cache-Control', 'private, no-store, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Robots-Tag', 'noindex, nofollow');
@@ -259,19 +334,33 @@ class ChildIdentityController extends Controller
         ChildIdentityRequest $identity,
         ChildIdentityAccessService $access,
         ChildIdentityEventLogger $events,
+        AgeRangeResolver $ageRanges,
     ) {
         $this->authorizeIdentity($identity, $request, $access);
         $this->ensureCustomerMutable($identity);
         abort_unless($identity->approved_attempt_id, 422);
         $validated = $request->validate(['story_category_id' => ['required', 'exists:story_categories,id']]);
+        $category = StoryCategory::query()
+            ->with(['stories' => fn ($stories) => $stories->where('active', true)])
+            ->findOrFail($validated['story_category_id']);
+        abort_unless(
+            $category->stories->contains(
+                fn (Story $story) => $ageRanges->normalized((string) $story->age_range)
+                    === $ageRanges->normalized($identity->age_range)
+            ),
+            422,
+            'لا توجد قصص مناسبة للفئة العمرية في هذا التصنيف.',
+        );
         $identity->forceFill([
-            'selected_story_category_id' => $validated['story_category_id'],
+            'selected_story_category_id' => $category->id,
             'selected_story_id' => null,
             'status' => 'approved',
         ])->save();
         $events->record($identity, 'category.selected', 'تم اختيار تصنيف للقصة.', $validated);
 
-        return back()->with('success', 'اختر القصة التي تناسب طفلك.');
+        return redirect()
+            ->route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'stories'])
+            ->with('success', 'اختر القصة التي تناسب طفلك.');
     }
 
     public function selectStory(
@@ -294,7 +383,9 @@ class ChildIdentityController extends Controller
         $identity->forceFill(['selected_story_id' => $story->id, 'status' => 'story_selected'])->save();
         $events->record($identity, 'story.selected', 'تم اختيار القصة.', ['story_id' => $story->id]);
 
-        return back()->with('success', 'تم اختيار القصة. أضفها إلى السلة لإكمال الطلب العادي.');
+        return redirect()
+            ->route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'confirm'])
+            ->with('success', 'تم اختيار القصة. راجع اختيارك ثم أكمل إلى السلة.');
     }
 
     public function addToCart(
@@ -325,6 +416,7 @@ class ChildIdentityController extends Controller
             [
                 'child_name' => $identity->child_name,
                 'child_age' => $identity->child_age,
+                'child_age_range' => $identity->age_range,
                 'child_gender' => $identity->gender,
                 'child_identity_request_id' => $identity->id,
                 'child_identity_approved_attempt_id' => $identity->approved_attempt_id,

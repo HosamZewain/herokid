@@ -115,6 +115,7 @@ class CheckoutController extends Controller
 
                     $childName = $identity ? $identity->child_name : $item['child_name'];
                     $childAge = $identity ? $identity->child_age : $item['child_age'];
+                    $childAgeRange = $identity ? $identity->age_range : ($item['child_age_range'] ?? null);
                     $childGender = $identity ? $identity->gender : ($item['child_gender'] ?? null);
                     $uploadedPhotos = $identity
                         ? $identity->validPhotos->pluck('path')->values()->all()
@@ -197,6 +198,7 @@ class CheckoutController extends Controller
                             'cart_item_key' => $cartKey,
                             'child_name' => $childName,
                             'child_age' => $childAge,
+                            'child_age_range' => $childAgeRange,
                             'child_gender' => $childGender,
                             'uploaded_photos_count' => count($uploadedPhotos),
                             'child_identity' => $identity ? [

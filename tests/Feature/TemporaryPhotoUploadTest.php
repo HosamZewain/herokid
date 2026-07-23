@@ -12,6 +12,7 @@ use App\Services\Uploads\TemporaryPhotoUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class TemporaryPhotoUploadTest extends TestCase
@@ -93,7 +94,7 @@ class TemporaryPhotoUploadTest extends TestCase
             'photo' => UploadedFile::fake()->create('child.txt', 4, 'text/plain'),
         ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP. HEIC/HEIF قد لا يعمل على كل الأجهزة.');
+            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.');
 
         $this->postJson(route('photo-uploads.store'), [
             'upload_session_token' => $sessionToken,
@@ -101,6 +102,23 @@ class TemporaryPhotoUploadTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'حجم كل صورة يجب ألا يزيد عن 15 ميجا.');
+    }
+
+    public function test_upload_endpoint_accepts_an_iphone_heic_container(): void
+    {
+        Storage::fake('local');
+        $sessionToken = $this->uploadSessionToken();
+        $heicHeader = pack('N', 24).'ftypheic'.pack('N', 0).'heicmif1';
+
+        $response = $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'photo' => UploadedFile::fake()->createWithContent('iphone-photo.heic', $heicHeader),
+        ])->assertCreated();
+
+        $upload = TemporaryPhotoUpload::where('public_id', $response->json('id'))->firstOrFail();
+        $this->assertSame('image/heic', $upload->mime_type);
+        $this->assertStringEndsWith('.heic', $upload->path);
+        Storage::disk('local')->assertExists($upload->path);
     }
 
     public function test_temp_uploads_are_limited_per_upload_session(): void
@@ -129,7 +147,7 @@ class TemporaryPhotoUploadTest extends TestCase
         $sessionToken = $this->uploadSessionToken();
 
         $foreign = TemporaryPhotoUpload::create([
-            'public_id' => (string) \Illuminate\Support\Str::uuid(),
+            'public_id' => (string) Str::uuid(),
             'session_hash' => 'foreign-session',
             'disk' => 'local',
             'path' => 'temporary-uploads/child-photos/foreign.png',
@@ -205,7 +223,7 @@ class TemporaryPhotoUploadTest extends TestCase
         Storage::disk('local')->put('temporary-uploads/child-photos/attached.png', 'attached');
 
         TemporaryPhotoUpload::create([
-            'public_id' => (string) \Illuminate\Support\Str::uuid(),
+            'public_id' => (string) Str::uuid(),
             'session_hash' => 'expired',
             'disk' => 'local',
             'path' => 'temporary-uploads/child-photos/expired.png',
@@ -216,7 +234,7 @@ class TemporaryPhotoUploadTest extends TestCase
         ]);
 
         TemporaryPhotoUpload::create([
-            'public_id' => (string) \Illuminate\Support\Str::uuid(),
+            'public_id' => (string) Str::uuid(),
             'session_hash' => 'attached',
             'disk' => 'local',
             'path' => 'temporary-uploads/child-photos/attached.png',
@@ -260,11 +278,11 @@ class TemporaryPhotoUploadTest extends TestCase
 
     private function uploadedRecord(string $sessionToken, array $overrides = []): TemporaryPhotoUpload
     {
-        $path = $overrides['path'] ?? 'temporary-uploads/child-photos/'.\Illuminate\Support\Str::uuid().'.png';
+        $path = $overrides['path'] ?? 'temporary-uploads/child-photos/'.Str::uuid().'.png';
         Storage::disk('local')->put($path, 'image-bytes');
 
         return TemporaryPhotoUpload::create(array_merge([
-            'public_id' => (string) \Illuminate\Support\Str::uuid(),
+            'public_id' => (string) Str::uuid(),
             'session_hash' => app(TemporaryPhotoUploadService::class)->sessionHash($sessionToken),
             'disk' => 'local',
             'path' => $path,

@@ -139,4 +139,9 @@ class ChildIdentityRequest extends Model
             default => 'غير محدد',
         };
     }
+
+    public function displayChildName(): string
+    {
+        return $this->child_name ?: 'الطفل';
+    }
 }

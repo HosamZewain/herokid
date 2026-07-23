@@ -26,7 +26,7 @@ class StoryProductionPrompt
 
     public static function forOrder(Order $order, bool $useOverride = true): string
     {
-        $order->loadMissing(['story', 'productionPromptOverride', 'childIdentityApprovedAttempt']);
+        $order->loadMissing(['story', 'productionPromptOverride', 'childIdentityApprovedAttempt', 'childIdentityRequest']);
 
         if ($useOverride && $order->productionPromptOverride) {
             return self::withCurrentIdentityReferences(
@@ -116,14 +116,14 @@ class StoryProductionPrompt
 
     private static function variablesForOrder(Order $order): array
     {
-        $order->loadMissing(['story', 'childIdentityApprovedAttempt']);
+        $order->loadMissing(['story', 'childIdentityApprovedAttempt', 'childIdentityRequest']);
         $story = $order->story;
 
         return [
             'order_number' => self::value($order->order_number),
             'order_url' => route('admin.orders.show', $order),
             'child_name' => self::value($order->child_name),
-            'child_age' => self::value($order->child_age),
+            'child_age' => self::value($order->child_age ?? $order->childIdentityRequest?->age_range),
             'child_gender' => self::gender($order->child_gender),
             'child_interests' => self::rawValue($order->interests),
             'child_image_references' => self::childImageReferences($order),

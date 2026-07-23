@@ -38,16 +38,25 @@ class ChildIdentityTest extends TestCase
 
     public function test_first_valid_step_creates_permanent_admin_visible_request_and_private_resume_access(): void
     {
+        Queue::fake();
+        Storage::fake('local');
         $this->ageRanges();
+        $this->configuredOpenAi();
+        [$uploadToken, $photoIds] = $this->uploadTemporaryPhotos();
 
-        $response = $this->post(route('child-identity.store'), $this->startPayload());
+        $response = $this->post(route('child-identity.store'), $this->startPayload($uploadToken, $photoIds));
         $response->assertSessionDoesntHaveErrors();
         $identity = ChildIdentityRequest::firstOrFail();
 
         $response->assertRedirect(route('child-identity.show', $identity->uuid))
             ->assertSessionHas('resume_url');
-        $this->assertSame('incomplete', $identity->status);
+        $this->assertSame('queued', $identity->status);
         $this->assertSame('٣ - ٦ سنوات', $identity->age_range);
+        $this->assertNull($identity->child_age);
+        $this->assertNull($identity->gender);
+        $this->assertNull($identity->parent_email);
+        $this->assertCount(2, $identity->photos);
+        $this->assertSame('pending', $identity->attempts()->firstOrFail()->status);
         $this->assertNotNull($identity->consent_accepted_at);
         $this->assertNull($identity->marketing_consent_at);
         $this->assertDatabaseHas('child_identity_events', [
@@ -58,7 +67,8 @@ class ChildIdentityTest extends TestCase
         $resumeUrl = session('resume_url');
         $show = $this->get(route('child-identity.show', $identity->uuid))
             ->assertOk()
-            ->assertSee('هوية ليلى');
+            ->assertSee('جاري إنشاء هوية طفلك')
+            ->assertDontSee('اسم ولي الأمر');
         $this->assertStringContainsString('no-store', (string) $show->headers->get('Cache-Control'));
         $this->app['session']->flush();
         $this->get(route('child-identity.show', $identity->uuid))->assertForbidden();
@@ -178,8 +188,89 @@ class ChildIdentityTest extends TestCase
         Storage::disk('local')->assertExists($attempt->output_storage_path);
         $this->assertSame(1, $identity->successful_attempts);
         $this->assertSame('0.041000', $identity->total_cost_usd);
+        $this->assertSame($attempt->id, $identity->approved_attempt_id);
+        $this->assertSame('approved', $identity->status);
         Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/images/edits'
             && $request->hasHeader('Authorization', 'Bearer test-openai-key'));
+    }
+
+    public function test_generated_identity_reveals_category_and_story_wizard_only_after_customer_action(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        $this->configuredOpenAi();
+        $identity = $this->createPublicIdentity();
+        $this->uploadTwoPhotos($identity);
+        $attempt = app(ChildIdentityAttemptService::class)->create($identity->fresh(), (string) Str::uuid());
+        $attempt->forceFill([
+            'status' => 'succeeded',
+            'output_disk' => 'local',
+            'output_storage_path' => 'child-identities/'.$identity->uuid.'/attempts/1/output.png',
+            'output_checksum' => hash('sha256', $this->tinyPngContents()),
+            'completed_at' => now(),
+        ])->save();
+        Storage::disk('local')->put($attempt->output_storage_path, $this->tinyPngContents());
+        $identity->forceFill(['approved_attempt_id' => $attempt->id, 'status' => 'approved'])->save();
+        $category = StoryCategory::create(['name' => 'مغامرات', 'slug' => 'wizard-adventures']);
+        $story = $this->story($category);
+
+        $this->get(route('child-identity.show', $identity->uuid))
+            ->assertOk()
+            ->assertSee('اختر قصة بهذه الهوية')
+            ->assertDontSee('ما نوع القصة التي تحبها؟');
+
+        $this->get(route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'category']))
+            ->assertOk()
+            ->assertSee('ما نوع القصة التي تحبها؟')
+            ->assertSee($category->name);
+
+        $this->post(route('child-identity.category', $identity->uuid), [
+            'story_category_id' => $category->id,
+        ])->assertRedirect(route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'stories']));
+
+        $this->get(route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'stories']))
+            ->assertOk()
+            ->assertSee($story->title);
+
+        $this->post(route('child-identity.story', $identity->uuid), [
+            'story_id' => $story->id,
+        ])->assertRedirect(route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'confirm']));
+    }
+
+    public function test_admin_can_edit_the_exact_prompt_used_by_the_next_attempt(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        $this->configuredOpenAi();
+        $identity = $this->createPublicIdentity();
+        $this->uploadTwoPhotos($identity);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customPrompt = str_repeat('Create a consistent child character identity sheet with a neutral background. ', 3);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.child-identities.prompt.update', $identity->id), [
+                'prompt_override' => $customPrompt,
+            ])
+            ->assertRedirect();
+
+        $attempt = app(ChildIdentityAttemptService::class)->create(
+            $identity->fresh(),
+            (string) Str::uuid(),
+            'admin',
+            $admin,
+        );
+
+        $this->assertSame(trim($customPrompt), $attempt->prompt_snapshot);
+        $this->assertSame('request_override', data_get($attempt->request_metadata, 'prompt_source'));
+        $this->assertDatabaseHas('child_identity_events', [
+            'child_identity_request_id' => $identity->id,
+            'event_type' => 'prompt.updated_by_admin',
+        ]);
+        $this->actingAs($admin)
+            ->get(route('admin.child-identities.show', $identity->id))
+            ->assertOk()
+            ->assertSee('برومبت OpenAI لهذا الطلب')
+            ->assertSee(trim($customPrompt));
     }
 
     public function test_provider_failure_remains_recorded_with_unknown_billing_instead_of_silent_zero(): void
@@ -645,24 +736,39 @@ class ChildIdentityTest extends TestCase
     private function createPublicIdentity(): ChildIdentityRequest
     {
         $this->ageRanges();
-        $this->post(route('child-identity.store'), $this->startPayload())
-            ->assertSessionDoesntHaveErrors()
-            ->assertRedirect();
+        $identity = ChildIdentityRequest::create($this->identityAttributes());
+        $this->withSession(['child_identity_grants' => [$identity->uuid]]);
 
-        return ChildIdentityRequest::latest('id')->firstOrFail();
+        return $identity;
     }
 
-    private function startPayload(): array
+    private function startPayload(string $uploadToken, array $photoIds): array
     {
         return [
             'parent_name' => 'مريم أحمد',
             'parent_phone' => '01001112233',
-            'parent_email' => 'parent@example.com',
             'child_name' => 'ليلى',
-            'child_age' => 5,
-            'gender' => 'girl',
+            'age_range' => '٣ - ٦ سنوات',
+            'upload_session_token' => $uploadToken,
+            'photo_upload_ids' => $photoIds,
             'processing_consent' => '1',
         ];
+    }
+
+    private function uploadTemporaryPhotos(): array
+    {
+        $this->get(route('child-identity.index'))->assertOk();
+        $token = (string) session('photo_upload.token');
+        $ids = collect(['first.png', 'second.png'])->map(function (string $name) use ($token): string {
+            return (string) $this->post(route('photo-uploads.store'), [
+                'upload_session_token' => $token,
+                'photo' => $this->tinyPng($name),
+            ], ['Accept' => 'application/json'])
+                ->assertCreated()
+                ->json('id');
+        })->all();
+
+        return [$token, $ids];
     }
 
     private function identityAttributes(): array

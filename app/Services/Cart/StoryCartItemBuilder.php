@@ -28,6 +28,7 @@ class StoryCartItemBuilder
             'story_lesson' => $story->lesson_value,
             'child_name' => $personalization['child_name'],
             'child_age' => $personalization['child_age'],
+            'child_age_range' => $personalization['child_age_range'] ?? null,
             'child_gender' => $personalization['child_gender'],
             'interests' => $personalization['interests'] ?? null,
             'gift_note' => $personalization['gift_note'] ?? null,

@@ -4,6 +4,7 @@ namespace App\Services\Uploads;
 
 use App\Models\Order;
 use App\Models\TemporaryPhotoUpload;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +13,7 @@ use Illuminate\Support\Str;
 
 class TemporaryPhotoUploadService
 {
-    public function ensureSession(\Illuminate\Http\Request $request): array
+    public function ensureSession(Request $request): array
     {
         if (! $request->session()->has('photo_upload.token')) {
             $request->session()->put('photo_upload.token', Str::random(48));
@@ -31,7 +32,7 @@ class TemporaryPhotoUploadService
         return hash_hmac('sha256', $token, (string) config('app.key'));
     }
 
-    public function validateToken(\Illuminate\Http\Request $request): string
+    public function validateToken(Request $request): string
     {
         $session = $this->ensureSession($request);
         $provided = (string) $request->input('upload_session_token');
@@ -43,7 +44,7 @@ class TemporaryPhotoUploadService
         return $session['hash'];
     }
 
-    public function upload(\Illuminate\Http\Request $request, UploadedFile $file): TemporaryPhotoUpload
+    public function upload(Request $request, UploadedFile $file): TemporaryPhotoUpload
     {
         $sessionHash = $this->validateToken($request);
         $this->assertSessionCapacity($sessionHash);
@@ -86,17 +87,25 @@ class TemporaryPhotoUploadService
         ]);
     }
 
-    public function attachIdsToCart(\Illuminate\Http\Request $request, array $publicIds, string $cartKey): Collection
-    {
+    public function validatedUploadedIds(
+        Request $request,
+        array $publicIds,
+        int $minimum = 1,
+        ?int $maximum = null,
+    ): Collection {
         $sessionHash = $this->validateToken($request);
+        $maximum ??= (int) config('photo_uploads.max_files', 5);
         $publicIds = array_values(array_unique(array_filter($publicIds, 'is_string')));
 
-        if (count($publicIds) < 1) {
-            throw new UploadValidationException('يرجى رفع صورة واحدة واضحة للطفل على الأقل.', 422, 'photo_upload_ids');
+        if (count($publicIds) < $minimum) {
+            $message = $minimum === 1
+                ? 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.'
+                : 'يرجى رفع صورتين واضحتين للطفل على الأقل.';
+            throw new UploadValidationException($message, 422, 'photo_upload_ids');
         }
 
-        if (count($publicIds) > (int) config('photo_uploads.max_files', 5)) {
-            throw new UploadValidationException($this->maxFilesMessage(), 422, 'photo_upload_ids');
+        if (count($publicIds) > $maximum) {
+            throw new UploadValidationException('يمكنك رفع '.$maximum.' صور كحد أقصى.', 422, 'photo_upload_ids');
         }
 
         $uploads = TemporaryPhotoUpload::whereIn('public_id', $publicIds)->get()->keyBy('public_id');
@@ -107,10 +116,20 @@ class TemporaryPhotoUploadService
 
         foreach ($publicIds as $publicId) {
             $upload = $uploads->get($publicId);
+
             if (! $upload?->isAttachableFor($sessionHash, $request->user()?->id)) {
                 throw new UploadValidationException('بعض الصور لا تخص جلسة الرفع الحالية أو انتهت صلاحيتها.', 422, 'photo_upload_ids');
             }
         }
+
+        return $uploads
+            ->sortBy(fn (TemporaryPhotoUpload $upload) => array_search($upload->public_id, $publicIds, true))
+            ->values();
+    }
+
+    public function attachIdsToCart(Request $request, array $publicIds, string $cartKey): Collection
+    {
+        $uploads = $this->validatedUploadedIds($request, $publicIds);
 
         TemporaryPhotoUpload::whereIn('id', $uploads->pluck('id'))->update([
             'status' => 'attached',
@@ -119,7 +138,7 @@ class TemporaryPhotoUploadService
             'updated_at' => now(),
         ]);
 
-        return $uploads->sortBy(fn (TemporaryPhotoUpload $upload) => array_search($upload->public_id, $publicIds, true))->values();
+        return $uploads;
     }
 
     public function markOrderAttached(array $paths, Order $order): void
@@ -189,7 +208,7 @@ class TemporaryPhotoUploadService
 
         $mime = strtolower((string) $file->getMimeType());
         if (! in_array($mime, config('photo_uploads.allowed_mimes', []), true)) {
-            throw new UploadValidationException('صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP. HEIC/HEIF قد لا يعمل على كل الأجهزة.', 422);
+            throw new UploadValidationException('صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.', 422);
         }
 
         if (! str_contains($mime, 'heic') && ! str_contains($mime, 'heif') && $this->dimensions($file)['width'] === null) {

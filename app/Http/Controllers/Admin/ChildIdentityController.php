@@ -78,7 +78,7 @@ class ChildIdentityController extends Controller
         return view('admin.child-identities.index', compact('identities', 'models', 'stats', 'trash'));
     }
 
-    public function show(int $identity)
+    public function show(int $identity, ChildIdentityAttemptService $attempts)
     {
         $identity = ChildIdentityRequest::withTrashed()
             ->with([
@@ -121,8 +121,53 @@ class ChildIdentityController extends Controller
             $identity,
             ['uuid' => $identity->uuid, 'status' => $identity->status],
         );
+        $nextPrompt = $attempts->promptFor($identity);
 
-        return view('admin.child-identities.show', compact('identity', 'media'));
+        return view('admin.child-identities.show', compact('identity', 'media', 'nextPrompt'));
+    }
+
+    public function updatePrompt(
+        Request $request,
+        int $identity,
+        ChildIdentityEventLogger $events,
+    ) {
+        $identity = ChildIdentityRequest::withTrashed()->findOrFail($identity);
+        abort_if($identity->trashed(), 422);
+        $validated = $request->validate([
+            'prompt_override' => ['nullable', 'string', 'min:50', 'max:20000'],
+            'use_global_prompt' => ['nullable', 'boolean'],
+        ]);
+        $beforeHash = filled($identity->prompt_override)
+            ? hash('sha256', (string) $identity->prompt_override)
+            : null;
+        $override = $request->boolean('use_global_prompt')
+            ? null
+            : trim((string) ($validated['prompt_override'] ?? ''));
+        $override = $override !== '' ? $override : null;
+        $identity->forceFill(['prompt_override' => $override])->save();
+        $afterHash = $override ? hash('sha256', $override) : null;
+        $events->record(
+            $identity,
+            'prompt.updated_by_admin',
+            $override ? 'حدّث المشرف برومبت المحاولة القادمة.' : 'أعاد المشرف الطلب إلى البرومبت العام.',
+            ['before_hash' => $beforeHash, 'after_hash' => $afterHash],
+            actor: $request->user(),
+            actorType: 'admin',
+            source: 'admin',
+        );
+        AdminActivityLogger::log(
+            'child_identity.prompt_updated',
+            'تحديث برومبت إنشاء هوية طفل.',
+            $identity,
+            [
+                'uuid' => $identity->uuid,
+                'before_hash' => $beforeHash,
+                'after_hash' => $afterHash,
+                'uses_request_override' => $override !== null,
+            ],
+        );
+
+        return back()->with('success', 'تم حفظ البرومبت. سيُستخدم في المحاولة القادمة فقط، بينما تبقى المحاولات السابقة ثابتة.');
     }
 
     public function generate(
