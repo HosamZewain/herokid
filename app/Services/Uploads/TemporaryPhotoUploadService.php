@@ -55,6 +55,11 @@ class TemporaryPhotoUploadService
         $batchHash = $this->batchHash((string) $request->input('upload_batch_token'));
         $this->assertBatchCapacity($sessionHash, $batchHash);
         $this->assertValidImage($file);
+        $preparedFile = $request->file('prepared_photo');
+
+        if ($preparedFile instanceof UploadedFile) {
+            $this->assertValidPreparedImage($preparedFile);
+        }
 
         $publicId = (string) Str::uuid();
         $extension = $this->extensionForMime((string) $file->getMimeType());
@@ -62,10 +67,33 @@ class TemporaryPhotoUploadService
         $diskName = (string) config('photo_uploads.disk', 'local');
         $checksum = hash_file('sha256', $file->getRealPath());
         $dimensions = $this->dimensions($file);
+        $preparedPath = null;
+        $preparedDimensions = ['width' => null, 'height' => null];
+        $preparedChecksum = null;
+
+        if ($preparedFile instanceof UploadedFile) {
+            $preparedExtension = $this->extensionForMime((string) $preparedFile->getMimeType());
+            $preparedPath = 'temporary-uploads/child-photos/'.now()->format('Y/m').'/'.$publicId.'-ai-input.'.$preparedExtension;
+            $preparedDimensions = $this->dimensions($preparedFile);
+            $preparedChecksum = hash_file('sha256', $preparedFile->getRealPath());
+        }
 
         try {
             $stored = Storage::disk($diskName)->putFileAs(dirname($path), $file, basename($path));
+
+            if ($stored && $preparedFile instanceof UploadedFile && $preparedPath) {
+                $preparedStored = Storage::disk($diskName)->putFileAs(
+                    dirname($preparedPath),
+                    $preparedFile,
+                    basename($preparedPath),
+                );
+
+                if (! $preparedStored) {
+                    throw new \RuntimeException('Prepared child image storage failed.');
+                }
+            }
         } catch (\Throwable $exception) {
+            Storage::disk($diskName)->delete(array_filter([$path, $preparedPath]));
             Log::warning('Temporary child photo storage failed.', [
                 'exception' => $exception::class,
             ]);
@@ -77,21 +105,34 @@ class TemporaryPhotoUploadService
             throw new UploadValidationException('تعذر حفظ الصورة مؤقتاً. حاول مرة أخرى.', 503);
         }
 
-        return TemporaryPhotoUpload::create([
-            'public_id' => $publicId,
-            'session_hash' => $sessionHash,
-            'batch_hash' => $batchHash,
-            'user_id' => $request->user()?->id,
-            'disk' => $diskName,
-            'path' => $path,
-            'mime_type' => (string) $file->getMimeType(),
-            'file_size' => (int) $file->getSize(),
-            'width' => $dimensions['width'],
-            'height' => $dimensions['height'],
-            'checksum' => $checksum ?: null,
-            'status' => 'uploaded',
-            'expires_at' => now()->addHours((int) config('photo_uploads.temp_retention_hours', 24)),
-        ]);
+        try {
+            return TemporaryPhotoUpload::create([
+                'public_id' => $publicId,
+                'session_hash' => $sessionHash,
+                'batch_hash' => $batchHash,
+                'user_id' => $request->user()?->id,
+                'disk' => $diskName,
+                'path' => $path,
+                'prepared_disk' => $preparedPath ? $diskName : null,
+                'prepared_path' => $preparedPath,
+                'prepared_mime_type' => $preparedFile?->getMimeType(),
+                'prepared_file_size' => $preparedFile?->getSize(),
+                'prepared_width' => $preparedDimensions['width'],
+                'prepared_height' => $preparedDimensions['height'],
+                'prepared_checksum' => $preparedChecksum ?: null,
+                'mime_type' => (string) $file->getMimeType(),
+                'file_size' => (int) $file->getSize(),
+                'width' => $dimensions['width'],
+                'height' => $dimensions['height'],
+                'checksum' => $checksum ?: null,
+                'status' => 'uploaded',
+                'expires_at' => now()->addHours((int) config('photo_uploads.temp_retention_hours', 24)),
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk($diskName)->delete(array_filter([$path, $preparedPath]));
+
+            throw $exception;
+        }
     }
 
     public function validatedUploadedIds(
@@ -177,6 +218,10 @@ class TemporaryPhotoUploadService
                 foreach ($uploads as $upload) {
                     try {
                         Storage::disk($upload->disk)->delete($upload->path);
+
+                        if ($upload->prepared_path) {
+                            Storage::disk($upload->prepared_disk ?: $upload->disk)->delete($upload->prepared_path);
+                        }
                     } catch (\Throwable) {
                         // Missing or inaccessible temporary files should not block cleanup.
                     }
@@ -221,6 +266,21 @@ class TemporaryPhotoUploadService
 
         if (! str_contains($mime, 'heic') && ! str_contains($mime, 'heif') && $this->dimensions($file)['width'] === null) {
             throw new UploadValidationException('الملف المرفوع ليس صورة صالحة أو لا يمكن قراءته.', 422);
+        }
+    }
+
+    private function assertValidPreparedImage(UploadedFile $file): void
+    {
+        if (! $file->isValid()) {
+            throw new UploadValidationException('تعذر تجهيز نسخة الصورة المتوافقة. أعد اختيار الصورة.', 422);
+        }
+
+        $maxBytes = (int) config('photo_uploads.max_size_mb', 15) * 1024 * 1024;
+        $mime = strtolower((string) $file->getMimeType());
+        $allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+        if ((int) $file->getSize() > $maxBytes || ! in_array($mime, $allowed, true) || $this->dimensions($file)['width'] === null) {
+            throw new UploadValidationException('نسخة الصورة المجهزة غير صالحة. أعد اختيار الصورة الأصلية.', 422);
         }
     }
 

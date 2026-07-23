@@ -45,7 +45,10 @@ class TemporaryPhotoUploadController extends Controller
                 'width' => $upload->width,
                 'height' => $upload->height,
                 'expires_at' => $upload->expires_at?->toIso8601String(),
-                'preview_url' => route('photo-uploads.show', $upload->public_id),
+                'preview_url' => route('photo-uploads.show', [
+                    'publicId' => $upload->public_id,
+                    'variant' => $upload->prepared_path ? 'prepared' : 'original',
+                ]),
             ], 201);
         } catch (UploadValidationException $exception) {
             return response()->json([
@@ -74,13 +77,18 @@ class TemporaryPhotoUploadController extends Controller
             abort(404);
         }
 
-        $disk = Storage::disk($upload->disk);
-        if (! $disk->exists($upload->path)) {
+        $prepared = $request->string('variant')->toString() === 'prepared' && filled($upload->prepared_path);
+        $diskName = $prepared ? ($upload->prepared_disk ?: $upload->disk) : $upload->disk;
+        $path = $prepared ? $upload->prepared_path : $upload->path;
+        $mimeType = $prepared ? $upload->prepared_mime_type : $upload->mime_type;
+        $disk = Storage::disk($diskName);
+
+        if (! $disk->exists($path)) {
             abort(404);
         }
 
-        return response()->file($disk->path($upload->path), [
-            'Content-Type' => $upload->mime_type,
+        return response()->file($disk->path($path), [
+            'Content-Type' => $mimeType,
             'Cache-Control' => 'private, max-age=300',
         ]);
     }
@@ -95,6 +103,11 @@ class TemporaryPhotoUploadController extends Controller
             ->firstOrFail();
 
         Storage::disk($upload->disk)->delete($upload->path);
+
+        if ($upload->prepared_path) {
+            Storage::disk($upload->prepared_disk ?: $upload->disk)->delete($upload->prepared_path);
+        }
+
         $upload->forceFill(['status' => 'expired'])->save();
 
         return response()->json(['message' => 'تم حذف الصورة.']);

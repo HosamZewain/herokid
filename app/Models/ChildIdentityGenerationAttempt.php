@@ -39,7 +39,7 @@ class ChildIdentityGenerationAttempt extends Model
             'child_identity_attempt_photos',
             'child_identity_generation_attempt_id',
             'child_identity_photo_id'
-        )->withPivot(['disk', 'path', 'checksum', 'sort_order'])->withTimestamps();
+        )->withPivot(['disk', 'path', 'mime_type', 'checksum', 'sort_order'])->withTimestamps();
     }
 
     public function statusLabel(): string

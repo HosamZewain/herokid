@@ -89,19 +89,30 @@ class ChildIdentityPhotoService
     public function adoptTemporaryUploads(ChildIdentityRequest $identity, Collection $uploads): Collection
     {
         return $uploads->values()->map(function (TemporaryPhotoUpload $upload, int $index) use ($identity): ChildIdentityPhoto {
-            $extension = match (strtolower($upload->mime_type)) {
-                'image/png' => 'png',
-                'image/webp' => 'webp',
-                'image/heic', 'image/heic-sequence' => 'heic',
-                'image/heif', 'image/heif-sequence' => 'heif',
-                default => 'jpg',
-            };
+            $extension = $this->extensionForMime($upload->mime_type);
+            $sourcePath = $upload->path;
+            $preparedSourcePath = $upload->prepared_path;
             $destination = 'child-identities/'.$identity->uuid.'/originals/'.Str::uuid().'.'.$extension;
             $disk = Storage::disk($upload->disk);
+            $preparedDiskName = $upload->prepared_disk ?: $upload->disk;
+            $preparedDisk = Storage::disk($preparedDiskName);
+            $preparedDestination = $preparedSourcePath
+                ? 'child-identities/'.$identity->uuid.'/ai-inputs/'.Str::uuid().'.'.$this->extensionForMime($upload->prepared_mime_type)
+                : null;
 
-            if (! $disk->exists($upload->path) || ! $disk->move($upload->path, $destination)) {
+            if (! $disk->exists($sourcePath) || ! $disk->move($sourcePath, $destination)) {
                 throw ValidationException::withMessages([
                     'photo_upload_ids' => 'تعذر تثبيت إحدى الصور داخل طلب الهوية. حاول مرة أخرى.',
+                ]);
+            }
+
+            if ($preparedDestination
+                && (! $preparedDisk->exists($preparedSourcePath)
+                    || ! $preparedDisk->move($preparedSourcePath, $preparedDestination))) {
+                $disk->move($destination, $sourcePath);
+
+                throw ValidationException::withMessages([
+                    'photo_upload_ids' => 'تعذر تثبيت نسخة الصورة المتوافقة داخل طلب الهوية. أعد اختيار الصورة.',
                 ]);
             }
 
@@ -109,6 +120,10 @@ class ChildIdentityPhotoService
                 $photo = $identity->photos()->create([
                     'disk' => $upload->disk,
                     'path' => $destination,
+                    'ai_input_disk' => $preparedDestination ? $preparedDiskName : null,
+                    'ai_input_path' => $preparedDestination,
+                    'ai_input_mime_type' => $preparedDestination ? $upload->prepared_mime_type : null,
+                    'ai_input_checksum' => $preparedDestination ? $upload->prepared_checksum : null,
                     'original_filename' => 'child-photo-'.($index + 1).'.'.$extension,
                     'mime_type' => $upload->mime_type,
                     'file_size' => $upload->file_size,
@@ -121,13 +136,20 @@ class ChildIdentityPhotoService
                 ]);
                 $upload->forceFill([
                     'path' => $destination,
+                    'prepared_disk' => $preparedDestination ? $preparedDiskName : null,
+                    'prepared_path' => $preparedDestination,
                     'status' => 'attached',
                     'attached_cart_key' => 'child-identity:'.$identity->uuid,
                 ])->save();
 
                 return $photo;
             } catch (\Throwable $exception) {
-                $disk->move($destination, $upload->path);
+                $disk->move($destination, $sourcePath);
+
+                if ($preparedDestination) {
+                    $preparedDisk->move($preparedDestination, $preparedSourcePath);
+                }
+
                 throw $exception;
             }
         });
@@ -140,5 +162,56 @@ class ChildIdentityPhotoService
             'validation_status' => 'removed',
             'validation_notes' => $note,
         ])->save();
+    }
+
+    public function storeAiInputDerivative(ChildIdentityPhoto $photo, UploadedFile $file): ChildIdentityPhoto
+    {
+        $mime = strtolower((string) $file->getMimeType());
+        $contents = $file->get();
+        $imageInfo = @getimagesizefromstring($contents);
+
+        if (! $file->isValid()
+            || $file->getSize() > 15 * 1024 * 1024
+            || ! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)
+            || ! is_array($imageInfo)) {
+            throw ValidationException::withMessages([
+                'prepared_photo' => 'تعذر تجهيز نسخة متوافقة من صورة iPhone. أعد اختيار الصورة الأصلية.',
+            ]);
+        }
+
+        $path = 'child-identities/'.$photo->identityRequest->uuid.'/ai-inputs/'.Str::uuid().'.'.$this->extensionForMime($mime);
+        $diskName = 'local';
+        Storage::disk($diskName)->put($path, $contents);
+        $previousDisk = $photo->ai_input_disk;
+        $previousPath = $photo->ai_input_path;
+
+        try {
+            $photo->forceFill([
+                'ai_input_disk' => $diskName,
+                'ai_input_path' => $path,
+                'ai_input_mime_type' => $mime,
+                'ai_input_checksum' => hash('sha256', $contents),
+            ])->save();
+        } catch (\Throwable $exception) {
+            Storage::disk($diskName)->delete($path);
+            throw $exception;
+        }
+
+        if ($previousPath && $previousPath !== $path) {
+            Storage::disk($previousDisk ?: $photo->disk)->delete($previousPath);
+        }
+
+        return $photo->fresh();
+    }
+
+    private function extensionForMime(?string $mime): string
+    {
+        return match (strtolower((string) $mime)) {
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/heic', 'image/heic-sequence' => 'heic',
+            'image/heif', 'image/heif-sequence' => 'heif',
+            default => 'jpg',
+        };
     }
 }

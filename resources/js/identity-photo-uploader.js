@@ -1,3 +1,5 @@
+import { prepareImageForUpload } from './image-upload-preparer';
+
 export function initializeIdentityPhotoUploader() {
     const form = document.querySelector('[data-identity-intake]');
     const input = form?.querySelector('[data-identity-photo-input]');
@@ -154,42 +156,6 @@ export function initializeIdentityPhotoUploader() {
         render();
     }
 
-    async function optimize(file) {
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
-            return file;
-        }
-
-        if (!window.createImageBitmap || !document.createElement('canvas').getContext) {
-            return file;
-        }
-
-        try {
-            const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-            const longEdge = Math.max(bitmap.width, bitmap.height);
-
-            if (longEdge <= maxLongEdge) {
-                bitmap.close?.();
-                return file;
-            }
-
-            const scale = maxLongEdge / longEdge;
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(bitmap.width * scale);
-            canvas.height = Math.round(bitmap.height * scale);
-            canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-            bitmap.close?.();
-            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', jpegQuality));
-
-            if (!blob || blob.size > file.size) {
-                return file;
-            }
-
-            return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
-        } catch {
-            return file;
-        }
-    }
-
     function enqueue(files) {
         setError();
         const remaining = maximum - items.length;
@@ -242,10 +208,39 @@ export function initializeIdentityPhotoUploader() {
     async function upload(item) {
         activeUploads += 1;
         patch(item.id, { status: 'preparing', progress: 4, message: 'جاري تجهيز الصورة...' });
-        const file = await optimize(item.file);
+        let preparedFile;
+
+        try {
+            preparedFile = await prepareImageForUpload(item.file, { maxLongEdge, jpegQuality });
+        } catch (conversionError) {
+            activeUploads = Math.max(0, activeUploads - 1);
+            patch(item.id, {
+                status: 'failed',
+                progress: 0,
+                message: conversionError.message || 'تعذر تجهيز الصورة قبل الرفع.',
+            });
+            pump();
+
+            return;
+        }
+
+        if (preparedFile !== item.file) {
+            const previousPreview = item.previewUrl;
+            patch(item.id, { previewUrl: URL.createObjectURL(preparedFile) });
+
+            if (previousPreview?.startsWith('blob:')) {
+                URL.revokeObjectURL(previousPreview);
+            }
+        }
+
         patch(item.id, { status: 'uploading', progress: 8, message: 'جاري الرفع تلقائيًا...' });
         const data = new FormData();
-        data.append('photo', file);
+        data.append('photo', item.file);
+
+        if (preparedFile !== item.file) {
+            data.append('prepared_photo', preparedFile);
+        }
+
         data.append('upload_session_token', config.sessionToken);
         data.append('upload_batch_token', config.batchToken || '');
         const xhr = new XMLHttpRequest();
@@ -382,4 +377,103 @@ export function initializeIdentityPhotoUploader() {
     }
 
     render();
+}
+
+export function initializeIdentityHeicRecovery() {
+    const form = document.querySelector('[data-identity-heic-recovery]');
+    const configNode = form?.querySelector('[data-identity-heic-recovery-config]');
+    const error = form?.querySelector('[data-identity-heic-recovery-error]');
+    const submit = form?.querySelector('button[type="submit"]');
+
+    if (!form || !configNode || !submit) {
+        return;
+    }
+
+    let config = {};
+
+    try {
+        config = JSON.parse(configNode.textContent || '{}');
+    } catch {
+        return;
+    }
+
+    const photos = Array.isArray(config.photos) ? config.photos : [];
+
+    if (photos.length === 0) {
+        return;
+    }
+
+    let recovered = false;
+    let working = false;
+
+    form.addEventListener('submit', async (event) => {
+        if (recovered) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (working) {
+            return;
+        }
+
+        working = true;
+        submit.disabled = true;
+        submit.textContent = 'جاري تجهيز صور iPhone...';
+        error?.classList.add('hidden');
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        try {
+            for (const photo of photos) {
+                const sourceResponse = await fetch(photo.sourceUrl, {
+                    credentials: 'same-origin',
+                    headers: { Accept: photo.mimeType || 'application/octet-stream' },
+                });
+
+                if (!sourceResponse.ok) {
+                    throw new Error('تعذر قراءة إحدى صور iPhone المحفوظة.');
+                }
+
+                const sourceBlob = await sourceResponse.blob();
+                const sourceFile = new File(
+                    [sourceBlob],
+                    photo.fileName || 'child-photo.heic',
+                    { type: photo.mimeType || 'image/heic' },
+                );
+                const prepared = await prepareImageForUpload(sourceFile, {
+                    maxLongEdge: Number(config.maxLongEdge || 2560),
+                    jpegQuality: Number(config.jpegQuality || 0.9),
+                });
+                const payload = new FormData();
+                payload.append('prepared_photo', prepared);
+                const uploadResponse = await fetch(photo.uploadUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        Accept: 'application/json',
+                    },
+                    body: payload,
+                });
+
+                if (!uploadResponse.ok) {
+                    const body = await uploadResponse.json().catch(() => ({}));
+                    throw new Error(body.message || 'تعذر حفظ النسخة المتوافقة من صورة iPhone.');
+                }
+            }
+
+            recovered = true;
+            submit.textContent = 'جاري بدء المحاولة...';
+            form.requestSubmit();
+        } catch (recoveryError) {
+            working = false;
+            submit.disabled = false;
+            submit.textContent = 'تجهيز صور iPhone وإعادة المحاولة';
+
+            if (error) {
+                error.textContent = recoveryError.message || 'تعذر تجهيز صور iPhone. أعد فتح الصفحة وحاول مرة أخرى.';
+                error.classList.remove('hidden');
+            }
+        }
+    });
 }

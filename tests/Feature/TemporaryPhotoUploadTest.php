@@ -113,12 +113,21 @@ class TemporaryPhotoUploadTest extends TestCase
         $response = $this->postJson(route('photo-uploads.store'), [
             'upload_session_token' => $sessionToken,
             'photo' => UploadedFile::fake()->createWithContent('iphone-photo.heic', $heicHeader),
+            'prepared_photo' => $this->tinyPngUpload('iphone-photo-ai-input.png'),
         ])->assertCreated();
 
         $upload = TemporaryPhotoUpload::where('public_id', $response->json('id'))->firstOrFail();
         $this->assertSame('image/heic', $upload->mime_type);
         $this->assertStringEndsWith('.heic', $upload->path);
+        $this->assertSame('image/png', $upload->prepared_mime_type);
+        $this->assertStringEndsWith('-ai-input.png', $upload->prepared_path);
+        $this->assertStringContainsString('variant=prepared', $response->json('preview_url'));
         Storage::disk('local')->assertExists($upload->path);
+        Storage::disk('local')->assertExists($upload->prepared_path);
+
+        $this->get($response->json('preview_url'))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
     }
 
     public function test_temp_uploads_are_limited_per_upload_session(): void

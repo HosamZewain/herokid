@@ -59,10 +59,16 @@ class ChildIdentityAttemptService
             ]);
 
             foreach ($photos as $photo) {
+                $inputDisk = $photo->ai_input_path ? ($photo->ai_input_disk ?: $photo->disk) : $photo->disk;
+                $inputPath = $photo->ai_input_path ?: $photo->path;
+                $inputMimeType = $photo->ai_input_path ? $photo->ai_input_mime_type : $photo->mime_type;
+                $inputChecksum = $photo->ai_input_path ? $photo->ai_input_checksum : $photo->checksum;
+
                 $attempt->photos()->attach($photo->id, [
-                    'disk' => $photo->disk,
-                    'path' => $photo->path,
-                    'checksum' => $photo->checksum,
+                    'disk' => $inputDisk,
+                    'path' => $inputPath,
+                    'mime_type' => $inputMimeType,
+                    'checksum' => $inputChecksum,
                     'sort_order' => $photo->sort_order,
                     'created_at' => now(),
                     'updated_at' => now(),

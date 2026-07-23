@@ -284,6 +284,31 @@ class ChildIdentityController extends Controller
         return back()->with('success', 'تمت إزالة الصورة من الطلب مع الاحتفاظ بسجلها الآمن.');
     }
 
+    public function storePhotoAiInput(
+        Request $request,
+        ChildIdentityRequest $identity,
+        ChildIdentityPhoto $photo,
+        ChildIdentityAccessService $access,
+        ChildIdentityPhotoService $photos,
+        ChildIdentityEventLogger $events,
+    ) {
+        $this->authorizeIdentity($identity, $request, $access);
+        $this->ensureCustomerMutable($identity);
+        abort_unless($photo->child_identity_request_id === $identity->id, 404);
+        $request->validate([
+            'prepared_photo' => ['required', 'file', 'max:15360'],
+        ]);
+        $prepared = $photos->storeAiInputDerivative($photo, $request->file('prepared_photo'));
+        $events->record(
+            $identity,
+            'photo.ai_input_prepared',
+            'تم تجهيز نسخة متوافقة من صورة iPhone مع الاحتفاظ بالصورة الأصلية.',
+            ['photo_id' => $photo->id, 'ai_input_mime_type' => $prepared->ai_input_mime_type],
+        );
+
+        return response()->json(['message' => 'تم تجهيز الصورة للمحاولة الجديدة.']);
+    }
+
     public function generate(
         Request $request,
         ChildIdentityRequest $identity,

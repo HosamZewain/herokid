@@ -100,8 +100,9 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
                 ->get()
                 ->map(function ($photo): string {
                     $contents = Storage::disk($photo->pivot->disk)->get($photo->pivot->path);
+                    $mimeType = $photo->pivot->mime_type ?: $photo->mime_type;
 
-                    return 'data:'.$photo->mime_type.';base64,'.base64_encode($contents);
+                    return 'data:'.$mimeType.';base64,'.base64_encode($contents);
                 })
                 ->all();
             $result = $client->generate(new GptImageRequest(

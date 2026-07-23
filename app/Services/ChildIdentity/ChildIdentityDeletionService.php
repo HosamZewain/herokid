@@ -79,12 +79,20 @@ class ChildIdentityDeletionService
     ): void {
         $identity->load(['photos', 'attempts']);
         $media = $identity->photos
-            ->map(fn ($photo) => [
-                'disk' => $photo->disk,
-                'path' => $photo->path,
-                'checksum' => $photo->checksum,
-                'kind' => 'original',
-            ])
+            ->flatMap(fn ($photo) => collect([
+                [
+                    'disk' => $photo->disk,
+                    'path' => $photo->path,
+                    'checksum' => $photo->checksum,
+                    'kind' => 'original',
+                ],
+                $photo->ai_input_path ? [
+                    'disk' => $photo->ai_input_disk ?: $photo->disk,
+                    'path' => $photo->ai_input_path,
+                    'checksum' => $photo->ai_input_checksum,
+                    'kind' => 'ai_input',
+                ] : null,
+            ])->filter())
             ->merge($identity->attempts->flatMap(fn ($attempt) => collect([
                 $attempt->output_storage_path ? [
                     'disk' => $attempt->output_disk ?: 'local',

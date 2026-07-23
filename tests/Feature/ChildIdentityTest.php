@@ -101,6 +101,101 @@ class ChildIdentityTest extends TestCase
         $this->assertDatabaseHas('child_identity_events', ['event_type' => 'photo.removed']);
     }
 
+    public function test_heic_original_is_retained_while_generation_uses_the_browser_prepared_derivative(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        $this->ageRanges();
+        $this->configuredOpenAi();
+        $this->get(route('child-identity.index'))->assertOk();
+        $uploadToken = (string) session('photo_upload.token');
+        $heicHeader = pack('N', 24).'ftypheic'.pack('N', 0).'heicmif1';
+
+        $heicId = $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $uploadToken,
+            'upload_batch_token' => 'heic-identity-batch',
+            'photo' => UploadedFile::fake()->createWithContent('iphone-photo.heic', $heicHeader),
+            'prepared_photo' => $this->tinyPng('iphone-photo-ai-input.png'),
+        ])->assertCreated()->json('id');
+        $pngId = $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $uploadToken,
+            'upload_batch_token' => 'heic-identity-batch',
+            'photo' => $this->tinyPng('second-photo.png'),
+        ])->assertCreated()->json('id');
+
+        $this->post(
+            route('child-identity.store'),
+            $this->startPayload($uploadToken, [$heicId, $pngId]),
+        )->assertSessionDoesntHaveErrors();
+
+        $identity = ChildIdentityRequest::with(['photos', 'attempts.photos'])->firstOrFail();
+        $heicPhoto = $identity->photos->firstWhere('mime_type', 'image/heic');
+        $attempt = $identity->attempts->firstOrFail();
+        $attemptHeicPhoto = $attempt->photos->firstWhere('id', $heicPhoto->id);
+
+        $this->assertNotNull($heicPhoto);
+        $this->assertStringEndsWith('.heic', $heicPhoto->path);
+        $this->assertSame('image/png', $heicPhoto->ai_input_mime_type);
+        $this->assertStringContainsString('/ai-inputs/', $heicPhoto->ai_input_path);
+        Storage::disk('local')->assertExists($heicPhoto->path);
+        Storage::disk('local')->assertExists($heicPhoto->ai_input_path);
+        $this->assertSame($heicPhoto->ai_input_path, $attemptHeicPhoto->pivot->path);
+        $this->assertSame('image/png', $attemptHeicPhoto->pivot->mime_type);
+
+        Http::fake([
+            'https://api.openai.com/v1/images/edits' => Http::response([
+                'id' => 'img_heic_derivative_success',
+                'data' => [['b64_json' => base64_encode($this->tinyPngContents())]],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 20],
+            ], 200, ['x-request-id' => 'req_heic_derivative']),
+        ]);
+
+        $this->runJob($attempt);
+
+        $this->assertSame('succeeded', $attempt->fresh()->status, (string) $attempt->fresh()->technical_error);
+    }
+
+    public function test_failed_legacy_heic_request_can_prepare_a_derivative_without_replacing_the_original(): void
+    {
+        Storage::fake('local');
+        $identity = $this->createPublicIdentity();
+        $originalPath = 'child-identities/'.$identity->uuid.'/originals/legacy-iphone.heic';
+        $heicHeader = pack('N', 24).'ftypheic'.pack('N', 0).'heicmif1';
+        Storage::disk('local')->put($originalPath, $heicHeader);
+        $photo = $identity->photos()->create([
+            'disk' => 'local',
+            'path' => $originalPath,
+            'original_filename' => 'legacy-iphone.heic',
+            'mime_type' => 'image/heic',
+            'file_size' => strlen($heicHeader),
+            'checksum' => hash('sha256', $heicHeader),
+            'sort_order' => 1,
+            'upload_status' => 'uploaded',
+            'validation_status' => 'valid',
+        ]);
+        $identity->forceFill(['status' => 'generation_failed'])->save();
+
+        $this->get(route('child-identity.show', $identity->uuid))
+            ->assertOk()
+            ->assertSee('تجهيز صور iPhone وإعادة المحاولة')
+            ->assertSee('data-identity-heic-recovery', false)
+            ->assertSee(route('child-identity.photos.ai-input', [$identity->uuid, $photo]), false);
+
+        $this->postJson(route('child-identity.photos.ai-input', [$identity->uuid, $photo]), [
+            'prepared_photo' => $this->tinyPng('legacy-ai-input.png'),
+        ])->assertOk();
+
+        $photo->refresh();
+        Storage::disk('local')->assertExists($originalPath);
+        Storage::disk('local')->assertExists($photo->ai_input_path);
+        $this->assertSame($originalPath, $photo->path);
+        $this->assertSame('image/png', $photo->ai_input_mime_type);
+        $this->assertDatabaseHas('child_identity_events', [
+            'child_identity_request_id' => $identity->id,
+            'event_type' => 'photo.ai_input_prepared',
+        ]);
+    }
+
     public function test_rejected_upload_is_quarantined_and_retained_for_admin_history(): void
     {
         Storage::fake('local');

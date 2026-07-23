@@ -7,6 +7,24 @@
         $latest = $identity->attempts->sortByDesc('attempt_number')->first();
         $approvedAttempt = $identity->approvedAttempt;
         $isWorking = $identity->attempts->contains(fn($attempt) => in_array($attempt->status, ['pending', 'processing'], true));
+        $recoverableHeicPhotos = $identity->photos
+            ->filter(fn($photo) => $photo->validation_status === 'valid'
+                && !$photo->ai_input_path
+                && (str_contains(strtolower($photo->mime_type), 'heic') || str_contains(strtolower($photo->mime_type), 'heif')));
+        $heicRecoveryConfig = [
+            'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
+            'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90) / 100,
+            'photos' => $recoverableHeicPhotos->map(fn($photo) => [
+                'sourceUrl' => $media['photos'][$photo->id] ?? null,
+                'uploadUrl' => route('child-identity.photos.ai-input', [$identity->uuid, $photo]),
+                'mimeType' => $photo->mime_type,
+                'fileName' => $photo->original_filename,
+            ])->values()->all(),
+        ];
+        $heicRecoveryJson = json_encode(
+            $heicRecoveryConfig,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
         $selectedCategoryStories = $identity->selected_story_category_id
             ? $stories->filter(fn($story) => $story->categories->contains('id', $identity->selected_story_category_id))
             : collect();
@@ -85,10 +103,19 @@
                     <span class="inline-flex rounded-full bg-red-100 px-4 py-2 text-sm font-black text-red-700">لم تكتمل المحاولة</span>
                     <h2 class="mt-4 text-2xl font-black text-slate-950">تعذر إنشاء الهوية هذه المرة</h2>
                     <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">{{ $latest?->safe_error_message ?: 'حدث خطأ مؤقت. الصور محفوظة ولن تحتاج إلى رفعها مرة أخرى.' }}</p>
-                    <form method="POST" action="{{ route('child-identity.generate', $identity->uuid) }}" class="mx-auto mt-6 max-w-md">
+                    <form method="POST" action="{{ route('child-identity.generate', $identity->uuid) }}"
+                          class="mx-auto mt-6 max-w-md"
+                          @if($recoverableHeicPhotos->isNotEmpty()) data-identity-heic-recovery @endif>
                         @csrf
                         <input type="hidden" name="idempotency_key" value="{{ \Illuminate\Support\Str::uuid() }}">
-                        <button class="w-full rounded-2xl bg-indigo-600 px-6 py-4 font-black text-white">إعادة المحاولة بنفس الصور</button>
+                        @if($recoverableHeicPhotos->isNotEmpty())
+                            <script type="application/json" data-identity-heic-recovery-config>{!! $heicRecoveryJson !!}</script>
+                        @endif
+                        <button type="submit" class="w-full rounded-2xl bg-indigo-600 px-6 py-4 font-black text-white disabled:opacity-60">
+                            {{ $recoverableHeicPhotos->isNotEmpty() ? 'تجهيز صور iPhone وإعادة المحاولة' : 'إعادة المحاولة بنفس الصور' }}
+                        </button>
+                        <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
+                             data-identity-heic-recovery-error></div>
                     </form>
                 </section>
             @elseif($wizardStep === 'identity')

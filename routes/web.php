@@ -120,6 +120,9 @@ Route::prefix('child-identity')->name('child-identity.')->group(function (): voi
     Route::post('{identity:uuid}/photos', [ChildIdentityController::class, 'uploadPhoto'])
         ->middleware('throttle:20,1')
         ->name('photos.store');
+    Route::post('{identity:uuid}/photos/{photo}/ai-input', [ChildIdentityController::class, 'storePhotoAiInput'])
+        ->middleware('throttle:10,1')
+        ->name('photos.ai-input');
     Route::delete('{identity:uuid}/photos/{photo}', [ChildIdentityController::class, 'removePhoto'])->name('photos.destroy');
     Route::post('{identity:uuid}/generate', [ChildIdentityController::class, 'generate'])
         ->middleware('throttle:6,1')

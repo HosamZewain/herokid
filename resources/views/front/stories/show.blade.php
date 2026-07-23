@@ -494,6 +494,10 @@
                 }
 
                 async function optimizeImage(file) {
+                    if (window.HeroKidImageUpload?.prepare) {
+                        return window.HeroKidImageUpload.prepare(file, { maxLongEdge, jpegQuality });
+                    }
+
                     const type = file.type.toLowerCase();
                     if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) {
                         return file;
@@ -577,11 +581,23 @@
                 async function uploadItem(item) {
                     activeUploads++;
                     patchItem(item.id, { status: 'preparing', progress: 3, message: 'جاري تجهيز الصورة قبل الرفع...' });
-                    const file = await optimizeImage(item.file);
+                    let preparedFile;
+                    try {
+                        preparedFile = await optimizeImage(item.file);
+                    } catch (conversionError) {
+                        activeUploads = Math.max(0, activeUploads - 1);
+                        patchItem(item.id, {
+                            status: 'failed',
+                            progress: 0,
+                            message: conversionError.message || 'تعذر تجهيز الصورة قبل الرفع.',
+                        });
+                        pumpQueue();
+                        return;
+                    }
                     patchItem(item.id, { status: 'uploading', progress: 8, message: 'جاري رفع الصورة...' });
 
                     const formData = new FormData();
-                    formData.append('photo', file);
+                    formData.append('photo', preparedFile);
                     formData.append('upload_session_token', config.sessionToken);
                     formData.append('upload_batch_token', config.batchToken || '');
 

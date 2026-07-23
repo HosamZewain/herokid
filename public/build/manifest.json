@@ -1,6 +1,11 @@
 {
+  "_heic2any-DQxJzxPi.js": {
+    "file": "assets/heic2any-DQxJzxPi.js",
+    "name": "heic2any",
+    "isDynamicEntry": true
+  },
   "resources/css/app.css": {
-    "file": "assets/app-Dr_YXotL.css",
+    "file": "assets/app-BgXqg2xn.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -9,9 +14,12 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-CHt44IIe.js",
+    "file": "assets/app-iZ6p5iKP.js",
     "name": "app",
     "src": "resources/js/app.js",
-    "isEntry": true
+    "isEntry": true,
+    "dynamicImports": [
+      "_heic2any-DQxJzxPi.js"
+    ]
   }
 }
