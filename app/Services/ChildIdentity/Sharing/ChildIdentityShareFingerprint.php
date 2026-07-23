@@ -52,6 +52,7 @@ class ChildIdentityShareFingerprint
             'attempt' => $attempt?->id,
             'output_checksum' => $attempt?->output_checksum,
             'template' => $templateVersion,
+            'layout' => 'landscape-child-first-v2',
             'headline' => $this->settings->cardHeadline(),
             'cta' => $this->settings->cardCta(),
             'logo' => is_file($logoPath) ? hash_file('sha256', $logoPath) : null,

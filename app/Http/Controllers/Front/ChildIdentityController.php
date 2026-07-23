@@ -18,6 +18,7 @@ use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\ChildIdentity\ChildIdentityPhotoService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\ChildIdentity\Sharing\ChildIdentityReferralService;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareDisplayService;
 use App\Services\ChildIdentity\Sharing\ChildIdentitySharePresenter;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareSettings;
 use App\Services\Uploads\TemporaryPhotoUploadService;
@@ -181,9 +182,11 @@ class ChildIdentityController extends Controller
         ChildIdentitySettings $settings,
         ChildIdentityShareSettings $shareSettings,
         ChildIdentitySharePresenter $sharePresenter,
+        ChildIdentityShareDisplayService $shareDisplay,
     ) {
         $this->authorizeIdentity($identity, $request, $access);
         $identity->load(['photos', 'attempts', 'approvedAttempt', 'selectedCategory', 'selectedStory', 'share.generationAttempt']);
+        $shareDisplay->ensureCurrent($identity, $request);
         $media = [
             'photos' => $identity->photos->mapWithKeys(fn ($photo) => [
                 $photo->id => URL::temporarySignedRoute(

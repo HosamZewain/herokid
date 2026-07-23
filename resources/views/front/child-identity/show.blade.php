@@ -138,7 +138,7 @@
                     <div class="p-4 sm:p-6">
                         @if($approvedAttempt && isset($media['attempts'][$approvedAttempt->id]))
                             <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل المعتمدة"
-                                 class="mx-auto aspect-[4/5] w-full max-w-3xl rounded-2xl bg-slate-100 object-contain shadow-sm" referrerpolicy="no-referrer">
+                                 class="mx-auto aspect-[4/3] w-full max-w-4xl rounded-2xl bg-slate-100 object-contain shadow-sm" referrerpolicy="no-referrer">
                         @endif
                         @include('front.child-identity._share-section')
                         <a href="{{ route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'category']) }}"
@@ -211,7 +211,7 @@
                     </div>
                     <div class="mx-auto mt-6 grid max-w-3xl gap-4 sm:grid-cols-2">
                         @if($approvedAttempt && isset($media['attempts'][$approvedAttempt->id]))
-                            <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل" class="aspect-[4/5] w-full rounded-2xl bg-slate-100 object-contain" referrerpolicy="no-referrer">
+                            <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل" class="aspect-[4/3] w-full rounded-2xl bg-slate-100 object-contain" referrerpolicy="no-referrer">
                         @endif
                         @if($identity->selectedStory?->cover_url)
                             <img src="{{ $identity->selectedStory->cover_url }}" alt="{{ $identity->selectedStory->title }}" class="aspect-[4/3] w-full rounded-2xl object-cover">

@@ -12,7 +12,7 @@ use Mpdf\Output\Destination;
 class ChildIdentityShareCardGenerator
 {
     private const VARIANTS = [
-        'feed' => ['pixels' => [1080, 1350], 'mm' => [108, 135], 'image_mm' => [91, 77]],
+        'feed' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 72]],
         'story' => ['pixels' => [1080, 1920], 'mm' => [108, 192], 'image_mm' => [91, 105]],
         'og' => ['pixels' => [1200, 630], 'mm' => [120, 63], 'image_mm' => [69, 51]],
     ];
@@ -96,7 +96,11 @@ class ChildIdentityShareCardGenerator
         $identityWidth = (int) ($imageWidthMm * 10);
         $identityHeight = (int) ($imageHeightMm * 10);
         $identity = $this->normalizedImage($identityContents, $identityWidth, $identityHeight);
-        $logo = $this->normalizedLogo($logoContents, $variant === 'og' ? 210 : 230, $variant === 'story' ? 210 : 170);
+        $logo = $this->normalizedLogo(
+            $logoContents,
+            $variant === 'feed' ? 150 : ($variant === 'og' ? 210 : 230),
+            $variant === 'feed' ? 90 : ($variant === 'story' ? 210 : 170),
+        );
         $firstName = $displayFirstName
             ? $this->text->firstName($identityRequest->child_name)
             : '';
@@ -109,7 +113,28 @@ class ChildIdentityShareCardGenerator
         $canvas->newImage($widthPx, $heightPx, new \ImagickPixel('#f8f7ff'), 'jpeg');
         $this->drawAccent($canvas, $widthPx, $heightPx);
 
-        if ($variant === 'og') {
+        if ($variant === 'feed') {
+            $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 1015, 5);
+            $headlineBlock = $this->textBlock(
+                "<div>{$headline}{$nameLine}</div>",
+                840,
+                88,
+                27,
+                '#312e81',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($headlineBlock, \Imagick::COMPOSITE_OVER, 100, 2);
+            $this->framedIdentity($canvas, $identity, 60, 100, $identityWidth, $identityHeight);
+            $ctaBlock = $this->textBlock(
+                "<div>{$cta} • <span style=\"direction:ltr\">hero-kid.com</span></div>",
+                900,
+                42,
+                19,
+                '#4f46e5',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 150, 850);
+        } elseif ($variant === 'og') {
             $this->roundedPanel($canvas, 735, 20, 445, 590, '#4f46e5', 38);
             $this->framedIdentity($canvas, $identity, 35, 60, $identityWidth, $identityHeight);
             $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 850, 38);
@@ -189,16 +214,25 @@ class ChildIdentityShareCardGenerator
 
     private function normalizedImage(string $contents, int $width, int $height): \Imagick
     {
+        $source = new \Imagick;
+        $source->readImageBlob($contents);
+        $source->setIteratorIndex(0);
+        $source->autoOrient();
+        $source->setImageBackgroundColor('#ffffff');
+        $source = $source->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+        $source->thumbnailImage($width, $height, true, true);
+
         $image = new \Imagick;
-        $image->readImageBlob($contents);
-        $image->setIteratorIndex(0);
-        $image->autoOrient();
-        $image->setImageBackgroundColor('#ffffff');
-        $image = $image->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
-        $image->cropThumbnailImage($width, $height);
-        $image->setImageFormat('jpeg');
+        $image->newImage($width, $height, new \ImagickPixel('#ffffff'), 'jpeg');
+        $image->compositeImage(
+            $source,
+            \Imagick::COMPOSITE_OVER,
+            (int) (($width - $source->getImageWidth()) / 2),
+            (int) (($height - $source->getImageHeight()) / 2),
+        );
         $image->setImageCompressionQuality(92);
         $image->stripImage();
+        $source->clear();
 
         return $image;
     }

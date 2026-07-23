@@ -49,6 +49,7 @@ class ChildIdentitySharingTest extends TestCase
             ->assertSee('واتساب')
             ->assertSee('فيسبوك')
             ->assertSee('تحميل')
+            ->assertSee('شارك صورة هوية طفلك مع عائلتك واصدقائك')
             ->assertDontSee('خلّي أصحابك يجربوا HeroKid')
             ->assertDontSee('موافق، أظهر أزرار المشاركة')
             ->assertDontSee('data-share-payload=', false);
@@ -212,7 +213,7 @@ class ChildIdentitySharingTest extends TestCase
         $paths = app(ChildIdentityShareCardGenerator::class)->generate($share, 1);
 
         foreach ([
-            'feed' => [1080, 1350],
+            'feed' => [1200, 900],
             'story' => [1080, 1920],
             'og' => [1200, 630],
         ] as $variant => $expected) {
@@ -226,6 +227,31 @@ class ChildIdentitySharingTest extends TestCase
             $image->clear();
         }
         Http::assertNothingSent();
+    }
+
+    public function test_opening_an_identity_refreshes_an_old_public_card_to_the_landscape_layout(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity(900, 600);
+        $share = $this->readyShare($identity);
+        $oldVersion = $share->generation_version;
+        $oldFingerprint = $share->generated_fingerprint;
+
+        $this->withSession(['child_identity_grants' => [$identity->uuid]])
+            ->get(route('child-identity.show', $identity->uuid))
+            ->assertOk();
+
+        $share->refresh();
+        $this->assertSame($oldVersion + 1, $share->generation_version);
+        $this->assertSame('ready', $share->status);
+        $this->assertNotSame($oldFingerprint, $share->generated_fingerprint);
+        $this->assertSame($share->card_fingerprint, $share->generated_fingerprint);
+
+        $feed = new \Imagick;
+        $feed->readImageBlob(Storage::disk('local')->get($share->feed_card_path));
+        $this->assertSame(1200, $feed->getImageWidth());
+        $this->assertSame(900, $feed->getImageHeight());
+        $feed->clear();
     }
 
     public function test_referral_is_first_touch_and_funnel_aggregates_are_idempotent(): void

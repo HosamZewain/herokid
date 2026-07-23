@@ -11,19 +11,24 @@
         ];
     @endphp
 
-    <div class="mx-auto mt-3 flex w-full max-w-xl flex-wrap items-center justify-center gap-2"
+    <p class="mt-4 text-center text-sm font-black text-slate-700">
+        شارك صورة هوية طفلك مع عائلتك واصدقائك
+    </p>
+    <div class="mx-auto mt-2 flex w-full max-w-xl flex-wrap items-center justify-center gap-2"
          data-identity-share
          @if($shareJson) data-share-payload="{{ $shareJson }}" @endif>
         @if($shareReady)
             @if($shareSettings->channelEnabled('whatsapp'))
                 <button type="button" data-share-action="whatsapp"
-                        class="min-h-10 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">
+                        class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">
+                    <img src="{{ asset('images/icons/whatsapp-white.svg') }}" alt="" class="h-4 w-4" aria-hidden="true">
                     واتساب
                 </button>
             @endif
             @if($shareSettings->channelEnabled('facebook'))
                 <button type="button" data-share-action="facebook"
-                        class="min-h-10 rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white">
+                        class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-sm font-black text-white">
+                    <img src="{{ asset('images/icons/facebook-white.svg') }}" alt="" class="h-4 w-4" aria-hidden="true">
                     فيسبوك
                 </button>
             @endif
@@ -41,7 +46,12 @@
                           @if($action !== 'download') target="_blank" @endif>
                         @csrf
                         <input type="hidden" name="share_action" value="{{ $action }}">
-                        <button class="min-h-10 rounded-xl px-4 py-2 text-sm font-black {{ $classes }}">
+                        <button class="inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-black {{ $classes }}">
+                            @if($action === 'whatsapp')
+                                <img src="{{ asset('images/icons/whatsapp-white.svg') }}" alt="" class="h-4 w-4" aria-hidden="true">
+                            @elseif($action === 'facebook')
+                                <img src="{{ asset('images/icons/facebook-white.svg') }}" alt="" class="h-4 w-4" aria-hidden="true">
+                            @endif
                             {{ $label }}
                         </button>
                     </form>
