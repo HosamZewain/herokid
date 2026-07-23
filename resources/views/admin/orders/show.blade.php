@@ -76,6 +76,26 @@
                 </div>
             @endif
 
+            @if($order->childIdentityRequest)
+                <div class="rounded-2xl border border-fuchsia-200 bg-gradient-to-l from-fuchsia-50 to-indigo-50 p-5 text-right">
+                    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                        <div>
+                            <p class="text-xs font-black text-fuchsia-700">هوية طفل مرتبطة بهذا الطلب</p>
+                            <h3 class="mt-1 text-lg font-black text-slate-900">{{ $order->childIdentityRequest->child_name }} • المحاولة المعتمدة {{ $order->childIdentityApprovedAttempt?->attempt_number ?: '—' }}</h3>
+                            <p class="mt-1 text-xs text-slate-500">
+                                {{ $order->childIdentityRequest->photos->count() }} صور أصلية • {{ $order->childIdentityRequest->attempts->count() }} محاولات
+                                @can('child_identities.view_costs')
+                                    • التكلفة الداخلية {{ $order->childIdentityRequest->total_cost_usd !== null ? '$'.number_format((float) $order->childIdentityRequest->total_cost_usd, 6) : 'USD غير معروفة' }}
+                                @endcan
+                            </p>
+                        </div>
+                        @can('child_identities.view')
+                            <a href="{{ route('admin.child-identities.show', $order->childIdentityRequest->id) }}" class="rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white">فتح سجل الهوية الكامل</a>
+                        @endcan
+                    </div>
+                </div>
+            @endif
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 <!-- Left Column: Details -->

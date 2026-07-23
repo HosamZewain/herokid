@@ -183,6 +183,9 @@
                             <x-nav-link :href="route('home')" :active="request()->routeIs('home')">الرئيسية</x-nav-link>
                             <x-nav-link :href="route('shop.index')"
                                 :active="request()->routeIs('shop.*') || request()->routeIs('stories.*')">متجر القصص والمنتجات</x-nav-link>
+                            @if(setting('child_identity_enabled', '1') === '1')
+                                <x-nav-link :href="route('child-identity.index')" :active="request()->routeIs('child-identity.*')">اصنع هوية طفلك</x-nav-link>
+                            @endif
                             <x-nav-link :href="route('how-it-works')" :active="request()->routeIs('how-it-works')">كيف
                                 يعمل؟</x-nav-link>
                             <x-nav-link :href="route('pricing')"
@@ -261,6 +264,10 @@
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الرئيسية</a>
                 <a href="{{ route('shop.index') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">متجر القصص والمنتجات</a>
+                @if(setting('child_identity_enabled', '1') === '1')
+                    <a href="{{ route('child-identity.index') }}"
+                        class="block px-4 py-2 rounded-xl text-indigo-700 font-black hover:bg-indigo-50 transition">اصنع هوية طفلك مجانًا</a>
+                @endif
                 <a href="{{ route('how-it-works') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">كيف
                     يعمل؟</a>
@@ -376,6 +383,9 @@
                         <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">متجر القصص والمنتجات</a></li>
+                            @if(setting('child_identity_enabled', '1') === '1')
+                                <li><a href="{{ route('child-identity.index') }}" class="hover:text-white transition">اصنع هوية طفلك</a></li>
+                            @endif
                             <li><a href="{{ route('how-it-works') }}" class="hover:text-white transition">كيف يعمل؟</a>
                             </li>
                             <li><a href="{{ route('pricing') }}" class="hover:text-white transition">الأسعار</a></li>

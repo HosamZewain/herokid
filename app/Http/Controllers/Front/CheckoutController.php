@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChildIdentityRequest;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
@@ -10,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
@@ -21,8 +23,12 @@ use Illuminate\Validation\Rule;
 
 class CheckoutController extends Controller
 {
-    public function store(Request $request, TemporaryPhotoUploadService $photoUploads, StoryPricingService $storyPricing)
-    {
+    public function store(
+        Request $request,
+        TemporaryPhotoUploadService $photoUploads,
+        StoryPricingService $storyPricing,
+        ChildIdentityEventLogger $identityEvents,
+    ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
         ]);
@@ -78,7 +84,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, $identityEvents, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -91,6 +97,28 @@ class CheckoutController extends Controller
                         continue;
                     }
 
+                    $identity = null;
+
+                    if (! empty($item['child_identity_request_id'])) {
+                        $identity = ChildIdentityRequest::query()
+                            ->with(['approvedAttempt', 'validPhotos'])
+                            ->lockForUpdate()
+                            ->findOrFail($item['child_identity_request_id']);
+
+                        if ($identity->status === 'converted'
+                            || $identity->selected_story_id !== $story->id
+                            || $identity->approvedAttempt?->status !== 'succeeded'
+                            || $identity->validPhotos->count() < 2) {
+                            throw new \RuntimeException('Child identity cart item is no longer valid.');
+                        }
+                    }
+
+                    $childName = $identity ? $identity->child_name : $item['child_name'];
+                    $childAge = $identity ? $identity->child_age : $item['child_age'];
+                    $childGender = $identity ? $identity->gender : ($item['child_gender'] ?? null);
+                    $uploadedPhotos = $identity
+                        ? $identity->validPhotos->pluck('path')->values()->all()
+                        : ($item['uploaded_photos'] ?? []);
                     $currentPriceSnapshot = $storyPricing->snapshot($story);
                     $storyPrice = (float) ($item['story_price'] ?? $currentPriceSnapshot['effective_price']);
                     $storyRegularPrice = (float) ($item['story_regular_price'] ?? $currentPriceSnapshot['regular_price']);
@@ -105,9 +133,11 @@ class CheckoutController extends Controller
                         'user_id' => auth()->id(),
                         'parent_name' => $validated['parent_name'],
                         'story_id' => $story->id,
-                        'child_name' => $item['child_name'],
-                        'child_age' => $item['child_age'],
-                        'child_gender' => $item['child_gender'],
+                        'child_identity_request_id' => $identity?->id,
+                        'child_identity_approved_attempt_id' => $identity?->approved_attempt_id,
+                        'child_name' => $childName,
+                        'child_age' => $childAge,
+                        'child_gender' => $childGender,
                         'language' => $story->language,
                         'lesson' => $story->lesson_value,
                         'interests' => $item['interests'] ?? null,
@@ -136,7 +166,7 @@ class CheckoutController extends Controller
                             'delivery_fee' => $deliveryFee,
                             'total' => $subtotal + $deliveryFee,
                         ],
-                        'uploaded_photos' => $item['uploaded_photos'] ?? [],
+                        'uploaded_photos' => $uploadedPhotos,
                         'status' => 'new',
                     ]);
 
@@ -145,7 +175,7 @@ class CheckoutController extends Controller
                         'notes' => 'تم إنشاء الطلب بنجاح وسيتم مراجعته قريباً.',
                     ]);
 
-                    $photoUploads->markOrderAttached($item['uploaded_photos'] ?? [], $order);
+                    $photoUploads->markOrderAttached($identity ? [] : $uploadedPhotos, $order);
 
                     $storyOrderItem = $order->items()->create([
                         'item_type' => 'story',
@@ -165,10 +195,18 @@ class CheckoutController extends Controller
                         ],
                         'personalization_snapshot' => [
                             'cart_item_key' => $cartKey,
-                            'child_name' => $item['child_name'] ?? null,
-                            'child_age' => $item['child_age'] ?? null,
-                            'child_gender' => $item['child_gender'] ?? null,
-                            'uploaded_photos_count' => count($item['uploaded_photos'] ?? []),
+                            'child_name' => $childName,
+                            'child_age' => $childAge,
+                            'child_gender' => $childGender,
+                            'uploaded_photos_count' => count($uploadedPhotos),
+                            'child_identity' => $identity ? [
+                                'request_id' => $identity->id,
+                                'request_uuid' => $identity->uuid,
+                                'approved_attempt_id' => $identity->approved_attempt_id,
+                                'original_photo_ids' => $identity->validPhotos->pluck('id')->all(),
+                                'generation_cost_usd' => $identity->total_cost_usd,
+                                'billing_currency' => 'USD',
+                            ] : null,
                         ],
                     ]);
 
@@ -176,6 +214,32 @@ class CheckoutController extends Controller
                     $ordersByStoryCartKey[$cartKey] = $order;
                     $firstOrder ??= $order;
                     $orderIds[] = $order->id;
+
+                    if ($identity) {
+                        $fromStatus = $identity->status;
+                        $identity->forceFill([
+                            'status' => 'converted',
+                            'converted_order_id' => $order->id,
+                            'converted_at' => now(),
+                            'last_activity_at' => now(),
+                        ])->save();
+                        $identityEvents->record(
+                            $identity,
+                            'request.converted',
+                            'تم إنشاء طلب HeroKid عادي وربطه بهوية الطفل.',
+                            [
+                                'order_id' => $order->id,
+                                'order_number' => $order->order_number,
+                                'cart_item_key' => $cartKey,
+                            ],
+                            $identity->approvedAttempt,
+                            $order,
+                            actor: $request->user(),
+                            source: 'checkout',
+                            fromStatus: $fromStatus,
+                            toStatus: 'converted',
+                        );
+                    }
                 }
 
                 if ($storyItems->isEmpty() && $productItems->isNotEmpty()) {

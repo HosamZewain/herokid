@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChildIdentityRequest;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
-use App\Services\Pricing\StoryPricingService;
+use App\Services\Cart\StoryCartItemBuilder;
+use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
@@ -62,8 +64,12 @@ class CartController extends Controller
         ]);
     }
 
-    public function store(Request $request, Story $story, TemporaryPhotoUploadService $uploads, StoryPricingService $storyPricing)
-    {
+    public function store(
+        Request $request,
+        Story $story,
+        TemporaryPhotoUploadService $uploads,
+        StoryCartItemBuilder $itemBuilder,
+    ) {
         abort_unless($story->active, 404);
 
         $validator = Validator::make($request->all(), [
@@ -162,29 +168,8 @@ class CartController extends Controller
                 ->withErrors(['photo_upload_ids' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.']);
         }
 
-        $priceSnapshot = $storyPricing->snapshot($story);
         $cart = $this->cart();
-        $cart[$itemKey] = [
-            'key' => $itemKey,
-            'item_type' => 'story',
-            'story_id' => $story->id,
-            'story_title' => $story->title,
-            'story_slug' => $story->slug,
-            'story_price' => $priceSnapshot['effective_price'],
-            'story_regular_price' => $priceSnapshot['regular_price'],
-            'story_offer_applied' => $priceSnapshot['offer_applied'],
-            'story_offer_label' => $priceSnapshot['offer_label'],
-            'story_cover_url' => $story->cover_url,
-            'story_language' => $story->language,
-            'story_lesson' => $story->lesson_value,
-            'child_name' => $validated['child_name'],
-            'child_age' => $validated['child_age'],
-            'child_gender' => $validated['child_gender'],
-            'interests' => $validated['interests'] ?? null,
-            'gift_note' => $validated['gift_note'] ?? null,
-            'parent_notes' => $validated['parent_notes'] ?? null,
-            'uploaded_photos' => $photoPaths,
-        ];
+        $cart[$itemKey] = $itemBuilder->build($story, $itemKey, $validated, $photoPaths);
 
         session(['cart.items' => $cart]);
         session()->flash('upsell_story_key', $itemKey);
@@ -199,16 +184,30 @@ class CartController extends Controller
             ->with('success', 'تمت إضافة القصة إلى السلة. يمكنك اختيار قصة أخرى أو إتمام الطلب من السلة.');
     }
 
-    public function destroy(Request $request, string $key)
+    public function destroy(Request $request, string $key, ChildIdentityEventLogger $identityEvents)
     {
         $cart = $this->cart();
 
         if (isset($cart[$key])) {
             $item = $cart[$key];
 
-            foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
-                if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
-                    Storage::disk('local')->delete($photoPath);
+            if (empty($item['child_identity_request_id'])) {
+                foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
+                    if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
+                        Storage::disk('local')->delete($photoPath);
+                    }
+                }
+            } else {
+                $identity = ChildIdentityRequest::query()->find($item['child_identity_request_id']);
+
+                if ($identity?->status === 'in_cart') {
+                    $identity->forceFill(['status' => 'story_selected'])->save();
+                    $identityEvents->record(
+                        $identity,
+                        'cart.removed',
+                        'أزال ولي الأمر قصة الهوية من السلة وأصبح بإمكانه تعديل الاختيار مرة أخرى.',
+                        ['cart_item_key' => $key],
+                    );
                 }
             }
 

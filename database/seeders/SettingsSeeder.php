@@ -47,7 +47,6 @@ class SettingsSeeder extends Seeder
             // Operational
             ['key' => 'orders_open',        'value' => '1'],
             ['key' => 'maintenance_mode',   'value' => '0'],
-            ['key' => 'photo_delete_days',  'value' => '90'],
 
             // Editable page SEO and marketing copy
             ['key' => 'seo_home_title', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي'],

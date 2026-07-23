@@ -66,6 +66,7 @@ class AdminPermissionRegistry
             'sales_reports.view' => 'admin.sales-report.index',
             'visitor_carts.view' => 'admin.visitor-carts.index',
             'orders.view' => 'admin.orders.index',
+            'child_identities.view' => 'admin.child-identities.index',
             'stories.view' => 'admin.stories.index',
             'store.products.view' => 'admin.products.index',
             'store.categories.view' => 'admin.product-categories.index',

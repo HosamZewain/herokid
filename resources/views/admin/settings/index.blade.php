@@ -554,7 +554,7 @@
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b flex items-center gap-2">
                     <span class="text-xl">⚙️</span> إعدادات التشغيل
                 </h3>
-                <div class="grid grid-cols-2 gap-5">
+                <div class="grid gap-5">
                     <div class="flex items-center gap-3 p-4 border rounded-lg">
                         <input type="hidden" name="settings[orders_open]" value="0">
                         <input type="checkbox" name="settings[orders_open]" id="orders_open" value="1"
@@ -564,12 +564,6 @@
                             <label for="orders_open" class="text-sm font-bold text-gray-700">قبول الطلبات الجديدة</label>
                             <p class="text-xs text-gray-400">أوقف هذا إذا كنت في إجازة أو الطاقة ممتلئة</p>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">حذف الصور بعد (أيام)</label>
-                        <input type="number" name="settings[photo_delete_days]" value="{{ $s('photo_delete_days', 90) }}" min="30" max="365"
-                               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <p class="text-xs text-gray-400 mt-1">صور الأطفال تُحذف تلقائياً بعد هذا العدد من الأيام</p>
                     </div>
                 </div>
             </div>

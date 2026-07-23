@@ -20,16 +20,26 @@ class StoryProductionPrompt
 
     private const CHILD_IMAGES_END = '<!-- HERO_KID_CHILD_IMAGES_END -->';
 
+    private const APPROVED_IDENTITY_START = '<!-- HERO_KID_APPROVED_IDENTITY_START -->';
+
+    private const APPROVED_IDENTITY_END = '<!-- HERO_KID_APPROVED_IDENTITY_END -->';
+
     public static function forOrder(Order $order, bool $useOverride = true): string
     {
-        $order->loadMissing(['story', 'productionPromptOverride']);
+        $order->loadMissing(['story', 'productionPromptOverride', 'childIdentityApprovedAttempt']);
 
         if ($useOverride && $order->productionPromptOverride) {
-            return self::withCurrentChildImageReferences($order->productionPromptOverride->prompt_text, $order);
+            return self::withCurrentIdentityReferences(
+                self::withCurrentChildImageReferences($order->productionPromptOverride->prompt_text, $order),
+                $order,
+            );
         }
 
-        return self::withCurrentChildImageReferences(
-            self::renderForOrder($order, self::activeTemplate()),
+        return self::withCurrentIdentityReferences(
+            self::withCurrentChildImageReferences(
+                self::renderForOrder($order, self::activeTemplate()),
+                $order,
+            ),
             $order,
         );
     }
@@ -74,6 +84,7 @@ class StoryProductionPrompt
             'child_gender' => ['label' => 'جنس الطفل', 'example' => 'Girl'],
             'child_interests' => ['label' => 'اهتمامات الطفل كما كتبها ولي الأمر', 'example' => 'الرسم والفضاء'],
             'child_image_references' => ['label' => 'روابط صور الطفل الآمنة للإنتاج', 'example' => '1. https://example.com/orders/1/production-photos/0?...'],
+            'approved_child_identity_reference' => ['label' => 'رابط هوية الطفل المعتمدة', 'example' => 'https://example.com/orders/1/approved-identity?...'],
             'story_title' => ['label' => 'عنوان القصة المختارة', 'example' => 'رحلة القمر قبل النوم'],
             'story_age_range' => ['label' => 'الفئة العمرية للقصة', 'example' => '6-9 سنوات'],
             'story_short_description' => ['label' => 'وصف القصة القصير', 'example' => 'قصة هادئة قبل النوم'],
@@ -105,7 +116,7 @@ class StoryProductionPrompt
 
     private static function variablesForOrder(Order $order): array
     {
-        $order->loadMissing('story');
+        $order->loadMissing(['story', 'childIdentityApprovedAttempt']);
         $story = $order->story;
 
         return [
@@ -116,6 +127,7 @@ class StoryProductionPrompt
             'child_gender' => self::gender($order->child_gender),
             'child_interests' => self::rawValue($order->interests),
             'child_image_references' => self::childImageReferences($order),
+            'approved_child_identity_reference' => self::approvedIdentityReference($order),
             'story_title' => self::value($story?->title),
             'story_age_range' => self::value($story?->age_range),
             'story_short_description' => self::value($story?->short_desc),
@@ -220,5 +232,38 @@ class StoryProductionPrompt
         return rtrim($prompt)."\n\n## Current Child Image References\n"
             .'This managed list is updated automatically from the order photos.'
             ."\n\n".$references;
+    }
+
+    private static function approvedIdentityReference(Order $order): string
+    {
+        $attempt = $order->childIdentityApprovedAttempt;
+
+        if (! $attempt || $attempt->status !== 'succeeded' || ! $attempt->output_storage_path) {
+            return 'No approved child identity is linked to this order.';
+        }
+
+        return self::APPROVED_IDENTITY_START."\n"
+            .URL::signedRoute('orders.approved-child-identity', ['order' => $order])
+            ."\n".self::APPROVED_IDENTITY_END;
+    }
+
+    private static function withCurrentIdentityReferences(string $prompt, Order $order): string
+    {
+        $attempt = $order->childIdentityApprovedAttempt;
+
+        if (! $attempt || $attempt->status !== 'succeeded' || ! $attempt->output_storage_path) {
+            return $prompt;
+        }
+
+        $reference = self::approvedIdentityReference($order);
+        $pattern = '/'.preg_quote(self::APPROVED_IDENTITY_START, '/').'.*?'.preg_quote(self::APPROVED_IDENTITY_END, '/').'/s';
+
+        if (preg_match($pattern, $prompt) === 1) {
+            return preg_replace($pattern, $reference, $prompt, 1) ?? $prompt;
+        }
+
+        return rtrim($prompt)."\n\n## Approved Child Identity Reference\n"
+            .'Use this approved identity as a separate secure visual reference while retaining every original child photo above.'
+            ."\n\n".$reference;
     }
 }

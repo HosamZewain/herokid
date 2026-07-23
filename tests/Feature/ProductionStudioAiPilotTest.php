@@ -1243,13 +1243,14 @@ class ProductionStudioAiPilotTest extends TestCase
         Storage::fake('local');
         Storage::disk('local')->put('orders/photos/kid.png', $this->validPngBytes());
         $this->enableOpenAi('sk-openai-image-test');
+        $generatedBytes = $this->validPngBytes(24, 16, true);
 
         Http::fake([
             'https://api.openai.com/v1/images/edits' => Http::response([
                 'id' => 'img_test_123',
                 'created' => 1234567890,
                 'data' => [
-                    ['b64_json' => base64_encode('openai-generated-image-bytes')],
+                    ['b64_json' => base64_encode($generatedBytes)],
                 ],
                 'usage' => ['input_tokens' => 100, 'output_tokens' => 50, 'total_tokens' => 150],
             ]),
@@ -1291,7 +1292,7 @@ class ProductionStudioAiPilotTest extends TestCase
         $submitted = $job->fresh();
         $this->assertSame('processing', $submitted->status);
         $this->assertStringStartsWith('local://production-studio/projects/'.$project->id.'/openai-temp/', $submitted->external_response_url);
-        $this->assertStringNotContainsString(base64_encode('openai-generated-image-bytes'), json_encode($submitted->provider_response_json));
+        $this->assertStringNotContainsString(base64_encode($generatedBytes), json_encode($submitted->provider_response_json));
         $this->assertSame('b64_json', data_get($submitted->provider_response_json, 'output_source'));
 
         (new PollAiGenerationJob($job->id))->handle(app(AiProviderManager::class));

@@ -70,6 +70,16 @@ class Order extends Model
         return $this->hasOne(ProductionProject::class);
     }
 
+    public function childIdentityRequest()
+    {
+        return $this->belongsTo(ChildIdentityRequest::class)->withTrashed();
+    }
+
+    public function childIdentityApprovedAttempt()
+    {
+        return $this->belongsTo(ChildIdentityGenerationAttempt::class, 'child_identity_approved_attempt_id');
+    }
+
     public function deletedBy()
     {
         return $this->belongsTo(User::class, 'deleted_by_user_id');

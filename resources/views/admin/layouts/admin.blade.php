@@ -62,7 +62,7 @@
                 $canOperations = auth()->user()->hasAnyPermission([
                     'orders.view', 'visitor_carts.view', 'stories.view', 'story_categories.view', 'store.products.view',
                     'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
-                    'production_studio.view',
+                    'production_studio.view', 'child_identities.view',
                 ]);
                 $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view', 'sales_reports.view', 'visitor_carts.view']);
                 $canContent = auth()->user()->hasAnyPermission([
@@ -71,7 +71,7 @@
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
                     'settings.pricing.view', 'settings.ai_providers.view', 'settings.notifications.view', 'admin_users.view', 'admin_users.create',
-                    'admin_users.permissions.manage', 'activity_logs.view',
+                    'admin_users.permissions.manage', 'activity_logs.view', 'child_identities.settings',
                 ]);
             @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
@@ -102,6 +102,9 @@
                                 <a href="{{ route('admin.production-studio.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.production-studio.*') ? $activeLink : $idleLink }}">استوديو الإنتاج</a>
                             @endcan
                         @endif
+                        @can('child_identities.view')
+                            <a href="{{ route('admin.child-identities.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.*') && !request()->routeIs('admin.child-identities.settings.*') ? $activeLink : $idleLink }}">هويات الأطفال</a>
+                        @endcan
                         @can('stories.view')
                             <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>
                         @endcan
@@ -143,6 +146,9 @@
                         @endcan
                         @can('settings.ai_providers.view')
                             <a href="{{ route('admin.settings.ai-providers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.ai-providers.*') ? $activeLink : $idleLink }}">مزودو الذكاء الاصطناعي</a>
+                        @endcan
+                        @can('child_identities.settings')
+                            <a href="{{ route('admin.child-identities.settings.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.settings.*') ? $activeLink : $idleLink }}">إعدادات هويات الأطفال</a>
                         @endcan
                         @can('settings.notifications.view')
                             <a href="{{ route('admin.settings.notifications.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.notifications.*') ? $activeLink : $idleLink }}">مركز التنبيهات</a>

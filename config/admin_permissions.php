@@ -19,6 +19,11 @@ return [
             'name_en' => 'Production Studio',
             'sort_order' => 25,
         ],
+        'child_identities' => [
+            'name_ar' => 'هويات الأطفال',
+            'name_en' => 'Child Identities',
+            'sort_order' => 27,
+        ],
         'customers' => [
             'name_ar' => 'العملاء',
             'name_en' => 'Customers',
@@ -57,6 +62,15 @@ return [
     ],
 
     'permissions' => [
+        'child_identities.view' => ['group_key' => 'child_identities', 'name_ar' => 'عرض هويات الأطفال', 'name_en' => 'View child identities', 'description_ar' => 'عرض طلبات هويات الأطفال وسجلها.', 'description_en' => 'View child identity requests and history.', 'sort_order' => 10, 'sensitive' => true],
+        'child_identities.view_media' => ['group_key' => 'child_identities', 'name_ar' => 'عرض صور هويات الأطفال', 'name_en' => 'View child identity media', 'description_ar' => 'عرض الصور الأصلية والمخرجات الخاصة.', 'description_en' => 'View private originals and generated outputs.', 'sort_order' => 20, 'sensitive' => true],
+        'child_identities.view_costs' => ['group_key' => 'child_identities', 'name_ar' => 'عرض تكاليف هويات الأطفال', 'name_en' => 'View child identity costs', 'description_ar' => 'عرض تكلفة محاولات التوليد بالدولار.', 'description_en' => 'View generation attempt cost in USD.', 'sort_order' => 30, 'sensitive' => true],
+        'child_identities.generate' => ['group_key' => 'child_identities', 'name_ar' => 'توليد هويات الأطفال', 'name_en' => 'Generate child identities', 'description_ar' => 'تشغيل وإعادة تشغيل توليد الهوية من الإدارة.', 'description_en' => 'Run and retry identity generation from admin.', 'sort_order' => 40, 'sensitive' => true],
+        'child_identities.approve' => ['group_key' => 'child_identities', 'name_ar' => 'اعتماد هويات الأطفال', 'name_en' => 'Approve child identities', 'description_ar' => 'اعتماد أو رفض وتغيير محاولة الهوية المعتمدة.', 'description_en' => 'Approve, reject, or replace the approved identity.', 'sort_order' => 50, 'sensitive' => true],
+        'child_identities.delete' => ['group_key' => 'child_identities', 'name_ar' => 'حذف هويات الأطفال مؤقتًا', 'name_en' => 'Soft delete child identities', 'description_ar' => 'نقل طلب الهوية إلى سلة المحذوفات مع الاحتفاظ بالملفات.', 'description_en' => 'Move identity requests to Trash while retaining files.', 'sort_order' => 60, 'sensitive' => true],
+        'child_identities.restore' => ['group_key' => 'child_identities', 'name_ar' => 'استعادة هويات الأطفال', 'name_en' => 'Restore child identities', 'description_ar' => 'استعادة طلبات الهوية من سلة المحذوفات.', 'description_en' => 'Restore identity requests from Trash.', 'sort_order' => 70, 'sensitive' => true],
+        'child_identities.force_delete' => ['group_key' => 'child_identities', 'name_ar' => 'الحذف النهائي لهويات الأطفال', 'name_en' => 'Permanently delete child identities', 'description_ar' => 'حذف السجلات والملفات نهائيًا بإذن مرتفع منفصل.', 'description_en' => 'Permanently delete records and media with separate elevated permission.', 'sort_order' => 80, 'sensitive' => true],
+        'child_identities.settings' => ['group_key' => 'child_identities', 'name_ar' => 'إعدادات هويات الأطفال', 'name_en' => 'Manage child identity settings', 'description_ar' => 'تحديث إعدادات التوليد والبرومبت.', 'description_en' => 'Manage identity generation and prompt settings.', 'sort_order' => 90, 'sensitive' => true],
         'dashboard.view' => [
             'group_key' => 'dashboard',
             'name_ar' => 'عرض لوحة القيادة',

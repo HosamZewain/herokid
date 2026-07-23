@@ -5,6 +5,9 @@ use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ChildIdentityController as AdminChildIdentityController;
+use App\Http\Controllers\Admin\ChildIdentityMediaController as AdminChildIdentityMediaController;
+use App\Http\Controllers\Admin\ChildIdentitySettingsController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -31,6 +34,8 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CheckoutController;
+use App\Http\Controllers\Front\ChildIdentityController;
+use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\PageController;
 use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\ShopController;
@@ -96,6 +101,36 @@ Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
 Route::get('/shop/product/{product:slug}', [ShopController::class, 'show'])->name('shop.product.show');
 Route::get('/shop/{category:slug}', [ShopController::class, 'category'])->name('shop.category');
 
+// Create Your Child Identity — private, resumable, and independent from production.
+Route::prefix('child-identity')->name('child-identity.')->group(function (): void {
+    Route::get('/', [ChildIdentityController::class, 'index'])->name('index');
+    Route::post('/', [ChildIdentityController::class, 'store'])->middleware('throttle:10,1')->name('store');
+    Route::get('resume/{identity:uuid}/{token}', [ChildIdentityController::class, 'resume'])
+        ->middleware('throttle:20,1')
+        ->name('resume');
+    Route::get('{identity:uuid}', [ChildIdentityController::class, 'show'])->name('show');
+    Route::post('{identity:uuid}/photos', [ChildIdentityController::class, 'uploadPhoto'])
+        ->middleware('throttle:20,1')
+        ->name('photos.store');
+    Route::delete('{identity:uuid}/photos/{photo}', [ChildIdentityController::class, 'removePhoto'])->name('photos.destroy');
+    Route::post('{identity:uuid}/generate', [ChildIdentityController::class, 'generate'])
+        ->middleware('throttle:6,1')
+        ->name('generate');
+    Route::get('{identity:uuid}/poll', [ChildIdentityController::class, 'poll'])
+        ->middleware('throttle:60,1')
+        ->name('poll');
+    Route::post('{identity:uuid}/attempts/{attempt}/approve', [ChildIdentityController::class, 'approve'])->name('approve');
+    Route::post('{identity:uuid}/category', [ChildIdentityController::class, 'selectCategory'])->name('category');
+    Route::post('{identity:uuid}/story', [ChildIdentityController::class, 'selectStory'])->name('story');
+    Route::post('{identity:uuid}/cart', [ChildIdentityController::class, 'addToCart'])->name('cart');
+    Route::get('{identity:uuid}/media/photos/{photo}', [ChildIdentityMediaController::class, 'photo'])
+        ->middleware('signed')
+        ->name('media.photo');
+    Route::get('{identity:uuid}/media/attempts/{attempt}', [ChildIdentityMediaController::class, 'attempt'])
+        ->middleware('signed')
+        ->name('media.attempt');
+});
+
 // Cart and checkout routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::get('/photo-uploads/session', [TemporaryPhotoUploadController::class, 'session'])->name('photo-uploads.session');
@@ -131,6 +166,9 @@ Route::get('/orders/{order}/production-photos/{index}', [OrderController::class,
     ->middleware('signed')
     ->name('orders.production-photo')
     ->where('index', '[0-9]+');
+Route::get('/orders/{order}/approved-child-identity', [OrderController::class, 'serveApprovedChildIdentity'])
+    ->middleware('signed')
+    ->name('orders.approved-child-identity');
 
 // Static Pages
 // ── Dynamic Sitemap ──────────────────────────────────────────────────────────
@@ -255,6 +293,56 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('visitor-carts/{visitorCart}', [VisitorCartController::class, 'show'])
         ->middleware('permission:visitor_carts.view')
         ->name('visitor-carts.show');
+
+    Route::get('child-identities', [AdminChildIdentityController::class, 'index'])
+        ->middleware('permission:child_identities.view')
+        ->name('child-identities.index');
+    Route::get('child-identities/trash', [AdminChildIdentityController::class, 'index'])
+        ->middleware('permission:child_identities.view')
+        ->defaults('view', 'trash')
+        ->name('child-identities.trash');
+    Route::get('child-identities/settings', [ChildIdentitySettingsController::class, 'edit'])
+        ->middleware('permission:child_identities.settings')
+        ->name('child-identities.settings.edit');
+    Route::put('child-identities/settings', [ChildIdentitySettingsController::class, 'update'])
+        ->middleware('permission:child_identities.settings')
+        ->name('child-identities.settings.update');
+    Route::get('child-identities/{identity}', [AdminChildIdentityController::class, 'show'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.view')
+        ->name('child-identities.show');
+    Route::post('child-identities/{identity}/generate', [AdminChildIdentityController::class, 'generate'])
+        ->whereNumber('identity')
+        ->middleware(['permission:child_identities.generate', 'throttle:10,1'])
+        ->name('child-identities.generate');
+    Route::post('child-identities/{identity}/attempts/{attempt}/approve', [AdminChildIdentityController::class, 'approve'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.approve')
+        ->name('child-identities.attempts.approve');
+    Route::post('child-identities/{identity}/attempts/{attempt}/reject', [AdminChildIdentityController::class, 'reject'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.approve')
+        ->name('child-identities.attempts.reject');
+    Route::delete('child-identities/{identity}', [AdminChildIdentityController::class, 'destroy'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.delete')
+        ->name('child-identities.destroy');
+    Route::post('child-identities/{identity}/restore', [AdminChildIdentityController::class, 'restore'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.restore')
+        ->name('child-identities.restore');
+    Route::delete('child-identities/{identity}/force', [AdminChildIdentityController::class, 'forceDelete'])
+        ->whereNumber('identity')
+        ->middleware('permission:child_identities.force_delete')
+        ->name('child-identities.force-delete');
+    Route::get('child-identities/{identity}/media/photos/{photo}', [AdminChildIdentityMediaController::class, 'photo'])
+        ->whereNumber('identity')
+        ->middleware(['permission:child_identities.view_media', 'signed'])
+        ->name('child-identities.media.photo');
+    Route::get('child-identities/{identity}/media/attempts/{attempt}', [AdminChildIdentityMediaController::class, 'attempt'])
+        ->whereNumber('identity')
+        ->middleware(['permission:child_identities.view_media', 'signed'])
+        ->name('child-identities.media.attempt');
 
     Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
         ->middlewareFor(['index', 'show'], 'permission:stories.view')

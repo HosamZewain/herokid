@@ -37,6 +37,9 @@ class OrderController extends Controller
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
             'productionProject.assignedTo',
+            'childIdentityRequest.photos',
+            'childIdentityRequest.attempts',
+            'childIdentityApprovedAttempt',
         ]);
         $storyProductionPrompt = null;
         $globalStoryProductionPrompt = null;
@@ -205,6 +208,26 @@ class OrderController extends Controller
     public function serveProductionPhoto(Order $order, int $index)
     {
         return $this->photoResponse($order, $index);
+    }
+
+    public function serveApprovedChildIdentity(Order $order)
+    {
+        $attempt = $order->childIdentityApprovedAttempt;
+
+        abort_unless(
+            $attempt
+            && $attempt->status === 'succeeded'
+            && filled($attempt->output_storage_path)
+            && ! str_contains($attempt->output_storage_path, '..'),
+            404,
+        );
+        $disk = Storage::disk($attempt->output_disk ?: 'local');
+        abort_unless($disk->exists($attempt->output_storage_path), 404);
+
+        return response()->file($disk->path($attempt->output_storage_path), [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     private function photoResponse(Order $order, int $index)

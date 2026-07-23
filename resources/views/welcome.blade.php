@@ -737,7 +737,7 @@
                                 style="background: linear-gradient(135deg, #10b981, #06b6d4);">🛡️</div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-lg mb-1">خصوصية محمية</h3>
-                                <p class="text-slate-500 text-sm leading-relaxed">صور طفلك تُستخدم فقط لقصته ثم تُحذف تلقائياً بعد اكتمال الطلب.</p>
+                                <p class="text-slate-500 text-sm leading-relaxed">صور طفلك تُحفظ في تخزين خاص وتُستخدم فقط لتنفيذ الخدمة والطلب، ويمكنك ممارسة حقوق الحذف وفق سياسة الخصوصية.</p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
