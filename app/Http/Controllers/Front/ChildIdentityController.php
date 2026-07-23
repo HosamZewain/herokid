@@ -171,6 +171,7 @@ class ChildIdentityController extends Controller
         ChildIdentityRequest $identity,
         ChildIdentityAccessService $access,
         AgeRangeResolver $ageRanges,
+        ChildIdentitySettings $settings,
     ) {
         $this->authorizeIdentity($identity, $request, $access);
         $identity->load(['photos', 'attempts', 'approvedAttempt', 'selectedCategory', 'selectedStory']);
@@ -219,8 +220,10 @@ class ChildIdentityController extends Controller
             default => 'processing',
         };
 
+        $processingCopy = $settings->processingCopy();
+
         return response()
-            ->view('front.child-identity.show', compact('identity', 'media', 'stories', 'categories', 'wizardStep'))
+            ->view('front.child-identity.show', compact('identity', 'media', 'stories', 'categories', 'wizardStep', 'processingCopy'))
             ->header('Cache-Control', 'private, no-store, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('X-Robots-Tag', 'noindex, nofollow');

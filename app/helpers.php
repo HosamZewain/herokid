@@ -39,6 +39,21 @@ if (! function_exists('setting_array')) {
     }
 }
 
+if (! function_exists('homepage_section_enabled')) {
+    function homepage_section_enabled(string $section): bool
+    {
+        $definition = config("homepage.sections.{$section}");
+
+        if (! is_array($definition) || empty($definition['setting'])) {
+            return false;
+        }
+
+        $default = ($definition['default'] ?? true) ? '1' : '0';
+
+        return (string) setting($definition['setting'], $default) === '1';
+    }
+}
+
 if (! function_exists('arabic_number')) {
     function arabic_number(int|float|string|null $value): string
     {

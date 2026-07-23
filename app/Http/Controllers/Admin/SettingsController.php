@@ -21,11 +21,16 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $settingsInput = $request->input('settings', []);
+        $homepageSectionSettings = collect(config('homepage.sections', []))
+            ->pluck('setting')
+            ->filter()
+            ->values()
+            ->all();
         $before = Setting::whereIn('key', array_keys($settingsInput))
             ->pluck('value', 'key')
             ->toArray();
 
-        $request->validate([
+        $rules = [
             'settings' => 'required|array',
             'settings.site_name' => 'required|string|max:100',
             'settings.site_email' => 'required|email',
@@ -57,13 +62,25 @@ class SettingsController extends Controller
             'settings.production_layout_website' => 'nullable|string|max:255',
             'settings.production_back_cover_text' => 'nullable|string|max:1000',
             'settings.production_cover_subtitle_template' => 'nullable|string|max:255',
-        ]);
+            'settings.home_child_identity_title' => 'nullable|string|max:120',
+            'settings.home_child_identity_subtitle' => 'nullable|string|max:400',
+            'settings.home_child_identity_cta' => 'nullable|string|max:60',
+        ];
+
+        foreach ($homepageSectionSettings as $settingKey) {
+            $rules["settings.{$settingKey}"] = 'nullable|boolean';
+        }
+
+        $request->validate($rules);
 
         if ($request->has('settings.shop_enabled')) {
             $settingsInput['shop_enabled'] = $request->boolean('settings.shop_enabled') ? '1' : '0';
         }
 
-        foreach (['story_global_price_enabled', 'story_offer_enabled'] as $booleanSetting) {
+        foreach (array_merge(
+            ['story_global_price_enabled', 'story_offer_enabled'],
+            $homepageSectionSettings,
+        ) as $booleanSetting) {
             if (array_key_exists($booleanSetting, $settingsInput)) {
                 $settingsInput[$booleanSetting] = $request->boolean("settings.{$booleanSetting}") ? '1' : '0';
             }

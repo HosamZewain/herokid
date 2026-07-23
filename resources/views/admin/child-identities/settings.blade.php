@@ -27,6 +27,42 @@
                             @endforeach
                         </select>
                     </label>
+                    <div class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5 sm:col-span-2">
+                        <div class="mb-4">
+                            <h3 class="font-black text-indigo-950">نصوص شاشة انتظار إنشاء الهوية</h3>
+                            <p class="mt-1 text-xs leading-6 text-indigo-700">
+                                يمكنك تغيير جميع العناوين الموضحة للعميل أثناء المعالجة. استخدم
+                                <code dir="ltr">:child</code> لاسم الطفل و<code dir="ltr">:count</code> لعدد الصور.
+                            </p>
+                        </div>
+                        @php
+                            $processingFields = [
+                                'heading' => 'العنوان الرئيسي',
+                                'description' => 'الوصف الرئيسي',
+                                'received_title' => 'عنوان استلام البيانات والصور',
+                                'received_description' => 'وصف استلام الصور',
+                                'queued_title' => 'عنوان تجهيز الطلب',
+                                'queued_waiting_description' => 'وصف الطلب في قائمة الانتظار',
+                                'queued_completed_description' => 'وصف اكتمال تجهيز الطلب',
+                                'generating_title' => 'عنوان إنشاء الهوية',
+                                'generating_active_description' => 'وصف إنشاء الهوية الجاري',
+                                'generating_waiting_description' => 'وصف انتظار بدء الإنشاء',
+                                'result_title' => 'عنوان عرض النتيجة',
+                                'result_description' => 'وصف ظهور النتيجة',
+                            ];
+                        @endphp
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            @foreach($processingFields as $key => $label)
+                                <label class="text-sm font-bold text-slate-700 {{ in_array($key, ['description'], true) ? 'sm:col-span-2' : '' }}">
+                                    {{ $label }}
+                                    <input name="processing_copy[{{ $key }}]"
+                                           value="{{ old("processing_copy.{$key}", $values['processing_copy'][$key]) }}"
+                                           maxlength="500"
+                                           class="mt-2 w-full rounded-xl border-slate-300">
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                     <label class="text-sm font-bold text-slate-700 sm:col-span-2">نسخة البرومبت
                         <input name="prompt_version" value="{{ old('prompt_version', $values['version']) }}" class="mt-2 w-full rounded-xl border-slate-300" dir="ltr">
                     </label>

@@ -95,7 +95,8 @@
     {{-- ═══════════════════════════════════════════
          HERO — Happy & Colorful
     ═══════════════════════════════════════════ --}}
-    <div class="relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('hero'))
+    <div data-home-section="hero" class="relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(145deg, #fffbeb 0%, #fdf4ff 28%, #eff6ff 58%, #f0fdf4 100%);">
 
         {{-- ── BACKGROUND LAYER ── --}}
@@ -391,9 +392,15 @@
         </div>
 
     </div>
+    @endif
+
+    @if(homepage_section_enabled('child_identity') && setting('child_identity_enabled', '1') === '1')
+        @include('front.child-identity._home-section')
+    @endif
 
     {{-- FEATURED STORIES --}}
-    <section class="py-20 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('stories'))
+    <section data-home-section="stories" class="py-20 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(160deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-20"
             style="background-image: radial-gradient(circle, #f59e0b 1px, transparent 1px); background-size: 32px 32px;"></div>
@@ -570,9 +577,10 @@
             @endif
         </div>
     </section>
+    @endif
 
-    @if(isset($storeSections) && $storeSections->isNotEmpty())
-        <section class="py-20 bg-slate-50" dir="rtl">
+    @if(homepage_section_enabled('store') && isset($storeSections) && $storeSections->isNotEmpty())
+        <section data-home-section="store" class="py-20 bg-slate-50" dir="rtl">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
                 <div class="text-center max-w-2xl mx-auto">
                     <span class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 font-black text-xs px-4 py-2 rounded-full border border-indigo-100 mb-4">المتجر</span>
@@ -610,7 +618,8 @@
     @endif
 
     {{-- HOW IT WORKS --}}
-    <section id="how-it-works" class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('how_it_works'))
+    <section id="how-it-works" data-home-section="how_it_works" class="py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(145deg, #0f0a1e 0%, #1e1b4b 50%, #2e1065 100%);">
         {{-- Star dot grid --}}
         <div class="absolute inset-0 pointer-events-none"
@@ -700,9 +709,11 @@
             </div>
         </div>
     </section>
+    @endif
 
     {{-- WHY PARENTS LOVE IT --}}
-    <section class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('benefits'))
+    <section data-home-section="benefits" class="py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(155deg, #ecfdf5 0%, #d1fae5 35%, #cffafe 70%, #e0f2fe 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-20"
             style="background-image: radial-gradient(circle, #10b981 1px, transparent 1px); background-size: 36px 36px;"></div>
@@ -795,10 +806,11 @@
             </div>
         </div>
     </section>
+    @endif
 
     {{-- TESTIMONIALS (dynamic from DB) --}}
-    @if($testimonials->count())
-        <section class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('testimonials') && $testimonials->count())
+        <section data-home-section="testimonials" class="py-24 relative overflow-hidden" dir="rtl"
             style="background: linear-gradient(155deg, #fff1f2 0%, #fce7f3 45%, #fdf4ff 100%);">
             <div class="absolute inset-0 pointer-events-none opacity-20"
                 style="background-image: radial-gradient(circle, #f43f5e 1px, transparent 1px); background-size: 30px 30px;"></div>
@@ -851,7 +863,8 @@
     @endif
 
     {{-- PRICING TEASER --}}
-    <section class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('pricing'))
+    <section data-home-section="pricing" class="py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-10"
             style="background-image: radial-gradient(circle, #818cf8 1px, transparent 1px); background-size: 28px 28px;"></div>
@@ -936,10 +949,11 @@
             </div>
         </div>
     </section>
+    @endif
 
     {{-- FAQ SNIPPET --}}
-    @if($faqs->count())
-        <section class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('faq') && $faqs->count())
+        <section data-home-section="faq" class="py-24 relative overflow-hidden" dir="rtl"
             style="background: linear-gradient(155deg, #fefce8 0%, #fef9c3 40%, #fef3c7 100%);">
             <div class="absolute inset-0 pointer-events-none opacity-20"
                 style="background-image: radial-gradient(circle, #ca8a04 1px, transparent 1px); background-size: 28px 28px;"></div>
@@ -993,7 +1007,8 @@
     @endif
 
     {{-- CONTACT US SECTION --}}
-    <section id="contact-us" class="py-16 md:py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('contact'))
+    <section id="contact-us" data-home-section="contact" class="py-16 md:py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(155deg, #f0f9ff 0%, #e0f2fe 40%, #eff6ff 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-20"
             style="background-image: radial-gradient(circle, #0ea5e9 1px, transparent 1px); background-size: 32px 32px;"></div>
@@ -1096,9 +1111,11 @@
             </div>
         </div>
     </section>
+    @endif
 
     {{-- FINAL CTA --}}
-    <div class="py-24 relative overflow-hidden" dir="rtl"
+    @if(homepage_section_enabled('final_cta'))
+    <div data-home-section="final_cta" class="py-24 relative overflow-hidden" dir="rtl"
         style="background: linear-gradient(135deg, #f97316 0%, #ec4899 35%, #8b5cf6 65%, #3b82f6 100%);">
         {{-- Dot pattern --}}
         <div class="absolute inset-0 opacity-15 pointer-events-none"
@@ -1141,4 +1158,5 @@
             </div>
         </div>
     </div>
+    @endif
 </x-front-layout>

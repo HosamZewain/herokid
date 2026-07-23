@@ -76,11 +76,19 @@ Route::get('/storage/{path}', function (string $path) {
 
 // Homepage
 Route::get('/', function () {
-    $featuredStories = Story::where('active', true)->with('categories')->inRandomOrder()->take(8)->get();
-    $faqs = FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get();
-    $testimonials = Testimonial::where('active', true)->orderBy('sort_order')->get();
-    $packages = PricingPackage::active()->ordered()->get();
-    $storeSections = setting('shop_enabled', '1') === '1'
+    $featuredStories = homepage_section_enabled('hero') || homepage_section_enabled('stories')
+        ? Story::where('active', true)->with('categories')->inRandomOrder()->take(8)->get()
+        : collect();
+    $faqs = homepage_section_enabled('faq')
+        ? FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get()
+        : collect();
+    $testimonials = homepage_section_enabled('testimonials')
+        ? Testimonial::where('active', true)->orderBy('sort_order')->get()
+        : collect();
+    $packages = homepage_section_enabled('pricing')
+        ? PricingPackage::active()->ordered()->get()
+        : collect();
+    $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
         ? HomepageStoreSection::query()
             ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
             ->where('is_active', true)

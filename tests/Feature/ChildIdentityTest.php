@@ -670,17 +670,48 @@ class ChildIdentityTest extends TestCase
             'image_quality' => 'high',
             'prompt_template' => str_repeat('Character sheet prompt. ', 4),
             'prompt_version' => 'character-sheet-v2',
+            'processing_copy' => [
+                'heading' => 'نجهز الآن هوية :child',
+                'description' => 'تم استلام طلبك وسيتم عرض النتيجة تلقائيًا.',
+                'received_title' => 'وصلتنا الصور',
+                'received_description' => 'تم حفظ :count صور',
+                'queued_title' => 'الطلب جاهز',
+                'queued_waiting_description' => 'بانتظار بدء الإنشاء',
+                'queued_completed_description' => 'تم تجهيز الطلب',
+                'generating_title' => 'نرسم هوية طفلك',
+                'generating_active_description' => 'يجري إنشاء الهوية الآن',
+                'generating_waiting_description' => 'ستبدأ هذه المرحلة قريبًا',
+                'result_title' => 'النتيجة النهائية',
+                'result_description' => 'ستظهر النتيجة هنا عند اكتمالها',
+            ],
         ];
+
+        $this->actingAs($admin)
+            ->get(route('admin.child-identities.settings.edit'))
+            ->assertOk()
+            ->assertSee('نصوص شاشة انتظار إنشاء الهوية')
+            ->assertSee('processing_copy[heading]', false)
+            ->assertSee('processing_copy[result_description]', false);
 
         $this->actingAs($admin)
             ->put(route('admin.child-identities.settings.update'), $payload)
             ->assertRedirect();
         $this->assertDatabaseHas('settings', ['key' => 'child_identity_image_quality', 'value' => 'high']);
         $this->assertDatabaseHas('settings', ['key' => 'child_identity_prompt_version', 'value' => 'character-sheet-v2']);
+        $this->assertDatabaseHas('settings', ['key' => 'child_identity_processing_heading', 'value' => 'نجهز الآن هوية :child']);
         $this->assertDatabaseHas('admin_activity_logs', [
             'user_id' => $admin->id,
             'action' => 'child_identity.settings_updated',
         ]);
+
+        $identity = $this->createPublicIdentity();
+        $this->uploadTwoPhotos($identity);
+        $this->get(route('child-identity.show', $identity->uuid))
+            ->assertOk()
+            ->assertSee('نجهز الآن هوية ليلى')
+            ->assertSee('وصلتنا الصور')
+            ->assertSee('تم حفظ ٢ صور')
+            ->assertSee('النتيجة النهائية');
 
         $permission = $admin->permissions()->where('key', 'child_identities.settings')->firstOrFail();
         $admin->permissions()->detach($permission);

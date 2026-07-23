@@ -6,6 +6,21 @@ use App\Models\AiProvider;
 
 class ChildIdentitySettings
 {
+    public const PROCESSING_COPY_DEFAULTS = [
+        'heading' => 'نجهز هوية :child',
+        'description' => 'تم حفظ البيانات والصور. لا تحتاج إلى تنفيذ أي خطوة أخرى الآن؛ ستظهر النتيجة هنا تلقائيًا.',
+        'received_title' => 'تم استلام البيانات والصور',
+        'received_description' => ':count صور محفوظة بأمان',
+        'queued_title' => 'تجهيز طلب الإنشاء',
+        'queued_waiting_description' => 'في قائمة الانتظار الآن',
+        'queued_completed_description' => 'اكتملت هذه الخطوة',
+        'generating_title' => 'إنشاء هوية الطفل',
+        'generating_active_description' => 'OpenAI ينشئ الهوية الآن',
+        'generating_waiting_description' => 'تبدأ بعد تجهيز الطلب',
+        'result_title' => 'عرض النتيجة',
+        'result_description' => 'ستظهر الهوية تلقائيًا عند اكتمالها',
+    ];
+
     public const DEFAULT_PROMPT = <<<'PROMPT'
 Create one professional landscape character sheet for a personalized children's book using the supplied child reference photos. Preserve the child's recognizable facial features, skin tone, hair, and age-appropriate proportions. Show one consistent character in front, three-quarter, and profile views plus a small set of natural expression references. Use a clean, simple neutral background. Do not include text, labels, watermark, logo, border, story scene, or unrelated people. The result must be warm, child-friendly, production-ready, and visually consistent across all views.
 PROMPT;
@@ -38,6 +53,15 @@ PROMPT;
     public function customerSuccessfulLimit(): int
     {
         return 2;
+    }
+
+    public function processingCopy(): array
+    {
+        return collect(self::PROCESSING_COPY_DEFAULTS)
+            ->mapWithKeys(fn (string $default, string $key): array => [
+                $key => (string) setting("child_identity_processing_{$key}", $default),
+            ])
+            ->all();
     }
 
     public function providerAndModel(): array

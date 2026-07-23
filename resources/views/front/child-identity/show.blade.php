@@ -58,25 +58,25 @@
             @if($wizardStep === 'processing')
                 <section class="rounded-3xl border border-indigo-100 bg-white p-6 text-center shadow-xl shadow-indigo-100/50 sm:p-10">
                     <div class="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600"></div>
-                    <h2 class="mt-6 text-2xl font-black text-slate-950">نجهز هوية {{ $identity->displayChildName() }}</h2>
-                    <p class="mx-auto mt-2 max-w-xl text-sm leading-7 text-slate-500">تم حفظ البيانات والصور. لا تحتاج إلى تنفيذ أي خطوة أخرى الآن؛ ستظهر النتيجة هنا تلقائيًا.</p>
+                    <h2 class="mt-6 text-2xl font-black text-slate-950">{{ strtr($processingCopy['heading'], [':child' => $identity->displayChildName()]) }}</h2>
+                    <p class="mx-auto mt-2 max-w-xl text-sm leading-7 text-slate-500">{{ $processingCopy['description'] }}</p>
 
                     <ol class="mx-auto mt-8 max-w-xl space-y-3 text-right">
                         <li class="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4">
                             <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">✓</span>
-                            <div><p class="font-black text-emerald-900">تم استلام البيانات والصور</p><p class="text-xs text-emerald-700">{{ arabic_number($identity->photos->where('validation_status', 'valid')->count()) }} صور محفوظة بأمان</p></div>
+                            <div><p class="font-black text-emerald-900">{{ $processingCopy['received_title'] }}</p><p class="text-xs text-emerald-700">{{ strtr($processingCopy['received_description'], [':count' => arabic_number($identity->photos->where('validation_status', 'valid')->count())]) }}</p></div>
                         </li>
                         <li class="flex items-center gap-3 rounded-2xl {{ $latest?->status === 'pending' ? 'bg-indigo-50 ring-2 ring-indigo-100' : 'bg-emerald-50' }} p-4">
                             <span class="flex h-8 w-8 items-center justify-center rounded-full {{ $latest?->status === 'pending' ? 'bg-indigo-600' : 'bg-emerald-600' }} text-sm font-black text-white">{{ $latest?->status === 'pending' ? '٢' : '✓' }}</span>
-                            <div><p class="font-black {{ $latest?->status === 'pending' ? 'text-indigo-900' : 'text-emerald-900' }}">تجهيز طلب الإنشاء</p><p class="text-xs {{ $latest?->status === 'pending' ? 'text-indigo-600' : 'text-emerald-700' }}">{{ $latest?->status === 'pending' ? 'في قائمة الانتظار الآن' : 'اكتملت هذه الخطوة' }}</p></div>
+                            <div><p class="font-black {{ $latest?->status === 'pending' ? 'text-indigo-900' : 'text-emerald-900' }}">{{ $processingCopy['queued_title'] }}</p><p class="text-xs {{ $latest?->status === 'pending' ? 'text-indigo-600' : 'text-emerald-700' }}">{{ $latest?->status === 'pending' ? $processingCopy['queued_waiting_description'] : $processingCopy['queued_completed_description'] }}</p></div>
                         </li>
                         <li class="flex items-center gap-3 rounded-2xl {{ $latest?->status === 'processing' ? 'bg-indigo-50 ring-2 ring-indigo-100' : 'bg-slate-50' }} p-4">
                             <span class="flex h-8 w-8 items-center justify-center rounded-full {{ $latest?->status === 'processing' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500' }} text-sm font-black">٣</span>
-                            <div><p class="font-black {{ $latest?->status === 'processing' ? 'text-indigo-900' : 'text-slate-600' }}">إنشاء هوية الطفل</p><p class="text-xs {{ $latest?->status === 'processing' ? 'text-indigo-600' : 'text-slate-400' }}">{{ $latest?->status === 'processing' ? 'OpenAI ينشئ الهوية الآن' : 'تبدأ بعد تجهيز الطلب' }}</p></div>
+                            <div><p class="font-black {{ $latest?->status === 'processing' ? 'text-indigo-900' : 'text-slate-600' }}">{{ $processingCopy['generating_title'] }}</p><p class="text-xs {{ $latest?->status === 'processing' ? 'text-indigo-600' : 'text-slate-400' }}">{{ $latest?->status === 'processing' ? $processingCopy['generating_active_description'] : $processingCopy['generating_waiting_description'] }}</p></div>
                         </li>
                         <li class="flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
                             <span class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-slate-500">٤</span>
-                            <div><p class="font-black text-slate-600">عرض النتيجة</p><p class="text-xs text-slate-400">ستظهر الهوية تلقائيًا عند اكتمالها</p></div>
+                            <div><p class="font-black text-slate-600">{{ $processingCopy['result_title'] }}</p><p class="text-xs text-slate-400">{{ $processingCopy['result_description'] }}</p></div>
                         </li>
                     </ol>
                 </section>

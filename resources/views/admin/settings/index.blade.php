@@ -68,6 +68,61 @@
                 </div>
             </div>
 
+            {{-- ===== Homepage Sections ===== --}}
+            <div class="rounded-xl border border-indigo-100 bg-white p-6 shadow-sm">
+                <div class="mb-5 border-b pb-4">
+                    <h3 class="flex items-center gap-2 text-base font-bold text-gray-900">
+                        <span class="text-xl">🧩</span> التحكم في أقسام الصفحة الرئيسية
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-gray-500">يمكنك إخفاء أي قسم وإظهاره مرة أخرى بدون حذف محتواه. آراء العملاء مخفية افتراضيًا ويمكن تشغيلها من هنا.</p>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach(config('homepage.sections', []) as $sectionKey => $section)
+                        @php
+                            $settingKey = $section['setting'];
+                            $defaultValue = ($section['default'] ?? true) ? '1' : '0';
+                            $isEnabled = (string) old("settings.{$settingKey}", $s($settingKey, $defaultValue)) === '1';
+                        @endphp
+                        <label class="flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition {{ $isEnabled ? 'border-indigo-200 bg-indigo-50/60' : 'border-gray-200 bg-gray-50' }}">
+                            <input type="hidden" name="settings[{{ $settingKey }}]" value="0">
+                            <input type="checkbox" name="settings[{{ $settingKey }}]" value="1"
+                                   @checked($isEnabled)
+                                   class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <span>
+                                <span class="block text-sm font-black text-gray-900">{{ $section['label_ar'] }}</span>
+                                <span class="mt-1 block text-xs leading-5 text-gray-500">{{ $section['description_ar'] }}</span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+
+                <div class="mt-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-5">
+                    <h4 class="font-black text-violet-950">نص قسم «اصنع هوية طفلك»</h4>
+                    <div class="mt-4 grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-sm font-bold text-gray-700">العنوان</label>
+                            <input type="text" name="settings[home_child_identity_title]"
+                                   value="{{ old('settings.home_child_identity_title', $s('home_child_identity_title', 'اصنع هوية طفلك قبل اختيار القصة')) }}"
+                                   maxlength="120"
+                                   class="w-full rounded-lg border-gray-300 text-sm focus:border-violet-500 focus:ring-violet-500">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-bold text-gray-700">نص الزر</label>
+                            <input type="text" name="settings[home_child_identity_cta]"
+                                   value="{{ old('settings.home_child_identity_cta', $s('home_child_identity_cta', 'ابدأ مجانًا')) }}"
+                                   maxlength="60"
+                                   class="w-full rounded-lg border-gray-300 text-sm focus:border-violet-500 focus:ring-violet-500">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="mb-1 block text-sm font-bold text-gray-700">الوصف</label>
+                            <textarea name="settings[home_child_identity_subtitle]" rows="3" maxlength="400"
+                                      class="w-full rounded-lg border-gray-300 text-sm focus:border-violet-500 focus:ring-violet-500">{{ old('settings.home_child_identity_subtitle', $s('home_child_identity_subtitle', 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة لتختار بعدها القصة المناسبة له.')) }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h3 class="text-base font-bold text-gray-900 mb-5 pb-3 border-b">إعدادات إخراج كتب الاستوديو</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
