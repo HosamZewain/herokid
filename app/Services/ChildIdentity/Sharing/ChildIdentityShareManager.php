@@ -33,6 +33,7 @@ class ChildIdentityShareManager
         bool $consentAccepted,
         string $actorType = 'customer',
         ?User $actor = null,
+        bool $generateImmediately = false,
     ): ChildIdentityShare {
         abort_unless($this->settings->enabled(), 404);
         $this->assertShareable($identity, $attempt);
@@ -64,7 +65,7 @@ class ChildIdentityShareManager
             $isNew = ! $share;
             $share ??= new ChildIdentityShare([
                 'child_identity_request_id' => $lockedIdentity->id,
-                'public_token' => Str::random(64),
+                'public_token' => $attempt->share_draft_token ?: Str::random(64),
                 'consent_accepted_at' => now(),
                 'consent_version' => self::CONSENT_VERSION,
                 'created_by_type' => $actorType,
@@ -90,6 +91,19 @@ class ChildIdentityShareManager
             $share->save();
             $share->load(['identityRequest', 'generationAttempt']);
             $share->forceFill(['card_fingerprint' => $this->fingerprints->make($share)])->save();
+            $reusedDraft = $this->canReuseDraft($share, $attempt);
+
+            if ($reusedDraft) {
+                $share->forceFill([
+                    'status' => 'ready',
+                    'card_disk' => 'local',
+                    'feed_card_path' => $attempt->share_feed_card_path,
+                    'story_card_path' => $attempt->share_story_card_path,
+                    'og_card_path' => $attempt->share_og_card_path,
+                    'cards_generated_at' => $attempt->share_cards_generated_at,
+                    'generated_fingerprint' => $share->card_fingerprint,
+                ])->save();
+            }
 
             $this->events->record(
                 $share,
@@ -100,16 +114,34 @@ class ChildIdentityShareManager
                     'generation_version' => $share->generation_version,
                 ],
             );
-            $this->events->record($share, 'share.card_generation_queued', metadata: [
-                'generation_version' => $share->generation_version,
-            ]);
+            $this->events->record(
+                $share,
+                $reusedDraft ? 'share.card_generation_succeeded' : 'share.card_generation_queued',
+                metadata: [
+                    'generation_version' => $share->generation_version,
+                    'reused_prebuilt_card' => $reusedDraft,
+                    'variants' => $reusedDraft ? ChildIdentityShare::VARIANTS : null,
+                ],
+            );
 
             return $share->fresh();
         });
 
-        GenerateChildIdentityShareCardsJob::dispatch($share->id, $share->generation_version)->afterCommit();
+        if ($share->status === 'ready') {
+            return $share;
+        }
 
-        return $share;
+        if ($generateImmediately) {
+            try {
+                GenerateChildIdentityShareCardsJob::dispatchSync($share->id, $share->generation_version);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        } else {
+            GenerateChildIdentityShareCardsJob::dispatch($share->id, $share->generation_version)->afterCommit();
+        }
+
+        return $share->fresh();
     }
 
     public function regenerate(ChildIdentityShare $share, ?User $actor = null): ChildIdentityShare
@@ -208,6 +240,23 @@ class ChildIdentityShareManager
                 'attempt' => 'يمكن مشاركة محاولة ناجحة ومعتمدة فقط.',
             ]);
         }
+    }
+
+    private function canReuseDraft(
+        ChildIdentityShare $share,
+        ChildIdentityGenerationAttempt $attempt,
+    ): bool {
+        if ($share->display_child_first_name
+            || blank($attempt->share_card_fingerprint)
+            || ! hash_equals((string) $attempt->share_card_fingerprint, (string) $share->card_fingerprint)) {
+            return false;
+        }
+
+        return collect(ChildIdentityShare::VARIANTS)->every(function (string $variant) use ($attempt): bool {
+            $path = $attempt->getAttribute("share_{$variant}_card_path");
+
+            return filled($path) && Storage::disk('local')->exists($path);
+        });
     }
 
     private function sessionHash(Request $request): ?string

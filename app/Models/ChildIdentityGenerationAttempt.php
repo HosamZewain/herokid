@@ -12,6 +12,13 @@ class ChildIdentityGenerationAttempt extends Model
 
     protected $guarded = [];
 
+    protected $hidden = [
+        'share_draft_token',
+        'share_feed_card_path',
+        'share_story_card_path',
+        'share_og_card_path',
+    ];
+
     protected $casts = [
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
@@ -20,6 +27,7 @@ class ChildIdentityGenerationAttempt extends Model
         'cost_usd' => 'decimal:6',
         'usd_to_egp_rate' => 'decimal:6',
         'cost_egp' => 'decimal:4',
+        'share_cards_generated_at' => 'datetime',
     ];
 
     public function identityRequest(): BelongsTo

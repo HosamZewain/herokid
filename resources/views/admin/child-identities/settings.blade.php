@@ -146,10 +146,6 @@
                             <input type="checkbox" name="share_allow_first_name" value="1" @checked(old('share_allow_first_name', $values['sharing']['allow_first_name'])) class="rounded border-violet-300 text-violet-600">
                             السماح بعرض الاسم الأول
                         </label>
-                        <label class="flex items-center gap-3 rounded-xl bg-white p-4 text-sm font-bold">
-                            <input type="checkbox" name="share_qr_enabled" value="1" @checked(old('share_qr_enabled', $values['sharing']['qr_enabled'])) class="rounded border-violet-300 text-violet-600">
-                            إظهار QR في البطاقة
-                        </label>
                     </div>
                 </section>
                 <div class="rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-600">

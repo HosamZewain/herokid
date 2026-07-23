@@ -6,7 +6,15 @@
     @php
         $latest = $identity->attempts->sortByDesc('attempt_number')->first();
         $approvedAttempt = $identity->approvedAttempt;
-        $isWorking = $identity->attempts->contains(fn($attempt) => in_array($attempt->status, ['pending', 'processing'], true));
+        $approvedShareReady = $share?->status === 'ready'
+            && $share?->generation_attempt_id === $approvedAttempt?->id;
+        $isWorking = $identity->attempts->contains(
+            fn($attempt) => in_array($attempt->status, ['pending', 'processing'], true)
+                || ($attempt->status === 'succeeded'
+                    && !$attempt->share_cards_generated_at
+                    && !($approvedShareReady && $attempt->id === $approvedAttempt?->id)
+                    && blank(data_get($attempt->response_metadata, 'share_card_error')))
+        );
         $recoverableHeicPhotos = $identity->photos
             ->filter(fn($photo) => $photo->validation_status === 'valid'
                 && !$photo->ai_input_path
@@ -127,18 +135,20 @@
                         <span class="inline-flex rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white">اكتملت الهوية بنجاح</span>
                         <h2 class="mt-3 text-2xl font-black text-slate-950">هوية {{ $identity->displayChildName() }} جاهزة</h2>
                     </div>
-                    @if($approvedAttempt && isset($media['attempts'][$approvedAttempt->id]))
-                        <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل المعتمدة"
-                             class="aspect-[3/2] w-full bg-slate-100 object-contain" referrerpolicy="no-referrer">
-                    @endif
-                    <div class="p-5 sm:p-8">
-                        <a href="{{ route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'category']) }}"
-                           class="block w-full rounded-2xl bg-gradient-to-l from-indigo-600 to-violet-600 px-6 py-4 text-center text-base font-black text-white shadow-lg shadow-indigo-200">
-                            اختر قصة بهذه الهوية
-                        </a>
+                    <div class="grid items-start lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+                        @if($approvedAttempt && isset($media['attempts'][$approvedAttempt->id]))
+                            <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل المعتمدة"
+                                 class="aspect-[3/2] h-full max-h-[680px] w-full bg-slate-100 object-contain" referrerpolicy="no-referrer">
+                        @endif
+                        <div class="space-y-4 p-4 sm:p-6">
+                            @include('front.child-identity._share-section')
+                            <a href="{{ route('child-identity.show', ['identity' => $identity->uuid, 'step' => 'category']) }}"
+                               class="block w-full rounded-2xl bg-gradient-to-l from-indigo-600 to-violet-600 px-6 py-4 text-center text-base font-black text-white shadow-lg shadow-indigo-200">
+                                اختر قصة بهذه الهوية
+                            </a>
+                        </div>
                     </div>
                 </section>
-                @include('front.child-identity._share-section')
             @elseif($wizardStep === 'category')
                 <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-indigo-100/50 sm:p-8">
                     <div class="text-center">

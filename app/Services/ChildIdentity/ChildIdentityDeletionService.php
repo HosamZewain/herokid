@@ -113,6 +113,24 @@ class ChildIdentityDeletionService
                     'checksum' => null,
                     'kind' => 'preview',
                 ] : null,
+                $attempt->share_feed_card_path ? [
+                    'disk' => 'local',
+                    'path' => $attempt->share_feed_card_path,
+                    'checksum' => null,
+                    'kind' => 'share_feed',
+                ] : null,
+                $attempt->share_story_card_path ? [
+                    'disk' => 'local',
+                    'path' => $attempt->share_story_card_path,
+                    'checksum' => null,
+                    'kind' => 'share_story',
+                ] : null,
+                $attempt->share_og_card_path ? [
+                    'disk' => 'local',
+                    'path' => $attempt->share_og_card_path,
+                    'checksum' => null,
+                    'kind' => 'share_og',
+                ] : null,
             ])->filter()))
             ->merge($identity->share
                 ? collect(ChildIdentityShare::VARIANTS)->map(fn (string $variant) => $identity->share->cardPath($variant)
@@ -124,6 +142,7 @@ class ChildIdentityDeletionService
                     ]
                     : null)->filter()
                 : collect())
+            ->unique(fn (array $file) => $file['disk'].'|'.$file['path'])
             ->values();
         $manifest = [
             'identity_id' => $identity->id,

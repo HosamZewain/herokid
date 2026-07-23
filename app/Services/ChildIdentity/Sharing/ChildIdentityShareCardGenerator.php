@@ -2,13 +2,9 @@
 
 namespace App\Services\ChildIdentity\Sharing;
 
+use App\Models\ChildIdentityGenerationAttempt;
+use App\Models\ChildIdentityRequest;
 use App\Models\ChildIdentityShare;
-use Endroid\QrCode\Color\Color;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\RoundBlockSizeMode;
-use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
@@ -29,9 +25,35 @@ class ChildIdentityShareCardGenerator
     public function generate(ChildIdentityShare $share, int $generationVersion): array
     {
         $share->loadMissing(['identityRequest', 'generationAttempt']);
-        $attempt = $share->generationAttempt;
 
-        if (! $attempt || $attempt->status !== 'succeeded' || blank($attempt->output_storage_path)) {
+        return $this->generateCards(
+            $share->generationAttempt,
+            $share->identityRequest,
+            $share->display_child_first_name,
+            "child-identity-shares/{$share->id}/v{$generationVersion}",
+        );
+    }
+
+    public function generateDraft(ChildIdentityGenerationAttempt $attempt): array
+    {
+        $attempt->loadMissing('identityRequest');
+        $identity = $attempt->identityRequest;
+
+        return $this->generateCards(
+            $attempt,
+            $identity,
+            false,
+            "child-identities/{$identity->uuid}/attempts/{$attempt->attempt_number}/share-cards",
+        );
+    }
+
+    private function generateCards(
+        ?ChildIdentityGenerationAttempt $attempt,
+        ?ChildIdentityRequest $identity,
+        bool $displayFirstName,
+        string $directory,
+    ): array {
+        if (! $attempt || ! $identity || $attempt->status !== 'succeeded' || blank($attempt->output_storage_path)) {
             throw new \RuntimeException('The approved identity output is unavailable.');
         }
 
@@ -42,20 +64,19 @@ class ChildIdentityShareCardGenerator
             throw new \RuntimeException('The official HeroKid logo is unavailable.');
         }
 
-        $publicUrl = route('child-identity-shares.show', $share->public_token);
         $paths = [];
 
         foreach (self::VARIANTS as $variant => $definition) {
-            $path = "child-identity-shares/{$share->id}/v{$generationVersion}/{$variant}.jpg";
+            $path = "{$directory}/{$variant}.jpg";
             $jpeg = $this->render(
-                $share,
+                $identity,
+                $displayFirstName,
                 $variant,
                 $definition,
                 $identityContents,
                 $logoContents,
-                $publicUrl,
             );
-            Storage::disk($share->card_disk)->put($path, $jpeg);
+            Storage::disk('local')->put($path, $jpeg);
             $paths[$variant] = $path;
         }
 
@@ -63,12 +84,12 @@ class ChildIdentityShareCardGenerator
     }
 
     private function render(
-        ChildIdentityShare $share,
+        ChildIdentityRequest $identityRequest,
+        bool $displayFirstName,
         string $variant,
         array $definition,
         string $identityContents,
         string $logoContents,
-        string $publicUrl,
     ): string {
         [$widthPx, $heightPx] = $definition['pixels'];
         [$imageWidthMm, $imageHeightMm] = $definition['image_mm'];
@@ -76,9 +97,8 @@ class ChildIdentityShareCardGenerator
         $identityHeight = (int) ($imageHeightMm * 10);
         $identity = $this->normalizedImage($identityContents, $identityWidth, $identityHeight);
         $logo = $this->normalizedLogo($logoContents, $variant === 'og' ? 210 : 230, $variant === 'story' ? 210 : 170);
-        $qr = $this->settings->qrEnabled() ? $this->qrImage($publicUrl, $variant === 'og' ? 150 : 180) : null;
-        $firstName = $share->display_child_first_name
-            ? $this->text->firstName($share->identityRequest?->child_name)
+        $firstName = $displayFirstName
+            ? $this->text->firstName($identityRequest->child_name)
             : '';
         $headline = htmlspecialchars(str_replace('✨', '', $this->settings->cardHeadline()), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $cta = htmlspecialchars($this->settings->cardCta(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -105,16 +125,13 @@ class ChildIdentityShareCardGenerator
             $this->roundedPanel($canvas, 765, 410, 375, 155, '#db2777', 28);
             $ctaBlock = $this->textBlock(
                 "<div>{$cta}</div><div style=\"font-size:18px;margin-top:4px;direction:ltr\">hero-kid.com</div>",
-                $qr ? 225 : 340,
+                340,
                 125,
                 25,
                 '#ffffff',
                 '#db2777',
             );
-            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, $qr ? 900 : 782, 425);
-            if ($qr) {
-                $canvas->compositeImage($qr, \Imagick::COMPOSITE_OVER, 785, 412);
-            }
+            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 782, 425);
         } else {
             $isStory = $variant === 'story';
             $headerHeight = $isStory ? 285 : 210;
@@ -137,21 +154,13 @@ class ChildIdentityShareCardGenerator
             $this->roundedPanel($canvas, 50, $footerY, 980, $footerHeight - 45, '#4f46e5', 42);
             $ctaBlock = $this->textBlock(
                 "<div>{$cta}</div><div style=\"font-size:24px;margin-top:6px;direction:ltr\">hero-kid.com</div>",
-                $qr ? 665 : 900,
+                900,
                 $footerHeight - 90,
                 $isStory ? 39 : 34,
                 '#ffffff',
                 '#4f46e5',
             );
-            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, $qr ? 315 : 90, $footerY + 22);
-            if ($qr) {
-                $canvas->compositeImage(
-                    $qr,
-                    \Imagick::COMPOSITE_OVER,
-                    90,
-                    (int) ($footerY + (($footerHeight - 45 - $qr->getImageHeight()) / 2)),
-                );
-            }
+            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 90, $footerY + 22);
             $brandBlock = $this->textBlock(
                 '<div style="direction:ltr">HeroKid • hero-kid.com</div>',
                 600,
@@ -172,7 +181,6 @@ class ChildIdentityShareCardGenerator
         $canvas->clear();
         $identity->clear();
         $logo->clear();
-        $qr?->clear();
         $headlineBlock->clear();
         $ctaBlock->clear();
 
@@ -205,25 +213,6 @@ class ChildIdentityShareCardGenerator
         $logo->thumbnailImage($width, $height, true, true);
 
         return $logo;
-    }
-
-    private function qrImage(string $url, int $size): \Imagick
-    {
-        $qrCode = new QrCode(
-            data: $url,
-            encoding: new Encoding('UTF-8'),
-            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
-            size: 260,
-            margin: 10,
-            roundBlockSizeMode: RoundBlockSizeMode::Margin,
-            foregroundColor: new Color(49, 46, 129),
-            backgroundColor: new Color(255, 255, 255),
-        );
-        $qr = new \Imagick;
-        $qr->readImageBlob((new PngWriter)->write($qrCode)->getString());
-        $qr->thumbnailImage($size, $size, true, true);
-
-        return $qr;
     }
 
     private function textBlock(

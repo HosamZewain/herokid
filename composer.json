@@ -7,7 +7,6 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "endroid/qr-code": "^5.0",
         "ext-gd": "*",
         "ext-imagick": "*",
         "laravel/framework": "^12.0",

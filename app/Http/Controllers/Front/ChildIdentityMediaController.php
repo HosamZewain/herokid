@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityPhoto;
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildIdentityShare;
 use App\Services\ChildIdentity\ChildIdentityAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -37,6 +38,24 @@ class ChildIdentityMediaController extends Controller
             && filled($attempt->output_storage_path),
             404,
         );
+
+        $share = ChildIdentityShare::query()
+            ->where('child_identity_request_id', $identity->id)
+            ->where('generation_attempt_id', $attempt->id)
+            ->where('status', 'ready')
+            ->where('share_enabled', true)
+            ->first();
+
+        if ($share
+            && filled($share->feed_card_path)
+            && Storage::disk($share->card_disk)->exists($share->feed_card_path)) {
+            return $this->privateFile($share->card_disk, $share->feed_card_path, 'image/jpeg');
+        }
+
+        if (filled($attempt->share_feed_card_path)
+            && Storage::disk('local')->exists($attempt->share_feed_card_path)) {
+            return $this->privateFile('local', $attempt->share_feed_card_path, 'image/jpeg');
+        }
 
         return $this->privateFile(
             $attempt->output_disk ?: 'local',

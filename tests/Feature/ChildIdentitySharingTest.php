@@ -11,6 +11,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\ChildIdentity\Sharing\ChildIdentityReferralService;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareCardGenerator;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareDraftService;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareEventService;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareManager;
 use App\Services\ChildIdentity\Sharing\ChildIdentitySharePresenter;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -31,9 +33,9 @@ class ChildIdentitySharingTest extends TestCase
 
     public function test_share_section_requires_a_successful_approved_attempt_and_explicit_consent(): void
     {
-        Queue::fake();
         Storage::fake('local');
-        [$identity, $attempt] = $this->approvedIdentity();
+        [$identity, $attempt] = $this->approvedIdentity(900, 600);
+        $attempt = app(ChildIdentityShareDraftService::class)->prepare($attempt);
         $unapproved = ChildIdentityRequest::create($this->identityAttributes(['uuid' => (string) Str::uuid()]));
 
         $this->withSession(['child_identity_grants' => [$unapproved->uuid]])
@@ -44,28 +46,78 @@ class ChildIdentitySharingTest extends TestCase
         $this->withSession(['child_identity_grants' => [$identity->uuid]])
             ->get(route('child-identity.show', $identity->uuid))
             ->assertOk()
-            ->assertSee('شارك هوية طفلك وخلي أصحابك يجربوا')
-            ->assertSee('إنشاء رابط عام للمشاركة')
+            ->assertSee('شارك النتيجة')
+            ->assertSee('تفعيل مشاركة النتيجة')
             ->assertDontSee('data-share-payload=', false);
 
         $this->post(route('child-identity.shares.store', $identity->uuid), [])
             ->assertSessionHasErrors('share_consent');
         $this->assertDatabaseCount('child_identity_shares', 0);
 
-        $this->post(route('child-identity.shares.store', $identity->uuid), [
-            'share_consent' => '1',
-        ])->assertRedirect();
+        $this->withSession(['child_identity_grants' => [$identity->uuid]])
+            ->post(route('child-identity.shares.store', $identity->uuid), [
+                'share_consent' => '1',
+            ])->assertRedirect();
 
         $share = ChildIdentityShare::firstOrFail();
         $this->assertSame($attempt->id, $share->generation_attempt_id);
         $this->assertTrue($share->share_enabled);
-        $this->assertSame('generating', $share->status);
+        $this->assertSame('ready', $share->status);
         $this->assertSame(64, strlen($share->public_token));
         $this->assertNotSame((string) $identity->id, $share->public_token);
         $this->assertNotNull($share->consent_accepted_at);
         $this->assertNotNull($share->ip_hash);
         $this->assertNotNull($share->guest_session_hash);
-        Queue::assertPushed(GenerateChildIdentityShareCardsJob::class);
+        foreach (ChildIdentityShare::VARIANTS as $variant) {
+            Storage::disk('local')->assertExists($share->cardPath($variant));
+        }
+    }
+
+    public function test_prebuilt_generation_card_is_reused_immediately_when_customer_enables_sharing(): void
+    {
+        Storage::fake('local');
+        [$identity, $attempt] = $this->approvedIdentity(900, 600);
+        $attempt = app(ChildIdentityShareDraftService::class)
+            ->prepare($attempt);
+        $draftPaths = collect(ChildIdentityShare::VARIANTS)
+            ->mapWithKeys(fn (string $variant): array => [$variant => $attempt->getAttribute("share_{$variant}_card_path")]);
+
+        $this->assertDatabaseCount('child_identity_shares', 0);
+        $this->assertNotNull($attempt->share_cards_generated_at);
+
+        $this->withSession(['child_identity_grants' => [$identity->uuid]])
+            ->post(route('child-identity.shares.store', $identity->uuid), [
+                'share_consent' => '1',
+            ])->assertRedirect();
+
+        $share = ChildIdentityShare::firstOrFail();
+        $this->assertSame('ready', $share->status);
+        $this->assertSame($attempt->share_draft_token, $share->public_token);
+        foreach (ChildIdentityShare::VARIANTS as $variant) {
+            $this->assertSame($draftPaths[$variant], $share->cardPath($variant));
+        }
+        $mediaUrl = URL::temporarySignedRoute(
+            'child-identity.media.attempt',
+            now()->addMinutes(5),
+            ['identity' => $identity->uuid, 'attempt' => $attempt->id],
+        );
+        $media = $this->withSession(['child_identity_grants' => [$identity->uuid]])
+            ->get($mediaUrl)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+        $displayedContents = $media->streamedContent();
+        $this->assertSame(
+            Storage::disk('local')->get($attempt->share_feed_card_path),
+            $displayedContents,
+        );
+        $this->assertNotSame(
+            Storage::disk('local')->get($attempt->output_storage_path),
+            $displayedContents,
+        );
+        $this->assertDatabaseHas('child_identity_share_events', [
+            'child_identity_share_id' => $share->id,
+            'event_type' => 'share.card_generation_succeeded',
+        ]);
     }
 
     public function test_guest_cannot_manage_another_identity_share_and_revocation_blocks_public_media(): void
@@ -121,8 +173,6 @@ class ChildIdentitySharingTest extends TestCase
         Http::fake();
         [$identity] = $this->approvedIdentity(900, 600);
         $share = $this->draftShare($identity);
-        Setting::updateOrCreate(['key' => 'child_identity_share_qr_enabled'], ['value' => '1']);
-
         $paths = app(ChildIdentityShareCardGenerator::class)->generate($share, 1);
 
         foreach ([

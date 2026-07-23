@@ -100,11 +100,6 @@ TEXT;
         return setting('child_identity_share_allow_first_name', '1') === '1';
     }
 
-    public function qrEnabled(): bool
-    {
-        return setting('child_identity_share_qr_enabled', '1') === '1';
-    }
-
     public function quality(string $variant): int
     {
         $default = $variant === 'story' ? 88 : 90;

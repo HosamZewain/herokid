@@ -117,7 +117,6 @@ class SettingsSeeder extends Seeder
             ['key' => 'child_identity_share_landing_cta', 'value' => 'اصنع هوية طفلك مجانًا'],
             ['key' => 'child_identity_share_attribution_days', 'value' => '30'],
             ['key' => 'child_identity_share_allow_first_name', 'value' => '1'],
-            ['key' => 'child_identity_share_qr_enabled', 'value' => '1'],
             ['key' => 'child_identity_share_feed_quality', 'value' => '90'],
             ['key' => 'child_identity_share_story_quality', 'value' => '88'],
             ['key' => 'child_identity_share_template_version', 'value' => 'identity-share-v1'],

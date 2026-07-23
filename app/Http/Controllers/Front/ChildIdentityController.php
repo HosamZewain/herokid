@@ -216,15 +216,20 @@ class ChildIdentityController extends Controller
             ->filter(fn (StoryCategory $category) => $stories->contains(fn (Story $story) => $story->categories->contains($category)))
             ->values();
         $requestedStep = $request->string('step')->toString();
+        $approvedAttempt = $identity->approvedAttempt;
+        $approvedCardReady = $approvedAttempt?->share_cards_generated_at !== null
+            || ($identity->share?->generation_attempt_id === $approvedAttempt?->id
+                && $identity->share?->status === 'ready');
+        $approvedCardFailed = filled(data_get($approvedAttempt?->response_metadata, 'share_card_error'));
         $wizardStep = match (true) {
             $identity->status === 'converted' => 'complete',
             $identity->status === 'in_cart' => 'cart',
             $requestedStep === 'stories' && $identity->selected_story_category_id !== null => 'stories',
-            $requestedStep === 'category' && $identity->approved_attempt_id !== null => 'category',
+            $requestedStep === 'category' && $identity->approved_attempt_id !== null && ($approvedCardReady || $approvedCardFailed) => 'category',
             $requestedStep === 'confirm' && $identity->selected_story_id !== null => 'confirm',
             $identity->selected_story_id !== null => 'confirm',
             $identity->selected_story_category_id !== null => 'stories',
-            $identity->approved_attempt_id !== null => 'identity',
+            $identity->approved_attempt_id !== null && ($approvedCardReady || $approvedCardFailed) => 'identity',
             $identity->status === 'generation_failed' => 'failed',
             default => 'processing',
         };
@@ -364,7 +369,10 @@ class ChildIdentityController extends Controller
             'attempt_status' => $latest?->status,
             'attempt_number' => $latest?->attempt_number,
             'message' => $latest?->safe_error_message,
-            'refresh' => in_array($latest?->status, ['pending', 'processing'], true),
+            'refresh' => in_array($latest?->status, ['pending', 'processing'], true)
+                || ($latest?->status === 'succeeded'
+                    && ! $latest?->share_cards_generated_at
+                    && blank(data_get($latest?->response_metadata, 'share_card_error'))),
         ])->header('Cache-Control', 'private, no-store, max-age=0');
     }
 

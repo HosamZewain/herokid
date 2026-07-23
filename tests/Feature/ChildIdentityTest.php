@@ -22,6 +22,7 @@ use App\Services\Ai\GptImageClient;
 use App\Services\ChildIdentity\ChildIdentityAggregateService;
 use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareDraftService;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -146,7 +147,7 @@ class ChildIdentityTest extends TestCase
         Http::fake([
             'https://api.openai.com/v1/images/edits' => Http::response([
                 'id' => 'img_heic_derivative_success',
-                'data' => [['b64_json' => base64_encode($this->tinyPngContents())]],
+                'data' => [['b64_json' => base64_encode($this->shareableJpegContents())]],
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 20],
             ], 200, ['x-request-id' => 'req_heic_derivative']),
         ]);
@@ -267,7 +268,7 @@ class ChildIdentityTest extends TestCase
             'https://api.openai.com/v1/images/edits' => Http::response([
                 'id' => 'img_test_success',
                 'created' => now()->timestamp,
-                'data' => [['b64_json' => base64_encode($this->tinyPngContents())]],
+                'data' => [['b64_json' => base64_encode($this->shareableJpegContents())]],
                 'usage' => ['input_tokens' => 123, 'output_tokens' => 456],
             ], 200, ['x-request-id' => 'req_identity_success']),
         ]);
@@ -284,6 +285,12 @@ class ChildIdentityTest extends TestCase
         $this->assertNull($attempt->usd_to_egp_rate);
         $this->assertNull($attempt->cost_egp);
         Storage::disk('local')->assertExists($attempt->output_storage_path);
+        Storage::disk('local')->assertExists($attempt->share_feed_card_path);
+        Storage::disk('local')->assertExists($attempt->share_story_card_path);
+        Storage::disk('local')->assertExists($attempt->share_og_card_path);
+        $this->assertNotNull($attempt->share_draft_token);
+        $this->assertNotNull($attempt->share_cards_generated_at);
+        $this->assertDatabaseCount('child_identity_shares', 0);
         $this->assertSame(1, $identity->successful_attempts);
         $this->assertSame('0.041000', $identity->total_cost_usd);
         $this->assertSame($attempt->id, $identity->approved_attempt_id);
@@ -300,14 +307,16 @@ class ChildIdentityTest extends TestCase
         $identity = $this->createPublicIdentity();
         $this->uploadTwoPhotos($identity);
         $attempt = app(ChildIdentityAttemptService::class)->create($identity->fresh(), (string) Str::uuid());
+        $output = $this->shareableJpegContents();
         $attempt->forceFill([
             'status' => 'succeeded',
             'output_disk' => 'local',
-            'output_storage_path' => 'child-identities/'.$identity->uuid.'/attempts/1/output.png',
-            'output_checksum' => hash('sha256', $this->tinyPngContents()),
+            'output_storage_path' => 'child-identities/'.$identity->uuid.'/attempts/1/output.jpg',
+            'output_checksum' => hash('sha256', $output),
             'completed_at' => now(),
         ])->save();
-        Storage::disk('local')->put($attempt->output_storage_path, $this->tinyPngContents());
+        Storage::disk('local')->put($attempt->output_storage_path, $output);
+        app(ChildIdentityShareDraftService::class)->prepare($attempt);
         $identity->forceFill(['approved_attempt_id' => $attempt->id, 'status' => 'approved'])->save();
         $category = StoryCategory::create(['name' => 'مغامرات', 'slug' => 'wizard-adventures']);
         $story = $this->story($category);
@@ -987,6 +996,7 @@ class ChildIdentityTest extends TestCase
             app(AiImagePricingService::class),
             app(ChildIdentityAggregateService::class),
             app(ChildIdentityEventLogger::class),
+            app(ChildIdentityShareDraftService::class),
         );
     }
 
@@ -1024,5 +1034,20 @@ class ChildIdentityTest extends TestCase
         return (string) base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
         );
+    }
+
+    private function shareableJpegContents(): string
+    {
+        $image = imagecreatetruecolor(900, 600);
+        $background = imagecolorallocate($image, 238, 242, 255);
+        $accent = imagecolorallocate($image, 79, 70, 229);
+        imagefill($image, 0, 0, $background);
+        imagefilledellipse($image, 450, 300, 360, 360, $accent);
+        ob_start();
+        imagejpeg($image, null, 92);
+        $contents = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $contents;
     }
 }

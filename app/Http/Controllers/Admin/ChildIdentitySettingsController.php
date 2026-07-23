@@ -37,7 +37,6 @@ class ChildIdentitySettingsController extends Controller
                     'landing_cta' => $shareSettings->landingCta(),
                     'attribution_days' => $shareSettings->attributionDays(),
                     'allow_first_name' => $shareSettings->allowFirstName(),
-                    'qr_enabled' => $shareSettings->qrEnabled(),
                     'feed_quality' => $shareSettings->quality('feed'),
                     'story_quality' => $shareSettings->quality('story'),
                     'template_version' => $shareSettings->templateVersion(),
@@ -52,7 +51,7 @@ class ChildIdentitySettingsController extends Controller
             'sharing_enabled', 'share_channels', 'share_caption_ar', 'share_caption_en',
             'share_hashtags', 'share_card_headline', 'share_card_cta',
             'share_landing_title', 'share_landing_description', 'share_landing_cta',
-            'share_attribution_days', 'share_allow_first_name', 'share_qr_enabled',
+            'share_attribution_days', 'share_allow_first_name',
             'share_feed_quality', 'share_story_quality', 'share_template_version',
         ]);
         $sharingRequired = $sharingSubmitted ? 'required' : 'sometimes';
@@ -75,7 +74,6 @@ class ChildIdentitySettingsController extends Controller
             'share_landing_cta' => [$sharingRequired, 'string', 'max:160'],
             'share_attribution_days' => [$sharingRequired, 'integer', 'min:1', 'max:365'],
             'share_allow_first_name' => ['nullable', 'boolean'],
-            'share_qr_enabled' => ['nullable', 'boolean'],
             'share_feed_quality' => [$sharingRequired, 'integer', 'min:70', 'max:96'],
             'share_story_quality' => [$sharingRequired, 'integer', 'min:70', 'max:96'],
             'share_template_version' => [$sharingRequired, 'string', 'max:80', 'regex:/^[A-Za-z0-9_.-]+$/'],
@@ -111,7 +109,6 @@ class ChildIdentitySettingsController extends Controller
                 'child_identity_share_landing_cta' => $validated['share_landing_cta'],
                 'child_identity_share_attribution_days' => (string) $validated['share_attribution_days'],
                 'child_identity_share_allow_first_name' => $request->boolean('share_allow_first_name') ? '1' : '0',
-                'child_identity_share_qr_enabled' => $request->boolean('share_qr_enabled') ? '1' : '0',
                 'child_identity_share_feed_quality' => (string) $validated['share_feed_quality'],
                 'child_identity_share_story_quality' => (string) $validated['share_story_quality'],
                 'child_identity_share_template_version' => $validated['share_template_version'],

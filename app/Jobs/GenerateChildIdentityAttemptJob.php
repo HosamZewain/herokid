@@ -12,6 +12,7 @@ use App\Services\Ai\AiImagePricingService;
 use App\Services\Ai\GptImageClient;
 use App\Services\ChildIdentity\ChildIdentityAggregateService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
+use App\Services\ChildIdentity\Sharing\ChildIdentityShareDraftService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
         AiImagePricingService $pricing,
         ChildIdentityAggregateService $aggregates,
         ChildIdentityEventLogger $events,
+        ChildIdentityShareDraftService $shareDrafts,
     ): void {
         $attempt = DB::transaction(function () use ($aggregates, $events): ?ChildIdentityGenerationAttempt {
             $attempt = ChildIdentityGenerationAttempt::query()->lockForUpdate()->find($this->attemptId);
@@ -166,6 +168,18 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
                     toStatus: $targetStatus,
                 );
             });
+
+            try {
+                $shareDrafts->prepare($attempt->fresh());
+            } catch (\Throwable $shareCardException) {
+                report($shareCardException);
+                $failedAttempt = $attempt->fresh();
+                $failedAttempt->forceFill([
+                    'response_metadata' => array_merge($failedAttempt->response_metadata ?? [], [
+                        'share_card_error' => $shareCardException::class,
+                    ]),
+                ])->save();
+            }
         } catch (\Throwable $exception) {
             $duration = (int) round((hrtime(true) - $started) / 1_000_000);
             $safe = $exception instanceof GptImageException

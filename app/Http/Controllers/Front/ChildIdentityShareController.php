@@ -24,20 +24,24 @@ class ChildIdentityShareController extends Controller
         $this->authorizeIdentity($identity, $request, $access);
         $validated = $request->validate([
             'share_consent' => ['required', 'accepted'],
-            'display_child_first_name' => ['nullable', 'boolean'],
         ]);
         $attempt = $identity->approvedAttempt()->firstOrFail();
-        $manager->createOrUpdate(
+        $share = $manager->createOrUpdate(
             $identity,
             $attempt,
             $request,
-            (bool) ($validated['display_child_first_name'] ?? false),
+            false,
             true,
             actor: $request->user(),
+            generateImmediately: true,
         );
 
+        if ($share->status === 'failed') {
+            return back()->with('error', $share->generation_error);
+        }
+
         return back()
-            ->with('success', 'جاري تجهيز صورة المشاركة والرابط العام.')
+            ->with('success', 'بطاقة وأدوات المشاركة جاهزة.')
             ->with('child_identity_share_created', true);
     }
 
@@ -51,19 +55,21 @@ class ChildIdentityShareController extends Controller
         $this->authorizeShare($identity, $share, $request, $access);
         $validated = $request->validate([
             'generation_attempt_id' => ['required', 'integer'],
-            'display_child_first_name' => ['nullable', 'boolean'],
         ]);
         $attempt = ChildIdentityGenerationAttempt::query()->findOrFail($validated['generation_attempt_id']);
-        $manager->createOrUpdate(
+        $share = $manager->createOrUpdate(
             $identity,
             $attempt,
             $request,
-            (bool) ($validated['display_child_first_name'] ?? false),
+            false,
             false,
             actor: $request->user(),
+            generateImmediately: true,
         );
 
-        return back()->with('success', 'تم طلب تحديث المشاركة بالهوية المعتمدة المختارة.');
+        return $share->status === 'failed'
+            ? back()->with('error', $share->generation_error)
+            : back()->with('success', 'تم تحديث بطاقة وأدوات المشاركة.');
     }
 
     public function revoke(
