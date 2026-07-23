@@ -96,11 +96,23 @@ export function initializeIdentityPhotoUploader() {
 
         const previewUrl = String(item.previewUrl);
 
-        if (!previewUrl.startsWith('blob:') && !previewUrl.startsWith('/')) {
+        if (previewUrl.startsWith('blob:')) {
+            return `<img src="${escapeHtml(previewUrl)}" alt="" class="h-full w-full object-cover">`;
+        }
+
+        let parsedUrl;
+
+        try {
+            parsedUrl = new URL(previewUrl, window.location.origin);
+        } catch {
             return '<div class="h-full w-full bg-slate-100"></div>';
         }
 
-        return `<img src="${escapeHtml(previewUrl)}" alt="" class="h-full w-full object-cover">`;
+        if (parsedUrl.origin !== window.location.origin) {
+            return '<div class="h-full w-full bg-slate-100"></div>';
+        }
+
+        return `<img src="${escapeHtml(parsedUrl.href)}" alt="" class="h-full w-full object-cover">`;
     }
 
     function render() {
