@@ -187,6 +187,8 @@ class ChildIdentitySharingTest extends TestCase
             ->assertSee('اصنع هوية طفلك مجانًا')
             ->assertSee('noindex, follow', false)
             ->assertSee('/card/og', false)
+            ->assertSee('width="1200" height="900"', false)
+            ->assertSee('<meta property="og:image:height" content="900">', false)
             ->assertDontSee($identity->parent_name)
             ->assertDontSee($identity->parent_phone)
             ->assertDontSee($identity->parent_email)
@@ -215,7 +217,7 @@ class ChildIdentitySharingTest extends TestCase
         foreach ([
             'feed' => [1200, 900],
             'story' => [1080, 1920],
-            'og' => [1200, 630],
+            'og' => [1200, 900],
         ] as $variant => $expected) {
             Storage::disk('local')->assertExists($paths[$variant]);
             $image = new \Imagick;
@@ -226,6 +228,10 @@ class ChildIdentitySharingTest extends TestCase
             $this->assertEmpty($image->getImageProperties('exif:*'));
             $image->clear();
         }
+        $this->assertSame(
+            hash('sha256', Storage::disk('local')->get($paths['feed'])),
+            hash('sha256', Storage::disk('local')->get($paths['og'])),
+        );
         Http::assertNothingSent();
     }
 

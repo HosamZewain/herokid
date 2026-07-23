@@ -112,6 +112,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'child_identity_share_hashtags', 'value' => ChildIdentityShareSettings::DEFAULT_HASHTAGS],
             ['key' => 'child_identity_share_card_headline', 'value' => 'شوفوا هوية طفلي من HeroKid ✨'],
             ['key' => 'child_identity_share_card_cta', 'value' => 'اصنع هوية طفلك مجانًا'],
+            ['key' => 'child_identity_share_card_footer', 'value' => 'شاركها وخلي أصحابك يجربوا'],
             ['key' => 'child_identity_share_landing_title', 'value' => 'شوفوا هوية طفلي من HeroKid ✨'],
             ['key' => 'child_identity_share_landing_description', 'value' => 'اصنع هوية طفلك مجانًا، وشوفه بطلًا في قصة مخصصة له.'],
             ['key' => 'child_identity_share_landing_cta', 'value' => 'اصنع هوية طفلك مجانًا'],

@@ -32,6 +32,7 @@ class ChildIdentitySettingsController extends Controller
                     'hashtags' => $shareSettings->hashtags(),
                     'card_headline' => $shareSettings->cardHeadline(),
                     'card_cta' => $shareSettings->cardCta(),
+                    'card_footer' => $shareSettings->cardFooter(),
                     'landing_title' => $shareSettings->landingTitle(),
                     'landing_description' => $shareSettings->landingDescription(),
                     'landing_cta' => $shareSettings->landingCta(),
@@ -49,7 +50,7 @@ class ChildIdentitySettingsController extends Controller
     {
         $sharingSubmitted = $request->hasAny([
             'sharing_enabled', 'share_channels', 'share_caption_ar', 'share_caption_en',
-            'share_hashtags', 'share_card_headline', 'share_card_cta',
+            'share_hashtags', 'share_card_headline', 'share_card_cta', 'share_card_footer',
             'share_landing_title', 'share_landing_description', 'share_landing_cta',
             'share_attribution_days', 'share_allow_first_name',
             'share_feed_quality', 'share_story_quality', 'share_template_version',
@@ -69,6 +70,7 @@ class ChildIdentitySettingsController extends Controller
             'share_hashtags' => [$sharingRequired, 'string', 'max:2000'],
             'share_card_headline' => [$sharingRequired, 'string', 'max:160'],
             'share_card_cta' => [$sharingRequired, 'string', 'max:160'],
+            'share_card_footer' => [$sharingRequired, 'string', 'max:160'],
             'share_landing_title' => [$sharingRequired, 'string', 'max:160'],
             'share_landing_description' => [$sharingRequired, 'string', 'max:500'],
             'share_landing_cta' => [$sharingRequired, 'string', 'max:160'],
@@ -104,6 +106,7 @@ class ChildIdentitySettingsController extends Controller
                 'child_identity_share_hashtags' => $shareText->normalizeHashtags($validated['share_hashtags']),
                 'child_identity_share_card_headline' => $validated['share_card_headline'],
                 'child_identity_share_card_cta' => $validated['share_card_cta'],
+                'child_identity_share_card_footer' => $validated['share_card_footer'],
                 'child_identity_share_landing_title' => $validated['share_landing_title'],
                 'child_identity_share_landing_description' => $validated['share_landing_description'],
                 'child_identity_share_landing_cta' => $validated['share_landing_cta'],

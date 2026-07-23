@@ -46,16 +46,19 @@ class ChildIdentityShareFingerprint
         bool $displayFirstName,
     ): string {
         $logoPath = public_path('images/logo-320.png');
+        $globePath = public_path('images/icons/globe-alt-indigo.svg');
 
         return hash('sha256', json_encode([
             'request' => $identity?->uuid,
             'attempt' => $attempt?->id,
             'output_checksum' => $attempt?->output_checksum,
             'template' => $templateVersion,
-            'layout' => 'landscape-child-first-v2',
+            'layout' => 'reference-template-v3',
             'headline' => $this->settings->cardHeadline(),
             'cta' => $this->settings->cardCta(),
+            'footer' => $this->settings->cardFooter(),
             'logo' => is_file($logoPath) ? hash_file('sha256', $logoPath) : null,
+            'globe' => is_file($globePath) ? hash_file('sha256', $globePath) : null,
             'first_name' => $displayFirstName
                 ? $this->text->firstName($identity?->child_name)
                 : null,

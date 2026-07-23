@@ -75,6 +75,11 @@ TEXT;
         return (string) setting('child_identity_share_card_cta', 'اصنع هوية طفلك مجانًا');
     }
 
+    public function cardFooter(): string
+    {
+        return (string) setting('child_identity_share_card_footer', 'شاركها وخلي أصحابك يجربوا');
+    }
+
     public function landingTitle(): string
     {
         return (string) setting('child_identity_share_landing_title', 'شوفوا هوية طفلي من HeroKid ✨');

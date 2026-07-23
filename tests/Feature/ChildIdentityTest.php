@@ -825,7 +825,8 @@ class ChildIdentityTest extends TestCase
             ->assertOk()
             ->assertSee('نصوص شاشة انتظار إنشاء الهوية')
             ->assertSee('processing_copy[heading]', false)
-            ->assertSee('processing_copy[result_description]', false);
+            ->assertSee('processing_copy[result_description]', false)
+            ->assertSee('share_card_footer', false);
 
         $this->actingAs($admin)
             ->put(route('admin.child-identities.settings.update'), $payload)

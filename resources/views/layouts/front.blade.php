@@ -11,6 +11,8 @@
         $seoTitle = isset($pageTitle) ? (string) $pageTitle : setting('seo_home_title', $settings['seo_home_title'] ?? '');
         $seoDescription = isset($pageDescription) ? (string) $pageDescription : setting('seo_home_description', $settings['seo_home_description'] ?? '');
         $seoImage = \App\Support\Seo::imageUrl(isset($pageImage) ? (string) $pageImage : '/images/og-cover.jpg');
+        $seoImageWidth = isset($ogImageWidth) ? (int) trim((string) $ogImageWidth) : 1200;
+        $seoImageHeight = isset($ogImageHeight) ? (int) trim((string) $ogImageHeight) : 630;
         $canonicalUrl = isset($canonical) ? \App\Support\Seo::url((string) $canonical) : \App\Support\Seo::canonicalForRequest(request());
         $fullTitle = $seoTitle . ' | HeroKid';
         $siteUrl = \App\Support\Seo::url('/');
@@ -82,8 +84,8 @@
     <meta property="og:title" content="{{ $fullTitle }}">
     <meta property="og:description" content="{{ $seoDescription }}">
     <meta property="og:image" content="{{ $seoImage }}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
+    <meta property="og:image:width" content="{{ $seoImageWidth }}">
+    <meta property="og:image:height" content="{{ $seoImageHeight }}">
     <meta property="og:locale" content="ar_EG">
 
     <!-- ══ Twitter Card ══ -->

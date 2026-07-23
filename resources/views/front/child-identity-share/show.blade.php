@@ -2,6 +2,8 @@
     <x-slot name="pageTitle">{{ $public['title'] }}</x-slot>
     <x-slot name="pageDescription">{{ $public['description'] }}</x-slot>
     <x-slot name="pageImage">{{ $public['og_image'] }}</x-slot>
+    <x-slot name="ogImageWidth">1200</x-slot>
+    <x-slot name="ogImageHeight">900</x-slot>
     <x-slot name="canonical">{{ $public['url'] }}</x-slot>
     <x-slot name="robots">noindex, follow</x-slot>
     <x-slot name="ogType">website</x-slot>
@@ -41,8 +43,8 @@
 
                     <div class="order-1 lg:order-2">
                         <img src="{{ $public['feed_image'] }}" alt="بطاقة هوية طفل من HeroKid"
-                             class="mx-auto aspect-[4/5] max-h-[720px] w-full max-w-lg rounded-3xl bg-white object-contain shadow-2xl"
-                             width="1080" height="1350">
+                             class="mx-auto aspect-[4/3] w-full max-w-2xl rounded-3xl bg-white object-contain shadow-2xl"
+                             width="1200" height="900">
                     </div>
                 </div>
             </section>

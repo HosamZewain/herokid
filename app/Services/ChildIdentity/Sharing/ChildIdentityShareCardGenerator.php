@@ -12,9 +12,9 @@ use Mpdf\Output\Destination;
 class ChildIdentityShareCardGenerator
 {
     private const VARIANTS = [
-        'feed' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 72]],
+        'feed' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 66]],
         'story' => ['pixels' => [1080, 1920], 'mm' => [108, 192], 'image_mm' => [91, 105]],
-        'og' => ['pixels' => [1200, 630], 'mm' => [120, 63], 'image_mm' => [69, 51]],
+        'og' => ['pixels' => [1200, 900], 'mm' => [120, 90], 'image_mm' => [108, 66]],
     ];
 
     public function __construct(
@@ -59,9 +59,10 @@ class ChildIdentityShareCardGenerator
 
         $identityContents = Storage::disk($attempt->output_disk ?: 'local')->get($attempt->output_storage_path);
         $logoContents = file_get_contents(public_path('images/logo-320.png'));
+        $globeContents = file_get_contents(public_path('images/icons/globe-alt-indigo.svg'));
 
-        if ($logoContents === false) {
-            throw new \RuntimeException('The official HeroKid logo is unavailable.');
+        if ($logoContents === false || $globeContents === false) {
+            throw new \RuntimeException('A required HeroKid sharing-card asset is unavailable.');
         }
 
         $paths = [];
@@ -75,6 +76,7 @@ class ChildIdentityShareCardGenerator
                 $definition,
                 $identityContents,
                 $logoContents,
+                $globeContents,
             );
             Storage::disk('local')->put($path, $jpeg);
             $paths[$variant] = $path;
@@ -90,6 +92,7 @@ class ChildIdentityShareCardGenerator
         array $definition,
         string $identityContents,
         string $logoContents,
+        string $globeContents,
     ): string {
         [$widthPx, $heightPx] = $definition['pixels'];
         [$imageWidthMm, $imageHeightMm] = $definition['image_mm'];
@@ -98,65 +101,66 @@ class ChildIdentityShareCardGenerator
         $identity = $this->normalizedImage($identityContents, $identityWidth, $identityHeight);
         $logo = $this->normalizedLogo(
             $logoContents,
-            $variant === 'feed' ? 150 : ($variant === 'og' ? 210 : 230),
-            $variant === 'feed' ? 90 : ($variant === 'story' ? 210 : 170),
+            in_array($variant, ['feed', 'og'], true) ? 150 : 230,
+            in_array($variant, ['feed', 'og'], true) ? 110 : 210,
         );
+        $globeDataUri = 'data:image/svg+xml;base64,'.base64_encode($globeContents);
         $firstName = $displayFirstName
             ? $this->text->firstName($identityRequest->child_name)
             : '';
         $headline = htmlspecialchars(str_replace('✨', '', $this->settings->cardHeadline()), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $cta = htmlspecialchars($this->settings->cardCta(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $footer = htmlspecialchars($this->settings->cardFooter(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $nameLine = $firstName !== ''
             ? '<div style="margin-top:8px;color:#db2777;font-size:24px">هوية '.htmlspecialchars($firstName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</div>'
+            : '';
+        $referenceName = $firstName !== ''
+            ? ' • هوية '.htmlspecialchars($firstName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             : '';
         $canvas = new \Imagick;
         $canvas->newImage($widthPx, $heightPx, new \ImagickPixel('#f8f7ff'), 'jpeg');
         $this->drawAccent($canvas, $widthPx, $heightPx);
 
-        if ($variant === 'feed') {
-            $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 1015, 5);
+        if (in_array($variant, ['feed', 'og'], true)) {
+            $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 1035, 18);
             $headlineBlock = $this->textBlock(
-                "<div>{$headline}{$nameLine}</div>",
-                840,
-                88,
-                27,
+                "<div>{$headline}</div>",
+                870,
+                68,
+                38,
                 '#312e81',
                 '#f8f7ff',
             );
-            $canvas->compositeImage($headlineBlock, \Imagick::COMPOSITE_OVER, 100, 2);
-            $this->framedIdentity($canvas, $identity, 60, 100, $identityWidth, $identityHeight);
+            $canvas->compositeImage($headlineBlock, \Imagick::COMPOSITE_OVER, 140, 18);
             $ctaBlock = $this->textBlock(
-                "<div>{$cta} • <span style=\"direction:ltr\">hero-kid.com</span></div>",
-                900,
-                42,
-                19,
+                "<div>{$cta}{$referenceName}</div>",
+                720,
+                48,
+                26,
+                '#2aa8b2',
+                '#f8f7ff',
+            );
+            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 240, 83);
+            $this->framedIdentity($canvas, $identity, 60, 165, $identityWidth, $identityHeight);
+            $footerBlock = $this->textBlock(
+                "<div>{$footer}</div>",
+                540,
+                62,
+                23,
                 '#4f46e5',
                 '#f8f7ff',
             );
-            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 150, 850);
-        } elseif ($variant === 'og') {
-            $this->roundedPanel($canvas, 735, 20, 445, 590, '#4f46e5', 38);
-            $this->framedIdentity($canvas, $identity, 35, 60, $identityWidth, $identityHeight);
-            $canvas->compositeImage($logo, \Imagick::COMPOSITE_OVER, 850, 38);
-            $headlineBlock = $this->textBlock(
-                "<div>{$headline}{$nameLine}</div>",
+            $canvas->compositeImage($footerBlock, \Imagick::COMPOSITE_OVER, 610, 838);
+            $siteBlock = $this->textBlock(
+                '<div style="direction:ltr">hero-kid.com&nbsp; <img src="'.$globeDataUri.'" style="width:24px;height:24px;vertical-align:middle"></div>',
                 390,
-                170,
-                30,
-                '#ffffff',
+                62,
+                22,
                 '#4f46e5',
+                '#f8f7ff',
             );
-            $canvas->compositeImage($headlineBlock, \Imagick::COMPOSITE_OVER, 760, 205);
-            $this->roundedPanel($canvas, 765, 410, 375, 155, '#db2777', 28);
-            $ctaBlock = $this->textBlock(
-                "<div>{$cta}</div><div style=\"font-size:18px;margin-top:4px;direction:ltr\">hero-kid.com</div>",
-                340,
-                125,
-                25,
-                '#ffffff',
-                '#db2777',
-            );
-            $canvas->compositeImage($ctaBlock, \Imagick::COMPOSITE_OVER, 782, 425);
+            $canvas->compositeImage($siteBlock, \Imagick::COMPOSITE_OVER, 80, 838);
+            $this->verticalDivider($canvas, 565, 848, 890);
         } else {
             $isStory = $variant === 'story';
             $headerHeight = $isStory ? 285 : 210;
@@ -208,6 +212,12 @@ class ChildIdentityShareCardGenerator
         $logo->clear();
         $headlineBlock->clear();
         $ctaBlock->clear();
+        if (isset($footerBlock)) {
+            $footerBlock->clear();
+        }
+        if (isset($siteBlock)) {
+            $siteBlock->clear();
+        }
 
         return $contents;
     }
@@ -304,7 +314,19 @@ HTML);
         int $height,
     ): void {
         $this->roundedPanel($canvas, $x - 10, $y - 10, $width + 20, $height + 20, '#ddd6fe', 34);
-        $canvas->compositeImage($identity, \Imagick::COMPOSITE_OVER, $x, $y);
+        $roundedIdentity = clone $identity;
+        $mask = new \Imagick;
+        $mask->newImage($width, $height, new \ImagickPixel('transparent'), 'png');
+        $draw = new \ImagickDraw;
+        $draw->setFillColor('#ffffff');
+        $draw->roundRectangle(0, 0, $width - 1, $height - 1, 25, 25);
+        $mask->drawImage($draw);
+        $roundedIdentity->setImageAlphaChannel(\Imagick::ALPHACHANNEL_ACTIVATE);
+        $roundedIdentity->compositeImage($mask, \Imagick::COMPOSITE_DSTIN, 0, 0);
+        $canvas->compositeImage($roundedIdentity, \Imagick::COMPOSITE_OVER, $x, $y);
+        $draw->clear();
+        $mask->clear();
+        $roundedIdentity->clear();
     }
 
     private function roundedPanel(
@@ -330,6 +352,18 @@ HTML);
         $draw->circle(10, 10, 120, 120);
         $draw->setFillColor('#fce7f3');
         $draw->circle($width - 5, $height - 5, $width - 130, $height - 130);
+        $draw->setFillColor('#ccfbf1');
+        $draw->circle(0, $height, 105, $height - 105);
+        $canvas->drawImage($draw);
+        $draw->clear();
+    }
+
+    private function verticalDivider(\Imagick $canvas, int $x, int $startY, int $endY): void
+    {
+        $draw = new \ImagickDraw;
+        $draw->setStrokeColor('#a78bfa');
+        $draw->setStrokeWidth(2);
+        $draw->line($x, $startY, $x, $endY);
         $canvas->drawImage($draw);
         $draw->clear();
     }

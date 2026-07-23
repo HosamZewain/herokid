@@ -121,6 +121,9 @@
                         <label class="text-sm font-bold text-slate-700">دعوة بطاقة المشاركة
                             <input name="share_card_cta" value="{{ old('share_card_cta', $values['sharing']['card_cta']) }}" class="mt-2 w-full rounded-xl border-slate-300">
                         </label>
+                        <label class="text-sm font-bold text-slate-700 sm:col-span-2">نص الشريط السفلي في البطاقة
+                            <input name="share_card_footer" value="{{ old('share_card_footer', $values['sharing']['card_footer']) }}" class="mt-2 w-full rounded-xl border-slate-300">
+                        </label>
                         <label class="text-sm font-bold text-slate-700">عنوان الصفحة العامة
                             <input name="share_landing_title" value="{{ old('share_landing_title', $values['sharing']['landing_title']) }}" class="mt-2 w-full rounded-xl border-slate-300">
                         </label>
