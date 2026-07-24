@@ -27,14 +27,18 @@ const download = (url, filename) => {
     link.remove();
 };
 
+const userAgent = () => navigator.userAgent ?? '';
+
 const isMobileDevice = () => {
     if (navigator.userAgentData?.mobile === true) return true;
 
-    const userAgent = navigator.userAgent ?? '';
+    const agent = userAgent();
 
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent)
-        || (/Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(agent)
+        || (/Macintosh/i.test(agent) && navigator.maxTouchPoints > 1);
 };
+
+const isFacebookInAppBrowser = () => /FBAN|FBAV|FB_IAB|FBIOS|FB4A/i.test(userAgent());
 
 const facebookPublicUrl = (data) => {
     try {
@@ -44,8 +48,21 @@ const facebookPublicUrl = (data) => {
     }
 };
 
+const mobileFacebookUrl = (data) => {
+    try {
+        const url = new URL(data.facebook);
+        url.hostname = 'm.facebook.com';
+
+        return url.toString();
+    } catch (_) {
+        return data.facebook;
+    }
+};
+
 const shareToFacebook = async (data) => {
-    if (isMobileDevice() && navigator.share) {
+    const mobile = isMobileDevice();
+
+    if (mobile && navigator.share && !isFacebookInAppBrowser()) {
         try {
             await navigator.share({
                 title: 'HeroKid',
@@ -57,9 +74,14 @@ const shareToFacebook = async (data) => {
         } catch (error) {
             if (error?.name === 'AbortError') return 'cancelled';
 
-            window.location.assign(data.facebook);
+            window.location.assign(mobileFacebookUrl(data));
             return 'fallback';
         }
+    }
+
+    if (mobile) {
+        window.location.assign(mobileFacebookUrl(data));
+        return 'fallback';
     }
 
     const facebookWindow = window.open(data.facebook, '_blank');
