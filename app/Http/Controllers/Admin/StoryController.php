@@ -6,9 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Services\Stories\StorySceneParser;
+use App\Services\Stories\StorySceneTemplateService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class StoryController extends Controller
 {
@@ -76,14 +80,15 @@ class StoryController extends Controller
     public function create()
     {
         $categories = StoryCategory::orderBy('name')->get();
+        $sceneTemplates = collect();
 
-        return view('admin.stories.create', compact('categories'));
+        return view('admin.stories.create', compact('categories', 'sceneTemplates'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(Request $request, StorySceneTemplateService $sceneTemplates)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -99,14 +104,26 @@ class StoryController extends Controller
             'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'full_story' => 'nullable|string',
             'prompt' => 'nullable|string',
+            'scenes' => 'nullable|array|size:13',
+            'scenes.*.scene_number' => 'required|integer|min:1|max:13|distinct',
+            'scenes.*.title' => 'nullable|string|max:255',
+            'scenes.*.text_template' => 'nullable|string|max:10000',
         ]);
+
+        $sceneInput = $validated['scenes'] ?? [];
+        $this->validateSceneVariables($sceneInput, $sceneTemplates);
+        unset($validated['scenes']);
 
         if ($request->hasFile('cover_image')) {
             $validated['cover_image'] = $request->file('cover_image')->store('stories', 'public');
         }
 
-        $story = Story::create($validated);
-        $story->categories()->sync($request->input('category_ids', []));
+        [$story, $sceneChanges] = DB::transaction(function () use ($validated, $request, $sceneInput, $sceneTemplates): array {
+            $story = Story::create($validated);
+            $story->categories()->sync($request->input('category_ids', []));
+
+            return [$story, $sceneTemplates->sync($story, $sceneInput)];
+        });
 
         AdminActivityLogger::log(
             action: 'story.created',
@@ -115,6 +132,7 @@ class StoryController extends Controller
             properties: [
                 'story' => $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']),
                 'category_ids' => $request->input('category_ids', []),
+                'scene_texts' => $sceneChanges,
             ],
             request: $request,
         );
@@ -136,15 +154,16 @@ class StoryController extends Controller
     public function edit(Story $story)
     {
         $categories = StoryCategory::orderBy('name')->get();
-        $story->load('attachments');
+        $story->load(['attachments', 'sceneTemplates']);
+        $sceneTemplates = $story->sceneTemplates->keyBy('scene_number');
 
-        return view('admin.stories.edit', compact('story', 'categories'));
+        return view('admin.stories.edit', compact('story', 'categories', 'sceneTemplates'));
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Story $story)
+    public function update(Request $request, Story $story, StorySceneTemplateService $sceneTemplates)
     {
         $before = $story->only([
             'title', 'slug', 'short_desc', 'full_desc', 'age_range', 'language',
@@ -166,7 +185,15 @@ class StoryController extends Controller
             'cover_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'full_story' => 'nullable|string',
             'prompt' => 'nullable|string',
+            'scenes' => 'nullable|array|size:13',
+            'scenes.*.scene_number' => 'required|integer|min:1|max:13|distinct',
+            'scenes.*.title' => 'nullable|string|max:255',
+            'scenes.*.text_template' => 'nullable|string|max:10000',
         ]);
+
+        $sceneInput = $validated['scenes'] ?? [];
+        $this->validateSceneVariables($sceneInput, $sceneTemplates);
+        unset($validated['scenes']);
 
         if ($request->hasFile('cover_image')) {
             // Delete old image if exists
@@ -179,8 +206,12 @@ class StoryController extends Controller
         // Handle checkbox since unchecked is not sent in payload
         $validated['active'] = $request->has('active');
 
-        $story->update($validated);
-        $story->categories()->sync($request->input('category_ids', []));
+        $sceneChanges = DB::transaction(function () use ($story, $validated, $request, $sceneInput, $sceneTemplates): array {
+            $story->update($validated);
+            $story->categories()->sync($request->input('category_ids', []));
+
+            return $sceneTemplates->sync($story, $sceneInput);
+        });
         $story->refresh();
 
         $after = $story->only(array_keys($before));
@@ -196,6 +227,7 @@ class StoryController extends Controller
                     'old' => $beforeCategories,
                     'new' => $afterCategories,
                 ],
+                'scene_texts' => $sceneChanges,
             ],
             request: $request,
         );
@@ -226,5 +258,46 @@ class StoryController extends Controller
         );
 
         return redirect()->route('admin.stories.index')->with('success', 'تم حذف القصة بنجاح!');
+    }
+
+    public function previewSceneImport(Request $request, StorySceneParser $parser)
+    {
+        $user = $request->user();
+        abort_unless(
+            $user && ($user->hasPermission('stories.create') || $user->hasPermission('stories.update')),
+            403,
+        );
+
+        $validated = $request->validate([
+            'full_story' => 'required|string|max:200000',
+        ]);
+        $scenes = $parser->parse($validated['full_story']);
+
+        if (! $scenes) {
+            throw ValidationException::withMessages([
+                'full_story' => 'تعذر اكتشاف ١٣ قسمًا مرقّمًا من مشهد 1 إلى مشهد 13 أو Scene 1 إلى Scene 13.',
+            ]);
+        }
+
+        return response()->json([
+            'scenes' => $scenes,
+            'message' => 'تم اكتشاف ١٣ مشهدًا. راجع النصوص قبل حفظ القصة.',
+        ]);
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $scenes
+     */
+    private function validateSceneVariables(array $scenes, StorySceneTemplateService $sceneTemplates): void
+    {
+        $errors = collect($sceneTemplates->validationErrors($scenes))
+            ->mapWithKeys(fn (string $message, int $sceneNumber): array => [
+                'scenes.'.$sceneNumber.'.text_template' => $message,
+            ])
+            ->all();
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }

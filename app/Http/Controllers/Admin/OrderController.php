@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -24,11 +25,12 @@ class OrderController extends Controller
         return view('admin.orders.index', $result);
     }
 
-    public function show(Order $order, AdminOrderGroupService $groups)
+    public function show(Order $order, AdminOrderGroupService $groups, OrderSceneTextService $sceneTexts)
     {
         $order->load([
             'user',
-            'story',
+            'story.sceneTemplates',
+            'sceneTextSnapshots',
             'statusLogs',
             'previews',
             'items.product',
@@ -37,6 +39,7 @@ class OrderController extends Controller
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
             'productionProject.assignedTo',
+            'productionProject.scenes',
             'childIdentityRequest.photos',
             'childIdentityRequest.attempts',
             'childIdentityApprovedAttempt',
@@ -64,8 +67,9 @@ class OrderController extends Controller
         );
 
         $checkoutGroup = $groups->findByRepresentative($order->id);
+        $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
 
-        return view('admin.orders.show', compact('order', 'checkoutGroup', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting'));
+        return view('admin.orders.show', compact('order', 'checkoutGroup', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting', 'sceneTextHandoff'));
     }
 
     public function update(Request $request, Order $order, OrderStatusService $statuses)

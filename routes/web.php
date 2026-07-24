@@ -412,6 +412,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middleware('permission:child_identities.manage_shares')
         ->name('child-identity-shares.cards.destroy');
 
+    Route::post('stories/scene-import-preview', [App\Http\Controllers\Admin\StoryController::class, 'previewSceneImport'])
+        ->name('stories.scene-import-preview');
     Route::resource('stories', App\Http\Controllers\Admin\StoryController::class)
         ->middlewareFor(['index', 'show'], 'permission:stories.view')
         ->middlewareFor(['create', 'store'], 'permission:stories.create')

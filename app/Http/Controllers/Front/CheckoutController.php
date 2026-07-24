@@ -13,6 +13,7 @@ use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
@@ -28,6 +29,7 @@ class CheckoutController extends Controller
         TemporaryPhotoUploadService $photoUploads,
         StoryPricingService $storyPricing,
         ChildIdentityEventLogger $identityEvents,
+        OrderSceneTextService $sceneTexts,
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -84,7 +86,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, $identityEvents, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -217,6 +219,7 @@ class CheckoutController extends Controller
                     $ordersByStoryCartKey[$cartKey] = $order;
                     $firstOrder ??= $order;
                     $orderIds[] = $order->id;
+                    $sceneTexts->snapshotForOrder($order, $story);
 
                     if ($identity) {
                         $fromStatus = $identity->status;

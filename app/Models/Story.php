@@ -22,13 +22,14 @@ class Story extends Model
      */
     public function getCoverUrlAttribute(): ?string
     {
-        if (!$this->cover_image) {
+        if (! $this->cover_image) {
             return null;
         }
         // Already a full external URL (e.g. seeder placeholder images)
         if (str_starts_with($this->cover_image, 'http')) {
             return Seo::imageUrl($this->cover_image);
         }
+
         // Use Storage::url() so the URL respects the disk driver (local OR S3/cloud)
         // and is always consistent with where the file was actually stored.
         return Seo::imageUrl(Storage::disk('public')->url($this->cover_image));
@@ -40,14 +41,14 @@ class Story extends Model
         $ageRange = $this->cleanSeoText((string) $this->age_range);
         $lesson = $this->cleanSeoText((string) $this->lesson_value);
 
-        $description = 'في قصة ' . $title . ' يصبح طفلك بطل الحكاية باسمه ووجهه المخصص';
+        $description = 'في قصة '.$title.' يصبح طفلك بطل الحكاية باسمه ووجهه المخصص';
 
         if ($ageRange !== '') {
-            $description .= '، للأعمار ' . $ageRange;
+            $description .= '، للأعمار '.$ageRange;
         }
 
         if ($lesson !== '') {
-            $description .= '، مع مغزى يعزز ' . $lesson;
+            $description .= '، مع مغزى يعزز '.$lesson;
         } else {
             $description .= '، مع تجربة عاطفية وتربوية تمنحه الثقة والخيال';
         }
@@ -59,7 +60,7 @@ class Story extends Model
         }
 
         if (mb_strlen($description) > 155) {
-            $description = rtrim(mb_substr($description, 0, 152), " \t\n\r\0\x0B،.") . '.';
+            $description = rtrim(mb_substr($description, 0, 152), " \t\n\r\0\x0B،.").'.';
         }
 
         return $description;
@@ -88,5 +89,10 @@ class Story extends Model
     public function categories()
     {
         return $this->belongsToMany(StoryCategory::class, 'story_story_category');
+    }
+
+    public function sceneTemplates()
+    {
+        return $this->hasMany(StorySceneTemplate::class)->orderBy('scene_number');
     }
 }

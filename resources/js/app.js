@@ -2,6 +2,8 @@ import './bootstrap';
 import { initializeIdentityHeicRecovery, initializeIdentityPhotoUploader } from './identity-photo-uploader';
 import { prepareImageForUpload } from './image-upload-preparer';
 import { initializeIdentitySharing } from './identity-sharing';
+import { initializeStorySceneEditor } from './story-scene-editor';
+import { initializeOrderSceneTexts } from './order-scene-texts';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -11,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeIdentityPhotoUploader();
     initializeIdentityHeicRecovery();
     initializeIdentitySharing();
+    initializeStorySceneEditor();
+    initializeOrderSceneTexts();
     const adminSidebar = document.querySelector('[data-admin-sidebar]');
     const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
     const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');

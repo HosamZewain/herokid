@@ -27,9 +27,11 @@ use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderManager;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Notifications\NotificationBudgetMonitor;
+use App\Services\Orders\OrderSceneTextService;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\ProductionStudio\ProductionLayoutBuilder;
 use App\Services\ProductionStudio\ScenePersonalizationService;
+use App\Services\Stories\StorySceneParser;
 use App\Support\AdminActivityLogger;
 use App\Support\Ai\SupportedProviderRegistry;
 use App\Support\ProductionStudio;
@@ -884,7 +886,7 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تمت إعادة فتح المشروع.');
     }
 
-    public function createDraftFromStory(ProductionProject $project)
+    public function createDraftFromStory(ProductionProject $project, OrderSceneTextService $sceneTexts)
     {
         $this->ensureEnabled();
 
@@ -904,12 +906,18 @@ class ProductionStudioController extends Controller
         ]);
 
         if (! $project->scenes()->exists()) {
+            $sceneHandoff = collect($sceneTexts->present($project->order, includeProductionScenes: false)['scenes'])
+                ->keyBy('scene_number');
+
             foreach (range(1, 13) as $sceneNumber) {
+                $handoff = $sceneHandoff->get($sceneNumber);
                 $project->scenes()->create([
                     'production_story_version_id' => $version->id,
                     'scene_number' => $sceneNumber,
-                    'title' => 'Scene '.$sceneNumber,
-                    'story_text' => ProductionStudio::sceneSeedText($content, $sceneNumber),
+                    'title' => filled($handoff['title'] ?? null) ? $handoff['title'] : 'Scene '.$sceneNumber,
+                    'story_text' => filled($handoff['text'] ?? null)
+                        ? $handoff['text']
+                        : ProductionStudio::sceneSeedText($content, $sceneNumber),
                     'educational_value' => $project->order->lesson ?? $story?->lesson_value,
                     'status' => 'draft',
                 ]);
@@ -949,7 +957,7 @@ class ProductionStudioController extends Controller
         return back()->with('success', 'تم تحديث نسخة القصة.');
     }
 
-    public function extractScenes(Request $request, ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer)
+    public function extractScenes(Request $request, ProductionProject $project, AiProviderAvailability $availability, ScenePersonalizationService $personalizer, StorySceneParser $sceneParser)
     {
         $this->ensureEnabled();
 
@@ -966,7 +974,7 @@ class ProductionStudioController extends Controller
             ?: ($project->order->story?->full_story ?? $project->order->story?->full_desc ?? $project->order->story?->short_desc);
 
         try {
-            $extracted = $this->deterministicSceneExtraction($project, $storyText);
+            $extracted = $this->deterministicSceneExtraction($project, $storyText, $sceneParser);
             $source = 'deterministic_parser';
             $job = null;
 
@@ -1825,33 +1833,22 @@ class ProductionStudioController extends Controller
         $job->update(['output_metadata_json' => $metadata]);
     }
 
-    private function deterministicSceneExtraction(ProductionProject $project, ?string $storyText): ?array
+    private function deterministicSceneExtraction(ProductionProject $project, ?string $storyText, StorySceneParser $parser): ?array
     {
-        $text = trim((string) $storyText);
+        $parsedScenes = $parser->parse($storyText);
 
-        if ($text === '') {
+        if (! $parsedScenes) {
             return null;
         }
 
-        preg_match_all('/(?:^|\R)\s*(?:Scene|مشهد)\s*([0-9٠-٩]+)\s*[:：\\-–]?\s*(.*?)(?=(?:\R\s*(?:Scene|مشهد)\s*[0-9٠-٩]+\s*[:：\\-–]?)|\z)/su', $text, $matches, PREG_SET_ORDER);
-
-        if (count($matches) !== 13) {
-            return null;
-        }
-
-        $scenes = collect($matches)->map(function (array $match, int $index): array {
-            $body = trim($match[2] ?? '');
-            $lines = collect(preg_split('/\R/u', $body) ?: [])
-                ->map(fn (string $line): string => trim($line))
-                ->filter()
-                ->values();
-            $title = $lines->first() ?: 'Scene '.($index + 1);
-            $written = $lines->slice(1)->implode("\n") ?: $body;
+        $scenes = collect($parsedScenes)->map(function (array $scene): array {
+            $sceneNumber = (int) $scene['scene_number'];
+            $title = trim((string) $scene['title']) ?: 'Scene '.$sceneNumber;
 
             return [
-                'scene_number' => $index + 1,
+                'scene_number' => $sceneNumber,
                 'scene_title' => $title,
-                'written_text' => $written,
+                'written_text' => $scene['text_template'],
                 'visual_direction' => 'Create one connected A3 landscape two-page reader spread for this scene: '.$title.'. The artwork must continue naturally across both facing A4 pages and support the written scene without showing any text.',
                 'child_action_pose' => 'Define the child as the active hero in this scene. Review and refine the exact pose/action before image generation.',
                 'environment' => 'Define one cohesive environment across the full A3 landscape spread. Review and refine before image generation.',

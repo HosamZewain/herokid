@@ -11,6 +11,7 @@
         'story_orders' => collect([$order]),
         'key' => $order->checkoutGroupKey(),
     ];
+    $sceneTextHandoff ??= null;
 @endphp
 
 <x-admin-layout>
@@ -199,6 +200,10 @@
                             </div>
                         @endif
                     </div>
+                    @endif
+
+                    @if($sceneTextHandoff)
+                        @include('admin.orders._scene-text-handoff')
                     @endif
 
                     <!-- Delivery Info -->

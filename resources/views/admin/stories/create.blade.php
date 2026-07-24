@@ -129,6 +129,8 @@
                         <x-input-error :messages="$errors->get('full_story')" class="mt-2" />
                     </div>
 
+                    @include('admin.stories._scene-texts')
+
                     <!-- Prompt (internal only) -->
                     <div class="mt-6">
                         <x-input-label for="prompt" :value="__('البرومبت (Prompt)')" />

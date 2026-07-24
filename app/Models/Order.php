@@ -70,6 +70,11 @@ class Order extends Model
         return $this->hasOne(ProductionProject::class);
     }
 
+    public function sceneTextSnapshots()
+    {
+        return $this->hasMany(OrderSceneTextSnapshot::class)->orderBy('scene_number');
+    }
+
     public function childIdentityRequest()
     {
         return $this->belongsTo(ChildIdentityRequest::class)->withTrashed();
