@@ -24,6 +24,17 @@
 
     <div class="border-t border-indigo-100 p-4 sm:p-6">
         @if($sceneTextHandoff['has_any'])
+            @if($sceneTextHandoff['has_gender_fallback'])
+                <div class="mb-5 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-amber-950" role="alert">
+                    <p class="font-black">تنبيه: بعض مشاهد النسخة البديلة غير مكتملة</p>
+                    <p class="mt-1 text-sm font-bold leading-6">
+                        استُخدم النص الأساسي بدل النص البديل في المشاهد:
+                        {{ collect($sceneTextHandoff['gender_fallback_scene_numbers'])->implode('، ') }}.
+                        النص قابل للنسخ، لكن راجع صياغة الجنس قبل الإنتاج.
+                    </p>
+                </div>
+            @endif
+
             <div class="mb-5 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex flex-col gap-2 sm:flex-row">
                     <button type="button" class="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 sm:w-auto" data-scene-text-open-all>
@@ -65,8 +76,15 @@
                                     <span class="text-sm text-gray-500">— {{ $scene['title'] }}</span>
                                 @endif
                             </div>
-                            <span class="w-fit rounded-full px-2.5 py-1 text-xs font-black {{ $sourceClasses[$scene['source']] ?? $sourceClasses['missing'] }}">
-                                {{ $scene['source_label'] }}
+                            <span class="flex flex-wrap gap-2">
+                                <span class="w-fit rounded-full px-2.5 py-1 text-xs font-black {{ $sourceClasses[$scene['source']] ?? $sourceClasses['missing'] }}">
+                                    {{ $scene['source_label'] }}
+                                </span>
+                                @if($scene['variant_label'] && $scene['source'] !== 'production_scene')
+                                    <span class="w-fit rounded-full px-2.5 py-1 text-xs font-black {{ $scene['uses_gender_fallback'] ? 'bg-amber-200 text-amber-900' : 'bg-sky-100 text-sky-700' }}">
+                                        {{ $scene['variant_label'] }}
+                                    </span>
+                                @endif
                             </span>
                         </summary>
 

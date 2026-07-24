@@ -46,7 +46,7 @@ class StorySceneTemplateRenderer
     }
 
     /**
-     * @return array{child_name: string, child_age: string, story_title: string}
+     * @return array{child_name: string, child_age: string, story_title: string, child_gender: string, story_gender: string}
      */
     public function contextForOrder(Order $order, ?Story $story = null): array
     {
@@ -56,6 +56,8 @@ class StorySceneTemplateRenderer
             'child_name' => trim((string) $order->child_name),
             'child_age' => trim((string) $order->child_age),
             'story_title' => trim((string) $story?->title),
+            'child_gender' => trim((string) $order->child_gender),
+            'story_gender' => trim((string) $story?->gender),
         ];
     }
 }

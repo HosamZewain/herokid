@@ -108,6 +108,7 @@ class StoryController extends Controller
             'scenes.*.scene_number' => 'required|integer|min:1|max:13|distinct',
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
+            'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];
@@ -189,6 +190,7 @@ class StoryController extends Controller
             'scenes.*.scene_number' => 'required|integer|min:1|max:13|distinct',
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
+            'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];
@@ -290,11 +292,7 @@ class StoryController extends Controller
      */
     private function validateSceneVariables(array $scenes, StorySceneTemplateService $sceneTemplates): void
     {
-        $errors = collect($sceneTemplates->validationErrors($scenes))
-            ->mapWithKeys(fn (string $message, int $sceneNumber): array => [
-                'scenes.'.$sceneNumber.'.text_template' => $message,
-            ])
-            ->all();
+        $errors = $sceneTemplates->validationErrors($scenes);
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);

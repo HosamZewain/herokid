@@ -44,7 +44,11 @@ class StorySceneTextHandoffTest extends TestCase
     {
         $admin = $this->admin(['stories.create', 'stories.update']);
         $payload = $this->storyPayload();
+        $payload['gender'] = 'girl';
         $payload['scenes'] = $this->scenePayload();
+        foreach (range(1, 12) as $sceneNumber) {
+            $payload['scenes'][$sceneNumber]['alternate_text_template'] = 'نص بديل {{child_name}} للمشهد '.$sceneNumber;
+        }
 
         $this->actingAs($admin)
             ->post(route('admin.stories.store'), $payload)
@@ -53,10 +57,14 @@ class StorySceneTextHandoffTest extends TestCase
         $story = Story::where('slug', $payload['slug'])->firstOrFail();
         $this->assertCount(13, $story->sceneTemplates);
         $this->assertSame(12, $story->sceneTemplates->whereNotNull('text_template')->count());
+        $this->assertSame(12, $story->sceneTemplates->whereNotNull('alternate_text_template')->count());
         $this->actingAs($admin)->get(route('admin.stories.edit', $story))
             ->assertOk()
             ->assertSee('نصوص المشاهد')
-            ->assertSee('12 من 13 مشهد مكتمل');
+            ->assertSee('الأساسي: 12 من 13')
+            ->assertSee('البديل: 12 من 13')
+            ->assertSee('data-scene-import-alternate', false)
+            ->assertSee('data-scene-alternate-template', false);
 
         $reordered = array_reverse($this->scenePayload(), preserve_keys: false);
         $updatePayload = array_merge($payload, ['scenes' => $reordered]);
@@ -69,11 +77,11 @@ class StorySceneTextHandoffTest extends TestCase
         );
 
         $payload['slug'] = 'invalid-scenes-'.Str::lower(Str::random(5));
-        $payload['scenes'][4]['text_template'] = 'مرحبًا {{unknown_value}}';
+        $payload['scenes'][4]['alternate_text_template'] = 'مرحبًا {{unknown_value}}';
 
         $this->actingAs($admin)
             ->post(route('admin.stories.store'), $payload)
-            ->assertSessionHasErrors('scenes.4.text_template');
+            ->assertSessionHasErrors('scenes.4.alternate_text_template');
     }
 
     public function test_import_preview_requires_permission_and_never_saves_story_fields(): void
@@ -129,12 +137,106 @@ class StorySceneTextHandoffTest extends TestCase
             'ليلى عمرها 7 في قصة '.$story->title,
             $order->sceneTextSnapshots->first()->rendered_text,
         );
+        $this->assertSame('original', $order->sceneTextSnapshots->first()->selected_text_variant);
+        $this->assertSame('girl', $order->sceneTextSnapshots->first()->render_context_snapshot['child_gender']);
+        $this->assertSame('both', $order->sceneTextSnapshots->first()->render_context_snapshot['story_gender']);
 
         $story->sceneTemplates()->where('scene_number', 1)->update(['text_template' => 'نص جديد']);
         $this->assertSame(
             'ليلى عمرها 7 في قصة '.$story->title,
             $order->sceneTextSnapshots()->where('scene_number', 1)->value('rendered_text'),
         );
+    }
+
+    public function test_gender_specific_snapshots_select_original_alternate_and_per_scene_fallback(): void
+    {
+        $story = $this->story(['gender' => 'girl']);
+        $this->addTemplates($story, 'النص الأساسي {{child_name}}', 'النص البديل {{child_name}}');
+        $story->sceneTemplates()->where('scene_number', 3)->update(['alternate_text_template' => null]);
+
+        $girlOrder = $this->order($story, [
+            'order_number' => 'HK-GIRL-ORIGINAL',
+            'child_name' => 'ريم',
+            'child_gender' => 'girl',
+        ]);
+        $boyOrder = $this->order($story, [
+            'order_number' => 'HK-BOY-ALTERNATE',
+            'child_name' => 'عمر',
+            'child_gender' => 'boy',
+        ]);
+        $service = app(OrderSceneTextService::class);
+        $service->snapshotForOrder($girlOrder, $story);
+        $service->snapshotForOrder($boyOrder, $story);
+
+        $this->assertSame(
+            ['original'],
+            $girlOrder->sceneTextSnapshots()->pluck('selected_text_variant')->unique()->values()->all(),
+        );
+        $this->assertSame('النص الأساسي ريم', $girlOrder->sceneTextSnapshots()->where('scene_number', 1)->value('rendered_text'));
+        $this->assertSame('alternate', $boyOrder->sceneTextSnapshots()->where('scene_number', 1)->value('selected_text_variant'));
+        $this->assertSame('النص البديل عمر', $boyOrder->sceneTextSnapshots()->where('scene_number', 1)->value('rendered_text'));
+        $this->assertSame('original_fallback', $boyOrder->sceneTextSnapshots()->where('scene_number', 3)->value('selected_text_variant'));
+        $this->assertSame('النص الأساسي عمر', $boyOrder->sceneTextSnapshots()->where('scene_number', 3)->value('rendered_text'));
+
+        $presented = $service->present($boyOrder->fresh());
+        $this->assertTrue($presented['has_gender_fallback']);
+        $this->assertSame([3], $presented['gender_fallback_scene_numbers']);
+        $this->assertSame('النص البديل — ولد', $presented['scenes'][0]['variant_label']);
+        $this->assertSame('النص الأساسي بدل البديل', $presented['scenes'][2]['variant_label']);
+
+        $story->update(['gender' => 'boy']);
+        $story->sceneTemplates()->where('scene_number', 1)->update([
+            'text_template' => 'تعديل لاحق',
+            'alternate_text_template' => 'تعديل بديل لاحق',
+        ]);
+        $this->assertSame('alternate', $boyOrder->sceneTextSnapshots()->where('scene_number', 1)->value('selected_text_variant'));
+        $this->assertSame('النص البديل عمر', $boyOrder->sceneTextSnapshots()->where('scene_number', 1)->value('rendered_text'));
+    }
+
+    public function test_boy_story_reverses_gender_mapping_and_both_story_always_uses_original(): void
+    {
+        $boyStory = $this->story(['gender' => 'boy']);
+        $this->addTemplates($boyStory, 'ولد أساسي', 'بنت بديل');
+        $girlOrder = $this->order($boyStory, ['order_number' => 'HK-BOY-STORY-GIRL', 'child_gender' => 'girl']);
+        app(OrderSceneTextService::class)->snapshotForOrder($girlOrder, $boyStory);
+
+        $this->assertSame('alternate', $girlOrder->sceneTextSnapshots()->first()->selected_text_variant);
+        $this->assertSame('بنت بديل', $girlOrder->sceneTextSnapshots()->first()->rendered_text);
+
+        $bothStory = $this->story(['gender' => 'both']);
+        $this->addTemplates($bothStory, 'محايد أساسي', 'بديل غير مستخدم');
+        $bothOrder = $this->order($bothStory, ['order_number' => 'HK-BOTH-STORY', 'child_gender' => 'boy']);
+        app(OrderSceneTextService::class)->snapshotForOrder($bothOrder, $bothStory);
+
+        $this->assertSame('original', $bothOrder->sceneTextSnapshots()->first()->selected_text_variant);
+        $this->assertSame('محايد أساسي', $bothOrder->sceneTextSnapshots()->first()->rendered_text);
+    }
+
+    public function test_legacy_orders_choose_current_gender_variant_and_historical_snapshots_remain_original(): void
+    {
+        $story = $this->story(['gender' => 'girl']);
+        $this->addTemplates($story, 'أساسي', 'بديل');
+        $legacyOrder = $this->order($story, ['order_number' => 'HK-LIVE-GENDER', 'child_gender' => 'boy']);
+
+        $live = app(OrderSceneTextService::class)->present($legacyOrder);
+        $this->assertTrue($live['is_legacy_fallback']);
+        $this->assertSame('بديل', $live['scenes'][0]['text']);
+        $this->assertSame('alternate', $live['scenes'][0]['text_variant']);
+
+        $historicalOrder = $this->order($story, ['order_number' => 'HK-HISTORICAL-SNAPSHOT', 'child_gender' => 'boy']);
+        $historicalOrder->sceneTextSnapshots()->create([
+            'scene_number' => 1,
+            'title_snapshot' => 'عنوان قديم',
+            'template_text_snapshot' => 'نص قديم',
+            'rendered_text' => 'نص قديم',
+            'selected_text_variant' => null,
+            'render_context_snapshot' => ['child_name' => 'رنا'],
+        ]);
+
+        $historical = app(OrderSceneTextService::class)->present($historicalOrder->fresh());
+        $this->assertFalse($historical['has_gender_fallback']);
+        $this->assertSame('نسخة تاريخية', $historical['scenes'][0]['variant_label']);
+        $this->assertSame('نص قديم', $historical['scenes'][0]['text']);
     }
 
     public function test_source_priority_is_production_then_snapshot_then_legacy_template(): void
@@ -177,9 +279,13 @@ class StorySceneTextHandoffTest extends TestCase
     public function test_production_draft_seeds_from_order_snapshots_without_changing_story(): void
     {
         $admin = $this->admin(['production_studio.story_edit']);
-        $story = $this->story(['full_story' => 'قصة كاملة غير مقسمة']);
-        $this->addTemplates($story);
-        $order = $this->order($story);
+        $story = $this->story(['full_story' => 'قصة كاملة غير مقسمة', 'gender' => 'girl']);
+        $this->addTemplates(
+            $story,
+            '{{child_name}} عمرها {{child_age}} في قصة {{story_title}}',
+            '{{child_name}} عمره {{child_age}} في قصة {{story_title}}',
+        );
+        $order = $this->order($story, ['child_name' => 'عمر', 'child_gender' => 'boy']);
         app(OrderSceneTextService::class)->snapshotForOrder($order, $story);
         $project = ProductionProject::create([
             'order_id' => $order->id,
@@ -193,7 +299,7 @@ class StorySceneTextHandoffTest extends TestCase
             ->assertRedirect();
 
         $this->assertCount(13, $project->scenes);
-        $this->assertSame('رنا عمرها 6 في قصة '.$story->title, $project->scenes->first()->story_text);
+        $this->assertSame('عمر عمره 6 في قصة '.$story->title, $project->scenes->first()->story_text);
         $this->assertEquals($originalStory, $story->fresh()->only(['title', 'full_story', 'updated_at']));
     }
 
@@ -228,6 +334,38 @@ class StorySceneTextHandoffTest extends TestCase
             ->get(route('admin.orders.show', $productOnly))
             ->assertOk()
             ->assertDontSee('data-order-scene-texts', false);
+    }
+
+    public function test_order_page_warns_about_gender_fallback_and_production_text_clears_that_scene_warning(): void
+    {
+        $admin = $this->admin(['orders.view']);
+        $story = $this->story(['gender' => 'girl']);
+        $this->addTemplates($story, 'أساسي', 'بديل');
+        $story->sceneTemplates()->whereIn('scene_number', [2, 5])->update(['alternate_text_template' => null]);
+        $order = $this->order($story, ['child_gender' => 'boy']);
+        $service = app(OrderSceneTextService::class);
+        $service->snapshotForOrder($order, $story);
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.show', $order))
+            ->assertOk()
+            ->assertSee('بعض مشاهد النسخة البديلة غير مكتملة')
+            ->assertSee('2، 5')
+            ->assertSee('النص الأساسي بدل البديل');
+
+        $project = ProductionProject::create([
+            'order_id' => $order->id,
+            'status' => 'draft',
+            'current_stage' => 'intake',
+        ]);
+        $project->scenes()->create([
+            'scene_number' => 2,
+            'story_text' => 'نص إنتاج نهائي',
+            'status' => 'draft',
+        ]);
+
+        $presented = $service->present($order->fresh());
+        $this->assertSame([5], $presented['gender_fallback_scene_numbers']);
     }
 
     public function test_scene_handoff_query_count_does_not_grow_with_project_scene_count(): void
@@ -306,13 +444,17 @@ class StorySceneTextHandoffTest extends TestCase
         ], $overrides));
     }
 
-    private function addTemplates(Story $story): void
-    {
+    private function addTemplates(
+        Story $story,
+        string $original = '{{child_name}} عمرها {{child_age}} في قصة {{story_title}}',
+        ?string $alternate = null,
+    ): void {
         foreach (range(1, 13) as $sceneNumber) {
             $story->sceneTemplates()->create([
                 'scene_number' => $sceneNumber,
                 'title' => 'عنوان '.$sceneNumber,
-                'text_template' => '{{child_name}} عمرها {{child_age}} في قصة {{story_title}}',
+                'text_template' => $original,
+                'alternate_text_template' => $alternate,
             ]);
         }
     }
