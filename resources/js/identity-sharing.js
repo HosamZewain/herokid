@@ -27,6 +27,48 @@ const download = (url, filename) => {
     link.remove();
 };
 
+const isMobileDevice = () => {
+    if (navigator.userAgentData?.mobile === true) return true;
+
+    const userAgent = navigator.userAgent ?? '';
+
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent)
+        || (/Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
+};
+
+const facebookPublicUrl = (data) => {
+    try {
+        return new URL(data.facebook).searchParams.get('u') || data.publicUrl;
+    } catch (_) {
+        return data.publicUrl;
+    }
+};
+
+const shareToFacebook = async (data) => {
+    if (isMobileDevice() && navigator.share) {
+        try {
+            await navigator.share({
+                title: 'HeroKid',
+                text: data.caption,
+                url: facebookPublicUrl(data),
+            });
+
+            return 'shared';
+        } catch (error) {
+            if (error?.name === 'AbortError') return 'cancelled';
+
+            window.location.assign(data.facebook);
+            return 'fallback';
+        }
+    }
+
+    const facebookWindow = window.open(data.facebook, '_blank');
+    if (facebookWindow) facebookWindow.opener = null;
+    else window.location.assign(data.facebook);
+
+    return 'opened';
+};
+
 const shareFile = async (url, filename, caption, publicUrl) => {
     const response = await fetch(url, {credentials: 'same-origin'});
     if (!response.ok) throw new Error('share_image_unavailable');
@@ -78,6 +120,9 @@ export const initializeIdentitySharing = () => {
         if (root.dataset.shareCreated === '1') {
             emitExternalAnalytics('child_identity_share_created', 'consent');
         }
+        root.querySelectorAll('form[data-share-bootstrap-action="facebook"]').forEach((form) => {
+            if (isMobileDevice()) form.removeAttribute('target');
+        });
         if (!root.dataset.sharePayload) return;
         const data = JSON.parse(root.dataset.sharePayload);
 
@@ -111,14 +156,13 @@ export const initializeIdentitySharing = () => {
                         record('share.whatsapp_clicked', 'whatsapp');
                         emitExternalAnalytics('child_identity_share_clicked', 'whatsapp');
                     } else if (action === 'facebook') {
-                        const facebookWindow = window.open('about:blank', '_blank');
-                        if (facebookWindow) facebookWindow.opener = null;
-                        await copyText(data.caption);
                         record('share.facebook_clicked', 'facebook');
                         emitExternalAnalytics('child_identity_share_clicked', 'facebook');
-                        showToast('تم نسخ النص والهاشتاجات. يمكنك لصقهم داخل منشور فيسبوك.');
-                        if (facebookWindow) facebookWindow.location = data.facebook;
-                        else window.location.href = data.facebook;
+                        const result = await shareToFacebook(data);
+                        if (result === 'opened') {
+                            await copyText(data.caption);
+                            showToast('تم نسخ النص والهاشتاجات. يمكنك لصقهم داخل منشور فيسبوك.');
+                        }
                     } else if (action === 'download-feed' || action === 'download-story') {
                         const variant = action === 'download-story' ? 'story' : 'feed';
                         download(data.cards[variant], `herokid-child-identity-${variant}.jpg`);

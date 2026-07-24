@@ -43,6 +43,7 @@
                 @if($action === 'download' || $shareSettings->channelEnabled($action))
                     <form method="POST"
                           action="{{ route('child-identity.shares.store', $identity->uuid) }}"
+                          data-share-bootstrap-action="{{ $action }}"
                           @if($action !== 'download') target="_blank" @endif>
                         @csrf
                         <input type="hidden" name="share_action" value="{{ $action }}">
