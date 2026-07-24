@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class ChildIdentityPhotoService
 {
+    public const MINIMUM_PHOTOS = 2;
+
+    public const MAXIMUM_PHOTOS = 3;
+
     private const ALLOWED_MIMES = [
         'image/jpeg',
         'image/png',
@@ -27,8 +31,8 @@ class ChildIdentityPhotoService
 
     public function store(ChildIdentityRequest $identity, UploadedFile $file): ChildIdentityPhoto
     {
-        if ($identity->validPhotos()->count() >= 5) {
-            throw ValidationException::withMessages(['photo' => 'يمكن رفع ٥ صور كحد أقصى.']);
+        if ($identity->validPhotos()->count() >= self::MAXIMUM_PHOTOS) {
+            throw ValidationException::withMessages(['photo' => 'يمكن رفع ٣ صور كحد أقصى.']);
         }
 
         if (! $file->isValid() || $file->getSize() > 15 * 1024 * 1024) {

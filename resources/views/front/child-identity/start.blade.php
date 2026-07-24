@@ -9,7 +9,7 @@
                 <span class="inline-flex rounded-full bg-indigo-100 px-4 py-2 text-sm font-black text-indigo-700">مجانية • خطوة واحدة</span>
                 <h1 class="mt-4 text-3xl font-black text-slate-950 sm:text-5xl">اصنع هوية طفلك</h1>
                 <p class="mx-auto mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-lg">
-                    أدخل البيانات الأساسية واختر من صورتين إلى ٥ صور. يبدأ إنشاء الهوية تلقائيًا بعد الإرسال.
+                    أدخل البيانات الأساسية واختر صورتين أو ٣ صور. يبدأ إنشاء الهوية تلقائيًا بعد الإرسال.
                 </p>
             </header>
 
@@ -76,9 +76,9 @@
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <h3 class="text-lg font-black text-indigo-950">صور الطفل</h3>
-                                    <p class="mt-1 text-sm leading-6 text-indigo-700">اختر ٢–٥ صور معًا. JPG وPNG وWebP وHEIC/HEIF مدعومة.</p>
+                                    <p class="mt-1 text-sm leading-6 text-indigo-700">اختر صورتين أو ٣ صور معًا. JPG وPNG وWebP وHEIC/HEIF مدعومة.</p>
                                 </div>
-                                <span class="rounded-full bg-white px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count>0 / 5</span>
+                                <span class="rounded-full bg-white px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count>تم رفع ٠ من ٢ المطلوبة</span>
                             </div>
 
                             <input type="file" id="identity-photos" multiple
@@ -87,12 +87,21 @@
                             <div data-identity-photo-ids></div>
 
                             <label for="identity-photos"
+                                   data-identity-photo-picker
                                    class="mt-5 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-indigo-200 bg-white px-5 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50">
-                                <span class="text-base font-black text-indigo-700">اختيار صور الطفل</span>
-                                <span class="mt-1 text-xs font-bold text-slate-500">يمكنك اختيار حتى ٥ صور مرة واحدة وسيبدأ رفعها تلقائيًا</span>
+                                <span class="text-base font-black text-indigo-700" data-identity-photo-picker-title>اختيار صور الطفل</span>
+                                <span class="mt-1 text-xs font-bold text-slate-500" data-identity-photo-picker-help>اختر صورتين أو ٣ صور مرة واحدة وسيبدأ رفعها تلقائيًا</span>
                             </label>
 
-                            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5" data-identity-photo-queue aria-live="polite"></div>
+                            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" data-identity-photo-queue aria-live="polite"></div>
+                            <div id="identity-photo-guidance"
+                                 class="mt-4 rounded-2xl border border-indigo-200 bg-white px-4 py-3"
+                                 role="status" aria-live="polite" data-identity-photo-requirement>
+                                <p class="text-sm font-black text-indigo-950" data-identity-photo-requirement-title>اختر صورتين للمتابعة</p>
+                                <p class="mt-1 text-xs font-bold leading-6 text-indigo-700" data-identity-photo-requirement-description>
+                                    نحتاج صورتين واضحتين على الأقل، ويمكنك إضافة صورة ثالثة اختيارية.
+                                </p>
+                            </div>
                             <div class="mt-4 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700" data-identity-photo-error></div>
                             <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-3" />
                             <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-3" />
@@ -111,9 +120,9 @@
                             </span>
                         </label>
 
-                        <button type="submit" disabled data-identity-submit
+                        <button type="submit" disabled data-identity-submit aria-describedby="identity-photo-guidance"
                                 class="w-full rounded-2xl bg-gradient-to-l from-indigo-600 to-violet-600 px-6 py-4 text-base font-black text-white shadow-lg shadow-indigo-200 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-200">
-                            <span data-submit-label>إنشاء هوية طفلي</span>
+                            <span data-submit-label>اختر صورتين للمتابعة</span>
                         </button>
                         <p class="text-center text-xs font-bold text-slate-400">لن تنتقل إلى نماذج أخرى؛ ستظهر حالة الإنشاء والنتيجة مباشرة.</p>
                     </div>

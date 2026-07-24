@@ -8,9 +8,18 @@ export function initializeIdentityPhotoUploader() {
     const error = form?.querySelector('[data-identity-photo-error]');
     const count = form?.querySelector('[data-identity-photo-count]');
     const submit = form?.querySelector('[data-identity-submit]');
+    const submitLabel = form?.querySelector('[data-submit-label]');
+    const picker = form?.querySelector('[data-identity-photo-picker]');
+    const pickerTitle = form?.querySelector('[data-identity-photo-picker-title]');
+    const pickerHelp = form?.querySelector('[data-identity-photo-picker-help]');
+    const requirement = form?.querySelector('[data-identity-photo-requirement]');
+    const requirementTitle = form?.querySelector('[data-identity-photo-requirement-title]');
+    const requirementDescription = form?.querySelector('[data-identity-photo-requirement-description]');
     const configNode = form?.querySelector('[data-identity-upload-config]');
 
-    if (!form || !input || !queue || !hiddenInputs || !submit || !configNode) {
+    if (!form || !input || !queue || !hiddenInputs || !count || !submit || !submitLabel
+        || !picker || !pickerTitle || !pickerHelp || !requirement || !requirementTitle
+        || !requirementDescription || !configNode) {
         return;
     }
 
@@ -23,7 +32,7 @@ export function initializeIdentityPhotoUploader() {
     }
 
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const maximum = Number(config.maxFiles || 5);
+    const maximum = Number(config.maxFiles || 3);
     const minimum = Number(config.minimumFiles || 2);
     const maximumBytes = Number(config.maxSizeMb || 15) * 1024 * 1024;
     const concurrency = Math.max(1, Number(config.concurrency || 2));
@@ -51,10 +60,48 @@ export function initializeIdentityPhotoUploader() {
         sessionStorage.setItem(storageKey, JSON.stringify(uploadedItems().map((item) => item.uploadId)));
     }
 
+    function arabicNumber(value) {
+        return Number(value).toLocaleString('ar-EG');
+    }
+
+    function setRequirementState(state, title, description) {
+        const styles = {
+            info: {
+                wrapper: 'border-indigo-200 bg-white',
+                title: 'text-indigo-950',
+                description: 'text-indigo-700',
+            },
+            warning: {
+                wrapper: 'border-amber-300 bg-amber-50',
+                title: 'text-amber-950',
+                description: 'text-amber-800',
+            },
+            success: {
+                wrapper: 'border-emerald-300 bg-emerald-50',
+                title: 'text-emerald-950',
+                description: 'text-emerald-800',
+            },
+            danger: {
+                wrapper: 'border-red-300 bg-red-50',
+                title: 'text-red-950',
+                description: 'text-red-700',
+            },
+        };
+        const style = styles[state] || styles.info;
+
+        requirement.className = `mt-4 rounded-2xl border px-4 py-3 ${style.wrapper}`;
+        requirementTitle.className = `text-sm font-black ${style.title}`;
+        requirementDescription.className = `mt-1 text-xs font-bold leading-6 ${style.description}`;
+        requirementTitle.textContent = title;
+        requirementDescription.textContent = description;
+    }
+
     function updateState() {
         const uploaded = uploadedItems();
         const busy = items.some((item) => ['waiting', 'preparing', 'uploading'].includes(item.status));
         const failed = items.some((item) => item.status === 'failed');
+        const remainingRequired = Math.max(0, minimum - uploaded.length);
+        const reachedMaximum = items.length >= maximum;
 
         hiddenInputs.replaceChildren(...uploaded.map((item) => {
             const hidden = document.createElement('input');
@@ -64,10 +111,79 @@ export function initializeIdentityPhotoUploader() {
 
             return hidden;
         }));
-        count.textContent = `${uploaded.length} / ${maximum}`;
+        count.textContent = uploaded.length < minimum
+            ? `تم رفع ${arabicNumber(uploaded.length)} من ${arabicNumber(minimum)} المطلوبة`
+            : `${arabicNumber(uploaded.length)} / ${arabicNumber(maximum)}`;
         submit.disabled = submitting || busy || failed || uploaded.length < minimum;
         submit.classList.toggle('opacity-60', submit.disabled);
         submit.classList.toggle('cursor-not-allowed', submit.disabled);
+        input.disabled = reachedMaximum;
+        picker.setAttribute('aria-disabled', reachedMaximum ? 'true' : 'false');
+        picker.classList.toggle('cursor-not-allowed', reachedMaximum);
+        picker.classList.toggle('opacity-60', reachedMaximum);
+
+        if (reachedMaximum) {
+            pickerTitle.textContent = 'اكتمل اختيار الصور';
+            pickerHelp.textContent = `وصلت إلى الحد الأقصى: ${arabicNumber(maximum)} صور.`;
+        } else if (uploaded.length === 1) {
+            pickerTitle.textContent = 'إضافة صورة أخرى';
+            pickerHelp.textContent = 'اختر صورة أخرى واحدة على الأقل ليتفعّل زر إنشاء الهوية.';
+        } else if (uploaded.length >= minimum) {
+            pickerTitle.textContent = 'إضافة صورة ثالثة (اختياري)';
+            pickerHelp.textContent = 'الصور المطلوبة جاهزة؛ إضافة الصورة الثالثة اختيارية.';
+        } else {
+            pickerTitle.textContent = 'اختيار صور الطفل';
+            pickerHelp.textContent = 'اختر صورتين أو ٣ صور مرة واحدة وسيبدأ رفعها تلقائيًا.';
+        }
+
+        if (submitting) {
+            submitLabel.textContent = 'جاري بدء إنشاء الهوية...';
+        } else if (busy) {
+            submitLabel.textContent = 'انتظر اكتمال رفع الصور';
+        } else if (failed) {
+            submitLabel.textContent = 'راجع الصورة التي فشل رفعها';
+        } else if (remainingRequired === 1) {
+            submitLabel.textContent = 'أضف صورة أخرى للمتابعة';
+        } else if (remainingRequired > 1) {
+            submitLabel.textContent = 'اختر صورتين للمتابعة';
+        } else {
+            submitLabel.textContent = 'إنشاء هوية طفلي';
+        }
+
+        if (failed) {
+            setRequirementState(
+                'danger',
+                'راجع الصورة التي فشل رفعها',
+                'أعد محاولة الصورة أو احذفها، ثم تأكد من وجود صورتين ناجحتين على الأقل.',
+            );
+        } else if (busy) {
+            setRequirementState(
+                'info',
+                'جاري رفع الصور تلقائيًا',
+                `تم رفع ${arabicNumber(uploaded.length)} حتى الآن. انتظر حتى يكتمل رفع الصور المحددة.`,
+            );
+        } else if (remainingRequired === 1) {
+            setRequirementState(
+                'warning',
+                'أضف صورة أخرى للمتابعة',
+                'تم رفع صورة واحدة بنجاح. نحتاج صورتين على الأقل لإنشاء هوية طفلك.',
+            );
+        } else if (remainingRequired > 1) {
+            setRequirementState(
+                'info',
+                'اختر صورتين للمتابعة',
+                'نحتاج صورتين واضحتين على الأقل، ويمكنك إضافة صورة ثالثة اختيارية.',
+            );
+        } else {
+            setRequirementState(
+                'success',
+                'الصور جاهزة لإنشاء الهوية',
+                uploaded.length === maximum
+                    ? `تم رفع ${arabicNumber(uploaded.length)} صور بنجاح. يمكنك إنشاء الهوية الآن.`
+                    : 'تم رفع صورتين بنجاح. يمكنك إنشاء الهوية الآن أو إضافة صورة ثالثة اختيارية.',
+            );
+        }
+
         saveIds();
     }
 
@@ -348,7 +464,6 @@ export function initializeIdentityPhotoUploader() {
         }
 
         submitting = true;
-        submit.querySelector('[data-submit-label]').textContent = 'جاري بدء إنشاء الهوية...';
         updateState();
     });
 

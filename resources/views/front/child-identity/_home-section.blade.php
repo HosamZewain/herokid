@@ -20,7 +20,7 @@
             <div class="mt-7 grid gap-3 sm:grid-cols-3">
                 <div class="rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur">
                     <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 font-black text-indigo-700">١</span>
-                    <p class="mt-3 text-sm font-black text-slate-900">ارفع ٢–٥ صور</p>
+                    <p class="mt-3 text-sm font-black text-slate-900">ارفع صورتين أو ٣ صور</p>
                     <p class="mt-1 text-xs leading-5 text-slate-500">اختيار متعدد ورفع تلقائي.</p>
                 </div>
                 <div class="rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur">

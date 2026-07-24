@@ -182,7 +182,11 @@ class TemporaryPhotoUploadTest extends TestCase
     {
         $response = $this->get(route('child-identity.index'))
             ->assertOk()
-            ->assertSee('"batchToken":', false);
+            ->assertSee('"batchToken":', false)
+            ->assertSee('"maxFiles":3', false)
+            ->assertSee('data-identity-photo-requirement', false)
+            ->assertSee('اختر صورتين للمتابعة')
+            ->assertSee('اختر صورتين أو ٣ صور مرة واحدة');
 
         $this->assertStringContainsString(
             "img-src 'self' https: data: blob:",

@@ -49,8 +49,8 @@ class ChildIdentityController extends Controller
                     'uploadUrl' => route('photo-uploads.store'),
                     'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
                     'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
-                    'maxFiles' => 5,
-                    'minimumFiles' => 2,
+                    'maxFiles' => ChildIdentityPhotoService::MAXIMUM_PHOTOS,
+                    'minimumFiles' => ChildIdentityPhotoService::MINIMUM_PHOTOS,
                     'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
                     'concurrency' => (int) config('photo_uploads.concurrency', 2),
                     'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
@@ -80,7 +80,12 @@ class ChildIdentityController extends Controller
             'child_name' => ['required', 'string', 'max:255'],
             'age_range' => ['required', 'string', 'max:100'],
             'upload_session_token' => ['required', 'string'],
-            'photo_upload_ids' => ['required', 'array', 'min:2', 'max:5'],
+            'photo_upload_ids' => [
+                'required',
+                'array',
+                'min:'.ChildIdentityPhotoService::MINIMUM_PHOTOS,
+                'max:'.ChildIdentityPhotoService::MAXIMUM_PHOTOS,
+            ],
             'photo_upload_ids.*' => ['required', 'uuid', 'distinct'],
             'processing_consent' => ['required', 'accepted'],
             'utm_source' => ['nullable', 'string', 'max:255'],
@@ -88,6 +93,10 @@ class ChildIdentityController extends Controller
             'utm_campaign' => ['nullable', 'string', 'max:255'],
             'utm_content' => ['nullable', 'string', 'max:255'],
             'utm_term' => ['nullable', 'string', 'max:255'],
+        ], [
+            'photo_upload_ids.required' => 'ارفع صورتين واضحتين للطفل على الأقل.',
+            'photo_upload_ids.min' => 'ارفع صورتين واضحتين للطفل على الأقل.',
+            'photo_upload_ids.max' => 'يمكنك رفع ٣ صور كحد أقصى.',
         ]);
         $ageRange = $ageRanges->selected($validated['age_range']);
         $referralShare = $referrals->resolve($request);
@@ -96,8 +105,8 @@ class ChildIdentityController extends Controller
             $temporaryPhotos = $uploads->validatedUploadedIds(
                 $request,
                 $validated['photo_upload_ids'],
-                minimum: 2,
-                maximum: 5,
+                minimum: ChildIdentityPhotoService::MINIMUM_PHOTOS,
+                maximum: ChildIdentityPhotoService::MAXIMUM_PHOTOS,
             );
         } catch (UploadValidationException $exception) {
             throw ValidationException::withMessages([

@@ -35,7 +35,10 @@ class ChildIdentityAttemptService
 
             [$provider, $model] = $this->settings->providerAndModel();
             $prompt = $this->promptFor($locked);
-            $photos = $locked->validPhotos()->get();
+            $photos = $locked->validPhotos()
+                ->orderBy('sort_order')
+                ->limit(ChildIdentityPhotoService::MAXIMUM_PHOTOS)
+                ->get();
             $attempt = $locked->attempts()->create([
                 'attempt_number' => ((int) $locked->attempts()->max('attempt_number')) + 1,
                 'idempotency_key' => $idempotencyKey,
@@ -156,8 +159,9 @@ class ChildIdentityAttemptService
             return ['code' => 'provider_unavailable', 'message' => 'خدمة إنشاء الهوية غير مهيأة حاليًا.'];
         }
 
-        if ($attempt->input_photos_count < 2 || $attempt->input_photos_count > 5) {
-            return ['code' => 'invalid_photo_count', 'message' => 'يجب رفع من صورتين إلى ٥ صور واضحة للطفل.'];
+        if ($attempt->input_photos_count < ChildIdentityPhotoService::MINIMUM_PHOTOS
+            || $attempt->input_photos_count > ChildIdentityPhotoService::MAXIMUM_PHOTOS) {
+            return ['code' => 'invalid_photo_count', 'message' => 'يجب رفع صورتين أو ٣ صور واضحة للطفل.'];
         }
 
         if ($initiatedBy === 'customer'

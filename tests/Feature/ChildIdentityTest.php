@@ -78,6 +78,51 @@ class ChildIdentityTest extends TestCase
         $this->assertStringNotContainsString((string) parse_url($resumeUrl, PHP_URL_PATH), json_encode($identity->events()->pluck('metadata')->all()));
     }
 
+    public function test_child_identity_intake_rejects_more_than_three_photos(): void
+    {
+        Storage::fake('local');
+        $this->ageRanges();
+        $this->get(route('child-identity.index'))->assertOk();
+        $uploadToken = (string) session('photo_upload.token');
+        $photoIds = collect(['one.png', 'two.png', 'three.png', 'four.png'])
+            ->map(fn (string $name): string => (string) $this->postJson(route('photo-uploads.store'), [
+                'upload_session_token' => $uploadToken,
+                'upload_batch_token' => 'child-identity-maximum-test',
+                'photo' => $this->tinyPng($name),
+            ])->assertCreated()->json('id'))
+            ->all();
+
+        $this->from(route('child-identity.index'))
+            ->post(route('child-identity.store'), $this->startPayload($uploadToken, $photoIds))
+            ->assertRedirect(route('child-identity.index'))
+            ->assertSessionHasErrors('photo_upload_ids');
+
+        $this->assertDatabaseCount('child_identity_requests', 0);
+        $this->assertSame(
+            'يمكنك رفع ٣ صور كحد أقصى.',
+            session('errors')->first('photo_upload_ids'),
+        );
+    }
+
+    public function test_existing_identity_photo_endpoint_stops_at_three_photos(): void
+    {
+        Storage::fake('local');
+        $identity = $this->createPublicIdentity();
+
+        foreach (['one.png', 'two.png', 'three.png'] as $name) {
+            $this->post(route('child-identity.photos.store', $identity->uuid), [
+                'photo' => $this->tinyPng($name),
+            ])->assertRedirect();
+        }
+
+        $this->post(route('child-identity.photos.store', $identity->uuid), [
+            'photo' => $this->tinyPng('four.png'),
+        ])->assertSessionHasErrors('photo');
+
+        $this->assertSame(3, $identity->fresh()->validPhotos()->count());
+        $this->assertSame('يمكن رفع ٣ صور كحد أقصى.', session('errors')->first('photo'));
+    }
+
     public function test_photos_are_uploaded_independently_to_persistent_private_storage_and_removal_keeps_file(): void
     {
         Storage::fake('local');
