@@ -21,6 +21,15 @@ class OrderSceneTextService
             return;
         }
 
+        $this->refreshForOrder($order, $story);
+    }
+
+    /**
+     * Re-render the order-owned scene snapshot after an authorized admin changes
+     * personalization details. Story templates remain untouched.
+     */
+    public function refreshForOrder(Order $order, Story $story): void
+    {
         $story->loadMissing('sceneTemplates');
         $templates = $story->sceneTemplates->keyBy('scene_number');
         $context = $this->renderer->contextForOrder($order, $story);
@@ -33,16 +42,20 @@ class OrderSceneTextService
                 'selected_text_variant' => $selection['variant'],
             ];
 
-            $order->sceneTextSnapshots()->create([
-                'source_story_scene_template_id' => $template?->id,
-                'scene_number' => $sceneNumber,
-                'title_snapshot' => $template?->title,
-                'template_text_snapshot' => $selection['text'],
-                'rendered_text' => $this->renderer->render($selection['text'], $context),
-                'selected_text_variant' => $selection['variant'],
-                'render_context_snapshot' => $snapshotContext,
-            ]);
+            $order->sceneTextSnapshots()->updateOrCreate(
+                ['scene_number' => $sceneNumber],
+                [
+                    'source_story_scene_template_id' => $template?->id,
+                    'title_snapshot' => $template?->title,
+                    'template_text_snapshot' => $selection['text'],
+                    'rendered_text' => $this->renderer->render($selection['text'], $context),
+                    'selected_text_variant' => $selection['variant'],
+                    'render_context_snapshot' => $snapshotContext,
+                ],
+            );
         }
+
+        $order->unsetRelation('sceneTextSnapshots');
     }
 
     /**

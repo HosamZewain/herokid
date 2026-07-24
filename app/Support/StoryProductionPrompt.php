@@ -24,6 +24,10 @@ class StoryProductionPrompt
 
     private const APPROVED_IDENTITY_END = '<!-- HERO_KID_APPROVED_IDENTITY_END -->';
 
+    private const ORDER_DETAILS_START = '<!-- HERO_KID_ORDER_DETAILS_START -->';
+
+    private const ORDER_DETAILS_END = '<!-- HERO_KID_ORDER_DETAILS_END -->';
+
     public static function forOrder(Order $order, bool $useOverride = true): string
     {
         $order->loadMissing(['story', 'productionPromptOverride', 'childIdentityApprovedAttempt', 'childIdentityRequest']);
@@ -232,6 +236,32 @@ class StoryProductionPrompt
         return rtrim($prompt)."\n\n## Current Child Image References\n"
             .'This managed list is updated automatically from the order photos.'
             ."\n\n".$references;
+    }
+
+    /**
+     * A manual prompt override is preserved verbatim, while this managed block
+     * keeps its operational personalization data synchronized with the order.
+     */
+    public static function withCurrentOrderDetails(string $prompt, Order $order): string
+    {
+        $values = self::variablesForOrder($order);
+        $details = self::ORDER_DETAILS_START."\n"
+            ."## Current Order Personalization (managed automatically)\n"
+            ."Use these current values if any older wording elsewhere in this override conflicts with them.\n"
+            .'- Child name: '.$values['child_name']."\n"
+            .'- Child age: '.$values['child_age']."\n"
+            .'- Child gender: '.$values['child_gender']."\n"
+            .'- Child interests: '.$values['child_interests']."\n"
+            .'- Dedication: '.$values['dedication']."\n"
+            .'- Customer notes: '.$values['customer_notes']."\n"
+            .self::ORDER_DETAILS_END;
+        $pattern = '/'.preg_quote(self::ORDER_DETAILS_START, '/').'.*?'.preg_quote(self::ORDER_DETAILS_END, '/').'/s';
+
+        if (preg_match($pattern, $prompt) === 1) {
+            return preg_replace($pattern, $details, $prompt, 1) ?? $prompt;
+        }
+
+        return rtrim($prompt)."\n\n".$details;
     }
 
     private static function approvedIdentityReference(Order $order): string

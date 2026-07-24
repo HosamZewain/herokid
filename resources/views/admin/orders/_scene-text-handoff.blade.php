@@ -7,7 +7,7 @@
     ];
 @endphp
 
-<details class="overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-sm" data-order-scene-texts>
+<details open class="overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-sm" data-order-scene-texts>
     <summary class="flex cursor-pointer list-none flex-col gap-3 px-5 py-5 text-right sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h3 class="text-lg font-black text-gray-900">نصوص المشاهد</h3>

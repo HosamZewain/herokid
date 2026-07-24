@@ -151,6 +151,124 @@
                             @if($order->parent_notes) <div><span class="font-bold text-gray-600">ملاحظات ولي الأمر:</span> {{ $order->parent_notes }}</div> @endif
                         </div>
                         @endif
+
+                        @can('orders.update')
+                            <details
+                                class="mt-5 overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50/50"
+                                @if($errors->hasAny(['parent_name', 'phone', 'child_name', 'child_age', 'child_gender', 'language', 'lesson', 'interests', 'gift_note', 'parent_notes', 'change_reason'])) open @endif
+                            >
+                                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-right">
+                                    <div>
+                                        <p class="font-black text-indigo-900">تعديل بيانات الطلب</p>
+                                        <p class="mt-1 text-xs font-bold text-indigo-600">يُحدّث نصوص المشاهد وبرومبت الإنتاج وبيانات Production Studio الآمنة.</p>
+                                    </div>
+                                    <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">تعديل</span>
+                                </summary>
+
+                                <form action="{{ route('admin.orders.details.update', $order) }}" method="POST" class="space-y-5 border-t border-indigo-100 bg-white p-4 sm:p-5">
+                                    @csrf
+                                    @method('PATCH')
+
+                                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-sm leading-6 text-amber-900">
+                                        <p class="font-black">ما الذي سيحدث بعد الحفظ؟</p>
+                                        <p class="mt-1">سيتم تحديث الطلب وعناصره ولقطات نصوص المشاهد والبرومبت الحالي. السجلات والبرومبتات التاريخية والأصول المولدة ستظل محفوظة، وأي محتوى إنتاج عُدّل يدويًا سيُعلّم للمراجعة بدل الكتابة فوقه.</p>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="order-parent-name" class="mb-1.5 block text-sm font-black text-gray-700">اسم ولي الأمر</label>
+                                            <input id="order-parent-name" name="parent_name" type="text" required maxlength="150"
+                                                value="{{ old('parent_name', $order->parent_name ?? $order->user?->name) }}"
+                                                class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <x-input-error :messages="$errors->get('parent_name')" class="mt-1" />
+                                        </div>
+                                        <div>
+                                            <label for="order-phone" class="mb-1.5 block text-sm font-black text-gray-700">الهاتف / واتساب</label>
+                                            <input id="order-phone" name="phone" type="text" required maxlength="30" dir="ltr"
+                                                value="{{ old('phone', data_get($order->delivery_details, 'phone')) }}"
+                                                class="block w-full rounded-xl border-gray-300 text-left shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <x-input-error :messages="$errors->get('phone')" class="mt-1" />
+                                        </div>
+
+                                        @if($order->story)
+                                            <div>
+                                                <label for="order-child-name" class="mb-1.5 block text-sm font-black text-gray-700">اسم الطفل</label>
+                                                <input id="order-child-name" name="child_name" type="text" required maxlength="100"
+                                                    value="{{ old('child_name', $order->child_name) }}"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-child-age" class="mb-1.5 block text-sm font-black text-gray-700">عمر الطفل</label>
+                                                <input id="order-child-age" name="child_age" type="number" required min="1" max="18"
+                                                    value="{{ old('child_age', $order->child_age) }}"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                <x-input-error :messages="$errors->get('child_age')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-child-gender" class="mb-1.5 block text-sm font-black text-gray-700">جنس الطفل</label>
+                                                <select id="order-child-gender" name="child_gender" required
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="boy" @selected(old('child_gender', $order->child_gender) === 'boy')>👦 ولد</option>
+                                                    <option value="girl" @selected(old('child_gender', $order->child_gender) === 'girl')>👧 بنت</option>
+                                                </select>
+                                                <x-input-error :messages="$errors->get('child_gender')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-language" class="mb-1.5 block text-sm font-black text-gray-700">لغة الإنتاج</label>
+                                                <select id="order-language" name="language"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="ar" @selected(old('language', $order->language) === 'ar')>العربية</option>
+                                                    <option value="en" @selected(old('language', $order->language) === 'en')>English</option>
+                                                </select>
+                                                <x-input-error :messages="$errors->get('language')" class="mt-1" />
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    @if($order->story)
+                                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                            <div>
+                                                <label for="order-lesson" class="mb-1.5 block text-sm font-black text-gray-700">الدرس / القيمة</label>
+                                                <textarea id="order-lesson" name="lesson" rows="3" maxlength="500"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('lesson', $order->lesson) }}</textarea>
+                                                <x-input-error :messages="$errors->get('lesson')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-interests" class="mb-1.5 block text-sm font-black text-gray-700">اهتمامات الطفل</label>
+                                                <textarea id="order-interests" name="interests" rows="3" maxlength="1000"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('interests', $order->interests) }}</textarea>
+                                                <x-input-error :messages="$errors->get('interests')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-gift-note" class="mb-1.5 block text-sm font-black text-gray-700">الإهداء</label>
+                                                <textarea id="order-gift-note" name="gift_note" rows="3" maxlength="1000"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('gift_note', $order->gift_note) }}</textarea>
+                                                <x-input-error :messages="$errors->get('gift_note')" class="mt-1" />
+                                            </div>
+                                            <div>
+                                                <label for="order-parent-notes" class="mb-1.5 block text-sm font-black text-gray-700">ملاحظات ولي الأمر</label>
+                                                <textarea id="order-parent-notes" name="parent_notes" rows="3" maxlength="2000"
+                                                    class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('parent_notes', $order->parent_notes) }}</textarea>
+                                                <x-input-error :messages="$errors->get('parent_notes')" class="mt-1" />
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    <div>
+                                        <label for="order-change-reason" class="mb-1.5 block text-sm font-black text-gray-700">سبب التعديل <span class="text-red-600">*</span></label>
+                                        <textarea id="order-change-reason" name="change_reason" rows="2" required minlength="5" maxlength="500"
+                                            placeholder="مثال: العميل أرسل العمر الصحيح عبر واتساب"
+                                            class="block w-full rounded-xl border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('change_reason') }}</textarea>
+                                        <x-input-error :messages="$errors->get('change_reason')" class="mt-1" />
+                                    </div>
+
+                                    <button type="submit" class="w-full rounded-xl bg-indigo-600 px-5 py-3 font-black text-white transition hover:bg-indigo-700 sm:w-auto">
+                                        حفظ ومزامنة كل البيانات
+                                    </button>
+                                </form>
+                            </details>
+                        @endcan
                     </div>
 
                     <!-- Production Studio -->
@@ -198,6 +316,20 @@
                                     <p class="mt-1 font-black text-gray-900">{{ $order->productionProject->assignedTo?->name ?? 'غير معين' }}</p>
                                 </div>
                             </div>
+
+                            @if($order->productionProject->personalization_status === 'needs_review')
+                                <div class="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-right text-amber-950" role="alert">
+                                    <p class="font-black">مشروع الإنتاج يحتاج مراجعة بيانات الطفل</p>
+                                    <p class="mt-1 text-sm font-bold leading-6">تم تعديل بيانات الطلب بعد إنشاء المشروع. راجع النصوص والتوجيهات والأصول المولدة قبل تشغيل أي توليد جديد.</p>
+                                    @if($order->productionProject->personalization_warnings)
+                                        <ul class="mt-2 list-inside list-disc space-y-1 text-xs font-bold">
+                                            @foreach($order->productionProject->personalization_warnings as $warning)
+                                                <li>{{ $warning }}</li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+                                </div>
+                            @endif
                         @endif
                     </div>
                     @endif

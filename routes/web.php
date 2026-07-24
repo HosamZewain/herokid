@@ -466,6 +466,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('orders/groups/{representative}/restore', [OrderGroupController::class, 'restore'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.restore');
     Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
+    Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');

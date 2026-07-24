@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderDetailsUpdateService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Uploads\OrderPhotoUploadService;
@@ -82,6 +83,45 @@ class OrderController extends Controller
         $statuses->update($order, $validated['status'], $validated['admin_notes'] ?? null, $request);
 
         return redirect()->route('admin.orders.show', $order)->with('success', 'تم تحديث الطلب بنجاح!');
+    }
+
+    public function updateDetails(Request $request, Order $order, OrderDetailsUpdateService $details)
+    {
+        $storyRules = $order->story_id
+            ? ['child_name' => 'required|string|max:100', 'child_age' => 'required|integer|min:1|max:18', 'child_gender' => 'required|in:boy,girl']
+            : ['child_name' => 'nullable|string|max:100', 'child_age' => 'nullable|integer|min:1|max:18', 'child_gender' => 'nullable|in:boy,girl'];
+
+        $validated = $request->validate([
+            'parent_name' => 'required|string|max:150',
+            'phone' => 'required|string|max:30',
+            ...$storyRules,
+            'language' => 'nullable|in:ar,en',
+            'lesson' => 'nullable|string|max:500',
+            'interests' => 'nullable|string|max:1000',
+            'gift_note' => 'nullable|string|max:1000',
+            'parent_notes' => 'nullable|string|max:2000',
+            'change_reason' => 'required|string|min:5|max:500',
+        ], [
+            'parent_name.required' => 'اكتب اسم ولي الأمر.',
+            'phone.required' => 'اكتب رقم الهاتف أو واتساب.',
+            'child_name.required' => 'اكتب اسم الطفل.',
+            'child_age.required' => 'اكتب عمر الطفل.',
+            'child_age.integer' => 'عمر الطفل يجب أن يكون رقمًا صحيحًا.',
+            'child_age.min' => 'عمر الطفل يجب ألا يقل عن سنة.',
+            'child_age.max' => 'عمر الطفل يجب ألا يزيد عن 18 سنة.',
+            'child_gender.required' => 'اختر جنس الطفل.',
+            'change_reason.required' => 'اكتب سبب تعديل بيانات الطلب لحفظه في سجل النشاط.',
+            'change_reason.min' => 'سبب التعديل يجب ألا يقل عن 5 أحرف.',
+        ]);
+
+        $result = $details->update($order, $validated, $request->user(), $request);
+        $message = 'تم تحديث بيانات الطلب ومزامنتها مع نصوص المشاهد وبرومبت الإنتاج.';
+
+        if ($result['production_requires_review']) {
+            $message .= ' مشروع Production Studio معلّم الآن للمراجعة حتى لا تُفقد التعديلات اليدوية أو تُستخدم أصول قديمة بالخطأ.';
+        }
+
+        return redirect()->route('admin.orders.show', $order)->with('success', $message);
     }
 
     public function destroy(Request $request, Order $order, OrderDeletionService $deletions)
