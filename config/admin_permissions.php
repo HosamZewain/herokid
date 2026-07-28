@@ -24,6 +24,11 @@ return [
             'name_en' => 'Child Identities',
             'sort_order' => 27,
         ],
+        'expenses' => [
+            'name_ar' => 'المصروفات',
+            'name_en' => 'Expenses',
+            'sort_order' => 28,
+        ],
         'customers' => [
             'name_ar' => 'العملاء',
             'name_en' => 'Customers',
@@ -62,6 +67,16 @@ return [
     ],
 
     'permissions' => [
+        'expenses.view' => ['group_key' => 'expenses', 'name_ar' => 'عرض المصروفات', 'name_en' => 'View expenses', 'description_ar' => 'عرض دفتر الوارد والصادر والرصيد.', 'description_en' => 'View the manual income and expense ledger.', 'sort_order' => 10, 'sensitive' => true],
+        'expenses.create_income' => ['group_key' => 'expenses', 'name_ar' => 'إضافة الوارد', 'name_en' => 'Create income', 'description_ar' => 'إضافة وارد أو رصيد افتتاحي يدوي.', 'description_en' => 'Add manual income or opening balances.', 'sort_order' => 20, 'sensitive' => true],
+        'expenses.create_expense' => ['group_key' => 'expenses', 'name_ar' => 'إضافة المصروفات', 'name_en' => 'Create expenses', 'description_ar' => 'إضافة مصروف يدوي.', 'description_en' => 'Add manual expense transactions.', 'sort_order' => 30, 'sensitive' => true],
+        'expenses.edit' => ['group_key' => 'expenses', 'name_ar' => 'تعديل العمليات المالية', 'name_en' => 'Edit expense transactions', 'description_ar' => 'تعديل العمليات المرحلة غير الملغاة.', 'description_en' => 'Edit posted, non-voided transactions.', 'sort_order' => 40, 'sensitive' => true],
+        'expenses.void' => ['group_key' => 'expenses', 'name_ar' => 'إلغاء العمليات المالية', 'name_en' => 'Void expense transactions', 'description_ar' => 'إلغاء أثر عملية مالية مع تسجيل السبب.', 'description_en' => 'Void a transaction with an audited reason.', 'sort_order' => 50, 'sensitive' => true],
+        'expenses.view_attachments' => ['group_key' => 'expenses', 'name_ar' => 'عرض مرفقات المصروفات', 'name_en' => 'View expense attachments', 'description_ar' => 'عرض الإيصالات والفواتير الخاصة.', 'description_en' => 'View private receipts and invoices.', 'sort_order' => 60, 'sensitive' => true],
+        'expenses.download_attachments' => ['group_key' => 'expenses', 'name_ar' => 'تنزيل مرفقات المصروفات', 'name_en' => 'Download expense attachments', 'description_ar' => 'تنزيل الإيصالات والفواتير الخاصة.', 'description_en' => 'Download private receipts and invoices.', 'sort_order' => 70, 'sensitive' => true],
+        'expenses.manage_categories' => ['group_key' => 'expenses', 'name_ar' => 'إدارة تصنيفات المصروفات', 'name_en' => 'Manage expense categories', 'description_ar' => 'إضافة وتعديل وتعطيل تصنيفات الوارد والصادر.', 'description_en' => 'Create, edit, and deactivate ledger categories.', 'sort_order' => 80, 'sensitive' => true],
+        'expenses.export' => ['group_key' => 'expenses', 'name_ar' => 'تصدير المصروفات', 'name_en' => 'Export expenses', 'description_ar' => 'تصدير العمليات المالية بصيغة CSV.', 'description_en' => 'Export ledger transactions as CSV.', 'sort_order' => 90, 'sensitive' => true],
+        'expenses.view_reports' => ['group_key' => 'expenses', 'name_ar' => 'عرض تقارير المصروفات', 'name_en' => 'View expense reports', 'description_ar' => 'عرض تجميعات الوارد والصادر حسب التصنيف.', 'description_en' => 'View income and expense reporting breakdowns.', 'sort_order' => 100, 'sensitive' => true],
         'child_identities.view' => ['group_key' => 'child_identities', 'name_ar' => 'عرض هويات الأطفال', 'name_en' => 'View child identities', 'description_ar' => 'عرض طلبات هويات الأطفال وسجلها.', 'description_en' => 'View child identity requests and history.', 'sort_order' => 10, 'sensitive' => true],
         'child_identities.view_media' => ['group_key' => 'child_identities', 'name_ar' => 'عرض صور هويات الأطفال', 'name_en' => 'View child identity media', 'description_ar' => 'عرض الصور الأصلية والمخرجات الخاصة.', 'description_en' => 'View private originals and generated outputs.', 'sort_order' => 20, 'sensitive' => true],
         'child_identities.view_costs' => ['group_key' => 'child_identities', 'name_ar' => 'عرض تكاليف هويات الأطفال', 'name_en' => 'View child identity costs', 'description_ar' => 'عرض تكلفة محاولات التوليد بالدولار.', 'description_en' => 'View generation attempt cost in USD.', 'sort_order' => 30, 'sensitive' => true],

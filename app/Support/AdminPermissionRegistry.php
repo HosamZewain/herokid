@@ -64,6 +64,7 @@ class AdminPermissionRegistry
             'dashboard.view' => 'admin.dashboard.index',
             'analytics.view' => 'admin.analytics.index',
             'sales_reports.view' => 'admin.sales-report.index',
+            'expenses.view' => 'admin.expenses.index',
             'visitor_carts.view' => 'admin.visitor-carts.index',
             'orders.view' => 'admin.orders.index',
             'child_identities.view' => 'admin.child-identities.index',

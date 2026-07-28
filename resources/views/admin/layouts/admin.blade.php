@@ -64,7 +64,7 @@
                     'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
                     'production_studio.view', 'child_identities.view', 'child_identities.view_share_report',
                 ]);
-                $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view', 'sales_reports.view', 'visitor_carts.view']);
+                $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view', 'sales_reports.view', 'expenses.view', 'visitor_carts.view']);
                 $canContent = auth()->user()->hasAnyPermission([
                     'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
@@ -85,6 +85,9 @@
                     @endcan
                     @can('sales_reports.view')
                         <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
+                    @endcan
+                    @can('expenses.view')
+                        <a href="{{ route('admin.expenses.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.expenses.*') ? $activeLink : $idleLink }}">المصروفات</a>
                     @endcan
                     @can('visitor_carts.view')
                         <a href="{{ route('admin.visitor-carts.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.visitor-carts.*') ? $activeLink : $idleLink }}">سلات الزوار</a>

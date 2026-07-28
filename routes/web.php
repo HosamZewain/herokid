@@ -13,6 +13,8 @@ use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DeliveryZoneController;
+use App\Http\Controllers\Admin\ExpenseCategoryController;
+use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\NotificationCenterController;
@@ -330,6 +332,43 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('sales-report/export', [SalesReportController::class, 'export'])
         ->middleware(['permission:sales_reports.view', 'throttle:10,1'])
         ->name('sales-report.export');
+    Route::get('expenses', [ExpenseController::class, 'index'])
+        ->middleware('permission:expenses.view')
+        ->name('expenses.index');
+    Route::get('expenses/export', [ExpenseController::class, 'export'])
+        ->middleware(['permission:expenses.export', 'throttle:10,1'])
+        ->name('expenses.export');
+    Route::get('expenses/categories', [ExpenseCategoryController::class, 'index'])
+        ->middleware('permission:expenses.manage_categories')
+        ->name('expenses.categories.index');
+    Route::post('expenses/categories', [ExpenseCategoryController::class, 'store'])
+        ->middleware('permission:expenses.manage_categories')
+        ->name('expenses.categories.store');
+    Route::put('expenses/categories/{category}', [ExpenseCategoryController::class, 'update'])
+        ->middleware('permission:expenses.manage_categories')
+        ->name('expenses.categories.update');
+    Route::get('expenses/create/{kind?}', [ExpenseController::class, 'create'])
+        ->where('kind', 'income|expense|opening')
+        ->name('expenses.create');
+    Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+    Route::get('expenses/{expense}', [ExpenseController::class, 'show'])
+        ->middleware('permission:expenses.view')
+        ->name('expenses.show');
+    Route::get('expenses/{expense}/edit', [ExpenseController::class, 'edit'])
+        ->middleware('permission:expenses.edit')
+        ->name('expenses.edit');
+    Route::put('expenses/{expense}', [ExpenseController::class, 'update'])
+        ->middleware('permission:expenses.edit')
+        ->name('expenses.update');
+    Route::post('expenses/{expense}/void', [ExpenseController::class, 'void'])
+        ->middleware('permission:expenses.void')
+        ->name('expenses.void');
+    Route::get('expenses/{expense}/attachment', [ExpenseController::class, 'attachment'])
+        ->middleware('permission:expenses.view_attachments')
+        ->name('expenses.attachment');
+    Route::get('expenses/{expense}/attachment/download', [ExpenseController::class, 'download'])
+        ->middleware('permission:expenses.download_attachments')
+        ->name('expenses.attachment.download');
     Route::get('visitor-carts', [VisitorCartController::class, 'index'])
         ->middleware('permission:visitor_carts.view')
         ->name('visitor-carts.index');
