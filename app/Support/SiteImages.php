@@ -8,6 +8,7 @@ class SiteImages
         'img_hero_main' => '/images/site/settings/hero-main.svg',
         'img_hero_mini1' => '/images/site/settings/hero-mini-adventure.svg',
         'img_hero_mini2' => '/images/site/settings/hero-mini-magic.svg',
+        'img_home_child_identity' => '/images/site/settings/child-identity-character-sheet.jpg',
         'img_home_step1' => '/images/site/settings/home-step-choose.svg',
         'img_home_step2' => '/images/site/settings/home-step-customize.svg',
         'img_home_step3' => '/images/site/settings/home-step-deliver.svg',

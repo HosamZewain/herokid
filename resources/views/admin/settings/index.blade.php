@@ -119,6 +119,29 @@
                             <textarea name="settings[home_child_identity_subtitle]" rows="3" maxlength="400"
                                       class="w-full rounded-lg border-gray-300 text-sm focus:border-violet-500 focus:ring-violet-500">{{ old('settings.home_child_identity_subtitle', $s('home_child_identity_subtitle', 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة لتختار بعدها القصة المناسبة له.')) }}</textarea>
                         </div>
+                        @php
+                            $childIdentityImage = old(
+                                'settings.img_home_child_identity',
+                                $s('img_home_child_identity', \App\Support\SiteImages::path('img_home_child_identity')),
+                            );
+                        @endphp
+                        <div class="md:col-span-2">
+                            <label class="mb-1 block text-sm font-bold text-gray-700">صورة قسم هوية الطفل</label>
+                            <div class="flex items-start gap-3">
+                                <input type="text"
+                                       name="settings[img_home_child_identity]"
+                                       value="{{ $childIdentityImage }}"
+                                       oninput="previewImg(this,'prev_home_child_identity')"
+                                       placeholder="/images/site/settings/child-identity-character-sheet.jpg"
+                                       class="w-full rounded-lg border-gray-300 text-xs focus:border-violet-500 focus:ring-violet-500">
+                                <img id="prev_home_child_identity"
+                                     src="{{ $childIdentityImage }}"
+                                     class="img-preview-lg"
+                                     alt="معاينة صورة قسم هوية الطفل"
+                                     {{ $childIdentityImage ? '' : 'style=display:none' }}>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">تظهر داخل بطاقة الميزة في الصفحة الرئيسية. استخدم صورة أفقية بنسبة 4:3.</p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Setting;
 use App\Models\Testimonial;
 use App\Models\User;
+use App\Support\SiteImages;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -27,6 +28,9 @@ class HomepageSectionVisibilityTest extends TestCase
             ->assertSee('data-home-section="child_identity"', false)
             ->assertSee(route('child-identity.index'), false)
             ->assertSee('اصنع هوية طفلك قبل اختيار القصة')
+            ->assertSee(SiteImages::path('img_home_child_identity'), false)
+            ->assertSee('صورتان حقيقيتان لنفس الطفل تتحولان إلى هوية متناسقة من زوايا وتعبيرات متعددة')
+            ->assertSee('من صورتين إلى هوية واحدة')
             ->assertDontSee('data-home-section="testimonials"', false)
             ->assertDontSee('ماذا يقول الآباء؟');
     }
@@ -78,6 +82,7 @@ class HomepageSectionVisibilityTest extends TestCase
                     'home_child_identity_title' => 'هوية طفلك الجديدة',
                     'home_child_identity_subtitle' => 'وصف قابل للتعديل من لوحة الإدارة.',
                     'home_child_identity_cta' => 'ابدأ الآن',
+                    'img_home_child_identity' => '/images/custom-child-identity.jpg',
                 ],
                 'age_ranges' => ['٣ - ٦ سنوات'],
             ])
@@ -94,6 +99,10 @@ class HomepageSectionVisibilityTest extends TestCase
         $this->assertDatabaseHas('settings', [
             'key' => 'home_child_identity_title',
             'value' => 'هوية طفلك الجديدة',
+        ]);
+        $this->assertDatabaseHas('settings', [
+            'key' => 'img_home_child_identity',
+            'value' => '/images/custom-child-identity.jpg',
         ]);
     }
 

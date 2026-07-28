@@ -65,6 +65,7 @@ class SettingsController extends Controller
             'settings.home_child_identity_title' => 'nullable|string|max:120',
             'settings.home_child_identity_subtitle' => 'nullable|string|max:400',
             'settings.home_child_identity_cta' => 'nullable|string|max:60',
+            'settings.img_home_child_identity' => 'nullable|string|max:2048',
         ];
 
         foreach ($homepageSectionSettings as $settingKey) {
