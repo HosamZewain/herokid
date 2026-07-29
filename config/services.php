@@ -37,6 +37,10 @@ return [
 
     'meta_pixel' => [
         'id' => env('META_PIXEL_ID', '1011553001490691'),
+        'conversions_api_enabled' => env('META_CONVERSIONS_API_ENABLED', true),
+        'access_token' => env('META_CONVERSIONS_API_ACCESS_TOKEN'),
+        'api_version' => env('META_GRAPH_API_VERSION', 'v23.0'),
+        'test_event_code' => env('META_TEST_EVENT_CODE'),
     ],
 
     'google_analytics' => [

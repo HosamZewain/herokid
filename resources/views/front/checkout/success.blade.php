@@ -8,7 +8,27 @@
     $subtotal = (float) ($order->delivery_details['subtotal'] ?? $orders->sum(fn($item) => (float) ($item->story->price ?? 0)));
     $deliveryFee = (float) ($order->delivery_details['delivery_fee'] ?? 0);
     $total = (float) ($order->delivery_details['total'] ?? ($subtotal + $deliveryFee));
+    $metaPurchasePayload = !empty($metaPurchaseEvent) ? [
+        'value' => (float) $metaPurchaseEvent['value'],
+        'currency' => 'EGP',
+        'content_ids' => $metaPurchaseEvent['content_ids'],
+        'content_type' => 'product',
+        'num_items' => (int) $metaPurchaseEvent['num_items'],
+        'order_id' => $metaPurchaseEvent['order_id'],
+    ] : null;
 @endphp
+
+@if(!empty($metaPurchaseEvent))
+    @push('scripts')
+        <script>
+            if (typeof window.fbq === 'function') {
+                window.fbq('track', 'Purchase', @json($metaPurchasePayload, \App\Support\Seo::jsonFlags()), {
+                    eventID: @json($metaPurchaseEvent['event_id']),
+                });
+            }
+        </script>
+    @endpush
+@endif
 
     <div class="bg-gray-50 py-20 min-h-[70vh] flex flex-col justify-center">
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center bg-white p-10 rounded-3xl shadow-xl border border-gray-100">

@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
+use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
@@ -30,6 +31,7 @@ class CheckoutController extends Controller
         StoryPricingService $storyPricing,
         ChildIdentityEventLogger $identityEvents,
         OrderSceneTextService $sceneTexts,
+        MetaPurchaseTrackingService $metaPurchaseTracking,
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -353,6 +355,10 @@ class CheckoutController extends Controller
         session()->forget('cart.items');
         session(['checkout.last_order_ids' => $orderIds]);
         app(CartTrackingService::class)->recordConverted($request, $orderIds);
+        $metaPurchaseEvent = $metaPurchaseTracking->record($request, $orderIds, $checkoutGroup);
+        if ($metaPurchaseEvent !== []) {
+            session(['meta.purchase_event' => $metaPurchaseEvent]);
+        }
 
         return redirect()->route('checkout.success');
     }
@@ -369,6 +375,7 @@ class CheckoutController extends Controller
         return view('front.checkout.success', [
             'orders' => $orders,
             'order' => $orders->first(),
+            'metaPurchaseEvent' => session()->pull('meta.purchase_event'),
         ]);
     }
 

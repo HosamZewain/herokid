@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
+use App\Models\MetaConversionEvent;
 use App\Models\Order;
 use App\Models\Setting;
 use App\Models\Story;
@@ -29,7 +30,7 @@ class CartCheckoutTest extends TestCase
             ->assertHeader('Set-Cookie');
     }
 
-    public function test_public_tracking_keeps_page_views_but_does_not_send_cart_ecommerce_events(): void
+    public function test_public_tracking_keeps_page_views_and_purchase_has_egp_currency(): void
     {
         Storage::fake('local');
         config(['services.meta_pixel.id' => '1011553001490691']);
@@ -61,7 +62,7 @@ class CartCheckoutTest extends TestCase
             ->assertDontSee('add_to_cart', false)
             ->assertDontSee('begin_checkout', false);
 
-        $this->post(route('checkout.store'), [
+        $this->withUnencryptedCookie('_fbp', 'fb.1.1234567890.checkout')->post(route('checkout.store'), [
             'parent_name' => 'Parent Name',
             'phone' => '201000000000',
             'delivery_country_id' => $egypt->id,
@@ -71,13 +72,22 @@ class CartCheckoutTest extends TestCase
             'address_details' => 'Building 2, Apartment 3',
         ])
             ->assertRedirect(route('checkout.success'))
-            ->assertSessionMissing('facebook_purchase_event');
+            ->assertSessionHas('meta.purchase_event', fn (array $event): bool => $event['currency'] === 'EGP'
+                && $event['value'] === 140.0
+                && str_starts_with($event['event_id'], 'purchase-'));
+        $this->assertSame(
+            'fb.1.1234567890.checkout',
+            MetaConversionEvent::query()->sole()->user_data_encrypted['fbp'],
+        );
 
         $this->get(route('checkout.success'))
             ->assertOk()
-            ->assertDontSee("fbq('track', 'Purchase'", false)
+            ->assertSee("window.fbq('track', 'Purchase'", false)
+            ->assertSee('"currency":"EGP"', false)
+            ->assertSee('"value":140', false)
+            ->assertSee('eventID:', false)
             ->assertDontSee("gtag('event'", false)
-            ->assertDontSee('purchase', false);
+            ->assertSessionMissing('meta.purchase_event');
     }
 
     public function test_public_pages_initialize_only_the_configured_meta_pixel(): void
