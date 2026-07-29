@@ -13,11 +13,13 @@ use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class CartController extends Controller
 {
@@ -72,17 +74,21 @@ class CartController extends Controller
     ) {
         abort_unless($story->active, 404);
 
+        $minimumPhotos = (int) config('photo_uploads.min_files', 2);
+        $maximumPhotos = (int) config('photo_uploads.max_files', 3);
+        $allowedAges = StoryAgeOptions::fromRange($story->age_range);
+
         $validator = Validator::make($request->all(), [
             'child_name' => 'required|string|max:255',
-            'child_age' => 'required|integer|min:1|max:18',
+            'child_age' => ['required', 'integer', Rule::in($allowedAges)],
             'child_gender' => 'required|in:boy,girl',
             'gift_note' => 'nullable|string|max:500',
             'interests' => 'nullable|string|max:500',
             'parent_notes' => 'nullable|string|max:1000',
             'privacy_consent' => 'required|accepted',
-            'photo_upload_ids' => 'nullable|array|max:'.config('photo_uploads.max_files', 5),
+            'photo_upload_ids' => 'nullable|array|min:'.$minimumPhotos.'|max:'.$maximumPhotos,
             'photo_upload_ids.*' => 'string|uuid',
-            'photos' => 'nullable|array|min:1|max:'.config('photo_uploads.max_files', 5),
+            'photos' => 'nullable|array|min:'.$minimumPhotos.'|max:'.$maximumPhotos,
             'photos.*' => [
                 'file',
                 'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024),
@@ -111,8 +117,7 @@ class CartController extends Controller
             'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفاً.',
             'child_age.required' => 'يرجى إدخال عمر الطفل.',
             'child_age.integer' => 'يرجى إدخال عمر الطفل كرقم صحيح.',
-            'child_age.min' => 'عمر الطفل يجب ألا يقل عن سنة واحدة.',
-            'child_age.max' => 'عمر الطفل يجب ألا يزيد عن 18 سنة.',
+            'child_age.in' => 'يرجى اختيار عمر مناسب للفئة العمرية لهذه القصة.',
             'child_gender.required' => 'يرجى اختيار جنس الطفل.',
             'child_gender.in' => 'يرجى اختيار جنس صحيح للطفل.',
             'gift_note.max' => 'الإهداء يجب ألا يزيد عن 500 حرف.',
@@ -120,14 +125,14 @@ class CartController extends Controller
             'parent_notes.max' => 'ملاحظات الفريق يجب ألا تزيد عن 1000 حرف.',
             'privacy_consent.required' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
             'privacy_consent.accepted' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
-            'photo_upload_ids.required' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
+            'photo_upload_ids.required' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
             'photo_upload_ids.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
-            'photo_upload_ids.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
-            'photo_upload_ids.max' => 'يمكنك رفع '.config('photo_uploads.max_files', 5).' صور كحد أقصى.',
+            'photo_upload_ids.min' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
+            'photo_upload_ids.max' => 'يمكنك رفع '.$maximumPhotos.' صور كحد أقصى.',
             'photo_upload_ids.*.uuid' => 'بعض الصور المرفوعة غير صالحة. احذفها وارفعها مرة أخرى.',
             'photos.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
-            'photos.min' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.',
-            'photos.max' => 'يمكنك رفع '.config('photo_uploads.max_files', 5).' صور كحد أقصى.',
+            'photos.min' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
+            'photos.max' => 'يمكنك رفع '.$maximumPhotos.' صور كحد أقصى.',
             'photos.*.file' => 'تعذر رفع الصورة. تأكد أن الملف صورة صحيحة وأن الاتصال لم ينقطع أثناء الرفع.',
             'photos.*.max' => 'حجم كل صورة يجب ألا يزيد عن '.config('photo_uploads.max_size_mb', 15).' ميجا.',
         ]);
@@ -137,7 +142,7 @@ class CartController extends Controller
                 return;
             }
 
-            $validator->errors()->add('photo_upload_ids', 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.');
+            $validator->errors()->add('photo_upload_ids', 'يرجى رفع صورتين واضحتين للطفل على الأقل.');
         });
 
         $validated = $validator->validate();
@@ -165,7 +170,7 @@ class CartController extends Controller
         if ($photoPaths === []) {
             return back()
                 ->withInput()
-                ->withErrors(['photo_upload_ids' => 'يرجى رفع صورة واحدة واضحة للطفل على الأقل.']);
+                ->withErrors(['photo_upload_ids' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.']);
         }
 
         $cart = $this->cart();

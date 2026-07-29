@@ -71,14 +71,31 @@
                 </div>
             </div>
         @else
+            <x-purchase-progress :current="3" class="mb-6" />
+            @include('front.cart._summary', ['attributes' => new \Illuminate\View\ComponentAttributeBag(['class' => 'mb-6 lg:hidden'])])
+
             <div class="grid grid-cols-1 lg:grid-cols-[minmax(560px,1.18fr)_minmax(0,0.82fr)] gap-6 lg:gap-8 items-start">
                 <aside class="order-1 lg:order-1 space-y-6 lg:sticky lg:top-28">
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm p-5 sm:p-6">
                         <div class="mb-5 text-right">
-                            <p class="text-sm font-bold text-indigo-600">الخطوة الأخيرة</p>
+                            <p class="text-sm font-bold text-indigo-600">الخطوة ٣ من ٤</p>
                             <h2 class="text-xl font-black text-slate-950 mt-1">بيانات ولي الأمر والتوصيل</h2>
-                            <p class="text-sm text-slate-500 mt-2 leading-6">هذه البيانات تُستخدم لكل القصص الموجودة في السلة.</p>
+                            <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold leading-6 text-emerald-900">
+                                سنتواصل معك عبر واتساب لتأكيد المعاينة وطريقة الدفع. لا يوجد دفع الآن.
+                            </div>
                         </div>
+
+                        @if($errors->any())
+                            <div data-scroll-on-load data-first-error-field="{{ $errors->keys()[0] ?? '' }}" tabindex="-1"
+                                class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-right text-sm text-red-700">
+                                <p class="font-black">راجع البيانات المطلوبة:</p>
+                                <ul class="mt-2 list-inside list-disc space-y-1">
+                                    @foreach($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
 
                         @guest
                             <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm text-blue-800 mb-4 text-right leading-6">
@@ -89,21 +106,24 @@
                         <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4">
                             @csrf
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم ولي الأمر <span class="text-red-500">*</span></label>
-                                <input type="text" name="parent_name" value="{{ old('parent_name', auth()->user()->name ?? '') }}" required
+                                <label for="checkout-parent-name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم ولي الأمر <span class="text-red-500">*</span></label>
+                                <input id="checkout-parent-name" type="text" name="parent_name" value="{{ old('parent_name', auth()->user()->name ?? '') }}" required autocomplete="name"
+                                    @if($errors->has('parent_name')) aria-invalid="true" @endif
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                 <x-input-error :messages="$errors->get('parent_name')" class="mt-1" />
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم الموبايل / واتساب <span class="text-red-500">*</span></label>
-                                <input type="text" name="phone" value="{{ old('phone', auth()->user()->phone ?? data_get($savedDeliveryDetails, 'phone')) }}" required dir="ltr"
+                                <label for="checkout-phone" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم الموبايل / واتساب <span class="text-red-500">*</span></label>
+                                <input id="checkout-phone" type="tel" inputmode="tel" autocomplete="tel" name="phone" value="{{ old('phone', auth()->user()->phone ?? data_get($savedDeliveryDetails, 'phone')) }}" required dir="ltr"
+                                    @if($errors->has('phone')) aria-invalid="true" @endif
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
                                 <x-input-error :messages="$errors->get('phone')" class="mt-1" />
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
                                 <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الدولة <span class="text-red-500">*</span></label>
-                                    <select name="delivery_country_id" id="delivery_country_id" required
+                                    <label for="delivery_country_id" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الدولة <span class="text-red-500">*</span></label>
+                                    <select name="delivery_country_id" id="delivery_country_id" required autocomplete="country-name"
+                                        @if($errors->has('delivery_country_id')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                         <option value="">اختر الدولة...</option>
                                         @foreach($deliveryCountries as $country)
@@ -115,8 +135,10 @@
                                     <x-input-error :messages="$errors->get('delivery_country_id')" class="mt-1" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المحافظة <span class="text-red-500">*</span></label>
+                                    <label for="delivery_governorate_id" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المحافظة <span class="text-red-500">*</span></label>
                                     <select name="delivery_governorate_id" id="delivery_governorate_id" required
+                                        autocomplete="address-level1"
+                                        @if($errors->has('delivery_governorate_id')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                         <option value="">اختر المحافظة...</option>
                                         @foreach($deliveryCountries as $country)
@@ -138,55 +160,37 @@
                                     <x-input-error :messages="$errors->get('delivery_governorate_id')" class="mt-1" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة <span class="text-red-500">*</span></label>
-                                    <input type="text" name="city" value="{{ old('city', data_get($savedDeliveryDetails, 'city')) }}" required
+                                    <label for="checkout-city" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة <span class="text-red-500">*</span></label>
+                                    <input id="checkout-city" type="text" name="city" value="{{ old('city', data_get($savedDeliveryDetails, 'city')) }}" required autocomplete="address-level2"
+                                        @if($errors->has('city')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                     <x-input-error :messages="$errors->get('city')" class="mt-1" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الشارع <span class="text-red-500">*</span></label>
-                                    <input type="text" name="street" value="{{ old('street', data_get($savedDeliveryDetails, 'street')) }}" required
+                                    <label for="checkout-street" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الشارع <span class="text-red-500">*</span></label>
+                                    <input id="checkout-street" type="text" name="street" value="{{ old('street', data_get($savedDeliveryDetails, 'street')) }}" required autocomplete="address-line1"
+                                        @if($errors->has('street')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                     <x-input-error :messages="$errors->get('street')" class="mt-1" />
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1.5 text-right">تفاصيل العنوان <span class="text-red-500">*</span></label>
-                                <textarea name="address_details" rows="3" required
+                                <label for="checkout-address-details" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">تفاصيل العنوان <span class="text-red-500">*</span></label>
+                                <textarea id="checkout-address-details" name="address_details" rows="3" required autocomplete="address-line2"
+                                    @if($errors->has('address_details')) aria-invalid="true" @endif
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">{{ old('address_details', data_get($savedDeliveryDetails, 'address_details')) }}</textarea>
                                 <x-input-error :messages="$errors->get('address_details')" class="mt-1" />
                             </div>
                             <button type="submit"
                                 class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-200">
-                                تأكيد الطلب وإرساله للمراجعة
+                                إرسال الطلب للمراجعة — بدون دفع الآن
                             </button>
-                            <p class="text-center text-xs leading-6 text-slate-400">لن يتم الدفع الآن. سنتواصل معك لتأكيد الطلب قبل الإنتاج.</p>
                         </form>
                     </section>
                 </aside>
 
                 <div class="order-2 lg:order-2 space-y-6">
-                    <section class="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                        <div class="bg-slate-950 p-6 text-white text-right">
-                            <p class="text-sm font-bold text-indigo-200">ملخص الطلب</p>
-                            <p class="mt-2 text-3xl font-black"><span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</p>
-                            <p class="mt-1 text-sm text-slate-300">يشمل عناصر السلة ومصاريف التوصيل</p>
-                        </div>
-                        <div class="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                            <div class="rounded-2xl bg-slate-50 p-4 text-right">
-                                <span class="block text-slate-500 mb-1">إجمالي العناصر</span>
-                                <span class="font-black text-slate-950">{{ format_money($subtotal) }}</span>
-                            </div>
-                            <div class="rounded-2xl bg-slate-50 p-4 text-right">
-                                <span class="block text-slate-500 mb-1">مصاريف التوصيل</span>
-                                <span class="font-black text-slate-950"><span data-delivery-fee>{{ arabic_number(number_format($deliveryFee, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</span>
-                            </div>
-                            <div class="rounded-2xl bg-indigo-50 p-4 text-right">
-                                <span class="block font-bold text-indigo-500 mb-1">الإجمالي</span>
-                                <span class="text-xl font-black text-indigo-700"><span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span> {{ setting('currency_label', $settings['currency_label'] ?? '') }}</span>
-                            </div>
-                        </div>
-                    </section>
+                    @include('front.cart._summary', ['attributes' => new \Illuminate\View\ComponentAttributeBag(['class' => 'hidden lg:block'])])
 
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
                         <div class="border-b border-slate-100 p-5 sm:p-6">
@@ -278,7 +282,7 @@
                                                                         <form action="{{ route('cart.destroy', $addOnKey) }}" method="POST" class="shrink-0">
                                                                             @csrf
                                                                             @method('DELETE')
-                                                                            <button class="w-full rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-500 hover:bg-red-100 sm:w-auto">حذف</button>
+                                                                            <button class="min-h-11 w-full rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-500 hover:bg-red-100 sm:w-auto">حذف</button>
                                                                         </form>
                                                                     </div>
                                                                 </div>
@@ -334,7 +338,7 @@
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" @if($linkedAddOns->isNotEmpty()) onclick="return confirm('سيتم حذف الإضافات المرتبطة بهذه القصة أيضاً. هل تريد المتابعة؟')" @endif
-                                                    class="w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 hover:bg-red-100 transition">
+                                                    class="min-h-11 w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-600 hover:bg-red-100 transition">
                                                     حذف
                                                 </button>
                                             </form>

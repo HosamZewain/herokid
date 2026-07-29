@@ -30,7 +30,7 @@
                     @csrf
                     <div class="md:col-span-2">
                         <label class="block text-sm font-bold text-gray-700 mb-1">اسم الدولة</label>
-                        <input type="text" name="name" value="{{ old('name') }}" placeholder="Egypt"
+                        <input type="text" name="name" value="{{ old('name') }}" placeholder="مصر"
                             class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm" required>
                     </div>
                     <div>

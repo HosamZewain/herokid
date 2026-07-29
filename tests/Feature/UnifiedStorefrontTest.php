@@ -218,7 +218,9 @@ class UnifiedStorefrontTest extends TestCase
             ->assertSee($story->title)
             ->assertDontSee($product->name_ar)
             ->assertSee('<link rel="canonical" href="'.Seo::url('/shop?type=stories').'">', false)
-            ->assertSee('مكتبة القصص أصبحت جزءاً من متجر HeroKid الموحد');
+            ->assertSee('اختر قصة طفلك مباشرة')
+            ->assertSee('id="catalog-results"', false)
+            ->assertDontSee('قصص مخصصة • كتب وأنشطة • هدايا');
     }
 
     public function test_store_navigation_footer_and_seo_present_one_public_store_identity(): void
@@ -276,7 +278,10 @@ class UnifiedStorefrontTest extends TestCase
             'child_gender' => 'girl',
             'privacy_consent' => '1',
             'next' => 'cart',
-            'photos' => [UploadedFile::fake()->create('child.jpg', 512, 'image/jpeg')],
+            'photos' => [
+                UploadedFile::fake()->create('child.jpg', 512, 'image/jpeg'),
+                UploadedFile::fake()->create('child-side.jpg', 512, 'image/jpeg'),
+            ],
         ])->assertSessionHasNoErrors()
             ->assertRedirect(route('cart.index'));
 

@@ -6,6 +6,7 @@
         $storyRegularPrice = $storyPricing->regularPrice($story);
         $storyPrice = $storyPricing->effectivePrice($story);
         $storyHasOffer = $storyPricing->hasActiveOffer($story);
+        $cartItemCount = count(session('cart.items', []));
     @endphp
 
     {{-- ══ Per-page SEO slots ══ --}}
@@ -61,7 +62,7 @@
         </script>
     @endpush
 
-    <div class="bg-slate-50 min-h-screen py-12">
+    <div class="min-h-screen bg-slate-50 py-8 pb-28 md:py-12 md:pb-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
             <!-- Breadcrumb -->
@@ -85,6 +86,8 @@
                     العودة إلى متجر القصص والمنتجات
                 </a>
             </div>
+
+            <x-purchase-progress :current="2" class="mb-8" />
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
 
@@ -116,17 +119,23 @@
                         <div class="flex gap-2 flex-wrap justify-end">
                             @if($story->age_range)
                                 <span class="bg-indigo-50 text-indigo-700 text-sm font-bold px-3 py-1.5 rounded-full">👶
-                                    {{ $story->age_range }}</span>
+                                    {{ format_age_range($story->age_range) }}</span>
                             @endif
                             <span
-                                class="bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1.5 rounded-full">{{ $story->language == 'ar' ? 'عربي' : 'English' }}</span>
+                                class="bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1.5 rounded-full">{{ $story->language == 'ar' ? 'عربي' : 'إنجليزي' }}</span>
                         </div>
                     </div>
 
                     <!-- Description -->
-                    <div class="text-slate-600 leading-relaxed mb-6 text-lg">
+                    <div class="hidden text-lg leading-relaxed text-slate-600 md:block">
                         {{ $story->full_desc ?: $story->short_desc }}
                     </div>
+                    <details class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-right md:hidden">
+                        <summary class="cursor-pointer list-none font-black text-slate-900">عن القصة</summary>
+                        <p class="mt-3 border-t border-slate-100 pt-3 text-sm leading-7 text-slate-600">
+                            {{ $story->full_desc ?: $story->short_desc }}
+                        </p>
+                    </details>
 
                     <!-- Lesson -->
                     @if($story->lesson_value)
@@ -178,17 +187,21 @@
                 </div>
 
                 {{-- ===== RIGHT: Order Form ===== --}}
-                <div class="lg:sticky lg:top-24">
-                    <div class="bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
-                        <div class="flex items-center gap-3 mb-8 justify-end">
+                <div id="story-customization" class="scroll-mt-24 lg:sticky lg:top-24">
+                    <div class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl">
+                        <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
+                            <div class="text-left">
+                                <p class="text-xs font-bold text-slate-500">{{ $story->title }}</p>
+                                <p class="font-black text-indigo-700">{{ format_money($storyPrice) }}</p>
+                                <p class="text-[11px] font-bold text-slate-400">السلة: {{ arabic_number($cartItemCount) }} عنصر</p>
+                            </div>
                             <div class="text-right">
                                 <h2 class="text-2xl font-extrabold text-slate-900">خصّص قصتك واطلبها</h2>
-                                <p class="text-slate-500 text-sm mt-1">يستغرق التعبئة أقل من ٣ دقائق</p>
+                                <p class="mt-1 text-sm font-bold text-indigo-600">الخطوة ٢ من ٤</p>
+                                <p class="mt-1 text-xs text-slate-500">بياناتك محفوظة أثناء التنقل</p>
                             </div>
-                            <div
-                                class="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">
-                                ✍️</div>
                         </div>
+                        <div class="p-5 sm:p-8">
 
                         @if(session('success'))
                             <div
@@ -198,7 +211,7 @@
                         @endif
 
                         @if($errors->any())
-                            <div id="story-order-errors" data-scroll-on-load
+                            <div id="story-order-errors" data-scroll-on-load data-first-error-field="{{ $errors->keys()[0] ?? '' }}"
                                 class="bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-xl mb-6 text-right"
                                 tabindex="-1">
                                 <p class="font-extrabold mb-2">يرجى مراجعة البيانات التالية:</p>
@@ -210,22 +223,26 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-story-order-form>
+                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-story-order-form data-story-draft-key="herokid:story:{{ $story->slug }}:draft">
                             @csrf
                             <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] ?? '' }}">
 
                             {{-- SECTION 1: Child Info --}}
-                            <div class="mb-6">
-                                <div class="flex items-center gap-2 mb-4 justify-end">
+                            <details class="group mb-4 rounded-2xl border border-indigo-100 bg-white" @if(! $errors->hasAny(['photo_upload_ids', 'photo_upload_ids.*', 'privacy_consent'])) open @endif data-story-stage="1">
+                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
+                                <div class="flex items-center gap-2 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">بيانات البطل (الطفل)</h3>
                                     <span
                                         class="bg-pink-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">١</span>
                                 </div>
-                                <div class="space-y-4">
+                                <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
+                                </summary>
+                                <div class="space-y-4 p-4">
                                     <div>
                                         <label for="child_name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم
                                             الطفل <span class="text-red-500">*</span></label>
-                                        <input id="child_name" type="text" name="child_name" value="{{ old('child_name') }}" required
+                                        <input id="child_name" type="text" name="child_name" value="{{ old('child_name') }}" required autocomplete="off"
+                                            @if($errors->has('child_name')) aria-invalid="true" @endif
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="الاسم الأول للطفل">
                                         <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
@@ -235,9 +252,14 @@
                                             <label for="child_age"
                                                 class="block text-sm font-bold text-slate-700 mb-1.5 text-right">العمر
                                                 <span class="text-red-500">*</span></label>
-                                            <input id="child_age" type="number" name="child_age" value="{{ old('child_age') }}"
-                                                required min="1" max="18"
+                                            <select id="child_age" name="child_age" required
+                                                @if($errors->has('child_age')) aria-invalid="true" @endif
                                                 class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-center py-3">
+                                                <option value="">اختر العمر</option>
+                                                @foreach($ageOptions as $age)
+                                                    <option value="{{ $age }}" @selected((string) old('child_age') === (string) $age)>{{ arabic_number($age) }} سنوات</option>
+                                                @endforeach
+                                            </select>
                                             <x-input-error :messages="$errors->get('child_age')" class="mt-1" />
                                         </div>
                                         <div>
@@ -245,6 +267,7 @@
                                                 class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الجنس
                                                 <span class="text-red-500">*</span></label>
                                             <select id="child_gender" name="child_gender" required
+                                                @if($errors->has('child_gender')) aria-invalid="true" @endif
                                                 class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
                                                 <option value="">اختر...</option>
                                                 <option value="boy" @selected(old('child_gender') == 'boy')>ولد 👦
@@ -265,25 +288,27 @@
                                         </p>
                                         <x-input-error :messages="$errors->get('interests')" class="mt-1" />
                                     </div>
+                                    <button type="button" class="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="2">التالي: صور الطفل</button>
                                 </div>
-                            </div>
-
-                            <hr class="border-slate-100 my-6">
+                            </details>
 
                             {{-- SECTION 2: Photos --}}
-                            <div class="mb-6">
-                                <div class="flex items-center gap-2 mb-4 justify-end">
+                            <details class="group mb-4 rounded-2xl border border-indigo-100 bg-white" @if($errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*')) open @endif data-story-stage="2">
+                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
+                                <div class="flex items-center gap-2 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">صور الطفل</h3>
                                     <span
                                         class="bg-amber-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٢</span>
                                 </div>
-                                <div
-                                    class="bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-2xl p-6 text-right">
-                                    <p class="font-bold text-indigo-800 mb-2">📸 ارفع ١–٥ صور واضحة للوجه</p>
+                                <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
+                                </summary>
+                                <div class="p-4">
+                                <div class="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-5 text-right">
+                                    <p class="mb-2 font-bold text-indigo-800">📸 ارفع صورتين أو ٣ صور واضحة للوجه</p>
                                     <ul class="text-xs text-indigo-600 space-y-1 mb-4">
                                         <li>• صور واضحة لوجه الطفل (بدون نظارة شمسية)</li>
                                         <li>• تقبل صور JPG وPNG وWebP وHEIC/HEIF — حد أقصى {{ arabic_number(config('photo_uploads.max_size_mb', 15)) }} ميجا للصورة</li>
-                                        <li>• كلما كانت الصور أوضح، كانت الرسومات أجمل</li>
+                                        <li>• اختر الصور معاً وسيبدأ رفعها تلقائياً</li>
                                     </ul>
                                     <input type="file" id="photos" multiple
                                         accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
@@ -305,18 +330,21 @@
                                     <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-2" />
                                     <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-2" />
                                 </div>
-                            </div>
-
-                            <hr class="border-slate-100 my-6">
+                                <button type="button" class="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="3">التالي: الإهداء الاختياري</button>
+                                </div>
+                            </details>
 
                             {{-- SECTION 3: Personalization & Gift --}}
-                            <div class="mb-6">
-                                <div class="flex items-center gap-2 mb-4 justify-end">
+                            <details class="group mb-4 rounded-2xl border border-slate-200 bg-white" data-story-stage="3">
+                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+                                <div class="flex items-center gap-2 justify-end">
                                     <h3 class="text-base font-extrabold text-indigo-800">إضافات خاصة (اختياري)</h3>
                                     <span
                                         class="bg-green-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٣</span>
                                 </div>
-                                <div class="space-y-4">
+                                <span class="text-xs font-black text-slate-500 group-open:rotate-180">⌄</span>
+                                </summary>
+                                <div class="space-y-4 p-4">
                                     <div>
                                         <label for="gift_note" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">إهداء
                                             يُطبع في الصفحة الأولى</label>
@@ -333,13 +361,22 @@
                                             placeholder="أي تفاصيل إضافية تريد إضافتها...">{{ old('parent_notes') }}</textarea>
                                         <x-input-error :messages="$errors->get('parent_notes')" class="mt-1" />
                                     </div>
+                                    <button type="button" class="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="4">التالي: مراجعة وإضافة للسلة</button>
                                 </div>
-                            </div>
+                            </details>
 
                             {{-- Privacy Consent --}}
+                            <details class="group rounded-2xl border border-indigo-100 bg-white" @if($errors->has('privacy_consent')) open @endif data-story-stage="4">
+                            <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
+                                <span class="font-extrabold text-indigo-800">مراجعة وإضافة للسلة</span>
+                                <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
+                            </summary>
+                            <div class="p-4">
                             <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 mb-8">
                                 <div class="flex items-start gap-3">
                                     <input id="privacy_consent" name="privacy_consent" type="checkbox" required
+                                        @checked(old('privacy_consent'))
+                                        @if($errors->has('privacy_consent')) aria-invalid="true" @endif
                                         class="mt-1 h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 flex-shrink-0">
                                     <label for="privacy_consent"
                                         class="text-sm text-slate-700 text-right cursor-pointer">
@@ -352,6 +389,11 @@
                                     </label>
                                 </div>
                                 <x-input-error :messages="$errors->get('privacy_consent')" class="mt-2" />
+                            </div>
+
+                            <div class="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-right" role="status" aria-live="polite" data-story-requirements>
+                                <p class="font-black text-indigo-950">أكمل البيانات لتفعيل الإضافة للسلة</p>
+                                <ul class="mt-2 list-inside list-disc text-sm leading-6 text-indigo-800" data-story-requirements-list></ul>
                             </div>
 
                             {{-- Submit --}}
@@ -372,11 +414,26 @@
                             <p class="text-center text-xs text-slate-400 mt-3">
                                 بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ format_money($storyPrice) }}
                             </p>
+                            </div>
+                            </details>
                         </form>
+                    </div>
                     </div>
                 </div>
 
             </div>
+        </div>
+    </div>
+
+    <div class="fixed inset-x-0 bottom-0 z-40 border-t border-indigo-100 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur md:hidden" dir="rtl">
+        <div class="mx-auto flex max-w-lg items-center gap-3">
+            <div class="min-w-0 flex-1 text-right">
+                <p class="truncate text-xs font-bold text-slate-500">{{ $story->title }}</p>
+                <p class="font-black text-indigo-700">{{ format_money($storyPrice) }} <span class="text-[11px] text-slate-400">· السلة {{ arabic_number($cartItemCount) }}</span></p>
+            </div>
+            <button type="button" data-scroll-to-story-form class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-200">
+                خصّص هذه القصة
+            </button>
         </div>
     </div>
 
@@ -391,15 +448,19 @@
                 const hiddenEl = document.querySelector('[data-photo-upload-ids]');
                 const errorEl = document.querySelector('[data-photo-global-error]');
                 const submitButtons = Array.from(document.querySelectorAll('[data-story-submit]'));
+                const requirementsEl = document.querySelector('[data-story-requirements]');
+                const requirementsList = document.querySelector('[data-story-requirements-list]');
                 if (!form || !input || !queueEl || !hiddenEl) return;
 
                 const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                const maxFiles = Number(config.maxFiles || 5);
+                const minFiles = Number(config.minFiles || 2);
+                const maxFiles = Number(config.maxFiles || 3);
                 const maxSizeBytes = Number(config.maxSizeMb || 15) * 1024 * 1024;
                 const concurrency = Math.max(1, Number(config.concurrency || 2));
                 const maxLongEdge = Number(config.maxLongEdge || 2560);
                 const jpegQuality = Math.min(1, Math.max(0.5, Number(config.jpegQuality || 90) / 100));
                 const storageKey = `herokid:story:${@json($story->slug)}:photo-upload-ids`;
+                const draftKey = form.dataset.storyDraftKey;
                 const serverRejectedStoredUploads = @json($errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*'));
                 const items = [];
                 let activeUploads = 0;
@@ -434,7 +495,11 @@
                     const ids = items.filter(item => item.status === 'uploaded' && item.uploadId).map(item => item.uploadId);
                     hiddenEl.innerHTML = ids.map(id => `<input type="hidden" name="photo_upload_ids[]" value="${id.replaceAll('"', '&quot;')}">`).join('');
                     localStorage.setItem(storageKey, JSON.stringify(ids));
-                    labelEl.textContent = ids.length ? `تم رفع ${ids.length} صورة` : 'لم يتم اختيار صور';
+                    labelEl.textContent = ids.length === 0
+                        ? `ارفع ${minFiles} صور على الأقل`
+                        : (ids.length < minFiles
+                            ? `تم رفع ${ids.length} صورة — أضف ${minFiles - ids.length} أخرى للمتابعة`
+                            : `تم رفع ${ids.length} صورة — يمكنك المتابعة`);
                     updateSubmitState();
                 }
 
@@ -442,12 +507,29 @@
                     const hasUploading = items.some(item => ['waiting', 'preparing', 'uploading'].includes(item.status));
                     const hasFailed = items.some(item => item.status === 'failed');
                     const uploadedCount = items.filter(item => item.status === 'uploaded').length;
-                    const disabled = submitLocked || hasUploading || hasFailed || uploadedCount < 1;
+                    const missing = [];
+                    if (!form.elements.child_name?.value.trim()) missing.push('اسم الطفل');
+                    if (!form.elements.child_age?.value) missing.push('عمر الطفل');
+                    if (!form.elements.child_gender?.value) missing.push('جنس الطفل');
+                    if (uploadedCount < minFiles) missing.push(`${minFiles - uploadedCount} صورة إضافية للطفل`);
+                    if (hasUploading) missing.push('انتظار اكتمال رفع الصور');
+                    if (hasFailed) missing.push('إعادة محاولة الصورة الفاشلة أو حذفها');
+                    if (!form.elements.privacy_consent?.checked) missing.push('الموافقة على استخدام الصور');
+
+                    const disabled = submitLocked || missing.length > 0;
                     submitButtons.forEach(button => {
                         button.disabled = disabled;
                         button.classList.toggle('opacity-60', disabled);
                         button.classList.toggle('cursor-not-allowed', disabled);
                     });
+
+                    if (requirementsList) {
+                        requirementsList.innerHTML = missing.length
+                            ? missing.map(item => `<li>${item}</li>`).join('')
+                            : '<li class="text-emerald-700">كل البيانات المطلوبة مكتملة — يمكنك الإضافة للسلة الآن.</li>';
+                    }
+                    requirementsEl?.classList.toggle('border-emerald-200', missing.length === 0);
+                    requirementsEl?.classList.toggle('bg-emerald-50', missing.length === 0);
                 }
 
                 function rowTemplate(item) {
@@ -467,8 +549,8 @@
                                     </div>
                                     <p class="mt-2 text-xs font-semibold text-slate-500" data-photo-message>${item.message || ''}</p>
                                     <div class="mt-3 flex flex-wrap justify-end gap-2">
-                                        <button type="button" data-photo-retry class="${item.status === 'failed' ? '' : 'hidden'} rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">إعادة المحاولة</button>
-                                        <button type="button" data-photo-remove class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">حذف</button>
+                                        <button type="button" data-photo-retry class="${item.status === 'failed' ? '' : 'hidden'} min-h-11 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">إعادة المحاولة</button>
+                                        <button type="button" data-photo-remove class="min-h-11 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">حذف</button>
                                     </div>
                                 </div>
                             </div>
@@ -673,6 +755,44 @@
                     input.value = '';
                 });
 
+                form.querySelectorAll('[data-story-next]').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const target = form.querySelector(`[data-story-stage="${button.dataset.storyNext}"]`);
+                        form.querySelectorAll('[data-story-stage]').forEach(stage => {
+                            stage.open = stage === target;
+                        });
+                        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        target?.querySelector('input, select, textarea, button')?.focus({ preventScroll: true });
+                    });
+                });
+
+                document.querySelector('[data-scroll-to-story-form]')?.addEventListener('click', () => {
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    form.querySelector('[name="child_name"]')?.focus({ preventScroll: true });
+                });
+
+                const draftFields = ['child_name', 'child_age', 'child_gender', 'interests', 'gift_note', 'parent_notes'];
+                if (draftKey) {
+                    try {
+                        const draft = JSON.parse(sessionStorage.getItem(draftKey) || '{}');
+                        draftFields.forEach(name => {
+                            const field = form.elements[name];
+                            if (field && !field.value && typeof draft[name] === 'string') field.value = draft[name];
+                        });
+                    } catch {}
+
+                    const saveDraft = () => {
+                        const draft = Object.fromEntries(draftFields.map(name => [name, form.elements[name]?.value || '']));
+                        sessionStorage.setItem(draftKey, JSON.stringify(draft));
+                        updateSubmitState();
+                    };
+                    form.addEventListener('input', saveDraft);
+                    form.addEventListener('change', saveDraft);
+                } else {
+                    form.addEventListener('input', updateSubmitState);
+                    form.addEventListener('change', updateSubmitState);
+                }
+
                 form.addEventListener('submit', event => {
                     if (submitLocked) {
                         event.preventDefault();
@@ -681,15 +801,21 @@
                     const hasUploading = items.some(item => ['waiting', 'preparing', 'uploading'].includes(item.status));
                     const hasFailed = items.some(item => item.status === 'failed');
                     const uploadedCount = items.filter(item => item.status === 'uploaded').length;
-                    if (hasUploading || hasFailed || uploadedCount < 1) {
+                    if (hasUploading || hasFailed || uploadedCount < minFiles) {
                         event.preventDefault();
                         showGlobalError(hasUploading
                             ? 'انتظر حتى يكتمل رفع كل الصور قبل إرسال الطلب.'
-                            : 'يرجى رفع صورة واحدة ناجحة على الأقل وحذف أو إعادة محاولة الصور الفاشلة.');
+                            : `يرجى رفع ${minFiles} صور ناجحة على الأقل وحذف أو إعادة محاولة الصور الفاشلة.`);
                         queueEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         return;
                     }
+                    if (!form.checkValidity()) {
+                        event.preventDefault();
+                        form.reportValidity();
+                        return;
+                    }
                     submitLocked = true;
+                    if (draftKey) sessionStorage.removeItem(draftKey);
                     updateSubmitState();
                 });
 

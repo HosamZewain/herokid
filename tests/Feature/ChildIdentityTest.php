@@ -81,6 +81,7 @@ class ChildIdentityTest extends TestCase
     public function test_child_identity_intake_rejects_more_than_three_photos(): void
     {
         Storage::fake('local');
+        config(['photo_uploads.max_files' => 4]);
         $this->ageRanges();
         $this->get(route('child-identity.index'))->assertOk();
         $uploadToken = (string) session('photo_upload.token');
@@ -642,7 +643,7 @@ class ChildIdentityTest extends TestCase
             'child_age' => 6,
             'child_gender' => 'boy',
             'privacy_consent' => '1',
-            'photos' => [$this->tinyPng('second-story.png')],
+            'photos' => [$this->tinyPng('second-story.png'), $this->tinyPng('second-story-side.png')],
         ])->assertRedirect();
         $this->assertCount(2, session('cart.items'));
 

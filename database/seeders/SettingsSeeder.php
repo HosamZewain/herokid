@@ -68,7 +68,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'home_feature_face', 'value' => 'وجه طفلك في كل رسمة'],
             ['key' => 'home_feature_values', 'value' => 'قصص بقيم تربوية'],
             ['key' => 'home_feature_delivery', 'value' => 'توصيل لبابك'],
-            ['key' => 'home_feature_languages', 'value' => 'عربي وإنجليزي'],
+            ['key' => 'home_feature_languages', 'value' => 'لغة القصة موضحة قبل الطلب'],
             ['key' => 'home_story_section_title', 'value' => 'قصص يعشقها الأطفال'],
             ['key' => 'home_story_section_subtitle', 'value' => 'كل قصة تغرس قيمة وتصنع ذكرى. طفلك هو البطل الحقيقي في كل صفحة.'],
             ['key' => 'home_store_section_title', 'value' => 'منتجات تكمل تجربة طفلك'],
@@ -131,7 +131,7 @@ class SettingsSeeder extends Seeder
                 'desc' => 'تصفح مكتبتنا المتنوعة واختر القصة التي تناسب عمر طفلك واهتماماته وتغرس قيمة إنسانية أصيلة.',
                 'bullet1' => 'فلتر حسب العمر والجنس واللغة',
                 'bullet2' => 'كل قصة تحمل درساً تربوياً واضحاً',
-                'bullet3' => 'متاحة بالعربية والإنجليزية',
+                'bullet3' => 'لغة كل قصة موضحة قبل الطلب',
             ],
             2 => [
                 'title' => 'خصّص القصة لطفلك',

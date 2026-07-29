@@ -142,7 +142,7 @@ class TemporaryPhotoUploadService
         ?int $maximum = null,
     ): Collection {
         $sessionHash = $this->validateToken($request);
-        $maximum ??= (int) config('photo_uploads.max_files', 5);
+        $maximum ??= (int) config('photo_uploads.max_files', 3);
         $publicIds = array_values(array_unique(array_filter($publicIds, 'is_string')));
 
         if (count($publicIds) < $minimum) {
@@ -243,7 +243,7 @@ class TemporaryPhotoUploadService
             ->where('expires_at', '>', now())
             ->count();
 
-        if ($count >= (int) config('photo_uploads.max_files', 5)) {
+        if ($count >= (int) config('photo_uploads.max_files', 3)) {
             throw new UploadValidationException($this->maxFilesMessage(), 422);
         }
     }
@@ -307,6 +307,6 @@ class TemporaryPhotoUploadService
 
     private function maxFilesMessage(): string
     {
-        return 'يمكنك رفع '.config('photo_uploads.max_files', 5).' صور كحد أقصى.';
+        return 'يمكنك رفع '.config('photo_uploads.max_files', 3).' صور كحد أقصى.';
     }
 }

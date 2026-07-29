@@ -36,7 +36,7 @@
                 @endif
                 <span class="text-lg font-black {{ $item->type === 'story' ? 'text-pink-700' : 'text-indigo-700' }}">{{ $item->priceLabel }}</span>
             </div>
-            <a href="{{ $item->detailUrl }}" class="rounded-xl px-4 py-2.5 text-xs font-black text-white transition hover:scale-105 {{ $item->type === 'story' ? 'bg-gradient-to-l from-pink-600 to-orange-500' : 'bg-indigo-600 hover:bg-indigo-700' }}">{{ $item->ctaLabel }}</a>
+            <a href="{{ $item->detailUrl }}" class="inline-flex min-h-11 items-center rounded-xl px-4 py-2.5 text-xs font-black text-white transition hover:scale-105 {{ $item->type === 'story' ? 'bg-gradient-to-l from-pink-600 to-orange-500' : 'bg-indigo-600 hover:bg-indigo-700' }}">{{ $item->ctaLabel }}</a>
         </div>
     </div>
 </article>

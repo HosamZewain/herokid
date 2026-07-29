@@ -85,6 +85,19 @@ if (! function_exists('format_money')) {
     }
 }
 
+if (! function_exists('format_age_range')) {
+    function format_age_range(?string $value): string
+    {
+        if ($value === null || trim($value) === '') {
+            return 'كل الأعمار';
+        }
+
+        $formatted = preg_replace('/\s*[-–—]\s*/u', '–', trim($value));
+
+        return arabic_number($formatted);
+    }
+}
+
 if (! function_exists('delivery_range')) {
     function delivery_range(bool $withBusinessDays = true): string
     {

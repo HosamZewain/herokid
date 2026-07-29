@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'max_files' => (int) env('PHOTO_UPLOAD_MAX_FILES', 5),
+    'min_files' => (int) env('PHOTO_UPLOAD_MIN_FILES', 2),
+    'max_files' => (int) env('PHOTO_UPLOAD_MAX_FILES', 3),
     'admin_max_files' => (int) env('ADMIN_ORDER_PHOTO_MAX_FILES', 10),
     'max_size_mb' => (int) env('PHOTO_UPLOAD_MAX_SIZE_MB', 15),
     'concurrency' => (int) env('PHOTO_UPLOAD_CONCURRENCY', 2),

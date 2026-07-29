@@ -117,14 +117,14 @@ class UnifiedStorefrontService
             imageUrl: $story->cover_url,
             price: $effectivePrice,
             priceLabel: format_money($effectivePrice),
-            ageRange: $ageRange,
+            ageRange: format_age_range($ageRange),
             ageValues: $ageRange === 'كل الأعمار' ? [] : [$ageRange],
             category: $category?->name,
             categorySlug: $category?->slug,
             categorySource: 'story',
             tags: $categories->pluck('name')->filter()->values()->all(),
             personalizationType: 'requires_child_photos',
-            personalizationLabel: 'يحتاج اسم وصورة الطفل',
+            personalizationLabel: 'قصة مخصصة — تحتاج بيانات الطفل وصوره',
             isFeatured: false,
             sortOrder: 0,
             detailUrl: route('stories.show', $story->slug),
@@ -154,9 +154,9 @@ class UnifiedStorefrontService
             default => 'none',
         };
         $personalizationLabel = match ($personalizationType) {
-            'story_context' => 'يستخدم قصة الطفل',
-            'requires_child_photos' => 'يحتاج بيانات الطفل',
-            default => 'لا يحتاج تخصيص',
+            'story_context' => 'إضافة تستخدم قصة الطفل',
+            'requires_child_photos' => 'منتج مخصص — يحتاج بيانات الطفل',
+            default => 'منتج جاهز — شراء مباشر',
         };
         $ctaLabel = match (true) {
             $personalizationType === 'story_context', $product->purchase_mode === 'add_on_only' => 'أضف مع قصة طفلك',

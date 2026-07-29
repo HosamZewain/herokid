@@ -19,6 +19,14 @@ class TemporaryPhotoUploadTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // This class exercises upload lifecycle mechanics, not the storefront photo-count policy.
+        config(['photo_uploads.min_files' => 1]);
+    }
+
     public function test_guest_can_upload_one_child_photo_and_attach_it_to_cart_without_resending_file(): void
     {
         Storage::fake('local');

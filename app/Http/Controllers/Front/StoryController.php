@@ -7,6 +7,7 @@ use App\Models\CustomerStoryView;
 use App\Models\Story;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -51,12 +52,14 @@ class StoryController extends Controller
                 'sessionUrl' => route('photo-uploads.session'),
                 'uploadUrl' => route('photo-uploads.store'),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
-                'maxFiles' => (int) config('photo_uploads.max_files', 5),
+                'minFiles' => (int) config('photo_uploads.min_files', 2),
+                'maxFiles' => (int) config('photo_uploads.max_files', 3),
                 'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
                 'concurrency' => (int) config('photo_uploads.concurrency', 2),
                 'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
                 'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
             ],
+            'ageOptions' => StoryAgeOptions::fromRange($story->age_range),
         ]);
     }
 }

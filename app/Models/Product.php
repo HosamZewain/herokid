@@ -101,7 +101,7 @@ class Product extends Model
     {
         $groups = $this->age_groups ?? [];
 
-        return $groups === [] ? 'كل الأعمار' : implode('، ', $groups);
+        return $groups === [] ? 'كل الأعمار' : implode('، ', array_map('format_age_range', $groups));
     }
 
     public function getFeaturedImageUrlAttribute(): ?string

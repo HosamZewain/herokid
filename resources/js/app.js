@@ -60,8 +60,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (errorSummary) {
         window.requestAnimationFrame(() => {
-            errorSummary.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            errorSummary.focus({ preventScroll: true });
+            const fieldName = errorSummary.dataset.firstErrorField?.replace(/\.\d+.*$/, '');
+            const field = fieldName
+                ? document.querySelector(`[name="${CSS.escape(fieldName)}"], [name="${CSS.escape(fieldName)}[]"]`)
+                : null;
+            const stage = field?.closest('details');
+
+            if (stage) {
+                stage.open = true;
+            }
+
+            const target = field || errorSummary;
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.focus({ preventScroll: true });
         });
     }
 

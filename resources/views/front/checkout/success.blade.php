@@ -31,6 +31,9 @@
 @endif
 
     <div class="bg-gray-50 py-20 min-h-[70vh] flex flex-col justify-center">
+        <div class="mx-auto mb-6 w-full max-w-3xl px-4 sm:px-6 lg:px-8">
+            <x-purchase-progress :current="4" />
+        </div>
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center bg-white p-10 rounded-3xl shadow-xl border border-gray-100">
             
             <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">

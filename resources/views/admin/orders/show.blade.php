@@ -345,7 +345,7 @@
                             $delivery = $order->delivery_details ?? [];
                         @endphp
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-right text-gray-700">
-                            <div><span class="font-bold text-gray-600">الدولة:</span> {{ $delivery['country'] ?? 'Egypt' }}</div>
+                            <div><span class="font-bold text-gray-600">الدولة:</span> {{ $delivery['country'] ?? 'مصر' }}</div>
                             <div><span class="font-bold text-gray-600">المحافظة:</span> {{ $delivery['governorate'] ?? '-' }}</div>
                             <div><span class="font-bold text-gray-600">المدينة:</span> {{ $delivery['city'] ?? '-' }}</div>
                             <div><span class="font-bold text-gray-600">الشارع:</span> {{ $delivery['street'] ?? '-' }}</div>

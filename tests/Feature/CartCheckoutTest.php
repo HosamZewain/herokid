@@ -27,7 +27,12 @@ class CartCheckoutTest extends TestCase
 
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
-            ->assertHeader('Set-Cookie');
+            ->assertHeader('Set-Cookie')
+            ->assertSee('خطوات الطلب كاملة')
+            ->assertSee('خصّص هذه القصة')
+            ->assertSee('data-scroll-to-story-form', false)
+            ->assertSee('data-story-stage="1"', false)
+            ->assertSee('data-story-stage="4"', false);
     }
 
     public function test_public_tracking_keeps_page_views_and_purchase_has_egp_currency(): void
@@ -127,9 +132,36 @@ class CartCheckoutTest extends TestCase
             ->assertSee('يرجى إدخال عمر الطفل')
             ->assertSee('يرجى اختيار جنس الطفل')
             ->assertSee('يجب الموافقة على استخدام الصور لإكمال الطلب')
-            ->assertSee('يرجى رفع صورة واحدة واضحة للطفل على الأقل')
+            ->assertSee('يرجى رفع صورتين واضحتين للطفل على الأقل')
             ->assertSee('اختيار الصور')
-            ->assertSee('لم يتم اختيار صور');
+            ->assertSee('لم يتم اختيار صور')
+            ->assertSee('ارفع صورتين أو ٣ صور واضحة للوجه')
+            ->assertSee('data-story-requirements', false);
+    }
+
+    public function test_story_cart_requires_two_to_three_photos_and_constrains_age_to_story_range(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('policy-story', 'قصة الفئة العمرية', 100);
+        $story->update(['age_range' => '٣ - ٦ سنوات']);
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'photos' => [$this->tinyPngUpload()],
+            ]))
+            ->assertSessionHasErrors('photos');
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'child_age' => 9,
+            ]))
+            ->assertSessionHasErrors('child_age');
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('<option value="3"', false)
+            ->assertSee('<option value="6"', false)
+            ->assertDontSee('<option value="9"', false);
     }
 
     public function test_story_page_renders_wildcard_photo_validation_errors(): void
@@ -215,6 +247,13 @@ class CartCheckoutTest extends TestCase
             ->assertSee('رحلة الفضاء')
             ->assertSee('سر البحر')
             ->assertSee('75')
+            ->assertSeeInOrder(['ملخص الطلب قبل إدخال العنوان', 'بيانات ولي الأمر والتوصيل'])
+            ->assertSee('إرسال الطلب للمراجعة — بدون دفع الآن')
+            ->assertSee('سنتواصل معك عبر واتساب لتأكيد المعاينة وطريقة الدفع')
+            ->assertSee('type="tel"', false)
+            ->assertSee('inputmode="tel"', false)
+            ->assertSee('autocomplete="tel"', false)
+            ->assertSee('for="checkout-parent-name"', false)
             ->assertSee('رقم الموبايل / واتساب')
             ->assertSee('المحافظة')
             ->assertSee('القاهرة')
@@ -240,7 +279,7 @@ class CartCheckoutTest extends TestCase
         $this->assertSame('201000000000', $orders[0]->delivery_details['phone']);
         $this->assertSame($egypt->id, $orders[0]->delivery_details['delivery_country_id']);
         $this->assertSame($cairo->id, $orders[0]->delivery_details['delivery_governorate_id']);
-        $this->assertSame('Egypt', $orders[0]->delivery_details['country']);
+        $this->assertSame('مصر', $orders[0]->delivery_details['country']);
         $this->assertSame('القاهرة', $orders[0]->delivery_details['governorate']);
         $this->assertSame('Nasr City', $orders[0]->delivery_details['city']);
         $this->assertSame('Street 1', $orders[0]->delivery_details['street']);
@@ -250,7 +289,7 @@ class CartCheckoutTest extends TestCase
         $this->assertSame(290.0, (float) $orders[0]->delivery_details['total']);
         $this->assertNotEmpty($orders[0]->delivery_details['checkout_group']);
         $this->assertSame($orders[0]->delivery_details['checkout_group'], $orders[1]->delivery_details['checkout_group']);
-        $this->assertCount(1, $orders[0]->uploaded_photos);
+        $this->assertCount(2, $orders[0]->uploaded_photos);
 
         $this->post(route('track.search'), [
             'order_number' => $orders[0]->order_number,
@@ -608,17 +647,18 @@ class CartCheckoutTest extends TestCase
             'next' => 'cart',
             'photos' => [
                 $this->tinyPngUpload(),
+                $this->tinyPngUpload('child-second.png'),
             ],
         ];
     }
 
-    private function tinyPngUpload(): UploadedFile
+    private function tinyPngUpload(string $name = 'child.png'): UploadedFile
     {
         $path = tempnam(sys_get_temp_dir(), 'herokid-child-photo-');
         file_put_contents($path, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
         ));
 
-        return new UploadedFile($path, 'child.png', 'image/png', null, true);
+        return new UploadedFile($path, $name, 'image/png', null, true);
     }
 }

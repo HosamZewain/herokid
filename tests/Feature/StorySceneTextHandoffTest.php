@@ -118,7 +118,7 @@ class StorySceneTextHandoffTest extends TestCase
             'child_gender' => 'girl',
             'privacy_consent' => '1',
             'next' => 'cart',
-            'photos' => [$this->tinyPngUpload()],
+            'photos' => [$this->tinyPngUpload(), $this->tinyPngUpload('child-second.png')],
         ])->assertRedirect(route('cart.index'));
 
         $this->post(route('checkout.store'), [
@@ -482,13 +482,13 @@ class StorySceneTextHandoffTest extends TestCase
         ])->all();
     }
 
-    private function tinyPngUpload(): UploadedFile
+    private function tinyPngUpload(string $name = 'child.png'): UploadedFile
     {
         $path = tempnam(sys_get_temp_dir(), 'scene-photo-');
         file_put_contents($path, base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
         ));
 
-        return new UploadedFile($path, 'child.png', 'image/png', null, true);
+        return new UploadedFile($path, $name, 'image/png', null, true);
     }
 }

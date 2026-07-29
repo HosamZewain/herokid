@@ -7,7 +7,14 @@
 @php
     $homeStoryCount = \App\Models\Story::where('active', true)->count();
     $homeCategoryCount = \App\Models\StoryCategory::whereHas('stories', fn ($query) => $query->where('active', true))->count();
-    $homeLanguageCount = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->count('language');
+    $homeLanguages = \App\Models\Story::where('active', true)->whereNotNull('language')->distinct()->pluck('language');
+    $homeLanguageCount = $homeLanguages->count();
+    $homeLanguageLabel = match (true) {
+        $homeLanguages->count() > 1 => 'متاحة بالعربية والإنجليزية',
+        $homeLanguages->contains('ar') => 'متاحة بالعربية',
+        $homeLanguages->contains('en') => 'متاحة بالإنجليزية',
+        default => 'لغة القصة موضحة قبل الطلب',
+    };
     $homeAgeRangeCount = count(setting_array('age_ranges')) ?: \App\Models\Story::where('active', true)->whereNotNull('age_range')->where('age_range', '!=', '')->distinct()->count('age_range');
     $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
     $homePricingStory = $featuredStories->first() ?? new \App\Models\Story(['price' => setting('price_soft_cover', 0)]);
@@ -192,7 +199,7 @@
                     <span class="inline-flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-700 text-sm font-bold rounded-full border border-pink-200 shadow-sm">📖 {{ setting('home_feature_values', $settings['home_feature_values'] ?? '') }}</span>
                     <span class="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 text-sm font-bold rounded-full border border-violet-200 shadow-sm">🚀 {{ setting('home_feature_delivery', $settings['home_feature_delivery'] ?? '') }}</span>
                     <span class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-bold rounded-full border border-emerald-200 shadow-sm">⏱ {{ delivery_range() }}</span>
-                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-700 text-sm font-bold rounded-full border border-sky-200 shadow-sm">🌐 {{ setting('home_feature_languages', $settings['home_feature_languages'] ?? '') }}</span>
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-700 text-sm font-bold rounded-full border border-sky-200 shadow-sm">🌐 {{ $homeLanguageLabel }}</span>
                 </div>
 
                 {{-- CTA buttons --}}
@@ -429,7 +436,7 @@
                         </div>
                         <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-orange-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🌐</span>
-                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeLanguageCount) }} لغة</span>
+                            <span class="text-xs font-black text-slate-700">{{ $homeLanguageCount === 1 ? 'لغة واحدة' : arabic_number($homeLanguageCount).' لغات' }}</span>
                         </div>
                         <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-yellow-200 rounded-2xl px-3 py-2 shadow-sm">
                             <span class="text-base">🎯</span>
