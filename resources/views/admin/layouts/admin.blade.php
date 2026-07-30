@@ -59,44 +59,68 @@
                 $navLink = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition';
                 $idleLink = 'text-indigo-200 hover:bg-indigo-700 hover:text-white';
                 $activeLink = 'bg-indigo-600 text-white';
-                $canOperations = auth()->user()->hasAnyPermission([
-                    'orders.view', 'visitor_carts.view', 'stories.view', 'story_categories.view', 'store.products.view',
-                    'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
-                    'production_studio.view', 'child_identities.view', 'child_identities.view_share_report',
+                $canHome = auth()->user()->hasAnyPermission(['dashboard.view']);
+                $canReports = auth()->user()->hasAnyPermission([
+                    'analytics.view', 'sales_reports.view', 'visitor_carts.view', 'child_identities.view_share_report',
                 ]);
-                $canDashboard = auth()->user()->hasAnyPermission(['dashboard.view', 'analytics.view', 'sales_reports.view', 'expenses.view', 'visitor_carts.view']);
+                $canFinance = auth()->user()->hasAnyPermission(['expenses.view']);
+                $canFulfillment = auth()->user()->hasAnyPermission([
+                    'orders.view', 'production_studio.view', 'child_identities.view',
+                ]);
+                $canCatalog = auth()->user()->hasAnyPermission([
+                    'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
+                    'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
+                ]);
                 $canContent = auth()->user()->hasAnyPermission([
                     'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
-                    'settings.pricing.view', 'settings.ai_providers.view', 'settings.notifications.view', 'admin_users.view', 'admin_users.create',
-                    'admin_users.permissions.manage', 'activity_logs.view', 'child_identities.settings',
+                    'settings.pricing.view', 'settings.ai_providers.view', 'settings.notifications.view',
+                    'child_identities.settings',
+                ]);
+                $canAdministration = auth()->user()->hasAnyPermission([
+                    'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'activity_logs.view',
                 ]);
             @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
-                @if($canDashboard)
+                @if($canHome)
                     <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الرئيسية</p>
                     @can('dashboard.view')
                         <a href="{{ route('admin.dashboard.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.dashboard.*') ? $activeLink : $idleLink }}">لوحة القيادة</a>
                     @endcan
-                    @can('analytics.view')
-                        <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
-                    @endcan
-                    @can('sales_reports.view')
-                        <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
-                    @endcan
-                    @can('expenses.view')
-                        <a href="{{ route('admin.expenses.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.expenses.*') ? $activeLink : $idleLink }}">المصروفات</a>
-                    @endcan
-                    @can('visitor_carts.view')
-                        <a href="{{ route('admin.visitor-carts.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.visitor-carts.*') ? $activeLink : $idleLink }}">سلات الزوار</a>
-                    @endcan
                 @endif
 
-                @if($canOperations)
+                @if($canReports)
                     <div class="pt-4">
-                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">العمليات</p>
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التقارير</p>
+                        @can('analytics.view')
+                            <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
+                        @endcan
+                        @can('sales_reports.view')
+                            <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
+                        @endcan
+                        @can('child_identities.view_share_report')
+                            <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>
+                        @endcan
+                        @can('visitor_carts.view')
+                            <a href="{{ route('admin.visitor-carts.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.visitor-carts.*') ? $activeLink : $idleLink }}">سلات الزوار</a>
+                        @endcan
+                    </div>
+                @endif
+
+                @if($canFinance)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">المالية</p>
+                        @can('expenses.view')
+                            <a href="{{ route('admin.expenses.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.expenses.*') ? $activeLink : $idleLink }}">المصروفات</a>
+                        @endcan
+                    </div>
+                @endif
+
+                @if($canFulfillment)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الطلبات والإنتاج</p>
                         @can('orders.view')
                             <a href="{{ route('admin.orders.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.orders.*') ? $activeLink : $idleLink }}">الطلبات</a>
                         @endcan
@@ -108,9 +132,12 @@
                         @can('child_identities.view')
                             <a href="{{ route('admin.child-identities.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.*') && !request()->routeIs('admin.child-identities.settings.*') && !request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">هويات الأطفال</a>
                         @endcan
-                        @can('child_identities.view_share_report')
-                            <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>
-                        @endcan
+                    </div>
+                @endif
+
+                @if($canCatalog)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الكتالوج والعملاء</p>
                         @can('stories.view')
                             <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>
                         @endcan
@@ -118,7 +145,7 @@
                             <a href="{{ auth()->user()->hasPermission('store.products.view') ? route('admin.products.index') : route('admin.product-categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.products.*') || request()->routeIs('admin.product-categories.*') || request()->routeIs('admin.homepage-store-sections.*') || request()->routeIs('admin.upsell-rules.*') ? $activeLink : $idleLink }}">المتجر</a>
                         @endif
                         @can('customers.view')
-                            <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">Customers</a>
+                            <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">العملاء</a>
                         @endcan
                         @can('story_categories.view')
                             <a href="{{ route('admin.categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.categories.*') ? $activeLink : $idleLink }}">التصنيفات</a>
@@ -147,6 +174,12 @@
                         @can('settings.site.view')
                             <a href="{{ route('admin.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? $activeLink : $idleLink }}">إعدادات الموقع</a>
                         @endcan
+                        @can('settings.pricing.view')
+                            <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">باقات الأسعار</a>
+                        @endcan
+                        @can('settings.delivery_zones.view')
+                            <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>
+                        @endcan
                         @can('settings.production_prompt.view')
                             <a href="{{ route('admin.settings.story-production-prompt.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.story-production-prompt.*') ? $activeLink : $idleLink }}">قالب برومبت الإنتاج</a>
                         @endcan
@@ -159,15 +192,15 @@
                         @can('settings.notifications.view')
                             <a href="{{ route('admin.settings.notifications.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.notifications.*') ? $activeLink : $idleLink }}">مركز التنبيهات</a>
                         @endcan
-                        @can('settings.delivery_zones.view')
-                            <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>
-                        @endcan
+                    </div>
+                @endif
+
+                @if($canAdministration)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإدارة والأمان</p>
                         @if(auth()->user()->hasAnyPermission(['admin_users.view', 'admin_users.create', 'admin_users.permissions.manage']))
                             <a href="{{ route('admin.users.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.users.*') ? $activeLink : $idleLink }}">إدارة المشرفين</a>
                         @endif
-                        @can('settings.pricing.view')
-                            <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">باقات الأسعار</a>
-                        @endcan
                         @can('activity_logs.view')
                             <a href="{{ route('admin.activity-logs.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.activity-logs.*') ? $activeLink : $idleLink }}">سجل النشاط</a>
                         @endcan

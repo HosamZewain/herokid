@@ -59,6 +59,51 @@ class AdminPermissionsTest extends TestCase
             ->assertDontSee('class="flex-1 flex flex-col min-w-0 mr-64"', false);
     }
 
+    public function test_admin_sidebar_groups_pages_by_business_function_in_a_clear_order(): void
+    {
+        $admin = $this->adminWithPermissions(AdminPermissionRegistry::keys());
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'الرئيسية',
+                'لوحة القيادة',
+                'التقارير',
+                'تحليلات الموقع',
+                'تقرير المبيعات',
+                'تقرير مشاركة الهويات',
+                'سلات الزوار',
+                'المالية',
+                'المصروفات',
+                'الطلبات والإنتاج',
+                'الطلبات',
+                'هويات الأطفال',
+                'الكتالوج والعملاء',
+                'القصص',
+                'المتجر',
+                'العملاء',
+                'التصنيفات',
+                'إدارة المحتوى',
+                'الإعدادات',
+                'الإدارة والأمان',
+            ]);
+    }
+
+    public function test_admin_sidebar_does_not_render_empty_sections_for_limited_staff(): void
+    {
+        $admin = $this->adminWithPermissions(['orders.view']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertSee('الطلبات والإنتاج')
+            ->assertDontSee('التقارير')
+            ->assertDontSee('المالية')
+            ->assertDontSee('الكتالوج والعملاء')
+            ->assertDontSee('الإدارة والأمان');
+    }
+
     public function test_order_sensitive_actions_require_separate_permissions(): void
     {
         Storage::fake('local');
