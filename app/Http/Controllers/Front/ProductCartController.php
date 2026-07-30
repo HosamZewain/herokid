@@ -37,7 +37,7 @@ class ProductCartController extends Controller
 
         if ($requiresStory) {
             if ($storyItems->isEmpty()) {
-                return back()->with('error', 'أضف قصة مخصصة أولًا لاستخدام صورة طفلك في هذا المنتج.');
+                return $this->errorResponse($request, 'أضف قصة مخصصة أولًا لاستخدام صورة طفلك في هذا المنتج.');
             }
 
             if (! $linkedStoryKey && $storyItems->count() === 1) {
@@ -45,16 +45,20 @@ class ProductCartController extends Controller
             }
 
             if (! $linkedStoryKey || ! isset($cart[$linkedStoryKey]) || ($cart[$linkedStoryKey]['item_type'] ?? 'story') !== 'story') {
-                return back()->withErrors(['linked_story_key' => 'اختر الطفل والقصة التي سيتم تخصيص المنتج لها.'])->withInput();
+                return $this->errorResponse(
+                    $request,
+                    'اختر الطفل والقصة التي سيتم تخصيص المنتج لها.',
+                    'linked_story_key'
+                );
             }
         }
 
         if ($product->purchase_mode === 'add_on_only' && ! $linkedStoryKey) {
-            return back()->with('error', 'هذا المنتج يضاف فقط مع قصة مخصصة.');
+            return $this->errorResponse($request, 'هذا المنتج يضاف فقط مع قصة مخصصة.');
         }
 
         if (! $product->hasStock($quantity, $variant)) {
-            return back()->with('error', 'الكمية المطلوبة غير متاحة حالياً.');
+            return $this->errorResponse($request, 'الكمية المطلوبة غير متاحة حالياً.');
         }
 
         $unitPriceCents = $product->effectivePriceCents($variant);
@@ -90,6 +94,37 @@ class ProductCartController extends Controller
         session(['cart.items' => $cart]);
         app(CartTrackingService::class)->recordItemAdded($request, $itemKey);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'تمت إضافة '.$product->name_ar.' إلى السلة.',
+                'item_key' => $itemKey,
+                'product_name' => $product->name_ar,
+                'added_line_total' => ($unitPriceCents * $quantity) / 100,
+                'cart_count' => count($cart),
+                'mobile_item_html' => view('front.cart._mobile_item', [
+                    'key' => $itemKey,
+                    'item' => $cart[$itemKey],
+                    'addOnItems' => collect(),
+                ])->render(),
+            ]);
+        }
+
         return redirect()->route('cart.index')->with('success', 'تمت إضافة المنتج إلى السلة.');
+    }
+
+    private function errorResponse(Request $request, string $message, ?string $field = null)
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'errors' => $field ? [$field => [$message]] : [],
+            ], 422);
+        }
+
+        if ($field) {
+            return back()->withErrors([$field => $message])->withInput();
+        }
+
+        return back()->with('error', $message);
     }
 }

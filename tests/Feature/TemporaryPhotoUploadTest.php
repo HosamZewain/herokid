@@ -58,6 +58,21 @@ class TemporaryPhotoUploadTest extends TestCase
         ]);
     }
 
+    public function test_story_page_restores_private_preview_urls_after_refresh(): void
+    {
+        $story = $this->story();
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('previewUrlTemplate', false)
+            ->assertSee('body.preview_url', false)
+            ->assertSee("config.previewUrlTemplate?.replace('__ID__', uploadId)", false)
+            ->assertSee('name: item.name', false)
+            ->assertSee('stored?.name', false)
+            ->assertSee('تم استعادة الصورة المرفوعة بعد تحديث الصفحة')
+            ->assertDontSee('تم الاحتفاظ برقم الصورة فقط بعد تحديث الصفحة');
+    }
+
     public function test_checkout_marks_attached_temporary_uploads_with_final_order(): void
     {
         Storage::fake('local');
@@ -388,7 +403,6 @@ class TemporaryPhotoUploadTest extends TestCase
             'interests' => 'الرسم',
             'gift_note' => 'إهداء خاص',
             'parent_notes' => 'ملاحظات للطلب',
-            'privacy_consent' => '1',
             'next' => 'cart',
         ], $overrides);
     }

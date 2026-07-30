@@ -236,6 +236,7 @@ Route::get('/sitemap.xml', function () {
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
         ['url' => Seo::url('/shop'),         'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
         ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
+        ['url' => Seo::url('/about'),        'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
         ['url' => Seo::url('/contact'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
         ['url' => Seo::url('/how-it-works'), 'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
@@ -289,6 +290,7 @@ Route::get('/sitemap.xml', function () {
         ->header('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
 })->name('sitemap');
 
+Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/faq', [PageController::class, 'faq'])->name('faq');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');

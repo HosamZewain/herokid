@@ -116,7 +116,6 @@ class StorySceneTextHandoffTest extends TestCase
             'child_name' => 'ليلى',
             'child_age' => 7,
             'child_gender' => 'girl',
-            'privacy_consent' => '1',
             'next' => 'cart',
             'photos' => [$this->tinyPngUpload(), $this->tinyPngUpload('child-second.png')],
         ])->assertRedirect(route('cart.index'));

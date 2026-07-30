@@ -15,6 +15,10 @@ class StoryController extends Controller
 {
     public function index(Request $request, UnifiedStorefrontService $storefront)
     {
+        $request->query->remove('personalization');
+        if (Str::startsWith((string) $request->query('category'), 'product:')) {
+            $request->query->remove('category');
+        }
         $request->merge(['type' => 'stories']);
 
         return view('front.shop.index', array_merge(
@@ -51,6 +55,7 @@ class StoryController extends Controller
                 'batchToken' => Str::random(48),
                 'sessionUrl' => route('photo-uploads.session'),
                 'uploadUrl' => route('photo-uploads.store'),
+                'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
                 'minFiles' => (int) config('photo_uploads.min_files', 2),
                 'maxFiles' => (int) config('photo_uploads.max_files', 3),
@@ -59,7 +64,7 @@ class StoryController extends Controller
                 'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
                 'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
             ],
-            'ageOptions' => StoryAgeOptions::fromRange($story->age_range),
+            'ageOptions' => StoryAgeOptions::forPersonalization(),
         ]);
     }
 }

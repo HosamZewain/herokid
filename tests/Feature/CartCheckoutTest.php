@@ -28,11 +28,68 @@ class CartCheckoutTest extends TestCase
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertHeader('Set-Cookie')
-            ->assertSee('خطوات الطلب كاملة')
-            ->assertSee('خصّص هذه القصة')
-            ->assertSee('data-scroll-to-story-form', false)
+            ->assertDontSee('خطوات الطلب كاملة')
+            ->assertSee('إضافة للسلة')
+            ->assertSee('املا بيانات طفلك لطلب القصة')
+            ->assertDontSee('خطوتان فقط لإضافة القصة للسلة')
+            ->assertDontSee('بياناتك محفوظة أثناء التنقل')
+            ->assertSee('بيانات الطفل والصور')
+            ->assertSee('إضافات اختيارية')
+            ->assertDontSee('المطلوب هنا: اسم الطفل وعمره وجنسه')
             ->assertSee('data-story-stage="1"', false)
-            ->assertSee('data-story-stage="4"', false);
+            ->assertSee('data-story-stage="2"', false)
+            ->assertDontSee('data-story-stage="3"', false)
+            ->assertDontSee('data-story-stage="4"', false)
+            ->assertSee('data-story-cart-actions', false)
+            ->assertSeeInOrder([
+                'data-story-stage="1"',
+                'data-photo-input',
+                'data-story-next="2"',
+                'data-story-stage="2"',
+            ], false)
+            ->assertDontSee('موافقة صريحة على استخدام الصور');
+    }
+
+    public function test_story_detail_sections_use_three_item_mobile_previews_and_expand_accessibly(): void
+    {
+        $story = $this->story('about-story', 'قصة الوصف', 100);
+        $story->update([
+            'full_desc' => 'هذا وصف طويل للقصة يشرح المغامرة والشخصيات والقيمة التي يتعلمها الطفل، ويحتوي على تفاصيل كافية ليمتد لأكثر من سطرين عند عرضه على شاشة الهاتف.',
+        ]);
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('data-story-about', false)
+            ->assertSee('data-story-about-text', false)
+            ->assertSee('style="max-height: 5.25rem"', false)
+            ->assertSee('lineHeight) || 28) * 3', false)
+            ->assertSee('data-story-about-fade', false)
+            ->assertSee('opacity-100 transition-opacity', false)
+            ->assertSee('bg-gradient-to-b from-transparent to-white', false)
+            ->assertDontSee('via-white/90', false)
+            ->assertSee('data-story-includes', false)
+            ->assertSee('data-story-includes-list', false)
+            ->assertSee('data-story-includes-fade', false)
+            ->assertSee('items[Math.min(2, items.length - 1)]', false)
+            ->assertSee("window.matchMedia('(min-width: 768px)')", false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee('عرض المزيد')
+            ->assertSee('عرض أقل');
+    }
+
+    public function test_story_photo_previews_use_a_compact_three_column_grid_with_file_names(): void
+    {
+        $story = $this->story('compact-photo-preview', 'قصة الصور', 349);
+
+        $this->get(route('stories.show', $story->slug))
+            ->assertOk()
+            ->assertSee('class="mt-3 grid grid-cols-3 gap-2" data-photo-queue', false)
+            ->assertSee('class="relative aspect-square overflow-hidden rounded-lg bg-slate-100"', false)
+            ->assertSee('title="${escapedName}"', false)
+            ->assertSee('name: item.name', false)
+            ->assertSee("const isUploaded = item.status === 'uploaded';", false)
+            ->assertSee("isUploaded ? 'hidden' : ''", false)
+            ->assertSee('function escapeHtml(value)', false);
     }
 
     public function test_public_tracking_keeps_page_views_and_purchase_has_egp_currency(): void
@@ -95,6 +152,47 @@ class CartCheckoutTest extends TestCase
             ->assertSessionMissing('meta.purchase_event');
     }
 
+    public function test_adding_a_story_and_continuing_shopping_redirects_to_shop_with_named_toast(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('continue-shopping-story', 'رحلة النجوم', 349);
+
+        $response = $this->post(route('cart.store', $story->slug), array_merge(
+            $this->cartPayload('ليلى', 'الفضاء'),
+            ['next' => 'stories'],
+        ));
+
+        $response
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('shop.index'))
+            ->assertSessionHas('cart_added_notice', fn (array $notice): bool => $notice['story_title'] === 'رحلة النجوم');
+
+        $this->get(route('shop.index'))
+            ->assertOk()
+            ->assertSee('data-cart-added-toast', false)
+            ->assertSee('تمت إضافة «رحلة النجوم» إلى السلة')
+            ->assertSee('الذهاب إلى السلة')
+            ->assertSee('اختيار منتج آخر')
+            ->assertSee(route('cart.index'), false);
+    }
+
+    public function test_adding_a_story_and_completing_order_keeps_cart_redirect_with_named_toast(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('complete-order-story', 'مغامرة البحر', 349);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('سليم', 'البحر'))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('cart.index'))
+            ->assertSessionHas('cart_added_notice', fn (array $notice): bool => $notice['story_title'] === 'مغامرة البحر');
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('data-cart-added-toast', false)
+            ->assertSee('تمت إضافة «مغامرة البحر» إلى السلة')
+            ->assertDontSee('تمت إضافة القصة إلى السلة بنجاح.');
+    }
+
     public function test_public_pages_initialize_only_the_configured_meta_pixel(): void
     {
         config(['services.meta_pixel.id' => '1011553001490691']);
@@ -119,7 +217,6 @@ class CartCheckoutTest extends TestCase
                 'child_name',
                 'child_age',
                 'child_gender',
-                'privacy_consent',
                 'photo_upload_ids',
             ]);
 
@@ -131,15 +228,18 @@ class CartCheckoutTest extends TestCase
             ->assertSee('يرجى إدخال اسم الطفل')
             ->assertSee('يرجى إدخال عمر الطفل')
             ->assertSee('يرجى اختيار جنس الطفل')
-            ->assertSee('يجب الموافقة على استخدام الصور لإكمال الطلب')
             ->assertSee('يرجى رفع صورتين واضحتين للطفل على الأقل')
-            ->assertSee('اختيار الصور')
+            ->assertSee('اختيار ٢ أو ٣ صور')
             ->assertSee('لم يتم اختيار صور')
             ->assertSee('ارفع صورتين أو ٣ صور واضحة للوجه')
+            ->assertDontSee('صورتان مطلوبتان، والصورة الثالثة اختيارية')
+            ->assertDontSee('تقبل صور JPG وPNG وWebP وHEIC/HEIF')
+            ->assertDontSee('سيتم رفع كل صورة وحدها قبل إرسال الطلب')
+            ->assertSee('اختياري — يمكنك الإضافة للسلة بدون فتح هذا القسم')
             ->assertSee('data-story-requirements', false);
     }
 
-    public function test_story_cart_requires_two_to_three_photos_and_constrains_age_to_story_range(): void
+    public function test_story_cart_requires_two_to_three_photos_and_accepts_ages_three_to_twelve_for_all_stories(): void
     {
         Storage::fake('local');
         $story = $this->story('policy-story', 'قصة الفئة العمرية', 100);
@@ -153,15 +253,24 @@ class CartCheckoutTest extends TestCase
 
         $this->from(route('stories.show', $story->slug))
             ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
-                'child_age' => 9,
+                'child_age' => 2,
             ]))
             ->assertSessionHasErrors('child_age');
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'child_age' => 9,
+            ]))
+            ->assertRedirect(route('cart.index'))
+            ->assertSessionDoesntHaveErrors();
 
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertSee('<option value="3"', false)
-            ->assertSee('<option value="6"', false)
-            ->assertDontSee('<option value="9"', false);
+            ->assertSee('<option value="9"', false)
+            ->assertSee('<option value="12"', false)
+            ->assertDontSee('<option value="2"', false)
+            ->assertDontSee('<option value="13"', false);
     }
 
     public function test_story_page_renders_wildcard_photo_validation_errors(): void
@@ -181,7 +290,7 @@ class CartCheckoutTest extends TestCase
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertSee('صيغة الصورة غير مدعومة')
-            ->assertSee('اختيار الصور');
+            ->assertSee('اختيار ٢ أو ٣ صور');
     }
 
     public function test_story_cart_accepts_mobile_image_formats_up_to_15_mb_each(): void
@@ -242,14 +351,20 @@ class CartCheckoutTest extends TestCase
 
         $this->assertCount(2, session('cart.items'));
 
-        $this->get(route('cart.index'))
+        $cartResponse = $this->get(route('cart.index'))
             ->assertOk()
             ->assertSee('رحلة الفضاء')
             ->assertSee('سر البحر')
             ->assertSee('75')
+            ->assertSee('data-cart-mobile-delivery-notice', false)
+            ->assertSee('الرجاء إدخال بيانات التوصيل لإتمام الطلب')
+            ->assertSee('class="mb-6 hidden justify-start sm:flex"', false)
+            ->assertSee('hidden sm:block', false)
             ->assertSeeInOrder(['ملخص الطلب قبل إدخال العنوان', 'بيانات ولي الأمر والتوصيل'])
-            ->assertSee('إرسال الطلب للمراجعة — بدون دفع الآن')
-            ->assertSee('سنتواصل معك عبر واتساب لتأكيد المعاينة وطريقة الدفع')
+            ->assertSee('إتمام الطلب')
+            ->assertSee('سيتواصل فريقنا معك على الواتساب للمعاينة قبل الطباعة وتأكيد الطلب')
+            ->assertDontSee('سنتواصل معك عبر واتساب لتأكيد المعاينة وطريقة الدفع. لا يوجد دفع الآن.')
+            ->assertSee('class="grid grid-cols-3 gap-2 p-3 text-sm sm:gap-3 sm:p-6"', false)
             ->assertSee('type="tel"', false)
             ->assertSee('inputmode="tel"', false)
             ->assertSee('autocomplete="tel"', false)
@@ -258,6 +373,11 @@ class CartCheckoutTest extends TestCase
             ->assertSee('المحافظة')
             ->assertSee('القاهرة')
             ->assertDontSee('البريد الإلكتروني');
+
+        $this->assertSame(2, substr_count($cartResponse->getContent(), 'data-cart-mobile-item'));
+        $cartResponse
+            ->assertSee('class="flex items-center justify-between border-b border-slate-100 p-3 md:hidden"', false)
+            ->assertSee('class="hidden divide-y divide-slate-100 md:block"', false);
 
         $this->post(route('checkout.store'), [
             'parent_name' => 'Parent Name',
@@ -643,7 +763,6 @@ class CartCheckoutTest extends TestCase
             'interests' => $interests,
             'gift_note' => 'إهداء خاص',
             'parent_notes' => 'ملاحظات للطلب',
-            'privacy_consent' => '1',
             'next' => 'cart',
             'photos' => [
                 $this->tinyPngUpload(),

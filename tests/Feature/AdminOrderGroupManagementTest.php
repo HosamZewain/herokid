@@ -58,6 +58,45 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(['checkouts' => 1, 'stories' => 2, 'products' => 3], $stats);
     }
 
+    public function test_dashboard_counts_and_lists_a_multi_story_checkout_once(): void
+    {
+        $first = $this->createStoryOrder('HK-DASH-1', 'GROUP-DASHBOARD', 'ليلى', 'new');
+        $second = $this->createStoryOrder('HK-DASH-2', 'GROUP-DASHBOARD', 'عمر', 'new');
+
+        foreach ([$first, $second] as $order) {
+            $order->items()->create([
+                'item_type' => 'story',
+                'story_id' => $order->story_id,
+                'title' => $order->story->title,
+                'unit_price_cents' => 29_900,
+                'quantity' => 1,
+                'total_price_cents' => 29_900,
+            ]);
+        }
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'));
+
+        $response->assertOk()
+            ->assertSee('عمليات شراء جديدة تنتظر المراجعة')
+            ->assertSee('تتضمن 2 سجل طلب')
+            ->assertSee('GROUP-DASHBOARD')
+            ->assertSee('2 قصة');
+
+        $this->assertSame(1, $response->viewData('newOrders'));
+        $this->assertSame(1, $response->viewData('totalOrders'));
+        $this->assertSame(2, $response->viewData('orderRecordCounts')['new']);
+        $this->assertCount(1, $response->viewData('recentOrders'));
+        $this->assertSame(2, $response->viewData('recentOrders')->first()['story_count']);
+
+        $groups = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', ['status' => 'new']))
+            ->assertOk()
+            ->viewData('groups');
+
+        $this->assertSame(1, $groups->total());
+    }
+
     public function test_search_status_mixed_and_date_filters_match_checkout_contents(): void
     {
         $this->checkoutFixture();

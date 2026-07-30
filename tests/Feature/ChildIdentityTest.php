@@ -642,7 +642,6 @@ class ChildIdentityTest extends TestCase
             'child_name' => 'طفل آخر',
             'child_age' => 6,
             'child_gender' => 'boy',
-            'privacy_consent' => '1',
             'photos' => [$this->tinyPng('second-story.png'), $this->tinyPng('second-story-side.png')],
         ])->assertRedirect();
         $this->assertCount(2, session('cart.items'));

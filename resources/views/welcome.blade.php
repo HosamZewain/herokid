@@ -270,7 +270,7 @@
                             <p class="text-xl">{{ format_money($homeStoryPrice) }}</p>
                         </div>
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#8b5cf6,#3b82f6);">
-                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">شحن خلال</p>
+                            <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">تصلك خلال</p>
                             <p class="text-xl">{{ delivery_range(false) }}</p>
                         </div>
                     </div>

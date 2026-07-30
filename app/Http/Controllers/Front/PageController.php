@@ -3,14 +3,23 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\ContactMessage;
+use App\Models\FaqItem;
+use App\Models\PricingPackage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 class PageController extends Controller
 {
+    public function about()
+    {
+        return view('front.pages.about');
+    }
+
     public function faq()
     {
-        $faqs = \App\Models\FaqItem::where('active', true)->orderBy('sort_order')->get();
+        $faqs = FaqItem::where('active', true)->orderBy('sort_order')->get();
+
         return view('front.pages.faq', compact('faqs'));
     }
 
@@ -19,7 +28,7 @@ class PageController extends Controller
         return view('front.pages.contact', ['formToken' => now()->timestamp]);
     }
 
-    public function submitContact(\Illuminate\Http\Request $request)
+    public function submitContact(Request $request)
     {
         // ── 1. Honeypot — bots fill this hidden field, humans never see it
         if ($request->filled('website')) {
@@ -33,21 +42,22 @@ class PageController extends Controller
         }
 
         // ── 3. Rate limiting — max 3 submissions per IP per 10 minutes
-        $key = 'contact:' . $request->ip();
+        $key = 'contact:'.$request->ip();
         if (RateLimiter::tooManyAttempts($key, 3)) {
             $seconds = RateLimiter::availableIn($key);
-            return back()->withErrors(['message' => 'لقد أرسلت عدة رسائل مؤخراً. يرجى الانتظار ' . ceil($seconds / 60) . ' دقيقة قبل المحاولة مجدداً.']);
+
+            return back()->withErrors(['message' => 'لقد أرسلت عدة رسائل مؤخراً. يرجى الانتظار '.ceil($seconds / 60).' دقيقة قبل المحاولة مجدداً.']);
         }
         RateLimiter::hit($key, 600); // 10 minutes decay
 
         $validated = $request->validate([
-            'name'    => 'required|string|max:255',
-            'email'   => 'required|email|max:255',
-            'phone'   => 'nullable|string|max:30',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:30',
             'message' => 'required|string|max:2000',
         ]);
 
-        \App\Models\ContactMessage::create($validated);
+        ContactMessage::create($validated);
 
         return back()->with('success', 'تم استلام رسالتك بنجاح، وسنتواصل معك قريباً!');
     }
@@ -64,7 +74,8 @@ class PageController extends Controller
 
     public function pricing()
     {
-        $packages = \App\Models\PricingPackage::active()->ordered()->get();
+        $packages = PricingPackage::active()->ordered()->get();
+
         return view('front.pages.pricing', compact('packages'));
     }
 

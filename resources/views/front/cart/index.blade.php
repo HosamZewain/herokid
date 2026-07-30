@@ -18,7 +18,7 @@
 
 <div class="min-h-[70vh] bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
-        <div class="mb-6 flex justify-start">
+        <div class="mb-6 hidden justify-start sm:flex">
             <a href="{{ route('stories.index') }}"
                 class="inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-extrabold text-indigo-700 shadow-sm hover:bg-indigo-50 transition">
                 <span>إضافة قصة أخرى</span>
@@ -71,7 +71,10 @@
                 </div>
             </div>
         @else
-            <x-purchase-progress :current="3" class="mb-6" />
+            <p data-cart-mobile-delivery-notice class="mb-4 text-center text-sm font-black text-slate-800 sm:hidden">
+                الرجاء إدخال بيانات التوصيل لإتمام الطلب
+            </p>
+            <x-purchase-progress :current="3" class="mb-6 hidden sm:block" />
             @include('front.cart._summary', ['attributes' => new \Illuminate\View\ComponentAttributeBag(['class' => 'mb-6 lg:hidden'])])
 
             <div class="grid grid-cols-1 lg:grid-cols-[minmax(560px,1.18fr)_minmax(0,0.82fr)] gap-6 lg:gap-8 items-start">
@@ -80,9 +83,6 @@
                         <div class="mb-5 text-right">
                             <p class="text-sm font-bold text-indigo-600">الخطوة ٣ من ٤</p>
                             <h2 class="text-xl font-black text-slate-950 mt-1">بيانات ولي الأمر والتوصيل</h2>
-                            <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold leading-6 text-emerald-900">
-                                سنتواصل معك عبر واتساب لتأكيد المعاينة وطريقة الدفع. لا يوجد دفع الآن.
-                            </div>
                         </div>
 
                         @if($errors->any())
@@ -183,8 +183,11 @@
                             </div>
                             <button type="submit"
                                 class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-200">
-                                إرسال الطلب للمراجعة — بدون دفع الآن
+                                إتمام الطلب
                             </button>
+                            <p class="text-center text-xs font-bold leading-5 text-slate-950">
+                                سيتواصل فريقنا معك على الواتساب للمعاينة قبل الطباعة وتأكيد الطلب
+                            </p>
                         </form>
                     </section>
                 </aside>
@@ -192,15 +195,25 @@
                 <div class="order-2 lg:order-2 space-y-6">
                     @include('front.cart._summary', ['attributes' => new \Illuminate\View\ComponentAttributeBag(['class' => 'hidden lg:block'])])
 
-                    <section class="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                        <div class="border-b border-slate-100 p-5 sm:p-6">
+                    <section class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-3xl">
+                        <div class="flex items-center justify-between border-b border-slate-100 p-3 md:hidden">
+                            <p class="text-xs font-bold text-slate-500" data-cart-count-label data-suffix=" عنصر">{{ $cartCount }} عنصر</p>
+                            <h2 class="text-base font-black text-slate-950">عناصر السلة</h2>
+                        </div>
+                        <div class="hidden border-b border-slate-100 p-5 sm:p-6 md:block">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <p class="text-sm font-bold text-slate-500">{{ $cartCount }} عنصر في السلة</p>
+                                <p class="text-sm font-bold text-slate-500" data-cart-count-label data-suffix=" عنصر في السلة">{{ $cartCount }} عنصر في السلة</p>
                                 <h2 class="text-xl font-black text-slate-950 text-right">عناصر السلة</h2>
                             </div>
                         </div>
 
-                        <div class="divide-y divide-slate-100">
+                        <div class="divide-y divide-slate-100 md:hidden" data-cart-mobile-list>
+                            @foreach($cartItems as $key => $item)
+                                @include('front.cart._mobile_item', compact('key', 'item', 'addOnItems'))
+                            @endforeach
+                        </div>
+
+                        <div class="hidden divide-y divide-slate-100 md:block">
                             @foreach($cartItems as $key => $item)
                                 @continue(($item['item_type'] ?? 'story') === 'product_add_on')
                                 @php
@@ -351,70 +364,57 @@
 
                     @if(isset($recommendedProducts) && $recommendedProducts->isNotEmpty() && $storyLineItems->isNotEmpty())
                         @php $targetStory = $storyLineItems->first(); @endphp
-                        <section class="rounded-3xl border border-indigo-100 bg-indigo-50/60 shadow-sm p-5 sm:p-6">
-                            <div class="mb-5 text-right">
-                                <p class="text-sm font-black text-indigo-600">كمّل هدية بطلك</p>
-                                <h2 class="mt-1 text-xl font-black text-slate-950">منتجات مقترحة لطفلك</h2>
-                                <p class="mt-2 text-sm leading-6 text-slate-500">اختر هدية أو نشاطًا إضافيًا. المنتجات المخصصة ستستخدم نفس بيانات الطفل والصور بدون رفعها مرة أخرى.</p>
+                        <section data-cart-upsells class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 shadow-sm sm:rounded-3xl sm:p-6">
+                            <div class="mb-3 text-right sm:mb-5">
+                                <p class="text-xs font-black text-indigo-600 sm:text-sm">أضف نشاطًا مع القصة</p>
+                                <h2 class="mt-1 text-lg font-black text-slate-950 sm:text-xl">قد يعجب طفلك أيضًا</h2>
                             </div>
-                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            <div class="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-2 lg:mx-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible lg:px-0 xl:grid-cols-3">
                                 @foreach($recommendedProducts as $product)
                                     @php
                                         $isPersonalizedAddon = $product->isPersonalizedAddon();
                                     @endphp
-                                    <div class="overflow-hidden rounded-3xl bg-white shadow-sm text-right border border-white">
-                                        <div class="bg-slate-50">
+                                    <article data-upsell-card class="w-[calc(50%_-_0.25rem)] min-w-[calc(50%_-_0.25rem)] snap-start overflow-hidden rounded-2xl border border-white bg-white text-right shadow-sm lg:w-auto lg:min-w-0">
+                                        <div class="relative aspect-[4/3] overflow-hidden bg-slate-50">
+                                            <div class="absolute inset-0">
+                                                <x-product-image-placeholder />
+                                            </div>
                                             @if($product->featured_image_url)
                                                 <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}"
-                                                    class="aspect-[4/3] w-full object-cover">
-                                            @else
-                                                <div class="aspect-[4/3]">
-                                                    <x-product-image-placeholder />
-                                                </div>
+                                                    class="relative z-10 h-full w-full object-cover" loading="lazy"
+                                                    onerror="this.remove()">
                                             @endif
                                         </div>
-                                        <div class="p-4">
-                                            <div class="mb-3 flex flex-wrap justify-end gap-1.5">
-                                                @if($isPersonalizedAddon)
-                                                    <span class="rounded-full bg-pink-50 px-3 py-1.5 text-xs font-black text-pink-700">يستخدم صورة الطفل</span>
-                                                @else
-                                                    <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">منتج مستقل</span>
-                                                @endif
-                                            </div>
-                                            <h3 class="text-lg font-black leading-7 text-slate-950">{{ $product->name_ar }}</h3>
-                                            <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{{ $product->short_description_ar }}</p>
-                                            <p class="mt-3 text-xl font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
+                                        <div class="p-2.5">
+                                            <h3 class="line-clamp-2 min-h-10 text-xs font-black leading-5 text-slate-950 sm:text-sm">{{ $product->name_ar }}</h3>
+                                            <p class="mt-1 text-sm font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
                                         </div>
-                                        <form action="{{ route('cart.products.store', $product) }}" method="POST" class="border-t border-slate-100 p-4 space-y-3">
+                                        <form action="{{ route('cart.products.store', $product) }}" method="POST"
+                                            data-cart-upsell-form data-product-name="{{ $product->name_ar }}"
+                                            class="space-y-2 border-t border-slate-100 p-2.5">
                                             @csrf
                                             @if($isPersonalizedAddon)
                                                 @if($storyLineItems->count() > 1)
                                                     <div>
-                                                        <label class="mb-1 block text-xs font-black text-slate-500">سيتم تخصيصه لأي طفل؟</label>
-                                                        <select name="linked_story_key" required class="w-full rounded-xl border-slate-200 text-sm text-right">
+                                                        <label class="sr-only">اختر الطفل</label>
+                                                        <select name="linked_story_key" required class="w-full rounded-lg border-slate-200 py-1.5 text-xs text-right">
                                                             @foreach($storyLineItems as $storyKey => $storyItem)
                                                                 <option value="{{ $storyKey }}" @selected($storyKey === $upsellStoryKey)>
-                                                                    {{ $storyItem['child_name'] ?? 'طفل' }} - {{ $storyItem['story_title'] ?? 'قصة' }}
+                                                                    لطفل: {{ $storyItem['child_name'] ?? 'طفل' }}
                                                                 </option>
                                                             @endforeach
                                                         </select>
                                                     </div>
                                                 @else
                                                     <input type="hidden" name="linked_story_key" value="{{ $targetStory['key'] ?? $storyLineItems->keys()->first() }}">
-                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-2 text-xs leading-5 text-indigo-800">
-                                                        <span class="font-black">سيضاف إلى:</span>
-                                                        {{ $targetStory['child_name'] ?? 'الطفل' }} - {{ $targetStory['story_title'] ?? 'القصة' }}
-                                                    </div>
                                                 @endif
                                             @endif
-                                            <div class="grid grid-cols-2 gap-3">
-                                                <a href="{{ route('shop.product.show', $product) }}" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">التفاصيل</a>
-                                                <button class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700">
-                                                    {{ $isPersonalizedAddon ? 'إضافة الهدية' : 'إضافة للسلة' }}
-                                                </button>
-                                            </div>
+                                            <button type="submit" data-upsell-submit class="min-h-11 w-full rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60">
+                                                إضافة
+                                            </button>
+                                            <p data-upsell-status class="hidden text-center text-[10px] font-bold leading-4" role="status" aria-live="polite"></p>
                                         </form>
-                                    </div>
+                                    </article>
                                 @endforeach
                             </div>
                         </section>
@@ -445,7 +445,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const countrySelect = document.getElementById('delivery_country_id');
             const governorateSelect = document.getElementById('delivery_governorate_id');
-            const subtotal = Number(@json((float) $subtotal));
+            let subtotal = Number(@json((float) $subtotal));
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
 
             function selectedCountryFee() {
@@ -453,6 +453,9 @@
             }
 
             function updateTotals(fee) {
+                document.querySelectorAll('[data-cart-subtotal]').forEach((node) => {
+                    node.textContent = `${formatMoney(subtotal)} {{ setting('currency_label', $settings['currency_label'] ?? '') }}`;
+                });
                 document.querySelectorAll('[data-delivery-fee]').forEach((node) => {
                     node.textContent = formatMoney(fee);
                 });
@@ -491,6 +494,154 @@
             governorateSelect?.addEventListener('change', () => {
                 const fee = governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee();
                 updateTotals(fee);
+            });
+
+            document.querySelectorAll('[data-cart-upsell-form]').forEach((form) => {
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+
+                    const button = form.querySelector('[data-upsell-submit]');
+                    const status = form.querySelector('[data-upsell-status]');
+                    const originalLabel = button?.textContent?.trim() || 'إضافة';
+
+                    if (!button || button.disabled) {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    button.textContent = 'جاري الإضافة...';
+                    status.textContent = '';
+                    status.className = 'hidden text-center text-[10px] font-bold leading-4';
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            body: new FormData(form),
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+                        const payload = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(payload.message || 'تعذر إضافة المنتج.');
+                        }
+
+                        subtotal += Number(payload.added_line_total || 0);
+                        const selectedFee = governorateSelect?.value
+                            ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())
+                            : selectedCountryFee();
+
+                        updateTotals(selectedFee);
+                        document.querySelectorAll('[data-cart-count]').forEach((node) => {
+                            node.textContent = payload.cart_count;
+                        });
+                        document.querySelectorAll('[data-cart-count-label]').forEach((node) => {
+                            node.textContent = `${payload.cart_count}${node.dataset.suffix || ''}`;
+                        });
+                        if (payload.mobile_item_html) {
+                            document.querySelector('[data-cart-mobile-list]')
+                                ?.insertAdjacentHTML('beforeend', payload.mobile_item_html);
+                        }
+
+                        button.textContent = 'تمت الإضافة ✓';
+                        button.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                        button.classList.add('bg-emerald-600');
+
+                        window.setTimeout(() => {
+                            form.closest('[data-upsell-card]')?.remove();
+
+                            if (!document.querySelector('[data-upsell-card]')) {
+                                document.querySelector('[data-cart-upsells]')?.remove();
+                            }
+                        }, 650);
+                    } catch (error) {
+                        button.disabled = false;
+                        button.textContent = originalLabel;
+                        status.textContent = error.message || 'تعذر إضافة المنتج.';
+                        status.className = 'block text-center text-[10px] font-bold leading-4 text-red-600';
+                    }
+                });
+            });
+
+            document.addEventListener('submit', async (event) => {
+                const form = event.target.closest('[data-cart-remove-form]');
+
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+                    return;
+                }
+
+                const button = form.querySelector('button[type="submit"]');
+
+                if (!button || button.disabled) {
+                    return;
+                }
+
+                button.disabled = true;
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(payload.message || 'تعذر حذف العنصر.');
+                    }
+
+                    subtotal = Number(payload.subtotal || 0);
+                    const selectedFee = governorateSelect?.value
+                        ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())
+                        : selectedCountryFee();
+
+                    updateTotals(selectedFee);
+                    document.querySelectorAll('[data-cart-count]').forEach((node) => {
+                        node.textContent = payload.cart_count;
+                    });
+                    document.querySelectorAll('[data-cart-count-label]').forEach((node) => {
+                        node.textContent = `${payload.cart_count}${node.dataset.suffix || ''}`;
+                    });
+
+                    (payload.removed_keys || []).forEach((removedKey) => {
+                        document.querySelectorAll('[data-cart-item-key]').forEach((item) => {
+                            if (item.dataset.cartItemKey !== removedKey) {
+                                return;
+                            }
+
+                            item.classList.add('pointer-events-none', 'opacity-0', '-translate-x-2');
+                            window.setTimeout(() => item.remove(), 180);
+                        });
+                    });
+
+                    if (payload.cart_empty) {
+                        window.setTimeout(() => {
+                            const list = document.querySelector('[data-cart-mobile-list]');
+
+                            if (list) {
+                                list.innerHTML = '<p class="px-4 py-6 text-center text-sm font-bold text-slate-500">السلة فارغة. اختر قصة أو منتجًا للمتابعة.</p>';
+                            }
+
+                            document.querySelector('[data-cart-upsells]')?.remove();
+                            document.querySelector('form[action="{{ route('checkout.store') }}"] button[type="submit"]')
+                                ?.setAttribute('disabled', 'disabled');
+                        }, 200);
+                    }
+                } catch (error) {
+                    button.disabled = false;
+                    window.alert(error.message || 'تعذر حذف العنصر.');
+                }
             });
 
             filterGovernorates();

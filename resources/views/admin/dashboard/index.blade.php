@@ -14,7 +14,8 @@
                         <span class="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">جديد</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $newOrders }}</p>
-                    <p class="text-sm text-gray-500 mt-1">طلبات جديدة تنتظر المراجعة</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء جديدة تنتظر المراجعة</p>
+                    <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['new'] }} سجل طلب</p>
                     <a href="{{ route('admin.orders.index') }}?status=new" class="text-xs text-indigo-600 font-bold mt-2 block hover:underline">عرض الكل ←</a>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -23,7 +24,8 @@
                         <span class="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">للموافقة</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $pendingPreview }}</p>
-                    <p class="text-sm text-gray-500 mt-1">تصميمات تنتظر موافقة العميل</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء تنتظر موافقة العميل</p>
+                    <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['preview_uploaded'] }} سجل طلب</p>
                     <a href="{{ route('admin.orders.index') }}?status=preview_uploaded" class="text-xs text-indigo-600 font-bold mt-2 block hover:underline">عرض الكل ←</a>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -32,7 +34,8 @@
                         <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">شحن</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $shippedOrders }}</p>
-                    <p class="text-sm text-gray-500 mt-1">طلبات في الشحن</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء في الشحن</p>
+                    <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['shipped'] }} سجل طلب</p>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-3">
@@ -40,7 +43,8 @@
                         <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">مكتمل</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $deliveredOrders }}</p>
-                    <p class="text-sm text-gray-500 mt-1">طلبات تم تسليمها</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء تم تسليمها</p>
+                    <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['delivered'] }} سجل طلب</p>
                 </div>
             </div>
 
@@ -49,7 +53,8 @@
                 <div class="bg-indigo-600 rounded-2xl p-6 shadow-sm text-white">
                     <span class="text-3xl mb-3 block">📊</span>
                     <p class="text-3xl font-extrabold">{{ $totalOrders }}</p>
-                    <p class="text-indigo-200 text-sm mt-1">إجمالي الطلبات</p>
+                    <p class="text-indigo-200 text-sm mt-1">إجمالي عمليات الشراء</p>
+                    <p class="mt-1 text-xs font-bold text-indigo-200">تتضمن {{ $orderRecordCounts['total'] }} سجل طلب</p>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <span class="text-3xl mb-3 block">📚</span>
@@ -131,7 +136,7 @@
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
                     <a href="{{ route('admin.orders.index') }}" class="text-sm text-indigo-600 font-bold hover:underline">عرض الكل ←</a>
-                    <h3 class="font-bold text-gray-800 text-lg">آخر الطلبات</h3>
+                    <h3 class="font-bold text-gray-800 text-lg">آخر عمليات الشراء</h3>
                 </div>
                 @if($recentOrders->count())
                 <div class="overflow-x-auto">
@@ -140,17 +145,17 @@
                             <tr>
                                 <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">الإجراء</th>
                                 <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">الحالة</th>
-                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">القصة</th>
-                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">الطفل</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">المحتويات</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">العميل</th>
                                 <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">التاريخ</th>
-                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">رقم الطلب</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">عملية الشراء</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
-                            @foreach($recentOrders as $order)
+                            @foreach($recentOrders as $group)
                             <tr class="hover:bg-gray-50 transition">
                                 <td class="px-4 py-3">
-                                    <a href="{{ route('admin.orders.show', $order) }}" class="text-indigo-600 font-bold text-xs hover:underline">تفاصيل</a>
+                                    <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="text-indigo-600 font-bold text-xs hover:underline">تفاصيل</a>
                                 </td>
                                 <td class="px-4 py-3">
                                     @php
@@ -165,16 +170,26 @@
                                             'delivered'           => 'bg-green-100 text-green-700',
                                             'cancelled'           => 'bg-red-100 text-red-700',
                                         ];
-                                        $colorClass = $statusColors[$order->status] ?? 'bg-gray-100 text-gray-700';
+                                        $colorClass = $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700';
                                     @endphp
                                     <span class="inline-block text-xs font-bold px-2 py-1 rounded-full {{ $colorClass }}">
-                                        {{ __('order_status.' . $order->status) }}
+                                        {{ $group['status_label'] }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-sm text-gray-700 text-right">{{ $order->story->title ?? '-' }}</td>
-                                <td class="px-4 py-3 text-sm font-bold text-gray-900 text-right">{{ $order->child_name }}</td>
-                                <td class="px-4 py-3 text-xs text-gray-400 text-right">{{ $order->created_at->format('d/m/Y') }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-600 text-right">{{ $order->order_number }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 text-right">
+                                    <div class="flex flex-wrap justify-end gap-1">
+                                        @if($group['story_count'])<span class="rounded-full bg-violet-50 px-2 py-1 text-xs font-bold text-violet-700">{{ $group['story_count'] }} قصة</span>@endif
+                                        @if($group['add_on_quantity'])<span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{{ $group['add_on_quantity'] }} إضافة</span>@endif
+                                        @if($group['product_quantity'])<span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">{{ $group['product_quantity'] }} منتج</span>@endif
+                                    </div>
+                                    <p class="mt-1 max-w-64 truncate text-xs text-gray-400">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
+                                </td>
+                                <td class="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                                    {{ $group['customer_name'] }}
+                                    @if($group['child_names'])<p class="mt-1 text-xs font-normal text-gray-400">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
+                                </td>
+                                <td class="px-4 py-3 text-xs text-gray-400 text-right">{{ optional($group['latest_at'])->format('d/m/Y') }}</td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-600 text-right" dir="ltr">{{ $group['key'] }}</td>
                             </tr>
                             @endforeach
                         </tbody>

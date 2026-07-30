@@ -3,8 +3,8 @@
         $storeTitle = setting('unified_store_title', 'متجر القصص والمنتجات');
         $storeSubtitle = setting('unified_store_subtitle', 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.');
         $activeType = request('type', 'all');
-        $hasFilters = request()->hasAny(['type', 'age', 'category', 'personalization', 'sort', 'q']);
-        $hasAdvancedFilters = request()->hasAny(['age', 'category', 'personalization', 'sort', 'q']);
+        $hasFilters = request()->hasAny(['type', 'age', 'category', 'gender', 'personalization', 'sort', 'q']);
+        $hasAdvancedFilters = request()->hasAny(['age', 'category', 'gender', 'personalization', 'sort', 'q']);
         $canonicalPath = $isStoriesAlias
             ? '/shop?type=stories'
             : ($currentCategory ? '/shop/' . $currentCategory->slug : '/shop');
@@ -88,13 +88,15 @@
 
         <div id="catalog-results" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
             @if($isStoriesAlias)
-                <div class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-900">
+                <div class="mb-5 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-900 sm:flex"
+                    data-stories-mobile-hidden-intro>
                     <p><strong>اختر قصة طفلك مباشرة.</strong> كل قصة مخصصة تحتاج بيانات الطفل وصورتين أو ٣ صور واضحة.</p>
                     <a href="{{ route('shop.index') }}" class="font-black text-indigo-700 hover:text-indigo-900">عرض القصص والمنتجات</a>
                 </div>
             @endif
 
-            <div class="mb-6 grid gap-3 rounded-3xl border border-slate-100 bg-white p-4 text-right shadow-sm sm:grid-cols-2">
+            <div class="mb-6 {{ $isStoriesAlias ? 'hidden sm:grid' : 'grid' }} gap-3 rounded-3xl border border-slate-100 bg-white p-4 text-right shadow-sm sm:grid-cols-2"
+                data-store-path-explainer>
                 <div class="rounded-2xl bg-pink-50 px-4 py-3">
                     <p class="font-black text-pink-900">قصة مخصصة</p>
                     <p class="mt-1 text-xs leading-5 text-pink-700">تحتاج بيانات الطفل وصورتين أو ٣ صور، ثم نراجع الطلب ونتواصل معك.</p>
@@ -123,7 +125,7 @@
             <div class="mb-8 hidden rounded-3xl border border-slate-100 bg-white shadow-sm lg:block">
                 @include('front.shop._filters', [
                     'filterId' => 'desktop-store',
-                    'formClasses' => 'grid grid-cols-6 gap-3 p-4',
+                    'formClasses' => $isStoriesAlias ? 'grid grid-cols-6 gap-3 p-4' : 'grid grid-cols-7 gap-3 p-4',
                 ])
             </div>
 

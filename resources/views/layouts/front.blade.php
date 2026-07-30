@@ -13,6 +13,7 @@
         $seoImage = \App\Support\Seo::imageUrl(isset($pageImage) ? (string) $pageImage : '/images/og-cover.jpg');
         $seoImageWidth = isset($ogImageWidth) ? (int) trim((string) $ogImageWidth) : 1200;
         $seoImageHeight = isset($ogImageHeight) ? (int) trim((string) $ogImageHeight) : 630;
+        $seoImageAlt = isset($pageImageAlt) ? (string) $pageImageAlt : 'HeroKid — قصص أطفال مخصصة';
         $canonicalUrl = isset($canonical) ? \App\Support\Seo::url((string) $canonical) : \App\Support\Seo::canonicalForRequest(request());
         $fullTitle = $seoTitle . ' | HeroKid';
         $siteUrl = \App\Support\Seo::url('/');
@@ -84,6 +85,7 @@
     <meta property="og:title" content="{{ $fullTitle }}">
     <meta property="og:description" content="{{ $seoDescription }}">
     <meta property="og:image" content="{{ $seoImage }}">
+    <meta property="og:image:alt" content="{{ $seoImageAlt }}">
     <meta property="og:image:width" content="{{ $seoImageWidth }}">
     <meta property="og:image:height" content="{{ $seoImageHeight }}">
     <meta property="og:locale" content="ar_EG">
@@ -94,6 +96,7 @@
     <meta name="twitter:title" content="{{ $fullTitle }}">
     <meta name="twitter:description" content="{{ $seoDescription }}">
     <meta name="twitter:image" content="{{ $seoImage }}">
+    <meta name="twitter:image:alt" content="{{ $seoImageAlt }}">
 
     <!-- ══ Favicon & Icons ══ -->
     <link rel="icon" type="image/png" href="/images/logo-96.png">
@@ -164,6 +167,7 @@
     @endif
     @php
         $cartItemCount = count(session('cart.items', []));
+        $guideMenuActive = request()->routeIs('about', 'how-it-works', 'faq', 'track.*');
     @endphp
     <div class="min-h-screen flex flex-col">
 
@@ -188,14 +192,38 @@
                             @if(setting('child_identity_enabled', '1') === '1')
                                 <x-nav-link :href="route('child-identity.index')" :active="request()->routeIs('child-identity.*')">اصنع هوية طفلك</x-nav-link>
                             @endif
-                            <x-nav-link :href="route('how-it-works')" :active="request()->routeIs('how-it-works')">كيف
-                                يعمل؟</x-nav-link>
                             <x-nav-link :href="route('pricing')"
                                 :active="request()->routeIs('pricing')">الأسعار</x-nav-link>
-                            <x-nav-link :href="route('faq')" :active="request()->routeIs('faq')">الأسئلة
-                                الشائعة</x-nav-link>
-                            <x-nav-link :href="route('track.index')" :active="request()->routeIs('track.*')">تتبع
-                                الطلب</x-nav-link>
+                            <details data-front-guide-menu class="relative group">
+                                <summary
+                                    class="{{ $guideMenuActive ? 'border-indigo-400 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' }} inline-flex cursor-pointer list-none items-center gap-1.5 border-b-2 px-1 pt-1 text-sm font-medium leading-5 transition duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-4 [&::-webkit-details-marker]:hidden">
+                                    <span>دليل HeroKid</span>
+                                    <svg class="h-4 w-4 transition-transform duration-200 group-open:rotate-180"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </summary>
+                                <div
+                                    class="absolute start-0 z-50 mt-3 w-64 overflow-hidden rounded-2xl border border-slate-100 bg-white p-2 text-right shadow-xl shadow-slate-900/10">
+                                    <a href="{{ route('about') }}"
+                                        class="{{ request()->routeIs('about') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50 hover:text-indigo-700' }} block rounded-xl px-4 py-3 text-sm font-bold transition">
+                                        عن HeroKid
+                                    </a>
+                                    <a href="{{ route('how-it-works') }}"
+                                        class="{{ request()->routeIs('how-it-works') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50 hover:text-indigo-700' }} block rounded-xl px-4 py-3 text-sm font-bold transition">
+                                        كيف يعمل؟
+                                    </a>
+                                    <a href="{{ route('faq') }}"
+                                        class="{{ request()->routeIs('faq') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50 hover:text-indigo-700' }} block rounded-xl px-4 py-3 text-sm font-bold transition">
+                                        الأسئلة الشائعة
+                                    </a>
+                                    <a href="{{ route('track.index') }}"
+                                        class="{{ request()->routeIs('track.*') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50 hover:text-indigo-700' }} block rounded-xl px-4 py-3 text-sm font-bold transition">
+                                        تتبع الطلب
+                                    </a>
+                                </div>
+                            </details>
                             <x-nav-link :href="route('cart.index')" :active="request()->routeIs('cart.*')">
                                 <span class="inline-flex items-center gap-1.5">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +233,7 @@
                                     <span>السلة</span>
                                 </span>
                                 @if($cartItemCount > 0)
-                                    <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
+                                    <span data-cart-count class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
                                 @endif
                             </x-nav-link>
                         </div>
@@ -238,7 +266,7 @@
                                     d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437m0 0L6.75 14.25A2.25 2.25 0 009 16.5h7.5a2.25 2.25 0 002.2-1.77l1.05-4.8A1.5 1.5 0 0018.285 8H6.04m-.934-2.728L4.5 3m4.5 16.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm9 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                             </svg>
                             @if($cartItemCount > 0)
-                                <span class="absolute -top-1 -left-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-black text-white">{{ $cartItemCount }}</span>
+                                <span data-cart-count class="absolute -top-1 -left-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-black text-white">{{ $cartItemCount }}</span>
                             @endif
                         </a>
                         <!-- Mobile Hamburger -->
@@ -270,17 +298,37 @@
                     <a href="{{ route('child-identity.index') }}"
                         class="block px-4 py-2 rounded-xl text-indigo-700 font-black hover:bg-indigo-50 transition">اصنع هوية طفلك مجانًا</a>
                 @endif
-                <a href="{{ route('how-it-works') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">كيف
-                    يعمل؟</a>
                 <a href="{{ route('pricing') }}"
                     class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الأسعار</a>
-                <a href="{{ route('faq') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الأسئلة
-                    الشائعة</a>
-                <a href="{{ route('track.index') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">تتبع
-                    الطلب</a>
+                <details data-front-guide-menu-mobile class="group rounded-xl border border-slate-100 bg-slate-50/70">
+                    <summary
+                        class="{{ $guideMenuActive ? 'text-indigo-700' : 'text-gray-700' }} flex cursor-pointer list-none items-center justify-between rounded-xl px-4 py-3 font-black transition hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
+                        <span>دليل HeroKid</span>
+                        <svg class="h-5 w-5 transition-transform duration-200 group-open:rotate-180"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </summary>
+                    <div class="space-y-1 border-t border-slate-100 p-2">
+                        <a href="{{ route('about') }}"
+                            class="{{ request()->routeIs('about') ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white hover:text-indigo-700' }} block rounded-lg px-4 py-2.5 text-sm font-bold transition">
+                            عن HeroKid
+                        </a>
+                        <a href="{{ route('how-it-works') }}"
+                            class="{{ request()->routeIs('how-it-works') ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white hover:text-indigo-700' }} block rounded-lg px-4 py-2.5 text-sm font-bold transition">
+                            كيف يعمل؟
+                        </a>
+                        <a href="{{ route('faq') }}"
+                            class="{{ request()->routeIs('faq') ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white hover:text-indigo-700' }} block rounded-lg px-4 py-2.5 text-sm font-bold transition">
+                            الأسئلة الشائعة
+                        </a>
+                        <a href="{{ route('track.index') }}"
+                            class="{{ request()->routeIs('track.*') ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:bg-white hover:text-indigo-700' }} block rounded-lg px-4 py-2.5 text-sm font-bold transition">
+                            تتبع الطلب
+                        </a>
+                    </div>
+                </details>
                 <a href="{{ route('cart.index') }}"
                     class="flex items-center justify-between px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">
                     <span class="inline-flex items-center gap-2">
@@ -291,7 +339,7 @@
                         <span>السلة</span>
                     </span>
                     @if($cartItemCount > 0)
-                        <span class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
+                        <span data-cart-count class="mr-1 inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] px-1">{{ $cartItemCount }}</span>
                     @endif
                 </a>
                 <div class="pt-2 border-t border-gray-100">
@@ -308,6 +356,36 @@
                 </div>
             </div>
         </nav>
+
+        @if(is_array(session('cart_added_notice')))
+            @php($cartAddedNotice = session('cart_added_notice'))
+            <div data-cart-added-toast role="status" aria-live="polite" aria-atomic="true"
+                class="fixed inset-x-3 bottom-4 z-[70] mx-auto max-w-xl rounded-3xl border border-emerald-200 bg-white p-4 text-right shadow-2xl shadow-slate-900/20 sm:inset-x-auto sm:bottom-6 sm:start-6 sm:mx-0 sm:w-[30rem]">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-xl text-emerald-700"
+                        aria-hidden="true">✓</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-black text-slate-950">
+                            تمت إضافة «{{ $cartAddedNotice['story_title'] ?? 'القصة' }}» إلى السلة
+                        </p>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">يمكنك إكمال الطلب الآن أو اختيار قصة أو منتج آخر.</p>
+                    </div>
+                    <button type="button" data-cart-toast-dismiss
+                        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                        aria-label="إغلاق الإشعار">×</button>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-2">
+                    <a href="{{ route('cart.index') }}"
+                        class="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+                        الذهاب إلى السلة
+                    </a>
+                    <button type="button" data-cart-toast-dismiss
+                        class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        اختيار منتج آخر
+                    </button>
+                </div>
+            </div>
+        @endif
 
         <!-- Page Content -->
         <main class="flex-grow">
@@ -385,6 +463,7 @@
                         <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">متجر القصص والمنتجات</a></li>
+                            <li><a href="{{ route('about') }}" class="hover:text-white transition">عن HeroKid</a></li>
                             @if(setting('child_identity_enabled', '1') === '1')
                                 <li><a href="{{ route('child-identity.index') }}" class="hover:text-white transition">اصنع هوية طفلك</a></li>
                             @endif

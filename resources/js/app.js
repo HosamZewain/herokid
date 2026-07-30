@@ -156,4 +156,40 @@ document.addEventListener('DOMContentLoaded', () => {
             setOpen(menu.classList.contains('hidden'));
         });
     }
+
+    const guideMenu = document.querySelector('[data-front-guide-menu]');
+
+    if (guideMenu) {
+        document.addEventListener('click', (event) => {
+            if (!guideMenu.contains(event.target)) {
+                guideMenu.removeAttribute('open');
+            }
+        });
+
+        guideMenu.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && guideMenu.open) {
+                guideMenu.removeAttribute('open');
+                guideMenu.querySelector('summary')?.focus();
+            }
+        });
+    }
+
+    const cartAddedToast = document.querySelector('[data-cart-added-toast]');
+
+    if (cartAddedToast) {
+        const dismissCartToast = () => {
+            cartAddedToast.classList.add('opacity-0', 'translate-y-3', 'pointer-events-none');
+            window.setTimeout(() => cartAddedToast.remove(), 200);
+        };
+
+        cartAddedToast.classList.add('transition', 'duration-200');
+        cartAddedToast.querySelectorAll('[data-cart-toast-dismiss]').forEach((button) => {
+            button.addEventListener('click', dismissCartToast);
+        });
+        cartAddedToast.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                dismissCartToast();
+            }
+        });
+    }
 });

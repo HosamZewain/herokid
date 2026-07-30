@@ -7,6 +7,7 @@
         $storyPrice = $storyPricing->effectivePrice($story);
         $storyHasOffer = $storyPricing->hasActiveOffer($story);
         $cartItemCount = count(session('cart.items', []));
+        $storyDescription = trim((string) ($story->full_desc ?: $story->short_desc));
     @endphp
 
     {{-- ══ Per-page SEO slots ══ --}}
@@ -62,7 +63,7 @@
         </script>
     @endpush
 
-    <div class="min-h-screen bg-slate-50 py-8 pb-28 md:py-12 md:pb-12">
+    <div class="min-h-screen bg-slate-50 py-8 pb-12 md:py-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
             <!-- Breadcrumb -->
@@ -86,8 +87,6 @@
                     العودة إلى متجر القصص والمنتجات
                 </a>
             </div>
-
-            <x-purchase-progress :current="2" class="mb-8" />
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
 
@@ -127,15 +126,29 @@
                     </div>
 
                     <!-- Description -->
-                    <div class="hidden text-lg leading-relaxed text-slate-600 md:block">
-                        {{ $story->full_desc ?: $story->short_desc }}
-                    </div>
-                    <details class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-right md:hidden">
-                        <summary class="cursor-pointer list-none font-black text-slate-900">عن القصة</summary>
-                        <p class="mt-3 border-t border-slate-100 pt-3 text-sm leading-7 text-slate-600">
-                            {{ $story->full_desc ?: $story->short_desc }}
-                        </p>
-                    </details>
+                    @if($storyDescription !== '')
+                        <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-right" data-story-about>
+                            <h2 class="font-black text-slate-900">عن القصة</h2>
+                            <div class="relative mt-2">
+                                <p id="story-about-text"
+                                    class="overflow-hidden text-sm leading-7 text-slate-600 transition-[max-height] duration-500 ease-in-out md:max-h-none md:overflow-visible md:text-lg md:leading-8 md:transition-none"
+                                    style="max-height: 5.25rem"
+                                    data-story-about-text>
+                                    {{ $storyDescription }}
+                                </p>
+                                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-white opacity-100 transition-opacity duration-500 md:hidden"
+                                    data-story-about-fade></div>
+                            </div>
+                            <button type="button"
+                                class="mt-1 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-black text-indigo-700 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 md:hidden"
+                                aria-expanded="false"
+                                aria-controls="story-about-text"
+                                data-story-about-toggle>
+                                <span data-story-about-label>عرض المزيد</span>
+                                <span class="transition-transform duration-300" aria-hidden="true" data-story-about-icon>⌄</span>
+                            </button>
+                        </section>
+                    @endif
 
                     <!-- Lesson -->
                     @if($story->lesson_value)
@@ -146,34 +159,49 @@
                     @endif
 
                     <!-- What's included -->
-                    <div class="bg-white border border-slate-100 rounded-2xl p-6 mb-8 shadow-sm">
+                    <div class="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" data-story-includes>
                         <h3 class="font-bold text-slate-900 text-lg mb-4">ما يتضمنه الكتاب:</h3>
-                        <ul class="space-y-3">
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>اسم طفلك في كل صفحة من
-                                    القصة</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>وجه طفلك الحقيقي في
-                                    رسومات الشخصية الرئيسية</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>إهداء شخصي مطبوع في
-                                    الصفحة الأولى</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>طباعة احترافية عالية
-                                    الجودة</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>مراجعة تصميم قبل
-                                    الطباعة (Preview)</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            <li class="flex items-center gap-3 text-slate-700 justify-end"><span>شحن لجميع محافظات
-                                    مصر</span><span
-                                    class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                        </ul>
+                        <div class="relative">
+                            <ul id="story-includes-list"
+                                class="space-y-3 overflow-hidden transition-[max-height] duration-500 ease-in-out md:max-h-none md:overflow-visible md:transition-none"
+                                style="max-height: 7.5rem"
+                                data-story-includes-list>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>اسم طفلك في كل صفحة من
+                                        القصة</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>وجه طفلك الحقيقي في
+                                        رسومات الشخصية الرئيسية</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>إهداء شخصي مطبوع في
+                                        الصفحة الأولى</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>طباعة احترافية عالية
+                                        الجودة</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>مراجعة تصميم قبل
+                                        الطباعة (Preview)</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                                <li class="flex items-center gap-3 text-slate-700 justify-end"><span>شحن لجميع محافظات
+                                        مصر</span><span
+                                        class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                                </li>
+                            </ul>
+                            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-white opacity-100 transition-opacity duration-500 md:hidden"
+                                data-story-includes-fade></div>
+                        </div>
+                        <button type="button"
+                            class="mt-1 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-black text-indigo-700 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 md:hidden"
+                            aria-expanded="false"
+                            aria-controls="story-includes-list"
+                            data-story-includes-toggle>
+                            <span data-story-includes-label>عرض المزيد</span>
+                            <span class="transition-transform duration-300" aria-hidden="true" data-story-includes-icon>⌄</span>
+                        </button>
                     </div>
 
                     <!-- Delivery Time -->
@@ -189,30 +217,21 @@
                 {{-- ===== RIGHT: Order Form ===== --}}
                 <div id="story-customization" class="scroll-mt-24 lg:sticky lg:top-24">
                     <div class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl">
-                        <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-8">
-                            <div class="text-left">
-                                <p class="text-xs font-bold text-slate-500">{{ $story->title }}</p>
-                                <p class="font-black text-indigo-700">{{ format_money($storyPrice) }}</p>
-                                <p class="text-[11px] font-bold text-slate-400">السلة: {{ arabic_number($cartItemCount) }} عنصر</p>
-                            </div>
-                            <div class="text-right">
-                                <h2 class="text-2xl font-extrabold text-slate-900">خصّص قصتك واطلبها</h2>
-                                <p class="mt-1 text-sm font-bold text-indigo-600">الخطوة ٢ من ٤</p>
-                                <p class="mt-1 text-xs text-slate-500">بياناتك محفوظة أثناء التنقل</p>
-                            </div>
+                        <div class="border-b border-slate-100 bg-white px-4 py-4 text-right sm:px-6">
+                            <h2 class="text-xl font-extrabold text-slate-900 sm:text-2xl">املا بيانات طفلك لطلب القصة</h2>
                         </div>
-                        <div class="p-5 sm:p-8">
+                        <div class="p-3 sm:p-5">
 
                         @if(session('success'))
                             <div
-                                class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-6 text-center font-bold">
+                                class="mb-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-center font-bold text-green-700">
                                 {{ session('success') }}
                             </div>
                         @endif
 
                         @if($errors->any())
                             <div id="story-order-errors" data-scroll-on-load data-first-error-field="{{ $errors->keys()[0] ?? '' }}"
-                                class="bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-xl mb-6 text-right"
+                                class="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-right text-red-700"
                                 tabindex="-1">
                                 <p class="font-extrabold mb-2">يرجى مراجعة البيانات التالية:</p>
                                 <ul class="space-y-1 text-sm list-disc list-inside">
@@ -223,21 +242,31 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-story-order-form data-story-draft-key="herokid:story:{{ $story->slug }}:draft">
+                        <form id="story-order-form" action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-story-order-form data-story-draft-key="herokid:story:{{ $story->slug }}:draft">
                             @csrf
                             <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] ?? '' }}">
 
+                            <div class="mb-3 grid grid-cols-2 gap-2" aria-label="خطوات تخصيص القصة">
+                                <div class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-sm font-black text-white">
+                                    <span class="block text-xs text-indigo-100">الخطوة ١</span>
+                                    بيانات الطفل والصور
+                                </div>
+                                <div class="rounded-xl bg-indigo-50 px-3 py-2.5 text-center text-sm font-black text-indigo-800">
+                                    <span class="block text-xs text-indigo-500">الخطوة ٢</span>
+                                    إضافات اختيارية
+                                </div>
+                            </div>
+
                             {{-- SECTION 1: Child Info --}}
-                            <details class="group mb-4 rounded-2xl border border-indigo-100 bg-white" @if(! $errors->hasAny(['photo_upload_ids', 'photo_upload_ids.*', 'privacy_consent'])) open @endif data-story-stage="1">
-                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
+                            <details class="group mb-3 rounded-2xl border border-indigo-100 bg-white" open data-story-stage="1">
+                                <summary class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-3 py-2.5">
                                 <div class="flex items-center gap-2 justify-end">
-                                    <h3 class="text-base font-extrabold text-indigo-800">بيانات البطل (الطفل)</h3>
-                                    <span
-                                        class="bg-pink-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">١</span>
+                                    <h3 class="text-base font-extrabold text-indigo-800">بيانات الطفل والصور</h3>
+                                    <span class="rounded-full bg-pink-500 px-2.5 py-1 text-xs font-black text-white">مطلوب</span>
                                 </div>
                                 <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
                                 </summary>
-                                <div class="space-y-4 p-4">
+                                <div class="space-y-3 p-3">
                                     <div>
                                         <label for="child_name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم
                                             الطفل <span class="text-red-500">*</span></label>
@@ -247,7 +276,7 @@
                                             placeholder="الاسم الأول للطفل">
                                         <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
                                     </div>
-                                    <div class="grid grid-cols-2 gap-4">
+                                    <div class="grid grid-cols-2 gap-3">
                                         <div>
                                             <label for="child_age"
                                                 class="block text-sm font-bold text-slate-700 mb-1.5 text-right">العمر
@@ -278,76 +307,57 @@
                                             <x-input-error :messages="$errors->get('child_gender')" class="mt-1" />
                                         </div>
                                     </div>
+                                    <div class="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-3 text-right">
+                                        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                            <span class="rounded-full bg-pink-500 px-2.5 py-1 text-xs font-black text-white">مطلوب</span>
+                                            <p class="font-bold text-indigo-800">📸 ارفع صورتين أو ٣ صور واضحة للوجه</p>
+                                        </div>
+                                        <input type="file" id="photos" multiple
+                                            accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                                            class="sr-only"
+                                            data-photo-input>
+                                        <div data-photo-upload-ids></div>
+                                        <div class="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
+                                            <label for="photos"
+                                                class="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700">
+                                                اختيار ٢ أو ٣ صور
+                                            </label>
+                                            <span class="text-sm font-semibold text-slate-500" data-photo-label>
+                                                لم يتم اختيار صور
+                                            </span>
+                                        </div>
+                                        <div class="mt-3 grid grid-cols-3 gap-2" data-photo-queue aria-live="polite"></div>
+                                        <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700" data-photo-global-error></div>
+                                        <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-2" />
+                                        <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-2" />
+                                    </div>
+                                    <button type="button" class="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="2">التالي: الإضافات الاختيارية</button>
+                                </div>
+                            </details>
+
+                            {{-- SECTION 2: Optional personalization and gift details --}}
+                            <details class="group mb-3 rounded-2xl border border-slate-200 bg-slate-50" @if($errors->hasAny(['interests', 'gift_note', 'parent_notes'])) open @endif data-story-stage="2">
+                                <summary class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5">
+                                <div class="flex items-center gap-2 justify-end">
+                                    <div class="text-right">
+                                        <h3 class="text-base font-extrabold text-indigo-800">إهداء واهتمامات وملاحظات</h3>
+                                        <p class="text-xs font-bold text-emerald-700">اختياري — يمكنك الإضافة للسلة بدون فتح هذا القسم</p>
+                                    </div>
+                                </div>
+                                <span class="text-xs font-black text-slate-500 group-open:rotate-180">⌄</span>
+                                </summary>
+                                <div class="space-y-3 p-3">
                                     <div>
                                         <label for="interests" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اهتمامات
                                             الطفل (اختياري)</label>
                                         <input id="interests" type="text" name="interests" value="{{ old('interests') }}"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
-                                            placeholder="مثال: رائد فضاء، ديناصورات، كرة قدم...">
-                                        <p class="text-xs text-slate-600 mt-1 text-right">سنحاول دمجها في القصة إن أمكن
-                                        </p>
+                                            placeholder="مثال: الفضاء، الديناصورات، كرة القدم">
                                         <x-input-error :messages="$errors->get('interests')" class="mt-1" />
                                     </div>
-                                    <button type="button" class="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="2">التالي: صور الطفل</button>
-                                </div>
-                            </details>
-
-                            {{-- SECTION 2: Photos --}}
-                            <details class="group mb-4 rounded-2xl border border-indigo-100 bg-white" @if($errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*')) open @endif data-story-stage="2">
-                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
-                                <div class="flex items-center gap-2 justify-end">
-                                    <h3 class="text-base font-extrabold text-indigo-800">صور الطفل</h3>
-                                    <span
-                                        class="bg-amber-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٢</span>
-                                </div>
-                                <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
-                                </summary>
-                                <div class="p-4">
-                                <div class="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-5 text-right">
-                                    <p class="mb-2 font-bold text-indigo-800">📸 ارفع صورتين أو ٣ صور واضحة للوجه</p>
-                                    <ul class="text-xs text-indigo-600 space-y-1 mb-4">
-                                        <li>• صور واضحة لوجه الطفل (بدون نظارة شمسية)</li>
-                                        <li>• تقبل صور JPG وPNG وWebP وHEIC/HEIF — حد أقصى {{ arabic_number(config('photo_uploads.max_size_mb', 15)) }} ميجا للصورة</li>
-                                        <li>• اختر الصور معاً وسيبدأ رفعها تلقائياً</li>
-                                    </ul>
-                                    <input type="file" id="photos" multiple
-                                        accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                                        class="sr-only"
-                                        data-photo-input>
-                                    <div data-photo-upload-ids></div>
-                                    <div class="flex flex-col sm:flex-row-reverse sm:items-center gap-3">
-                                        <label for="photos"
-                                            class="inline-flex justify-center items-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-indigo-700 cursor-pointer transition">
-                                            اختيار الصور
-                                        </label>
-                                        <span class="text-sm font-semibold text-slate-500" data-photo-label>
-                                            لم يتم اختيار صور
-                                        </span>
-                                    </div>
-                                    <div class="mt-4 space-y-3" data-photo-queue aria-live="polite"></div>
-                                    <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700" data-photo-global-error></div>
-                                    <p class="mt-3 text-xs text-slate-500">سيتم رفع كل صورة وحدها قبل إرسال الطلب. يمكنك إعادة محاولة أي صورة فشلت بدون فقدان الصور الناجحة.</p>
-                                    <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-2" />
-                                    <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-2" />
-                                </div>
-                                <button type="button" class="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="3">التالي: الإهداء الاختياري</button>
-                                </div>
-                            </details>
-
-                            {{-- SECTION 3: Personalization & Gift --}}
-                            <details class="group mb-4 rounded-2xl border border-slate-200 bg-white" data-story-stage="3">
-                                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                                <div class="flex items-center gap-2 justify-end">
-                                    <h3 class="text-base font-extrabold text-indigo-800">إضافات خاصة (اختياري)</h3>
-                                    <span
-                                        class="bg-green-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">٣</span>
-                                </div>
-                                <span class="text-xs font-black text-slate-500 group-open:rotate-180">⌄</span>
-                                </summary>
-                                <div class="space-y-4 p-4">
                                     <div>
                                         <label for="gift_note" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">إهداء
-                                            يُطبع في الصفحة الأولى</label>
+                                            يُطبع في الصفحة الأولى (اختياري)</label>
                                         <textarea id="gift_note" name="gift_note" rows="2"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="إلى ابني الغالي... أنت بطلنا الحقيقي ❤️">{{ old('gift_note') }}</textarea>
@@ -355,49 +365,17 @@
                                     </div>
                                     <div>
                                         <label for="parent_notes" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">ملاحظات
-                                            إضافية للفريق</label>
+                                            إضافية للفريق (اختياري)</label>
                                         <textarea id="parent_notes" name="parent_notes" rows="2"
                                             class="block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
                                             placeholder="أي تفاصيل إضافية تريد إضافتها...">{{ old('parent_notes') }}</textarea>
                                         <x-input-error :messages="$errors->get('parent_notes')" class="mt-1" />
                                     </div>
-                                    <button type="button" class="min-h-11 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white" data-story-next="4">التالي: مراجعة وإضافة للسلة</button>
                                 </div>
                             </details>
 
-                            {{-- Privacy Consent --}}
-                            <details class="group rounded-2xl border border-indigo-100 bg-white" @if($errors->has('privacy_consent')) open @endif data-story-stage="4">
-                            <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-indigo-50 px-4 py-3">
-                                <span class="font-extrabold text-indigo-800">مراجعة وإضافة للسلة</span>
-                                <span class="text-xs font-black text-indigo-600 group-open:rotate-180">⌄</span>
-                            </summary>
-                            <div class="p-4">
-                            <div class="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 mb-8">
-                                <div class="flex items-start gap-3">
-                                    <input id="privacy_consent" name="privacy_consent" type="checkbox" required
-                                        @checked(old('privacy_consent'))
-                                        @if($errors->has('privacy_consent')) aria-invalid="true" @endif
-                                        class="mt-1 h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 flex-shrink-0">
-                                    <label for="privacy_consent"
-                                        class="text-sm text-slate-700 text-right cursor-pointer">
-                                        <span class="font-bold block mb-1">موافقة صريحة على استخدام الصور</span>
-                                        أوافق على استخدام صور طفلي المرفوعة حصرياً لإنشاء رسومات القصة المطبوعة لهذا
-                                        الطلب. أؤكد أنني أمتلك الحق القانوني لرفع هذه الصور، وأوافق على الاحتفاظ الآمن بها
-                                        لدعم تنفيذ الطلب وسجل الخدمة، مع حقي في طلب الحذف وفق <a href="{{ route('privacy') }}"
-                                            class="underline text-indigo-600 hover:text-indigo-800"
-                                            target="_blank">سياسة الخصوصية</a>.
-                                    </label>
-                                </div>
-                                <x-input-error :messages="$errors->get('privacy_consent')" class="mt-2" />
-                            </div>
-
-                            <div class="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-right" role="status" aria-live="polite" data-story-requirements>
-                                <p class="font-black text-indigo-950">أكمل البيانات لتفعيل الإضافة للسلة</p>
-                                <ul class="mt-2 list-inside list-disc text-sm leading-6 text-indigo-800" data-story-requirements-list></ul>
-                            </div>
-
                             {{-- Submit --}}
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8">
+                            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2" data-story-cart-actions>
                                 <button type="submit" name="next" value="cart" data-story-submit
                                     class="w-full flex justify-center items-center gap-3 py-4 px-6 rounded-2xl text-base font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-indigo-300">
                                     <span>إضافة للسلة وإتمام الطلب</span>
@@ -411,11 +389,13 @@
                                     <span>إضافة واختيار قصة أخرى</span>
                                 </button>
                             </div>
-                            <p class="text-center text-xs text-slate-400 mt-3">
+                            <div class="mb-3 mt-3 hidden rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-right text-red-800" role="alert" aria-live="assertive" tabindex="-1" data-story-requirements>
+                                <p class="font-black" data-story-requirements-title>أكمل البيانات المطلوبة لإضافة القصة</p>
+                                <ul class="mt-2 list-inside list-disc text-sm leading-6" data-story-requirements-list></ul>
+                            </div>
+                            <p class="mt-2 text-center text-xs text-slate-400">
                                 بيانات ولي الأمر وعنوان التوصيل يتم إدخالها مرة واحدة في السلة. السعر: {{ format_money($storyPrice) }}
                             </p>
-                            </div>
-                            </details>
                         </form>
                     </div>
                     </div>
@@ -425,19 +405,87 @@
         </div>
     </div>
 
-    <div class="fixed inset-x-0 bottom-0 z-40 border-t border-indigo-100 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur md:hidden" dir="rtl">
-        <div class="mx-auto flex max-w-lg items-center gap-3">
-            <div class="min-w-0 flex-1 text-right">
-                <p class="truncate text-xs font-bold text-slate-500">{{ $story->title }}</p>
-                <p class="font-black text-indigo-700">{{ format_money($storyPrice) }} <span class="text-[11px] text-slate-400">· السلة {{ arabic_number($cartItemCount) }}</span></p>
-            </div>
-            <button type="button" data-scroll-to-story-form class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-200">
-                خصّص هذه القصة
-            </button>
-        </div>
-    </div>
-
     @push('scripts')
+        <script>
+            (() => {
+                const about = document.querySelector('[data-story-about]');
+                const text = about?.querySelector('[data-story-about-text]');
+                const fade = about?.querySelector('[data-story-about-fade]');
+                const toggle = about?.querySelector('[data-story-about-toggle]');
+                const label = about?.querySelector('[data-story-about-label]');
+                const icon = about?.querySelector('[data-story-about-icon]');
+                if (!about || !text || !fade || !toggle || !label || !icon) return;
+
+                let expanded = false;
+                let collapsedHeight = 56;
+
+                const update = () => {
+                    const desktop = window.matchMedia('(min-width: 768px)').matches;
+                    collapsedHeight = (Number.parseFloat(getComputedStyle(text).lineHeight) || 28) * 3;
+                    const fullHeight = text.scrollHeight;
+                    const needsExpansion = fullHeight > collapsedHeight + 1;
+
+                    toggle.classList.toggle('hidden', desktop || !needsExpansion);
+                    fade.classList.toggle('hidden', desktop || !needsExpansion);
+                    text.style.maxHeight = `${desktop || expanded ? fullHeight : collapsedHeight}px`;
+                    fade.classList.toggle('opacity-0', desktop || expanded);
+                    fade.classList.toggle('opacity-100', !desktop && !expanded);
+                    label.textContent = expanded ? 'عرض أقل' : 'عرض المزيد';
+                    icon.classList.toggle('rotate-180', expanded);
+                    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                };
+
+                toggle.addEventListener('click', () => {
+                    expanded = !expanded;
+                    update();
+                });
+
+                window.addEventListener('resize', update, { passive: true });
+                requestAnimationFrame(update);
+            })();
+        </script>
+        <script>
+            (() => {
+                const includes = document.querySelector('[data-story-includes]');
+                const list = includes?.querySelector('[data-story-includes-list]');
+                const fade = includes?.querySelector('[data-story-includes-fade]');
+                const toggle = includes?.querySelector('[data-story-includes-toggle]');
+                const label = includes?.querySelector('[data-story-includes-label]');
+                const icon = includes?.querySelector('[data-story-includes-icon]');
+                if (!includes || !list || !fade || !toggle || !label || !icon) return;
+
+                let expanded = false;
+                let collapsedHeight = 80;
+
+                const update = () => {
+                    const items = Array.from(list.children);
+                    const desktop = window.matchMedia('(min-width: 768px)').matches;
+                    const lastVisibleItem = items[Math.min(2, items.length - 1)];
+                    collapsedHeight = lastVisibleItem
+                        ? lastVisibleItem.offsetTop + lastVisibleItem.offsetHeight
+                        : list.scrollHeight;
+                    const fullHeight = list.scrollHeight;
+                    const needsExpansion = items.length > 3 && fullHeight > collapsedHeight + 1;
+
+                    toggle.classList.toggle('hidden', desktop || !needsExpansion);
+                    fade.classList.toggle('hidden', desktop || !needsExpansion);
+                    list.style.maxHeight = `${desktop || expanded ? fullHeight : collapsedHeight}px`;
+                    fade.classList.toggle('opacity-0', desktop || expanded);
+                    fade.classList.toggle('opacity-100', !desktop && !expanded);
+                    label.textContent = expanded ? 'عرض أقل' : 'عرض المزيد';
+                    icon.classList.toggle('rotate-180', expanded);
+                    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                };
+
+                toggle.addEventListener('click', () => {
+                    expanded = !expanded;
+                    update();
+                });
+
+                window.addEventListener('resize', update, { passive: true });
+                requestAnimationFrame(update);
+            })();
+        </script>
         <script>
             (() => {
                 const config = @json($photoUploadConfig ?? []);
@@ -449,6 +497,7 @@
                 const errorEl = document.querySelector('[data-photo-global-error]');
                 const submitButtons = Array.from(document.querySelectorAll('[data-story-submit]'));
                 const requirementsEl = document.querySelector('[data-story-requirements]');
+                const requirementsTitle = document.querySelector('[data-story-requirements-title]');
                 const requirementsList = document.querySelector('[data-story-requirements-list]');
                 if (!form || !input || !queueEl || !hiddenEl) return;
 
@@ -465,6 +514,7 @@
                 const items = [];
                 let activeUploads = 0;
                 let submitLocked = false;
+                let submitAttempted = false;
 
                 const arabicStatus = {
                     waiting: 'في الانتظار',
@@ -492,9 +542,14 @@
                 }
 
                 function updateHiddenInputs() {
-                    const ids = items.filter(item => item.status === 'uploaded' && item.uploadId).map(item => item.uploadId);
+                    const uploadedItems = items.filter(item => item.status === 'uploaded' && item.uploadId);
+                    const ids = uploadedItems.map(item => item.uploadId);
                     hiddenEl.innerHTML = ids.map(id => `<input type="hidden" name="photo_upload_ids[]" value="${id.replaceAll('"', '&quot;')}">`).join('');
-                    localStorage.setItem(storageKey, JSON.stringify(ids));
+                    localStorage.setItem(storageKey, JSON.stringify(uploadedItems.map(item => ({
+                        id: item.uploadId,
+                        name: item.name,
+                        previewUrl: item.serverPreviewUrl || item.previewUrl || null,
+                    }))));
                     labelEl.textContent = ids.length === 0
                         ? `ارفع ${minFiles} صور على الأقل`
                         : (ids.length < minFiles
@@ -503,7 +558,7 @@
                     updateSubmitState();
                 }
 
-                function updateSubmitState() {
+                function missingRequirements() {
                     const hasUploading = items.some(item => ['waiting', 'preparing', 'uploading'].includes(item.status));
                     const hasFailed = items.some(item => item.status === 'failed');
                     const uploadedCount = items.filter(item => item.status === 'uploaded').length;
@@ -514,13 +569,16 @@
                     if (uploadedCount < minFiles) missing.push(`${minFiles - uploadedCount} صورة إضافية للطفل`);
                     if (hasUploading) missing.push('انتظار اكتمال رفع الصور');
                     if (hasFailed) missing.push('إعادة محاولة الصورة الفاشلة أو حذفها');
-                    if (!form.elements.privacy_consent?.checked) missing.push('الموافقة على استخدام الصور');
 
-                    const disabled = submitLocked || missing.length > 0;
+                    return missing;
+                }
+
+                function updateSubmitState() {
+                    const missing = missingRequirements();
                     submitButtons.forEach(button => {
-                        button.disabled = disabled;
-                        button.classList.toggle('opacity-60', disabled);
-                        button.classList.toggle('cursor-not-allowed', disabled);
+                        button.disabled = submitLocked;
+                        button.classList.toggle('opacity-60', submitLocked);
+                        button.classList.toggle('cursor-not-allowed', submitLocked);
                     });
 
                     if (requirementsList) {
@@ -528,34 +586,49 @@
                             ? missing.map(item => `<li>${item}</li>`).join('')
                             : '<li class="text-emerald-700">كل البيانات المطلوبة مكتملة — يمكنك الإضافة للسلة الآن.</li>';
                     }
+                    if (requirementsTitle) {
+                        requirementsTitle.textContent = missing.length
+                            ? 'لا يمكن إضافة القصة بعد — أكمل التالي:'
+                            : 'القصة جاهزة للإضافة للسلة';
+                    }
                     requirementsEl?.classList.toggle('border-emerald-200', missing.length === 0);
                     requirementsEl?.classList.toggle('bg-emerald-50', missing.length === 0);
+                    requirementsEl?.classList.toggle('text-emerald-800', missing.length === 0);
+                    requirementsEl?.classList.toggle('border-red-200', missing.length > 0);
+                    requirementsEl?.classList.toggle('bg-red-50', missing.length > 0);
+                    requirementsEl?.classList.toggle('text-red-800', missing.length > 0);
+                    requirementsEl?.classList.toggle('hidden', missing.length > 0 && !submitAttempted);
                 }
 
                 function rowTemplate(item) {
+                    const escapedName = escapeHtml(item.name || 'صورة الطفل');
+                    const escapedMessage = escapeHtml(item.message || '');
+                    const isUploaded = item.status === 'uploaded';
+
                     return `
-                        <div class="rounded-2xl border border-indigo-100 bg-white p-3 shadow-sm" data-photo-row="${item.id}">
-                            <div class="flex gap-3 sm:flex-row-reverse">
-                                <div class="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                                    ${item.previewUrl ? `<img src="${item.previewUrl}" alt="" class="h-full w-full object-cover">` : '<div class="h-full w-full bg-slate-100"></div>'}
+                        <div class="min-w-0 rounded-xl border border-indigo-100 bg-white p-2 shadow-sm" data-photo-row="${item.id}">
+                            <div class="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
+                                ${item.previewUrl ? `<img src="${item.previewUrl}" alt="معاينة ${escapedName}" class="h-full w-full object-cover">` : '<div class="h-full w-full bg-slate-100"></div>'}
+                                <span class="absolute start-1 top-1 max-w-[calc(100%_-_0.5rem)] truncate rounded-full bg-white/95 px-2 py-1 text-[10px] font-black text-indigo-700 shadow-sm" data-photo-status>${arabicStatus[item.status] || item.status}</span>
+                                <div class="${isUploaded ? 'hidden' : ''} absolute inset-x-1 bottom-1 h-1.5 overflow-hidden rounded-full bg-white/80">
+                                    <div class="h-full rounded-full bg-indigo-600 transition-all" data-photo-progress style="width: ${item.progress}%"></div>
                                 </div>
-                                <div class="min-w-0 flex-1 text-right">
-                                    <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <p class="truncate text-sm font-extrabold text-slate-800">${item.name}</p>
-                                        <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700" data-photo-status>${arabicStatus[item.status] || item.status}</span>
-                                    </div>
-                                    <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                                        <div class="h-full rounded-full bg-indigo-600 transition-all" data-photo-progress style="width: ${item.progress}%"></div>
-                                    </div>
-                                    <p class="mt-2 text-xs font-semibold text-slate-500" data-photo-message>${item.message || ''}</p>
-                                    <div class="mt-3 flex flex-wrap justify-end gap-2">
-                                        <button type="button" data-photo-retry class="${item.status === 'failed' ? '' : 'hidden'} min-h-11 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">إعادة المحاولة</button>
-                                        <button type="button" data-photo-remove class="min-h-11 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">حذف</button>
-                                    </div>
-                                </div>
+                            </div>
+                            <p class="mt-2 truncate text-center text-[11px] font-extrabold text-slate-700" title="${escapedName}">${escapedName}</p>
+                            <p class="${isUploaded ? 'hidden' : ''} mt-1 line-clamp-2 text-center text-[10px] font-semibold leading-4 text-slate-500" data-photo-message>${escapedMessage}</p>
+                            <div class="mt-1.5 grid gap-1">
+                                <button type="button" data-photo-retry class="${item.status === 'failed' ? '' : 'hidden'} min-h-11 rounded-lg bg-indigo-600 px-2 py-2 text-[11px] font-bold text-white">إعادة المحاولة</button>
+                                <button type="button" data-photo-remove class="min-h-11 rounded-lg bg-red-50 px-2 py-2 text-[11px] font-bold text-red-600 hover:bg-red-100">حذف</button>
                             </div>
                         </div>
                     `;
+                }
+
+                function escapeHtml(value) {
+                    const element = document.createElement('span');
+                    element.textContent = String(value);
+
+                    return element.innerHTML;
                 }
 
                 function render() {
@@ -704,6 +777,8 @@
                                 status: 'uploaded',
                                 progress: 100,
                                 uploadId: body.id,
+                                serverPreviewUrl: body.preview_url || null,
+                                previewUrl: body.preview_url || item.previewUrl,
                                 message: 'تم رفع الصورة بنجاح.',
                             });
                         } else {
@@ -766,11 +841,6 @@
                     });
                 });
 
-                document.querySelector('[data-scroll-to-story-form]')?.addEventListener('click', () => {
-                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    form.querySelector('[name="child_name"]')?.focus({ preventScroll: true });
-                });
-
                 const draftFields = ['child_name', 'child_age', 'child_gender', 'interests', 'gift_note', 'parent_notes'];
                 if (draftKey) {
                     try {
@@ -798,15 +868,15 @@
                         event.preventDefault();
                         return;
                     }
-                    const hasUploading = items.some(item => ['waiting', 'preparing', 'uploading'].includes(item.status));
-                    const hasFailed = items.some(item => item.status === 'failed');
-                    const uploadedCount = items.filter(item => item.status === 'uploaded').length;
-                    if (hasUploading || hasFailed || uploadedCount < minFiles) {
+                    const missing = missingRequirements();
+                    if (missing.length > 0) {
                         event.preventDefault();
-                        showGlobalError(hasUploading
-                            ? 'انتظر حتى يكتمل رفع كل الصور قبل إرسال الطلب.'
-                            : `يرجى رفع ${minFiles} صور ناجحة على الأقل وحذف أو إعادة محاولة الصور الفاشلة.`);
-                        queueEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        submitAttempted = true;
+                        updateSubmitState();
+                        const targetStage = form.querySelector('[data-story-stage="1"]');
+                        if (targetStage) targetStage.open = true;
+                        requirementsEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        requirementsEl?.focus({ preventScroll: true });
                         return;
                     }
                     if (!form.checkValidity()) {
@@ -823,17 +893,27 @@
                     if (serverRejectedStoredUploads) {
                         localStorage.removeItem(storageKey);
                     }
-                    const storedIds = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    if (Array.isArray(storedIds) && storedIds.length) {
-                        storedIds.slice(0, maxFiles).forEach(id => items.push({
-                            id: uid(),
-                            name: 'صورة مرفوعة سابقاً',
-                            previewUrl: null,
-                            status: 'uploaded',
-                            progress: 100,
-                            uploadId: id,
-                            message: 'تم الاحتفاظ برقم الصورة فقط بعد تحديث الصفحة.',
-                        }));
+                    const storedUploads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    if (Array.isArray(storedUploads) && storedUploads.length) {
+                        storedUploads.slice(0, maxFiles).forEach(stored => {
+                            const uploadId = typeof stored === 'string' ? stored : stored?.id;
+                            if (!uploadId) return;
+                            const previewUrl = typeof stored === 'object' && stored?.previewUrl
+                                ? stored.previewUrl
+                                : config.previewUrlTemplate?.replace('__ID__', uploadId);
+                            items.push({
+                                id: uid(),
+                                name: typeof stored === 'object' && stored?.name
+                                    ? stored.name
+                                    : 'صورة مرفوعة سابقاً',
+                                previewUrl: previewUrl || null,
+                                serverPreviewUrl: previewUrl || null,
+                                status: 'uploaded',
+                                progress: 100,
+                                uploadId,
+                                message: 'تم استعادة الصورة المرفوعة بعد تحديث الصفحة.',
+                            });
+                        });
                         render();
                     } else {
                         updateSubmitState();

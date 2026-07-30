@@ -10,6 +10,13 @@ use Illuminate\Support\Collection;
 
 class AdminOrderGroupService
 {
+    private const DASHBOARD_STATUSES = [
+        'new',
+        'preview_uploaded',
+        'shipped',
+        'delivered',
+    ];
+
     private const INDEX_RELATIONS = [
         'user:id,name,role',
         'story:id,title,price',
@@ -83,6 +90,51 @@ class AdminOrderGroupService
             ->get();
 
         return $this->present($orders, $orders->every->trashed());
+    }
+
+    public function dashboardStats(): array
+    {
+        $byStatus = Order::query()
+            ->selectRaw('status, COUNT(*) as record_count, COUNT(DISTINCT checkout_group_key) as checkout_count')
+            ->groupBy('status')
+            ->get()
+            ->keyBy('status');
+
+        $checkouts = [
+            'total' => Order::query()->distinct()->count('checkout_group_key'),
+        ];
+        $records = [
+            'total' => (int) $byStatus->sum('record_count'),
+        ];
+
+        foreach (self::DASHBOARD_STATUSES as $status) {
+            $checkouts[$status] = (int) ($byStatus->get($status)?->checkout_count ?? 0);
+            $records[$status] = (int) ($byStatus->get($status)?->record_count ?? 0);
+        }
+
+        return compact('checkouts', 'records');
+    }
+
+    public function recent(int $limit = 8): Collection
+    {
+        $groups = Order::query()
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at')
+            ->groupBy('checkout_group_key')
+            ->orderByDesc('latest_at')
+            ->limit(max(1, $limit))
+            ->get();
+
+        $keys = $groups->pluck('checkout_group_key');
+        $orders = $this->ordersForKeys($keys, false)
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+        return $groups
+            ->map(fn ($group): array => $this->present(
+                $orders->get($group->checkout_group_key, collect()),
+                false
+            ))
+            ->filter()
+            ->values();
     }
 
     public function ordersForGroup(Order $order, bool $withTrashed = false): Collection

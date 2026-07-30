@@ -48,10 +48,17 @@ class CartController extends Controller
         $cart = $this->cart();
         $cartCollection = collect($cart);
         $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
+        $cartProductIds = $cartCollection
+            ->pluck('product_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
         $upsellStoryKey = session('upsell_story_key');
         $upsellStoryItem = $upsellStoryKey && isset($cart[$upsellStoryKey]) ? $cart[$upsellStoryKey] : $storyItems->first();
         $recommendedProducts = $upsellStoryItem
-            ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6)
+            ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6, $cartProductIds)
             : collect();
 
         return view('front.cart.index', [
@@ -76,7 +83,7 @@ class CartController extends Controller
 
         $minimumPhotos = (int) config('photo_uploads.min_files', 2);
         $maximumPhotos = (int) config('photo_uploads.max_files', 3);
-        $allowedAges = StoryAgeOptions::fromRange($story->age_range);
+        $allowedAges = StoryAgeOptions::forPersonalization();
 
         $validator = Validator::make($request->all(), [
             'child_name' => 'required|string|max:255',
@@ -85,7 +92,6 @@ class CartController extends Controller
             'gift_note' => 'nullable|string|max:500',
             'interests' => 'nullable|string|max:500',
             'parent_notes' => 'nullable|string|max:1000',
-            'privacy_consent' => 'required|accepted',
             'photo_upload_ids' => 'nullable|array|min:'.$minimumPhotos.'|max:'.$maximumPhotos,
             'photo_upload_ids.*' => 'string|uuid',
             'photos' => 'nullable|array|min:'.$minimumPhotos.'|max:'.$maximumPhotos,
@@ -117,14 +123,12 @@ class CartController extends Controller
             'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفاً.',
             'child_age.required' => 'يرجى إدخال عمر الطفل.',
             'child_age.integer' => 'يرجى إدخال عمر الطفل كرقم صحيح.',
-            'child_age.in' => 'يرجى اختيار عمر مناسب للفئة العمرية لهذه القصة.',
+            'child_age.in' => 'يرجى اختيار عمر الطفل من ٣ إلى ١٢ سنة.',
             'child_gender.required' => 'يرجى اختيار جنس الطفل.',
             'child_gender.in' => 'يرجى اختيار جنس صحيح للطفل.',
             'gift_note.max' => 'الإهداء يجب ألا يزيد عن 500 حرف.',
             'interests.max' => 'اهتمامات الطفل يجب ألا تزيد عن 500 حرف.',
             'parent_notes.max' => 'ملاحظات الفريق يجب ألا تزيد عن 1000 حرف.',
-            'privacy_consent.required' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
-            'privacy_consent.accepted' => 'يجب الموافقة على استخدام الصور لإكمال الطلب.',
             'photo_upload_ids.required' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
             'photo_upload_ids.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
             'photo_upload_ids.min' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
@@ -180,21 +184,29 @@ class CartController extends Controller
         session()->flash('upsell_story_key', $itemKey);
         app(CartTrackingService::class)->recordItemAdded($request, $itemKey);
 
+        $cartNotice = [
+            'story_title' => $story->title,
+        ];
+
         if ($request->input('next') === 'cart') {
-            return redirect()->route('cart.index')->with('success', 'تمت إضافة القصة إلى السلة بنجاح.');
+            return redirect()
+                ->route('cart.index')
+                ->with('cart_added_notice', $cartNotice);
         }
 
         return redirect()
-            ->route('stories.index')
-            ->with('success', 'تمت إضافة القصة إلى السلة. يمكنك اختيار قصة أخرى أو إتمام الطلب من السلة.');
+            ->route('shop.index')
+            ->with('cart_added_notice', $cartNotice);
     }
 
     public function destroy(Request $request, string $key, ChildIdentityEventLogger $identityEvents)
     {
         $cart = $this->cart();
+        $removedKeys = [];
 
         if (isset($cart[$key])) {
             $item = $cart[$key];
+            $removedKeys[] = $key;
 
             if (empty($item['child_identity_request_id'])) {
                 foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
@@ -219,6 +231,11 @@ class CartController extends Controller
             unset($cart[$key]);
 
             if (($item['item_type'] ?? 'story') === 'story') {
+                $linkedKeys = collect($cart)
+                    ->filter(fn (array $cartItem) => ($cartItem['linked_story_key'] ?? null) === $key)
+                    ->keys()
+                    ->all();
+                $removedKeys = array_values(array_unique(array_merge($removedKeys, $linkedKeys)));
                 $cart = collect($cart)
                     ->reject(fn (array $cartItem) => ($cartItem['linked_story_key'] ?? null) === $key)
                     ->all();
@@ -226,6 +243,16 @@ class CartController extends Controller
 
             session(['cart.items' => $cart]);
             app(CartTrackingService::class)->recordItemRemoved($request, $key, $item);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'تم حذف العنصر من السلة.',
+                'removed_keys' => $removedKeys,
+                'cart_count' => count($cart),
+                'subtotal' => $this->subtotal($cart),
+                'cart_empty' => $cart === [],
+            ]);
         }
 
         return redirect()->route('cart.index')->with('success', 'تم حذف العنصر من السلة.');

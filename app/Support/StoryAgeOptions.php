@@ -5,6 +5,12 @@ namespace App\Support;
 final class StoryAgeOptions
 {
     /** @return array<int, int> */
+    public static function forPersonalization(): array
+    {
+        return range(3, 12);
+    }
+
+    /** @return array<int, int> */
     public static function fromRange(?string $ageRange): array
     {
         $normalized = strtr((string) $ageRange, [

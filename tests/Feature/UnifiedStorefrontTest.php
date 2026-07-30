@@ -178,6 +178,38 @@ class UnifiedStorefrontTest extends TestCase
             ->assertDontSee('هدية مباشرة');
     }
 
+    public function test_gender_filter_keeps_matching_and_neutral_stories_and_all_products(): void
+    {
+        $boyStory = $this->story('boy-story', 'قصة للأولاد', ['gender' => 'boy']);
+        $girlStory = $this->story('girl-story', 'قصة للبنات', ['gender' => 'girl']);
+        $neutralStory = $this->story('neutral-story', 'قصة للجميع', ['gender' => 'both']);
+        $coloringBook = $this->product('neutral-coloring-book', 'كتاب تلوين محايد', 50, [], 'activities-learning');
+
+        $this->get(route('shop.index', ['gender' => 'boy']))
+            ->assertOk()
+            ->assertSee($boyStory->title)
+            ->assertSee($neutralStory->title)
+            ->assertSee($coloringBook->name_ar)
+            ->assertDontSee($girlStory->title)
+            ->assertSee('<option value="boy" selected>ولد</option>', false)
+            ->assertSee('data-mobile-store-filters data-expanded="true"', false);
+
+        $this->get(route('shop.index', ['gender' => 'girl']))
+            ->assertOk()
+            ->assertSee($girlStory->title)
+            ->assertSee($neutralStory->title)
+            ->assertSee($coloringBook->name_ar)
+            ->assertDontSee($boyStory->title)
+            ->assertSee('<option value="girl" selected>بنت</option>', false);
+
+        $this->get(route('shop.index', ['gender' => 'girl', 'personalization' => 'none']))
+            ->assertOk()
+            ->assertSee($coloringBook->name_ar)
+            ->assertDontSee($boyStory->title)
+            ->assertDontSee($girlStory->title)
+            ->assertDontSee($neutralStory->title);
+    }
+
     public function test_activity_and_gift_shortcuts_classify_products_without_new_database_columns(): void
     {
         $activity = $this->product('coloring-book', 'كتاب تلوين ممتع', 50, [], 'activities-learning');
@@ -219,8 +251,21 @@ class UnifiedStorefrontTest extends TestCase
             ->assertDontSee($product->name_ar)
             ->assertSee('<link rel="canonical" href="'.Seo::url('/shop?type=stories').'">', false)
             ->assertSee('اختر قصة طفلك مباشرة')
+            ->assertSee('data-stories-mobile-hidden-intro', false)
+            ->assertSee('hidden flex-wrap', false)
+            ->assertSee('hidden sm:grid', false)
+            ->assertSee('action="'.route('stories.index').'"', false)
+            ->assertDontSee('action="'.route('shop.index').'"', false)
+            ->assertDontSee('id="mobile-store-personalization"', false)
+            ->assertDontSee('تصنيفات المنتجات')
             ->assertSee('id="catalog-results"', false)
             ->assertDontSee('قصص مخصصة • كتب وأنشطة • هدايا');
+
+        $this->get(route('stories.index', ['gender' => 'girl', 'personalization' => 'none']))
+            ->assertOk()
+            ->assertSee($story->title)
+            ->assertDontSee($product->name_ar)
+            ->assertDontSee('id="mobile-store-personalization"', false);
     }
 
     public function test_store_navigation_footer_and_seo_present_one_public_store_identity(): void
@@ -276,7 +321,6 @@ class UnifiedStorefrontTest extends TestCase
             'child_name' => 'ليلى',
             'child_age' => 6,
             'child_gender' => 'girl',
-            'privacy_consent' => '1',
             'next' => 'cart',
             'photos' => [
                 UploadedFile::fake()->create('child.jpg', 512, 'image/jpeg'),

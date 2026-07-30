@@ -9,12 +9,13 @@ use Illuminate\Support\Collection;
 
 class ProductRecommendations
 {
-    public function forStoryCartItem(array $item, int $limit = 6): Collection
+    public function forStoryCartItem(array $item, int $limit = 6, array $excludedProductIds = []): Collection
     {
         $story = Story::with('categories')->find($item['story_id'] ?? null);
         $age = (string) ($item['child_age'] ?? '');
         $gender = $item['child_gender'] ?? null;
         $categoryIds = $story?->categories?->pluck('id')->all() ?? [];
+        $excludedProductIds = array_values(array_filter(array_map('intval', $excludedProductIds)));
 
         $ruleProducts = ProductUpsellRule::query()
             ->with('targetProduct.category')
@@ -37,20 +38,28 @@ class ProductRecommendations
             ->orderByDesc('priority')
             ->get()
             ->pluck('targetProduct')
-            ->filter(fn ($product) => $product && $product->is_active && $product->category?->is_active);
+            ->filter(fn ($product) => $product
+                && $product->is_active
+                && $product->category?->is_active
+                && ! in_array((int) $product->id, $excludedProductIds, true));
 
         $fallbackProducts = Product::query()
             ->with('category')
             ->publiclyVisible()
-            ->forAgeGroup($age)
-            ->where(function ($query) {
-                $query->where('personalization_mode', 'inherit_from_linked_story')
-                    ->orWhere('is_featured', true);
-            })
+            ->where('personalization_mode', '!=', 'collect_child_details')
+            ->when($excludedProductIds !== [], fn ($query) => $query->whereNotIn('id', $excludedProductIds))
+            ->orderByRaw("CASE WHEN personalization_mode = 'inherit_from_linked_story' THEN 0 ELSE 1 END")
             ->orderByDesc('is_featured')
             ->orderBy('sort_order')
-            ->limit($limit)
-            ->get();
+            ->get()
+            ->filter(function (Product $product) use ($age): bool {
+                if ($product->age_groups === null || $product->age_groups === []) {
+                    return true;
+                }
+
+                return collect($product->age_groups)
+                    ->contains(fn (string $range): bool => in_array((int) $age, StoryAgeOptions::fromRange($range), true));
+            });
 
         return $ruleProducts
             ->merge($fallbackProducts)

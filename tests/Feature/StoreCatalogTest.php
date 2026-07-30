@@ -222,6 +222,34 @@ class StoreCatalogTest extends TestCase
         $this->assertSame([], session('cart.items'));
     }
 
+    public function test_cart_item_can_be_removed_as_json_without_reloading_and_linked_addons_are_reported(): void
+    {
+        $story = $this->story('ajax-remove-story', 'قصة الحذف الفوري');
+
+        $this->withSession(['cart.items' => [
+            'story-key' => $this->storyCartItem('story-key', $story, 'رينا'),
+            'addon-key' => [
+                'key' => 'addon-key',
+                'item_type' => 'product_add_on',
+                'product_id' => 99,
+                'product_title' => 'بوستر',
+                'linked_story_key' => 'story-key',
+                'line_total_cents' => 5000,
+                'quantity' => 1,
+            ],
+        ]]);
+
+        $this->deleteJson(route('cart.destroy', 'story-key'))
+            ->assertOk()
+            ->assertJsonPath('cart_count', 0)
+            ->assertJsonPath('subtotal', 0)
+            ->assertJsonPath('cart_empty', true)
+            ->assertJsonPath('removed_keys.0', 'story-key')
+            ->assertJsonPath('removed_keys.1', 'addon-key');
+
+        $this->assertSame([], session('cart.items'));
+    }
+
     public function test_cart_recommendations_make_personalized_addon_target_child_clear(): void
     {
         $addon = $this->product('hero-gift', 65, [
@@ -243,12 +271,90 @@ class StoreCatalogTest extends TestCase
 
         $this->get(route('cart.index'))
             ->assertOk()
-            ->assertSee('كمّل هدية بطلك')
+            ->assertSee('أضف نشاطًا مع القصة')
+            ->assertSee('قد يعجب طفلك أيضًا')
             ->assertSee('بوستر البطل')
-            ->assertSee('سيتم تخصيصه لأي طفل؟')
-            ->assertSee('رينا - قصة أولى')
-            ->assertSee('سليم - قصة ثانية')
-            ->assertSee('إضافة الهدية');
+            ->assertSee('لطفل: رينا')
+            ->assertSee('لطفل: سليم')
+            ->assertSee('data-cart-upsell-form', false)
+            ->assertSee('data-upsell-submit', false)
+            ->assertSee('Accept: \'application/json\'', false)
+            ->assertSee('إضافة');
+    }
+
+    public function test_cart_recommends_multiple_small_activity_products_and_excludes_products_already_added(): void
+    {
+        $story = $this->story('recommendation-story', 'قصة الأنشطة');
+        $coloring = $this->product('coloring-book', 90, ['name_ar' => 'كتاب تلوين']);
+        $maze = $this->product('maze-book', 95, [
+            'name_ar' => 'كتاب متاهات',
+            'age_groups' => ['3-6'],
+            'is_featured' => false,
+        ]);
+        $puzzles = $this->product('puzzle-book', 100, [
+            'name_ar' => 'كتاب ألغاز',
+            'age_groups' => ['6-9'],
+            'is_featured' => false,
+        ]);
+        $requiresSeparateDetails = $this->product('separate-details', 110, [
+            'name_ar' => 'منتج يحتاج بيانات منفصلة',
+            'personalization_mode' => 'collect_child_details',
+        ]);
+
+        $this->withSession(['cart.items' => [
+            'story-key' => $this->storyCartItem('story-key', $story, 'رينا'),
+            'coloring-key' => [
+                'key' => 'coloring-key',
+                'item_type' => 'product',
+                'product_id' => $coloring->id,
+                'product_title' => $coloring->name_ar,
+                'product_slug' => $coloring->slug,
+                'line_total_cents' => 9000,
+                'quantity' => 1,
+            ],
+        ]]);
+
+        $response = $this->get(route('cart.index'))->assertOk();
+        $recommended = $response->viewData('recommendedProducts')->pluck('id');
+
+        $this->assertTrue($recommended->contains($maze->id));
+        $this->assertTrue($recommended->contains($puzzles->id));
+        $this->assertFalse($recommended->contains($coloring->id));
+        $this->assertFalse($recommended->contains($requiresSeparateDetails->id));
+
+        $response
+            ->assertSee('كتاب متاهات')
+            ->assertSee('كتاب ألغاز')
+            ->assertSee('snap-mandatory', false)
+            ->assertSee('w-[calc(50%_-_0.25rem)]', false);
+    }
+
+    public function test_cart_upsell_can_be_added_as_json_without_redirecting_or_replacing_cart_session(): void
+    {
+        $story = $this->story('ajax-story', 'قصة أجاكس');
+        $maze = $this->product('ajax-maze-book', 95, ['name_ar' => 'كتاب متاهات']);
+
+        $this->withSession(['cart.items' => [
+            'story-key' => $this->storyCartItem('story-key', $story, 'رينا'),
+        ]]);
+
+        $response = $this->postJson(route('cart.products.store', $maze), ['quantity' => 1]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('product_name', 'كتاب متاهات')
+            ->assertJsonPath('added_line_total', 95)
+            ->assertJsonPath('cart_count', 2);
+        $this->assertStringContainsString('data-cart-mobile-item', $response->json('mobile_item_html'));
+        $this->assertStringContainsString('data-cart-remove-form', $response->json('mobile_item_html'));
+        $this->assertStringContainsString('aria-label="حذف كتاب متاهات"', $response->json('mobile_item_html'));
+        $this->assertStringContainsString('كتاب متاهات', $response->json('mobile_item_html'));
+        $this->assertStringNotContainsString('>عرض<', $response->json('mobile_item_html'));
+        $this->assertStringNotContainsString('>حذف<', $response->json('mobile_item_html'));
+
+        $cart = collect(session('cart.items'));
+        $this->assertSame('رينا', $cart->get('story-key')['child_name']);
+        $this->assertSame('كتاب متاهات', $cart->firstWhere('product_id', $maze->id)['product_title']);
     }
 
     public function test_cart_shows_linked_addons_under_their_story_with_product_details(): void
