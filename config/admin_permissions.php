@@ -132,13 +132,22 @@ return [
             'description_en' => 'View order list and order details.',
             'sort_order' => 10,
         ],
+        'orders.create' => [
+            'group_key' => 'orders',
+            'name_ar' => 'إنشاء طلبات يدوية',
+            'name_en' => 'Create manual orders',
+            'description_ar' => 'إنشاء طلب عميل يدويًا من الإدارة مع المنتجات والتوصيل والخصم.',
+            'description_en' => 'Create customer orders manually with products, delivery, and discounts.',
+            'sort_order' => 20,
+            'sensitive' => true,
+        ],
         'orders.update' => [
             'group_key' => 'orders',
             'name_ar' => 'تحديث الطلبات',
             'name_en' => 'Update orders',
             'description_ar' => 'تحديث حالة الطلب والملاحظات وبيانات التشغيل.',
             'description_en' => 'Update order status, notes, and operational fields.',
-            'sort_order' => 20,
+            'sort_order' => 30,
         ],
         'orders.preview.upload' => [
             'group_key' => 'orders',

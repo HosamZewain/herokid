@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
+use App\Support\OrderSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -65,7 +66,8 @@ class SalesReportService
                 $cart = $carts->first(fn (VisitorCart $cart): bool => $orders->contains('id', $cart->related_order_id));
                 $itemsTotalCents = (int) $items->sum('total_cents');
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
-                $totalCents = $itemsTotalCents + $deliveryCents;
+                $discountCents = (int) $orders->max('discount_cents');
+                $totalCents = max(0, $itemsTotalCents + $deliveryCents - $discountCents);
                 $statuses = $orders->pluck('status')->filter()->unique()->values();
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
                 $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
@@ -87,8 +89,10 @@ class SalesReportService
                     'country' => (string) data_get($first->delivery_details, 'country', 'غير محدد'),
                     'governorate' => (string) data_get($first->delivery_details, 'governorate', 'غير محدد'),
                     'city' => (string) data_get($first->delivery_details, 'city', ''),
-                    'source' => $this->sourceLabel($cart),
-                    'source_key' => $cart && filled($cart->utm_source) ? (string) $cart->utm_source : 'direct',
+                    'source' => $this->sourceLabel($cart, $first),
+                    'source_key' => $cart && filled($cart->utm_source)
+                        ? (string) $cart->utm_source
+                        : (($first->order_source ?: 'website') === 'website' ? 'direct' : $first->order_source),
                     'campaign' => $cart?->utm_campaign,
                     'items' => $items->all(),
                     'items_summary' => $items->groupBy(fn (array $item): string => $item['type'].'|'.$item['title'])
@@ -97,6 +101,7 @@ class SalesReportService
                     'items_quantity' => (int) $items->sum('quantity'),
                     'items_total_cents' => $itemsTotalCents,
                     'delivery_cents' => $deliveryCents,
+                    'discount_cents' => $discountCents,
                     'total_cents' => $totalCents,
                     'orders' => $orders->map(function (Order $order) use ($items): array {
                         return [
@@ -256,13 +261,15 @@ class SalesReportService
     {
         $itemsCents = (int) $rows->sum('items_total_cents');
         $deliveryCents = (int) $rows->sum('delivery_cents');
-        $totalCents = $itemsCents + $deliveryCents;
+        $discountCents = (int) $rows->sum('discount_cents');
+        $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
         $checkouts = $rows->count();
 
         return [
             'total' => round($totalCents / 100, 2),
             'items_sales' => round($itemsCents / 100, 2),
             'delivery' => round($deliveryCents / 100, 2),
+            'discounts' => round($discountCents / 100, 2),
             'checkouts' => $checkouts,
             'order_records' => (int) $rows->sum('order_records'),
             'items_quantity' => (int) $rows->sum('items_quantity'),
@@ -286,6 +293,7 @@ class SalesReportService
                 'total' => 0.0,
                 'items_sales' => 0.0,
                 'delivery' => 0.0,
+                'discounts' => 0.0,
                 'checkouts' => 0,
                 'items_quantity' => 0,
             ];
@@ -305,12 +313,14 @@ class SalesReportService
                 'total' => 0.0,
                 'items_sales' => 0.0,
                 'delivery' => 0.0,
+                'discounts' => 0.0,
                 'checkouts' => 0,
                 'items_quantity' => 0,
             ];
             $periods[$key]['total'] += $row['total_cents'] / 100;
             $periods[$key]['items_sales'] += $row['items_total_cents'] / 100;
             $periods[$key]['delivery'] += $row['delivery_cents'] / 100;
+            $periods[$key]['discounts'] += $row['discount_cents'] / 100;
             $periods[$key]['checkouts']++;
             $periods[$key]['items_quantity'] += $row['items_quantity'];
         }
@@ -413,11 +423,22 @@ class SalesReportService
 
     private function options(): array
     {
+        $sources = collect(['direct' => OrderSource::label('website')])
+            ->merge(collect(OrderSource::manualOptions()))
+            ->merge(VisitorCart::query()
+                ->whereNotNull('utm_source')
+                ->where('utm_source', '!=', '')
+                ->distinct()
+                ->orderBy('utm_source')
+                ->pluck('utm_source')
+                ->mapWithKeys(fn (string $source): array => [$source => $source]))
+            ->sortKeys();
+
         return [
             'stories' => Story::orderBy('title')->get(['id', 'title']),
             'products' => Product::orderBy('name_ar')->get(['id', 'name_ar']),
             'countries' => DeliveryCountry::with(['governorates' => fn ($query) => $query->orderBy('name')])->orderBy('name')->get(),
-            'sources' => VisitorCart::query()->whereNotNull('utm_source')->where('utm_source', '!=', '')->distinct()->orderBy('utm_source')->pluck('utm_source')->values(),
+            'sources' => $sources,
         ];
     }
 
@@ -428,10 +449,10 @@ class SalesReportService
         return $group !== '' ? $group : 'ORDER-'.$order->id;
     }
 
-    private function sourceLabel(?VisitorCart $cart): string
+    private function sourceLabel(?VisitorCart $cart, Order $order): string
     {
         if (! $cart || blank($cart->utm_source)) {
-            return 'مباشر / غير معروف';
+            return OrderSource::label($order->order_source);
         }
 
         return trim((string) $cart->utm_source.(filled($cart->utm_medium) ? ' / '.$cart->utm_medium : ''));

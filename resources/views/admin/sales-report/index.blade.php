@@ -129,9 +129,8 @@
                                 <label class="mb-2 block text-xs font-black text-gray-600">المصدر التسويقي</label>
                                 <select name="source" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل المصادر</option>
-                                    <option value="direct" @selected($filters->source === 'direct')>مباشر / غير معروف</option>
-                                    @foreach($options['sources'] as $source)
-                                        <option value="{{ $source }}" @selected($filters->source === $source)>{{ $source }}</option>
+                                    @foreach($options['sources'] as $source => $label)
+                                        <option value="{{ $source }}" @selected($filters->source === $source)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -226,6 +225,11 @@
                     <p class="text-sm font-black text-amber-700">رسوم التوصيل</p>
                     <p class="mt-3 text-3xl font-black text-amber-950">{{ format_money($summary['delivery']) }}</p>
                     <p class="mt-3 text-xs font-bold text-amber-700/70">مرة واحدة لكل مجموعة شراء</p>
+                </div>
+                <div class="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-right">
+                    <p class="text-sm font-black text-rose-700">إجمالي الخصومات</p>
+                    <p class="mt-3 text-3xl font-black text-rose-950">{{ format_money($summary['discounts']) }}</p>
+                    <p class="mt-3 text-xs font-bold text-rose-700/70">مخصومة من إجمالي قيمة الطلبات</p>
                 </div>
                 <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 text-right">
                     <p class="text-sm font-black text-emerald-700">مجموعات الشراء</p>
@@ -380,6 +384,7 @@
                                         <p class="text-lg font-black text-gray-950">{{ format_money($row['total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-xs text-gray-500">عناصر: {{ format_money($row['items_total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-xs text-gray-400">توصيل: {{ format_money($row['delivery_cents'] / 100) }}</p>
+                                        @if($row['discount_cents'] > 0)<p class="mt-1 text-xs font-bold text-rose-600">خصم: - {{ format_money($row['discount_cents'] / 100) }}</p>@endif
                                     </td>
                                 </tr>
                             @empty

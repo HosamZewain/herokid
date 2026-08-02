@@ -10,6 +10,7 @@
     </x-slot>
 
     @php
+        $sourceLabel = \App\Support\OrderSource::label($group['order_source']);
         $statusLabels = [
             'new' => 'طلب جديد', 'under_review' => 'قيد المراجعة', 'generating' => 'جاري التوليد',
             'preview_uploaded' => 'انتظار الموافقة', 'approved_for_print' => 'موافق للطباعة',
@@ -69,6 +70,9 @@
                         <div><p class="text-xs font-bold text-gray-400">الدولة / المحافظة</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
                         <div><p class="text-xs font-bold text-gray-400">المدينة / الشارع</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
                         <div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل العنوان</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
+                        <div><p class="text-xs font-bold text-gray-400">مصدر الطلب</p><p class="mt-1 font-black text-gray-900">{{ $sourceLabel }}</p></div>
+                        <div><p class="text-xs font-bold text-gray-400">أُنشئ بواسطة</p><p class="mt-1 font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
+                        @if($group['source_notes'])<div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-1 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
                     </div>
                 </div>
                 <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-6">
@@ -76,6 +80,10 @@
                     <div class="mt-5 space-y-3 text-sm font-bold text-indigo-900">
                         <div class="flex justify-between gap-3"><span>العناصر</span><span>{{ format_money($group['items_cents'] / 100) }}</span></div>
                         <div class="flex justify-between gap-3"><span>التوصيل</span><span>{{ format_money($group['delivery_cents'] / 100) }}</span></div>
+                        @if($group['discount_cents'] > 0)
+                            <div class="flex justify-between gap-3 text-rose-700"><span>الخصم</span><span>- {{ format_money($group['discount_cents'] / 100) }}</span></div>
+                            @if($group['discount_reason'])<p class="rounded-xl bg-white/70 px-3 py-2 text-xs text-rose-700">{{ $group['discount_reason'] }}</p>@endif
+                        @endif
                         <div class="flex justify-between gap-3 border-t border-indigo-200 pt-3 text-lg font-black"><span>الإجمالي</span><span>{{ format_money($group['total_cents'] / 100) }}</span></div>
                     </div>
                 </div>

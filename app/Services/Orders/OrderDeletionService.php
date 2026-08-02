@@ -289,6 +289,7 @@ class OrderDeletionService
         $orders->each(fn (Order $order) => $order->loadMissing('items'));
         $itemsTotalCents = (int) $orders->flatMap->items->sum('total_price_cents');
         $deliveryCents = (int) round($orders->max(fn (Order $order): float => (float) data_get($order->delivery_details, 'delivery_fee', 0)) * 100);
+        $discountCents = (int) $orders->max('discount_cents');
 
         return [
             'checkout_group_key' => $orders->first()?->checkoutGroupKey(),
@@ -304,7 +305,8 @@ class OrderDeletionService
             ])->values()->all(),
             'items_total_cents' => $itemsTotalCents,
             'delivery_cents' => $deliveryCents,
-            'checkout_total_cents' => $itemsTotalCents + $deliveryCents,
+            'discount_cents' => $discountCents,
+            'checkout_total_cents' => max(0, $itemsTotalCents + $deliveryCents - $discountCents),
         ] + $extra;
     }
 

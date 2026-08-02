@@ -133,8 +133,11 @@ class LocalCartAnalyticsRepository
         $deliveryTotal = $orders
             ->groupBy(fn (Order $order): string => (string) data_get($order->delivery_details, 'checkout_group', 'order-'.$order->id))
             ->sum(fn (Collection $group): float => (float) data_get($group->first()->delivery_details, 'delivery_fee', 0));
+        $discountTotal = $orders
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
+            ->sum(fn (Collection $group): float => ((int) $group->max('discount_cents')) / 100);
 
-        return round($itemsTotal + $deliveryTotal, 2);
+        return round(max(0, $itemsTotal + $deliveryTotal - $discountTotal), 2);
     }
 
     private function cartsStartedBetween(Carbon $start, Carbon $end): int

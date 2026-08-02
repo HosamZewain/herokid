@@ -14,6 +14,7 @@ class Order extends Model
     protected $casts = [
         'delivery_details' => 'array',
         'uploaded_photos' => 'array',
+        'discount_cents' => 'integer',
         'deleted_at' => 'datetime',
     ];
 
@@ -33,6 +34,11 @@ class Order extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function createdByAdmin()
+    {
+        return $this->belongsTo(User::class, 'created_by_admin_id');
     }
 
     public function story()

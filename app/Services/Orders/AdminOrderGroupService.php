@@ -19,6 +19,7 @@ class AdminOrderGroupService
 
     private const INDEX_RELATIONS = [
         'user:id,name,role',
+        'createdByAdmin:id,name',
         'story:id,title,price',
         'items.product:id,name_ar,inventory_mode,stock_quantity',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
@@ -164,6 +165,7 @@ class AdminOrderGroupService
         $addOns = $items->where('item_type', 'product_add_on')->values();
         $statuses = $visibleOrders->pluck('status')->filter()->unique()->values();
         $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
+        $discountCents = (int) $visibleOrders->max('discount_cents');
         $itemsCents = (int) $items->sum('total_price_cents');
 
         if ($itemsCents === 0) {
@@ -192,6 +194,9 @@ class AdminOrderGroupService
             'customer_key' => $customerKey,
             'phone' => $phone,
             'delivery' => $first->delivery_details ?? [],
+            'order_source' => $first->order_source ?: 'website',
+            'source_notes' => $first->source_notes,
+            'created_by_admin' => $first->createdByAdmin,
             'story_count' => $displayStoryOrders->count(),
             'product_quantity' => (int) $directProducts->sum('quantity'),
             'add_on_quantity' => (int) $addOns->sum('quantity'),
@@ -204,7 +209,9 @@ class AdminOrderGroupService
             'status_label' => $statuses->count() === 1 ? (string) __('order_status.'.$statuses->first()) : 'حالات متعددة',
             'items_cents' => $itemsCents,
             'delivery_cents' => $deliveryCents,
-            'total_cents' => $itemsCents + $deliveryCents,
+            'discount_cents' => $discountCents,
+            'discount_reason' => $visibleOrders->pluck('discount_reason')->filter()->first(),
+            'total_cents' => max(0, $itemsCents + $deliveryCents - $discountCents),
             'trashed' => $activeOrders->isEmpty(),
         ];
     }

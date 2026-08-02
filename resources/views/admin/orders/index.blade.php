@@ -13,6 +13,12 @@
         </div>
     </x-slot>
 
+    @can('orders.create')
+        <x-slot name="headerActions">
+            <a href="{{ route('admin.orders.create') }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700">+ إضافة طلب</a>
+        </x-slot>
+    @endcan
+
     @php
         $statusLabels = [
             '' => 'كل الحالات',
@@ -107,6 +113,9 @@
                                 <div class="min-w-0 text-right">
                                     <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="block truncate font-mono text-sm font-black text-gray-950" dir="ltr">{{ $group['key'] }}</a>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
+                                    @if($group['order_source'] !== 'website')
+                                        <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
+                                    @endif
                                 </div>
                                 <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
                             </div>
@@ -170,6 +179,9 @@
                                         <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr">{{ $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
+                                        @if($group['order_source'] !== 'website')
+                                            <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-4">
                                         @can('customers.view')
@@ -201,6 +213,7 @@
                                     <td class="px-4 py-4 whitespace-nowrap">
                                         <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_money($group['delivery_cents'] / 100) }}</p>
+                                        @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">{{ optional($group['latest_at'])->format('d/m/Y') }}</td>
                                     <td class="px-4 py-4">

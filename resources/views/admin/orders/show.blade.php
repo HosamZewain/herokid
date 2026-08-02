@@ -361,6 +361,10 @@
                                 <div><span class="font-bold text-gray-600">سعر القصة:</span> {{ number_format((float) ($order->delivery_details['item_price'] ?? ($order->story->price ?? 0)), 0) }} ج.م</div>
                                 <div><span class="font-bold text-gray-600">إجمالي القصص:</span> {{ number_format((float) ($order->delivery_details['subtotal'] ?? 0), 0) }} ج.م</div>
                                 <div><span class="font-bold text-gray-600">مصاريف التوصيل:</span> {{ number_format((float) ($order->delivery_details['delivery_fee'] ?? 0), 0) }} ج.م</div>
+                                @if((int) $order->discount_cents > 0)
+                                    <div class="text-red-700"><span class="font-bold">الخصم:</span> - {{ format_money($order->discount_cents / 100) }} — {{ $order->discount_reason }}</div>
+                                @endif
+                                <div><span class="font-bold text-gray-600">مصدر الطلب:</span> {{ \App\Support\OrderSource::label($order->order_source) }}</div>
                                 <div><span class="font-bold text-gray-600">إجمالي السلة:</span> {{ number_format((float) ($order->delivery_details['total'] ?? 0), 0) }} ج.م</div>
                             </div>
                         @endif

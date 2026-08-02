@@ -3,18 +3,26 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\OrderPreview;
+use App\Models\Product;
+use App\Models\Story;
+use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderDetailsUpdateService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderSource;
+use App\Support\Phone;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
@@ -24,6 +32,102 @@ class OrderController extends Controller
         $result = $groups->paginate($request);
 
         return view('admin.orders.index', $result);
+    }
+
+    public function create(StoryPricingService $storyPricing)
+    {
+        $stories = Story::query()->where('active', true)->orderBy('title')->get();
+
+        return view('admin.orders.create', [
+            'stories' => $stories,
+            'storyPrices' => $stories->mapWithKeys(fn (Story $story): array => [
+                $story->id => $storyPricing->snapshot($story),
+            ]),
+            'products' => Product::query()
+                ->with(['activeVariants'])
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name_ar')
+                ->get(),
+            'countries' => DeliveryCountry::query()
+                ->with('activeGovernorates')
+                ->where('active', true)
+                ->orderBy('name')
+                ->get(),
+            'sourceOptions' => OrderSource::manualOptions(),
+        ]);
+    }
+
+    public function store(Request $request, AdminOrderCreationService $creator)
+    {
+        $request->merge(['phone' => Phone::normalize($request->input('phone'))]);
+
+        $validated = $request->validate([
+            'parent_name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:20'],
+            'order_source' => ['required', Rule::in(array_keys(OrderSource::manualOptions()))],
+            'source_notes' => ['nullable', 'string', 'max:500'],
+            'delivery_country_id' => [
+                'required',
+                Rule::exists('delivery_countries', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
+            'delivery_governorate_id' => [
+                'required',
+                Rule::exists('delivery_governorates', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
+            'city' => ['required', 'string', 'max:255'],
+            'street' => ['required', 'string', 'max:255'],
+            'address_details' => ['required', 'string', 'max:1000'],
+            'stories' => ['required', 'array', 'min:1', 'max:10'],
+            'stories.*.story_id' => [
+                'required',
+                Rule::exists('stories', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
+            'stories.*.child_name' => ['required', 'string', 'max:100'],
+            'stories.*.child_age' => ['required', 'integer', 'min:3', 'max:12'],
+            'stories.*.child_gender' => ['required', Rule::in(['boy', 'girl'])],
+            'stories.*.interests' => ['nullable', 'string', 'max:1000'],
+            'stories.*.gift_note' => ['nullable', 'string', 'max:1000'],
+            'stories.*.parent_notes' => ['nullable', 'string', 'max:2000'],
+            'stories.*.photos' => ['required', 'array', 'min:2', 'max:3'],
+            'stories.*.photos.*' => ['required', 'file', 'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024)],
+            'products' => ['nullable', 'array'],
+            'products.*.quantity' => ['nullable', 'integer', 'min:0', 'max:99'],
+            'products.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
+            'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:9'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+            'discount_reason' => ['nullable', 'string', 'max:500'],
+            'admin_notes' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'parent_name.required' => 'اكتب اسم ولي الأمر.',
+            'phone.required' => 'اكتب رقم الهاتف أو واتساب.',
+            'order_source.required' => 'اختر مصدر الطلب.',
+            'delivery_country_id.required' => 'اختر الدولة.',
+            'delivery_governorate_id.required' => 'اختر المحافظة.',
+            'city.required' => 'اكتب المدينة أو المنطقة.',
+            'street.required' => 'اكتب اسم الشارع.',
+            'address_details.required' => 'اكتب تفاصيل عنوان التوصيل.',
+            'stories.required' => 'أضف قصة واحدة على الأقل.',
+            'stories.*.story_id.required' => 'اختر القصة.',
+            'stories.*.child_name.required' => 'اكتب اسم الطفل لكل قصة.',
+            'stories.*.child_age.required' => 'اختر عمر الطفل لكل قصة.',
+            'stories.*.child_gender.required' => 'اختر جنس الطفل لكل قصة.',
+            'stories.*.photos.required' => 'ارفع صورتين أو 3 صور للطفل لكل قصة.',
+            'stories.*.photos.min' => 'يجب رفع صورتين على الأقل للطفل لكل قصة.',
+            'stories.*.photos.max' => 'الحد الأقصى 3 صور للطفل لكل قصة.',
+        ]);
+
+        if ((float) ($validated['discount_amount'] ?? 0) > 0 && blank($validated['discount_reason'] ?? null)) {
+            throw ValidationException::withMessages([
+                'discount_reason' => 'اكتب سبب الخصم لحفظه مع الطلب.',
+            ]);
+        }
+
+        $result = $creator->create($validated, $request->user(), $request);
+
+        return redirect()
+            ->route('admin.orders.groups.show', $result['representative']->id)
+            ->with('success', 'تم إنشاء الطلب بنجاح وإضافته إلى الطلبات الجديدة.');
     }
 
     public function show(Order $order, AdminOrderGroupService $groups, OrderSceneTextService $sceneTexts)
@@ -314,10 +418,6 @@ class OrderController extends Controller
         abort(404);
     }
 
-    // Stubs for resource controller compliance
-    public function create() {}
-
-    public function store(Request $request) {}
-
+    // Stub for resource controller compliance
     public function edit(string $id) {}
 }

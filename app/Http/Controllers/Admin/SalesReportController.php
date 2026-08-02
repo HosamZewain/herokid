@@ -58,7 +58,7 @@ class SalesReportController extends Controller
             fwrite($output, "\xEF\xBB\xBF");
             fputcsv($output, [
                 'التاريخ', 'مجموعة الشراء', 'أرقام الطلبات', 'العميل', 'الهاتف', 'نوع العميل',
-                'العناصر', 'عدد القطع', 'قيمة العناصر', 'التوصيل', 'الإجمالي', 'الحالة',
+                'العناصر', 'عدد القطع', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي', 'الحالة',
                 'الدولة', 'المحافظة', 'المدينة', 'المصدر', 'الحملة',
             ]);
 
@@ -74,6 +74,7 @@ class SalesReportController extends Controller
                     $row['items_quantity'],
                     number_format($row['items_total_cents'] / 100, 2, '.', ''),
                     number_format($row['delivery_cents'] / 100, 2, '.', ''),
+                    number_format($row['discount_cents'] / 100, 2, '.', ''),
                     number_format($row['total_cents'] / 100, 2, '.', ''),
                     $row['status_label'],
                     $row['country'],
