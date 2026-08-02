@@ -118,6 +118,9 @@ class AdminManualOrderCreationTest extends TestCase
             ],
             'discount_amount' => 100,
             'discount_reason' => 'خصم طلب متعدد',
+            'payment_status' => 'partially_paid',
+            'paid_amount' => 300,
+            'payment_method' => 'انستاباي',
             'admin_notes' => 'يرجى التأكد من مقاس الملصق.',
         ]);
 
@@ -130,6 +133,9 @@ class AdminManualOrderCreationTest extends TestCase
         $this->assertSame([$this->admin->id], $orders->pluck('created_by_admin_id')->unique()->values()->all());
         $this->assertSame([2, 2], $orders->map(fn (Order $order): int => count($order->uploaded_photos ?? []))->all());
         $this->assertSame([10_000, 10_000], $orders->pluck('discount_cents')->all());
+        $this->assertSame(['partially_paid'], $orders->pluck('payment_status')->unique()->values()->all());
+        $this->assertSame([30_000], $orders->pluck('paid_amount_cents')->unique()->values()->all());
+        $this->assertSame(['انستاباي'], $orders->pluck('payment_method')->unique()->values()->all());
 
         $first = $orders->first();
         $second = $orders->last();
@@ -159,6 +165,8 @@ class AdminManualOrderCreationTest extends TestCase
         $this->assertSame(10_000, $group['discount_cents']);
         $this->assertSame(85_000, $group['total_cents']);
         $this->assertSame('whatsapp', $group['order_source']);
+        $this->assertSame(30_000, $group['paid_amount_cents']);
+        $this->assertSame(55_000, $group['remaining_amount_cents']);
 
         $this->assertDatabaseHas('admin_activity_logs', [
             'user_id' => $this->admin->id,

@@ -15,6 +15,8 @@ class Order extends Model
         'delivery_details' => 'array',
         'uploaded_photos' => 'array',
         'discount_cents' => 'integer',
+        'paid_amount_cents' => 'integer',
+        'payment_updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
@@ -39,6 +41,11 @@ class Order extends Model
     public function createdByAdmin()
     {
         return $this->belongsTo(User::class, 'created_by_admin_id');
+    }
+
+    public function paymentUpdatedBy()
+    {
+        return $this->belongsTo(User::class, 'payment_updated_by_user_id');
     }
 
     public function story()

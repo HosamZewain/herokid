@@ -17,6 +17,7 @@ use App\Services\Orders\OrderStatusService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\Phone;
 use App\Support\StoryProductionPrompt;
@@ -55,12 +56,17 @@ class OrderController extends Controller
                 ->orderBy('name')
                 ->get(),
             'sourceOptions' => OrderSource::manualOptions(),
+            'paymentStatuses' => OrderPaymentStatus::labels(),
+            'paymentMethods' => OrderPaymentStatus::paymentMethods(),
         ]);
     }
 
     public function store(Request $request, AdminOrderCreationService $creator)
     {
-        $request->merge(['phone' => Phone::normalize($request->input('phone'))]);
+        $request->merge([
+            'phone' => Phone::normalize($request->input('phone')),
+            'payment_status' => $request->input('payment_status', OrderPaymentStatus::UNPAID),
+        ]);
 
         $validated = $request->validate([
             'parent_name' => ['required', 'string', 'max:255'],
@@ -98,6 +104,9 @@ class OrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+            'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
         ], [
             'parent_name.required' => 'اكتب اسم ولي الأمر.',
             'phone.required' => 'اكتب رقم الهاتف أو واتساب.',

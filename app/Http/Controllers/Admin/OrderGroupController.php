@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
+use App\Support\OrderPaymentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +20,8 @@ class OrderGroupController extends Controller
         return view('admin.orders.group-show', [
             'group' => $groups->findByRepresentative($representative),
             'statuses' => OrderStatusService::STATUSES,
+            'paymentStatuses' => OrderPaymentStatus::labels(),
+            'paymentMethods' => OrderPaymentStatus::paymentMethods(),
         ]);
     }
 
@@ -33,6 +37,26 @@ class OrderGroupController extends Controller
         $statuses->updateGroup($storyOrders->isNotEmpty() ? $storyOrders : $groupOrders, $validated['status'], $validated['admin_notes'] ?? null, $request);
 
         return back()->with('success', 'تم تحديث حالة جميع قصص عملية الشراء بنجاح.');
+    }
+
+    public function updatePayment(Request $request, int $representative, OrderPaymentService $payments)
+    {
+        $validated = $request->validate([
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+            'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
+        ]);
+        $order = Order::query()->findOrFail($representative);
+        $payments->updateGroup(
+            $order,
+            $validated['payment_status'],
+            $validated['paid_amount'] ?? null,
+            $validated['payment_method'] ?? null,
+            $request->user(),
+            $request,
+        );
+
+        return back()->with('success', 'تم تحديث حالة الدفع وحساب المبلغ المتبقي بنجاح.');
     }
 
     public function destroy(Request $request, int $representative, OrderDeletionService $deletions)

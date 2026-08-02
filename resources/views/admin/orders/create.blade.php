@@ -177,7 +177,7 @@
 
                     <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                         <div class="mb-5 text-right">
-                            <h3 class="text-lg font-black text-gray-950">الخصم والملاحظات</h3>
+                            <h3 class="text-lg font-black text-gray-950">الخصم والدفع والملاحظات</h3>
                         </div>
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
@@ -187,6 +187,25 @@
                             <div>
                                 <label for="discount-reason" class="mb-1.5 block text-xs font-black text-gray-700">سبب الخصم</label>
                                 <input id="discount-reason" name="discount_reason" value="{{ old('discount_reason') }}" placeholder="مطلوب عند إضافة خصم" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            </div>
+                            <div>
+                                <label for="payment-status" class="mb-1.5 block text-xs font-black text-gray-700">حالة الدفع *</label>
+                                <select id="payment-status" name="payment_status" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-status>
+                                    @foreach($paymentStatuses as $value => $label)
+                                        <option value="{{ $value }}" @selected(old('payment_status', 'unpaid') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div data-partial-payment-field>
+                                <label for="paid-amount" class="mb-1.5 block text-xs font-black text-gray-700">المبلغ المدفوع بالجنيه *</label>
+                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ old('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount>
+                            </div>
+                            <div data-payment-method-field>
+                                <label for="payment-method" class="mb-1.5 block text-xs font-black text-gray-700">طريقة الدفع *</label>
+                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method>
+                                    <option value="">اختر الطريقة</option>
+                                    @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected(old('payment_method') === $method)>{{ $method }}</option>@endforeach
+                                </select>
                             </div>
                             <div class="md:col-span-2">
                                 <label for="admin-notes" class="mb-1.5 block text-xs font-black text-gray-700">ملاحظات إدارية داخلية <span class="font-normal text-gray-400">اختياري</span></label>
@@ -205,6 +224,8 @@
                             <div class="flex justify-between gap-3 text-indigo-100"><span>التوصيل</span><span data-delivery-total>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 text-rose-200"><span>الخصم</span><span data-discount-total>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 border-t border-indigo-700 pt-4 text-xl font-black"><span>الإجمالي</span><span data-grand-total>٠ ج.م</span></div>
+                            <div class="flex justify-between gap-3 border-t border-indigo-800 pt-3 text-emerald-200"><span>المدفوع</span><span data-paid-total>٠ ج.م</span></div>
+                            <div class="flex justify-between gap-3 text-rose-200"><span>المتبقي عند الاستلام</span><span data-remaining-total>٠ ج.م</span></div>
                         </div>
                         <p class="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold leading-6 text-indigo-100">السعر النهائي يُعاد حسابه والتحقق منه في الخادم عند الحفظ.</p>
                         <button class="mt-5 w-full rounded-xl bg-white px-5 py-3.5 text-sm font-black text-indigo-800 transition hover:bg-indigo-50">حفظ وإنشاء الطلب</button>
@@ -269,6 +290,21 @@
                     root.querySelector('[data-delivery-total]').textContent = money(deliveryCents);
                     root.querySelector('[data-discount-total]').textContent = money(discountCents);
                     root.querySelector('[data-grand-total]').textContent = money(totalCents);
+                    const paymentStatus = root.querySelector('[data-payment-status]')?.value || 'unpaid';
+                    const paidInput = root.querySelector('[data-paid-amount]');
+                    const methodInput = root.querySelector('[data-payment-method]');
+                    const partialField = root.querySelector('[data-partial-payment-field]');
+                    const methodField = root.querySelector('[data-payment-method-field]');
+                    let paidCents = 0;
+                    if (paymentStatus === 'partially_paid') paidCents = Math.round(Math.max(0, Number(paidInput?.value || 0)) * 100);
+                    if (paymentStatus === 'paid_without_shipping') paidCents = Math.max(0, totalCents - deliveryCents);
+                    if (paymentStatus === 'paid_in_full') paidCents = totalCents;
+                    partialField.hidden = paymentStatus !== 'partially_paid';
+                    methodField.hidden = paymentStatus === 'unpaid';
+                    paidInput.required = paymentStatus === 'partially_paid';
+                    methodInput.required = paymentStatus !== 'unpaid';
+                    root.querySelector('[data-paid-total]').textContent = money(paidCents);
+                    root.querySelector('[data-remaining-total]').textContent = money(totalCents - paidCents);
                 };
 
                 const bindRow = row => {
@@ -319,8 +355,9 @@
                     calculate();
                 });
                 governorate?.addEventListener('change', calculate);
-                root.querySelectorAll('[data-product-quantity], [data-product-variant], [data-discount-input]').forEach(input => input.addEventListener('input', calculate));
+                root.querySelectorAll('[data-product-quantity], [data-product-variant], [data-discount-input], [data-paid-amount]').forEach(input => input.addEventListener('input', calculate));
                 root.querySelectorAll('[data-product-variant]').forEach(input => input.addEventListener('change', calculate));
+                root.querySelector('[data-payment-status]')?.addEventListener('change', calculate);
 
                 country?.dispatchEvent(new Event('change'));
                 refreshStoryLinks();

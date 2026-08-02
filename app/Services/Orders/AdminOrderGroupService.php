@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Support\OrderPaymentStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class AdminOrderGroupService
     private const INDEX_RELATIONS = [
         'user:id,name,role',
         'createdByAdmin:id,name',
+        'paymentUpdatedBy:id,name',
         'story:id,title,price',
         'items.product:id,name_ar,inventory_mode,stock_quantity',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
@@ -176,6 +178,11 @@ class AdminOrderGroupService
         $customerKey = $first->user && $first->user->role !== 'admin'
             ? 'user-'.$first->user->id
             : 'guest-'.sha1($phone ?: 'order-'.$first->id);
+        $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
+        $paymentStatus = in_array($first->payment_status, OrderPaymentStatus::STATUSES, true)
+            ? $first->payment_status
+            : OrderPaymentStatus::UNPAID;
+        $paidAmountCents = min($totalCents, max(0, (int) $first->paid_amount_cents));
 
         return [
             'key' => $first->checkoutGroupKey(),
@@ -211,7 +218,14 @@ class AdminOrderGroupService
             'delivery_cents' => $deliveryCents,
             'discount_cents' => $discountCents,
             'discount_reason' => $visibleOrders->pluck('discount_reason')->filter()->first(),
-            'total_cents' => max(0, $itemsCents + $deliveryCents - $discountCents),
+            'total_cents' => $totalCents,
+            'payment_status' => $paymentStatus,
+            'payment_status_label' => OrderPaymentStatus::label($paymentStatus),
+            'paid_amount_cents' => $paidAmountCents,
+            'remaining_amount_cents' => max(0, $totalCents - $paidAmountCents),
+            'payment_method' => $first->payment_method,
+            'payment_updated_at' => $first->payment_updated_at,
+            'payment_updated_by' => $first->paymentUpdatedBy,
             'trashed' => $activeOrders->isEmpty(),
         ];
     }
@@ -223,6 +237,14 @@ class AdminOrderGroupService
 
         if ($status !== '' && $status !== 'mixed') {
             $query->where('status', $status);
+        }
+
+        if ($request->filled('payment_status')) {
+            $paymentStatus = (string) $request->query('payment_status');
+
+            if (in_array($paymentStatus, OrderPaymentStatus::STATUSES, true)) {
+                $query->where('payment_status', $paymentStatus);
+            }
         }
 
         if ($request->filled('from')) {

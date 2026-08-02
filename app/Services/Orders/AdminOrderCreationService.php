@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderPaymentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class AdminOrderCreationService
         private readonly StoryPricingService $storyPricing,
         private readonly OrderSceneTextService $sceneTexts,
         private readonly OrderPhotoUploadService $photoUploads,
+        private readonly OrderPaymentService $payments,
     ) {}
 
     /** @return array{representative: Order, orders: array<int, Order>} */
@@ -86,6 +88,14 @@ class AdminOrderCreationService
                     ]);
                 }
 
+                $payment = $this->payments->resolve(
+                    (string) ($data['payment_status'] ?? OrderPaymentStatus::UNPAID),
+                    $data['paid_amount'] ?? null,
+                    $data['payment_method'] ?? null,
+                    $grossCents - $discountCents,
+                    $deliveryCents,
+                );
+
                 $checkoutGroup = 'CHK-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
                 $lineCount = $storyInputs->count() + $productLines->count();
                 $orders = [];
@@ -118,6 +128,10 @@ class AdminOrderCreationService
                         'delivery_fee' => $deliveryCents / 100,
                         'discount' => $discountCents / 100,
                         'total' => ($grossCents - $discountCents) / 100,
+                        'payment_status' => $payment['payment_status'],
+                        'payment_method' => $payment['payment_method'],
+                        'paid_amount' => $payment['paid_amount_cents'] / 100,
+                        'remaining_amount' => $payment['remaining_amount_cents'] / 100,
                         'order_source' => $data['order_source'],
                         'source_notes' => $data['source_notes'] ?? null,
                         'created_manually' => true,
@@ -128,6 +142,11 @@ class AdminOrderCreationService
                         'checkout_group_key' => $checkoutGroup,
                         'discount_cents' => $discountCents,
                         'discount_reason' => $discountCents > 0 ? $data['discount_reason'] : null,
+                        'payment_status' => $payment['payment_status'],
+                        'paid_amount_cents' => $payment['paid_amount_cents'],
+                        'payment_method' => $payment['payment_method'],
+                        'payment_updated_by_user_id' => $payment['payment_status'] !== OrderPaymentStatus::UNPAID ? $admin->id : null,
+                        'payment_updated_at' => $payment['payment_status'] !== OrderPaymentStatus::UNPAID ? now() : null,
                         'user_id' => null,
                         'created_by_admin_id' => $admin->id,
                         'order_source' => $data['order_source'],
@@ -240,6 +259,7 @@ class AdminOrderCreationService
                     'delivery_cents' => $deliveryCents,
                     'discount_cents' => $discountCents,
                     'total_cents' => $grossCents - $discountCents,
+                    'payment' => $payment,
                 ];
             });
         } catch (\Throwable $exception) {
@@ -264,6 +284,7 @@ class AdminOrderCreationService
                 'delivery_cents' => $result['delivery_cents'],
                 'discount_cents' => $result['discount_cents'],
                 'total_cents' => $result['total_cents'],
+                'payment' => $result['payment'],
             ],
             admin: $admin,
             request: $request,

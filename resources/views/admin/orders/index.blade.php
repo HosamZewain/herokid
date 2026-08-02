@@ -45,6 +45,8 @@
             'delivered' => 'bg-green-100 text-green-700',
             'cancelled' => 'bg-red-100 text-red-700',
         ];
+        $paymentStatusLabels = ['' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels();
+        $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
     @endphp
 
     <div class="py-8">
@@ -75,7 +77,7 @@
                     @endcan
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
                     @if($trash)<input type="hidden" name="view" value="trash">@endif
                     <div class="xl:col-span-2">
                         <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
@@ -87,6 +89,14 @@
                         <select name="status" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             @foreach($statusLabels as $value => $label)
                                 <option value="{{ $value }}" @selected(request('status', '') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الدفع</label>
+                        <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            @foreach($paymentStatusLabels as $value => $label)
+                                <option value="{{ $value }}" @selected(request('payment_status', '') === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -129,6 +139,8 @@
                                     <div class="text-left">
                                         <p class="font-black text-gray-950">{{ format_money($group['total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-[10px] text-gray-400">شامل التوصيل</p>
+                                        <span class="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_money($group['remaining_amount_cents'] / 100) }}</p>@endif
                                     </div>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-1.5">
@@ -168,6 +180,7 @@
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">الدفع</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">التاريخ</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">إجراءات</th>
                             </tr>
@@ -215,6 +228,12 @@
                                         <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_money($group['delivery_cents'] / 100) }}</p>
                                         @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
                                     </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع {{ format_money($group['paid_amount_cents'] / 100) }}</p>@endif
+                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_money($group['remaining_amount_cents'] / 100) }}</p>@endif
+                                        @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">{{ optional($group['latest_at'])->format('d/m/Y') }}</td>
                                     <td class="px-4 py-4">
                                         <div class="flex min-w-32 flex-col gap-2">
@@ -245,7 +264,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</td></tr>
+                                <tr><td colspan="8" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
