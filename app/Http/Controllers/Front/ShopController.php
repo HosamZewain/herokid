@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Services\Catalog\UnifiedStorefrontService;
@@ -59,6 +60,7 @@ class ShopController extends Controller
             [
                 'currentCategory' => $category,
                 'isStoriesAlias' => false,
+                'packages' => PricingPackage::active()->purchasable()->where('show_in_store', true)->with(['items.product', 'items.variant'])->ordered()->get()->filter->availableForPurchase(),
             ],
         ));
     }

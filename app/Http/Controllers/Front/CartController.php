@@ -208,6 +208,16 @@ class CartController extends Controller
             $item = $cart[$key];
             $removedKeys[] = $key;
 
+            if (($item['item_type'] ?? 'story') === 'package') {
+                foreach ($item['package_stories'] ?? [] as $packageStory) {
+                    foreach ($packageStory['uploaded_photos'] ?? [] as $photoPath) {
+                        if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
+                            Storage::disk('local')->delete($photoPath);
+                        }
+                    }
+                }
+            }
+
             if (empty($item['child_identity_request_id'])) {
                 foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
                     if (is_string($photoPath) && ! str_contains($photoPath, '..')) {

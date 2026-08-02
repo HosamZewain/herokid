@@ -40,6 +40,8 @@ use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
+use App\Http\Controllers\Front\PackageCartController;
+use App\Http\Controllers\Front\PackageController;
 use App\Http\Controllers\Front\PageController;
 use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\PublicChildIdentityShareController;
@@ -91,7 +93,7 @@ Route::get('/', function () {
         ? Testimonial::where('active', true)->orderBy('sort_order')->get()
         : collect();
     $packages = homepage_section_enabled('pricing')
-        ? PricingPackage::active()->ordered()->get()
+        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant'])->ordered()->get()->filter->availableForPurchase()
         : collect();
     $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
         ? HomepageStoreSection::query()
@@ -111,6 +113,7 @@ Route::get('/stories/{slug}', [StoryController::class, 'show'])->name('stories.s
 
 // Public Store Routes
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
+Route::get('/shop/package/{pricingPackage:slug}', [PackageController::class, 'show'])->name('shop.package.show');
 Route::get('/shop/product/{product:slug}', [ShopController::class, 'show'])->name('shop.product.show');
 Route::get('/shop/{category:slug}', [ShopController::class, 'category'])->name('shop.category');
 
@@ -184,6 +187,7 @@ Route::get('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 
 Route::delete('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'destroy'])->name('photo-uploads.destroy');
 Route::post('/cart/stories/{story:slug}', [CartController::class, 'store'])->name('cart.store');
 Route::post('/cart/products/{product:slug}', [ProductCartController::class, 'store'])->name('cart.products.store');
+Route::post('/cart/packages/{pricingPackage:slug}', [PackageCartController::class, 'store'])->name('cart.packages.store');
 Route::delete('/cart/{key}', [CartController::class, 'destroy'])->name('cart.destroy');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
@@ -231,6 +235,12 @@ Route::get('/sitemap.xml', function () {
     $products = $shopEnabled ? Product::publiclyVisible()
         ->select('slug', 'updated_at')
         ->get() : collect();
+    $packages = $shopEnabled ? PricingPackage::active()->purchasable()
+        ->where('show_in_store', true)
+        ->with(['items.product', 'items.variant'])
+        ->select('id', 'slug', 'active', 'story_count', 'updated_at')
+        ->get()
+        ->filter->availableForPurchase() : collect();
 
     $staticPages = [
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
@@ -257,6 +267,17 @@ Route::get('/sitemap.xml', function () {
     foreach ($stories as $story) {
         $url = Seo::url('/stories/'.$story->slug);
         $lastmod = $story->updated_at ? $story->updated_at->toDateString() : now()->toDateString();
+        $xml .= "  <url>\n";
+        $xml .= '    <loc>'.e($url)."</loc>\n";
+        $xml .= "    <lastmod>{$lastmod}</lastmod>\n";
+        $xml .= "    <changefreq>weekly</changefreq>\n";
+        $xml .= "    <priority>0.8</priority>\n";
+        $xml .= "  </url>\n";
+    }
+
+    foreach ($packages as $package) {
+        $url = Seo::url('/shop/package/'.$package->slug);
+        $lastmod = $package->updated_at ? $package->updated_at->toDateString() : now()->toDateString();
         $xml .= "  <url>\n";
         $xml .= '    <loc>'.e($url)."</loc>\n";
         $xml .= "    <lastmod>{$lastmod}</lastmod>\n";

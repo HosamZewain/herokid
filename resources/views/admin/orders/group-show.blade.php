@@ -130,6 +130,9 @@
                                     <a href="{{ route('admin.orders.show', $order) }}" class="font-mono text-xs font-black text-indigo-600 hover:underline" dir="ltr">#{{ $order->order_number }}</a>
                                 </div>
                                 <h4 class="mt-3 text-lg font-black text-gray-950">{{ $storyItem?->title ?: $order->story?->title ?: 'قصة مخصصة' }}</h4>
+                                @if(data_get($storyItem?->item_snapshot, 'package.name'))
+                                    <p class="mt-2 inline-flex rounded-full bg-fuchsia-50 px-3 py-1 text-xs font-black text-fuchsia-700">ضمن باقة: {{ data_get($storyItem->item_snapshot, 'package.name') }}</p>
+                                @endif
                                 <p class="mt-1 text-sm font-bold text-gray-600">الطفل: {{ $order->child_name ?: '—' }} · {{ $order->child_age ? $order->child_age.' سنوات' : 'العمر غير محدد' }}</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
@@ -229,6 +232,7 @@
                     <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         @foreach($group['direct_products'] as $product)
                             <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                                @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-2 text-xs font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
                                 <p class="font-black text-gray-900">{{ $product->title }}</p>
                                 @if($product->sku)<p class="mt-1 text-xs text-gray-400" dir="ltr">SKU: {{ $product->sku }}</p>@endif
                                 <p class="mt-3 text-sm font-bold text-emerald-800">{{ $product->quantity }} × {{ format_money($product->unit_price_cents / 100) }}</p>

@@ -46,8 +46,8 @@ return [
         ],
         'pricing' => [
             'setting' => 'home_section_pricing_enabled',
-            'label_ar' => 'الأسعار',
-            'description_ar' => 'باقات الأسعار المختصرة في الصفحة الرئيسية.',
+            'label_ar' => 'باقات القصص والمنتجات',
+            'description_ar' => 'باقات الشراء الموفرة المفعلة للصفحة الرئيسية.',
             'default' => true,
         ],
         'faq' => [

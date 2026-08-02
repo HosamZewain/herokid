@@ -69,14 +69,14 @@
                 ]);
                 $canCatalog = auth()->user()->hasAnyPermission([
                     'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
-                    'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view',
+                    'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view', 'settings.pricing.view',
                 ]);
                 $canContent = auth()->user()->hasAnyPermission([
                     'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
-                    'settings.pricing.view', 'settings.ai_providers.view', 'settings.notifications.view',
+                    'settings.ai_providers.view', 'settings.notifications.view',
                     'child_identities.settings',
                 ]);
                 $canAdministration = auth()->user()->hasAnyPermission([
@@ -147,6 +147,9 @@
                         @if(auth()->user()->hasAnyPermission(['store.products.view', 'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view']))
                             <a href="{{ auth()->user()->hasPermission('store.products.view') ? route('admin.products.index') : route('admin.product-categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.products.*') || request()->routeIs('admin.product-categories.*') || request()->routeIs('admin.homepage-store-sections.*') || request()->routeIs('admin.upsell-rules.*') ? $activeLink : $idleLink }}">المتجر</a>
                         @endif
+                        @can('settings.pricing.view')
+                            <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">الباقات</a>
+                        @endcan
                         @can('customers.view')
                             <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">العملاء</a>
                         @endcan
@@ -176,9 +179,6 @@
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإعدادات</p>
                         @can('settings.site.view')
                             <a href="{{ route('admin.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? $activeLink : $idleLink }}">إعدادات الموقع</a>
-                        @endcan
-                        @can('settings.pricing.view')
-                            <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">باقات الأسعار</a>
                         @endcan
                         @can('settings.delivery_zones.view')
                             <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>

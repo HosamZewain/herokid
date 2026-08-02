@@ -5,7 +5,7 @@
         : collect();
     $mobileTitle = $mobileItemType === 'story'
         ? ($item['story_title'] ?? 'قصة')
-        : ($item['product_title'] ?? 'منتج');
+        : ($mobileItemType === 'package' ? ($item['package_name'] ?? 'باقة') : ($item['product_title'] ?? 'منتج'));
     $mobilePrice = $mobileItemType === 'story'
         ? (float) ($item['story_price'] ?? 0)
         : ((int) ($item['line_total_cents'] ?? 0) / 100);
@@ -26,8 +26,8 @@
 
     <div class="min-w-0 text-right">
         <div class="flex min-w-0 items-center gap-2">
-            <span class="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black {{ $mobileItemType === 'story' ? 'bg-indigo-50 text-indigo-600' : ($mobileItemType === 'product_add_on' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700') }}">
-                {{ $mobileItemType === 'story' ? 'قصة' : ($mobileItemType === 'product_add_on' ? 'إضافة' : 'منتج') }}
+            <span class="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black {{ $mobileItemType === 'story' ? 'bg-indigo-50 text-indigo-600' : ($mobileItemType === 'package' ? 'bg-fuchsia-50 text-fuchsia-700' : ($mobileItemType === 'product_add_on' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700')) }}">
+                {{ $mobileItemType === 'story' ? 'قصة' : ($mobileItemType === 'package' ? 'باقة' : ($mobileItemType === 'product_add_on' ? 'إضافة' : 'منتج')) }}
             </span>
             <h3 class="line-clamp-1 min-w-0 text-xs font-black text-slate-950">{{ $mobileTitle }}</h3>
         </div>
@@ -36,6 +36,8 @@
                 @if($mobileItemType === 'story')
                     {{ $item['child_name'] ?? 'الطفل' }} · {{ $item['child_age_range'] ?? (($item['child_age'] ?? '-') . ' سنة') }} · {{ count($item['uploaded_photos'] ?? []) }} صورة
                     @if($mobileLinkedAddOns->isNotEmpty()) · {{ $mobileLinkedAddOns->count() }} إضافة @endif
+                @elseif($mobileItemType === 'package')
+                    {{ $item['story_count'] ?? 0 }} قصة · {{ $item['product_count'] ?? 0 }} منتج
                 @elseif($mobileItemType === 'product_add_on')
                     إضافة مرتبطة · الكمية {{ $item['quantity'] ?? 1 }}
                 @else

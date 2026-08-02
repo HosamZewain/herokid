@@ -882,10 +882,10 @@
 
         <div class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-14">
-                <span class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 font-black text-xs px-4 py-2 rounded-full border border-indigo-500/30 mb-4">💎 الأسعار</span>
-                <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">سعر واحد، قيمة لا تُقدَّر</h2>
+                <span class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 font-black text-xs px-4 py-2 rounded-full border border-indigo-500/30 mb-4">🎁 باقات HeroKid</span>
+                <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">قصص وأنشطة أكثر بسعر أوفر</h2>
                 <div class="w-20 h-1.5 mx-auto rounded-full mb-4" style="background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);"></div>
-                <p class="text-lg text-indigo-300">لا رسوم خفية. تدفع مرة واحدة وتحصل على ذكرى للأبد.</p>
+                <p class="text-lg text-indigo-300">اختر عدد القصص والمنتجات داخل باقة واحدة بسعر ثابت.</p>
             </div>
 
             @if(isset($packages) && $packages->count())
@@ -919,7 +919,8 @@
                                 @endforeach
                             </ul>
                             @endif
-                            <a href="{{ route('stories.index') }}" class="block text-center bg-white font-extrabold py-3 rounded-xl hover:shadow-2xl hover:scale-105 transition" style="color: #7c3aed;">{{ $pkg->button_text }}</a>
+                            <p class="mb-4 text-sm font-black text-white">{{ $pkg->componentSummary() }}</p>
+                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white font-extrabold py-3 rounded-xl hover:shadow-2xl hover:scale-105 transition" style="color: #7c3aed;">{{ $pkg->button_text ?: 'اختر الباقة' }}</a>
                         </div>
                     </div>
                     @else
@@ -944,7 +945,8 @@
                             @endforeach
                         </ul>
                         @endif
-                        <a href="{{ route('stories.index') }}" class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">{{ $pkg->button_text }}</a>
+                        <p class="mb-4 text-sm font-black text-indigo-200">{{ $pkg->componentSummary() }}</p>
+                        <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">{{ $pkg->button_text ?: 'اختر الباقة' }}</a>
                     </div>
                     @endif
                 @endforeach
@@ -952,7 +954,7 @@
             @endif
 
             <div class="text-center mt-8">
-                <a href="{{ route('pricing') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض تفاصيل كاملة عن الأسعار ←</a>
+                <a href="{{ route('shop.index') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض المتجر وكل الباقات ←</a>
             </div>
         </div>
     </section>

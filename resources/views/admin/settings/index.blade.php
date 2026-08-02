@@ -410,7 +410,7 @@
                     @foreach([
                         'home' => 'الرئيسية',
                         'stories' => 'القصص',
-                        'pricing' => 'الأسعار',
+                        'pricing' => 'باقات القصص والمنتجات',
                         'how_it_works' => 'كيف يعمل',
                         'shop' => 'المتجر',
                     ] as $page => $label)

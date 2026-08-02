@@ -235,6 +235,9 @@
                                                     @if($itemType === 'story')
                                                         <p class="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-extrabold text-indigo-600 mb-2">قصة مخصصة</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['story_title'] ?? 'قصة' }}</h3>
+                                                    @elseif($itemType === 'package')
+                                                        <p class="inline-flex rounded-full bg-fuchsia-50 px-3 py-1 text-xs font-extrabold text-fuchsia-700 mb-2">باقة موفرة</p>
+                                                        <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['package_name'] ?? 'باقة HeroKid' }}</h3>
                                                     @else
                                                         <p class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-700 mb-2">منتج من المتجر</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['product_title'] ?? 'منتج' }}</h3>
@@ -303,6 +306,14 @@
                                                         </div>
                                                     </div>
                                                 @endif
+                                            @elseif($itemType === 'package')
+                                                <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3"><p class="text-xs font-bold text-slate-400 mb-1">القصص</p><p class="font-black text-slate-900">{{ $item['story_count'] ?? 0 }}</p></div>
+                                                    <div class="rounded-2xl bg-slate-50 px-3 py-3"><p class="text-xs font-bold text-slate-400 mb-1">المنتجات</p><p class="font-black text-slate-900">{{ $item['product_count'] ?? 0 }}</p></div>
+                                                    @if(($item['regular_total_cents'] ?? 0) > ($item['line_total_cents'] ?? 0))
+                                                        <div class="rounded-2xl bg-emerald-50 px-3 py-3"><p class="text-xs font-bold text-emerald-600 mb-1">إجمالي منفصل</p><p class="font-black text-emerald-800 line-through">{{ format_money($item['regular_total_cents'] / 100) }}</p></div>
+                                                    @endif
+                                                </div>
                                             @else
                                                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">

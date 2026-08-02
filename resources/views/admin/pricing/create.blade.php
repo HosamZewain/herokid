@@ -7,7 +7,7 @@
     </x-slot>
 
     <div class="py-8" dir="rtl">
-        <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-sm rounded-xl p-8">
                 <form action="{{ route('admin.pricing.store') }}" method="POST" class="space-y-5">
                     @csrf

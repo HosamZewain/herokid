@@ -300,15 +300,25 @@ class CartTrackingService
     {
         return (string) match ($item['item_type'] ?? 'story') {
             'product', 'product_add_on' => $item['product_title'] ?? $item['product_name'] ?? 'منتج',
+            'package' => $item['package_name'] ?? 'باقة HeroKid',
             default => $item['story_title'] ?? 'قصة مخصصة',
         };
     }
 
     private function safeItemSnapshot(array $item): array
     {
-        return collect($item)
+        $snapshot = collect($item)
             ->except(['uploaded_photos'])
             ->all();
+
+        if (isset($snapshot['package_stories']) && is_array($snapshot['package_stories'])) {
+            $snapshot['package_stories'] = array_map(
+                fn (array $story): array => collect($story)->except(['uploaded_photos'])->all(),
+                $snapshot['package_stories'],
+            );
+        }
+
+        return $snapshot;
     }
 
     private function visitorHash(Request $request): ?string

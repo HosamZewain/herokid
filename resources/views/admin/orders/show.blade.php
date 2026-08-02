@@ -379,6 +379,9 @@
                                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                                             <div>
                                                 <p class="text-xs font-bold text-indigo-600">{{ $orderItem->item_type === 'story' ? 'قصة مخصصة' : 'منتج' }}</p>
+                                                @if(data_get($orderItem->item_snapshot, 'package.name'))
+                                                    <p class="mb-1 inline-flex rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700">ضمن باقة: {{ data_get($orderItem->item_snapshot, 'package.name') }}</p>
+                                                @endif
                                                 <p class="font-black text-gray-900">{{ $orderItem->title }}</p>
                                                 @if($orderItem->variant_snapshot)
                                                     <p class="text-xs text-gray-500">النوع: {{ $orderItem->variant_snapshot['name_ar'] ?? '-' }}</p>

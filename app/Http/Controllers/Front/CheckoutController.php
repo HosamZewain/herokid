@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Cart\PackageCartExpander;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\OrderSceneTextService;
@@ -32,6 +33,7 @@ class CheckoutController extends Controller
         ChildIdentityEventLogger $identityEvents,
         OrderSceneTextService $sceneTexts,
         MetaPurchaseTrackingService $metaPurchaseTracking,
+        PackageCartExpander $packageCartExpander,
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -58,7 +60,8 @@ class CheckoutController extends Controller
             ->where('delivery_country_id', $country->id)
             ->findOrFail($validated['delivery_governorate_id']);
 
-        $cart = session('cart.items', []);
+        $sessionCart = session('cart.items', []);
+        $cart = $packageCartExpander->expand($sessionCart);
 
         if ($cart === []) {
             return redirect()->route('cart.index')->with('error', 'السلة فارغة. أضف قصة واحدة على الأقل قبل تأكيد الطلب.');
@@ -198,6 +201,7 @@ class CheckoutController extends Controller
                             'regular_price' => $storyRegularPrice,
                             'offer_applied' => $storyOfferApplied,
                             'offer_label' => $storyOfferLabel,
+                            'package' => $item['package_snapshot'] ?? null,
                         ],
                         'personalization_snapshot' => [
                             'cart_item_key' => $cartKey,
@@ -323,6 +327,7 @@ class CheckoutController extends Controller
                             'fulfillment_type' => $product->fulfillment_type,
                             'purchase_mode' => $product->purchase_mode,
                             'production_lead_time_days' => $product->production_lead_time_days,
+                            'package' => $item['package_snapshot'] ?? null,
                         ],
                         'variant_snapshot' => $variant ? [
                             'name_ar' => $variant->name_ar,

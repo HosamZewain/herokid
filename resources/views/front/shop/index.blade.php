@@ -86,6 +86,17 @@
         </section>
         @endunless
 
+        @if(!$isStoriesAlias && isset($packages) && $packages->isNotEmpty())
+            <section class="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8" aria-labelledby="packages-title">
+                <div class="mb-5 text-right">
+                    <span class="inline-flex rounded-full bg-fuchsia-100 px-3 py-1 text-xs font-black text-fuchsia-700">وفر أكثر</span>
+                    <h2 id="packages-title" class="mt-2 text-2xl font-black text-slate-950 sm:text-3xl">باقات القصص والأنشطة</h2>
+                    <p class="mt-2 text-sm text-slate-500">اختر باقة جاهزة بسعر ثابت أقل من شراء مكوناتها منفصلة.</p>
+                </div>
+                @include('front.packages._cards', ['packages' => $packages])
+            </section>
+        @endif
+
         <div id="catalog-results" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
             @if($isStoriesAlias)
                 <div class="mb-5 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-900 sm:flex"

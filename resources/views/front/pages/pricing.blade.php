@@ -99,7 +99,8 @@
                                 @endforeach
                             </ul>
                             @endif
-                            <a href="{{ route('stories.index') }}" class="block text-center bg-white text-indigo-600 font-bold py-4 rounded-2xl hover:bg-indigo-50 transition duration-300 mt-auto">
+                            <p class="mb-4 text-sm font-black text-indigo-100">{{ $pkg->componentSummary() }}</p>
+                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white text-indigo-600 font-bold py-4 rounded-2xl hover:bg-indigo-50 transition duration-300 mt-auto">
                                 {{ $pkg->button_text ?: 'اختر قصتك الآن' }}
                             </a>
                         </div>
@@ -134,7 +135,8 @@
                                 @endforeach
                             </ul>
                             @endif
-                            <a href="{{ route('stories.index') }}" class="block text-center bg-slate-100 hover:bg-indigo-600 text-slate-800 hover:text-white font-bold py-4 rounded-2xl transition duration-300 mt-auto">
+                            <p class="mb-4 text-sm font-black text-indigo-700">{{ $pkg->componentSummary() }}</p>
+                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-slate-100 hover:bg-indigo-600 text-slate-800 hover:text-white font-bold py-4 rounded-2xl transition duration-300 mt-auto">
                                 {{ $pkg->button_text ?: 'اختر قصتك الآن' }}
                             </a>
                         </div>

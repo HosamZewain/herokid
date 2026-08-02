@@ -1,7 +1,7 @@
 <x-admin-layout>
     <x-slot name="header">
         <div class="flex justify-between items-center">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">باقات الأسعار</h2>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">الباقات</h2>
             <a href="{{ route('admin.pricing.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center gap-1">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 إضافة باقة جديدة
@@ -40,6 +40,7 @@
                                 @if($package->badge)
                                     <span class="inline-block mt-1 text-[10px] bg-yellow-100 text-yellow-700 font-bold px-2 py-0.5 rounded-full">{{ $package->badge }}</span>
                                 @endif
+                                <div class="mt-1 text-xs font-bold text-indigo-600">{{ $package->componentSummary() ?: 'لم تحدد مكونات شراء بعد' }}</div>
                             </td>
                             <td class="px-4 py-3 font-bold text-indigo-600">
                                 {{ number_format($package->price, 0) }} {{ $package->currency }}
@@ -88,7 +89,7 @@
                 </table>
             </div>
 
-            <p class="text-xs text-gray-400 text-right">الباقات تُعرض على صفحة الأسعار مرتبة حسب "الترتيب" من الأصغر للأكبر.</p>
+            <p class="text-xs text-gray-400 text-right">سعر الباقة هو السعر النهائي للعميل، حتى لو كان مجموع أسعار مكوناتها مختلفًا.</p>
         </div>
     </div>
 </x-admin-layout>
