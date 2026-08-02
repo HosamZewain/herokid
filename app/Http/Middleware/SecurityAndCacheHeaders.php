@@ -33,13 +33,17 @@ class SecurityAndCacheHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
+        $isBookletPreview = $request->routeIs('booklet-previews.*');
+
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->headers->set('Referrer-Policy', $isBookletPreview ? 'no-referrer' : 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        $response->headers->set('X-Frame-Options', $isBookletPreview ? 'DENY' : 'SAMEORIGIN');
         $response->headers->set(
             'Content-Security-Policy',
-            "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+            $isBookletPreview
+                ? "default-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+                : "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
         );
     }
 
@@ -100,6 +104,7 @@ class SecurityAndCacheHeaders
             'profile.*',
             'checkout.*',
             'photo-uploads.*',
+            'booklet-previews.*',
             'orders.*',
             'track.*',
             'login',
@@ -118,6 +123,8 @@ class SecurityAndCacheHeaders
             'checkout/*',
             'photo-uploads',
             'photo-uploads/*',
+            'preview/*',
+            'preview-media/*',
             'orders',
             'orders/*',
             'track-order',

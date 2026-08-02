@@ -63,6 +63,11 @@ class Order extends Model
         return $this->hasMany(OrderPreview::class);
     }
 
+    public function bookletPreview()
+    {
+        return $this->hasOne(BookletPreview::class);
+    }
+
     public function items()
     {
         return $this->hasMany(OrderItem::class);

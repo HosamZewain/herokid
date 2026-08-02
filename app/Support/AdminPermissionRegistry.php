@@ -68,6 +68,7 @@ class AdminPermissionRegistry
             'visitor_carts.view' => 'admin.visitor-carts.index',
             'orders.view' => 'admin.orders.index',
             'orders.create' => 'admin.orders.create',
+            'booklet_previews.view' => 'admin.booklet-previews.index',
             'child_identities.view' => 'admin.child-identities.index',
             'stories.view' => 'admin.stories.index',
             'store.products.view' => 'admin.products.index',

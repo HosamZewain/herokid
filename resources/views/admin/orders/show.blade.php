@@ -618,7 +618,19 @@
                         <div class="space-y-3">
                             @foreach($order->previews as $preview)
                             <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 text-right">
-                                <span class="text-xs text-gray-400">{{ $preview->created_at->format('d/m/Y H:i') }}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-400">{{ $preview->created_at->format('d/m/Y H:i') }}</span>
+                                    @if($order->story_id && !$order->bookletPreview && strtolower(pathinfo($preview->file_path, PATHINFO_EXTENSION)) === 'pdf')
+                                        @can('orders.preview.upload')
+                                            @can('booklet_previews.create')
+                                                <form action="{{ route('admin.orders.previews.promote', [$order, $preview]) }}" method="POST">
+                                                    @csrf
+                                                    <button class="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-black text-white">إنشاء رابط قارئ</button>
+                                                </form>
+                                            @endcan
+                                        @endcan
+                                    @endif
+                                </div>
                                 <div>
                                     <p class="text-sm font-bold text-gray-800">تصميم #{{ $loop->iteration }}</p>
                                     @if($preview->note) <p class="text-xs text-gray-500">{{ $preview->note }}</p> @endif
@@ -668,30 +680,86 @@
                     </div>
                     @endcan
 
-                    <!-- Upload Preview -->
+                    <!-- Booklet Preview -->
+                    @if($order->story_id)
                     @can('orders.preview.upload')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                        <h3 class="text-base font-bold mb-4 text-right">رفع تصميم للعميل (Preview)</h3>
-                        <form action="{{ route('admin.orders.upload-preview', $order) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
-                            @csrf
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">ملف التصميم (PDF أو صورة)</label>
-                                <input type="file" name="preview_file" accept="image/*,.pdf" required
-                                    class="block w-full text-sm text-gray-500 file:ml-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
-                                <x-input-error :messages="$errors->get('preview_file')" class="mt-1"/>
+                        @php
+                            $bookletPreview = $order->bookletPreview;
+                            $bookletPublicUrl = $bookletPreview?->publicUrl();
+                        @endphp
+                        <h3 class="text-base font-bold mb-2 text-right">📖 معاينة الكتاب للعميل</h3>
+                        <p class="mb-4 text-xs font-bold leading-6 text-gray-500 text-right">ارفع ملف PDF مرتب الصفحات لتحصل على رابط قارئ خاص. سيظل الرابط نفسه عند رفع نسخة مصححة.</p>
+
+                        @if($bookletPreview)
+                            <div class="mb-4 rounded-2xl border p-4 {{ $bookletPreview->status === 'active' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50' }}">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="rounded-full px-2.5 py-1 text-[11px] font-black {{ $bookletPreview->status === 'active' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white' }}">{{ $bookletPreview->status === 'active' ? 'الرابط فعال' : 'الرابط موقوف' }}</span>
+                                    <p class="text-sm font-black text-gray-900">الإصدار {{ $bookletPreview->currentVersion?->version_number }} · {{ $bookletPreview->currentVersion?->page_count }} صفحة</p>
+                                </div>
+                                @if($bookletPreview->status === 'active' && $bookletPublicUrl)
+                                    <p class="mt-3 break-all text-left text-[10px] font-bold text-slate-500" dir="ltr">{{ $bookletPublicUrl }}</p>
+                                    <div class="mt-3 grid grid-cols-2 gap-2">
+                                        <a href="{{ $bookletPublicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-3 py-2 text-center text-xs font-black text-indigo-700">فتح القارئ</a>
+                                        <button type="button" data-order-preview-copy="{{ $bookletPublicUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">نسخ الرابط</button>
+                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}?text={{ urlencode('مرحبًا، يمكنك مشاهدة معاينة قصة HeroKid من الرابط التالي: '.$bookletPublicUrl) }}" target="_blank" rel="noopener" class="col-span-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-black text-white">إرسال عبر واتساب</a>
+                                    </div>
+                                @endif
+                                @can('booklet_previews.view')
+                                    <a href="{{ route('admin.booklet-previews.show', $bookletPreview) }}" class="mt-3 block text-center text-xs font-black text-slate-600 underline">إدارة الرابط والإصدارات</a>
+                                @endcan
+
+                                <details class="mt-3 rounded-xl border border-white/80 bg-white/70 p-3 text-right">
+                                    <summary class="cursor-pointer text-xs font-black text-slate-700">سجل الإصدارات ({{ $bookletPreview->versions->count() }})</summary>
+                                    <div class="mt-3 space-y-2">
+                                        @foreach($bookletPreview->versions as $version)
+                                            <div class="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-[11px] font-bold text-slate-600">
+                                                <span>{{ $version->created_at->format('d/m/Y H:i') }}</span>
+                                                <span>الإصدار {{ $version->version_number }} · {{ $version->page_count }} صفحة @if($bookletPreview->current_version_id === $version->id)· الحالي@endif</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </details>
+
+                                @can('booklet_previews.revoke')
+                                    @if($bookletPreview->status === 'active')
+                                        <form action="{{ route('admin.booklet-previews.revoke', $bookletPreview) }}" method="POST" class="mt-3 flex gap-2">
+                                            @csrf
+                                            <input name="reason" required minlength="3" class="min-w-0 flex-1 rounded-xl border-amber-200 bg-white text-xs" placeholder="سبب إيقاف الرابط">
+                                            <button class="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white">إيقاف</button>
+                                        </form>
+                                    @else
+                                        <form action="{{ route('admin.booklet-previews.reenable', $bookletPreview) }}" method="POST" class="mt-3">
+                                            @csrf
+                                            <button class="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white">إعادة تفعيل الرابط</button>
+                                        </form>
+                                    @endif
+                                @endcan
                             </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">ملاحظة للعميل (اختياري)</label>
-                                <textarea name="preview_note" rows="2" class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-xl shadow-sm text-right text-sm"
-                                    placeholder="أي تعليمات للعميل..."></textarea>
-                            </div>
-                            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition">
-                                رفع التصميم وتحديث الحالة
-                            </button>
-                        </form>
-                        <p class="text-xs text-gray-400 mt-2 text-right">سيتم تحديث حالة الطلب تلقائياً إلى "تصميم تم رفعه"</p>
+                        @endif
+
+                        @if(auth()->user()->hasPermission($bookletPreview ? 'booklet_previews.update' : 'booklet_previews.create'))
+                            <form action="{{ route('admin.orders.booklet-preview.store', $order) }}" method="POST" enctype="multipart/form-data" class="space-y-4">
+                                @csrf
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">{{ $bookletPreview ? 'ملف PDF المصحح' : 'ملف PDF للمعاينة' }}</label>
+                                    <input type="file" name="pdf_file" accept="application/pdf,.pdf" required
+                                        class="block w-full text-sm text-gray-500 file:ml-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
+                                    <x-input-error :messages="$errors->get('pdf_file')" class="mt-1"/>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">ملاحظة الإصدار (اختياري)</label>
+                                    <textarea name="note" rows="2" class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-xl shadow-sm text-right text-sm" placeholder="مثال: تعديل المشهد الخامس"></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition">
+                                    {{ $bookletPreview ? 'رفع الإصدار المصحح' : 'رفع المعاينة وإنشاء الرابط' }}
+                                </button>
+                            </form>
+                            <p class="text-xs text-gray-400 mt-2 text-right">PDF فقط · حتى {{ config('booklet_previews.max_upload_mb', 50) }} ميجا · سيتم تحديث الحالة إلى "تصميم تم رفعه"</p>
+                        @endif
                     </div>
                     @endcan
+                    @endif
 
                     <!-- WhatsApp Quick Link -->
                     @if(isset($order->delivery_details['phone']))
@@ -783,4 +851,20 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 @endpush
 @endcan
+@push('scripts')
+<script>
+document.addEventListener('click', async function (event) {
+    const button = event.target.closest('[data-order-preview-copy]');
+    if (!button) return;
+    try {
+        await navigator.clipboard.writeText(button.dataset.orderPreviewCopy);
+        const original = button.textContent;
+        button.textContent = 'تم النسخ ✓';
+        setTimeout(() => button.textContent = original, 1800);
+    } catch (_) {
+        window.prompt('انسخ الرابط:', button.dataset.orderPreviewCopy);
+    }
+});
+</script>
+@endpush
 </x-admin-layout>

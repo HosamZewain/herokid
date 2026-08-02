@@ -36,7 +36,10 @@ class StoryController extends Controller
 
     public function show(Request $request, $slug, TemporaryPhotoUploadService $uploads)
     {
-        $story = Story::where('slug', $slug)->where('active', true)->firstOrFail();
+        $story = Story::with('publicBookletPreview.currentVersion')
+            ->where('slug', $slug)
+            ->where('active', true)
+            ->firstOrFail();
         $uploadSession = $uploads->ensureSession($request);
 
         CustomerStoryView::create([

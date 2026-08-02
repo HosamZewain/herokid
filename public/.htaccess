@@ -35,10 +35,17 @@
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
 
     <FilesMatch "\.(?:css|js|mjs|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|eot)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
+
+    <IfModule mod_setenvif.c>
+        SetEnvIf Request_URI "^/preview(?:/|-media/)" HEROKID_BOOKLET_PREVIEW=1
+        Header always set Referrer-Policy "no-referrer" env=HEROKID_BOOKLET_PREVIEW
+        Header always set X-Frame-Options "DENY" env=HEROKID_BOOKLET_PREVIEW
+        Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" env=HEROKID_BOOKLET_PREVIEW
+    </IfModule>
 </IfModule>

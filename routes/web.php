@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\BookletPreviewController as AdminBookletPreviewController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ChildIdentityController as AdminChildIdentityController;
 use App\Http\Controllers\Admin\ChildIdentityMediaController as AdminChildIdentityMediaController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
+use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
@@ -110,6 +112,14 @@ Route::get('/', function () {
 // Public Story Routes
 Route::get('/stories', [StoryController::class, 'index'])->name('stories.index');
 Route::get('/stories/{slug}', [StoryController::class, 'show'])->name('stories.show');
+
+Route::get('/preview/{token}', [PublicBookletPreviewController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:120,1')
+    ->name('booklet-previews.show');
+Route::get('/preview-media/{bookletPreview}', [PublicBookletPreviewController::class, 'document'])
+    ->middleware('throttle:300,1')
+    ->name('booklet-previews.document');
 
 // Public Store Routes
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
@@ -198,6 +208,8 @@ Route::post('/track-order', [TrackOrderController::class, 'track'])->name('track
 
 // Preview Approval (customer)
 Route::post('/orders/{order}/approve-preview', function (Order $order) {
+    abort_unless($order->user_id === auth()->id(), 403);
+
     if ($order->status === 'preview_uploaded') {
         $order->update(['status' => 'approved_for_print']);
         $order->statusLogs()->create([
@@ -399,6 +411,46 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middleware('permission:visitor_carts.view')
         ->name('visitor-carts.show');
 
+    Route::get('booklet-previews', [AdminBookletPreviewController::class, 'index'])
+        ->middleware('permission:booklet_previews.view')
+        ->name('booklet-previews.index');
+    Route::get('booklet-previews/create', [AdminBookletPreviewController::class, 'create'])
+        ->middleware('permission:booklet_previews.create')
+        ->name('booklet-previews.create');
+    Route::post('booklet-previews', [AdminBookletPreviewController::class, 'store'])
+        ->middleware('permission:booklet_previews.create')
+        ->name('booklet-previews.store');
+    Route::get('booklet-previews/{bookletPreview}', [AdminBookletPreviewController::class, 'show'])
+        ->middleware('permission:booklet_previews.view')
+        ->name('booklet-previews.show');
+    Route::patch('booklet-previews/{bookletPreview}', [AdminBookletPreviewController::class, 'update'])
+        ->middleware('permission:booklet_previews.update')
+        ->name('booklet-previews.update');
+    Route::post('booklet-previews/{bookletPreview}/versions', [AdminBookletPreviewController::class, 'replace'])
+        ->middleware('permission:booklet_previews.update')
+        ->name('booklet-previews.versions.store');
+    Route::post('booklet-previews/{bookletPreview}/publish', [AdminBookletPreviewController::class, 'publish'])
+        ->middleware('permission:booklet_previews.publish')
+        ->name('booklet-previews.publish');
+    Route::delete('booklet-previews/{bookletPreview}/publish', [AdminBookletPreviewController::class, 'unpublish'])
+        ->middleware('permission:booklet_previews.publish')
+        ->name('booklet-previews.unpublish');
+    Route::post('booklet-previews/{bookletPreview}/revoke', [AdminBookletPreviewController::class, 'revoke'])
+        ->middleware('permission:booklet_previews.revoke')
+        ->name('booklet-previews.revoke');
+    Route::post('booklet-previews/{bookletPreview}/reenable', [AdminBookletPreviewController::class, 'reenable'])
+        ->middleware('permission:booklet_previews.revoke')
+        ->name('booklet-previews.reenable');
+    Route::delete('booklet-previews/{bookletPreview}', [AdminBookletPreviewController::class, 'destroy'])
+        ->middleware('permission:booklet_previews.delete')
+        ->name('booklet-previews.destroy');
+    Route::post('booklet-previews/{bookletPreview}/restore', [AdminBookletPreviewController::class, 'restore'])
+        ->middleware('permission:booklet_previews.delete')
+        ->name('booklet-previews.restore');
+    Route::get('booklet-previews/{bookletPreview}/versions/{version}/download', [AdminBookletPreviewController::class, 'download'])
+        ->middleware('permission:booklet_previews.download_source')
+        ->name('booklet-previews.versions.download');
+
     Route::get('child-identities', [AdminChildIdentityController::class, 'index'])
         ->middleware('permission:child_identities.view')
         ->name('child-identities.index');
@@ -536,6 +588,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');
     Route::post('orders/{order}/preview', [OrderController::class, 'uploadPreview'])->middleware('permission:orders.preview.upload')->name('orders.upload-preview');
+    Route::post('orders/{order}/booklet-preview', [AdminBookletPreviewController::class, 'storeForOrder'])->middleware('permission:orders.preview.upload')->name('orders.booklet-preview.store');
+    Route::post('orders/{order}/previews/{legacyPreview}/promote', [AdminBookletPreviewController::class, 'promoteLegacy'])->middleware('permission:orders.preview.upload')->name('orders.previews.promote');
     Route::get('orders/{order}/photos/{index}', [OrderController::class, 'servePhoto'])->middleware('permission:orders.photos.view')->name('orders.photo')->where('index', '[0-9]+');
     Route::get('orders/{order}/production-prompt/regenerate', [OrderProductionPromptController::class, 'regenerate'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.regenerate');
     Route::post('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'saveOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override');

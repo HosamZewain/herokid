@@ -125,6 +125,15 @@
                         </div>
                     </div>
 
+                    @if($story->publicBookletPreview?->isPubliclyAvailable() && $story->publicBookletPreview->publicUrl())
+                        <a href="{{ $story->publicBookletPreview->publicUrl() }}"
+                            target="_blank" rel="noopener noreferrer nofollow"
+                            class="mb-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-5 py-3 text-base font-black text-indigo-800 transition hover:border-indigo-300 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:w-auto">
+                            <span aria-hidden="true">📖</span>
+                            معاينة القصة
+                        </a>
+                    @endif
+
                     <!-- Description -->
                     @if($storyDescription !== '')
                         <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-right" data-story-about>

@@ -147,6 +147,8 @@ class OrderController extends Controller
             'sceneTextSnapshots',
             'statusLogs',
             'previews',
+            'bookletPreview.currentVersion',
+            'bookletPreview.versions.uploader',
             'items.product',
             'items.variant',
             'items.linkedAddOns.product',

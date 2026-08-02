@@ -86,6 +86,19 @@ class Story extends Model
         return $this->hasMany(StoryAttachment::class)->latest();
     }
 
+    public function bookletPreviews()
+    {
+        return $this->hasMany(BookletPreview::class);
+    }
+
+    public function publicBookletPreview()
+    {
+        return $this->hasOne(BookletPreview::class)
+            ->where('show_on_story', true)
+            ->where('status', 'active')
+            ->latestOfMany();
+    }
+
     public function categories()
     {
         return $this->belongsToMany(StoryCategory::class, 'story_story_category');

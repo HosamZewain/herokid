@@ -4,8 +4,12 @@
     "name": "heic2any",
     "isDynamicEntry": true
   },
+  "node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
+    "file": "assets/pdf.worker.min-qwK7q_zL.mjs",
+    "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
+  },
   "resources/css/app.css": {
-    "file": "assets/app-u2P4p_qO.css",
+    "file": "assets/app-CcnWTggv.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -14,12 +18,22 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-CuOHhXhj.js",
+    "file": "assets/app-CsRpZXuL.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
-      "_heic2any-DQxJzxPi.js"
+      "_heic2any-DQxJzxPi.js",
+      "resources/js/booklet-reader.js"
+    ]
+  },
+  "resources/js/booklet-reader.js": {
+    "file": "assets/booklet-reader-3p0Nx0zM.js",
+    "name": "booklet-reader",
+    "src": "resources/js/booklet-reader.js",
+    "isDynamicEntry": true,
+    "assets": [
+      "assets/pdf.worker.min-qwK7q_zL.mjs"
     ]
   }
 }

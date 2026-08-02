@@ -10,6 +10,16 @@ window.HeroKidImageUpload = Object.freeze({
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    const bookletReader = document.querySelector('[data-booklet-reader]');
+    if (bookletReader) {
+        import('./booklet-reader')
+            .then(({ initializeBookletReader }) => initializeBookletReader(bookletReader))
+            .catch(() => {
+                bookletReader.querySelector('[data-reader-loading]')?.setAttribute('hidden', '');
+                bookletReader.querySelector('[data-reader-error]')?.removeAttribute('hidden');
+            });
+    }
+
     initializeIdentityPhotoUploader();
     initializeIdentityHeicRecovery();
     initializeIdentitySharing();

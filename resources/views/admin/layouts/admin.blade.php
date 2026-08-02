@@ -65,7 +65,7 @@
                 ]);
                 $canFinance = auth()->user()->hasAnyPermission(['expenses.view']);
                 $canFulfillment = auth()->user()->hasAnyPermission([
-                    'orders.view', 'orders.create', 'production_studio.view', 'child_identities.view',
+                    'orders.view', 'orders.create', 'booklet_previews.view', 'production_studio.view', 'child_identities.view',
                 ]);
                 $canCatalog = auth()->user()->hasAnyPermission([
                     'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
@@ -126,6 +126,9 @@
                         @endcan
                         @can('orders.create')
                             <a href="{{ route('admin.orders.create') }}" class="{{ $navLink }} {{ request()->routeIs('admin.orders.create') ? $activeLink : $idleLink }}">إضافة طلب</a>
+                        @endcan
+                        @can('booklet_previews.view')
+                            <a href="{{ route('admin.booklet-previews.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.booklet-previews.*') ? $activeLink : $idleLink }}">معاينات الكتب</a>
                         @endcan
                         @if(config('production_studio.enabled'))
                             @can('production_studio.view')
