@@ -13,6 +13,7 @@ class SalesReportFilters
         public readonly string $startDate,
         public readonly string $endDate,
         public readonly string $status,
+        public readonly string $paymentStatus,
         public readonly string $type,
         public readonly ?string $item,
         public readonly string $customerType,
@@ -37,9 +38,13 @@ class SalesReportFilters
 
         [$start, $end] = self::dates($request, $range, $today);
 
-        $status = (string) $request->query('status', 'active');
+        $status = (string) $request->query('status', 'all');
         $allowedStatuses = ['active', 'all', 'new', 'under_review', 'generating', 'preview_uploaded', 'approved_for_print', 'printing', 'shipped', 'delivered', 'cancelled'];
-        $status = in_array($status, $allowedStatuses, true) ? $status : 'active';
+        $status = in_array($status, $allowedStatuses, true) ? $status : 'all';
+
+        $paymentStatus = (string) $request->query('payment_status', 'all');
+        $allowedPaymentStatuses = ['all', 'unpaid', 'partially_paid', 'paid_without_shipping', 'paid_in_full'];
+        $paymentStatus = in_array($paymentStatus, $allowedPaymentStatuses, true) ? $paymentStatus : 'all';
 
         $type = (string) $request->query('type', 'all');
         $type = in_array($type, ['all', 'story', 'product', 'product_add_on'], true) ? $type : 'all';
@@ -67,6 +72,7 @@ class SalesReportFilters
             startDate: $start->toDateString(),
             endDate: $end->toDateString(),
             status: $status,
+            paymentStatus: $paymentStatus,
             type: $type,
             item: self::item((string) $request->query('item', '')),
             customerType: $customerType,
@@ -103,6 +109,7 @@ class SalesReportFilters
             startDate: $start->toDateString(),
             endDate: $end->toDateString(),
             status: $this->status,
+            paymentStatus: $this->paymentStatus,
             type: $this->type,
             item: $this->item,
             customerType: $this->customerType,

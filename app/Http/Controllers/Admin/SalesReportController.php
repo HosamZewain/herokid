@@ -48,6 +48,7 @@ class SalesReportController extends Controller
                 'end_date' => $filters->endDate,
                 'row_count' => $rows->count(),
                 'status' => $filters->status,
+                'payment_status' => $filters->paymentStatus,
                 'type' => $filters->type,
             ],
             request: $request,
@@ -58,7 +59,8 @@ class SalesReportController extends Controller
             fwrite($output, "\xEF\xBB\xBF");
             fputcsv($output, [
                 'التاريخ', 'مجموعة الشراء', 'أرقام الطلبات', 'العميل', 'الهاتف', 'نوع العميل',
-                'العناصر', 'عدد القطع', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي', 'الحالة',
+                'العناصر', 'عدد القطع', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي', 'حالة الطلب',
+                'حالة الدفع', 'المدفوع', 'المتبقي', 'طريقة الدفع', 'التصنيف المحاسبي', 'محتسب في المبيعات',
                 'الدولة', 'المحافظة', 'المدينة', 'المصدر', 'الحملة',
             ]);
 
@@ -77,6 +79,12 @@ class SalesReportController extends Controller
                     number_format($row['discount_cents'] / 100, 2, '.', ''),
                     number_format($row['total_cents'] / 100, 2, '.', ''),
                     $row['status_label'],
+                    $row['payment_status_label'],
+                    number_format($row['paid_amount_cents'] / 100, 2, '.', ''),
+                    number_format($row['remaining_amount_cents'] / 100, 2, '.', ''),
+                    $row['payment_method'],
+                    $row['sales_classification_label'],
+                    $row['sale_recognized'] ? 'نعم' : 'لا',
                     $row['country'],
                     $row['governorate'],
                     $row['city'],

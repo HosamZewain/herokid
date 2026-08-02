@@ -57,7 +57,7 @@ class AdminSalesReportTest extends TestCase
 
         $response->assertOk()
             ->assertSee('تقرير المبيعات')
-            ->assertSee('ملاحظة محاسبية')
+            ->assertSee('قاعدة احتساب المبيعات')
             ->assertSee($first->order_number)
             ->assertSee($second->order_number);
 
@@ -89,7 +89,7 @@ class AdminSalesReportTest extends TestCase
             'last_activity_at' => now(),
         ]);
 
-        $cancelled = $this->order('HK-CANCELLED', 'CANCELLED-GROUP', 'cancelled', null, 50, now()->subDay());
+        $cancelled = $this->order('HK-CANCELLED', 'CANCELLED-GROUP', 'cancelled', null, 50, now()->subDay(), 'unpaid');
         $cancelled->items()->create([
             'item_type' => 'story',
             'story_id' => $cancelled->story_id,
@@ -101,10 +101,12 @@ class AdminSalesReportTest extends TestCase
 
         $default = $this->actingAs($this->admin)->get(route('admin.sales-report.index'))->viewData('report');
         $this->assertSame(1, $default['summary']['checkouts']);
+        $this->assertSame(2, $default['operational_summary']['all_checkouts']);
+        $this->assertSame(1, $default['operational_summary']['cancelled_checkouts']);
 
         $all = $this->actingAs($this->admin)->get(route('admin.sales-report.index', ['status' => 'all']))->viewData('report');
-        $this->assertSame(2, $all['summary']['checkouts']);
-        $this->assertSame(1048.0, $all['summary']['total']);
+        $this->assertSame(1, $all['summary']['checkouts']);
+        $this->assertSame(798.0, $all['summary']['total']);
 
         $addon = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
             'type' => 'product_add_on',
@@ -153,6 +155,8 @@ class AdminSalesReportTest extends TestCase
 
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertStringContainsString('مجموعة الشراء', $csv);
+        $this->assertStringContainsString('محتسب في المبيعات', $csv);
+        $this->assertStringContainsString('مبيعات محققة', $csv);
         $this->assertSame(1, substr_count($csv, 'CHECKOUT-GROUP'));
         $this->assertStringContainsString($first->order_number, $csv);
         $this->assertStringContainsString($second->order_number, $csv);
@@ -215,10 +219,83 @@ class AdminSalesReportTest extends TestCase
         $this->assertSame(200.0, $report['trend'][0]['total']);
     }
 
+    public function test_only_fully_delivered_and_fully_paid_checkouts_are_recognized_as_sales(): void
+    {
+        $cases = [
+            ['HK-RECOGNIZED', 'RECOGNIZED', 'delivered', 'paid_in_full', 20_000],
+            ['HK-UNPAID', 'UNPAID', 'delivered', 'unpaid', 30_000],
+            ['HK-PARTIAL', 'PARTIAL', 'delivered', 'partially_paid', 40_000],
+            ['HK-NOT-DELIVERED', 'NOT-DELIVERED', 'shipped', 'paid_in_full', 50_000],
+            ['HK-CANCELLED-2', 'CANCELLED-2', 'cancelled', 'unpaid', 60_000],
+        ];
+
+        foreach ($cases as [$number, $group, $status, $paymentStatus, $amount]) {
+            $order = $this->order(
+                $number,
+                $group,
+                $status,
+                null,
+                0,
+                now(),
+                $paymentStatus,
+                $paymentStatus === 'partially_paid' ? 10_000 : null,
+            );
+            $order->items()->create([
+                'item_type' => 'story',
+                'story_id' => $order->story_id,
+                'title' => 'قصة '.$number,
+                'unit_price_cents' => $amount,
+                'quantity' => 1,
+                'total_price_cents' => $amount,
+            ]);
+        }
+
+        foreach ([['HK-MIXED-DELIVERED', 'delivered', 70_000], ['HK-MIXED-SHIPPED', 'shipped', 80_000]] as [$number, $status, $amount]) {
+            $order = $this->order($number, 'MIXED-CHECKOUT', $status, null, 0, now());
+            $order->items()->create([
+                'item_type' => 'story',
+                'story_id' => $order->story_id,
+                'title' => 'قصة '.$number,
+                'unit_price_cents' => $amount,
+                'quantity' => 1,
+                'total_price_cents' => $amount,
+            ]);
+        }
+
+        $report = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
+            'range' => 'today',
+        ]))->viewData('report');
+
+        $this->assertSame(200.0, $report['summary']['total']);
+        $this->assertSame(1, $report['summary']['checkouts']);
+        $this->assertSame(6, $report['operational_summary']['all_checkouts']);
+        $this->assertSame(5, $report['operational_summary']['unrecognized_checkouts']);
+        $this->assertSame(1, $report['operational_summary']['cancelled_checkouts']);
+        $this->assertSame(2, $report['operational_summary']['unpaid_checkouts']);
+        $this->assertSame(1, $report['operational_summary']['partially_paid_checkouts']);
+        $this->assertSame(2, $report['operational_summary']['fully_paid_not_delivered_checkouts']);
+
+        $unpaid = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
+            'range' => 'today',
+            'payment_status' => 'unpaid',
+        ]))->viewData('report');
+
+        $this->assertSame(0.0, $unpaid['summary']['total']);
+        $this->assertSame(2, $unpaid['operational_summary']['all_checkouts']);
+
+        $delivered = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
+            'range' => 'today',
+            'status' => 'delivered',
+        ]))->viewData('report');
+
+        $this->assertSame(200.0, $delivered['summary']['total']);
+        $this->assertFalse($delivered['rows']->firstWhere('key', 'MIXED-CHECKOUT')['sale_recognized']);
+    }
+
     private function multiOrderCheckout(): array
     {
         $first = $this->order('HK-FIRST', 'CHECKOUT-GROUP', 'delivered', null, 50, now());
-        $second = $this->order('HK-SECOND', 'CHECKOUT-GROUP', 'shipped', null, 50, now());
+        $second = $this->order('HK-SECOND', 'CHECKOUT-GROUP', 'delivered', null, 50, now());
         $product = Product::create([
             'name_ar' => 'ملصق',
             'slug' => 'sales-report-poster',
@@ -255,8 +332,16 @@ class AdminSalesReportTest extends TestCase
         return [$first, $second];
     }
 
-    private function order(string $number, string $group, string $status, ?User $user, float $deliveryFee, Carbon $date): Order
-    {
+    private function order(
+        string $number,
+        string $group,
+        string $status,
+        ?User $user,
+        float $deliveryFee,
+        Carbon $date,
+        string $paymentStatus = 'paid_in_full',
+        ?int $paidAmountCents = null,
+    ): Order {
         $story = Story::create([
             'title' => 'قصة '.$number,
             'slug' => strtolower($number),
@@ -286,6 +371,9 @@ class AdminSalesReportTest extends TestCase
             ],
             'uploaded_photos' => [],
             'status' => $status,
+            'payment_status' => $paymentStatus,
+            'paid_amount_cents' => $paidAmountCents ?? ($paymentStatus === 'paid_in_full' ? 999_999 : 0),
+            'payment_method' => $paymentStatus === 'unpaid' ? null : 'انستاباي',
             'created_at' => $date,
             'updated_at' => $date,
         ]);

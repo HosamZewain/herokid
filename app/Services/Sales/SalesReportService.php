@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
+use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,8 +20,10 @@ class SalesReportService
     {
         $rows = $this->rows($filters);
         $previousRows = $this->rows($filters->previousPeriod());
-        $summary = $this->summary($rows);
-        $previousSummary = $this->summary($previousRows);
+        $recognizedRows = $rows->where('sale_recognized', true)->values();
+        $previousRecognizedRows = $previousRows->where('sale_recognized', true)->values();
+        $summary = $this->summary($recognizedRows);
+        $previousSummary = $this->summary($previousRecognizedRows);
 
         return [
             'summary' => $summary,
@@ -32,13 +35,15 @@ class SalesReportService
                 'previous_total' => $previousSummary['total'],
                 'previous_checkouts' => $previousSummary['checkouts'],
             ],
-            'trend' => $this->trend($rows, $filters),
-            'top_items' => $this->topItems($rows),
-            'type_breakdown' => $this->typeBreakdown($rows),
+            'operational_summary' => $this->operationalSummary($rows),
+            'trend' => $this->trend($recognizedRows, $filters),
+            'top_items' => $this->topItems($recognizedRows),
+            'type_breakdown' => $this->typeBreakdown($recognizedRows),
             'status_breakdown' => $this->statusBreakdown($rows),
-            'source_breakdown' => $this->sourceBreakdown($rows),
-            'geography_breakdown' => $this->geographyBreakdown($rows),
-            'customer_breakdown' => $this->customerBreakdown($rows),
+            'payment_breakdown' => $this->paymentBreakdown($rows),
+            'source_breakdown' => $this->sourceBreakdown($recognizedRows),
+            'geography_breakdown' => $this->geographyBreakdown($recognizedRows),
+            'customer_breakdown' => $this->customerBreakdown($recognizedRows),
             'rows' => $rows,
             'options' => $this->options(),
         ];
@@ -47,6 +52,11 @@ class SalesReportService
     public function rows(SalesReportFilters $filters): Collection
     {
         $orders = $this->orderQuery($filters)->get();
+        $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
+        $checkoutStates = Order::query()
+            ->whereIn('checkout_group_key', $checkoutKeys)
+            ->get(['id', 'checkout_group_key', 'status', 'payment_status', 'paid_amount_cents', 'payment_method'])
+            ->groupBy('checkout_group_key');
         $carts = VisitorCart::query()
             ->whereIn('related_order_id', $orders->pluck('id'))
             ->get(['related_order_id', 'utm_source', 'utm_medium', 'utm_campaign'])
@@ -54,7 +64,7 @@ class SalesReportService
 
         $rows = $orders
             ->groupBy(fn (Order $order): string => $this->checkoutKey($order))
-            ->map(function (Collection $group) use ($filters, $carts): ?array {
+            ->map(function (Collection $group) use ($filters, $carts, $checkoutStates): ?array {
                 $orders = $group->sortBy('id')->values();
                 $items = $orders->flatMap(fn (Order $order): array => $this->orderItems($order, $filters))->values();
 
@@ -63,12 +73,21 @@ class SalesReportService
                 }
 
                 $first = $orders->first();
+                $stateOrders = $checkoutStates->get($first->checkoutGroupKey(), $orders);
+                $stateFirst = $stateOrders->sortBy('id')->first() ?? $first;
                 $cart = $carts->first(fn (VisitorCart $cart): bool => $orders->contains('id', $cart->related_order_id));
                 $itemsTotalCents = (int) $items->sum('total_cents');
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
                 $discountCents = (int) $orders->max('discount_cents');
                 $totalCents = max(0, $itemsTotalCents + $deliveryCents - $discountCents);
-                $statuses = $orders->pluck('status')->filter()->unique()->values();
+                $statuses = $stateOrders->pluck('status')->filter()->unique()->values();
+                $paymentStatus = in_array($stateFirst->payment_status, OrderPaymentStatus::STATUSES, true)
+                    ? $stateFirst->payment_status
+                    : OrderPaymentStatus::UNPAID;
+                $paidAmountCents = min($totalCents, max(0, (int) $stateFirst->paid_amount_cents));
+                $fullyDelivered = $statuses->count() === 1 && $statuses->first() === 'delivered';
+                $cancelled = $statuses->contains('cancelled');
+                $saleRecognized = $fullyDelivered && $paymentStatus === OrderPaymentStatus::PAID_IN_FULL;
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
                 $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
 
@@ -82,6 +101,15 @@ class SalesReportService
                     'order_records' => $orders->count(),
                     'statuses' => $statuses->all(),
                     'status_label' => $statuses->map(fn (string $status): string => (string) __('order_status.'.$status))->implode('، '),
+                    'fully_delivered' => $fullyDelivered,
+                    'cancelled' => $cancelled,
+                    'payment_status' => $paymentStatus,
+                    'payment_status_label' => OrderPaymentStatus::label($paymentStatus),
+                    'paid_amount_cents' => $paidAmountCents,
+                    'remaining_amount_cents' => max(0, $totalCents - $paidAmountCents),
+                    'payment_method' => $stateFirst->payment_method,
+                    'sale_recognized' => $saleRecognized,
+                    'sales_classification_label' => $this->salesClassificationLabel($cancelled, $fullyDelivered, $paymentStatus),
                     'customer_name' => $first->parent_name ?: $first->user?->name ?: 'زائر',
                     'customer_key' => $customerKey,
                     'customer_type' => $first->user_id ? 'registered' : 'guest',
@@ -145,6 +173,10 @@ class SalesReportService
             $query->where('status', '!=', 'cancelled');
         } elseif ($filters->status !== 'all') {
             $query->where('status', $filters->status);
+        }
+
+        if ($filters->paymentStatus !== 'all') {
+            $query->where('payment_status', $filters->paymentStatus);
         }
 
         if ($filters->customerType === 'registered') {
@@ -278,6 +310,29 @@ class SalesReportService
         ];
     }
 
+    private function operationalSummary(Collection $rows): array
+    {
+        $activeRows = $rows->where('cancelled', false);
+
+        return [
+            'all_checkouts' => $rows->count(),
+            'recognized_checkouts' => $rows->where('sale_recognized', true)->count(),
+            'unrecognized_checkouts' => $rows->where('sale_recognized', false)->count(),
+            'cancelled_checkouts' => $rows->where('cancelled', true)->count(),
+            'unpaid_checkouts' => $rows->where('payment_status', OrderPaymentStatus::UNPAID)->count(),
+            'partially_paid_checkouts' => $rows->where('payment_status', OrderPaymentStatus::PARTIALLY_PAID)->count(),
+            'paid_without_shipping_checkouts' => $rows->where('payment_status', OrderPaymentStatus::PAID_WITHOUT_SHIPPING)->count(),
+            'fully_paid_not_delivered_checkouts' => $rows
+                ->where('payment_status', OrderPaymentStatus::PAID_IN_FULL)
+                ->where('fully_delivered', false)
+                ->where('cancelled', false)
+                ->count(),
+            'pending_delivery_checkouts' => $activeRows->where('fully_delivered', false)->count(),
+            'outstanding_amount' => round(((int) $activeRows->sum('remaining_amount_cents')) / 100, 2),
+            'unrecognized_value' => round(((int) $rows->where('sale_recognized', false)->sum('total_cents')) / 100, 2),
+        ];
+    }
+
     private function trend(Collection $rows, SalesReportFilters $filters): array
     {
         $groupBy = $filters->resolvedGroupBy();
@@ -377,6 +432,43 @@ class SalesReportService
             ->all();
     }
 
+    private function paymentBreakdown(Collection $rows): array
+    {
+        return $rows->groupBy('payment_status')
+            ->map(fn (Collection $same, string $status): array => [
+                'status' => $status,
+                'label' => OrderPaymentStatus::label($status),
+                'checkouts' => $same->count(),
+                'total' => round(((int) $same->sum('total_cents')) / 100, 2),
+                'paid' => round(((int) $same->sum('paid_amount_cents')) / 100, 2),
+                'remaining' => round(((int) $same->sum('remaining_amount_cents')) / 100, 2),
+            ])
+            ->sortByDesc('checkouts')
+            ->values()
+            ->all();
+    }
+
+    private function salesClassificationLabel(bool $cancelled, bool $fullyDelivered, string $paymentStatus): string
+    {
+        if ($cancelled) {
+            return 'ملغي — غير محتسب في المبيعات';
+        }
+
+        if (! $fullyDelivered && $paymentStatus !== OrderPaymentStatus::PAID_IN_FULL) {
+            return 'بانتظار اكتمال التوصيل والدفع';
+        }
+
+        if (! $fullyDelivered) {
+            return 'مدفوع لكن لم يكتمل التوصيل';
+        }
+
+        if ($paymentStatus !== OrderPaymentStatus::PAID_IN_FULL) {
+            return 'تم التوصيل ولم يكتمل الدفع';
+        }
+
+        return 'مبيعات محققة';
+    }
+
     private function sourceBreakdown(Collection $rows): array
     {
         return $rows->groupBy('source')
@@ -444,9 +536,7 @@ class SalesReportService
 
     private function checkoutKey(Order $order): string
     {
-        $group = trim((string) data_get($order->delivery_details, 'checkout_group', ''));
-
-        return $group !== '' ? $group : 'ORDER-'.$order->id;
+        return $order->checkoutGroupKey();
     }
 
     private function sourceLabel(?VisitorCart $cart, Order $order): string
