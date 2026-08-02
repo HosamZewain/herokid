@@ -9,7 +9,7 @@
     "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
   },
   "resources/css/app.css": {
-    "file": "assets/app-CcnWTggv.css",
+    "file": "assets/app-CoSAbypA.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -18,7 +18,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-CsRpZXuL.js",
+    "file": "assets/app-BwkjwNiv.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -28,7 +28,7 @@
     ]
   },
   "resources/js/booklet-reader.js": {
-    "file": "assets/booklet-reader-3p0Nx0zM.js",
+    "file": "assets/booklet-reader-9HRmsDIL.js",
     "name": "booklet-reader",
     "src": "resources/js/booklet-reader.js",
     "isDynamicEntry": true,

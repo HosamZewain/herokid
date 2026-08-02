@@ -85,6 +85,8 @@ class BookletPreviewTest extends TestCase
             ->assertSee('data-booklet-reader', false)
             ->assertSee('data-reading-direction="rtl"', false)
             ->assertSee('[data-reader-loading][hidden]', false)
+            ->assertSee('h-[100dvh]', false)
+            ->assertSee('--reader-fit-width', false)
             ->assertSee('noindex,nofollow,noarchive', false)
             ->assertDontSee($preview->currentVersion->file_path)
             ->assertDontSee('data-download', false)

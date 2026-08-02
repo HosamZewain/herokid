@@ -18,7 +18,7 @@
         body { font-family: Tahoma, Arial, sans-serif; background: radial-gradient(circle at top, #312e81 0, #111827 46%, #030712 100%); }
         [data-book-stage] { --reader-zoom: 1; }
         [data-book-zoom] { transform: scale(var(--reader-zoom)); transform-origin: center center; transition: transform .18s ease; }
-        [data-book] { margin: 0 auto; }
+        [data-book] { width: 100%; max-width: min(100%, var(--reader-fit-width, 100%)) !important; margin: 0 auto; }
         .booklet-page { overflow: hidden; background: #fff; }
         .booklet-page__image { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; }
         .booklet-page__placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #94a3b8; background: linear-gradient(135deg, #fff, #f8fafc); font-weight: 800; }
@@ -28,12 +28,12 @@
         @media (prefers-reduced-motion: reduce) { [data-book-zoom], * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
     </style>
 </head>
-<body class="min-h-screen overflow-x-hidden text-white">
-    <div class="min-h-screen" data-booklet-reader
+<body class="h-[100dvh] overflow-hidden text-white">
+    <div class="flex h-[100dvh] flex-col overflow-hidden" data-booklet-reader
         data-document-url="{{ $documentUrl }}"
         data-reading-direction="{{ $preview->reading_direction }}"
         data-page-count="{{ $pageCount }}">
-        <header class="border-b border-white/10 bg-slate-950/70 px-3 py-3 backdrop-blur sm:px-6">
+        <header class="shrink-0 border-b border-white/10 bg-slate-950/70 px-3 py-3 backdrop-blur sm:px-6">
             <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
                 <a href="{{ route('home') }}" class="flex items-center gap-2" aria-label="HeroKid">
                     <img src="/images/logo-192.png" alt="HeroKid" class="h-12 w-12 rounded-xl bg-white object-contain p-0.5 sm:h-14 sm:w-14">
@@ -47,7 +47,7 @@
             </div>
         </header>
 
-        <main class="mx-auto flex min-h-[calc(100vh-76px)] max-w-[1600px] flex-col px-2 py-3 sm:px-5 sm:py-5">
+        <main class="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-2 py-3 sm:px-5 sm:py-5">
             <div class="relative flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-2xl" data-book-stage>
                 <aside data-thumbnails hidden class="absolute inset-y-0 right-0 z-30 w-28 overflow-y-auto border-l border-white/10 bg-slate-950/95 p-2 shadow-2xl sm:w-40" aria-label="صور الصفحات المصغرة">
                     <div class="mb-2 flex items-center justify-between gap-2"><strong class="text-xs">الصفحات</strong><button type="button" data-thumbnails-close class="h-9 w-9 rounded-lg bg-white/10" aria-label="إغلاق الصور المصغرة">×</button></div>
@@ -66,7 +66,7 @@
                     <div><span class="text-4xl">⚠️</span><h2 class="mt-3 text-xl font-black">تعذر فتح المعاينة</h2><p class="mt-2 max-w-lg text-sm leading-7 text-slate-300" data-reader-error-message>حاول تحديث الصفحة أو تواصل مع HeroKid.</p><button type="button" onclick="window.location.reload()" class="mt-5 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black">إعادة المحاولة</button></div>
                 </div>
 
-                <div class="flex min-h-[420px] w-full items-center justify-center overflow-auto p-2 sm:min-h-[600px] sm:p-6" data-book-scroll>
+                <div class="flex min-h-0 w-full items-center justify-center overflow-auto p-2 sm:p-6" data-book-scroll>
                     <div class="flex h-full w-full items-center justify-center" data-book-zoom>
                         <div class="h-full w-full max-w-6xl" data-book aria-label="قارئ الكتاب التفاعلي"></div>
                         <div data-reader-fallback hidden class="mx-auto flex h-full w-full max-w-3xl items-center justify-center">
@@ -76,7 +76,7 @@
                 </div>
             </div>
 
-            <nav class="mt-3 flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-slate-950/75 p-2.5 backdrop-blur" aria-label="أدوات قارئ الكتاب">
+            <nav class="mt-3 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/10 bg-slate-950/75 p-2.5 backdrop-blur" aria-label="أدوات قارئ الكتاب">
                 <button type="button" data-next-page class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"><span>{{ $preview->reading_direction === 'rtl' ? '→' : '←' }}</span><span>التالي</span></button>
                 <div class="min-w-24 rounded-xl bg-white/10 px-3 py-2 text-center text-xs font-black" dir="ltr" aria-live="polite"><span data-current-page>1</span> / <span data-total-pages>{{ $pageCount }}</span></div>
                 <button type="button" data-previous-page class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-black hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"><span>السابق</span><span>{{ $preview->reading_direction === 'rtl' ? '←' : '→' }}</span></button>
@@ -86,7 +86,7 @@
                 <button type="button" data-zoom-reset class="inline-flex h-11 min-w-14 items-center justify-center rounded-xl bg-white/10 px-3 text-xs font-black hover:bg-white/15" aria-label="إعادة ضبط التكبير">100%</button>
                 <button type="button" data-zoom-in class="inline-flex h-11 min-w-11 items-center justify-center rounded-xl bg-white/10 px-3 text-lg font-black hover:bg-white/15" aria-label="تكبير">+</button>
             </nav>
-            <p class="mt-2 text-center text-[10px] font-bold text-slate-500">المعاينة مخصصة للعرض داخل HeroKid ولا يتوفر تنزيل أو طباعة.</p>
+            <p class="mt-2 shrink-0 text-center text-[10px] font-bold text-slate-500">المعاينة مخصصة للعرض داخل HeroKid ولا يتوفر تنزيل أو طباعة.</p>
         </main>
     </div>
 </body>

@@ -37,6 +37,7 @@ export async function initializeBookletReader(root) {
     let pageCount = Number(root.dataset.pageCount || 0);
     let zoom = 1;
     let fallbackMode = reducedMotion;
+    let fitBookToViewport = () => {};
 
     const showError = (message) => {
         loading?.setAttribute('hidden', '');
@@ -162,6 +163,13 @@ export async function initializeBookletReader(root) {
 
         const firstPage = await pdf.getPage(1);
         const viewport = firstPage.getViewport({ scale: 1 });
+        fitBookToViewport = () => {
+            const availableHeight = Math.max(320, (bookStage?.clientHeight || window.innerHeight) - 48);
+            const spreadWidth = Math.floor(availableHeight * (viewport.width / viewport.height) * 2);
+            bookElement.style.setProperty('--reader-fit-width', `${spreadWidth}px`);
+        };
+        fitBookToViewport();
+        window.addEventListener('resize', fitBookToViewport, { passive: true });
         const pageOrder = Array.from({ length: pageCount }, (_, index) => index + 1);
         if (direction === 'rtl') pageOrder.reverse();
 
@@ -271,6 +279,7 @@ export async function initializeBookletReader(root) {
     });
 
     window.addEventListener('beforeunload', () => {
+        window.removeEventListener('resize', fitBookToViewport);
         pageImages.forEach((url) => URL.revokeObjectURL(url));
         thumbnailImages.forEach((url) => URL.revokeObjectURL(url));
     }, { once: true });
