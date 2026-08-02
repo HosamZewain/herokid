@@ -48,7 +48,8 @@ class AdminOrderPaymentStatusTest extends TestCase
             ->assertOk()
             ->assertSee('مدفوع جزئياً')
             ->assertSee('المتبقي عند الاستلام')
-            ->assertSee('٣٥٠');
+            ->assertSee('٣٥٠')
+            ->assertSee("amount.disabled = value !== 'partially_paid'", false);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.index', ['payment_status' => 'partially_paid']))

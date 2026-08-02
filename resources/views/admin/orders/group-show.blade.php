@@ -118,13 +118,13 @@
                                         @foreach($paymentStatuses as $value => $label)<option value="{{ $value }}" @selected($group['payment_status'] === $value)>{{ $label }}</option>@endforeach
                                     </select>
                                 </div>
-                                <div data-partial-field>
+                                <div data-partial-field @if($group['payment_status'] !== 'partially_paid') hidden @endif>
                                     <label class="mb-1 block text-[10px] font-black text-gray-500">المبلغ المدفوع</label>
-                                    <input name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $group['paid_amount_cents'] / 100 }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount>
+                                    <input name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $group['paid_amount_cents'] / 100 }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required($group['payment_status'] === 'partially_paid') @disabled($group['payment_status'] !== 'partially_paid')>
                                 </div>
-                                <div data-method-field>
+                                <div data-method-field @if($group['payment_status'] === 'unpaid') hidden @endif>
                                     <label class="mb-1 block text-[10px] font-black text-gray-500">طريقة الدفع</label>
-                                    <select name="payment_method" class="w-full rounded-xl border-gray-200 text-right text-sm" data-payment-method>
+                                    <select name="payment_method" class="w-full rounded-xl border-gray-200 text-right text-sm" data-payment-method @required($group['payment_status'] !== 'unpaid') @disabled($group['payment_status'] === 'unpaid')>
                                         <option value="">اختر الطريقة</option>
                                         @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected($group['payment_method'] === $method)>{{ $method }}</option>@endforeach
                                     </select>
@@ -351,6 +351,8 @@
                     methodField.hidden = value === 'unpaid';
                     amount.required = value === 'partially_paid';
                     method.required = value !== 'unpaid';
+                    amount.disabled = value !== 'partially_paid';
+                    method.disabled = value === 'unpaid';
                     let paid = 0;
                     if (value === 'partially_paid') paid = Math.round(Math.max(0, Number(amount.value || 0)) * 100);
                     if (value === 'paid_without_shipping') paid = Math.max(0, total - delivery);

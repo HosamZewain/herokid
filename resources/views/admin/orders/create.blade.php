@@ -196,13 +196,13 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div data-partial-payment-field>
+                            <div data-partial-payment-field @if(old('payment_status', 'unpaid') !== 'partially_paid') hidden @endif>
                                 <label for="paid-amount" class="mb-1.5 block text-xs font-black text-gray-700">المبلغ المدفوع بالجنيه *</label>
-                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ old('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount>
+                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ old('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required(old('payment_status') === 'partially_paid') @disabled(old('payment_status', 'unpaid') !== 'partially_paid')>
                             </div>
-                            <div data-payment-method-field>
+                            <div data-payment-method-field @if(old('payment_status', 'unpaid') === 'unpaid') hidden @endif>
                                 <label for="payment-method" class="mb-1.5 block text-xs font-black text-gray-700">طريقة الدفع *</label>
-                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method>
+                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method @required(old('payment_status', 'unpaid') !== 'unpaid') @disabled(old('payment_status', 'unpaid') === 'unpaid')>
                                     <option value="">اختر الطريقة</option>
                                     @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected(old('payment_method') === $method)>{{ $method }}</option>@endforeach
                                 </select>
@@ -303,6 +303,8 @@
                     methodField.hidden = paymentStatus === 'unpaid';
                     paidInput.required = paymentStatus === 'partially_paid';
                     methodInput.required = paymentStatus !== 'unpaid';
+                    paidInput.disabled = paymentStatus !== 'partially_paid';
+                    methodInput.disabled = paymentStatus === 'unpaid';
                     root.querySelector('[data-paid-total]').textContent = money(paidCents);
                     root.querySelector('[data-remaining-total]').textContent = money(totalCents - paidCents);
                 };
