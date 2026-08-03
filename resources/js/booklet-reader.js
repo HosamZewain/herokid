@@ -23,11 +23,14 @@ export async function initializeBookletReader(root) {
     const totalPagesLabel = root.querySelector('[data-total-pages]');
     const nextButton = root.querySelector('[data-next-page]');
     const previousButton = root.querySelector('[data-previous-page]');
+    const sideNextButton = root.querySelector('[data-side-next-page]');
+    const sidePreviousButton = root.querySelector('[data-side-previous-page]');
     const bookStage = root.querySelector('[data-book-stage]');
     const zoomReset = root.querySelector('[data-zoom-reset]');
     const thumbnails = root.querySelector('[data-thumbnails]');
     const thumbnailList = root.querySelector('[data-thumbnail-list]');
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mobileViewport = window.matchMedia('(max-width: 767px)').matches;
     const pageImages = new Map();
     const thumbnailImages = new Map();
     const pagePromises = new Map();
@@ -38,6 +41,7 @@ export async function initializeBookletReader(root) {
     let zoom = 1;
     let fallbackMode = reducedMotion;
     let fitBookToViewport = () => {};
+    let updatePagePresentation = () => {};
 
     const showError = (message) => {
         loading?.setAttribute('hidden', '');
@@ -50,6 +54,8 @@ export async function initializeBookletReader(root) {
         if (totalPagesLabel) totalPagesLabel.textContent = String(pageCount);
         if (previousButton) previousButton.disabled = currentPage <= 1;
         if (nextButton) nextButton.disabled = currentPage >= pageCount;
+        if (sidePreviousButton) sidePreviousButton.disabled = currentPage <= 1;
+        if (sideNextButton) sideNextButton.disabled = currentPage >= pageCount;
         root.querySelectorAll('[data-thumbnail-page]').forEach((button) => {
             const active = Number(button.dataset.thumbnailPage) === currentPage;
             button.classList.toggle('ring-2', active);
@@ -145,6 +151,26 @@ export async function initializeBookletReader(root) {
         updateControls();
     };
 
+    const goToNextSpread = () => {
+        if (fallbackMode || !pageFlip) {
+            goToPage(currentPage + 1);
+            return;
+        }
+
+        if (direction === 'rtl') pageFlip.flipPrev('top');
+        else pageFlip.flipNext('top');
+    };
+
+    const goToPreviousSpread = () => {
+        if (fallbackMode || !pageFlip) {
+            goToPage(currentPage - 1);
+            return;
+        }
+
+        if (direction === 'rtl') pageFlip.flipNext('top');
+        else pageFlip.flipPrev('top');
+    };
+
     try {
         const loadingTask = getDocument({
             url: documentUrl,
@@ -164,9 +190,10 @@ export async function initializeBookletReader(root) {
         const firstPage = await pdf.getPage(1);
         const viewport = firstPage.getViewport({ scale: 1 });
         fitBookToViewport = () => {
-            const availableHeight = Math.max(320, (bookStage?.clientHeight || window.innerHeight) - 48);
+            const availableHeight = Math.max(320, (bookStage?.clientHeight || window.innerHeight) - 16);
             const spreadWidth = Math.floor(availableHeight * (viewport.width / viewport.height) * 2);
             bookElement.style.setProperty('--reader-fit-width', `${spreadWidth}px`);
+            window.requestAnimationFrame(updatePagePresentation);
         };
         fitBookToViewport();
         window.addEventListener('resize', fitBookToViewport, { passive: true });
@@ -195,12 +222,12 @@ export async function initializeBookletReader(root) {
                     width: Math.round(viewport.width),
                     height: Math.round(viewport.height),
                     size: 'stretch',
-                    minWidth: 260,
+                    minWidth: mobileViewport ? 160 : 260,
                     maxWidth: 920,
-                    minHeight: 360,
+                    minHeight: mobileViewport ? 220 : 360,
                     maxHeight: 1180,
                     showCover: true,
-                    usePortrait: true,
+                    usePortrait: !mobileViewport,
                     autoSize: true,
                     drawShadow: true,
                     maxShadowOpacity: 0.45,
@@ -213,8 +240,52 @@ export async function initializeBookletReader(root) {
                     currentPage = logicalPageForIndex(Number(event.data));
                     renderAround(currentPage);
                     updateControls();
+                    updatePagePresentation();
                 });
                 pageFlip.loadFromHTML(bookElement.querySelectorAll('.booklet-page'));
+                const visiblePageItems = () => Array.from(bookElement.querySelectorAll('.stf__item')).filter((item) => {
+                    const rect = item.getBoundingClientRect();
+                    return window.getComputedStyle(item).display !== 'none' && rect.width > 0 && rect.height > 0;
+                });
+                updatePagePresentation = () => {
+                    window.requestAnimationFrame(() => {
+                        const landscape = bookElement.querySelector('.stf__wrapper.--landscape');
+                        const visibleItems = visiblePageItems();
+
+                        if (landscape && visibleItems.length === 1) {
+                            root.dataset.singlePageSide = visibleItems[0].classList.contains('--left') ? 'left' : 'right';
+                        } else {
+                            delete root.dataset.singlePageSide;
+                        }
+
+                        window.requestAnimationFrame(() => {
+                            const activeItems = visiblePageItems();
+                            if (!bookStage || activeItems.length === 0) {
+                                sideNextButton?.setAttribute('hidden', '');
+                                sidePreviousButton?.setAttribute('hidden', '');
+                                return;
+                            }
+
+                            const stageRect = bookStage.getBoundingClientRect();
+                            const leftEdge = Math.min(...activeItems.map((item) => item.getBoundingClientRect().left));
+                            const rightEdge = Math.max(...activeItems.map((item) => item.getBoundingClientRect().right));
+                            const buttonSize = sideNextButton?.offsetWidth || 48;
+                            const gap = window.matchMedia('(max-width: 639px)').matches ? 4 : 12;
+                            const inset = 6;
+                            const leftPosition = clamp(leftEdge - stageRect.left - buttonSize - gap, inset, stageRect.width - buttonSize - inset);
+                            const rightPosition = clamp(rightEdge - stageRect.left + gap, inset, stageRect.width - buttonSize - inset);
+                            const nextPosition = direction === 'rtl' ? leftPosition : rightPosition;
+                            const previousPosition = direction === 'rtl' ? rightPosition : leftPosition;
+
+                            sideNextButton?.style.setProperty('left', `${nextPosition}px`);
+                            sidePreviousButton?.style.setProperty('left', `${previousPosition}px`);
+                            sideNextButton?.removeAttribute('hidden');
+                            sidePreviousButton?.removeAttribute('hidden');
+                        });
+                    });
+                };
+                pageFlip.on('changeOrientation', updatePagePresentation);
+                updatePagePresentation();
                 renderAround(1);
             } catch (_) {
                 fallbackMode = true;
@@ -252,8 +323,10 @@ export async function initializeBookletReader(root) {
         return;
     }
 
-    nextButton?.addEventListener('click', () => goToPage(currentPage + 1));
-    previousButton?.addEventListener('click', () => goToPage(currentPage - 1));
+    nextButton?.addEventListener('click', goToNextSpread);
+    previousButton?.addEventListener('click', goToPreviousSpread);
+    sideNextButton?.addEventListener('click', goToNextSpread);
+    sidePreviousButton?.addEventListener('click', goToPreviousSpread);
     root.querySelector('[data-thumbnails-toggle]')?.addEventListener('click', () => thumbnails.toggleAttribute('hidden'));
     root.querySelector('[data-thumbnails-close]')?.addEventListener('click', () => thumbnails.setAttribute('hidden', ''));
 
@@ -272,8 +345,8 @@ export async function initializeBookletReader(root) {
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') thumbnails?.setAttribute('hidden', '');
-        if (event.key === (direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft')) { event.preventDefault(); goToPage(currentPage + 1); }
-        if (event.key === (direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight')) { event.preventDefault(); goToPage(currentPage - 1); }
+        if (event.key === (direction === 'rtl' ? 'ArrowLeft' : 'ArrowRight')) { event.preventDefault(); goToNextSpread(); }
+        if (event.key === (direction === 'rtl' ? 'ArrowRight' : 'ArrowLeft')) { event.preventDefault(); goToPreviousSpread(); }
         if (event.key === 'Home') goToPage(1, false);
         if (event.key === 'End') goToPage(pageCount, false);
     });
