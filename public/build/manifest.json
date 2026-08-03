@@ -4,10 +4,6 @@
     "name": "heic2any",
     "isDynamicEntry": true
   },
-  "node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
-    "file": "assets/pdf.worker.min-qwK7q_zL.mjs",
-    "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
-  },
   "resources/css/app.css": {
     "file": "assets/app-4RXj5Tfk.css",
     "src": "resources/css/app.css",
@@ -18,7 +14,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-DgEW6TeQ.js",
+    "file": "assets/app-C27pH75t.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -28,12 +24,9 @@
     ]
   },
   "resources/js/booklet-reader.js": {
-    "file": "assets/booklet-reader-BQ_RyQ4o.js",
+    "file": "assets/booklet-reader-BY8Vi2Dn.js",
     "name": "booklet-reader",
     "src": "resources/js/booklet-reader.js",
-    "isDynamicEntry": true,
-    "assets": [
-      "assets/pdf.worker.min-qwK7q_zL.mjs"
-    ]
+    "isDynamicEntry": true
   }
 }

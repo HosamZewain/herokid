@@ -1,8 +1,11 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
 import { PageFlip } from 'page-flip';
 
-GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+// Hostinger serves `.mjs` assets as `text/plain`, which browsers reject when
+// `nosniff` is enabled. Let Vite bundle the PDF worker as a normal `.js`
+// worker instead of exposing the upstream `.mjs` file directly.
+GlobalWorkerOptions.workerPort = new PdfWorker();
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
