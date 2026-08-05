@@ -238,6 +238,9 @@
                                     <td class="px-4 py-4">
                                         <div class="flex min-w-32 flex-col gap-2">
                                             <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="rounded-lg bg-indigo-50 px-3 py-2 text-center text-xs font-black text-indigo-700 hover:bg-indigo-100">عرض التفاصيل</a>
+                                            @can('orders.update')
+                                                @if(!$trash)<a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="rounded-lg bg-violet-600 px-3 py-2 text-center text-xs font-black text-white hover:bg-violet-700">تعديل الطلب</a>@endif
+                                            @endcan
                                             @if($group['phone'] && !$trash)
                                                 <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $group['phone']) }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" class="rounded-lg bg-green-50 px-3 py-2 text-center text-xs font-black text-green-700 hover:bg-green-100">واتساب</a>
                                             @endif

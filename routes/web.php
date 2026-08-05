@@ -577,6 +577,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('orders/create', [OrderController::class, 'create'])->middleware('permission:orders.create')->name('orders.create');
     Route::post('orders', [OrderController::class, 'store'])->middleware('permission:orders.create')->name('orders.store');
     Route::get('orders/groups/{representative}', [OrderGroupController::class, 'show'])->whereNumber('representative')->middleware('permission:orders.view')->name('orders.groups.show');
+    Route::get('orders/groups/{representative}/edit', [\App\Http\Controllers\Admin\OrderEditController::class, 'edit'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.edit');
+    Route::put('orders/groups/{representative}', [\App\Http\Controllers\Admin\OrderEditController::class, 'update'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.update');
     Route::patch('orders/groups/{representative}/status', [OrderGroupController::class, 'updateStatus'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.status');
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
     Route::delete('orders/groups/{representative}', [OrderGroupController::class, 'destroy'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.destroy');

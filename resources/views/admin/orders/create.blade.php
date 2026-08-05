@@ -1,24 +1,32 @@
 <x-admin-layout>
-    <x-slot name="header">
-        <div class="text-right">
-            <p class="text-xs font-black text-indigo-500">الطلبات</p>
-            <h2 class="mt-1 text-xl font-black text-gray-900">إضافة طلب</h2>
-            <p class="mt-1 text-xs font-bold text-gray-500">أنشئ عملية شراء كاملة لعميل تواصل معك خارج الموقع.</p>
-        </div>
-    </x-slot>
-
     @php
-        $initialStories = old('stories', [[
+        $isEditing = isset($editingGroup);
+        $orderForm = $orderForm ?? [];
+        $formValue = fn (string $key, mixed $default = null): mixed => old($key, data_get($orderForm, $key, $default));
+        $initialProducts = old('products', $initialProducts ?? []);
+        $initialStories = old('stories', $initialStories ?? [[
             'story_id' => '', 'child_name' => '', 'child_age' => '', 'child_gender' => '',
             'interests' => '', 'gift_note' => '', 'parent_notes' => '',
         ]]);
     @endphp
 
-    <div class="py-6" data-admin-order-form>
+    <x-slot name="header">
+        <div class="text-right">
+            <p class="text-xs font-black text-indigo-500">الطلبات</p>
+            <h2 class="mt-1 text-xl font-black text-gray-900">{{ $isEditing ? 'تعديل الطلب بالكامل' : 'إضافة طلب' }}</h2>
+            <p class="mt-1 text-xs font-bold text-gray-500">
+                {{ $isEditing ? 'عدّل العميل والقصص والأطفال والصور والمنتجات والتوصيل والخصم والدفع من نموذج واحد.' : 'أنشئ عملية شراء كاملة لعميل تواصل معك خارج الموقع.' }}
+            </p>
+        </div>
+    </x-slot>
+
+    <div class="py-6" data-admin-order-form data-edit-mode="{{ $isEditing ? '1' : '0' }}">
         <div class="mx-auto max-w-7xl space-y-5 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.index') }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
-                <span class="rounded-full bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">إدخال يدوي بواسطة الإدارة</span>
+                <span class="rounded-full bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">
+                    {{ $isEditing ? 'تعديل آمن ومسجل — '.$editingGroup['key'] : 'إدخال يدوي بواسطة الإدارة' }}
+                </span>
             </div>
 
             @if($errors->any())
@@ -28,8 +36,9 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('admin.orders.store') }}" enctype="multipart/form-data" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-form>
+            <form method="POST" action="{{ $isEditing ? route('admin.orders.groups.update', $representative->id) : route('admin.orders.store') }}" enctype="multipart/form-data" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-form>
                 @csrf
+                @if($isEditing) @method('PUT') @endif
 
                 <div class="space-y-5">
                     <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
@@ -40,24 +49,24 @@
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
                                 <label for="parent-name" class="mb-1.5 block text-xs font-black text-gray-700">اسم ولي الأمر *</label>
-                                <input id="parent-name" name="parent_name" value="{{ old('parent_name') }}" required autocomplete="name" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <input id="parent-name" name="parent_name" value="{{ $formValue('parent_name') }}" required autocomplete="name" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             </div>
                             <div>
                                 <label for="phone" class="mb-1.5 block text-xs font-black text-gray-700">رقم الهاتف / واتساب *</label>
-                                <input id="phone" name="phone" value="{{ old('phone') }}" required inputmode="tel" autocomplete="tel" dir="ltr" class="w-full rounded-xl border-gray-200 text-left text-sm">
+                                <input id="phone" name="phone" value="{{ $formValue('phone') }}" required inputmode="tel" autocomplete="tel" dir="ltr" class="w-full rounded-xl border-gray-200 text-left text-sm">
                             </div>
                             <div>
                                 <label for="order-source" class="mb-1.5 block text-xs font-black text-gray-700">مصدر الطلب *</label>
                                 <select id="order-source" name="order_source" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm">
                                     <option value="">اختر المصدر</option>
                                     @foreach($sourceOptions as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('order_source') === $value)>{{ $label }}</option>
+                                        <option value="{{ $value }}" @selected($formValue('order_source') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div>
                                 <label for="source-notes" class="mb-1.5 block text-xs font-black text-gray-700">تفاصيل المصدر <span class="font-normal text-gray-400">اختياري</span></label>
-                                <input id="source-notes" name="source_notes" value="{{ old('source_notes') }}" placeholder="مثال: رسالة على إنستجرام أو زيارة المعرض" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <input id="source-notes" name="source_notes" value="{{ $formValue('source_notes') }}" placeholder="مثال: رسالة على إنستجرام أو زيارة المعرض" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             </div>
                         </div>
                     </section>
@@ -91,8 +100,11 @@
                             <div class="grid gap-3 md:grid-cols-2">
                                 @foreach($products as $product)
                                     @php
-                                        $quantity = (int) old("products.$product->id.quantity", 0);
-                                        $basePrice = $product->effectivePriceCents();
+                                        $productForm = $initialProducts[$product->id] ?? [];
+                                        $quantity = (int) ($productForm['quantity'] ?? 0);
+                                        $basePrice = isset($productForm['unit_price_cents'])
+                                            ? (int) $productForm['unit_price_cents']
+                                            : $product->effectivePriceCents();
                                     @endphp
                                     <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4" data-product-row data-base-price-cents="{{ $basePrice }}">
                                         <div class="flex items-start justify-between gap-3">
@@ -113,7 +125,12 @@
                                                     <select name="products[{{ $product->id }}][variant_id]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-product-variant>
                                                         <option value="" data-price-cents="{{ $basePrice }}">اختر</option>
                                                         @foreach($product->activeVariants as $variant)
-                                                            <option value="{{ $variant->id }}" data-price-cents="{{ $product->effectivePriceCents($variant) }}" @selected((string) old("products.$product->id.variant_id") === (string) $variant->id)>{{ $variant->name_ar }} — {{ format_money($product->effectivePriceCents($variant) / 100) }}</option>
+                                                            @php
+                                                                $variantPrice = (string) ($productForm['variant_id'] ?? '') === (string) $variant->id && isset($productForm['unit_price_cents'])
+                                                                    ? (int) $productForm['unit_price_cents']
+                                                                    : $product->effectivePriceCents($variant);
+                                                            @endphp
+                                                            <option value="{{ $variant->id }}" data-price-cents="{{ $variantPrice }}" @selected((string) ($productForm['variant_id'] ?? '') === (string) $variant->id)>{{ $variant->name_ar }} — {{ format_money($variantPrice / 100) }}</option>
                                                         @endforeach
                                                     </select>
                                                 </div>
@@ -123,7 +140,7 @@
                                             @if($product->isPersonalizedAddon())
                                                 <div>
                                                     <label class="mb-1 block text-[10px] font-black text-gray-500">القصة / الطفل</label>
-                                                    <select name="products[{{ $product->id }}][linked_story_index]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-story-link data-selected-value="{{ old("products.$product->id.linked_story_index") }}">
+                                                    <select name="products[{{ $product->id }}][linked_story_index]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-story-link data-selected-value="{{ $productForm['linked_story_index'] ?? '' }}">
                                                         <option value="">اختر القصة</option>
                                                     </select>
                                                 </div>
@@ -145,7 +162,7 @@
                                 <select id="country" name="delivery_country_id" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-country-select>
                                     <option value="">اختر الدولة</option>
                                     @foreach($countries as $country)
-                                        <option value="{{ $country->id }}" @selected((string) old('delivery_country_id') === (string) $country->id)>{{ $country->name }}</option>
+                                        <option value="{{ $country->id }}" @selected((string) $formValue('delivery_country_id') === (string) $country->id)>{{ $country->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -155,22 +172,27 @@
                                     <option value="">اختر المحافظة</option>
                                     @foreach($countries as $country)
                                         @foreach($country->activeGovernorates as $governorate)
-                                            <option value="{{ $governorate->id }}" data-country-id="{{ $country->id }}" data-fee-cents="{{ (int) round($governorate->effectiveDeliveryFee() * 100) }}" @selected((string) old('delivery_governorate_id') === (string) $governorate->id)>{{ $governorate->name }} — {{ format_money($governorate->effectiveDeliveryFee()) }}</option>
+                                            @php
+                                                $savedDeliveryCents = $isEditing && (string) $formValue('delivery_governorate_id') === (string) $governorate->id
+                                                    ? (int) $editingGroup['delivery_cents']
+                                                    : (int) round($governorate->effectiveDeliveryFee() * 100);
+                                            @endphp
+                                            <option value="{{ $governorate->id }}" data-country-id="{{ $country->id }}" data-fee-cents="{{ $savedDeliveryCents }}" @selected((string) $formValue('delivery_governorate_id') === (string) $governorate->id)>{{ $governorate->name }} — {{ format_money($savedDeliveryCents / 100) }}</option>
                                         @endforeach
                                     @endforeach
                                 </select>
                             </div>
                             <div>
                                 <label for="city" class="mb-1.5 block text-xs font-black text-gray-700">المدينة / المنطقة *</label>
-                                <input id="city" name="city" value="{{ old('city') }}" required autocomplete="address-level2" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <input id="city" name="city" value="{{ $formValue('city') }}" required autocomplete="address-level2" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             </div>
                             <div>
                                 <label for="street" class="mb-1.5 block text-xs font-black text-gray-700">الشارع *</label>
-                                <input id="street" name="street" value="{{ old('street') }}" required autocomplete="street-address" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <input id="street" name="street" value="{{ $formValue('street') }}" required autocomplete="street-address" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             </div>
                             <div class="md:col-span-2">
                                 <label for="address-details" class="mb-1.5 block text-xs font-black text-gray-700">تفاصيل العنوان *</label>
-                                <textarea id="address-details" name="address_details" rows="3" required class="w-full rounded-xl border-gray-200 text-right text-sm">{{ old('address_details') }}</textarea>
+                                <textarea id="address-details" name="address_details" rows="3" required class="w-full rounded-xl border-gray-200 text-right text-sm">{{ $formValue('address_details') }}</textarea>
                             </div>
                         </div>
                     </section>
@@ -182,35 +204,42 @@
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
                                 <label for="discount" class="mb-1.5 block text-xs font-black text-gray-700">قيمة الخصم بالجنيه</label>
-                                <input id="discount" name="discount_amount" type="number" min="0" step="0.01" value="{{ old('discount_amount', 0) }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-discount-input>
+                                <input id="discount" name="discount_amount" type="number" min="0" step="0.01" value="{{ $formValue('discount_amount', 0) }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-discount-input>
                             </div>
                             <div>
                                 <label for="discount-reason" class="mb-1.5 block text-xs font-black text-gray-700">سبب الخصم</label>
-                                <input id="discount-reason" name="discount_reason" value="{{ old('discount_reason') }}" placeholder="مطلوب عند إضافة خصم" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <input id="discount-reason" name="discount_reason" value="{{ $formValue('discount_reason') }}" placeholder="مطلوب عند إضافة خصم" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             </div>
                             <div>
                                 <label for="payment-status" class="mb-1.5 block text-xs font-black text-gray-700">حالة الدفع *</label>
                                 <select id="payment-status" name="payment_status" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-status>
                                     @foreach($paymentStatuses as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('payment_status', 'unpaid') === $value)>{{ $label }}</option>
+                                        <option value="{{ $value }}" @selected($formValue('payment_status', 'unpaid') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
-                            <div data-partial-payment-field @if(old('payment_status', 'unpaid') !== 'partially_paid') hidden @endif>
+                            <div data-partial-payment-field @if($formValue('payment_status', 'unpaid') !== 'partially_paid') hidden @endif>
                                 <label for="paid-amount" class="mb-1.5 block text-xs font-black text-gray-700">المبلغ المدفوع بالجنيه *</label>
-                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ old('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required(old('payment_status') === 'partially_paid') @disabled(old('payment_status', 'unpaid') !== 'partially_paid')>
+                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $formValue('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required($formValue('payment_status') === 'partially_paid') @disabled($formValue('payment_status', 'unpaid') !== 'partially_paid')>
                             </div>
-                            <div data-payment-method-field @if(old('payment_status', 'unpaid') === 'unpaid') hidden @endif>
+                            <div data-payment-method-field @if($formValue('payment_status', 'unpaid') === 'unpaid') hidden @endif>
                                 <label for="payment-method" class="mb-1.5 block text-xs font-black text-gray-700">طريقة الدفع *</label>
-                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method @required(old('payment_status', 'unpaid') !== 'unpaid') @disabled(old('payment_status', 'unpaid') === 'unpaid')>
+                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method @required($formValue('payment_status', 'unpaid') !== 'unpaid') @disabled($formValue('payment_status', 'unpaid') === 'unpaid')>
                                     <option value="">اختر الطريقة</option>
-                                    @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected(old('payment_method') === $method)>{{ $method }}</option>@endforeach
+                                    @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected($formValue('payment_method') === $method)>{{ $method }}</option>@endforeach
                                 </select>
                             </div>
                             <div class="md:col-span-2">
                                 <label for="admin-notes" class="mb-1.5 block text-xs font-black text-gray-700">ملاحظات إدارية داخلية <span class="font-normal text-gray-400">اختياري</span></label>
-                                <textarea id="admin-notes" name="admin_notes" rows="3" class="w-full rounded-xl border-gray-200 text-right text-sm">{{ old('admin_notes') }}</textarea>
+                                <textarea id="admin-notes" name="admin_notes" rows="3" class="w-full rounded-xl border-gray-200 text-right text-sm">{{ $formValue('admin_notes') }}</textarea>
                             </div>
+                            @if($isEditing)
+                                <div class="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                    <label for="change-reason" class="mb-1.5 block text-xs font-black text-amber-900">سبب تعديل الطلب *</label>
+                                    <textarea id="change-reason" name="change_reason" rows="2" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل تغيير القصة وإضافة كتاب متاهات" class="w-full rounded-xl border-amber-200 bg-white text-right text-sm">{{ old('change_reason') }}</textarea>
+                                    <p class="mt-2 text-[11px] font-bold text-amber-700">سيُحفظ السبب مع تفاصيل ما أُضيف أو حُذف أو تغيّر في سجل النشاط.</p>
+                                </div>
+                            @endif
                         </div>
                     </section>
                 </div>
@@ -228,7 +257,9 @@
                             <div class="flex justify-between gap-3 text-rose-200"><span>المتبقي عند الاستلام</span><span data-remaining-total>٠ ج.م</span></div>
                         </div>
                         <p class="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold leading-6 text-indigo-100">السعر النهائي يُعاد حسابه والتحقق منه في الخادم عند الحفظ.</p>
-                        <button class="mt-5 w-full rounded-xl bg-white px-5 py-3.5 text-sm font-black text-indigo-800 transition hover:bg-indigo-50">حفظ وإنشاء الطلب</button>
+                        <button class="mt-5 w-full rounded-xl bg-white px-5 py-3.5 text-sm font-black text-indigo-800 transition hover:bg-indigo-50">
+                            {{ $isEditing ? 'حفظ كل تعديلات الطلب' : 'حفظ وإنشاء الطلب' }}
+                        </button>
                     </div>
                 </aside>
             </form>
@@ -246,6 +277,7 @@
                 const addButton = root.querySelector('[data-add-story]');
                 const country = root.querySelector('[data-country-select]');
                 const governorate = root.querySelector('[data-governorate-select]');
+                const editMode = root.dataset.editMode === '1';
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
                 const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
@@ -311,7 +343,7 @@
 
                 const bindRow = row => {
                     row.querySelector('[data-remove-story]')?.addEventListener('click', () => {
-                        if (rows.querySelectorAll('[data-story-row]').length === 1) {
+                        if (!editMode && rows.querySelectorAll('[data-story-row]').length === 1) {
                             alert('يجب أن يحتوي الطلب على قصة واحدة على الأقل.');
                             return;
                         }

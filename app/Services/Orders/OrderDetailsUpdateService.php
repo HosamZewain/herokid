@@ -58,6 +58,10 @@ class OrderDetailsUpdateService
                 ->lockForUpdate()
                 ->findOrFail($order->id);
 
+            $previousStoryId = isset($validated['_previous_story_id'])
+                ? (int) $validated['_previous_story_id']
+                : (int) $order->story_id;
+            $storyChanged = $previousStoryId !== (int) $order->story_id;
             $before = $this->editableValues($order);
             $oldSnapshots = $order->sceneTextSnapshots->keyBy('scene_number');
             $checkoutOrdersUpdated = $this->updateCheckoutContact($order, $validated);
@@ -75,6 +79,12 @@ class OrderDetailsUpdateService
 
             $order->load('sceneTextSnapshots');
             $changes = AdminActivityLogger::changedValues($before, $this->editableValues($order));
+            if ($storyChanged) {
+                $changes['story_id'] = [
+                    'old' => $previousStoryId ?: null,
+                    'new' => $order->story_id ? (int) $order->story_id : null,
+                ];
+            }
             $productionSync = $this->syncProductionProject(
                 $order,
                 $oldSnapshots,
@@ -211,6 +221,7 @@ class OrderDetailsUpdateService
             'child_age',
             'age_range',
             'gender',
+            'selected_story_id',
         ]);
         $identity->forceFill([
             'parent_name' => $validated['parent_name'],
@@ -219,6 +230,7 @@ class OrderDetailsUpdateService
             'child_age' => $order->child_age,
             'age_range' => $this->resolveAgeRange((int) $order->child_age, $identity->age_range),
             'gender' => $order->child_gender,
+            'selected_story_id' => $order->story_id,
         ]);
         $changes = AdminActivityLogger::changedValues(
             $before,
@@ -276,6 +288,7 @@ class OrderDetailsUpdateService
         }
 
         $identityFields = array_values(array_intersect($changedFields, [
+            'story_id',
             'child_name',
             'child_age',
             'child_gender',

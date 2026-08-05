@@ -42,6 +42,11 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.index', $group['trashed'] ? ['view' => 'trash'] : []) }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
                 <div class="flex flex-wrap gap-2">
+                    @can('orders.update')
+                        @if(!$group['trashed'])
+                            <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700">تعديل الطلب بالكامل</a>
+                        @endif
+                    @endcan
                     @if($group['phone'] && !$group['trashed'])
                         <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $group['phone']) }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-black text-white hover:bg-green-700">واتساب العميل</a>
                     @endif
