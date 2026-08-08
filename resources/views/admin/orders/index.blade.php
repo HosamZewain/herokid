@@ -27,6 +27,7 @@
             'under_review' => 'قيد المراجعة',
             'generating' => 'جاري التوليد',
             'preview_uploaded' => 'انتظار الموافقة',
+            'revision_requested' => 'طلب تعديلات',
             'approved_for_print' => 'موافق للطباعة',
             'printing' => 'جاري الطباعة',
             'shipped' => 'تم الشحن',
@@ -39,6 +40,7 @@
             'under_review' => 'bg-amber-100 text-amber-700',
             'generating' => 'bg-purple-100 text-purple-700',
             'preview_uploaded' => 'bg-orange-100 text-orange-700',
+            'revision_requested' => 'bg-rose-100 text-rose-700',
             'approved_for_print' => 'bg-teal-100 text-teal-700',
             'printing' => 'bg-indigo-100 text-indigo-700',
             'shipped' => 'bg-cyan-100 text-cyan-700',
@@ -47,6 +49,10 @@
         ];
         $paymentStatusLabels = ['' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels();
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
+        $printingStatusLabels = ['' => 'كل حالات الطباعة'] + \App\Support\OrderWorkflowStatus::printingLabels();
+        $shippingStatusLabels = ['' => 'كل حالات الشحن'] + \App\Support\OrderWorkflowStatus::shippingLabels();
+        $printingStatusColors = \App\Support\OrderWorkflowStatus::printingColors();
+        $shippingStatusColors = \App\Support\OrderWorkflowStatus::shippingColors();
     @endphp
 
     <div class="py-8">
@@ -77,7 +83,7 @@
                     @endcan
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-9">
                     @if($trash)<input type="hidden" name="view" value="trash">@endif
                     <div class="xl:col-span-2">
                         <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
@@ -101,6 +107,18 @@
                         </select>
                     </div>
                     <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطباعة</label>
+                        <select name="printing_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            @foreach($printingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('printing_status', '') === $value)>{{ $label }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الشحن</label>
+                        <select name="shipping_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">من تاريخ</label>
                         <input name="from" type="date" value="{{ request('from') }}" class="w-full rounded-xl border-gray-200 text-sm">
                     </div>
@@ -118,6 +136,7 @@
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="divide-y divide-gray-100 md:hidden">
                     @forelse($groups as $group)
+                        @php($whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']))
                         <article class="space-y-4 p-5">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0 text-right">
@@ -127,7 +146,11 @@
                                         <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
                                     @endif
                                 </div>
-                                <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
+                                <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                                    <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
+                                    <span data-workflow-badge="printing_status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $printingStatusColors[$group['printing_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['printing_status_label'] }}</span>
+                                    <span data-workflow-badge="shipping_status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $shippingStatusColors[$group['shipping_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['shipping_status_label'] }}</span>
+                                </div>
                             </div>
 
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
@@ -139,7 +162,7 @@
                                     <div class="text-left">
                                         <p class="font-black text-gray-950">{{ format_money($group['total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-[10px] text-gray-400">شامل التوصيل</p>
-                                        <span class="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        <span data-workflow-badge="payment_status" class="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
                                         @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_money($group['remaining_amount_cents'] / 100) }}</p>@endif
                                     </div>
                                 </div>
@@ -154,8 +177,8 @@
 
                             <div class="grid grid-cols-2 gap-2">
                                 <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-xs font-black text-white">عرض وإدارة</a>
-                                @if($group['phone'] && !$trash)
-                                    <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $group['phone']) }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" class="rounded-xl bg-green-50 px-3 py-2.5 text-center text-xs font-black text-green-700">واتساب</a>
+                                @if($whatsappNumber && !$trash)
+                                    <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" class="rounded-xl bg-green-50 px-3 py-2.5 text-center text-xs font-black text-green-700">واتساب</a>
                                 @elseif($trash && auth()->user()->hasPermission('orders.delete'))
                                     <form method="POST" action="{{ route('admin.orders.groups.restore', $group['representative_id']) }}" onsubmit="return confirm('استعادة عملية الشراء وكل قصصها؟')">
                                         @csrf
@@ -165,6 +188,14 @@
                                     <span class="rounded-xl bg-gray-50 px-3 py-2.5 text-center text-xs font-bold text-gray-400">{{ optional($group['latest_at'])->format('d/m/Y') }}</span>
                                 @endif
                             </div>
+                            @can('orders.update')
+                                @if(!$trash)
+                                    <details>
+                                        <summary class="cursor-pointer rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-center text-xs font-black text-indigo-700">تغيير الحالات الأربع</summary>
+                                        <div class="mt-3">@include('admin.orders._workflow-status-panel', ['group' => $group])</div>
+                                    </details>
+                                @endif
+                            @endcan
                         </article>
                     @empty
                         <div class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</div>
@@ -187,9 +218,10 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             @forelse($groups as $group)
+                                @php($whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']))
                                 <tr class="align-top transition hover:bg-slate-50">
-                                    <td class="px-4 py-4">
-                                        <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr">{{ $group['key'] }}</a>
+                                    <td class="w-44 max-w-44 px-4 py-4">
+                                        <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="block w-40 truncate font-mono text-xs font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
                                         @if($group['order_source'] !== 'website')
@@ -213,8 +245,12 @@
                                         @if($group['child_names'])<p class="mt-2 text-xs font-bold text-gray-700">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                         <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                     </td>
-                                    <td class="px-4 py-4">
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
+                                    <td class="px-4 py-4" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                                        <div class="flex min-w-36 flex-col items-start gap-1">
+                                            <span data-workflow-badge="status" class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
+                                            <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $printingStatusColors[$group['printing_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['printing_status_label'] }}</span>
+                                            <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $shippingStatusColors[$group['shipping_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['shipping_status_label'] }}</span>
+                                        </div>
                                         @if($group['status'] === 'mixed')
                                             <div class="mt-2 space-y-1 text-[10px] font-bold text-gray-400">
                                                 @foreach(collect($group['active_orders'])->groupBy('status') as $status => $same)
@@ -229,20 +265,28 @@
                                         @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap">
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
-                                        @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع {{ format_money($group['paid_amount_cents'] / 100) }}</p>@endif
-                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_money($group['remaining_amount_cents'] / 100) }}</p>@endif
+                                        <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع <span data-workflow-paid>{{ format_money($group['paid_amount_cents'] / 100) }}</span></p>@endif
+                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي <span data-workflow-remaining>{{ format_money($group['remaining_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">{{ optional($group['latest_at'])->format('d/m/Y') }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">
+                                        <p>{{ optional($group['latest_at'])->format('d/m/Y') }}</p>
+                                        <p class="mt-1 text-xs text-gray-400">{{ optional($group['latest_at'])->format('h:i A') }}</p>
+                                    </td>
                                     <td class="px-4 py-4">
-                                        <div class="flex min-w-32 flex-col gap-2">
-                                            <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="rounded-lg bg-indigo-50 px-3 py-2 text-center text-xs font-black text-indigo-700 hover:bg-indigo-100">عرض التفاصيل</a>
+                                        <div class="flex min-w-36 flex-wrap gap-1.5">
+                                            <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
+                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                            </a>
                                             @can('orders.update')
-                                                @if(!$trash)<a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="rounded-lg bg-violet-600 px-3 py-2 text-center text-xs font-black text-white hover:bg-violet-700">تعديل الطلب</a>@endif
+                                                @if(!$trash)
+                                                    <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" title="تعديل الطلب" aria-label="تعديل الطلب" class="grid h-9 w-9 place-items-center rounded-lg bg-violet-600 text-white hover:bg-violet-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-7.414a2 2 0 112.828 2.828L11.828 17H9v-2.828l8.586-8.586z"/></svg></a>
+                                                    <button type="button" data-workflow-toggle="{{ $group['representative_id'] }}" title="تغيير الحالات" aria-label="تغيير الحالات" class="grid h-9 w-9 place-items-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+                                                @endif
                                             @endcan
-                                            @if($group['phone'] && !$trash)
-                                                <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $group['phone']) }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" class="rounded-lg bg-green-50 px-3 py-2 text-center text-xs font-black text-green-700 hover:bg-green-100">واتساب</a>
+                                            @if($whatsappNumber && !$trash)
+                                                <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" title="واتساب" aria-label="واتساب" class="grid h-9 w-9 place-items-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.52 3.48A11.91 11.91 0 0012.06 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.15 1.59 5.95L.06 24l6.29-1.65a11.9 11.9 0 005.7 1.45h.01c6.56 0 11.9-5.34 11.9-11.9 0-3.18-1.22-6.16-3.44-8.42zm-8.46 18.31h-.01a9.88 9.88 0 01-5.04-1.38l-.36-.21-3.73.98 1-3.64-.24-.37a9.86 9.86 0 01-1.51-5.27c0-5.45 4.44-9.89 9.9-9.89a9.82 9.82 0 017 2.9 9.82 9.82 0 012.9 7c-.01 5.45-4.45 9.88-9.9 9.88zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47a8.94 8.94 0 01-1.65-2.05c-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.27.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.3.18-1.42-.08-.12-.27-.2-.57-.35z"/></svg></a>
                                             @endif
                                             @can('orders.delete')
                                                 @if($trash)
@@ -250,22 +294,18 @@
                                                         @csrf
                                                         <button class="w-full rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white hover:bg-green-700">استعادة الكل</button>
                                                     </form>
-                                                @else
-                                                    <details class="rounded-lg border border-red-100 bg-red-50 p-2">
-                                                        <summary class="cursor-pointer text-center text-xs font-black text-red-700">حذف العملية</summary>
-                                                        <form method="POST" action="{{ route('admin.orders.groups.destroy', $group['representative_id']) }}" class="mt-2 space-y-2">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <textarea name="deletion_reason" required minlength="5" rows="2" placeholder="سبب الحذف" class="w-full rounded-lg border-red-200 text-xs"></textarea>
-                                                            <input name="confirmation" required placeholder="اكتب {{ $group['key'] }}" class="w-full rounded-lg border-red-200 text-xs" dir="ltr">
-                                                            <button class="w-full rounded-lg bg-red-600 px-2 py-2 text-xs font-black text-white">نقل للمحذوفات</button>
-                                                        </form>
-                                                    </details>
                                                 @endif
                                             @endcan
                                         </div>
                                     </td>
                                 </tr>
+                                @can('orders.update')
+                                    @if(!$trash)
+                                        <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
+                                            <td colspan="8" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                        </tr>
+                                    @endif
+                                @endcan
                             @empty
                                 <tr><td colspan="8" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</td></tr>
                             @endforelse

@@ -20,4 +20,23 @@ class Phone
 
         return $normalized !== '' ? $normalized : null;
     }
+
+    public static function forWhatsApp(?string $phone, string $defaultCountryCode = '20'): ?string
+    {
+        $digits = preg_replace('/\D/', '', (string) self::normalize($phone)) ?: '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, $defaultCountryCode)) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            $digits = substr($digits, 1);
+        }
+
+        return $defaultCountryCode.$digits;
+    }
 }

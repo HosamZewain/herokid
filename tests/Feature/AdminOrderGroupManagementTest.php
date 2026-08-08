@@ -10,6 +10,7 @@ use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Support\Phone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -166,6 +167,91 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertDatabaseHas('order_production_prompt_snapshots', ['order_id' => $first->id, 'snapshot_reason' => 'status:generating']);
         $this->assertDatabaseHas('order_production_prompt_snapshots', ['order_id' => $second->id, 'snapshot_reason' => 'status:generating']);
         $this->assertSame(2, DB::table('admin_activity_logs')->where('action', 'order.status_updated')->count());
+    }
+
+    public function test_admin_can_update_all_four_checkout_statuses_without_a_page_reload(): void
+    {
+        [$first, $second] = $this->checkoutFixture();
+
+        $response = $this->actingAs($this->admin)
+            ->patchJson(route('admin.orders.groups.workflow-statuses', $first->id), [
+                'status' => 'generating',
+                'payment_status' => 'partially_paid',
+                'paid_amount' => 100,
+                'payment_method' => 'انستاباي',
+                'printing_status' => 'in_progress',
+                'shipping_status' => 'ready',
+                'admin_notes' => 'تحديث تشغيلي موحد',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('group.status', 'generating')
+            ->assertJsonPath('group.payment_status', 'partially_paid')
+            ->assertJsonPath('group.printing_status', 'in_progress')
+            ->assertJsonPath('group.shipping_status', 'ready');
+
+        foreach ([$first, $second] as $order) {
+            $order->refresh();
+            $this->assertSame('generating', $order->status);
+            $this->assertSame('partially_paid', $order->payment_status);
+            $this->assertSame(10_000, $order->paid_amount_cents);
+            $this->assertSame('in_progress', $order->printing_status);
+            $this->assertSame('ready', $order->shipping_status);
+            $this->assertDatabaseHas('order_status_logs', [
+                'order_id' => $order->id,
+                'status_type' => 'printing',
+                'status' => 'in_progress',
+            ]);
+            $this->assertDatabaseHas('order_status_logs', [
+                'order_id' => $order->id,
+                'status_type' => 'shipping',
+                'status' => 'ready',
+            ]);
+        }
+
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'action' => 'checkout.workflow_statuses_updated',
+            'subject_id' => $first->id,
+        ]);
+    }
+
+    public function test_orders_list_exposes_workflow_filters_ajax_controls_and_normalized_whatsapp_link(): void
+    {
+        [$first] = $this->checkoutFixture();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', [
+                'printing_status' => 'not_started',
+                'shipping_status' => 'not_ready',
+            ]))
+            ->assertOk()
+            ->assertSee('حالة الطباعة')
+            ->assertSee('حالة الشحن')
+            ->assertSee('تغيير الحالات', false)
+            ->assertSee(route('admin.orders.groups.workflow-statuses', $first->id), false)
+            ->assertSee('https://wa.me/201000000000', false)
+            ->assertDontSee('حذف العملية');
+
+        $this->assertSame('201111822277', Phone::forWhatsApp('01111822277'));
+        $this->assertSame('201111822277', Phone::forWhatsApp('201111822277'));
+    }
+
+    public function test_group_and_order_details_share_the_unified_status_panel(): void
+    {
+        [$first] = $this->checkoutFixture();
+        $route = route('admin.orders.groups.workflow-statuses', $first->id);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $first->id))
+            ->assertOk()
+            ->assertSee('حالات عملية الشراء')
+            ->assertSee($route, false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $first))
+            ->assertOk()
+            ->assertSee('حالات عملية الشراء')
+            ->assertSee($route, false);
     }
 
     public function test_whole_checkout_deletion_restores_stock_cancels_production_and_is_recoverable(): void

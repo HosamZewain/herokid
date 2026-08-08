@@ -119,7 +119,7 @@
                                     @endcan
                                 </div>
                                 <div><span class="font-bold text-gray-600">الهاتف / واتساب:</span>
-                                    <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}" target="_blank" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
+                                    <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone'] ?? '') }}" target="_blank" rel="noopener" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
                                 </div>
                             </div>
                             <div class="space-y-3">
@@ -596,10 +596,20 @@
                         @if($order->statusLogs->count())
                         <div class="space-y-3">
                             @foreach($order->statusLogs->sortByDesc('created_at') as $log)
+                            @php
+                                $logType = $log->status_type ?: 'order';
+                                $logLabel = match ($logType) {
+                                    'printing' => \App\Support\OrderWorkflowStatus::printingLabel($log->status),
+                                    'shipping' => \App\Support\OrderWorkflowStatus::shippingLabel($log->status),
+                                    default => (string) __('order_status.'.$log->status),
+                                };
+                                $logTypeLabel = ['order' => 'الطلب', 'printing' => 'الطباعة', 'shipping' => 'الشحن'][$logType] ?? 'الطلب';
+                            @endphp
                             <div class="flex items-start gap-3 text-right">
                                 <div class="text-xs text-gray-400 flex-shrink-0 mt-1 w-24 text-left">{{ $log->created_at->format('d/m/Y') }}</div>
                                 <div class="flex-grow">
-                                    <span class="text-sm font-bold text-gray-800">{{ __('order_status.' . $log->status) }}</span>
+                                    <span class="text-sm font-bold text-gray-800">{{ $logLabel }}</span>
+                                    <span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500">{{ $logTypeLabel }}</span>
                                     @if($log->notes) <p class="text-xs text-gray-500 mt-0.5">{{ $log->notes }}</p> @endif
                                 </div>
                                 <div class="w-3 h-3 bg-indigo-400 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -649,35 +659,12 @@
 
                     <!-- Update Status -->
                     @can('orders.update')
+                    @if(isset($checkoutGroup['total_cents'], $checkoutGroup['delivery_cents']))
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                        <h3 class="text-base font-bold mb-4 text-right">تحديث حالة الطلب</h3>
-                        <form action="{{ route('admin.orders.update', $order) }}" method="POST" class="space-y-4">
-                            @csrf
-                            @method('PATCH')
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">الحالة</label>
-                                <select name="status" class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-xl shadow-sm text-right">
-                                    <option value="new" @selected($order->status == 'new')>📦 طلب جديد</option>
-                                    <option value="under_review" @selected($order->status == 'under_review')>🔍 قيد المراجعة</option>
-                                    <option value="generating" @selected($order->status == 'generating')>🤖 جاري التوليد</option>
-                                    <option value="preview_uploaded" @selected($order->status == 'preview_uploaded')>👁️ تصميم تم رفعه</option>
-                                    <option value="approved_for_print" @selected($order->status == 'approved_for_print')>✅ موافق للطباعة</option>
-                                    <option value="printing" @selected($order->status == 'printing')>🖨️ جاري الطباعة</option>
-                                    <option value="shipped" @selected($order->status == 'shipped')>🚚 تم الشحن</option>
-                                    <option value="delivered" @selected($order->status == 'delivered')>🏠 تم التوصيل</option>
-                                    <option value="cancelled" @selected($order->status == 'cancelled')>❌ ملغي</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-1.5 text-right">ملاحظة داخلية (اختياري)</label>
-                                <textarea name="admin_notes" rows="3" class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-xl shadow-sm text-right text-sm"
-                                    placeholder="ملاحظة تضاف لسجل الحالة...">{{ old('admin_notes') }}</textarea>
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition">
-                                تحديث الحالة
-                            </button>
-                        </form>
+                        <p class="mb-3 text-right text-xs font-bold text-gray-500">التعديل هنا يحدّث الحالات المشتركة لكل عناصر عملية الشراء.</p>
+                        @include('admin.orders._workflow-status-panel', ['group' => $checkoutGroup])
                     </div>
+                    @endif
                     @endcan
 
                     <!-- Booklet Preview -->
@@ -702,7 +689,7 @@
                                     <div class="mt-3 grid grid-cols-2 gap-2">
                                         <a href="{{ $bookletPublicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-3 py-2 text-center text-xs font-black text-indigo-700">فتح القارئ</a>
                                         <button type="button" data-order-preview-copy="{{ $bookletPublicUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">نسخ الرابط</button>
-                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone'] ?? '') }}?text={{ urlencode('مرحبًا، يمكنك مشاهدة معاينة قصة HeroKid من الرابط التالي: '.$bookletPublicUrl) }}" target="_blank" rel="noopener" class="col-span-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-black text-white">إرسال عبر واتساب</a>
+                                        <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone'] ?? '') }}?text={{ urlencode('مرحبًا، يمكنك مشاهدة معاينة قصة HeroKid من الرابط التالي: '.$bookletPublicUrl) }}" target="_blank" rel="noopener" class="col-span-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-black text-white">إرسال عبر واتساب</a>
                                     </div>
                                 @endif
                                 @can('booklet_previews.view')
@@ -765,7 +752,7 @@
                     @if(isset($order->delivery_details['phone']))
                     <div class="bg-green-50 rounded-2xl border border-green-100 p-5">
                         <h3 class="font-bold text-green-800 text-sm mb-3 text-right">التواصل مع العميل</h3>
-                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->delivery_details['phone']) }}?text=مرحبا، بخصوص طلبك {{ $order->order_number }}"
+                        <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone']) }}?text={{ urlencode('مرحبا، بخصوص طلبك '.$order->order_number) }}"
                             target="_blank"
                             class="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 rounded-xl transition text-sm">
                             <span aria-hidden="true">💬</span>

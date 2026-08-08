@@ -5,7 +5,12 @@
                 <p class="text-xs font-black text-indigo-500">تفاصيل عملية الشراء</p>
                 <h2 class="mt-1 text-xl font-black text-gray-900" dir="ltr">{{ $group['key'] }}</h2>
             </div>
-            <span class="inline-flex self-start rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">{{ $group['status_label'] }}</span>
+            <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                <span data-workflow-badge="status" class="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">{{ $group['status_label'] }}</span>
+                <span data-workflow-badge="payment_status" class="inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{{ $group['payment_status_label'] }}</span>
+                <span data-workflow-badge="printing_status" class="inline-flex rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700">{{ $group['printing_status_label'] }}</span>
+                <span data-workflow-badge="shipping_status" class="inline-flex rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $group['shipping_status_label'] }}</span>
+            </div>
         </div>
     </x-slot>
 
@@ -26,6 +31,7 @@
         $visibleStoryOrders = $group['story_orders'];
         $deletedStoryOrders = $group['deleted_orders']->filter(fn ($order) => $order->story_id || $order->items->contains('item_type', 'story'));
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
+        $whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']);
     @endphp
 
     <div class="py-8">
@@ -47,8 +53,8 @@
                             <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700">تعديل الطلب بالكامل</a>
                         @endif
                     @endcan
-                    @if($group['phone'] && !$group['trashed'])
-                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $group['phone']) }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-black text-white hover:bg-green-700">واتساب العميل</a>
+                    @if($whatsappNumber && !$group['trashed'])
+                        <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-black text-white hover:bg-green-700">واتساب العميل</a>
                     @endif
                     @can('orders.delete')
                         @if($group['trashed'])
@@ -108,63 +114,7 @@
 
             @if(!$group['trashed'] && $group['active_orders']->isNotEmpty())
                 @can('orders.update')
-                    <div class="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                            <div class="text-right lg:max-w-xs">
-                                <h3 class="text-lg font-black text-gray-900">تحديث حالة الدفع</h3>
-                                <p class="mt-1 text-xs font-bold leading-5 text-gray-500">يُحدّث الدفع لكل القصص والمنتجات داخل عملية الشراء، ويُحسب المتبقي تلقائياً.</p>
-                            </div>
-                            <form method="POST" action="{{ route('admin.orders.groups.payment', $group['representative_id']) }}" class="grid flex-1 gap-3 md:grid-cols-4" data-payment-form data-total-cents="{{ $group['total_cents'] }}" data-delivery-cents="{{ $group['delivery_cents'] }}">
-                                @csrf
-                                @method('PATCH')
-                                <div>
-                                    <label class="mb-1 block text-[10px] font-black text-gray-500">حالة الدفع</label>
-                                    <select name="payment_status" required class="w-full rounded-xl border-gray-200 text-right text-sm" data-payment-status>
-                                        @foreach($paymentStatuses as $value => $label)<option value="{{ $value }}" @selected($group['payment_status'] === $value)>{{ $label }}</option>@endforeach
-                                    </select>
-                                </div>
-                                <div data-partial-field @if($group['payment_status'] !== 'partially_paid') hidden @endif>
-                                    <label class="mb-1 block text-[10px] font-black text-gray-500">المبلغ المدفوع</label>
-                                    <input name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $group['paid_amount_cents'] / 100 }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required($group['payment_status'] === 'partially_paid') @disabled($group['payment_status'] !== 'partially_paid')>
-                                </div>
-                                <div data-method-field @if($group['payment_status'] === 'unpaid') hidden @endif>
-                                    <label class="mb-1 block text-[10px] font-black text-gray-500">طريقة الدفع</label>
-                                    <select name="payment_method" class="w-full rounded-xl border-gray-200 text-right text-sm" data-payment-method @required($group['payment_status'] !== 'unpaid') @disabled($group['payment_status'] === 'unpaid')>
-                                        <option value="">اختر الطريقة</option>
-                                        @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected($group['payment_method'] === $method)>{{ $method }}</option>@endforeach
-                                    </select>
-                                </div>
-                                <button class="self-end rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700">حفظ حالة الدفع</button>
-                                <div class="rounded-xl bg-slate-50 px-4 py-3 text-xs font-black text-gray-700 md:col-span-4">
-                                    المدفوع: <span class="text-emerald-700" data-payment-paid>—</span>
-                                    <span class="mx-2 text-gray-300">|</span>
-                                    المتبقي عند الاستلام: <span class="text-rose-700" data-payment-remaining>—</span>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                @endcan
-            @endif
-
-            @if(!$group['trashed'] && $group['active_orders']->isNotEmpty())
-                @can('orders.update')
-                    <div class="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                            <div class="text-right">
-                                <h3 class="text-lg font-black text-gray-900">تحديث كل القصص معاً</h3>
-                                <p class="mt-1 text-xs font-bold text-gray-500">سيتم إنشاء سجل حالة مستقل لكل قصة مع الاحتفاظ بإمكانية تعديلها منفردة.</p>
-                            </div>
-                            <form method="POST" action="{{ route('admin.orders.groups.status', $group['representative_id']) }}" class="grid flex-1 gap-3 md:grid-cols-3" onsubmit="return confirm('تحديث حالة كل القصص النشطة في هذه العملية؟')">
-                                @csrf
-                                @method('PATCH')
-                                <select name="status" required class="rounded-xl border-gray-200 text-right text-sm">
-                                    @foreach($statuses as $status)<option value="{{ $status }}">{{ $statusLabels[$status] }}</option>@endforeach
-                                </select>
-                                <input name="admin_notes" class="rounded-xl border-gray-200 text-right text-sm" placeholder="ملاحظة داخلية اختيارية">
-                                <button class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">تحديث حالة الجميع</button>
-                            </form>
-                        </div>
-                    </div>
+                    @include('admin.orders._workflow-status-panel', ['group' => $group])
                 @endcan
             @endif
 
@@ -336,40 +286,4 @@
         </div>
     </div>
 
-    @push('scripts')
-        <script>
-            (() => {
-                const form = document.querySelector('[data-payment-form]');
-                if (!form) return;
-                const status = form.querySelector('[data-payment-status]');
-                const amount = form.querySelector('[data-paid-amount]');
-                const method = form.querySelector('[data-payment-method]');
-                const partialField = form.querySelector('[data-partial-field]');
-                const methodField = form.querySelector('[data-method-field]');
-                const total = Number(form.dataset.totalCents || 0);
-                const delivery = Number(form.dataset.deliveryCents || 0);
-                const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
-
-                const refresh = () => {
-                    const value = status.value;
-                    partialField.hidden = value !== 'partially_paid';
-                    methodField.hidden = value === 'unpaid';
-                    amount.required = value === 'partially_paid';
-                    method.required = value !== 'unpaid';
-                    amount.disabled = value !== 'partially_paid';
-                    method.disabled = value === 'unpaid';
-                    let paid = 0;
-                    if (value === 'partially_paid') paid = Math.round(Math.max(0, Number(amount.value || 0)) * 100);
-                    if (value === 'paid_without_shipping') paid = Math.max(0, total - delivery);
-                    if (value === 'paid_in_full') paid = total;
-                    form.querySelector('[data-payment-paid]').textContent = money(paid);
-                    form.querySelector('[data-payment-remaining]').textContent = money(total - paid);
-                };
-
-                status.addEventListener('change', refresh);
-                amount.addEventListener('input', refresh);
-                refresh();
-            })();
-        </script>
-    @endpush
 </x-admin-layout>

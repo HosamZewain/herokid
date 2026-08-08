@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Support\OrderPaymentStatus;
+use App\Support\OrderWorkflowStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -166,6 +167,16 @@ class AdminOrderGroupService
         $directProducts = $items->where('item_type', 'product')->values();
         $addOns = $items->where('item_type', 'product_add_on')->values();
         $statuses = $visibleOrders->pluck('status')->filter()->unique()->values();
+        $printingStatuses = $visibleOrders->pluck('printing_status')
+            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::PRINTING_STATUSES, true)
+                ? $status
+                : OrderWorkflowStatus::PRINTING_NOT_STARTED)
+            ->unique()->values();
+        $shippingStatuses = $visibleOrders->pluck('shipping_status')
+            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::SHIPPING_STATUSES, true)
+                ? $status
+                : OrderWorkflowStatus::SHIPPING_NOT_READY)
+            ->unique()->values();
         $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
         $discountCents = (int) $visibleOrders->max('discount_cents');
         $itemsCents = (int) $items->sum('total_price_cents');
@@ -214,6 +225,14 @@ class AdminOrderGroupService
             'statuses' => $statuses->all(),
             'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
             'status_label' => $statuses->count() === 1 ? (string) __('order_status.'.$statuses->first()) : 'حالات متعددة',
+            'printing_status' => $printingStatuses->count() === 1 ? $printingStatuses->first() : 'mixed',
+            'printing_status_label' => $printingStatuses->count() === 1
+                ? OrderWorkflowStatus::printingLabel($printingStatuses->first())
+                : 'حالات طباعة متعددة',
+            'shipping_status' => $shippingStatuses->count() === 1 ? $shippingStatuses->first() : 'mixed',
+            'shipping_status_label' => $shippingStatuses->count() === 1
+                ? OrderWorkflowStatus::shippingLabel($shippingStatuses->first())
+                : 'حالات شحن متعددة',
             'items_cents' => $itemsCents,
             'delivery_cents' => $deliveryCents,
             'discount_cents' => $discountCents,
@@ -245,6 +264,14 @@ class AdminOrderGroupService
             if (in_array($paymentStatus, OrderPaymentStatus::STATUSES, true)) {
                 $query->where('payment_status', $paymentStatus);
             }
+        }
+
+        if ($request->filled('printing_status') && in_array($request->query('printing_status'), OrderWorkflowStatus::PRINTING_STATUSES, true)) {
+            $query->where('printing_status', $request->query('printing_status'));
+        }
+
+        if ($request->filled('shipping_status') && in_array($request->query('shipping_status'), OrderWorkflowStatus::SHIPPING_STATUSES, true)) {
+            $query->where('shipping_status', $request->query('shipping_status'));
         }
 
         if ($request->filled('from')) {
