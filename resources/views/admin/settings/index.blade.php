@@ -328,7 +328,9 @@
                     <div class="md:col-span-2">
                         <label class="block text-sm font-bold text-gray-700 mb-1">الترتيب الافتراضي للمتجر</label>
                         <select name="settings[unified_store_default_sort]" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                            <option value="featured" @selected($s('unified_store_default_sort', 'featured') === 'featured')>المميزة</option>
+                            <option value="best_selling" @selected($s('unified_store_default_sort', 'best_selling') === 'best_selling')>الأكثر مبيعاً</option>
+                            <option value="most_viewed" @selected($s('unified_store_default_sort') === 'most_viewed')>الأكثر مشاهدة</option>
+                            <option value="featured" @selected($s('unified_store_default_sort') === 'featured')>المميزة</option>
                             <option value="newest" @selected($s('unified_store_default_sort') === 'newest')>الأحدث</option>
                             <option value="price_asc" @selected($s('unified_store_default_sort') === 'price_asc')>السعر من الأقل</option>
                             <option value="price_desc" @selected($s('unified_store_default_sort') === 'price_desc')>السعر من الأعلى</option>

@@ -24,6 +24,11 @@ class Product extends Model
         return $this->belongsTo(ProductCategory::class, 'product_category_id');
     }
 
+    public function views()
+    {
+        return $this->hasMany(CustomerProductView::class);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'slug';

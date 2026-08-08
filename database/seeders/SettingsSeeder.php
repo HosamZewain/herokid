@@ -62,7 +62,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'seo_shop_description', 'value' => 'Browse personalized children’s stories, activity books, coloring books, mazes, posters, and gifts from HeroKid.'],
             ['key' => 'unified_store_title', 'value' => 'متجر القصص والمنتجات'],
             ['key' => 'unified_store_subtitle', 'value' => 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.'],
-            ['key' => 'unified_store_default_sort', 'value' => 'featured'],
+            ['key' => 'unified_store_default_sort', 'value' => 'best_selling'],
 
             ['key' => 'home_badge_text', 'value' => 'أول قصة أطفال بوجه طفلك الحقيقي في مصر'],
             ['key' => 'home_feature_face', 'value' => 'وجه طفلك في كل رسمة'],

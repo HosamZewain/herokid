@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\CustomerProductView;
+use App\Models\CustomerStoryView;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Support\OrderPaymentStatus;
 use App\Support\Seo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -63,6 +67,83 @@ class UnifiedStorefrontTest extends TestCase
         $this->assertContains('product', $firstTypes);
         $this->assertNotSame($firstTypes[0], $firstTypes[1]);
         $this->assertNotSame($firstTypes[1], $firstTypes[2]);
+    }
+
+    public function test_catalog_defaults_to_all_recorded_orders_as_best_sellers_and_allows_sorting_changes(): void
+    {
+        $bestStory = $this->story('best-selling-story', 'القصة الأكثر مبيعاً');
+        $newestStory = $this->story('newest-unsold-story', 'القصة الأحدث غير المباعة');
+        $bestProduct = $this->product('best-selling-product', 'المنتج الأكثر مبيعاً', 90);
+        $interestProduct = $this->product('cancelled-product', 'منتج طلب ملغي', 80);
+
+        $this->recognizedOrder('CHK-BEST-ONE', $bestStory, $bestProduct, 3);
+        $this->recognizedOrder('CHK-BEST-TWO', $bestStory);
+        $this->unrecognizedOrder('CHK-CANCELLED', $interestProduct, 50, 'cancelled');
+
+        $response = $this->get(route('shop.index'))
+            ->assertOk()
+            ->assertSee('<option value="'.route('shop.index').'?sort=best_selling" selected>الأكثر مبيعاً</option>', false)
+            ->assertSee('الأكثر مشاهدة')
+            ->assertSee('id="store-sort"', false)
+            ->assertSee('id="store-per-page"', false);
+
+        $ids = collect($response->viewData('items')->items())->pluck('id')->values();
+        $this->assertSame([
+            'product:'.$interestProduct->id,
+            'product:'.$bestProduct->id,
+            'story:'.$bestStory->id,
+        ], $ids->take(3)->all());
+
+        $this->get(route('shop.index', ['sort' => 'newest']))
+            ->assertOk()
+            ->assertSeeInOrder([$interestProduct->name_ar, $bestProduct->name_ar]);
+    }
+
+    public function test_most_viewed_sort_uses_story_and_product_detail_views(): void
+    {
+        $story = $this->story('viewed-story', 'قصة كثيرة المشاهدة');
+        $product = $this->product('viewed-product', 'منتج أكثر مشاهدة', 90);
+
+        foreach (range(1, 4) as $index) {
+            CustomerStoryView::create([
+                'story_id' => $story->id,
+                'session_id' => 'story-view-'.$index,
+                'viewed_at' => now(),
+            ]);
+        }
+
+        foreach (range(1, 6) as $index) {
+            CustomerProductView::create([
+                'product_id' => $product->id,
+                'session_id' => 'product-view-'.$index,
+                'viewed_at' => now(),
+            ]);
+        }
+
+        $response = $this->get(route('shop.index', ['sort' => 'most_viewed']))->assertOk();
+        $items = collect($response->viewData('items')->items());
+
+        $this->assertSame('product:'.$product->id, $items->first()->id);
+        $this->assertSame(6, $items->first()->viewsCount);
+        $this->assertSame('story:'.$story->id, $items->get(1)->id);
+
+        $this->get(route('shop.product.show', $product))->assertOk();
+        $this->assertDatabaseCount('customer_product_views', 7);
+    }
+
+    public function test_stories_sort_control_stays_on_the_stories_page_and_preserves_page_size(): void
+    {
+        $story = $this->story('stories-sort-link', 'قصة رابط الترتيب');
+        $this->recognizedOrder('CHK-STORIES-SORT', $story);
+
+        $response = $this->get(route('stories.index', ['per_page' => 12]))
+            ->assertOk();
+        $response
+            ->assertSee('<option value="'.route('stories.index').'?per_page=12&amp;sort=best_selling" selected>الأكثر مبيعاً</option>', false)
+            ->assertSee(route('stories.index').'?per_page=12&amp;sort=newest', false)
+            ->assertDontSee(route('shop.index').'?per_page=12&amp;sort=newest', false);
+
+        $this->assertSame(12, $response->viewData('items')->perPage());
     }
 
     public function test_page_size_can_be_changed_and_mobile_filters_only_open_for_active_criteria(): void
@@ -407,5 +488,62 @@ class UnifiedStorefrontTest extends TestCase
             'personalization_mode' => 'none',
             'inventory_mode' => 'no_tracking',
         ], $overrides));
+    }
+
+    private function recognizedOrder(string $group, Story $story, ?Product $product = null, int $productQuantity = 1): Order
+    {
+        $order = Order::create([
+            'order_number' => 'HK-'.$group,
+            'checkout_group_key' => $group,
+            'story_id' => $story->id,
+            'child_name' => 'طفل الاختبار',
+            'child_age' => 7,
+            'child_gender' => 'both',
+            'status' => 'delivered',
+            'payment_status' => OrderPaymentStatus::PAID_IN_FULL,
+        ]);
+
+        $order->items()->create([
+            'item_type' => 'story',
+            'story_id' => $story->id,
+            'title' => $story->title,
+            'unit_price_cents' => 14900,
+            'quantity' => 1,
+            'total_price_cents' => 14900,
+        ]);
+
+        if ($product) {
+            $order->items()->create([
+                'item_type' => 'product',
+                'product_id' => $product->id,
+                'title' => $product->name_ar,
+                'unit_price_cents' => $product->price_cents,
+                'quantity' => $productQuantity,
+                'total_price_cents' => $product->price_cents * $productQuantity,
+            ]);
+        }
+
+        return $order;
+    }
+
+    private function unrecognizedOrder(string $group, Product $product, int $quantity, string $status = 'new'): Order
+    {
+        $order = Order::create([
+            'order_number' => 'HK-'.$group,
+            'checkout_group_key' => $group,
+            'status' => $status,
+            'payment_status' => OrderPaymentStatus::UNPAID,
+        ]);
+
+        $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => $product->price_cents,
+            'quantity' => $quantity,
+            'total_price_cents' => $product->price_cents * $quantity,
+        ]);
+
+        return $order;
     }
 }

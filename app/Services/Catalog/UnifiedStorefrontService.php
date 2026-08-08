@@ -15,7 +15,10 @@ use Illuminate\Support\Str;
 
 class UnifiedStorefrontService
 {
-    public function __construct(private readonly StoryPricingService $storyPricing) {}
+    public function __construct(
+        private readonly StoryPricingService $storyPricing,
+        private readonly CatalogSalesRankingService $salesRanking,
+    ) {}
 
     /**
      * @return array{
@@ -30,24 +33,41 @@ class UnifiedStorefrontService
     public function storefront(Request $request, bool $productsEnabled = true, int $defaultPerPage = 24): array
     {
         $type = $this->validatedType($request->input('type'));
+        $sort = $this->validatedSort($request->input('sort', setting('unified_store_default_sort', 'best_selling')));
         $needsStories = in_array($type, ['all', 'stories'], true);
         $needsProducts = $productsEnabled && in_array($type, ['all', 'products', 'gifts', 'activities'], true);
 
-        $stories = $needsStories
+        $storyModels = $needsStories
             ? Story::query()
                 ->with('categories:id,name,slug')
                 ->where('active', true)
                 ->get()
-                ->map(fn (Story $story) => $this->storyItem($story))
             : collect();
 
-        $products = $needsProducts
+        $productModels = $needsProducts
             ? Product::query()
                 ->with('category:id,name_ar,slug,is_active,show_in_store')
                 ->publiclyVisible()
                 ->get()
-                ->map(fn (Product $product) => $this->productItem($product))
             : collect();
+
+        $salesCounts = in_array($sort, ['best_selling', 'most_viewed'], true)
+            ? $this->salesRanking->counts($storyModels->pluck('id'), $productModels->pluck('id'))
+            : ['stories' => [], 'products' => []];
+        $viewCounts = $sort === 'most_viewed'
+            ? $this->salesRanking->viewCounts($storyModels->pluck('id'), $productModels->pluck('id'))
+            : ['stories' => [], 'products' => []];
+
+        $stories = $storyModels->map(fn (Story $story) => $this->storyItem(
+            $story,
+            $salesCounts['stories'][$story->id] ?? 0,
+            $viewCounts['stories'][$story->id] ?? 0,
+        ));
+        $products = $productModels->map(fn (Product $product) => $this->productItem(
+            $product,
+            $salesCounts['products'][$product->id] ?? 0,
+            $viewCounts['products'][$product->id] ?? 0,
+        ));
 
         $items = $stories->concat($products);
 
@@ -56,7 +76,7 @@ class UnifiedStorefrontService
         }
 
         $items = $this->filter($items, $request);
-        $items = $this->sort($items, $request->input('sort', setting('unified_store_default_sort', 'featured')));
+        $items = $this->sort($items, $sort);
 
         $perPage = in_array((int) $request->input('per_page'), [12, 20, 24, 30], true)
             ? (int) $request->input('per_page')
@@ -96,7 +116,7 @@ class UnifiedStorefrontService
         ];
     }
 
-    private function storyItem(Story $story): UnifiedCatalogItem
+    public function storyItem(Story $story, int $salesCount = 0, int $viewsCount = 0): UnifiedCatalogItem
     {
         $categories = $story->categories;
         $category = $categories->first();
@@ -138,13 +158,15 @@ class UnifiedStorefrontService
             ]))),
             section: 'stories',
             createdTimestamp: $story->created_at?->timestamp ?? 0,
+            salesCount: $salesCount,
+            viewsCount: $viewsCount,
             originalPrice: $hasOffer ? $regularPrice : null,
             originalPriceLabel: $hasOffer ? format_money($regularPrice) : null,
             offerLabel: $hasOffer ? $this->storyPricing->offerLabel() : null,
         );
     }
 
-    private function productItem(Product $product): UnifiedCatalogItem
+    public function productItem(Product $product, int $salesCount = 0, int $viewsCount = 0): UnifiedCatalogItem
     {
         $categoryName = $product->category?->name_ar;
         $section = $this->productSection($product);
@@ -197,6 +219,8 @@ class UnifiedStorefrontService
             ]))),
             section: $section,
             createdTimestamp: $product->created_at?->timestamp ?? 0,
+            salesCount: $salesCount,
+            viewsCount: $viewsCount,
         );
     }
 
@@ -251,14 +275,36 @@ class UnifiedStorefrontService
     }
 
     /** @param Collection<int, UnifiedCatalogItem> $items */
-    private function sort(Collection $items, ?string $sort): Collection
+    private function sort(Collection $items, string $sort): Collection
     {
         return match ($sort) {
+            'best_selling' => $this->bestSellingSort($items),
+            'most_viewed' => $this->mostViewedSort($items),
             'newest' => $items->sortByDesc('createdTimestamp')->values(),
             'price_asc' => $items->sortBy(fn (UnifiedCatalogItem $item) => [$item->price, $item->title])->values(),
             'price_desc' => $items->sortByDesc(fn (UnifiedCatalogItem $item) => [$item->price, $item->createdTimestamp])->values(),
             default => $this->featuredSort($items),
         };
+    }
+
+    /** @param Collection<int, UnifiedCatalogItem> $items */
+    private function bestSellingSort(Collection $items): Collection
+    {
+        return $items
+            ->groupBy('salesCount')
+            ->sortKeysDesc()
+            ->flatMap(fn (Collection $sameSalesCount) => $this->featuredSort($sameSalesCount))
+            ->values();
+    }
+
+    /** @param Collection<int, UnifiedCatalogItem> $items */
+    private function mostViewedSort(Collection $items): Collection
+    {
+        return $items
+            ->groupBy('viewsCount')
+            ->sortKeysDesc()
+            ->flatMap(fn (Collection $sameViewsCount) => $this->bestSellingSort($sameViewsCount))
+            ->values();
     }
 
     /** @param Collection<int, UnifiedCatalogItem> $items */
@@ -353,6 +399,13 @@ class UnifiedStorefrontService
     private function validatedType(?string $type): string
     {
         return in_array($type, ['all', 'stories', 'products', 'gifts', 'activities'], true) ? $type : 'all';
+    }
+
+    private function validatedSort(?string $sort): string
+    {
+        return in_array($sort, ['best_selling', 'most_viewed', 'featured', 'newest', 'price_asc', 'price_desc'], true)
+            ? $sort
+            : 'best_selling';
     }
 
     private function normalizeAge(string $age): string

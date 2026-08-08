@@ -4,7 +4,13 @@
         $storeSubtitle = setting('unified_store_subtitle', 'كل قصص HeroKid المخصصة وكتب الأنشطة والهدايا في مكان واحد.');
         $activeType = request('type', 'all');
         $hasFilters = request()->hasAny(['type', 'age', 'category', 'gender', 'personalization', 'sort', 'q']);
-        $hasAdvancedFilters = request()->hasAny(['age', 'category', 'gender', 'personalization', 'sort', 'q']);
+        $hasAdvancedFilters = request()->hasAny(['age', 'category', 'gender', 'personalization', 'q']);
+        $activeSort = request('sort', setting('unified_store_default_sort', 'best_selling'));
+        $catalogRoute = $isStoriesAlias ? route('stories.index') : route('shop.index');
+        $catalogQuery = request()->query();
+        if ($isStoriesAlias) {
+            unset($catalogQuery['type']);
+        }
         $canonicalPath = $isStoriesAlias
             ? '/shop?type=stories'
             : ($currentCategory ? '/shop/' . $currentCategory->slug : '/shop');
@@ -156,12 +162,28 @@
                     <h2 class="text-2xl font-black text-slate-950">اختيارات لطفلك</h2>
                     <p class="mt-1 text-sm font-bold text-slate-500">{{ $items->total() }} نتيجة من القصص والمنتجات المتاحة</p>
                 </div>
-                <label class="sr-only" for="store-per-page">عدد النتائج في الصفحة</label>
-                <select id="store-per-page" onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
-                    @foreach([12, 20, 24, 30] as $perPage)
-                        <option value="{{ route('shop.index', array_merge(request()->query(), ['per_page' => $perPage, 'page' => null])) }}" @selected($items->perPage() === $perPage)>{{ $perPage }} في الصفحة</option>
-                    @endforeach
-                </select>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="sr-only" for="store-sort">ترتيب النتائج</label>
+                    <select id="store-sort" onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
+                        @foreach([
+                            'best_selling' => 'الأكثر مبيعاً',
+                            'most_viewed' => 'الأكثر مشاهدة',
+                            'featured' => 'المميزة',
+                            'newest' => 'الأحدث',
+                            'price_asc' => 'السعر من الأقل',
+                            'price_desc' => 'السعر من الأعلى',
+                        ] as $sortValue => $sortLabel)
+                            <option value="{{ $catalogRoute }}?{{ http_build_query(array_filter(array_merge($catalogQuery, ['sort' => $sortValue, 'page' => null]), fn ($value) => $value !== null && $value !== '')) }}" @selected($activeSort === $sortValue)>{{ $sortLabel }}</option>
+                        @endforeach
+                    </select>
+
+                    <label class="sr-only" for="store-per-page">عدد النتائج في الصفحة</label>
+                    <select id="store-per-page" onchange="window.location = this.value" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-600">
+                        @foreach([12, 20, 24, 30] as $perPage)
+                            <option value="{{ $catalogRoute }}?{{ http_build_query(array_filter(array_merge($catalogQuery, ['per_page' => $perPage, 'page' => null]), fn ($value) => $value !== null && $value !== '')) }}" @selected($items->perPage() === $perPage)>{{ $perPage }} في الصفحة</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
 
             @if($items->count())
