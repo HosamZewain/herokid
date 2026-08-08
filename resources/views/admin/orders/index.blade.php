@@ -136,11 +136,16 @@
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="divide-y divide-gray-100 md:hidden">
                     @forelse($groups as $group)
-                        @php($whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']))
+                        @php
+                            $whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']);
+                            $detailsUrl = $group['direct_order_id']
+                                ? route('admin.orders.show', $group['direct_order_id'])
+                                : route('admin.orders.groups.show', $group['representative_id']);
+                        @endphp
                         <article class="space-y-4 p-5">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0 text-right">
-                                    <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="block truncate font-mono text-sm font-black text-gray-950" dir="ltr">{{ $group['key'] }}</a>
+                                    <a href="{{ $detailsUrl }}" class="block truncate font-mono text-sm font-black text-gray-950" dir="ltr">{{ $group['key'] }}</a>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
                                     @if($group['order_source'] !== 'website')
                                         <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
@@ -176,7 +181,7 @@
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
-                                <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-xs font-black text-white">عرض وإدارة</a>
+                                <a href="{{ $detailsUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-xs font-black text-white">عرض وإدارة</a>
                                 @if($whatsappNumber && !$trash)
                                     <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" class="rounded-xl bg-green-50 px-3 py-2.5 text-center text-xs font-black text-green-700">واتساب</a>
                                 @elseif($trash && auth()->user()->hasPermission('orders.delete'))
@@ -218,10 +223,15 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             @forelse($groups as $group)
-                                @php($whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']))
+                                @php
+                                    $whatsappNumber = \App\Support\Phone::forWhatsApp($group['phone']);
+                                    $detailsUrl = $group['direct_order_id']
+                                        ? route('admin.orders.show', $group['direct_order_id'])
+                                        : route('admin.orders.groups.show', $group['representative_id']);
+                                @endphp
                                 <tr class="align-top transition hover:bg-slate-50">
                                     <td class="w-44 max-w-44 px-4 py-4">
-                                        <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="block w-40 truncate font-mono text-xs font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</a>
+                                        <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-xs font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
                                         @if($group['order_source'] !== 'website')
@@ -276,7 +286,7 @@
                                     </td>
                                     <td class="px-4 py-4">
                                         <div class="flex min-w-36 flex-wrap gap-1.5">
-                                            <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
+                                            <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                             </a>
                                             @can('orders.update')

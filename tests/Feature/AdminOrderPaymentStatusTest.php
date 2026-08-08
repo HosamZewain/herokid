@@ -44,7 +44,7 @@ class AdminOrderPaymentStatusTest extends TestCase
         }
 
         $this->actingAs($this->admin)
-            ->get(route('admin.orders.groups.show', $first->id))
+            ->get(route('admin.orders.show', $first))
             ->assertOk()
             ->assertSee('مدفوع جزئياً')
             ->assertSee('المتبقي عند الاستلام')

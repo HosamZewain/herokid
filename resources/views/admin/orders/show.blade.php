@@ -37,9 +37,6 @@
             <!-- Top Bar -->
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">
-                    <a href="{{ route('admin.orders.groups.show', $checkoutGroup['representative_id']) }}" class="text-gray-600 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition text-sm font-bold flex items-center gap-1">
-                        العودة لعملية الشراء
-                    </a>
                     <a href="{{ route('admin.orders.index') }}" class="text-indigo-600 border border-indigo-100 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition text-sm font-bold">
                         كل الطلبات
                     </a>

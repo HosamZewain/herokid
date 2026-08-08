@@ -198,6 +198,9 @@ class AdminOrderGroupService
         return [
             'key' => $first->checkoutGroupKey(),
             'representative_id' => (int) $first->id,
+            'direct_order_id' => ! $trash && $storyOrders->isNotEmpty()
+                ? (int) $storyOrders->first()->id
+                : null,
             'created_at' => $orders->min('created_at'),
             'latest_at' => $orders->max('created_at'),
             'orders' => $orders,

@@ -19,8 +19,14 @@ class OrderGroupController extends Controller
 {
     public function show(int $representative, AdminOrderGroupService $groups)
     {
+        $group = $groups->findByRepresentative($representative);
+
+        if ($group['direct_order_id']) {
+            return redirect()->route('admin.orders.show', $group['direct_order_id']);
+        }
+
         return view('admin.orders.group-show', [
-            'group' => $groups->findByRepresentative($representative),
+            'group' => $group,
             'statuses' => OrderStatusService::STATUSES,
             'paymentStatuses' => OrderPaymentStatus::labels(),
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),

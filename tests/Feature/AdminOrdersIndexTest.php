@@ -19,7 +19,7 @@ class AdminOrdersIndexTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.orders.index'))
             ->assertOk()
-            ->assertSee('href="'.route('admin.orders.groups.show', $order->id).'"', false)
+            ->assertSee('href="'.route('admin.orders.show', $order).'"', false)
             ->assertSee('HK-2026-LINKS1')
             ->assertSee('href="'.route('admin.customers.show', 'user-'.$customer->id).'"', false)
             ->assertSee('Customer Parent')
