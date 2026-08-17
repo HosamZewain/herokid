@@ -4,6 +4,7 @@ import { prepareImageForUpload } from './image-upload-preparer';
 import { initializeIdentitySharing } from './identity-sharing';
 import { initializeStorySceneEditor } from './story-scene-editor';
 import { initializeOrderSceneTexts } from './order-scene-texts';
+import { initializeOrderPaymentSummaries } from './order-payment-summary';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -35,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeIdentitySharing();
     initializeStorySceneEditor();
     initializeOrderSceneTexts();
+    initializeOrderPaymentSummaries();
     const adminSidebar = document.querySelector('[data-admin-sidebar]');
     const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
     const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');

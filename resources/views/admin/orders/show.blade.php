@@ -74,6 +74,8 @@
                 </div>
             @endif
 
+            @include('admin.orders._payment-summary')
+
             @if($order->childIdentityRequest)
                 <div class="rounded-2xl border border-fuchsia-200 bg-gradient-to-l from-fuchsia-50 to-indigo-50 p-5 text-right">
                     <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

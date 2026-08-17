@@ -142,6 +142,24 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee(route('admin.orders.show', $second), false);
     }
 
+    public function test_order_details_show_a_downloadable_checkout_payment_summary_with_all_items(): void
+    {
+        [$first] = $this->checkoutFixture();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $first))
+            ->assertOk()
+            ->assertSee('ملخص الطلب والدفع')
+            ->assertSee('تنزيل الملخص كصورة')
+            ->assertSee('المبلغ المطلوب للدفع')
+            ->assertSee('مغامرة رنا')
+            ->assertSee('رحلة آدم')
+            ->assertSee('كتاب تلوين مباشر')
+            ->assertSee('ملصق باسم الطفل')
+            ->assertSee('data-order-payment-summary-data', false)
+            ->assertSee('GROUP-MULTI');
+    }
+
     public function test_single_order_opens_production_details_without_the_group_intermediate_page(): void
     {
         [$order] = $this->checkoutFixture(singleStory: true);
