@@ -9,7 +9,7 @@
     "name": "pdf.worker.min"
   },
   "resources/css/app.css": {
-    "file": "assets/app-DoSv70U0.css",
+    "file": "assets/app-BiSzJzRg.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -18,7 +18,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-D0aaZL2g.js",
+    "file": "assets/app-b8M6WqYe.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -38,7 +38,7 @@
     ]
   },
   "resources/js/scene-reader.js": {
-    "file": "assets/scene-reader-CHO-qd_Q.js",
+    "file": "assets/scene-reader-BoUEwSCH.js",
     "name": "scene-reader",
     "src": "resources/js/scene-reader.js",
     "isDynamicEntry": true,
