@@ -11,6 +11,7 @@
 
     @php
         $publicUrl = $preview->publicUrl();
+        $publicScenesUrl = $preview->publicScenesUrl();
         $whatsAppText = 'مرحبًا، يمكنك مشاهدة معاينة قصة HeroKid من الرابط التالي: '.$publicUrl;
     @endphp
     <div class="mx-auto max-w-6xl space-y-6 py-5 sm:py-8" dir="rtl">
@@ -26,8 +27,10 @@
                 </div>
                 <div class="flex flex-wrap gap-2">
                     @if($preview->status === 'active' && $publicUrl)
-                        <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-indigo-700 shadow-sm">فتح القارئ</a>
-                        <button type="button" data-copy-value="{{ $publicUrl }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white">نسخ الرابط</button>
+                        <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-indigo-700 shadow-sm">قارئ التقليب</a>
+                        <a href="{{ $publicScenesUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-violet-700 shadow-sm">قارئ المشاهد</a>
+                        <button type="button" data-copy-value="{{ $publicUrl }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white">نسخ رابط التقليب</button>
+                        <button type="button" data-copy-value="{{ $publicScenesUrl }}" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">نسخ رابط المشاهد</button>
                         <a href="https://wa.me/?text={{ urlencode($whatsAppText) }}" target="_blank" rel="noopener" class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white">واتساب</a>
                     @endif
                 </div>

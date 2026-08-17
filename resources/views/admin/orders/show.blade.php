@@ -671,6 +671,7 @@
                         @php
                             $bookletPreview = $order->bookletPreview;
                             $bookletPublicUrl = $bookletPreview?->publicUrl();
+                            $bookletScenesUrl = $bookletPreview?->publicScenesUrl();
                         @endphp
                         <h3 class="text-base font-bold mb-2 text-right">📖 معاينة الكتاب للعميل</h3>
                         <p class="mb-4 text-xs font-bold leading-6 text-gray-500 text-right">ارفع ملف PDF مرتب الصفحات لتحصل على رابط قارئ خاص. سيظل الرابط نفسه عند رفع نسخة مصححة.</p>
@@ -684,8 +685,10 @@
                                 @if($bookletPreview->status === 'active' && $bookletPublicUrl)
                                     <p class="mt-3 break-all text-left text-[10px] font-bold text-slate-500" dir="ltr">{{ $bookletPublicUrl }}</p>
                                     <div class="mt-3 grid grid-cols-2 gap-2">
-                                        <a href="{{ $bookletPublicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-3 py-2 text-center text-xs font-black text-indigo-700">فتح القارئ</a>
-                                        <button type="button" data-order-preview-copy="{{ $bookletPublicUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">نسخ الرابط</button>
+                                        <a href="{{ $bookletPublicUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-3 py-2 text-center text-xs font-black text-indigo-700">قارئ التقليب</a>
+                                        <a href="{{ $bookletScenesUrl }}" target="_blank" rel="noopener" class="rounded-xl bg-white px-3 py-2 text-center text-xs font-black text-violet-700">قارئ المشاهد</a>
+                                        <button type="button" data-order-preview-copy="{{ $bookletPublicUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">نسخ رابط التقليب</button>
+                                        <button type="button" data-order-preview-copy="{{ $bookletScenesUrl }}" class="rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white">نسخ رابط المشاهد</button>
                                         <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone'] ?? '') }}?text={{ urlencode('مرحبًا، يمكنك مشاهدة معاينة قصة HeroKid من الرابط التالي: '.$bookletPublicUrl) }}" target="_blank" rel="noopener" class="col-span-2 rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-black text-white">إرسال عبر واتساب</a>
                                     </div>
                                 @endif

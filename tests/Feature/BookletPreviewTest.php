@@ -97,6 +97,20 @@ class BookletPreviewTest extends TestCase
             ->assertDontSee('connect.facebook.net', false)
             ->assertDontSee('googletagmanager.com', false);
 
+        $scenesReader = $this->get($preview->publicScenesUrl());
+        $scenesReader->assertOk()
+            ->assertSee('data-scene-reader', false)
+            ->assertSee('data-reading-direction="rtl"', false)
+            ->assertSee('data-page-count="2"', false)
+            ->assertSee('عرض التقليب')
+            ->assertSee($preview->publicUrl(), false)
+            ->assertDontSee($preview->currentVersion->file_path)
+            ->assertDontSee('data-download', false)
+            ->assertDontSee('data-print', false);
+
+        $this->assertStringContainsString('no-store', (string) $scenesReader->headers->get('Cache-Control'));
+        $this->assertStringContainsString('noindex', (string) $scenesReader->headers->get('X-Robots-Tag'));
+
         $this->assertStringContainsString('no-store', (string) $reader->headers->get('Cache-Control'));
         $this->assertStringContainsString('noindex', (string) $reader->headers->get('X-Robots-Tag'));
         $this->assertSame('no-referrer', $reader->headers->get('Referrer-Policy'));

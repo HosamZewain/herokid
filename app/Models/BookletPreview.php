@@ -85,6 +85,13 @@ class BookletPreview extends Model
         return $token ? route('booklet-previews.show', ['token' => $token]) : null;
     }
 
+    public function publicScenesUrl(): ?string
+    {
+        $token = $this->plainPublicToken();
+
+        return $token ? route('booklet-previews.scenes', ['token' => $token]) : null;
+    }
+
     public function isPubliclyAvailable(): bool
     {
         if ($this->trashed() || $this->status !== 'active' || ! $this->current_version_id) {

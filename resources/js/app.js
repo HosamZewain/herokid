@@ -20,6 +20,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
+    const sceneReader = document.querySelector('[data-scene-reader]');
+    if (sceneReader) {
+        import('./scene-reader')
+            .then(({ initializeSceneReader }) => initializeSceneReader(sceneReader))
+            .catch(() => {
+                sceneReader.querySelector('[data-reader-loading]')?.setAttribute('hidden', '');
+                sceneReader.querySelector('[data-reader-error]')?.removeAttribute('hidden');
+            });
+    }
+
     initializeIdentityPhotoUploader();
     initializeIdentityHeicRecovery();
     initializeIdentitySharing();

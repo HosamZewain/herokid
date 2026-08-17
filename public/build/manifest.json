@@ -4,8 +4,12 @@
     "name": "heic2any",
     "isDynamicEntry": true
   },
+  "_pdf.worker.min-DQioOMWc.js": {
+    "file": "assets/pdf.worker.min-DQioOMWc.js",
+    "name": "pdf.worker.min"
+  },
   "resources/css/app.css": {
-    "file": "assets/app-2XSVAeU7.css",
+    "file": "assets/app-DoSv70U0.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -14,19 +18,32 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-C27pH75t.js",
+    "file": "assets/app-D0aaZL2g.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
       "_heic2any-DQxJzxPi.js",
-      "resources/js/booklet-reader.js"
+      "resources/js/booklet-reader.js",
+      "resources/js/scene-reader.js"
     ]
   },
   "resources/js/booklet-reader.js": {
-    "file": "assets/booklet-reader-BY8Vi2Dn.js",
+    "file": "assets/booklet-reader-D7OrfzFs.js",
     "name": "booklet-reader",
     "src": "resources/js/booklet-reader.js",
-    "isDynamicEntry": true
+    "isDynamicEntry": true,
+    "imports": [
+      "_pdf.worker.min-DQioOMWc.js"
+    ]
+  },
+  "resources/js/scene-reader.js": {
+    "file": "assets/scene-reader-CHO-qd_Q.js",
+    "name": "scene-reader",
+    "src": "resources/js/scene-reader.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_pdf.worker.min-DQioOMWc.js"
+    ]
   }
 }

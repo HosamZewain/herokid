@@ -45,7 +45,10 @@
                     <h1 class="truncate text-sm font-black sm:text-base">{{ $publicTitle }}</h1>
                     <p class="text-[9px] font-bold text-slate-400 sm:text-[10px]">معاينة خاصة للعرض فقط</p>
                 </div>
-                <button type="button" data-fullscreen class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-lg hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300" aria-label="عرض بملء الشاشة">⛶</button>
+                <div class="flex items-center gap-1.5">
+                    <a href="{{ $scenesUrl }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 px-2.5 text-[10px] font-black hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 sm:px-3 sm:text-xs">عرض المشاهد</a>
+                    <button type="button" data-fullscreen class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-lg hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300" aria-label="عرض بملء الشاشة">⛶</button>
+                </div>
             </div>
         </header>
 

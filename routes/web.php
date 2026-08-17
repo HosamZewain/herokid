@@ -117,6 +117,10 @@ Route::get('/preview/{token}', [PublicBookletPreviewController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{64}')
     ->middleware('throttle:120,1')
     ->name('booklet-previews.show');
+Route::get('/preview/{token}/scenes', [PublicBookletPreviewController::class, 'scenes'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:120,1')
+    ->name('booklet-previews.scenes');
 Route::get('/preview-media/{bookletPreview}', [PublicBookletPreviewController::class, 'document'])
     ->middleware('throttle:300,1')
     ->name('booklet-previews.document');
