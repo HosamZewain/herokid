@@ -94,12 +94,16 @@ export function initializeFootballStories() {
         cards.forEach((card) => {
             const checked = card.querySelector('[data-story-checkbox]')?.checked;
             card.classList.toggle('border-indigo-600', checked);
-            card.classList.toggle('ring-4', checked);
+            card.classList.toggle('ring-2', checked);
+            card.classList.toggle('sm:ring-4', checked);
             card.classList.toggle('ring-indigo-100', checked);
             card.classList.toggle('border-slate-200', !checked);
             card.querySelector('[data-selected-badge]')?.classList.toggle('hidden', !checked);
-            const copy = card.querySelector('[data-select-copy]');
-            if (copy) copy.textContent = checked ? 'إلغاء الاختيار' : 'اختار القصة';
+            const toggle = card.querySelector('[data-story-toggle]');
+            if (toggle) {
+                toggle.textContent = checked ? 'إلغاء الاختيار' : 'اختار القصة';
+                toggle.setAttribute('aria-pressed', checked ? 'true' : 'false');
+            }
         });
 
         if (count) count.textContent = selected.length.toLocaleString('ar-EG');
@@ -114,6 +118,12 @@ export function initializeFootballStories() {
 
     cards.forEach((card) => {
         const checkbox = card.querySelector('[data-story-checkbox]');
+        card.querySelector('[data-story-toggle]')?.addEventListener('click', () => {
+            if (!checkbox) return;
+
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        });
         checkbox?.addEventListener('change', () => {
             renderSelection();
             trackEvent('SelectStory', {
@@ -140,8 +150,7 @@ export function initializeFootballStories() {
     function updateFloatingWhatsApp() {
         if (!floatingWhatsApp || !customization) return;
 
-        const customizationReached = window.scrollY >= customization.offsetTop - (window.innerHeight * 0.35);
-        floatingWhatsApp.classList.toggle('hidden', window.innerWidth < 768 && customizationReached);
+        floatingWhatsApp.classList.toggle('hidden', window.innerWidth < 768);
     }
 
     window.addEventListener('scroll', updateFloatingWhatsApp, { passive: true });

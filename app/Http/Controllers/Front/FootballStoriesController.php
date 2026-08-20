@@ -58,8 +58,8 @@ class FootballStoriesController extends Controller
                 'uploadUrl' => route('photo-uploads.store'),
                 'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
-                'minimumFiles' => (int) config('photo_uploads.min_files', 2),
-                'maxFiles' => (int) config('photo_uploads.max_files', 3),
+                'minimumFiles' => 2,
+                'maxFiles' => 3,
                 'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
                 'concurrency' => (int) config('photo_uploads.concurrency', 2),
                 'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
@@ -74,7 +74,7 @@ class FootballStoriesController extends Controller
         TemporaryPhotoUploadService $uploads,
         StoryCartItemBuilder $itemBuilder,
     ) {
-        $maximumPhotos = (int) config('photo_uploads.max_files', 3);
+        $maximumPhotos = 3;
         $validated = $request->validate([
             'story_ids' => ['required', 'array', 'min:1'],
             'story_ids.*' => ['required', 'integer', 'distinct'],
