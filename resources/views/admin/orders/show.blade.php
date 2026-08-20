@@ -74,6 +74,8 @@
                 </div>
             @endif
 
+            @include('admin.orders._payment-summary')
+
             @if($order->childIdentityRequest)
                 <div class="rounded-2xl border border-fuchsia-200 bg-gradient-to-l from-fuchsia-50 to-indigo-50 p-5 text-right">
                     <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -496,6 +498,105 @@
                     </div>
                     @endcan
 
+                    <!-- Child Identity Prompt -->
+                    @if($order->story)
+                    @can('orders.production_prompt.manage')
+                    <div class="rounded-2xl border border-fuchsia-100 bg-white p-6 shadow-sm">
+                        <div class="mb-4 flex flex-col gap-3 border-b pb-3 md:flex-row md:items-center md:justify-between">
+                            <div class="text-right">
+                                <h3 class="text-lg font-bold">Child Identity Prompt</h3>
+                                <p class="mt-1 text-xs font-bold text-gray-500">ينشئ هوية الطفل فقط قبل توليد المشاهد، ويستخدم سياق القصة لتحديد شكل بطلها</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                @if($order->childIdentityApprovedAttempt)
+                                    <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">هوية معتمدة ومربوطة بالطلب</span>
+                                @else
+                                    <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">بانتظار اعتماد الهوية</span>
+                                @endif
+                                @if($order->childIdentityPromptOverride)
+                                    <span class="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1.5 text-xs font-black text-fuchsia-700">نسخة خاصة بالطلب</span>
+                                @else
+                                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-600">القالب الافتراضي</span>
+                                @endif
+                                <button
+                                    type="button"
+                                    id="copy-child-identity-prompt"
+                                    class="inline-flex items-center justify-center rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
+                                >
+                                    نسخ برومبت الهوية
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-right text-sm text-indigo-900">
+                            <p class="font-black">ترتيب العمل الصحيح</p>
+                            <p class="mt-1 leading-6">١) استخدم هذا البرومبت لتوليد هوية الطفل فقط. ٢) أرسل الهوية للعميل واعتمدها. ٣) بعد ربط الهوية المعتمدة بالطلب، سيضيفها برومبت الإنتاج الحالي تلقائيًا كمرجع بصري عند توليد المشاهد.</p>
+                        </div>
+
+                        <textarea
+                            id="child-identity-prompt"
+                            rows="24"
+                            dir="ltr"
+                            data-regenerate-url="{{ route('admin.orders.child-identity-prompt.regenerate', $order) }}"
+                            data-regenerate-confirm="سيتم استبدال تعديلات برومبت الهوية بالنسخة الافتراضية المحدثة من بيانات الطلب. هل تريد المتابعة؟"
+                            spellcheck="false"
+                            class="block w-full rounded-xl border-gray-300 bg-fuchsia-50/30 text-left font-mono text-sm leading-6 text-slate-800 shadow-sm focus:border-fuchsia-500 focus:ring-fuchsia-500"
+                        >{{ $childIdentityPrompt ?? '' }}</textarea>
+
+                        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <button type="button" id="regenerate-child-identity-prompt" class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2.5 text-sm font-bold text-fuchsia-700 hover:bg-fuchsia-100">
+                                إعادة إنشاء من بيانات الطلب
+                            </button>
+                            <form action="{{ route('admin.orders.child-identity-prompt.override', $order) }}" method="POST" data-child-identity-prompt-form>
+                                @csrf
+                                <input type="hidden" name="prompt_text">
+                                <button class="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-100">
+                                    حفظ كبرومبت خاص
+                                </button>
+                            </form>
+                            <form action="{{ route('admin.orders.child-identity-prompt.override-reset', $order) }}" method="POST" onsubmit="return confirm('سيتم حذف برومبت الهوية الخاص والرجوع للقالب الافتراضي. هل تريد المتابعة؟')">
+                                @csrf
+                                @method('DELETE')
+                                <button class="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                                    الرجوع للقالب الافتراضي
+                                </button>
+                            </form>
+                            <form action="{{ route('admin.orders.child-identity-prompt.snapshot', $order) }}" method="POST" data-child-identity-prompt-form>
+                                @csrf
+                                <input type="hidden" name="prompt_text">
+                                <input type="hidden" name="snapshot_reason" value="manual">
+                                <button class="w-full rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-bold text-green-700 hover:bg-green-100">
+                                    حفظ نسخة الهوية
+                                </button>
+                            </form>
+                        </div>
+
+                        <div id="child-identity-prompt-copy-message" class="mt-3 hidden rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-right text-sm font-bold text-green-700" role="status" aria-live="polite">
+                            تم نسخ برومبت هوية الطفل بنجاح
+                        </div>
+
+                        @if($order->childIdentityPromptSnapshots->count())
+                            <div class="mt-6 rounded-xl border border-fuchsia-100 bg-fuchsia-50/40 p-4 text-right">
+                                <h4 class="mb-3 text-sm font-black text-slate-800">نسخ برومبت الهوية المحفوظة</h4>
+                                <div class="space-y-3">
+                                    @foreach($order->childIdentityPromptSnapshots as $snapshot)
+                                        <details class="rounded-lg bg-white p-3">
+                                            <summary class="cursor-pointer text-sm font-bold text-slate-700">
+                                                {{ $snapshot->created_at->format('Y-m-d H:i') }} — v{{ $snapshot->prompt_version }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
+                                                @if($snapshot->creator)
+                                                    — {{ $snapshot->creator->name }}
+                                                @endif
+                                            </summary>
+                                            <textarea rows="10" readonly dir="ltr" class="mt-3 block w-full rounded-lg border-gray-200 bg-slate-50 text-left font-mono text-xs">{{ $snapshot->prompt_text }}</textarea>
+                                        </details>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+                    @endcan
+                    @endif
+
                     <!-- Story Production Prompt -->
                     @can('orders.production_prompt.manage')
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -764,6 +865,80 @@
             </div>
         </div>
     </div>
+
+@can('orders.production_prompt.manage')
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var copyButton = document.getElementById('copy-child-identity-prompt');
+    var promptTextarea = document.getElementById('child-identity-prompt');
+    var message = document.getElementById('child-identity-prompt-copy-message');
+    var regenerateButton = document.getElementById('regenerate-child-identity-prompt');
+    var originalPrompt = promptTextarea ? promptTextarea.value : '';
+
+    if (!copyButton || !promptTextarea || !message) {
+        return;
+    }
+
+    function showCopiedMessage() {
+        message.classList.remove('hidden');
+        window.clearTimeout(showCopiedMessage.timeout);
+        showCopiedMessage.timeout = window.setTimeout(function () {
+            message.classList.add('hidden');
+        }, 3000);
+    }
+
+    function fallbackCopy() {
+        promptTextarea.focus();
+        promptTextarea.select();
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+
+    copyButton.addEventListener('click', function () {
+        var promptText = promptTextarea.value;
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(promptText).then(showCopiedMessage).catch(function () {
+                fallbackCopy();
+                showCopiedMessage();
+            });
+
+            return;
+        }
+
+        fallbackCopy();
+        showCopiedMessage();
+    });
+
+    document.querySelectorAll('[data-child-identity-prompt-form]').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            form.querySelector('input[name="prompt_text"]').value = promptTextarea.value;
+        });
+    });
+
+    if (regenerateButton) {
+        regenerateButton.addEventListener('click', function () {
+            var isDirty = promptTextarea.value !== originalPrompt;
+
+            if (isDirty && !window.confirm(promptTextarea.dataset.regenerateConfirm)) {
+                return;
+            }
+
+            fetch(promptTextarea.dataset.regenerateUrl, {
+                headers: {'Accept': 'application/json'}
+            })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    promptTextarea.value = data.prompt || '';
+                    originalPrompt = promptTextarea.value;
+                });
+        });
+    }
+});
+</script>
+@endpush
+@endcan
 
 @can('orders.production_prompt.manage')
 @push('scripts')

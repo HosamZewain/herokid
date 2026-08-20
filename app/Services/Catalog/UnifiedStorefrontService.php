@@ -46,7 +46,7 @@ class UnifiedStorefrontService
 
         $productModels = $needsProducts
             ? Product::query()
-                ->with('category:id,name_ar,slug,is_active,show_in_store')
+                ->with('category:id,name_ar,name_en,slug,is_active,show_in_store')
                 ->publiclyVisible()
                 ->get()
             : collect();
@@ -118,6 +118,7 @@ class UnifiedStorefrontService
 
     public function storyItem(Story $story, int $salesCount = 0, int $viewsCount = 0): UnifiedCatalogItem
     {
+        $english = app()->getLocale() === 'en';
         $categories = $story->categories;
         $category = $categories->first();
         $ageRange = trim((string) $story->age_range) ?: 'كل الأعمار';
@@ -136,20 +137,20 @@ class UnifiedStorefrontService
             shortDescription: $shortDescription,
             imageUrl: $story->cover_url,
             price: $effectivePrice,
-            priceLabel: format_money($effectivePrice),
-            ageRange: format_age_range($ageRange),
+            priceLabel: $english ? number_format($effectivePrice, 2).' EGP' : format_money($effectivePrice),
+            ageRange: $english ? ($ageRange === 'كل الأعمار' ? 'All ages' : $ageRange) : format_age_range($ageRange),
             ageValues: $ageRange === 'كل الأعمار' ? [] : [$ageRange],
             category: $category?->name,
             categorySlug: $category?->slug,
             categorySource: 'story',
             tags: $categories->pluck('name')->filter()->values()->all(),
             personalizationType: 'requires_child_photos',
-            personalizationLabel: 'قصة مخصصة — تحتاج بيانات الطفل وصوره',
+            personalizationLabel: $english ? 'Personalized story — child details and photos required' : 'قصة مخصصة — تحتاج بيانات الطفل وصوره',
             isFeatured: false,
             sortOrder: 0,
             detailUrl: route('stories.show', $story->slug),
-            ctaLabel: 'خصّص القصة',
-            badgeLabel: $category?->name ?: 'قصة مخصصة',
+            ctaLabel: $english ? 'Personalize story' : 'خصّص القصة',
+            badgeLabel: $category?->name ?: ($english ? 'Personalized story' : 'قصة مخصصة'),
             searchableText: Str::lower(implode(' ', array_filter([
                 $story->title,
                 $shortDescription,
@@ -161,14 +162,15 @@ class UnifiedStorefrontService
             salesCount: $salesCount,
             viewsCount: $viewsCount,
             originalPrice: $hasOffer ? $regularPrice : null,
-            originalPriceLabel: $hasOffer ? format_money($regularPrice) : null,
+            originalPriceLabel: $hasOffer ? ($english ? number_format($regularPrice, 2).' EGP' : format_money($regularPrice)) : null,
             offerLabel: $hasOffer ? $this->storyPricing->offerLabel() : null,
         );
     }
 
     public function productItem(Product $product, int $salesCount = 0, int $viewsCount = 0): UnifiedCatalogItem
     {
-        $categoryName = $product->category?->name_ar;
+        $english = app()->getLocale() === 'en';
+        $categoryName = $english ? ($product->category?->name_en ?: $product->category?->name_ar) : $product->category?->name_ar;
         $section = $this->productSection($product);
         $personalizationType = match ($product->personalization_mode) {
             'inherit_from_linked_story' => 'story_context',
@@ -176,28 +178,28 @@ class UnifiedStorefrontService
             default => 'none',
         };
         $personalizationLabel = match ($personalizationType) {
-            'story_context' => 'إضافة تستخدم قصة الطفل',
-            'requires_child_photos' => 'منتج مخصص — يحتاج بيانات الطفل',
-            default => 'منتج جاهز — شراء مباشر',
+            'story_context' => $english ? 'Add-on using the child’s story' : 'إضافة تستخدم قصة الطفل',
+            'requires_child_photos' => $english ? 'Personalized product — child details required' : 'منتج مخصص — يحتاج بيانات الطفل',
+            default => $english ? 'Ready product — buy directly' : 'منتج جاهز — شراء مباشر',
         };
         $ctaLabel = match (true) {
-            $personalizationType === 'story_context', $product->purchase_mode === 'add_on_only' => 'أضف مع قصة طفلك',
-            $personalizationType === 'requires_child_photos' => 'خصّص المنتج',
-            default => 'شراء الآن',
+            $personalizationType === 'story_context', $product->purchase_mode === 'add_on_only' => $english ? 'Add with your child’s story' : 'أضف مع قصة طفلك',
+            $personalizationType === 'requires_child_photos' => $english ? 'Personalize product' : 'خصّص المنتج',
+            default => $english ? 'Buy now' : 'شراء الآن',
         };
 
         return new UnifiedCatalogItem(
             id: 'product:'.$product->id,
             type: 'product',
             sourceModel: $product,
-            title: $product->name_ar,
+            title: $english ? ($product->name_en ?: $product->name_ar) : $product->name_ar,
             slug: $product->slug,
-            description: trim((string) $product->description_ar),
-            shortDescription: trim((string) $product->short_description_ar),
+            description: trim((string) ($english ? ($product->description_en ?: $product->description_ar) : $product->description_ar)),
+            shortDescription: trim((string) ($english ? ($product->short_description_en ?: $product->short_description_ar) : $product->short_description_ar)),
             imageUrl: $product->featured_image_url,
             price: $product->effectivePrice(),
-            priceLabel: format_money($product->effectivePrice()),
-            ageRange: $product->ageLabel(),
+            priceLabel: $english ? number_format($product->effectivePrice(), 2).' EGP' : format_money($product->effectivePrice()),
+            ageRange: $english ? (($product->age_groups ?? []) === [] ? 'All ages' : implode(', ', $product->age_groups)) : $product->ageLabel(),
             ageValues: $product->age_groups ?? [],
             category: $categoryName,
             categorySlug: $product->category?->slug,

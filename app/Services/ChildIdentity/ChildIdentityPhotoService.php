@@ -4,6 +4,7 @@ namespace App\Services\ChildIdentity;
 
 use App\Models\ChildIdentityPhoto;
 use App\Models\ChildIdentityRequest;
+use App\Models\ChildProfilePhoto;
 use App\Models\TemporaryPhotoUpload;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -154,6 +155,43 @@ class ChildIdentityPhotoService
                     $preparedDisk->move($preparedDestination, $preparedSourcePath);
                 }
 
+                throw $exception;
+            }
+        });
+    }
+
+    public function adoptChildProfilePhotos(ChildIdentityRequest $identity, Collection $profilePhotos): Collection
+    {
+        if ($profilePhotos->count() < self::MINIMUM_PHOTOS || $profilePhotos->count() > self::MAXIMUM_PHOTOS) {
+            throw ValidationException::withMessages(['photo_ids' => 'Select two or three active child photos.']);
+        }
+
+        return $profilePhotos->values()->map(function (ChildProfilePhoto $source, int $index) use ($identity): ChildIdentityPhoto {
+            if ($source->status !== 'active' || $source->deleted_at || ! Storage::disk($source->disk)->exists($source->path)) {
+                throw ValidationException::withMessages(['photo_ids' => 'One of the selected child photos is unavailable.']);
+            }
+
+            $destination = 'child-identities/'.$identity->uuid.'/originals/'.Str::uuid().'.'.$this->extensionForMime($source->mime_type);
+            if (! Storage::disk($source->disk)->copy($source->path, $destination)) {
+                throw ValidationException::withMessages(['photo_ids' => 'A selected child photo could not be copied securely.']);
+            }
+
+            try {
+                return $identity->photos()->create([
+                    'disk' => $source->disk,
+                    'path' => $destination,
+                    'original_filename' => $source->original_filename,
+                    'mime_type' => $source->mime_type,
+                    'file_size' => $source->file_size,
+                    'width' => $source->width,
+                    'height' => $source->height,
+                    'checksum' => $source->checksum,
+                    'sort_order' => $index + 1,
+                    'upload_status' => 'uploaded',
+                    'validation_status' => 'valid',
+                ]);
+            } catch (\Throwable $exception) {
+                Storage::disk($source->disk)->delete($destination);
                 throw $exception;
             }
         });

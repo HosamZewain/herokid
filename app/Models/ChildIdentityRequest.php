@@ -27,7 +27,7 @@ class ChildIdentityRequest extends Model
 
     protected $guarded = [];
 
-    protected $hidden = ['resume_token_hash'];
+    protected $hidden = ['resume_token_hash', 'mobile_idempotency_key'];
 
     protected $casts = [
         'consent_accepted_at' => 'datetime',
@@ -42,6 +42,11 @@ class ChildIdentityRequest extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function childProfile(): BelongsTo
+    {
+        return $this->belongsTo(ChildProfile::class);
     }
 
     public function photos(): HasMany

@@ -54,6 +54,11 @@ return [
             'name_en' => 'Settings and Operations',
             'sort_order' => 70,
         ],
+        'integrations' => [
+            'name_ar' => 'التكاملات',
+            'name_en' => 'Integrations',
+            'sort_order' => 75,
+        ],
         'admin_users' => [
             'name_ar' => 'إدارة المستخدمين والصلاحيات',
             'name_en' => 'Admin Users and Permissions',
@@ -67,6 +72,11 @@ return [
     ],
 
     'permissions' => [
+        'robodesk.view' => ['group_key' => 'integrations', 'name_ar' => 'عرض تكامل RoboDesk', 'name_en' => 'View RoboDesk integration', 'description_ar' => 'عرض حالة التكامل والأحداث وإثباتات الدفع.', 'description_en' => 'View integration status, events, and payment proofs.', 'sort_order' => 10, 'sensitive' => true],
+        'robodesk.manage' => ['group_key' => 'integrations', 'name_ar' => 'إدارة تكامل RoboDesk', 'name_en' => 'Manage RoboDesk integration', 'description_ar' => 'إدارة ربط المحادثات وسير عمل العملاء.', 'description_en' => 'Manage customer workflow and conversation linkage.', 'sort_order' => 20, 'sensitive' => true],
+        'robodesk.review_payments' => ['group_key' => 'integrations', 'name_ar' => 'مراجعة إثباتات InstaPay', 'name_en' => 'Review InstaPay proofs', 'description_ar' => 'اعتماد أو رفض إثباتات الدفع يدويًا.', 'description_en' => 'Approve or reject payment proofs manually.', 'sort_order' => 30, 'sensitive' => true],
+        'robodesk.view_media' => ['group_key' => 'integrations', 'name_ar' => 'عرض إثباتات الدفع', 'name_en' => 'View payment proof media', 'description_ar' => 'فتح ملفات إثبات الدفع الخاصة.', 'description_en' => 'Open private payment proof files.', 'sort_order' => 40, 'sensitive' => true],
+        'robodesk.retry' => ['group_key' => 'integrations', 'name_ar' => 'إعادة إرسال أحداث RoboDesk', 'name_en' => 'Retry RoboDesk events', 'description_ar' => 'إعادة محاولة إرسال الأحداث الفاشلة أو المعلقة.', 'description_en' => 'Retry failed or held outbound events.', 'sort_order' => 50, 'sensitive' => true],
         'expenses.view' => ['group_key' => 'expenses', 'name_ar' => 'عرض المصروفات', 'name_en' => 'View expenses', 'description_ar' => 'عرض دفتر الوارد والصادر والرصيد.', 'description_en' => 'View the manual income and expense ledger.', 'sort_order' => 10, 'sensitive' => true],
         'expenses.create_income' => ['group_key' => 'expenses', 'name_ar' => 'إضافة الوارد', 'name_en' => 'Create income', 'description_ar' => 'إضافة وارد أو رصيد افتتاحي يدوي.', 'description_en' => 'Add manual income or opening balances.', 'sort_order' => 20, 'sensitive' => true],
         'expenses.create_expense' => ['group_key' => 'expenses', 'name_ar' => 'إضافة المصروفات', 'name_en' => 'Create expenses', 'description_ar' => 'إضافة مصروف يدوي.', 'description_en' => 'Add manual expense transactions.', 'sort_order' => 30, 'sensitive' => true],
@@ -300,6 +310,8 @@ return [
         'settings.notifications.test' => ['group_key' => 'settings', 'name_ar' => 'اختبار التنبيهات', 'name_en' => 'Test notifications', 'description_ar' => 'إرسال رسائل اختبار من الخادم لقنوات التنبيه.', 'description_en' => 'Send server-side test messages for notification channels.', 'sort_order' => 230, 'sensitive' => true],
         'settings.notifications.view_logs' => ['group_key' => 'settings', 'name_ar' => 'عرض سجل تسليم التنبيهات', 'name_en' => 'View notification logs', 'description_ar' => 'عرض سجل التسليم الآمن والتنبيهات الفاشلة.', 'description_en' => 'View safe delivery history and failed notifications.', 'sort_order' => 240, 'sensitive' => true],
         'settings.notifications.manage_rules' => ['group_key' => 'settings', 'name_ar' => 'إدارة قواعد التنبيهات', 'name_en' => 'Manage notification rules', 'description_ar' => 'تفعيل أو تعطيل التنبيهات لكل حدث وقناة.', 'description_en' => 'Enable or disable notifications per event and channel.', 'sort_order' => 250, 'sensitive' => true],
+        'settings.mobile.view' => ['group_key' => 'settings', 'name_ar' => 'عرض تشغيل تطبيق الهاتف', 'name_en' => 'View mobile operations', 'description_ar' => 'عرض إعدادات التطبيق والتحليلات والطلبات المتعلقة بالخصوصية.', 'description_en' => 'View app configuration, analytics, and privacy operations.', 'sort_order' => 260, 'sensitive' => true],
+        'settings.mobile.manage' => ['group_key' => 'settings', 'name_ar' => 'إدارة تشغيل تطبيق الهاتف', 'name_en' => 'Manage mobile operations', 'description_ar' => 'تحديث إعدادات الإصدار والعروض وحالات طلبات الخصوصية.', 'description_en' => 'Manage app versions, promotions, and privacy request workflow.', 'sort_order' => 270, 'sensitive' => true],
 
         'admin_users.view' => ['group_key' => 'admin_users', 'name_ar' => 'عرض المشرفين', 'name_en' => 'View admin users', 'description_ar' => 'عرض قائمة حسابات المشرفين.', 'description_en' => 'View staff accounts.', 'sort_order' => 10, 'sensitive' => true],
         'admin_users.create' => ['group_key' => 'admin_users', 'name_ar' => 'إضافة مشرفين', 'name_en' => 'Create admin users', 'description_ar' => 'إنشاء حسابات مشرفين جديدة.', 'description_en' => 'Create new staff accounts.', 'sort_order' => 20, 'sensitive' => true],

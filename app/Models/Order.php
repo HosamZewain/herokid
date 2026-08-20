@@ -17,6 +17,7 @@ class Order extends Model
         'discount_cents' => 'integer',
         'paid_amount_cents' => 'integer',
         'payment_updated_at' => 'datetime',
+        'preview_approved_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
 
@@ -68,6 +69,16 @@ class Order extends Model
         return $this->hasOne(BookletPreview::class);
     }
 
+    public function approvedBookletPreviewVersion()
+    {
+        return $this->belongsTo(BookletPreviewVersion::class, 'approved_booklet_preview_version_id');
+    }
+
+    public function previewDecisions()
+    {
+        return $this->hasMany(BookletPreviewDecision::class);
+    }
+
     public function items()
     {
         return $this->hasMany(OrderItem::class);
@@ -81,6 +92,16 @@ class Order extends Model
     public function productionPromptSnapshots()
     {
         return $this->hasMany(OrderProductionPromptSnapshot::class)->latest();
+    }
+
+    public function childIdentityPromptOverride()
+    {
+        return $this->hasOne(OrderChildIdentityPromptOverride::class);
+    }
+
+    public function childIdentityPromptSnapshots()
+    {
+        return $this->hasMany(OrderChildIdentityPromptSnapshot::class)->latest();
     }
 
     public function productionProject()

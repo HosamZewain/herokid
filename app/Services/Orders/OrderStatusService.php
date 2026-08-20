@@ -3,19 +3,24 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Services\Mobile\MobileNotificationService;
 use App\Support\AdminActivityLogger;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class OrderStatusService
 {
+    public function __construct(private readonly MobileNotificationService $mobileNotifications) {}
+
     public const STATUSES = [
         'new',
         'under_review',
         'generating',
         'preview_uploaded',
+        'revision_requested',
         'approved_for_print',
         'printing',
         'shipped',
@@ -30,6 +35,15 @@ class OrderStatusService
             $oldStatus = $locked->status;
             $oldNotes = $locked->notes;
             $statusChanged = $oldStatus !== $status;
+
+            if ($locked->story_id && in_array($status, ['approved_for_print', 'printing'], true)) {
+                $currentVersionId = $locked->bookletPreview()->value('current_version_id');
+                if (! $currentVersionId || (int) $locked->approved_booklet_preview_version_id !== (int) $currentVersionId) {
+                    throw ValidationException::withMessages([
+                        'status' => 'لا يمكن اعتماد الطباعة أو بدئها قبل موافقة العميل الصريحة على النسخة الحالية من المعاينة.',
+                    ]);
+                }
+            }
 
             $locked->update([
                 'status' => $status,
@@ -66,6 +80,10 @@ class OrderStatusService
                 request: $request,
             );
 
+            if ($statusChanged) {
+                $this->notifyCustomer($locked, $status);
+            }
+
             return $locked->fresh();
         });
     }
@@ -78,5 +96,21 @@ class OrderStatusService
                 ->map(fn (Order $order): Order => $this->update($order, $status, $notes, $request))
                 ->values();
         });
+    }
+
+    private function notifyCustomer(Order $order, string $status): void
+    {
+        $message = match ($status) {
+            'generating' => ['production.started', 'بدأ إعداد طلبك', 'بدأ فريق HeroKid إعداد محتوى طلبك '.$order->order_number.'.'],
+            'preview_uploaded' => ['preview.ready', 'تصميمك جاهز للمراجعة', 'راجع النسخة الحالية من طلبك '.$order->order_number.' واعتمدها أو اطلب تعديلاً.'],
+            'approved_for_print' => ['preview.approved', 'تم تسجيل موافقتك', 'تم اعتماد التصميم الحالي للطلب '.$order->order_number.' للطباعة.'],
+            'printing' => ['printing.started', 'بدأت الطباعة', 'دخل طلبك '.$order->order_number.' مرحلة الطباعة.'],
+            'shipped' => ['order.shipped', 'تم شحن طلبك', 'طلب HeroKid '.$order->order_number.' في طريقه إليك.'],
+            'delivered' => ['order.delivered', 'تم توصيل طلبك', 'نتمنى أن تستمتعوا بطلب HeroKid '.$order->order_number.'.'],
+            default => null,
+        };
+        if ($message) {
+            $this->mobileNotifications->notifyOrder($order, $message[0], $message[1], $message[2]);
+        }
     }
 }

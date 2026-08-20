@@ -10,11 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $guarded = [];
 
@@ -51,6 +52,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_seen_at' => 'datetime',
+            'deletion_requested_at' => 'datetime',
+            'deletion_scheduled_for' => 'datetime',
             'is_active' => 'boolean',
             'password' => 'hashed',
         ];
@@ -64,6 +67,51 @@ class User extends Authenticatable
     public function storyViews(): HasMany
     {
         return $this->hasMany(CustomerStoryView::class);
+    }
+
+    public function childProfiles(): HasMany
+    {
+        return $this->hasMany(ChildProfile::class);
+    }
+
+    public function customerAddresses(): HasMany
+    {
+        return $this->hasMany(CustomerAddress::class);
+    }
+
+    public function mobileDrafts(): HasMany
+    {
+        return $this->hasMany(MobileDraft::class);
+    }
+
+    public function deviceInstallations(): HasMany
+    {
+        return $this->hasMany(DeviceInstallation::class);
+    }
+
+    public function mobileCarts(): HasMany
+    {
+        return $this->hasMany(MobileCart::class);
+    }
+
+    public function mobileCheckoutAttempts(): HasMany
+    {
+        return $this->hasMany(MobileCheckoutAttempt::class);
+    }
+
+    public function mobileNotifications(): HasMany
+    {
+        return $this->hasMany(MobileNotification::class);
+    }
+
+    public function privacyRequests(): HasMany
+    {
+        return $this->hasMany(PrivacyRequest::class);
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 
     public function adminActivityLogs(): HasMany

@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderDetailsUpdateService;
 use App\Services\Orders\OrderSceneTextService;
@@ -139,8 +140,12 @@ class OrderController extends Controller
             ->with('success', 'تم إنشاء الطلب بنجاح وإضافته إلى الطلبات الجديدة.');
     }
 
-    public function show(Order $order, AdminOrderGroupService $groups, OrderSceneTextService $sceneTexts)
-    {
+    public function show(
+        Order $order,
+        AdminOrderGroupService $groups,
+        OrderSceneTextService $sceneTexts,
+        OrderChildIdentityPromptService $identityPrompts,
+    ) {
         $order->load([
             'user',
             'story.sceneTemplates',
@@ -154,6 +159,8 @@ class OrderController extends Controller
             'items.linkedAddOns.product',
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
+            'childIdentityPromptOverride.editor',
+            'childIdentityPromptSnapshots.creator',
             'productionProject.assignedTo',
             'productionProject.scenes',
             'childIdentityRequest.photos',
@@ -163,11 +170,13 @@ class OrderController extends Controller
         $storyProductionPrompt = null;
         $globalStoryProductionPrompt = null;
         $productionPromptTemplateSetting = null;
+        $childIdentityPrompt = null;
 
         if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
             $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
             $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
             $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
+            $childIdentityPrompt = $identityPrompts->forOrder($order);
         }
 
         AdminActivityLogger::log(
@@ -185,13 +194,21 @@ class OrderController extends Controller
         $checkoutGroup = $groups->findByRepresentative($order->id);
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
 
-        return view('admin.orders.show', compact('order', 'checkoutGroup', 'storyProductionPrompt', 'globalStoryProductionPrompt', 'productionPromptTemplateSetting', 'sceneTextHandoff'));
+        return view('admin.orders.show', compact(
+            'order',
+            'checkoutGroup',
+            'storyProductionPrompt',
+            'globalStoryProductionPrompt',
+            'productionPromptTemplateSetting',
+            'childIdentityPrompt',
+            'sceneTextHandoff',
+        ));
     }
 
     public function update(Request $request, Order $order, OrderStatusService $statuses)
     {
         $validated = $request->validate([
-            'status' => 'required|string|in:new,under_review,generating,preview_uploaded,approved_for_print,printing,shipped,delivered,cancelled',
+            'status' => 'required|string|in:new,under_review,generating,preview_uploaded,revision_requested,approved_for_print,printing,shipped,delivered,cancelled',
             'admin_notes' => 'nullable|string|max:2000',
         ]);
 

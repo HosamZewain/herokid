@@ -71,6 +71,12 @@ class BookletPreviewManager
                     'current_version_id' => $version->id,
                     'updated_by_user_id' => $actor?->id,
                 ]);
+                if ($locked->order_id) {
+                    Order::query()->whereKey($locked->order_id)->update([
+                        'approved_booklet_preview_version_id' => null,
+                        'preview_approved_at' => null,
+                    ]);
+                }
 
                 return $locked->fresh(['currentVersion', 'versions', 'story', 'order']);
             });

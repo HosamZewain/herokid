@@ -39,7 +39,7 @@ class SalesReportFilters
         [$start, $end] = self::dates($request, $range, $today);
 
         $status = (string) $request->query('status', 'all');
-        $allowedStatuses = ['active', 'all', 'new', 'under_review', 'generating', 'preview_uploaded', 'approved_for_print', 'printing', 'shipped', 'delivered', 'cancelled'];
+        $allowedStatuses = ['active', 'all', 'new', 'under_review', 'generating', 'preview_uploaded', 'revision_requested', 'approved_for_print', 'printing', 'shipped', 'delivered', 'cancelled'];
         $status = in_array($status, $allowedStatuses, true) ? $status : 'all';
 
         $paymentStatus = (string) $request->query('payment_status', 'all');

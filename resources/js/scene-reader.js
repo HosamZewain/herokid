@@ -29,6 +29,7 @@ const sceneGroups = (pageCount) => {
 export async function initializeSceneReader(root) {
     if (!root || root.dataset.readerInitialized === 'true') return;
     root.dataset.readerInitialized = 'true';
+    root.style.setProperty('--scene-reader-viewport-height', `${window.innerHeight}px`);
 
     const documentUrl = root.dataset.documentUrl;
     const direction = root.dataset.readingDirection === 'ltr' ? 'ltr' : 'rtl';
@@ -96,6 +97,23 @@ export async function initializeSceneReader(root) {
         return promise;
     };
 
+    const renderAllPages = async () => {
+        const pageNumbers = Array.from({ length: pdf.numPages }, (_, index) => index + 1);
+        const batchSize = 4;
+
+        for (let index = 0; index < pageNumbers.length; index += batchSize) {
+            const batch = pageNumbers.slice(index, index + batchSize);
+            await Promise.all(batch.map((pageNumber) => renderPage(pageNumber)));
+
+            if (loadingProgress) {
+                const rendered = Math.min(index + batch.length, pageNumbers.length);
+                loadingProgress.textContent = `تم تجهيز ${rendered} من ${pageNumbers.length} صفحة`;
+            }
+        }
+
+        root.dataset.allPagesRendered = 'true';
+    };
+
     try {
         const loadingTask = getDocument({
             url: documentUrl,
@@ -144,7 +162,7 @@ export async function initializeSceneReader(root) {
                     renderPage(Number(page.dataset.scenePage)).catch(() => showError('تعذر تجهيز إحدى صفحات المشهد.'));
                 });
             });
-        }, { root: sceneList, rootMargin: '100% 0px' });
+        }, { root: null, rootMargin: '100% 0px' });
 
         const positionObserver = new IntersectionObserver((entries) => {
             const visible = entries
@@ -155,7 +173,7 @@ export async function initializeSceneReader(root) {
             const label = visible.target.dataset.sceneLabel;
             if (currentLabel) currentLabel.textContent = label;
             if (progressBar) progressBar.style.width = `${((index + 1) / groups.length) * 100}%`;
-        }, { root: sceneList, threshold: [0.35, 0.55, 0.75] });
+        }, { root: null, threshold: [0.35, 0.55, 0.75] });
 
         sceneList.querySelectorAll('[data-scene-group]').forEach((section) => {
             renderObserver.observe(section);
@@ -163,7 +181,14 @@ export async function initializeSceneReader(root) {
         });
 
         await Promise.all(groups[0]?.pages.map((page) => renderPage(page)) || []);
-        loading?.setAttribute('hidden', '');
+
+        if (pdf.numPages <= 40) {
+            await renderAllPages();
+            loading?.setAttribute('hidden', '');
+        } else {
+            loading?.setAttribute('hidden', '');
+            renderAllPages().catch(() => showError('تعذر تجهيز إحدى صفحات المشهد.'));
+        }
     } catch (error) {
         showError(error?.message?.includes('403')
             ? 'انتهت جلسة المعاينة. حدّث الصفحة لإعادة فتحها.'

@@ -15,11 +15,11 @@
     <link rel="icon" type="image/png" href="/images/logo-96.png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
-        html, body { overscroll-behavior: none; }
-        body { font-family: Tahoma, Arial, sans-serif; background: radial-gradient(circle at top, #312e81 0, #111827 42%, #030712 100%); }
+        html { min-height: 100%; background: #030712; }
+        body { min-height: 100%; font-family: Tahoma, Arial, sans-serif; background: radial-gradient(circle at top, #312e81 0, #111827 42rem, #030712 100rem); }
         [data-reader-loading][hidden], [data-reader-error][hidden] { display: none; }
-        .scene-reader__list { scroll-snap-type: y proximity; scrollbar-color: #6366f1 #0f172a; }
-        .scene-reader__section { min-height: calc(100dvh - 4.25rem); padding: .75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; scroll-snap-align: start; scroll-snap-stop: always; }
+        .scene-reader__list { min-height: calc(var(--scene-reader-viewport-height, 100vh) - 3.5rem); scrollbar-color: #6366f1 #0f172a; }
+        .scene-reader__section { min-height: calc(var(--scene-reader-viewport-height, 100vh) - 3.5rem); padding: .75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; }
         .scene-reader__frame { width: min(100%, 1500px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border-radius: .75rem; background: white; box-shadow: 0 24px 70px rgb(0 0 0 / .42); touch-action: pan-y pinch-zoom; }
         .scene-reader__frame--cover, .scene-reader__frame--back-cover { width: min(80vw, 620px); grid-template-columns: minmax(0, 1fr); }
         .scene-reader__page { position: relative; min-width: 0; aspect-ratio: 1 / 1.4142; overflow: hidden; background: linear-gradient(135deg, #fff, #f1f5f9); }
@@ -29,18 +29,17 @@
         .scene-reader__caption { margin: 0; border-radius: 9999px; background: rgb(15 23 42 / .82); padding: .35rem .85rem; color: white; font-size: .75rem; font-weight: 900; }
         @media (min-width: 768px) {
             .scene-reader__section { padding: 1.25rem; }
-            .scene-reader__frame { width: auto; height: min(calc(100dvh - 7rem), calc((100vw - 2.5rem) / 1.4142)); aspect-ratio: 1.4142 / 1; }
-            .scene-reader__frame--cover, .scene-reader__frame--back-cover { width: auto; height: min(calc(100dvh - 7rem), calc((100vw - 2.5rem) * 1.4142)); aspect-ratio: 1 / 1.4142; }
+            .scene-reader__frame { width: auto; height: min(calc(var(--scene-reader-viewport-height, 100vh) - 7rem), calc((100vw - 2.5rem) / 1.4142)); aspect-ratio: 1.4142 / 1; }
+            .scene-reader__frame--cover, .scene-reader__frame--back-cover { width: auto; height: min(calc(var(--scene-reader-viewport-height, 100vh) - 7rem), calc((100vw - 2.5rem) * 1.4142)); aspect-ratio: 1 / 1.4142; }
         }
-        @media (prefers-reduced-motion: reduce) { .scene-reader__list { scroll-behavior: auto !important; scroll-snap-type: none; } }
     </style>
 </head>
-<body class="h-[100dvh] overflow-hidden text-white">
-    <div class="relative flex h-[100dvh] flex-col overflow-hidden" data-scene-reader
+<body class="text-white">
+    <div class="relative" style="min-height: var(--scene-reader-viewport-height, 100vh)" data-scene-reader
         data-document-url="{{ $documentUrl }}"
         data-reading-direction="{{ $preview->reading_direction }}"
         data-page-count="{{ $pageCount }}">
-        <header class="relative z-20 shrink-0 border-b border-white/10 bg-slate-950/85 px-3 py-1.5 backdrop-blur sm:px-4 sm:py-2">
+        <header class="relative z-20 border-b border-white/10 bg-slate-950/85 px-3 py-1.5 backdrop-blur sm:px-4 sm:py-2">
             <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
                 <a href="{{ route('home') }}" class="flex items-center gap-2" aria-label="HeroKid">
                     <img src="/images/logo-192.png" alt="HeroKid" class="h-10 w-10 rounded-lg bg-white object-contain p-0.5 sm:h-11 sm:w-11">
@@ -55,9 +54,9 @@
             <div class="absolute inset-x-0 bottom-0 h-0.5 bg-white/10"><div data-scene-progress class="h-full w-0 bg-indigo-400 transition-[width] duration-300"></div></div>
         </header>
 
-        <main class="scene-reader__list min-h-0 flex-1 overflow-y-auto" data-scene-list aria-label="مشاهد الكتاب بالترتيب"></main>
+        <main class="scene-reader__list" data-scene-list aria-label="مشاهد الكتاب بالترتيب"></main>
 
-        <div class="absolute inset-0 z-30 grid place-items-center bg-slate-950/95 px-6 text-center" data-reader-loading role="status" aria-live="polite">
+        <div class="fixed inset-0 z-30 grid place-items-center bg-slate-950/95 px-6 text-center" data-reader-loading role="status" aria-live="polite">
             <div>
                 <div class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-indigo-300/30 border-t-indigo-300"></div>
                 <p class="mt-4 font-black">جاري تجهيز المشاهد...</p>
@@ -65,7 +64,7 @@
             </div>
         </div>
 
-        <div data-reader-error hidden class="absolute inset-0 z-40 grid place-items-center bg-slate-950 px-6 text-center" role="alert">
+        <div data-reader-error hidden class="fixed inset-0 z-40 grid place-items-center bg-slate-950 px-6 text-center" role="alert">
             <div><span class="text-4xl">⚠️</span><h2 class="mt-3 text-xl font-black">تعذر فتح المعاينة</h2><p class="mt-2 max-w-lg text-sm leading-7 text-slate-300" data-reader-error-message>حاول تحديث الصفحة أو تواصل مع HeroKid.</p><button type="button" onclick="window.location.reload()" class="mt-5 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black">إعادة المحاولة</button></div>
         </div>
 

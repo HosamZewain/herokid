@@ -77,8 +77,10 @@
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
                     'settings.ai_providers.view', 'settings.notifications.view',
+                    'settings.mobile.view',
                     'child_identities.settings',
                 ]);
+                $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage']);
                 $canAdministration = auth()->user()->hasAnyPermission([
                     'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'activity_logs.view',
                 ]);
@@ -197,6 +199,18 @@
                         @endcan
                         @can('settings.notifications.view')
                             <a href="{{ route('admin.settings.notifications.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.notifications.*') ? $activeLink : $idleLink }}">مركز التنبيهات</a>
+                        @endcan
+                        @can('settings.mobile.view')
+                            <a href="{{ route('admin.mobile-operations.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-operations.*') ? $activeLink : $idleLink }}">تطبيق الهاتف</a>
+                        @endcan
+                    </div>
+                @endif
+
+                @if($canIntegrations)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التكاملات</p>
+                        @can('robodesk.view')
+                            <a href="{{ route('admin.robodesk.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.*') ? $activeLink : $idleLink }}">RoboDesk وواتساب</a>
                         @endcan
                     </div>
                 @endif

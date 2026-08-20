@@ -187,6 +187,8 @@ class ChildIdentityAttemptService
         }
 
         return trim($this->settings->promptTemplate())."\n\n".
-            'Child profile: age range '.$identity->age_range.'; gender '.($identity->gender ?: 'not specified').'.';
+            'Child profile: age range '.$identity->age_range.'; gender '.($identity->gender ?: 'not specified').
+            '; identity type '.$identity->identity_type.
+            ($identity->identity_theme ? '; theme '.$identity->identity_theme : '').'.';
     }
 }

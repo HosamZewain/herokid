@@ -1,0 +1,12 @@
+import AsyncStorage from'@react-native-async-storage/async-storage';
+import Constants from'expo-constants';
+import{Platform}from'react-native';
+import{api}from'@/src/api/client';
+import{idempotencyKey}from'@/src/api/idempotency';
+const QUEUE_KEY='herokid.analytics.queue.v1';
+export type AnalyticsEventName='app_opened'|'onboarding_completed'|'registration_started'|'registration_completed'|'child_profile_created'|'photo_upload_started'|'photo_upload_completed'|'photo_upload_failed'|'identity_generation_started'|'identity_generation_completed'|'identity_shared'|'product_viewed'|'personalization_started'|'personalization_completed'|'product_added_to_cart'|'checkout_started'|'payment_completed'|'order_completed'|'preview_viewed'|'preview_approved'|'revision_requested'|'product_reordered'|'review_submitted';
+type Queued={id:string;name:AnalyticsEventName;properties:Record<string,string|number|boolean|null>;occurred_at:string};
+export async function track(name:AnalyticsEventName,properties:Record<string,unknown>={}):Promise<void>{const queue=await readQueue();queue.push({id:idempotencyKey(),name,properties:sanitize(properties),occurred_at:new Date().toISOString()});await AsyncStorage.setItem(QUEUE_KEY,JSON.stringify(queue.slice(-200)));void flushAnalytics()}
+export async function flushAnalytics():Promise<void>{const queue=await readQueue();if(!queue.length)return;try{await api('/analytics/events',{method:'POST',body:JSON.stringify({events:queue.slice(0,50),app_version:Constants.expoConfig?.version,platform:Platform.OS})});await AsyncStorage.setItem(QUEUE_KEY,JSON.stringify(queue.slice(50)))}catch{/* Keep the bounded queue for the next connected session. */}}
+async function readQueue():Promise<Queued[]>{try{const raw=await AsyncStorage.getItem(QUEUE_KEY);return raw?JSON.parse(raw)as Queued[]:[]}catch{return[]}}
+function sanitize(properties:Record<string,unknown>):Record<string,string|number|boolean|null>{const safe:Record<string,string|number|boolean|null>={};for(const[key,value]of Object.entries(properties)){const allowedChildId=key==='child_profile_id'||key==='child_identity_id';if(!allowedChildId&&/child|photo|image|name|email|phone|address|token|path|url/i.test(key))continue;if(typeof value==='string')safe[key]=value.slice(0,250);else if(typeof value==='number'||typeof value==='boolean'||value===null)safe[key]=value;if(Object.keys(safe).length>=25)break}return safe}

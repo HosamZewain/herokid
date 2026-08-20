@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\MobileSocialIdentityVerifier;
 use App\Models\Setting;
+use App\Services\Mobile\ProviderTokenVerifier;
 use App\Support\AdminPermissionRegistry;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Cache;
@@ -13,7 +15,10 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void {}
+    public function register(): void
+    {
+        $this->app->bind(MobileSocialIdentityVerifier::class, ProviderTokenVerifier::class);
+    }
 
     public function boot(): void
     {

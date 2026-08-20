@@ -19,7 +19,9 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\NotificationCenterController;
+use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderGroupController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\PricingPackageController;
@@ -39,6 +41,7 @@ use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CheckoutController;
+use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
@@ -211,21 +214,8 @@ Route::get('/track-order', [TrackOrderController::class, 'index'])->name('track.
 Route::post('/track-order', [TrackOrderController::class, 'track'])->name('track.search');
 
 // Preview Approval (customer)
-Route::post('/orders/{order}/approve-preview', function (Order $order) {
-    abort_unless($order->user_id === auth()->id(), 403);
-
-    if ($order->status === 'preview_uploaded') {
-        $order->update(['status' => 'approved_for_print']);
-        $order->statusLogs()->create([
-            'status' => 'approved_for_print',
-            'notes' => 'تم الموافقة على التصميم النهائي من قِبل العميل.',
-        ]);
-
-        return back()->with('success', 'تمت الموافقة على التصميم! سنبدأ الطباعة قريباً.');
-    }
-
-    return back()->with('error', 'لا يوجد تصميم قيد المراجعة حالياً.');
-})->middleware('auth')->name('orders.approve-preview');
+Route::post('/orders/{order}/approve-preview', [CustomerPreviewDecisionController::class, 'approve'])
+    ->middleware('auth')->name('orders.approve-preview');
 
 Route::get('/orders/{order}/production-photos/{index}', [OrderController::class, 'serveProductionPhoto'])
     ->middleware('signed')
@@ -602,6 +592,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'saveOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override');
     Route::delete('orders/{order}/production-prompt/override', [OrderProductionPromptController::class, 'resetOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.override-reset');
     Route::post('orders/{order}/production-prompt/snapshot', [OrderProductionPromptController::class, 'saveSnapshot'])->middleware('permission:orders.production_prompt.manage')->name('orders.production-prompt.snapshot');
+    Route::get('orders/{order}/child-identity-prompt/regenerate', [OrderChildIdentityPromptController::class, 'regenerate'])->middleware('permission:orders.production_prompt.manage')->name('orders.child-identity-prompt.regenerate');
+    Route::post('orders/{order}/child-identity-prompt/override', [OrderChildIdentityPromptController::class, 'saveOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.child-identity-prompt.override');
+    Route::delete('orders/{order}/child-identity-prompt/override', [OrderChildIdentityPromptController::class, 'resetOverride'])->middleware('permission:orders.production_prompt.manage')->name('orders.child-identity-prompt.override-reset');
+    Route::post('orders/{order}/child-identity-prompt/snapshot', [OrderChildIdentityPromptController::class, 'saveSnapshot'])->middleware('permission:orders.production_prompt.manage')->name('orders.child-identity-prompt.snapshot');
 
     Route::get('production-studio', [ProductionStudioController::class, 'index'])->middleware('permission:production_studio.view')->name('production-studio.index');
     Route::post('production-studio/from-order/{order}', [ProductionStudioController::class, 'storeFromOrder'])->middleware('permission:production_studio.create_from_order')->name('production-studio.from-order');
@@ -709,6 +703,11 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('settings/notifications/telegram/test', [NotificationCenterController::class, 'testTelegram'])->middleware(['permission:settings.notifications.test', 'throttle:5,1'])->name('settings.notifications.telegram.test');
     Route::put('settings/notifications/rules', [NotificationCenterController::class, 'updateRules'])->middleware('permission:settings.notifications.manage_rules')->name('settings.notifications.rules.update');
     Route::put('settings/notifications/thresholds', [NotificationCenterController::class, 'updateThresholds'])->middleware('permission:settings.notifications.manage')->name('settings.notifications.thresholds.update');
+    Route::get('mobile-operations', [MobileOperationsController::class, 'index'])->middleware('permission:settings.mobile.view')->name('mobile-operations.index');
+    Route::put('mobile-operations/config', [MobileOperationsController::class, 'updateConfig'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.config.update');
+    Route::post('mobile-operations/promo-codes', [MobileOperationsController::class, 'storePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.store');
+    Route::patch('mobile-operations/promo-codes/{promoCode}', [MobileOperationsController::class, 'updatePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.update');
+    Route::patch('mobile-operations/privacy-requests/{privacyRequest}', [MobileOperationsController::class, 'updatePrivacyRequest'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.privacy-requests.update');
     Route::get('delivery-zones', [DeliveryZoneController::class, 'index'])->middleware('permission:settings.delivery_zones.view')->name('delivery-zones.index');
     Route::post('delivery-zones/countries', [DeliveryZoneController::class, 'storeCountry'])->middleware('permission:settings.delivery_zones.create')->name('delivery-zones.countries.store');
     Route::put('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'updateCountry'])->middleware('permission:settings.delivery_zones.update')->name('delivery-zones.countries.update');

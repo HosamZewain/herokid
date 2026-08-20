@@ -8,6 +8,7 @@ class OrderSource
     {
         return [
             'website' => 'الموقع',
+            'mobile' => 'تطبيق الهاتف',
             'whatsapp' => 'واتساب',
             'phone' => 'مكالمة هاتفية',
             'in_person' => 'زيارة',

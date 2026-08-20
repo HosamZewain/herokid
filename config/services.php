@@ -47,4 +47,25 @@ return [
         'id' => env('GOOGLE_ANALYTICS_ID', 'G-NBQYMB9NT2'),
     ],
 
+    'twilio' => [
+        'sid' => env('TWILIO_ACCOUNT_SID'),
+        'token' => env('TWILIO_AUTH_TOKEN'),
+        'from' => env('TWILIO_FROM_NUMBER'),
+    ],
+
+    'mobile_otp' => [
+        'driver' => env('MOBILE_OTP_DRIVER', 'none'),
+    ],
+
+    'mobile_oauth' => [
+        'google_client_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GOOGLE_MOBILE_CLIENT_IDS', ''))
+        ))),
+        'apple_client_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('APPLE_MOBILE_CLIENT_IDS', ''))
+        ))),
+    ],
+
 ];
