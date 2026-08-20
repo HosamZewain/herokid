@@ -6,11 +6,54 @@
 @endphp
 
 @php
-    $checkoutGroup ??= [
-        'representative_id' => $order->id,
-        'story_orders' => collect([$order]),
-        'key' => $order->checkoutGroupKey(),
-    ];
+    if (! isset($checkoutGroup)) {
+        $fallbackItemsCents = (int) $order->items->sum('total_price_cents');
+        if ($fallbackItemsCents === 0) {
+            $fallbackItemsCents = (int) round((float) data_get(
+                $order->delivery_details,
+                'item_price',
+                $order->story?->price ?? 0,
+            ) * 100);
+        }
+
+        $fallbackDeliveryCents = (int) round(max(0, (float) data_get($order->delivery_details, 'delivery_fee', 0)) * 100);
+        $fallbackDiscountCents = max(0, (int) ($order->discount_cents ?? 0));
+        $fallbackTotalCents = max(0, $fallbackItemsCents + $fallbackDeliveryCents - $fallbackDiscountCents);
+        $fallbackPaidCents = min($fallbackTotalCents, max(0, (int) ($order->paid_amount_cents ?? 0)));
+        $fallbackPhone = (string) data_get($order->delivery_details, 'phone', '');
+        $fallbackPaymentStatus = in_array($order->payment_status, \App\Support\OrderPaymentStatus::STATUSES, true)
+            ? $order->payment_status
+            : \App\Support\OrderPaymentStatus::UNPAID;
+
+        $checkoutGroup = [
+            'representative_id' => $order->id,
+            'story_orders' => collect([$order]),
+            'direct_products' => collect(),
+            'add_ons' => collect(),
+            'key' => $order->checkoutGroupKey(),
+            'order_numbers' => [$order->order_number],
+            'created_at' => $order->created_at,
+            'customer_name' => $order->parent_name ?: $order->user?->name ?: 'زائر',
+            'phone' => $fallbackPhone,
+            'delivery' => $order->delivery_details ?? [],
+            'items_cents' => $fallbackItemsCents,
+            'delivery_cents' => $fallbackDeliveryCents,
+            'discount_cents' => $fallbackDiscountCents,
+            'total_cents' => $fallbackTotalCents,
+            'paid_amount_cents' => $fallbackPaidCents,
+            'remaining_amount_cents' => max(0, $fallbackTotalCents - $fallbackPaidCents),
+            'status' => $order->status ?: 'new',
+            'payment_status' => $fallbackPaymentStatus,
+            'payment_status_label' => \App\Support\OrderPaymentStatus::label($fallbackPaymentStatus),
+            'payment_method' => $order->payment_method,
+            'printing_status' => in_array($order->printing_status, \App\Support\OrderWorkflowStatus::PRINTING_STATUSES, true)
+                ? $order->printing_status
+                : \App\Support\OrderWorkflowStatus::PRINTING_NOT_STARTED,
+            'shipping_status' => in_array($order->shipping_status, \App\Support\OrderWorkflowStatus::SHIPPING_STATUSES, true)
+                ? $order->shipping_status
+                : \App\Support\OrderWorkflowStatus::SHIPPING_NOT_READY,
+        ];
+    }
     $sceneTextHandoff ??= null;
 @endphp
 
