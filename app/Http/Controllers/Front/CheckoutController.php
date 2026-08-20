@@ -83,6 +83,7 @@ class CheckoutController extends Controller
         $deliveryFee = $this->deliveryFee($country, $governorate);
         $checkoutGroup = 'CHK-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
         $checkoutSessionId = $request->session()->getId();
+        $attribution = $this->attributionSnapshot($request);
         $orderIds = [];
         app(CartTrackingService::class)->recordCheckoutStarted($request);
 
@@ -91,7 +92,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -139,6 +140,7 @@ class CheckoutController extends Controller
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
                         'user_id' => auth()->id(),
+                        'order_source' => 'website',
                         'referred_by_child_identity_share_id' => $identity?->referred_by_child_identity_share_id,
                         'parent_name' => $validated['parent_name'],
                         'story_id' => $story->id,
@@ -174,6 +176,8 @@ class CheckoutController extends Controller
                             'subtotal' => $subtotal,
                             'delivery_fee' => $deliveryFee,
                             'total' => $subtotal + $deliveryFee,
+                            'source' => 'website',
+                            'marketing_attribution' => $attribution,
                         ],
                         'uploaded_photos' => $uploadedPhotos,
                         'status' => 'new',
@@ -202,6 +206,7 @@ class CheckoutController extends Controller
                             'offer_applied' => $storyOfferApplied,
                             'offer_label' => $storyOfferLabel,
                             'package' => $item['package_snapshot'] ?? null,
+                            'source_context' => $item['source_context'] ?? null,
                         ],
                         'personalization_snapshot' => [
                             'cart_item_key' => $cartKey,
@@ -259,6 +264,7 @@ class CheckoutController extends Controller
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
                         'user_id' => auth()->id(),
+                        'order_source' => 'website',
                         'parent_name' => $validated['parent_name'],
                         'story_id' => null,
                         'child_name' => null,
@@ -270,7 +276,7 @@ class CheckoutController extends Controller
                         'gift_note' => null,
                         'notes' => null,
                         'parent_notes' => null,
-                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee),
+                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $attribution),
                         'uploaded_photos' => [],
                         'status' => 'new',
                     ]);
@@ -398,7 +404,7 @@ class CheckoutController extends Controller
         return max(0, (float) ($governorate->delivery_fee ?? $country->delivery_fee));
     }
 
-    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee): array
+    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee, array $attribution): array
     {
         return [
             'phone' => $validated['phone'],
@@ -418,7 +424,32 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'delivery_fee' => $deliveryFee,
             'total' => $subtotal + $deliveryFee,
+            'source' => 'website',
+            'marketing_attribution' => $attribution,
         ];
+    }
+
+    private function attributionSnapshot(Request $request): array
+    {
+        $allowed = [
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'campaign_id',
+            'adset_id',
+            'ad_id',
+            'fbclid',
+            'landing_url',
+            'referrer',
+        ];
+
+        return collect($request->session()->get('marketing_attribution', []))
+            ->only($allowed)
+            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->map(fn (string $value): string => Str::limit(trim($value), 2000, ''))
+            ->all();
     }
 
     private function decrementStock(Product $product, ?ProductVariant $variant, int $quantity): void

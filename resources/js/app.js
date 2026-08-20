@@ -5,9 +5,13 @@ import { initializeIdentitySharing } from './identity-sharing';
 import { initializeStorySceneEditor } from './story-scene-editor';
 import { initializeOrderSceneTexts } from './order-scene-texts';
 import { initializeOrderPaymentSummaries } from './order-payment-summary';
+import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
+});
+window.HeroKidAnalytics = Object.freeze({
+    track: trackHeroKidEvent,
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +41,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeStorySceneEditor();
     initializeOrderSceneTexts();
     initializeOrderPaymentSummaries();
+    initializeFootballStories();
+
+    document.querySelectorAll('[data-floating-whatsapp]').forEach((link) => {
+        link.addEventListener('click', () => trackHeroKidEvent('WhatsAppClick', {
+            page_location: window.location.pathname,
+        }));
+    });
     const adminSidebar = document.querySelector('[data-admin-sidebar]');
     const adminSidebarToggle = document.querySelector('[data-admin-sidebar-toggle]');
     const adminSidebarClose = document.querySelector('[data-admin-sidebar-close]');

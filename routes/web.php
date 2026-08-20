@@ -45,6 +45,7 @@ use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
+use App\Http\Controllers\Front\FootballStoriesController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
 use App\Http\Controllers\Front\PageController;
@@ -113,6 +114,8 @@ Route::get('/', function () {
 })->name('home');
 
 // Public Story Routes
+Route::get('/football-stories', [FootballStoriesController::class, 'index'])->name('football-stories.index');
+Route::post('/football-stories/cart', [FootballStoriesController::class, 'store'])->name('football-stories.store');
 Route::get('/stories', [StoryController::class, 'index'])->name('stories.index');
 Route::get('/stories/{slug}', [StoryController::class, 'show'])->name('stories.show');
 
@@ -251,6 +254,7 @@ Route::get('/sitemap.xml', function () {
     $staticPages = [
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
         ['url' => Seo::url('/shop'),         'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
+        ['url' => Seo::url('/football-stories'), 'lastmod' => now()->toDateString(), 'freq' => 'daily', 'priority' => '0.9'],
         ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/about'),        'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],

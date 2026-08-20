@@ -14,12 +14,14 @@
     $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
     $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
     $addOnItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product_add_on');
+    $footballLandingCart = $storyLineItems->isNotEmpty()
+        && $storyLineItems->every(fn ($item) => ($item['source_context'] ?? null) === 'football_landing');
 @endphp
 
 <div class="min-h-[70vh] bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
         <div class="mb-6 hidden justify-start sm:flex">
-            <a href="{{ route('stories.index') }}"
+            <a href="{{ $footballLandingCart ? route('football-stories.index') : route('stories.index') }}"
                 class="inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-extrabold text-indigo-700 shadow-sm hover:bg-indigo-50 transition">
                 <span>إضافة قصة أخرى</span>
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,14 +76,16 @@
             <p data-cart-mobile-delivery-notice class="mb-4 text-center text-sm font-black text-slate-800 sm:hidden">
                 الرجاء إدخال بيانات التوصيل لإتمام الطلب
             </p>
-            <x-purchase-progress :current="3" class="mb-6 hidden sm:block" />
+            @unless($footballLandingCart)
+                <x-purchase-progress :current="3" class="mb-6 hidden sm:block" />
+            @endunless
             @include('front.cart._summary', ['attributes' => new \Illuminate\View\ComponentAttributeBag(['class' => 'mb-6 lg:hidden'])])
 
             <div class="grid grid-cols-1 lg:grid-cols-[minmax(560px,1.18fr)_minmax(0,0.82fr)] gap-6 lg:gap-8 items-start">
                 <aside class="order-1 lg:order-1 space-y-6 lg:sticky lg:top-28">
                     <section class="rounded-3xl border border-slate-100 bg-white shadow-sm p-5 sm:p-6">
                         <div class="mb-5 text-right">
-                            <p class="text-sm font-bold text-indigo-600">الخطوة ٣ من ٤</p>
+                            <p class="text-sm font-bold text-indigo-600">الخطوة ٣ من {{ $footballLandingCart ? '٣' : '٤' }}</p>
                             <h2 class="text-xl font-black text-slate-950 mt-1">بيانات ولي الأمر والتوصيل</h2>
                         </div>
 
@@ -103,7 +107,7 @@
                             </div>
                         @endguest
 
-                        <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4">
+                        <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4" data-checkout-form>
                             @csrf
                             <div>
                                 <label for="checkout-parent-name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم ولي الأمر <span class="text-red-500">*</span></label>
@@ -656,6 +660,28 @@
             });
 
             filterGovernorates();
+
+            document.querySelector('[data-checkout-form]')?.addEventListener('submit', () => {
+                const checkoutEventKey = 'herokid:analytics:InitiateCheckout:{{ hash('sha256', implode('|', array_keys($cartItems))) }}';
+
+                if (sessionStorage.getItem(checkoutEventKey) === '1') {
+                    return;
+                }
+
+                window.HeroKidAnalytics?.track('InitiateCheckout', {
+                    content_type: 'product',
+                    num_items: Number(@json($cartCount)),
+                    value: subtotal,
+                    currency: 'EGP',
+                }, true);
+                sessionStorage.setItem(checkoutEventKey, '1');
+            });
+
+            @if(is_array(session('football_add_to_cart_event')))
+                window.HeroKidAnalytics?.track('AddToCart', @json(session('football_add_to_cart_event'), \App\Support\Seo::jsonFlags()), true);
+                sessionStorage.removeItem('herokid:football-landing:draft');
+                sessionStorage.removeItem('herokid:football-landing:photo-ids');
+            @endif
 
             if (governorateSelect?.value) {
                 const fee = governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee();

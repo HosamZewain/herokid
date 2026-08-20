@@ -15,18 +15,37 @@ class CartTrackingService
 {
     public function captureAttribution(Request $request): void
     {
-        $utm = collect(['utm_source', 'utm_medium', 'utm_campaign'])
+        $attribution = collect([
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'campaign_id',
+            'adset_id',
+            'ad_id',
+            'fbclid',
+        ])
             ->mapWithKeys(fn (string $key): array => [$key => $request->query($key)])
             ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
-            ->map(fn (string $value): string => Str::limit(trim($value), 255, ''))
+            ->map(fn (string $value): string => Str::limit(trim($value), 512, ''))
             ->all();
+        $existing = $request->session()->get('marketing_attribution', []);
 
-        if ($utm !== []) {
-            $request->session()->put('marketing_attribution', array_merge(
-                $request->session()->get('marketing_attribution', []),
-                $utm,
-            ));
+        if (! is_array($existing)) {
+            $existing = [];
         }
+
+        if (! array_key_exists('landing_url', $existing)) {
+            $existing['landing_url'] = Str::limit($request->fullUrl(), 2000, '');
+        }
+
+        if (! array_key_exists('referrer', $existing)) {
+            $referrer = trim((string) $request->headers->get('referer', ''));
+            $existing['referrer'] = $referrer === '' ? null : Str::limit($referrer, 2000, '');
+        }
+
+        $request->session()->put('marketing_attribution', $existing + $attribution);
     }
 
     public function recordItemAdded(Request $request, string $cartItemKey): void
@@ -195,6 +214,14 @@ class CartTrackingService
                 'utm_source' => $attribution['utm_source'] ?? null,
                 'utm_medium' => $attribution['utm_medium'] ?? null,
                 'utm_campaign' => $attribution['utm_campaign'] ?? null,
+                'utm_content' => $attribution['utm_content'] ?? null,
+                'utm_term' => $attribution['utm_term'] ?? null,
+                'campaign_id' => $attribution['campaign_id'] ?? null,
+                'adset_id' => $attribution['adset_id'] ?? null,
+                'ad_id' => $attribution['ad_id'] ?? null,
+                'fbclid' => $attribution['fbclid'] ?? null,
+                'landing_url' => $attribution['landing_url'] ?? null,
+                'referrer' => $attribution['referrer'] ?? null,
                 'last_activity_at' => now(),
             ],
         );
@@ -206,6 +233,14 @@ class CartTrackingService
             'utm_source' => $cart->utm_source ?: ($attribution['utm_source'] ?? null),
             'utm_medium' => $cart->utm_medium ?: ($attribution['utm_medium'] ?? null),
             'utm_campaign' => $cart->utm_campaign ?: ($attribution['utm_campaign'] ?? null),
+            'utm_content' => $cart->utm_content ?: ($attribution['utm_content'] ?? null),
+            'utm_term' => $cart->utm_term ?: ($attribution['utm_term'] ?? null),
+            'campaign_id' => $cart->campaign_id ?: ($attribution['campaign_id'] ?? null),
+            'adset_id' => $cart->adset_id ?: ($attribution['adset_id'] ?? null),
+            'ad_id' => $cart->ad_id ?: ($attribution['ad_id'] ?? null),
+            'fbclid' => $cart->fbclid ?: ($attribution['fbclid'] ?? null),
+            'landing_url' => $cart->landing_url ?: ($attribution['landing_url'] ?? null),
+            'referrer' => $cart->referrer ?: ($attribution['referrer'] ?? null),
         ];
 
         if (! in_array($cart->status, ['converted', 'expired'], true)) {

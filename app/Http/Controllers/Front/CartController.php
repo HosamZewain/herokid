@@ -207,11 +207,14 @@ class CartController extends Controller
         if (isset($cart[$key])) {
             $item = $cart[$key];
             $removedKeys[] = $key;
+            $photoPathsStillInUse = $this->photoPathsReferencedByOtherItems($cart, $key);
 
             if (($item['item_type'] ?? 'story') === 'package') {
                 foreach ($item['package_stories'] ?? [] as $packageStory) {
                     foreach ($packageStory['uploaded_photos'] ?? [] as $photoPath) {
-                        if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
+                        if (is_string($photoPath)
+                            && ! str_contains($photoPath, '..')
+                            && ! in_array($photoPath, $photoPathsStillInUse, true)) {
                             Storage::disk('local')->delete($photoPath);
                         }
                     }
@@ -220,7 +223,9 @@ class CartController extends Controller
 
             if (empty($item['child_identity_request_id'])) {
                 foreach ($item['uploaded_photos'] ?? [] as $photoPath) {
-                    if (is_string($photoPath) && ! str_contains($photoPath, '..')) {
+                    if (is_string($photoPath)
+                        && ! str_contains($photoPath, '..')
+                        && ! in_array($photoPath, $photoPathsStillInUse, true)) {
                         Storage::disk('local')->delete($photoPath);
                     }
                 }
@@ -282,6 +287,32 @@ class CartController extends Controller
 
             return ((int) ($item['line_total_cents'] ?? 0)) / 100;
         });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function photoPathsReferencedByOtherItems(array $cart, string $excludedKey): array
+    {
+        return collect($cart)
+            ->except($excludedKey)
+            ->flatMap(function (array $item): array {
+                $paths = is_array($item['uploaded_photos'] ?? null)
+                    ? $item['uploaded_photos']
+                    : [];
+
+                foreach ($item['package_stories'] ?? [] as $packageStory) {
+                    if (is_array($packageStory['uploaded_photos'] ?? null)) {
+                        $paths = array_merge($paths, $packageStory['uploaded_photos']);
+                    }
+                }
+
+                return $paths;
+            })
+            ->filter(fn ($path): bool => is_string($path))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function defaultDeliveryFee(): float
