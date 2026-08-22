@@ -21,7 +21,6 @@ class PackageController extends Controller
         $stories = Story::query()
             ->where('active', true)
             ->with('categories')
-            ->orderBy('sort_order')
             ->orderBy('title')
             ->get();
 

@@ -178,10 +178,11 @@ class AdminManualOrderCreationTest extends TestCase
             'source' => 'whatsapp',
         ]));
         $report = app(SalesReportService::class)->report($filters);
-        $this->assertSame(0.0, $report['summary']['total']);
-        $this->assertSame(0.0, $report['summary']['discounts']);
+        $this->assertSame(300.0, $report['summary']['total']);
+        $this->assertSame(100.0, $report['summary']['discounts']);
         $this->assertSame(1, $report['operational_summary']['all_checkouts']);
         $this->assertSame(1, $report['operational_summary']['partially_paid_checkouts']);
+        $this->assertSame(300.0, $report['operational_summary']['partially_paid_amount']);
         $this->assertSame('واتساب', $report['rows']->first()['source']);
 
         $this->actingAs($this->admin)

@@ -45,6 +45,7 @@ class PurchasablePackagesTest extends TestCase
             'name' => 'باقة القصة والتلوين',
             'price' => 499,
             'currency' => 'ج.م',
+            'features_raw' => '',
             'story_count' => 1,
             'products' => [$product->id => ['quantity' => 1]],
             'active' => 1,
@@ -56,6 +57,7 @@ class PurchasablePackagesTest extends TestCase
         $package = PricingPackage::where('name', 'باقة القصة والتلوين')->firstOrFail();
         $this->assertSame(1, $package->story_count);
         $this->assertSame('499.00', $package->price);
+        $this->assertSame([], $package->features);
         $this->assertTrue($package->show_in_store);
         $this->assertDatabaseHas('pricing_package_products', [
             'pricing_package_id' => $package->id,
@@ -145,6 +147,74 @@ class PurchasablePackagesTest extends TestCase
         $this->assertSame($package->id, data_get($orders->first()->items->first()->item_snapshot, 'package.id'));
         $this->assertSame(9, $product->fresh()->stock_quantity);
         $this->assertNull(session('cart.items'));
+    }
+
+    public function test_three_story_package_keeps_the_package_price_through_cart_checkout_and_orders(): void
+    {
+        Storage::fake('local');
+        $stories = collect([
+            $this->story('three-package-one', 'قصة الباقة الأولى', 400),
+            $this->story('three-package-two', 'قصة الباقة الثانية', 400),
+            $this->story('three-package-three', 'قصة الباقة الثالثة', 400),
+        ]);
+        $package = PricingPackage::create([
+            'name' => 'باقة ثلاث قصص',
+            'slug' => 'three-story-package',
+            'price' => 900,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+
+        $this->get(route('shop.package.show', $package))
+            ->assertOk()
+            ->assertSee('القصة 1')
+            ->assertSee('القصة 2')
+            ->assertSee('القصة 3')
+            ->assertSee('سعر الباقة النهائي');
+
+        $this->post(route('cart.packages.store', $package), [
+            'stories' => $stories->values()->map(fn (Story $story, int $index): array => [
+                'story_id' => $story->id,
+                'child_name' => $index < 2 ? 'ليلى' : 'عمر',
+                'child_age' => $index < 2 ? 6 : 8,
+                'child_gender' => $index < 2 ? 'girl' : 'boy',
+                'photos' => [
+                    $this->photo("package-child-{$index}-1.png"),
+                    $this->photo("package-child-{$index}-2.png"),
+                ],
+            ])->all(),
+        ])->assertRedirect(route('cart.index'));
+
+        $packageItem = collect(session('cart.items'))->sole();
+        $this->assertSame(90_000, $packageItem['line_total_cents']);
+        $this->assertSame(120_000, $packageItem['regular_total_cents']);
+        $this->assertCount(3, $packageItem['package_stories']);
+        $this->assertSame(90_000, collect($packageItem['package_stories'])->sum(fn (array $story): int => (int) round($story['story_price'] * 100)));
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertViewHas('subtotal', 900.0);
+
+        $country = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $governorate = DeliveryGovernorate::where('delivery_country_id', $country->id)->firstOrFail();
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'ولي أمر الباقة',
+            'phone' => '01000000000',
+            'delivery_country_id' => $country->id,
+            'delivery_governorate_id' => $governorate->id,
+            'city' => 'القاهرة',
+            'street' => 'شارع الاختبار',
+            'address_details' => 'عمارة ١ شقة ٢',
+        ])->assertRedirect(route('checkout.success'));
+
+        $orders = Order::with('items')->orderBy('id')->get();
+        $this->assertCount(3, $orders);
+        $this->assertCount(1, $orders->pluck('checkout_group_key')->unique());
+        $this->assertSame(['ليلى', 'ليلى', 'عمر'], $orders->pluck('child_name')->all());
+        $this->assertSame(90_000, $orders->flatMap->items->sum('total_price_cents'));
+        $this->assertTrue($orders->every(fn (Order $order): bool => (float) data_get($order->delivery_details, 'subtotal') === 900.0));
+        $this->assertTrue($orders->flatMap->items->every(fn ($item): bool => data_get($item->item_snapshot, 'package.id') === $package->id));
     }
 
     public function test_package_requires_two_photos_for_every_story(): void

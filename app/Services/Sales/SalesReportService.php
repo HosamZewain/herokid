@@ -86,9 +86,12 @@ class SalesReportService
                     ? $stateFirst->payment_status
                     : OrderPaymentStatus::UNPAID;
                 $paidAmountCents = min($totalCents, max(0, (int) $stateFirst->paid_amount_cents));
+                $items = $this->withCollectedAmounts($items, $paidAmountCents);
                 $fullyDelivered = $statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered');
                 $cancelled = $statuses->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
-                $saleRecognized = $fullyDelivered && OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'paid_in_full';
+                // Sales are recognized from money actually collected. Fulfilment status is
+                // operational and must not delay recognition of a valid payment.
+                $saleRecognized = ! $cancelled && $paidAmountCents > 0;
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
                 $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
 
@@ -110,7 +113,12 @@ class SalesReportService
                     'remaining_amount_cents' => max(0, $totalCents - $paidAmountCents),
                     'payment_method' => $stateFirst->payment_method,
                     'sale_recognized' => $saleRecognized,
-                    'sales_classification_label' => $this->salesClassificationLabel($cancelled, $fullyDelivered, $paymentStatus),
+                    'sales_classification_label' => $this->salesClassificationLabel(
+                        $cancelled,
+                        $paymentStatus,
+                        $paidAmountCents,
+                        $totalCents,
+                    ),
                     'customer_name' => $first->parent_name ?: $first->user?->name ?: 'زائر',
                     'customer_key' => $customerKey,
                     'customer_type' => $first->user_id ? 'registered' : 'guest',
@@ -295,18 +303,22 @@ class SalesReportService
         $itemsCents = (int) $rows->sum('items_total_cents');
         $deliveryCents = (int) $rows->sum('delivery_cents');
         $discountCents = (int) $rows->sum('discount_cents');
-        $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
+        $orderValueCents = (int) $rows->sum('total_cents');
+        $paidCents = (int) $rows->sum('paid_amount_cents');
+        $remainingCents = (int) $rows->sum('remaining_amount_cents');
         $checkouts = $rows->count();
 
         return [
-            'total' => round($totalCents / 100, 2),
+            'total' => round($paidCents / 100, 2),
+            'order_value' => round($orderValueCents / 100, 2),
+            'remaining' => round($remainingCents / 100, 2),
             'items_sales' => round($itemsCents / 100, 2),
             'delivery' => round($deliveryCents / 100, 2),
             'discounts' => round($discountCents / 100, 2),
             'checkouts' => $checkouts,
             'order_records' => (int) $rows->sum('order_records'),
             'items_quantity' => (int) $rows->sum('items_quantity'),
-            'average_checkout' => $checkouts > 0 ? round(($totalCents / 100) / $checkouts, 2) : 0,
+            'average_checkout' => $checkouts > 0 ? round(($paidCents / 100) / $checkouts, 2) : 0,
             'unique_customers' => $rows->pluck('customer_key')->unique()->count(),
         ];
     }
@@ -314,19 +326,34 @@ class SalesReportService
     private function operationalSummary(Collection $rows): array
     {
         $activeRows = $rows->where('cancelled', false);
+        $cancelledRows = $rows->where('cancelled', true);
+        $paidRows = $activeRows->where('paid_amount_cents', '>', 0);
+        $unpaidRows = $activeRows->where('paid_amount_cents', '<=', 0);
+        $partiallyPaidRows = $activeRows->filter(fn (array $row): bool => $row['paid_amount_cents'] > 0
+            && $row['paid_amount_cents'] < $row['total_cents']);
+        $fullyPaidRows = $activeRows->filter(fn (array $row): bool => $row['paid_amount_cents'] > 0
+            && $row['remaining_amount_cents'] === 0);
 
         return [
             'all_checkouts' => $rows->count(),
-            'recognized_checkouts' => $rows->where('sale_recognized', true)->count(),
+            'all_order_value' => round(((int) $rows->sum('total_cents')) / 100, 2),
+            'active_order_value' => round(((int) $activeRows->sum('total_cents')) / 100, 2),
+            'recognized_checkouts' => $paidRows->count(),
             'unrecognized_checkouts' => $rows->where('sale_recognized', false)->count(),
-            'cancelled_checkouts' => $rows->where('cancelled', true)->count(),
-            'unpaid_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'unpaid')->count(),
-            'partially_paid_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'partially_paid')->count(),
-            'paid_without_shipping_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_without_shipping')->count(),
-            'fully_paid_not_delivered_checkouts' => $rows
-                ->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_in_full')
+            'paid_checkouts' => $paidRows->count(),
+            'paid_amount' => round(((int) $paidRows->sum('paid_amount_cents')) / 100, 2),
+            'fully_paid_checkouts' => $fullyPaidRows->count(),
+            'fully_paid_amount' => round(((int) $fullyPaidRows->sum('paid_amount_cents')) / 100, 2),
+            'cancelled_checkouts' => $cancelledRows->count(),
+            'cancelled_value' => round(((int) $cancelledRows->sum('total_cents')) / 100, 2),
+            'cancelled_paid_amount' => round(((int) $cancelledRows->sum('paid_amount_cents')) / 100, 2),
+            'unpaid_checkouts' => $unpaidRows->count(),
+            'unpaid_value' => round(((int) $unpaidRows->sum('total_cents')) / 100, 2),
+            'partially_paid_checkouts' => $partiallyPaidRows->count(),
+            'partially_paid_amount' => round(((int) $partiallyPaidRows->sum('paid_amount_cents')) / 100, 2),
+            'paid_without_shipping_checkouts' => $activeRows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_without_shipping')->count(),
+            'fully_paid_not_delivered_checkouts' => $fullyPaidRows
                 ->where('fully_delivered', false)
-                ->where('cancelled', false)
                 ->count(),
             'pending_delivery_checkouts' => $activeRows->where('fully_delivered', false)->count(),
             'outstanding_amount' => round(((int) $activeRows->sum('remaining_amount_cents')) / 100, 2),
@@ -373,7 +400,7 @@ class SalesReportService
                 'checkouts' => 0,
                 'items_quantity' => 0,
             ];
-            $periods[$key]['total'] += $row['total_cents'] / 100;
+            $periods[$key]['total'] += $row['paid_amount_cents'] / 100;
             $periods[$key]['items_sales'] += $row['items_total_cents'] / 100;
             $periods[$key]['delivery'] += $row['delivery_cents'] / 100;
             $periods[$key]['discounts'] += $row['discount_cents'] / 100;
@@ -392,7 +419,7 @@ class SalesReportService
                 'title' => $items->first()['title'],
                 'type' => $items->first()['type'],
                 'quantity' => (int) $items->sum('quantity'),
-                'sales' => round(((int) $items->sum('total_cents')) / 100, 2),
+                'sales' => round(((int) $items->sum('collected_cents')) / 100, 2),
                 'checkouts' => $items->pluck('checkout_key')->unique()->count(),
             ])
             ->sortByDesc('sales')
@@ -411,7 +438,7 @@ class SalesReportService
                 'key' => $type,
                 'label' => $labels[$type] ?? $type,
                 'quantity' => (int) $items->sum('quantity'),
-                'sales' => round(((int) $items->sum('total_cents')) / 100, 2),
+                'sales' => round(((int) $items->sum('collected_cents')) / 100, 2),
             ])
             ->sortByDesc('sales')
             ->values()
@@ -449,27 +476,21 @@ class SalesReportService
             ->all();
     }
 
-    private function salesClassificationLabel(bool $cancelled, bool $fullyDelivered, string $paymentStatus): string
+    private function salesClassificationLabel(bool $cancelled, string $paymentStatus, int $paidAmountCents, int $totalCents): string
     {
         if ($cancelled) {
             return 'ملغي — غير محتسب في المبيعات';
         }
 
-        $fullyPaid = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'paid_in_full';
-
-        if (! $fullyDelivered && ! $fullyPaid) {
-            return 'بانتظار اكتمال التوصيل والدفع';
+        if ($paidAmountCents <= 0) {
+            return 'غير مدفوع — غير محتسب في المبيعات';
         }
 
-        if (! $fullyDelivered) {
-            return 'مدفوع لكن لم يكتمل التوصيل';
+        if ($paidAmountCents < $totalCents || OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'partially_paid') {
+            return 'تحصيل جزئي — المبلغ المدفوع محتسب';
         }
 
-        if (! $fullyPaid) {
-            return 'تم التوصيل ولم يكتمل الدفع';
-        }
-
-        return 'مبيعات محققة';
+        return 'مدفوع — المبلغ المحصل محتسب';
     }
 
     private function sourceBreakdown(Collection $rows): array
@@ -478,7 +499,7 @@ class SalesReportService
             ->map(fn (Collection $same, string $source): array => [
                 'label' => $source,
                 'checkouts' => $same->count(),
-                'sales' => round(((int) $same->sum('total_cents')) / 100, 2),
+                'sales' => round(((int) $same->sum('paid_amount_cents')) / 100, 2),
             ])
             ->sortByDesc('sales')
             ->values()
@@ -491,7 +512,7 @@ class SalesReportService
             ->map(fn (Collection $same, string $label): array => [
                 'label' => $label ?: 'غير محدد',
                 'checkouts' => $same->count(),
-                'sales' => round(((int) $same->sum('total_cents')) / 100, 2),
+                'sales' => round(((int) $same->sum('paid_amount_cents')) / 100, 2),
                 'customers' => $same->pluck('customer_key')->unique()->count(),
             ])
             ->sortByDesc('sales')
@@ -508,7 +529,7 @@ class SalesReportService
             ->map(fn (Collection $same, string $type): array => [
                 'label' => $labels[$type] ?? $type,
                 'checkouts' => $same->count(),
-                'sales' => round(((int) $same->sum('total_cents')) / 100, 2),
+                'sales' => round(((int) $same->sum('paid_amount_cents')) / 100, 2),
                 'customers' => $same->pluck('customer_key')->unique()->count(),
             ])
             ->sortByDesc('sales')
@@ -535,6 +556,31 @@ class SalesReportService
             'countries' => DeliveryCountry::with(['governorates' => fn ($query) => $query->orderBy('name')])->orderBy('name')->get(),
             'sources' => $sources,
         ];
+    }
+
+    /**
+     * Attribute the collected checkout amount across its items for reporting.
+     * This keeps item/type breakdown totals tied to cash collected, including
+     * partial payments and order-level discounts, without changing snapshots.
+     */
+    private function withCollectedAmounts(Collection $items, int $paidAmountCents): Collection
+    {
+        $grossItemsCents = (int) $items->sum('total_cents');
+        $remainingCents = max(0, $paidAmountCents);
+        $lastIndex = $items->count() - 1;
+
+        return $items->values()->map(function (array $item, int $index) use ($grossItemsCents, $lastIndex, $paidAmountCents, &$remainingCents): array {
+            if ($remainingCents === 0 || $grossItemsCents <= 0) {
+                return $item + ['collected_cents' => 0];
+            }
+
+            $collectedCents = $index === $lastIndex
+                ? $remainingCents
+                : min($remainingCents, intdiv(max(0, (int) $item['total_cents']) * $paidAmountCents, $grossItemsCents));
+            $remainingCents -= $collectedCents;
+
+            return $item + ['collected_cents' => $collectedCents];
+        });
     }
 
     private function checkoutKey(Order $order): string

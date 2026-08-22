@@ -104,8 +104,12 @@ class PricingPackageController extends Controller
         return $data;
     }
 
-    private function parseFeatures(string $raw): array
+    private function parseFeatures(?string $raw): array
     {
+        if (blank($raw)) {
+            return [];
+        }
+
         return array_values(array_filter(
             array_map('trim', explode("\n", $raw))
         ));

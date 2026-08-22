@@ -156,7 +156,7 @@ class AdminSalesReportTest extends TestCase
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertStringContainsString('مجموعة الشراء', $csv);
         $this->assertStringContainsString('محتسب في المبيعات', $csv);
-        $this->assertStringContainsString('مبيعات محققة', $csv);
+        $this->assertStringContainsString('مدفوع — المبلغ المحصل محتسب', $csv);
         $this->assertSame(1, substr_count($csv, 'CHECKOUT-GROUP'));
         $this->assertStringContainsString($first->order_number, $csv);
         $this->assertStringContainsString($second->order_number, $csv);
@@ -219,7 +219,7 @@ class AdminSalesReportTest extends TestCase
         $this->assertSame(200.0, $report['trend'][0]['total']);
     }
 
-    public function test_only_fully_delivered_and_fully_paid_checkouts_are_recognized_as_sales(): void
+    public function test_every_non_cancelled_collected_amount_is_recognized_without_waiting_for_delivery(): void
     {
         $cases = [
             ['HK-RECOGNIZED', 'RECOGNIZED', 'delivered', 'paid_in_full', 20_000],
@@ -266,13 +266,18 @@ class AdminSalesReportTest extends TestCase
             'range' => 'today',
         ]))->viewData('report');
 
-        $this->assertSame(200.0, $report['summary']['total']);
-        $this->assertSame(1, $report['summary']['checkouts']);
+        $this->assertSame(2300.0, $report['summary']['total']);
+        $this->assertSame(4, $report['summary']['checkouts']);
         $this->assertSame(6, $report['operational_summary']['all_checkouts']);
-        $this->assertSame(5, $report['operational_summary']['unrecognized_checkouts']);
+        $this->assertSame(4, $report['operational_summary']['paid_checkouts']);
+        $this->assertSame(2300.0, $report['operational_summary']['paid_amount']);
+        $this->assertSame(2, $report['operational_summary']['unrecognized_checkouts']);
         $this->assertSame(1, $report['operational_summary']['cancelled_checkouts']);
-        $this->assertSame(2, $report['operational_summary']['unpaid_checkouts']);
+        $this->assertSame(600.0, $report['operational_summary']['cancelled_value']);
+        $this->assertSame(1, $report['operational_summary']['unpaid_checkouts']);
+        $this->assertSame(300.0, $report['operational_summary']['unpaid_value']);
         $this->assertSame(1, $report['operational_summary']['partially_paid_checkouts']);
+        $this->assertSame(100.0, $report['operational_summary']['partially_paid_amount']);
         $this->assertSame(2, $report['operational_summary']['fully_paid_not_delivered_checkouts']);
 
         $unpaid = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
@@ -288,8 +293,65 @@ class AdminSalesReportTest extends TestCase
             'status' => 'delivered',
         ]))->viewData('report');
 
-        $this->assertSame(200.0, $delivered['summary']['total']);
-        $this->assertFalse($delivered['rows']->firstWhere('key', 'MIXED-CHECKOUT')['sale_recognized']);
+        $this->assertSame(1000.0, $delivered['summary']['total']);
+        $this->assertTrue($delivered['rows']->firstWhere('key', 'MIXED-CHECKOUT')['sale_recognized']);
+    }
+
+    public function test_report_uses_paid_amount_after_discount_and_excludes_cancelled_collections(): void
+    {
+        $discounted = $this->order(
+            'HK-DISCOUNTED-PAID',
+            'DISCOUNTED-PAID',
+            'new',
+            null,
+            0,
+            now(),
+            'paid_in_full',
+            20_000,
+        );
+        $discounted->update(['discount_cents' => 20_000]);
+        $discounted->items()->create([
+            'item_type' => 'story',
+            'story_id' => $discounted->story_id,
+            'title' => 'قصة بعد الخصم',
+            'unit_price_cents' => 40_000,
+            'quantity' => 1,
+            'total_price_cents' => 40_000,
+        ]);
+
+        $cancelled = $this->order(
+            'HK-CANCELLED-PAID',
+            'CANCELLED-PAID',
+            'cancelled',
+            null,
+            0,
+            now(),
+            'paid_in_full',
+            10_000,
+        );
+        $cancelled->items()->create([
+            'item_type' => 'story',
+            'story_id' => $cancelled->story_id,
+            'title' => 'قصة ملغاة مدفوعة',
+            'unit_price_cents' => 10_000,
+            'quantity' => 1,
+            'total_price_cents' => 10_000,
+        ]);
+
+        $report = $this->actingAs($this->admin)->get(route('admin.sales-report.index', [
+            'range' => 'today',
+        ]))->viewData('report');
+
+        $this->assertSame(200.0, $report['summary']['total']);
+        $this->assertSame(200.0, $report['summary']['order_value']);
+        $this->assertSame(1, $report['summary']['checkouts']);
+        $this->assertSame(1, $report['operational_summary']['paid_checkouts']);
+        $this->assertSame(200.0, $report['operational_summary']['paid_amount']);
+        $this->assertSame(1, $report['operational_summary']['cancelled_checkouts']);
+        $this->assertSame(100.0, $report['operational_summary']['cancelled_value']);
+        $this->assertSame(100.0, $report['operational_summary']['cancelled_paid_amount']);
+        $this->assertTrue($report['rows']->firstWhere('key', 'DISCOUNTED-PAID')['sale_recognized']);
+        $this->assertFalse($report['rows']->firstWhere('key', 'CANCELLED-PAID')['sale_recognized']);
     }
 
     private function multiOrderCheckout(): array
