@@ -1,6 +1,6 @@
 <x-front-layout>
     @php
-        $fallbackStoryCover = \App\Support\Seo::imageUrl('/images/site/featured_generic.png');
+        $fallbackStoryCover = \App\Support\StoryCover::fallbackUrl();
         $storyCoverUrl = $story->cover_url ?: $fallbackStoryCover;
         $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
         $storyRegularPrice = $storyPricing->regularPrice($story);
@@ -96,11 +96,9 @@
                     <!-- Cover Image -->
                     <div
                         class="aspect-[4/4] bg-gradient-to-br from-indigo-50 to-slate-100 rounded-3xl overflow-hidden shadow-lg mb-8 relative">
-                        <img src="{{ $storyCoverUrl }}" alt="{{ $story->title }}"
-                            width="640" height="640"
-                            fetchpriority="high"
-                            onerror="this.onerror=null;this.src='{{ $fallbackStoryCover }}';"
-                            class="w-full h-full object-cover">
+                        <x-story-cover-image :src="$story->cover_url" :alt="$story->title"
+                            :fallback="$fallbackStoryCover" width="640" height="640"
+                            fetchpriority="high" class="w-full h-full object-cover" />
                     </div>
 
                     <!-- Title & Price -->

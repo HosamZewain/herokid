@@ -293,7 +293,7 @@
                         <div class="w-[220px] rounded-[2rem] overflow-hidden bg-white" style="box-shadow:0 24px 64px rgba(249,115,22,.25),0 8px 24px rgba(0,0,0,.12);">
                             <div class="relative h-[280px] overflow-hidden">
                                 @if($heroCard && $heroCard->cover_image)
-                                    <img src="{{ $heroCard->cover_url }}" alt="{{ $heroCard->title }}" class="w-full h-full object-cover">
+                                    <x-story-cover-image :src="$heroCard->cover_url" :alt="$heroCard->title" class="w-full h-full object-cover" />
                                 @else
                                     <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_main'] ?? \App\Support\SiteImages::url('img_hero_main')) }}" alt="HeroKid" class="w-full h-full object-cover">
                                 @endif
@@ -324,7 +324,7 @@
                         <div class="w-[125px] rounded-[1.5rem] overflow-hidden bg-white transform rotate-[-8deg] hover:rotate-[-3deg] transition-transform duration-700 opacity-90" style="box-shadow:0 10px 35px rgba(236,72,153,.2);">
                             <div class="h-[80px] overflow-hidden bg-gradient-to-br from-pink-100 to-rose-100">
                                 @if($card2 && $card2->cover_image)
-                                    <img src="{{ $card2->cover_url }}" alt="{{ $card2->title }}" class="w-full h-full object-cover">
+                                    <x-story-cover-image :src="$card2->cover_url" :alt="$card2->title" class="w-full h-full object-cover" />
                                 @else
                                     <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini1'] ?? \App\Support\SiteImages::url('img_hero_mini1')) }}" class="w-full h-full object-cover" alt="قصة مغامرات">
                                 @endif
@@ -341,7 +341,7 @@
                         <div class="w-[115px] rounded-[1.5rem] overflow-hidden bg-white transform rotate-[7deg] hover:rotate-[2deg] transition-transform duration-700 opacity-80" style="box-shadow:0 10px 35px rgba(139,92,246,.2);">
                             <div class="h-[75px] overflow-hidden bg-gradient-to-br from-violet-100 to-indigo-100">
                                 @if($card3 && $card3->cover_image)
-                                    <img src="{{ $card3->cover_url }}" alt="{{ $card3->title }}" class="w-full h-full object-cover">
+                                    <x-story-cover-image :src="$card3->cover_url" :alt="$card3->title" class="w-full h-full object-cover" />
                                 @else
                                     <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini2'] ?? \App\Support\SiteImages::url('img_hero_mini2')) }}" class="w-full h-full object-cover" alt="قصة خيالية">
                                 @endif
@@ -492,8 +492,8 @@
                         {{-- Image --}}
                         <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
                             @if($story->cover_image)
-                                <img src="{{ $story->cover_url }}" alt="{{ $story->title }}"
-                                    class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
+                                <x-story-cover-image :src="$story->cover_url" :alt="$story->title" loading="lazy"
+                                    class="w-full h-full object-cover transition duration-700 group-hover:scale-110" />
                             @else
                                 <img src="{{ $fallbackImgs[$loop->index % count($fallbackImgs)] }}"
                                     alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">

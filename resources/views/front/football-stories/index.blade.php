@@ -115,9 +115,9 @@
                         @forelse($stories->take(4) as $entry)
                             <div class="overflow-hidden rounded-2xl bg-white/10 {{ $loop->first ? 'col-span-2' : '' }}">
                                 @if($entry['catalog']->imageUrl)
-                                    <img src="{{ $entry['catalog']->imageUrl }}" alt="غلاف {{ $entry['model']->title }}"
-                                        width="640" height="800" fetchpriority="{{ $loop->first ? 'high' : 'auto' }}"
-                                        class="{{ $loop->first ? 'aspect-[16/8]' : 'aspect-[4/3]' }} h-full w-full object-cover">
+                                    <x-story-cover-image :src="$entry['catalog']->imageUrl" alt="غلاف {{ $entry['model']->title }}"
+                                        width="640" height="800" :fetchpriority="$loop->first ? 'high' : 'auto'"
+                                        class="{{ $loop->first ? 'aspect-[16/8]' : 'aspect-[4/3]' }} h-full w-full object-cover" />
                                 @else
                                     <div class="{{ $loop->first ? 'aspect-[16/8]' : 'aspect-[4/3]' }} flex h-full w-full items-center justify-center bg-white/10 p-6">
                                         <img src="{{ asset('images/logo-320.png') }}" alt="HeroKid" width="160" height="160" class="h-24 w-24 object-contain opacity-90">
@@ -185,8 +185,8 @@
                                     @checked(in_array($story->id, $selectedIds, true)) tabindex="-1" class="sr-only" data-story-checkbox>
                                 <div class="relative aspect-[4/3] overflow-hidden bg-slate-100">
                                     @if($catalog->imageUrl)
-                                        <img src="{{ $catalog->imageUrl }}" alt="غلاف {{ $story->title }}" width="640" height="480"
-                                            loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]">
+                                        <x-story-cover-image :src="$catalog->imageUrl" alt="غلاف {{ $story->title }}" width="640" height="480"
+                                            loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
                                     @else
                                         <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-50 to-violet-100 p-8">
                                             <img src="{{ asset('images/logo-320.png') }}" alt="HeroKid" width="160" height="160" loading="lazy" class="h-28 w-28 object-contain opacity-80">

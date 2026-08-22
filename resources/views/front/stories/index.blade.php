@@ -146,7 +146,7 @@
                             <div class="aspect-square bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center overflow-hidden">
                                 @php $heroStory = $stories->first(); @endphp
                                 @if($heroStory && $heroStory->cover_image)
-                                    <img src="{{ $heroStory->cover_url }}" alt="{{ $heroStory->title }}" class="w-full h-full object-cover">
+                                    <x-story-cover-image :src="$heroStory->cover_url" :alt="$heroStory->title" class="w-full h-full object-cover" />
                                 @else
                                     <img src="{{ $fallbacks[0] }}" alt="قصة" class="w-full h-full object-cover">
                                 @endif
@@ -476,7 +476,8 @@
                                 <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
                                 <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
                                     @if($story->cover_image)
-                                        <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
+                                        <x-story-cover-image :src="$story->cover_url" :alt="$story->title" loading="lazy"
+                                            class="w-full h-full object-cover transition duration-700 group-hover:scale-110" />
                                     @else
                                         <img src="{{ $fallbacks[$idx % count($fallbacks)] }}" alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
                                     @endif

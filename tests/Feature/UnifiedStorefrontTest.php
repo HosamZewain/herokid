@@ -41,6 +41,23 @@ class UnifiedStorefrontTest extends TestCase
             ->assertSee('data-catalog-type="product"', false);
     }
 
+    public function test_story_catalog_cards_use_the_shared_versioned_cover_recovery_component(): void
+    {
+        $story = $this->story('cover-recovery-story', 'قصة استرجاع الغلاف', [
+            'cover_image' => 'stories/cover-recovery.jpg',
+        ]);
+
+        $response = $this->get(route('shop.index', ['type' => 'stories']))
+            ->assertOk()
+            ->assertSee('data-story-cover', false)
+            ->assertSee('data-original-src="'.$story->cover_url.'"', false)
+            ->assertSee('data-cover-retry-state="original"', false)
+            ->assertSee('window.HeroKidStoryCover?.handleError(this)', false);
+
+        $this->assertStringContainsString('?v=', $story->cover_url);
+        $this->assertStringContainsString($story->cover_url, $response->getContent());
+    }
+
     public function test_default_featured_view_balances_stories_and_products_on_the_first_page(): void
     {
         foreach (range(1, 30) as $index) {

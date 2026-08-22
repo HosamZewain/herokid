@@ -187,7 +187,7 @@
                                 @csrf
                                 <input type="hidden" name="story_id" value="{{ $story->id }}">
                                 @if($story->cover_url)
-                                    <img src="{{ $story->cover_url }}" alt="{{ $story->title }}" class="aspect-[4/3] w-full object-cover">
+                                    <x-story-cover-image :src="$story->cover_url" :alt="$story->title" class="aspect-[4/3] w-full object-cover" />
                                 @else
                                     <div class="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-indigo-100 to-amber-100 font-black text-indigo-700">HeroKid</div>
                                 @endif
@@ -214,7 +214,8 @@
                             <img src="{{ $media['attempts'][$approvedAttempt->id] }}" alt="هوية الطفل" class="aspect-[4/3] w-full rounded-2xl bg-slate-100 object-contain" referrerpolicy="no-referrer">
                         @endif
                         @if($identity->selectedStory?->cover_url)
-                            <img src="{{ $identity->selectedStory->cover_url }}" alt="{{ $identity->selectedStory->title }}" class="aspect-[4/3] w-full rounded-2xl object-cover">
+                            <x-story-cover-image :src="$identity->selectedStory->cover_url" :alt="$identity->selectedStory->title"
+                                class="aspect-[4/3] w-full rounded-2xl object-cover" />
                         @endif
                     </div>
                     <form method="POST" action="{{ route('child-identity.cart', $identity->uuid) }}" class="mx-auto mt-6 max-w-2xl">

@@ -1,10 +1,13 @@
 <article data-catalog-type="{{ $item->type }}" class="group flex h-full flex-col overflow-hidden rounded-3xl border bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl {{ $item->type === 'story' ? 'border-pink-100' : 'border-indigo-100' }}">
     <a href="{{ $item->detailUrl }}" class="block">
         <div class="relative aspect-[4/3] overflow-hidden {{ $item->type === 'story' ? 'bg-gradient-to-br from-orange-50 to-pink-50' : 'bg-gradient-to-br from-indigo-50 to-cyan-50' }}">
-            @if($item->imageUrl)
+            @if($item->type === 'story')
+                <x-story-cover-image :src="$item->imageUrl" :alt="$item->title" loading="lazy"
+                    class="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+            @elseif($item->imageUrl)
                 <img src="{{ $item->imageUrl }}" alt="{{ $item->title }}" loading="lazy"
-                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');"
-                     class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                    onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');"
+                    class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                 <div class="hidden h-full w-full"><x-product-image-placeholder /></div>
             @else
                 <x-product-image-placeholder />

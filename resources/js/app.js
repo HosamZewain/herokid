@@ -6,6 +6,7 @@ import { initializeStorySceneEditor } from './story-scene-editor';
 import { initializeOrderSceneTexts } from './order-scene-texts';
 import { initializeOrderPaymentSummaries } from './order-payment-summary';
 import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
+import { storyCoverRecovery } from './story-cover-recovery';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -13,6 +14,7 @@ window.HeroKidImageUpload = Object.freeze({
 window.HeroKidAnalytics = Object.freeze({
     track: trackHeroKidEvent,
 });
+window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
     const bookletReader = document.querySelector('[data-booklet-reader]');
