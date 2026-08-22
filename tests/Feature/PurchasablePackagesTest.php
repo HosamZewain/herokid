@@ -84,6 +84,7 @@ class PurchasablePackagesTest extends TestCase
             ->assertSee('باقات قصص الأطفال المخصصة | HeroKid')
             ->assertSee('canonical', false)
             ->assertSee('/packages', false)
+            ->assertSee('data-package-card-link', false)
             ->assertSee('خصم ١٠٪')
             ->assertSee($fiveBundle->image_url, false);
         $this->assertStringContainsString('s-maxage=0', (string) $packagesPage->headers->get('Cache-Control'));
