@@ -173,7 +173,7 @@
                         يظهر سعر كل قصة أو منتج بوضوح في صفحة الاختيار والسلة. تكلفة التوصيل تُعرض قبل إرسال الطلب، ومدة الوصول المتوقعة هي
                         <strong class="text-slate-900">{{ delivery_range() }}</strong>.
                     </p>
-                    <a href="{{ route('pricing') }}" class="mt-5 inline-flex font-black text-indigo-700 underline decoration-2 underline-offset-8 hover:text-indigo-900">راجع الأسعار والباقات</a>
+                    <a href="{{ route('packages') }}" class="mt-5 inline-flex font-black text-indigo-700 underline decoration-2 underline-offset-8 hover:text-indigo-900">استكشف باقات HeroKid</a>
                 </article>
                 <article class="rounded-3xl border border-slate-200 p-7 sm:p-9">
                     <h2 class="text-2xl font-black text-slate-950">المراجعة وجودة النتيجة</h2>

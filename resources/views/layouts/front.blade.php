@@ -192,8 +192,8 @@
                             @if(setting('child_identity_enabled', '1') === '1')
                                 <x-nav-link :href="route('child-identity.index')" :active="request()->routeIs('child-identity.*')">اصنع هوية طفلك</x-nav-link>
                             @endif
-                            <x-nav-link :href="route('pricing')"
-                                :active="request()->routeIs('pricing')">الأسعار</x-nav-link>
+                            <x-nav-link :href="route('packages')"
+                                :active="request()->routeIs('packages')">الباقات</x-nav-link>
                             <details data-front-guide-menu class="relative group">
                                 <summary
                                     class="{{ $guideMenuActive ? 'border-indigo-400 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' }} inline-flex cursor-pointer list-none items-center gap-1.5 border-b-2 px-1 pt-1 text-sm font-medium leading-5 transition duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-4 [&::-webkit-details-marker]:hidden">
@@ -298,8 +298,8 @@
                     <a href="{{ route('child-identity.index') }}"
                         class="block px-4 py-2 rounded-xl text-indigo-700 font-black hover:bg-indigo-50 transition">اصنع هوية طفلك مجانًا</a>
                 @endif
-                <a href="{{ route('pricing') }}"
-                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الأسعار</a>
+                <a href="{{ route('packages') }}"
+                    class="block px-4 py-2 rounded-xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition">الباقات</a>
                 <details data-front-guide-menu-mobile class="group rounded-xl border border-slate-100 bg-slate-50/70">
                     <summary
                         class="{{ $guideMenuActive ? 'text-indigo-700' : 'text-gray-700' }} flex cursor-pointer list-none items-center justify-between rounded-xl px-4 py-3 font-black transition hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
@@ -471,7 +471,7 @@
                             @endif
                             <li><a href="{{ route('how-it-works') }}" class="hover:text-white transition">كيف يعمل؟</a>
                             </li>
-                            <li><a href="{{ route('pricing') }}" class="hover:text-white transition">الأسعار</a></li>
+                            <li><a href="{{ route('packages') }}" class="hover:text-white transition">الباقات</a></li>
                             <li><a href="{{ route('faq') }}" class="hover:text-white transition">الأسئلة الشائعة</a>
                             </li>
                             <li><a href="{{ route('track.index') }}" class="hover:text-white transition">تتبع الطلب</a>

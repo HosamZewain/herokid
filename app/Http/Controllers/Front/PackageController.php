@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\PricingPackage;
 use App\Models\Story;
+use App\Services\Catalog\CatalogSalesRankingService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use Illuminate\Http\Request;
@@ -12,8 +13,13 @@ use Illuminate\Support\Str;
 
 class PackageController extends Controller
 {
-    public function show(Request $request, PricingPackage $pricingPackage, StoryPricingService $storyPricing, TemporaryPhotoUploadService $uploads)
-    {
+    public function show(
+        Request $request,
+        PricingPackage $pricingPackage,
+        StoryPricingService $storyPricing,
+        TemporaryPhotoUploadService $uploads,
+        CatalogSalesRankingService $salesRanking,
+    ) {
         abort_unless($pricingPackage->active && $pricingPackage->show_in_store, 404);
         $pricingPackage->load(['items.product.category', 'items.variant']);
         abort_unless($pricingPackage->availableForPurchase(), 404);
@@ -21,8 +27,14 @@ class PackageController extends Controller
         $stories = Story::query()
             ->where('active', true)
             ->with('categories')
-            ->orderBy('title')
             ->get();
+        $salesCounts = $salesRanking->counts($stories->pluck('id'), collect())['stories'];
+        $stories = $stories
+            ->sortBy(fn (Story $story): array => [
+                -($salesCounts[$story->id] ?? 0),
+                $story->title,
+            ])
+            ->values();
 
         $referenceStory = $stories->first();
         abort_if($pricingPackage->story_count > 0 && ! $referenceStory, 404);

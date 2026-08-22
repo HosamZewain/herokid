@@ -1,8 +1,9 @@
 <x-front-layout>
 
 {{-- ══ SEO ══ --}}
-<x-slot name="pageTitle">{{ setting('seo_pricing_title', $settings['seo_pricing_title'] ?? '') }}</x-slot>
+<x-slot name="pageTitle">{{ setting('seo_pricing_title', 'باقات قصص الأطفال المخصصة | HeroKid') }}</x-slot>
 <x-slot name="pageDescription">{{ setting('seo_pricing_description', $settings['seo_pricing_description'] ?? '') }}</x-slot>
+<x-slot name="canonical">/packages</x-slot>
 @if($packages->first()?->image_url)
 <x-slot name="pageImage">{{ $packages->first()->image_url }}</x-slot>
 <x-slot name="pageImageAlt">باقات قصص وأنشطة HeroKid المخصصة</x-slot>
@@ -21,7 +22,7 @@
         '@context' => 'https://schema.org',
         '@type' => 'WebPage',
         'name' => 'أسعار قصص HeroKid المخصصة',
-        'url' => \App\Support\Seo::url('/pricing'),
+        'url' => \App\Support\Seo::url('/packages'),
         'description' => 'باقات HeroKid لقصص الأطفال المخصصة بأسعار واضحة بدون رسوم خفية',
         'mainEntity' => [
             '@type' => 'ItemList',

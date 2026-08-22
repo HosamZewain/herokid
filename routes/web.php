@@ -257,7 +257,7 @@ Route::get('/sitemap.xml', function () {
         ['url' => Seo::url('/'),             'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '1.0'],
         ['url' => Seo::url('/shop'),         'lastmod' => now()->toDateString(), 'freq' => 'daily',   'priority' => '0.9'],
         ['url' => Seo::url('/football-stories'), 'lastmod' => now()->toDateString(), 'freq' => 'daily', 'priority' => '0.9'],
-        ['url' => Seo::url('/pricing'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
+        ['url' => Seo::url('/packages'),     'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/about'),        'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.8'],
         ['url' => Seo::url('/faq'),          'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.7'],
         ['url' => Seo::url('/contact'),      'lastmod' => now()->toDateString(), 'freq' => 'monthly', 'priority' => '0.6'],
@@ -329,7 +329,8 @@ Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/terms', [PageController::class, 'terms'])->name('terms');
-Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
+Route::get('/packages', [PageController::class, 'pricing'])->name('packages');
+Route::redirect('/pricing', '/packages', 301)->name('pricing');
 Route::get('/how-it-works', [PageController::class, 'howItWorks'])->name('how-it-works');
 
 // Customer Dashboard

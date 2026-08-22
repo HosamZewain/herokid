@@ -958,7 +958,7 @@
             @endif
 
             <div class="text-center mt-8">
-                <a href="{{ route('pricing') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض كل الباقات والتفاصيل ←</a>
+                <a href="{{ route('packages') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض كل الباقات والتفاصيل ←</a>
             </div>
         </div>
     </section>

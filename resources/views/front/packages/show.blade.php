@@ -101,9 +101,16 @@
     </div>
 
     <dialog data-package-story-dialog class="m-auto max-h-[88vh] w-[calc(100%-2rem)] max-w-4xl rounded-3xl p-0 shadow-2xl backdrop:bg-slate-950/70">
-        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-            <div><h2 class="text-xl font-black text-slate-950">اختر القصة</h2><p class="text-xs text-slate-500">اضغط على صورة القصة لإضافتها إلى الباقة.</p></div>
-            <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xl font-black text-slate-700" data-close-story-picker aria-label="إغلاق">×</button>
+        <div class="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+            <div class="flex items-center justify-between gap-4">
+                <div><h2 class="text-xl font-black text-slate-950">اختر القصة</h2><p class="text-xs text-slate-500">مرتبة حسب الأكثر طلبًا. اضغط على صورة القصة لإضافتها إلى الباقة.</p></div>
+                <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xl font-black text-slate-700" data-close-story-picker aria-label="إغلاق">×</button>
+            </div>
+            <label class="relative mt-3 block">
+                <span class="sr-only">ابحث باسم القصة</span>
+                <input type="search" inputmode="search" autocomplete="off" placeholder="ابحث باسم القصة..." class="w-full rounded-2xl border-slate-200 bg-slate-50 py-3 pe-11 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:ring-indigo-500" data-package-story-search>
+                <span class="pointer-events-none absolute inset-y-0 end-4 flex items-center text-slate-400" aria-hidden="true">⌕</span>
+            </label>
         </div>
         <div class="grid gap-3 bg-slate-50 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
             @foreach($stories as $story)
@@ -112,6 +119,7 @@
                     <span class="min-w-0"><strong class="line-clamp-2 text-sm text-slate-950">{{ $story->title }}</strong><span class="mt-2 block text-xs font-bold text-indigo-600">اختر هذه القصة</span></span>
                 </button>
             @endforeach
+            <p class="col-span-full hidden rounded-2xl bg-white px-5 py-10 text-center font-bold text-slate-500" data-package-story-empty>لا توجد قصة بهذا الاسم.</p>
         </div>
     </dialog>
 
@@ -124,6 +132,9 @@
         const states = new Map();
         const escape = value => { const span = document.createElement('span'); span.textContent = value; return span.innerHTML; };
         const dialog = document.querySelector('[data-package-story-dialog]');
+        const storySearch = dialog?.querySelector('[data-package-story-search]');
+        const storyButtons = [...(dialog?.querySelectorAll('[data-choose-story]') || [])];
+        const storyEmpty = dialog?.querySelector('[data-package-story-empty]');
         let activeStorySlot = null;
 
         document.querySelectorAll('[data-package-story-slot]').forEach(slot => {
@@ -136,7 +147,15 @@
             select.classList.add('hidden');
             trigger.classList.remove('hidden');
             trigger.classList.add('flex');
-            trigger.addEventListener('click', () => { activeStorySlot = slot; dialog?.showModal(); });
+            trigger.addEventListener('click', () => {
+                activeStorySlot = slot;
+                if (storySearch) {
+                    storySearch.value = '';
+                    storySearch.dispatchEvent(new Event('input'));
+                }
+                dialog?.showModal();
+                window.setTimeout(() => storySearch?.focus(), 50);
+            });
             select.addEventListener('change', () => {
                 const option = select.options[select.selectedIndex];
                 title.textContent = option?.dataset.title || 'اضغط لاختيار القصة';
@@ -154,7 +173,17 @@
         });
         dialog?.querySelector('[data-close-story-picker]')?.addEventListener('click', () => dialog.close());
         dialog?.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
-        dialog?.querySelectorAll('[data-choose-story]').forEach(button => button.addEventListener('click', () => {
+        storySearch?.addEventListener('input', () => {
+            const term = storySearch.value.trim().toLocaleLowerCase('ar');
+            let visible = 0;
+            storyButtons.forEach(button => {
+                const matches = !term || (button.dataset.title || '').toLocaleLowerCase('ar').includes(term);
+                button.classList.toggle('hidden', !matches);
+                if (matches) visible += 1;
+            });
+            storyEmpty?.classList.toggle('hidden', visible !== 0);
+        });
+        storyButtons.forEach(button => button.addEventListener('click', () => {
             const select = activeStorySlot?.querySelector('[data-package-story-select]');
             if (!select) return;
             select.value = button.dataset.id;

@@ -54,7 +54,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'seo_home_description', 'value' => 'HeroKid يحول طفلك إلى بطل قصة مطبوعة بوجهه واسمه. اختر القصة، أرسل صورة طفلك، واستلم كتاباً فاخراً.'],
             ['key' => 'seo_stories_title', 'value' => 'مكتبة قصص الأطفال المخصصة'],
             ['key' => 'seo_stories_description', 'value' => 'استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة بوجه طفلك واسمه، واختر القصة المناسبة لعمره واهتماماته.'],
-            ['key' => 'seo_pricing_title', 'value' => 'أسعار قصص الأطفال المخصصة'],
+            ['key' => 'seo_pricing_title', 'value' => 'باقات قصص الأطفال المخصصة | HeroKid'],
             ['key' => 'seo_pricing_description', 'value' => 'اكتشف باقات HeroKid لقصص الأطفال المخصصة المطبوعة باسم طفلك ووجهه مع أسعار واضحة ورسوم شحن تظهر في السلة.'],
             ['key' => 'seo_how_it_works_title', 'value' => 'كيف يعمل HeroKid؟'],
             ['key' => 'seo_how_it_works_description', 'value' => 'اكتشف رحلة طلب قصة HeroKid المخصصة من اختيار القصة وإضافة بيانات الطفل حتى المراجعة والطباعة والشحن.'],

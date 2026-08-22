@@ -67,8 +67,27 @@ class PurchasablePackagesTest extends TestCase
         $this->assertNotNull($fiveBundle->image_url);
         $this->assertSame([$coloring->id, $maze->id], $threeBundle->items()->pluck('product_id')->all());
 
-        $this->get(route('home'))->assertOk()->assertSee($storiesOnly->name)->assertSee($threeBundle->name)->assertSee($fiveBundle->name);
-        $this->get(route('pricing'))->assertOk()->assertSee('خصم ١٠٪')->assertSee($fiveBundle->image_url, false);
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('data-home-section="pricing"', false)
+            ->assertSee($storiesOnly->name)
+            ->assertSee($threeBundle->name)
+            ->assertSee($fiveBundle->name);
+
+        $packagesPage = $this->get(route('packages'));
+        $packagesPage
+            ->assertOk()
+            ->assertSee('باقات قصص الأطفال المخصصة | HeroKid')
+            ->assertSee('canonical', false)
+            ->assertSee('/packages', false)
+            ->assertSee('خصم ١٠٪')
+            ->assertSee($fiveBundle->image_url, false);
+
+        $this->get('/pricing')->assertRedirect('/packages')->assertStatus(301);
+
+        $shopHtml = $this->get(route('shop.index'))->assertOk()->getContent();
+        $this->assertGreaterThan(strpos($shopHtml, 'id="catalog-results"'), strpos($shopHtml, 'id="packages-title"'));
+        $this->assertStringContainsString(route('packages'), $shopHtml);
     }
 
     public function test_package_story_picker_shows_cover_thumbnail_with_each_story_name(): void
@@ -80,6 +99,22 @@ class PurchasablePackagesTest extends TestCase
             'price' => 349,
             'language' => 'ar',
             'active' => true,
+        ]);
+        $bestSeller = Story::create([
+            'title' => 'قصة الأكثر طلبًا',
+            'slug' => 'best-selling-package-story',
+            'cover_image' => 'stories/best-selling-package-story.jpg',
+            'price' => 349,
+            'language' => 'ar',
+            'active' => true,
+        ]);
+        Order::create([
+            'order_number' => 'HK-PACKAGE-BEST-SELLER',
+            'story_id' => $bestSeller->id,
+            'child_name' => 'نور',
+            'child_age' => 7,
+            'child_gender' => 'girl',
+            'status' => 'cancelled',
         ]);
         $package = PricingPackage::create([
             'name' => 'باقة اختيار القصص',
@@ -93,7 +128,10 @@ class PurchasablePackagesTest extends TestCase
         $this->get(route('shop.package.show', $package))
             ->assertOk()
             ->assertSee('data-package-story-dialog', false)
+            ->assertSee('data-package-story-search', false)
+            ->assertSee('ابحث باسم القصة...')
             ->assertSee('data-choose-story', false)
+            ->assertSeeInOrder([$bestSeller->title, $story->title])
             ->assertSee($story->title)
             ->assertSee($story->cover_url, false);
     }
