@@ -10,6 +10,7 @@ use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWorkflowStatusService;
 use App\Support\OrderPaymentStatus;
+use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -25,13 +26,32 @@ class OrderGroupController extends Controller
             return redirect()->route('admin.orders.show', $group['direct_order_id']);
         }
 
+        $statuses = OrderStatusService::statuses();
+        foreach ($group['statuses'] as $currentStatus) {
+            if (! in_array($currentStatus, $statuses, true)) {
+                $statuses[] = $currentStatus;
+            }
+        }
+        $paymentStatuses = OrderPaymentStatus::labels();
+        if (! array_key_exists($group['payment_status'], $paymentStatuses)) {
+            $paymentStatuses[$group['payment_status']] = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']);
+        }
+        $printingStatuses = OrderWorkflowStatus::printingLabels();
+        if ($group['printing_status'] !== 'mixed' && ! array_key_exists($group['printing_status'], $printingStatuses)) {
+            $printingStatuses[$group['printing_status']] = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']);
+        }
+        $shippingStatuses = OrderWorkflowStatus::shippingLabels();
+        if ($group['shipping_status'] !== 'mixed' && ! array_key_exists($group['shipping_status'], $shippingStatuses)) {
+            $shippingStatuses[$group['shipping_status']] = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']);
+        }
+
         return view('admin.orders.group-show', [
             'group' => $group,
-            'statuses' => OrderStatusService::STATUSES,
-            'paymentStatuses' => OrderPaymentStatus::labels(),
+            'statuses' => $statuses,
+            'paymentStatuses' => $paymentStatuses,
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
-            'printingStatuses' => OrderWorkflowStatus::printingLabels(),
-            'shippingStatuses' => OrderWorkflowStatus::shippingLabels(),
+            'printingStatuses' => $printingStatuses,
+            'shippingStatuses' => $shippingStatuses,
         ]);
     }
 
@@ -41,12 +61,12 @@ class OrderGroupController extends Controller
         OrderWorkflowStatusService $workflow,
     ) {
         $validated = $request->validate([
-            'status' => ['nullable', Rule::in(OrderStatusService::STATUSES)],
-            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'status' => ['nullable', Rule::in(OrderStatusService::statuses(false))],
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::statuses(false))],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
-            'printing_status' => ['required', Rule::in(OrderWorkflowStatus::PRINTING_STATUSES)],
-            'shipping_status' => ['required', Rule::in(OrderWorkflowStatus::SHIPPING_STATUSES)],
+            'printing_status' => ['required', Rule::in(OrderWorkflowStatus::printingStatuses(false))],
+            'shipping_status' => ['required', Rule::in(OrderWorkflowStatus::shippingStatuses(false))],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $order = Order::query()->findOrFail($representative);
@@ -59,14 +79,18 @@ class OrderGroupController extends Controller
                     'representative_id' => $group['representative_id'],
                     'status' => $group['status'],
                     'status_label' => $group['status_label'],
+                    'status_color' => OrderStatusRegistry::color(OrderStatusRegistry::TYPE_ORDER, $group['status']),
                     'payment_status' => $group['payment_status'],
                     'payment_status_label' => $group['payment_status_label'],
+                    'payment_status_color' => OrderStatusRegistry::color(OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']),
                     'paid_amount' => format_money($group['paid_amount_cents'] / 100),
                     'remaining_amount' => format_money($group['remaining_amount_cents'] / 100),
                     'printing_status' => $group['printing_status'],
                     'printing_status_label' => $group['printing_status_label'],
+                    'printing_status_color' => OrderStatusRegistry::color(OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']),
                     'shipping_status' => $group['shipping_status'],
                     'shipping_status_label' => $group['shipping_status_label'],
+                    'shipping_status_color' => OrderStatusRegistry::color(OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']),
                 ],
             ]);
         }
@@ -77,7 +101,7 @@ class OrderGroupController extends Controller
     public function updateStatus(Request $request, int $representative, AdminOrderGroupService $groups, OrderStatusService $statuses)
     {
         $validated = $request->validate([
-            'status' => ['required', Rule::in(OrderStatusService::STATUSES)],
+            'status' => ['required', Rule::in(OrderStatusService::statuses(false))],
             'admin_notes' => 'nullable|string|max:2000',
         ]);
         $order = Order::query()->findOrFail($representative);
@@ -91,7 +115,7 @@ class OrderGroupController extends Controller
     public function updatePayment(Request $request, int $representative, OrderPaymentService $payments)
     {
         $validated = $request->validate([
-            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::statuses(false))],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
         ]);

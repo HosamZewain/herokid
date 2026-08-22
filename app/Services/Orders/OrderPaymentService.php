@@ -20,7 +20,7 @@ class OrderPaymentService
         int $totalCents,
         int $deliveryCents,
     ): array {
-        if (! in_array($status, OrderPaymentStatus::STATUSES, true)) {
+        if (! in_array($status, OrderPaymentStatus::statuses(false), true)) {
             throw ValidationException::withMessages(['payment_status' => 'اختر حالة دفع صحيحة.']);
         }
 
@@ -28,7 +28,9 @@ class OrderPaymentService
         $deliveryCents = min($totalCents, max(0, $deliveryCents));
         $paymentMethod = filled($paymentMethod) ? trim((string) $paymentMethod) : null;
 
-        if ($status === OrderPaymentStatus::UNPAID) {
+        $behavior = OrderPaymentStatus::behavior($status);
+
+        if ($behavior === OrderPaymentStatus::UNPAID) {
             $paidCents = 0;
             $paymentMethod = null;
         } else {
@@ -36,19 +38,19 @@ class OrderPaymentService
                 throw ValidationException::withMessages(['payment_method' => 'اختر طريقة الدفع.']);
             }
 
-            $paidCents = match ($status) {
+            $paidCents = match ($behavior) {
                 OrderPaymentStatus::PARTIALLY_PAID => (int) round(max(0, (float) $paidAmount) * 100),
                 OrderPaymentStatus::PAID_WITHOUT_SHIPPING => max(0, $totalCents - $deliveryCents),
                 OrderPaymentStatus::PAID_IN_FULL => $totalCents,
             };
 
-            if ($status === OrderPaymentStatus::PARTIALLY_PAID && ($paidCents <= 0 || $paidCents >= $totalCents)) {
+            if ($behavior === OrderPaymentStatus::PARTIALLY_PAID && ($paidCents <= 0 || $paidCents >= $totalCents)) {
                 throw ValidationException::withMessages([
                     'paid_amount' => 'المبلغ المدفوع جزئياً يجب أن يكون أكبر من صفر وأقل من إجمالي الطلب.',
                 ]);
             }
 
-            if ($status === OrderPaymentStatus::PAID_WITHOUT_SHIPPING && $deliveryCents <= 0) {
+            if ($behavior === OrderPaymentStatus::PAID_WITHOUT_SHIPPING && $deliveryCents <= 0) {
                 throw ValidationException::withMessages([
                     'payment_status' => 'لا يمكن اختيار مدفوع بدون شحن لأن الطلب لا يحتوي على مصاريف توصيل.',
                 ]);

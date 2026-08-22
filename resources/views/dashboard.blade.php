@@ -54,18 +54,7 @@
                     @foreach($orders as $order)
                         @php
                             $latestPreview = $order->previews->sortByDesc('created_at')->first();
-                            $statusColors = [
-                                'new'               => 'bg-blue-100 text-blue-800',
-                                'under_review'      => 'bg-yellow-100 text-yellow-800',
-                                'generating'        => 'bg-purple-100 text-purple-800',
-                                'preview_uploaded'  => 'bg-orange-100 text-orange-800',
-                                'approved_for_print'=> 'bg-teal-100 text-teal-800',
-                                'printing'          => 'bg-indigo-100 text-indigo-800',
-                                'shipped'           => 'bg-cyan-100 text-cyan-800',
-                                'delivered'         => 'bg-green-100 text-green-800',
-                                'cancelled'         => 'bg-red-100 text-red-800',
-                            ];
-                            $colorClass = $statusColors[$order->status] ?? 'bg-gray-100 text-gray-800';
+                            $colorClass = \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status);
                             $steps = ['new', 'under_review', 'generating', 'preview_uploaded', 'approved_for_print', 'shipped', 'delivered'];
                             $stepLabels = ['طلب جديد', 'مراجعة', 'التوليد', 'Preview', 'موافقة', 'شحن', 'تسليم'];
                             $currentStep = array_search($order->status, $steps);
@@ -87,7 +76,7 @@
                                     </div>
                                 </div>
                                 <span class="px-3 py-1.5 rounded-full text-xs font-bold {{ $colorClass }}">
-                                    {{ __('order_status.' . $order->status) }}
+                                    {{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status) }}
                                 </span>
                             </div>
 
@@ -227,7 +216,7 @@
                                             <div class="flex items-start gap-2 text-xs text-slate-600">
                                                 <span class="text-slate-400 whitespace-nowrap">{{ $log->created_at->format('d/m H:i') }}</span>
                                                 <span class="text-indigo-400 flex-shrink-0">•</span>
-                                                <span>{{ __('order_status.' . $log->status) }}{{ $log->notes ? ' — ' . $log->notes : '' }}</span>
+                                                <span>{{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $log->status) }}{{ $log->notes ? ' — ' . $log->notes : '' }}</span>
                                             </div>
                                         @endforeach
                                     </div>

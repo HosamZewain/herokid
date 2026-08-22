@@ -12,6 +12,7 @@ use App\Services\Orders\AdminOrderUpdateService;
 use App\Services\Pricing\StoryPricingService;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
+use App\Support\OrderStatusRegistry;
 use App\Support\Phone;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -93,6 +94,14 @@ class OrderEditController extends Controller
             ];
         }
 
+        $paymentStatuses = OrderPaymentStatus::labels();
+        if (! array_key_exists($group['payment_status'], $paymentStatuses)) {
+            $paymentStatuses[$group['payment_status']] = OrderStatusRegistry::label(
+                OrderStatusRegistry::TYPE_PAYMENT,
+                $group['payment_status'],
+            );
+        }
+
         return view('admin.orders.create', [
             'editingGroup' => $group,
             'representative' => $first,
@@ -126,7 +135,7 @@ class OrderEditController extends Controller
                 ->orderBy('name')
                 ->get(),
             'sourceOptions' => OrderSource::options(),
-            'paymentStatuses' => OrderPaymentStatus::labels(),
+            'paymentStatuses' => $paymentStatuses,
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
         ]);
     }
@@ -178,7 +187,7 @@ class OrderEditController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
-            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::statuses(false))],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
             'change_reason' => ['required', 'string', 'min:5', 'max:500'],

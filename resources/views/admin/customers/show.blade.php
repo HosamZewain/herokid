@@ -171,7 +171,7 @@
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap">
                                     <span class="inline-flex px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">
-                                        {{ __('order_status.' . $order->status) }}
+                                        {{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status) }}
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dir-ltr">

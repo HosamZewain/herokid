@@ -105,7 +105,7 @@ class OrderController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
-            'payment_status' => ['required', Rule::in(OrderPaymentStatus::STATUSES)],
+            'payment_status' => ['required', Rule::in(OrderPaymentStatus::statuses())],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
         ], [
@@ -208,7 +208,7 @@ class OrderController extends Controller
     public function update(Request $request, Order $order, OrderStatusService $statuses)
     {
         $validated = $request->validate([
-            'status' => 'required|string|in:new,under_review,generating,preview_uploaded,revision_requested,approved_for_print,printing,shipped,delivered,cancelled',
+            'status' => ['required', 'string', Rule::in(OrderStatusService::statuses(false))],
             'admin_notes' => 'nullable|string|max:2000',
         ]);
 

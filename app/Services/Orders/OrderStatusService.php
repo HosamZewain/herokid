@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Services\Mobile\MobileNotificationService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderStatusRegistry;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -28,8 +29,27 @@ class OrderStatusService
         'cancelled',
     ];
 
+    public static function statuses(bool $activeOnly = true): array
+    {
+        return OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_ORDER, $activeOnly);
+    }
+
+    public static function labels(bool $activeOnly = true): array
+    {
+        return OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_ORDER, $activeOnly);
+    }
+
+    public static function colors(): array
+    {
+        return OrderStatusRegistry::colors(OrderStatusRegistry::TYPE_ORDER);
+    }
+
     public function update(Order $order, string $status, ?string $notes, Request $request): Order
     {
+        if (! OrderStatusRegistry::isValid(OrderStatusRegistry::TYPE_ORDER, $status, false)) {
+            throw ValidationException::withMessages(['status' => 'اختر حالة طلب صحيحة.']);
+        }
+
         return DB::transaction(function () use ($order, $status, $notes, $request): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
             $oldStatus = $locked->status;
@@ -109,6 +129,13 @@ class OrderStatusService
             'delivered' => ['order.delivered', 'تم توصيل طلبك', 'نتمنى أن تستمتعوا بطلب HeroKid '.$order->order_number.'.'],
             default => null,
         };
+        if (! $message) {
+            $message = match (OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status)) {
+                'shipped' => ['order.shipped', 'تم شحن طلبك', 'طلب HeroKid '.$order->order_number.' في طريقه إليك.'],
+                'delivered' => ['order.delivered', 'تم توصيل طلبك', 'نتمنى أن تستمتعوا بطلب HeroKid '.$order->order_number.'.'],
+                default => null,
+            };
+        }
         if ($message) {
             $this->mobileNotifications->notifyOrder($order, $message[0], $message[1], $message[2]);
         }

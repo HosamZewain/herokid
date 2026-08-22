@@ -20,37 +20,12 @@
     @endcan
 
     @php
-        $statusLabels = [
-            '' => 'كل الحالات',
-            'mixed' => 'حالات متعددة',
-            'new' => 'طلب جديد',
-            'under_review' => 'قيد المراجعة',
-            'generating' => 'جاري التوليد',
-            'preview_uploaded' => 'انتظار الموافقة',
-            'revision_requested' => 'طلب تعديلات',
-            'approved_for_print' => 'موافق للطباعة',
-            'printing' => 'جاري الطباعة',
-            'shipped' => 'تم الشحن',
-            'delivered' => 'تم التوصيل',
-            'cancelled' => 'ملغي',
-        ];
-        $statusColors = [
-            'mixed' => 'bg-slate-100 text-slate-700',
-            'new' => 'bg-blue-100 text-blue-700',
-            'under_review' => 'bg-amber-100 text-amber-700',
-            'generating' => 'bg-purple-100 text-purple-700',
-            'preview_uploaded' => 'bg-orange-100 text-orange-700',
-            'revision_requested' => 'bg-rose-100 text-rose-700',
-            'approved_for_print' => 'bg-teal-100 text-teal-700',
-            'printing' => 'bg-indigo-100 text-indigo-700',
-            'shipped' => 'bg-cyan-100 text-cyan-700',
-            'delivered' => 'bg-green-100 text-green-700',
-            'cancelled' => 'bg-red-100 text-red-700',
-        ];
-        $paymentStatusLabels = ['' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels();
+        $statusLabels = ['' => 'كل الحالات', 'mixed' => 'حالات متعددة'] + \App\Services\Orders\OrderStatusService::labels(false);
+        $statusColors = ['mixed' => 'bg-slate-100 text-slate-700'] + \App\Services\Orders\OrderStatusService::colors();
+        $paymentStatusLabels = ['' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels(false);
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
-        $printingStatusLabels = ['' => 'كل حالات الطباعة'] + \App\Support\OrderWorkflowStatus::printingLabels();
-        $shippingStatusLabels = ['' => 'كل حالات الشحن'] + \App\Support\OrderWorkflowStatus::shippingLabels();
+        $printingStatusLabels = ['' => 'كل حالات الطباعة'] + \App\Support\OrderWorkflowStatus::printingLabels(false);
+        $shippingStatusLabels = ['' => 'كل حالات الشحن'] + \App\Support\OrderWorkflowStatus::shippingLabels(false);
         $printingStatusColors = \App\Support\OrderWorkflowStatus::printingColors();
         $shippingStatusColors = \App\Support\OrderWorkflowStatus::shippingColors();
     @endphp
@@ -295,7 +270,7 @@
                                         @if($group['status'] === 'mixed')
                                             <div class="mt-2 space-y-1 text-[10px] font-bold text-gray-400">
                                                 @foreach(collect($group['active_orders'])->groupBy('status') as $status => $same)
-                                                    <p>{{ __('order_status.'.$status) }}: {{ $same->count() }}</p>
+                                                    <p>{{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $status) }}: {{ $same->count() }}</p>
                                                 @endforeach
                                             </div>
                                         @endif

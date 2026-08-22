@@ -78,6 +78,7 @@
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
                     'settings.ai_providers.view', 'settings.notifications.view',
                     'settings.mobile.view',
+                    'settings.order_statuses.manage',
                     'child_identities.settings',
                 ]);
                 $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage']);
@@ -184,6 +185,9 @@
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإعدادات</p>
                         @can('settings.site.view')
                             <a href="{{ route('admin.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? $activeLink : $idleLink }}">إعدادات الموقع</a>
+                        @endcan
+                        @can('settings.order_statuses.manage')
+                            <a href="{{ route('admin.settings.order-statuses.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.order-statuses.*') ? $activeLink : $idleLink }}">حالات الطلبات</a>
                         @endcan
                         @can('settings.delivery_zones.view')
                             <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>

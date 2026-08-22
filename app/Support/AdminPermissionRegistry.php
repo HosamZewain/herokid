@@ -79,6 +79,7 @@ class AdminPermissionRegistry
             'content.testimonials.view' => 'admin.testimonials.index',
             'content.messages.view' => 'admin.messages.index',
             'settings.site.view' => 'admin.settings.index',
+            'settings.order_statuses.manage' => 'admin.settings.order-statuses.index',
             'settings.production_prompt.view' => 'admin.settings.story-production-prompt.edit',
             'settings.ai_providers.view' => 'admin.settings.ai-providers.index',
             'settings.notifications.view' => 'admin.settings.notifications.index',

@@ -158,20 +158,7 @@
                                     <a href="{{ route('admin.orders.groups.show', $group['representative_id']) }}" class="text-indigo-600 font-bold text-xs hover:underline">تفاصيل</a>
                                 </td>
                                 <td class="px-4 py-3">
-                                    @php
-                                        $statusColors = [
-                                            'new'                 => 'bg-orange-100 text-orange-700',
-                                            'under_review'        => 'bg-blue-100 text-blue-700',
-                                            'generating'          => 'bg-purple-100 text-purple-700',
-                                            'preview_uploaded'    => 'bg-indigo-100 text-indigo-700',
-                                            'approved_for_print'  => 'bg-teal-100 text-teal-700',
-                                            'printing'            => 'bg-yellow-100 text-yellow-700',
-                                            'shipped'             => 'bg-sky-100 text-sky-700',
-                                            'delivered'           => 'bg-green-100 text-green-700',
-                                            'cancelled'           => 'bg-red-100 text-red-700',
-                                        ];
-                                        $colorClass = $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700';
-                                    @endphp
+                                    @php($colorClass = $group['status'] === 'mixed' ? 'bg-gray-100 text-gray-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']))
                                     <span class="inline-block text-xs font-bold px-2 py-1 rounded-full {{ $colorClass }}">
                                         {{ $group['status_label'] }}
                                     </span>

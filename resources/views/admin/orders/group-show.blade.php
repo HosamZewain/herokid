@@ -6,29 +6,18 @@
                 <h2 class="mt-1 text-xl font-black text-gray-900" dir="ltr">{{ $group['key'] }}</h2>
             </div>
             <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
-                <span data-workflow-badge="status" class="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">{{ $group['status_label'] }}</span>
-                <span data-workflow-badge="payment_status" class="inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{{ $group['payment_status_label'] }}</span>
-                <span data-workflow-badge="printing_status" class="inline-flex rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700">{{ $group['printing_status_label'] }}</span>
-                <span data-workflow-badge="shipping_status" class="inline-flex rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $group['shipping_status_label'] }}</span>
+                <span data-workflow-badge="status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
+                <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']) }}">{{ $group['payment_status_label'] }}</span>
+                <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']) }}">{{ $group['printing_status_label'] }}</span>
+                <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
             </div>
         </div>
     </x-slot>
 
     @php
         $sourceLabel = \App\Support\OrderSource::label($group['order_source']);
-        $statusLabels = [
-            'new' => 'طلب جديد', 'under_review' => 'قيد المراجعة', 'generating' => 'جاري التوليد',
-            'preview_uploaded' => 'انتظار الموافقة', 'revision_requested' => 'طلب تعديلات', 'approved_for_print' => 'موافق للطباعة',
-            'printing' => 'جاري الطباعة', 'shipped' => 'تم الشحن', 'delivered' => 'تم التوصيل', 'cancelled' => 'ملغي',
-        ];
-        $statusColors = [
-            'new' => 'bg-blue-100 text-blue-700', 'under_review' => 'bg-amber-100 text-amber-700',
-            'generating' => 'bg-purple-100 text-purple-700', 'preview_uploaded' => 'bg-orange-100 text-orange-700',
-            'revision_requested' => 'bg-rose-100 text-rose-700',
-            'approved_for_print' => 'bg-teal-100 text-teal-700', 'printing' => 'bg-indigo-100 text-indigo-700',
-            'shipped' => 'bg-cyan-100 text-cyan-700', 'delivered' => 'bg-green-100 text-green-700',
-            'cancelled' => 'bg-red-100 text-red-700',
-        ];
+        $statusLabels = \App\Services\Orders\OrderStatusService::labels(false);
+        $statusColors = \App\Services\Orders\OrderStatusService::colors();
         $visibleStoryOrders = $group['story_orders'];
         $deletedStoryOrders = $group['deleted_orders']->filter(fn ($order) => $order->story_id || $order->items->contains('item_type', 'story'));
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();

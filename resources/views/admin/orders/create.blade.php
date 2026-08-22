@@ -214,17 +214,18 @@
                                 <label for="payment-status" class="mb-1.5 block text-xs font-black text-gray-700">حالة الدفع *</label>
                                 <select id="payment-status" name="payment_status" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-status>
                                     @foreach($paymentStatuses as $value => $label)
-                                        <option value="{{ $value }}" @selected($formValue('payment_status', 'unpaid') === $value)>{{ $label }}</option>
+                                        <option value="{{ $value }}" data-behavior="{{ \App\Support\OrderPaymentStatus::behavior($value) }}" @selected($formValue('payment_status', 'unpaid') === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
-                            <div data-partial-payment-field @if($formValue('payment_status', 'unpaid') !== 'partially_paid') hidden @endif>
+                            @php($selectedPaymentBehavior = \App\Support\OrderPaymentStatus::behavior($formValue('payment_status', 'unpaid')))
+                            <div data-partial-payment-field @if($selectedPaymentBehavior !== 'partially_paid') hidden @endif>
                                 <label for="paid-amount" class="mb-1.5 block text-xs font-black text-gray-700">المبلغ المدفوع بالجنيه *</label>
-                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $formValue('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required($formValue('payment_status') === 'partially_paid') @disabled($formValue('payment_status', 'unpaid') !== 'partially_paid')>
+                                <input id="paid-amount" name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $formValue('paid_amount') }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-paid-amount @required($selectedPaymentBehavior === 'partially_paid') @disabled($selectedPaymentBehavior !== 'partially_paid')>
                             </div>
-                            <div data-payment-method-field @if($formValue('payment_status', 'unpaid') === 'unpaid') hidden @endif>
+                            <div data-payment-method-field @if($selectedPaymentBehavior === 'unpaid') hidden @endif>
                                 <label for="payment-method" class="mb-1.5 block text-xs font-black text-gray-700">طريقة الدفع *</label>
-                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method @required($formValue('payment_status', 'unpaid') !== 'unpaid') @disabled($formValue('payment_status', 'unpaid') === 'unpaid')>
+                                <select id="payment-method" name="payment_method" class="w-full rounded-xl border-gray-200 bg-white text-right text-sm" data-payment-method @required($selectedPaymentBehavior !== 'unpaid') @disabled($selectedPaymentBehavior === 'unpaid')>
                                     <option value="">اختر الطريقة</option>
                                     @foreach($paymentMethods as $method)<option value="{{ $method }}" @selected($formValue('payment_method') === $method)>{{ $method }}</option>@endforeach
                                 </select>
@@ -322,21 +323,23 @@
                     root.querySelector('[data-delivery-total]').textContent = money(deliveryCents);
                     root.querySelector('[data-discount-total]').textContent = money(discountCents);
                     root.querySelector('[data-grand-total]').textContent = money(totalCents);
-                    const paymentStatus = root.querySelector('[data-payment-status]')?.value || 'unpaid';
+                    const paymentSelect = root.querySelector('[data-payment-status]');
+                    const paymentStatus = paymentSelect?.value || 'unpaid';
+                    const paymentBehavior = paymentSelect?.selectedOptions[0]?.dataset.behavior || paymentStatus;
                     const paidInput = root.querySelector('[data-paid-amount]');
                     const methodInput = root.querySelector('[data-payment-method]');
                     const partialField = root.querySelector('[data-partial-payment-field]');
                     const methodField = root.querySelector('[data-payment-method-field]');
                     let paidCents = 0;
-                    if (paymentStatus === 'partially_paid') paidCents = Math.round(Math.max(0, Number(paidInput?.value || 0)) * 100);
-                    if (paymentStatus === 'paid_without_shipping') paidCents = Math.max(0, totalCents - deliveryCents);
-                    if (paymentStatus === 'paid_in_full') paidCents = totalCents;
-                    partialField.hidden = paymentStatus !== 'partially_paid';
-                    methodField.hidden = paymentStatus === 'unpaid';
-                    paidInput.required = paymentStatus === 'partially_paid';
-                    methodInput.required = paymentStatus !== 'unpaid';
-                    paidInput.disabled = paymentStatus !== 'partially_paid';
-                    methodInput.disabled = paymentStatus === 'unpaid';
+                    if (paymentBehavior === 'partially_paid') paidCents = Math.round(Math.max(0, Number(paidInput?.value || 0)) * 100);
+                    if (paymentBehavior === 'paid_without_shipping') paidCents = Math.max(0, totalCents - deliveryCents);
+                    if (paymentBehavior === 'paid_in_full') paidCents = totalCents;
+                    partialField.hidden = paymentBehavior !== 'partially_paid';
+                    methodField.hidden = paymentBehavior === 'unpaid';
+                    paidInput.required = paymentBehavior === 'partially_paid';
+                    methodInput.required = paymentBehavior !== 'unpaid';
+                    paidInput.disabled = paymentBehavior !== 'partially_paid';
+                    methodInput.disabled = paymentBehavior === 'unpaid';
                     root.querySelector('[data-paid-total]').textContent = money(paidCents);
                     root.querySelector('[data-remaining-total]').textContent = money(totalCents - paidCents);
                 };

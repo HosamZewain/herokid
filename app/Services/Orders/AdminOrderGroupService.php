@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Support\OrderPaymentStatus;
+use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -118,6 +119,12 @@ class AdminOrderGroupService
             $records[$status] = (int) ($byStatus->get($status)?->record_count ?? 0);
         }
 
+        foreach (['shipped', 'delivered'] as $behavior) {
+            $keys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, $behavior);
+            $checkouts[$behavior] = (int) $byStatus->only($keys)->sum('checkout_count');
+            $records[$behavior] = (int) $byStatus->only($keys)->sum('record_count');
+        }
+
         return compact('checkouts', 'records');
     }
 
@@ -170,12 +177,12 @@ class AdminOrderGroupService
         $addOns = $items->where('item_type', 'product_add_on')->values();
         $statuses = $visibleOrders->pluck('status')->filter()->unique()->values();
         $printingStatuses = $visibleOrders->pluck('printing_status')
-            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::PRINTING_STATUSES, true)
+            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::printingStatuses(false), true)
                 ? $status
                 : OrderWorkflowStatus::PRINTING_NOT_STARTED)
             ->unique()->values();
         $shippingStatuses = $visibleOrders->pluck('shipping_status')
-            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::SHIPPING_STATUSES, true)
+            ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::shippingStatuses(false), true)
                 ? $status
                 : OrderWorkflowStatus::SHIPPING_NOT_READY)
             ->unique()->values();
@@ -192,7 +199,7 @@ class AdminOrderGroupService
             ? 'user-'.$first->user->id
             : 'guest-'.sha1($phone ?: 'order-'.$first->id);
         $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
-        $paymentStatus = in_array($first->payment_status, OrderPaymentStatus::STATUSES, true)
+        $paymentStatus = in_array($first->payment_status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)
             ? $first->payment_status
             : OrderPaymentStatus::UNPAID;
         $paidAmountCents = min($totalCents, max(0, (int) $first->paid_amount_cents));
@@ -229,7 +236,7 @@ class AdminOrderGroupService
             'add_on_titles' => $addOns->pluck('title')->filter()->unique()->values()->all(),
             'statuses' => $statuses->all(),
             'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
-            'status_label' => $statuses->count() === 1 ? (string) __('order_status.'.$statuses->first()) : 'حالات متعددة',
+            'status_label' => $statuses->count() === 1 ? OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $statuses->first()) : 'حالات متعددة',
             'printing_status' => $printingStatuses->count() === 1 ? $printingStatuses->first() : 'mixed',
             'printing_status_label' => $printingStatuses->count() === 1
                 ? OrderWorkflowStatus::printingLabel($printingStatuses->first())
@@ -266,16 +273,16 @@ class AdminOrderGroupService
         if ($request->filled('payment_status')) {
             $paymentStatus = (string) $request->query('payment_status');
 
-            if (in_array($paymentStatus, OrderPaymentStatus::STATUSES, true)) {
+            if (in_array($paymentStatus, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)) {
                 $query->where('payment_status', $paymentStatus);
             }
         }
 
-        if ($request->filled('printing_status') && in_array($request->query('printing_status'), OrderWorkflowStatus::PRINTING_STATUSES, true)) {
+        if ($request->filled('printing_status') && in_array($request->query('printing_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PRINTING, false), true)) {
             $query->where('printing_status', $request->query('printing_status'));
         }
 
-        if ($request->filled('shipping_status') && in_array($request->query('shipping_status'), OrderWorkflowStatus::SHIPPING_STATUSES, true)) {
+        if ($request->filled('shipping_status') && in_array($request->query('shipping_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false), true)) {
             $query->where('shipping_status', $request->query('shipping_status'));
         }
 
@@ -376,11 +383,11 @@ class AdminOrderGroupService
                 $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
                 $statuses = $group->pluck('status')->filter()->unique();
                 $shippingStatuses = $group->pluck('shipping_status')
-                    ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::SHIPPING_STATUSES, true)
+                    ->map(fn (?string $status): string => in_array($status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false), true)
                         ? $status
                         : OrderWorkflowStatus::SHIPPING_NOT_READY)
                     ->unique();
-                $paymentStatus = in_array($first->payment_status, OrderPaymentStatus::STATUSES, true)
+                $paymentStatus = in_array($first->payment_status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)
                     ? $first->payment_status
                     : OrderPaymentStatus::UNPAID;
 
@@ -393,8 +400,8 @@ class AdminOrderGroupService
             })
             ->values();
 
-        $cancelled = $checkouts->where('status', 'cancelled');
-        $paid = $checkouts->where('payment_status', OrderPaymentStatus::PAID_IN_FULL);
+        $cancelled = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $checkout['status']) === 'cancelled');
+        $paid = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $checkout['payment_status']) === 'paid_in_full');
 
         return [
             'total_value_cents' => (int) $checkouts->sum('total_cents'),
@@ -402,7 +409,11 @@ class AdminOrderGroupService
             'cancelled_value_cents' => (int) $cancelled->sum('total_cents'),
             'paid_checkouts' => $paid->count(),
             'paid_value_cents' => (int) $paid->sum('total_cents'),
-            'shipped_checkouts' => $checkouts->where('shipping_status', OrderWorkflowStatus::SHIPPING_SHIPPED)->count(),
+            'shipped_checkouts' => $checkouts->filter(fn (array $checkout): bool => in_array(
+                OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $checkout['shipping_status']),
+                ['shipped', 'delivered'],
+                true,
+            ))->count(),
         ];
     }
 

@@ -19,29 +19,29 @@ class OrderPaymentStatus
         self::PAID_IN_FULL,
     ];
 
-    public static function labels(): array
+    public static function labels(bool $activeOnly = true): array
     {
-        return [
-            self::UNPAID => 'غير مدفوع',
-            self::PARTIALLY_PAID => 'مدفوع جزئياً',
-            self::PAID_WITHOUT_SHIPPING => 'مدفوع بدون شحن',
-            self::PAID_IN_FULL => 'مدفوع كلياً',
-        ];
+        return OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_PAYMENT, $activeOnly);
     }
 
     public static function label(?string $status): string
     {
-        return self::labels()[$status] ?? self::labels()[self::UNPAID];
+        return OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PAYMENT, $status, 'غير مدفوع');
     }
 
     public static function colors(): array
     {
-        return [
-            self::UNPAID => 'bg-slate-100 text-slate-700',
-            self::PARTIALLY_PAID => 'bg-amber-100 text-amber-800',
-            self::PAID_WITHOUT_SHIPPING => 'bg-sky-100 text-sky-800',
-            self::PAID_IN_FULL => 'bg-emerald-100 text-emerald-800',
-        ];
+        return OrderStatusRegistry::colors(OrderStatusRegistry::TYPE_PAYMENT);
+    }
+
+    public static function statuses(bool $activeOnly = true): array
+    {
+        return OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, $activeOnly);
+    }
+
+    public static function behavior(?string $status): string
+    {
+        return OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $status) ?? self::UNPAID;
     }
 
     public static function paymentMethods(): array

@@ -10,6 +10,7 @@ use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
+use App\Support\OrderStatusRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -81,13 +82,13 @@ class SalesReportService
                 $discountCents = (int) $orders->max('discount_cents');
                 $totalCents = max(0, $itemsTotalCents + $deliveryCents - $discountCents);
                 $statuses = $stateOrders->pluck('status')->filter()->unique()->values();
-                $paymentStatus = in_array($stateFirst->payment_status, OrderPaymentStatus::STATUSES, true)
+                $paymentStatus = in_array($stateFirst->payment_status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)
                     ? $stateFirst->payment_status
                     : OrderPaymentStatus::UNPAID;
                 $paidAmountCents = min($totalCents, max(0, (int) $stateFirst->paid_amount_cents));
-                $fullyDelivered = $statuses->count() === 1 && $statuses->first() === 'delivered';
-                $cancelled = $statuses->contains('cancelled');
-                $saleRecognized = $fullyDelivered && $paymentStatus === OrderPaymentStatus::PAID_IN_FULL;
+                $fullyDelivered = $statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered');
+                $cancelled = $statuses->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
+                $saleRecognized = $fullyDelivered && OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'paid_in_full';
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
                 $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
 
@@ -100,7 +101,7 @@ class SalesReportService
                     'first_order_id' => $first->id,
                     'order_records' => $orders->count(),
                     'statuses' => $statuses->all(),
-                    'status_label' => $statuses->map(fn (string $status): string => (string) __('order_status.'.$status))->implode('، '),
+                    'status_label' => $statuses->map(fn (string $status): string => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status))->implode('، '),
                     'fully_delivered' => $fullyDelivered,
                     'cancelled' => $cancelled,
                     'payment_status' => $paymentStatus,
@@ -170,7 +171,7 @@ class SalesReportService
             ->whereBetween('created_at', [$filters->start(), $filters->end()]);
 
         if ($filters->status === 'active') {
-            $query->where('status', '!=', 'cancelled');
+            $query->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'));
         } elseif ($filters->status !== 'all') {
             $query->where('status', $filters->status);
         }
@@ -319,11 +320,11 @@ class SalesReportService
             'recognized_checkouts' => $rows->where('sale_recognized', true)->count(),
             'unrecognized_checkouts' => $rows->where('sale_recognized', false)->count(),
             'cancelled_checkouts' => $rows->where('cancelled', true)->count(),
-            'unpaid_checkouts' => $rows->where('payment_status', OrderPaymentStatus::UNPAID)->count(),
-            'partially_paid_checkouts' => $rows->where('payment_status', OrderPaymentStatus::PARTIALLY_PAID)->count(),
-            'paid_without_shipping_checkouts' => $rows->where('payment_status', OrderPaymentStatus::PAID_WITHOUT_SHIPPING)->count(),
+            'unpaid_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'unpaid')->count(),
+            'partially_paid_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'partially_paid')->count(),
+            'paid_without_shipping_checkouts' => $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_without_shipping')->count(),
             'fully_paid_not_delivered_checkouts' => $rows
-                ->where('payment_status', OrderPaymentStatus::PAID_IN_FULL)
+                ->filter(fn (array $row): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_in_full')
                 ->where('fully_delivered', false)
                 ->where('cancelled', false)
                 ->count(),
@@ -423,7 +424,7 @@ class SalesReportService
             ->groupBy('status')
             ->map(fn (Collection $orders, string $status): array => [
                 'status' => $status,
-                'label' => (string) __('order_status.'.$status),
+                'label' => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status),
                 'orders' => $orders->count(),
                 'items_sales' => round(((int) $orders->sum('items_total_cents')) / 100, 2),
             ])
@@ -454,7 +455,9 @@ class SalesReportService
             return 'ملغي — غير محتسب في المبيعات';
         }
 
-        if (! $fullyDelivered && $paymentStatus !== OrderPaymentStatus::PAID_IN_FULL) {
+        $fullyPaid = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'paid_in_full';
+
+        if (! $fullyDelivered && ! $fullyPaid) {
             return 'بانتظار اكتمال التوصيل والدفع';
         }
 
@@ -462,7 +465,7 @@ class SalesReportService
             return 'مدفوع لكن لم يكتمل التوصيل';
         }
 
-        if ($paymentStatus !== OrderPaymentStatus::PAID_IN_FULL) {
+        if (! $fullyPaid) {
             return 'تم التوصيل ولم يكتمل الدفع';
         }
 

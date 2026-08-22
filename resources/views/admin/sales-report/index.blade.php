@@ -20,20 +20,8 @@
         $options = $report['options'];
         $trend = collect($report['trend']);
         $trendMax = max(1, (float) $trend->max('total'));
-        $statuses = [
-            'all' => 'كل الحالات بما فيها الملغاة',
-            'active' => 'كل الطلبات غير الملغاة',
-            'new' => 'جديد',
-            'under_review' => 'قيد المراجعة',
-            'generating' => 'جاري التوليد',
-            'preview_uploaded' => 'المعاينة مرفوعة',
-            'approved_for_print' => 'موافق للطباعة',
-            'printing' => 'قيد الطباعة',
-            'shipped' => 'تم الشحن',
-            'delivered' => 'تم التسليم',
-            'cancelled' => 'ملغي',
-        ];
-        $paymentStatuses = ['all' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels();
+        $statuses = ['all' => 'كل الحالات بما فيها الملغاة', 'active' => 'كل الطلبات غير الملغاة'] + \App\Support\OrderStatusRegistry::labels(\App\Support\OrderStatusRegistry::TYPE_ORDER, false);
+        $paymentStatuses = ['all' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels(false);
         $comparisonBadge = function ($value): string {
             if ($value === null) {
                 return '<span class="text-xs font-bold text-gray-400">لا توجد مقارنة سابقة</span>';

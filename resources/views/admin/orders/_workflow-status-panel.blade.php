@@ -1,14 +1,14 @@
 @php
-    $workflowStatusLabels = [
-        'new' => 'طلب جديد', 'under_review' => 'قيد المراجعة', 'generating' => 'جاري التوليد',
-        'preview_uploaded' => 'انتظار الموافقة', 'revision_requested' => 'طلب تعديلات',
-        'approved_for_print' => 'موافق للطباعة', 'printing' => 'جاري الطباعة',
-        'shipped' => 'تم الشحن', 'delivered' => 'تم التوصيل', 'cancelled' => 'ملغي',
-    ];
+    $workflowStatusLabels = \App\Services\Orders\OrderStatusService::labels();
     $workflowPaymentLabels = \App\Support\OrderPaymentStatus::labels();
     $workflowPaymentMethods = \App\Support\OrderPaymentStatus::paymentMethods();
     $workflowPrintingLabels = \App\Support\OrderWorkflowStatus::printingLabels();
     $workflowShippingLabels = \App\Support\OrderWorkflowStatus::shippingLabels();
+    $workflowPaymentBehavior = \App\Support\OrderPaymentStatus::behavior($group['payment_status']);
+    if ($group['status'] !== 'mixed' && !array_key_exists($group['status'], $workflowStatusLabels)) $workflowStatusLabels[$group['status']] = \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']);
+    if (!array_key_exists($group['payment_status'], $workflowPaymentLabels)) $workflowPaymentLabels[$group['payment_status']] = \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']);
+    if ($group['printing_status'] !== 'mixed' && !array_key_exists($group['printing_status'], $workflowPrintingLabels)) $workflowPrintingLabels[$group['printing_status']] = \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']);
+    if ($group['shipping_status'] !== 'mixed' && !array_key_exists($group['shipping_status'], $workflowShippingLabels)) $workflowShippingLabels[$group['shipping_status']] = \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']);
 @endphp
 
 <div class="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 sm:p-5" data-workflow-panel="{{ $group['representative_id'] }}">
@@ -43,7 +43,7 @@
             <label class="mb-1 block text-xs font-black text-gray-600">حالة الدفع</label>
             <select name="payment_status" required class="w-full rounded-xl border-gray-200 text-right text-sm" data-workflow-payment-status>
                 @foreach($workflowPaymentLabels as $value => $label)
-                    <option value="{{ $value }}" @selected($group['payment_status'] === $value)>{{ $label }}</option>
+                    <option value="{{ $value }}" data-behavior="{{ \App\Support\OrderPaymentStatus::behavior($value) }}" @selected($group['payment_status'] === $value)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
@@ -63,13 +63,13 @@
                 @endforeach
             </select>
         </div>
-        <div data-workflow-partial-field @if($group['payment_status'] !== 'partially_paid') hidden @endif>
+        <div data-workflow-partial-field @if($workflowPaymentBehavior !== 'partially_paid') hidden @endif>
             <label class="mb-1 block text-xs font-black text-gray-600">المبلغ المدفوع جزئيًا</label>
-            <input name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $group['paid_amount_cents'] / 100 }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-workflow-paid-amount @required($group['payment_status'] === 'partially_paid') @disabled($group['payment_status'] !== 'partially_paid')>
+            <input name="paid_amount" type="number" min="0.01" step="0.01" value="{{ $group['paid_amount_cents'] / 100 }}" class="w-full rounded-xl border-gray-200 text-left text-sm" dir="ltr" data-workflow-paid-amount @required($workflowPaymentBehavior === 'partially_paid') @disabled($workflowPaymentBehavior !== 'partially_paid')>
         </div>
-        <div data-workflow-method-field @if($group['payment_status'] === 'unpaid') hidden @endif>
+        <div data-workflow-method-field @if($workflowPaymentBehavior === 'unpaid') hidden @endif>
             <label class="mb-1 block text-xs font-black text-gray-600">طريقة الدفع</label>
-            <select name="payment_method" class="w-full rounded-xl border-gray-200 text-right text-sm" data-workflow-payment-method @required($group['payment_status'] !== 'unpaid') @disabled($group['payment_status'] === 'unpaid')>
+            <select name="payment_method" class="w-full rounded-xl border-gray-200 text-right text-sm" data-workflow-payment-method @required($workflowPaymentBehavior !== 'unpaid') @disabled($workflowPaymentBehavior === 'unpaid')>
                 <option value="">اختر الطريقة</option>
                 @foreach($workflowPaymentMethods as $method)<option value="{{ $method }}" @selected($group['payment_method'] === $method)>{{ $method }}</option>@endforeach
             </select>
@@ -92,7 +92,10 @@
                     document.querySelectorAll(`[data-workflow-badge-group="${id}"]`).forEach(container => {
                         ['status', 'payment_status', 'printing_status', 'shipping_status'].forEach(key => {
                             const badge = container.querySelector(`[data-workflow-badge="${key}"]`);
-                            if (badge) badge.textContent = group[`${key}_label`];
+                            if (badge) {
+                                badge.textContent = group[`${key}_label`];
+                                badge.className = `inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${group[`${key}_color`] || 'bg-gray-100 text-gray-700'}`;
+                            }
                         });
                         const paid = container.querySelector('[data-workflow-paid]');
                         const remaining = container.querySelector('[data-workflow-remaining]');
@@ -120,11 +123,13 @@
 
                     const refreshPayment = () => {
                         const value = paymentStatus.value;
-                        const isPartial = value === 'partially_paid';
-                        const isUnpaid = value === 'unpaid';
+                        const behavior = paymentStatus.selectedOptions[0]?.dataset.behavior || value;
+                        const isPartial = behavior === 'partially_paid';
+                        const isUnpaid = behavior === 'unpaid';
                         partialField.hidden = !isPartial;
                         methodField.hidden = isUnpaid;
                         amount.disabled = value !== 'partially_paid';
+                        if (behavior !== value) amount.disabled = !isPartial;
                         amount.required = isPartial;
                         method.disabled = isUnpaid;
                         method.required = !isUnpaid;

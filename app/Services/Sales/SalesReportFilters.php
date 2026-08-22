@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use App\Support\OrderStatusRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -39,11 +40,11 @@ class SalesReportFilters
         [$start, $end] = self::dates($request, $range, $today);
 
         $status = (string) $request->query('status', 'all');
-        $allowedStatuses = ['active', 'all', 'new', 'under_review', 'generating', 'preview_uploaded', 'revision_requested', 'approved_for_print', 'printing', 'shipped', 'delivered', 'cancelled'];
+        $allowedStatuses = ['active', 'all', ...OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_ORDER, false)];
         $status = in_array($status, $allowedStatuses, true) ? $status : 'all';
 
         $paymentStatus = (string) $request->query('payment_status', 'all');
-        $allowedPaymentStatuses = ['all', 'unpaid', 'partially_paid', 'paid_without_shipping', 'paid_in_full'];
+        $allowedPaymentStatuses = ['all', ...OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false)];
         $paymentStatus = in_array($paymentStatus, $allowedPaymentStatuses, true) ? $paymentStatus : 'all';
 
         $type = (string) $request->query('type', 'all');

@@ -3,6 +3,7 @@
 namespace App\Services\Mobile;
 
 use App\Models\Order;
+use App\Support\OrderStatusRegistry;
 
 class MobileOrderPresenter
 {
@@ -54,7 +55,11 @@ class MobileOrderPresenter
                 'stage' => $order->productionProject->current_stage,
                 'status' => $order->productionProject->status,
             ] : null,
-            'can_reorder' => in_array($order->status, ['delivered', 'cancelled'], true),
+            'can_reorder' => in_array(
+                OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status),
+                ['delivered', 'cancelled'],
+                true,
+            ),
             'support_context' => ['order_number' => $order->order_number],
         ]);
     }
@@ -70,6 +75,11 @@ class MobileOrderPresenter
 
     private function mapStatus(string $status): string
     {
+        $behavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status);
+        if (in_array($behavior, ['shipped', 'delivered', 'cancelled'], true)) {
+            return $behavior;
+        }
+
         return match ($status) {
             'new', 'under_review' => 'under_review',
             'generating' => 'content_production',

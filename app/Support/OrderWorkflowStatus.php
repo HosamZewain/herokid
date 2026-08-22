@@ -49,63 +49,43 @@ class OrderWorkflowStatus
         self::SHIPPING_CANCELLED,
     ];
 
-    public static function printingLabels(): array
+    public static function printingLabels(bool $activeOnly = true): array
     {
-        return [
-            self::PRINTING_NOT_REQUIRED => 'لا يحتاج طباعة',
-            self::PRINTING_NOT_STARTED => 'لم تبدأ الطباعة',
-            self::PRINTING_READY => 'جاهز للطباعة',
-            self::PRINTING_IN_PROGRESS => 'جاري الطباعة',
-            self::PRINTING_COMPLETED => 'اكتملت الطباعة',
-            self::PRINTING_ON_HOLD => 'الطباعة متوقفة',
-        ];
+        return OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_PRINTING, $activeOnly);
     }
 
-    public static function shippingLabels(): array
+    public static function shippingLabels(bool $activeOnly = true): array
     {
-        return [
-            self::SHIPPING_NOT_REQUIRED => 'لا يحتاج شحن',
-            self::SHIPPING_NOT_READY => 'غير جاهز للشحن',
-            self::SHIPPING_READY => 'جاهز للشحن',
-            self::SHIPPING_SHIPPED => 'تم الشحن',
-            self::SHIPPING_DELIVERED => 'تم التسليم',
-            self::SHIPPING_RETURNED => 'مرتجع',
-            self::SHIPPING_CANCELLED => 'الشحن ملغي',
-        ];
+        return OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_SHIPPING, $activeOnly);
     }
 
     public static function printingLabel(?string $status): string
     {
-        return self::printingLabels()[$status] ?? self::printingLabels()[self::PRINTING_NOT_STARTED];
+        return OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PRINTING, $status, 'لم تبدأ الطباعة');
     }
 
     public static function shippingLabel(?string $status): string
     {
-        return self::shippingLabels()[$status] ?? self::shippingLabels()[self::SHIPPING_NOT_READY];
+        return OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $status, 'غير جاهز للشحن');
     }
 
     public static function printingColors(): array
     {
-        return [
-            self::PRINTING_NOT_REQUIRED => 'bg-gray-100 text-gray-600',
-            self::PRINTING_NOT_STARTED => 'bg-slate-100 text-slate-700',
-            self::PRINTING_READY => 'bg-teal-100 text-teal-800',
-            self::PRINTING_IN_PROGRESS => 'bg-indigo-100 text-indigo-800',
-            self::PRINTING_COMPLETED => 'bg-emerald-100 text-emerald-800',
-            self::PRINTING_ON_HOLD => 'bg-amber-100 text-amber-800',
-        ];
+        return OrderStatusRegistry::colors(OrderStatusRegistry::TYPE_PRINTING);
     }
 
     public static function shippingColors(): array
     {
-        return [
-            self::SHIPPING_NOT_REQUIRED => 'bg-gray-100 text-gray-600',
-            self::SHIPPING_NOT_READY => 'bg-slate-100 text-slate-700',
-            self::SHIPPING_READY => 'bg-sky-100 text-sky-800',
-            self::SHIPPING_SHIPPED => 'bg-cyan-100 text-cyan-800',
-            self::SHIPPING_DELIVERED => 'bg-emerald-100 text-emerald-800',
-            self::SHIPPING_RETURNED => 'bg-orange-100 text-orange-800',
-            self::SHIPPING_CANCELLED => 'bg-red-100 text-red-800',
-        ];
+        return OrderStatusRegistry::colors(OrderStatusRegistry::TYPE_SHIPPING);
+    }
+
+    public static function printingStatuses(bool $activeOnly = true): array
+    {
+        return OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PRINTING, $activeOnly);
+    }
+
+    public static function shippingStatuses(bool $activeOnly = true): array
+    {
+        return OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, $activeOnly);
     }
 }

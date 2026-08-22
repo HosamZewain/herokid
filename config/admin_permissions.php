@@ -195,6 +195,16 @@ return [
             'sensitive' => true,
         ],
 
+        'settings.order_statuses.manage' => [
+            'group_key' => 'settings',
+            'name_ar' => 'إدارة حالات الطلبات',
+            'name_en' => 'Manage order statuses',
+            'description_ar' => 'إضافة وتعديل وترتيب وتعطيل حالات الطلب والدفع والطباعة والشحن.',
+            'description_en' => 'Create, edit, order, and deactivate order, payment, printing, and shipping statuses.',
+            'sort_order' => 15,
+            'sensitive' => true,
+        ],
+
         'booklet_previews.view' => ['group_key' => 'orders', 'name_ar' => 'عرض معاينات الكتب', 'name_en' => 'View booklet previews', 'description_ar' => 'عرض مكتبة معاينات الكتب وروابط العملاء.', 'description_en' => 'View the booklet preview library and customer links.', 'sort_order' => 70, 'sensitive' => true],
         'booklet_previews.create' => ['group_key' => 'orders', 'name_ar' => 'إنشاء معاينات الكتب', 'name_en' => 'Create booklet previews', 'description_ar' => 'رفع ملفات PDF وإنشاء روابط معاينة خاصة.', 'description_en' => 'Upload PDFs and create private preview links.', 'sort_order' => 71, 'sensitive' => true],
         'booklet_previews.update' => ['group_key' => 'orders', 'name_ar' => 'تحديث معاينات الكتب', 'name_en' => 'Update booklet previews', 'description_ar' => 'تعديل بيانات المعاينة ورفع إصدارات مصححة.', 'description_en' => 'Edit previews and upload corrected versions.', 'sort_order' => 72, 'sensitive' => true],

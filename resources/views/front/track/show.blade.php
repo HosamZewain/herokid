@@ -32,7 +32,7 @@
                                 
                                 <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
                                     <div class="flex items-center justify-between space-x-2 rtl:space-x-reverse mb-1">
-                                        <div class="font-bold text-gray-900">{{ __('order_status.' . $log->status) }}</div>
+                                        <div class="font-bold text-gray-900">{{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $log->status) }}</div>
                                         <time class="text-xs font-medium text-gray-500">{{ $log->created_at->diffForHumans() }}</time>
                                     </div>
                                     <div class="text-gray-600 text-sm">

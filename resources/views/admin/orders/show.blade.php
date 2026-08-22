@@ -21,7 +21,7 @@
         $fallbackTotalCents = max(0, $fallbackItemsCents + $fallbackDeliveryCents - $fallbackDiscountCents);
         $fallbackPaidCents = min($fallbackTotalCents, max(0, (int) ($order->paid_amount_cents ?? 0)));
         $fallbackPhone = (string) data_get($order->delivery_details, 'phone', '');
-        $fallbackPaymentStatus = in_array($order->payment_status, \App\Support\OrderPaymentStatus::STATUSES, true)
+        $fallbackPaymentStatus = in_array($order->payment_status, \App\Support\OrderStatusRegistry::keys(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, false), true)
             ? $order->payment_status
             : \App\Support\OrderPaymentStatus::UNPAID;
 
@@ -46,10 +46,10 @@
             'payment_status' => $fallbackPaymentStatus,
             'payment_status_label' => \App\Support\OrderPaymentStatus::label($fallbackPaymentStatus),
             'payment_method' => $order->payment_method,
-            'printing_status' => in_array($order->printing_status, \App\Support\OrderWorkflowStatus::PRINTING_STATUSES, true)
+            'printing_status' => in_array($order->printing_status, \App\Support\OrderStatusRegistry::keys(\App\Support\OrderStatusRegistry::TYPE_PRINTING, false), true)
                 ? $order->printing_status
                 : \App\Support\OrderWorkflowStatus::PRINTING_NOT_STARTED,
-            'shipping_status' => in_array($order->shipping_status, \App\Support\OrderWorkflowStatus::SHIPPING_STATUSES, true)
+            'shipping_status' => in_array($order->shipping_status, \App\Support\OrderStatusRegistry::keys(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, false), true)
                 ? $order->shipping_status
                 : \App\Support\OrderWorkflowStatus::SHIPPING_NOT_READY,
         ];
@@ -85,21 +85,10 @@
                     </a>
                 </div>
                 @php
-                    $statusColors = [
-                        'new'                => 'bg-orange-100 text-orange-700 border-orange-200',
-                        'under_review'       => 'bg-blue-100 text-blue-700 border-blue-200',
-                        'generating'         => 'bg-purple-100 text-purple-700 border-purple-200',
-                        'preview_uploaded'   => 'bg-indigo-100 text-indigo-700 border-indigo-200',
-                        'approved_for_print' => 'bg-teal-100 text-teal-700 border-teal-200',
-                        'printing'           => 'bg-yellow-100 text-yellow-700 border-yellow-200',
-                        'shipped'            => 'bg-sky-100 text-sky-700 border-sky-200',
-                        'delivered'          => 'bg-green-100 text-green-700 border-green-200',
-                        'cancelled'          => 'bg-red-100 text-red-700 border-red-200',
-                    ];
-                    $statusColor = $statusColors[$order->status] ?? 'bg-gray-100 text-gray-700 border-gray-200';
+                    $statusColor = \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status);
                 @endphp
                 <span class="px-4 py-2 rounded-full text-sm font-extrabold border {{ $statusColor }}">
-                    {{ __('order_status.' . $order->status) }}
+                    {{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status) }}
                 </span>
             </div>
 
@@ -742,7 +731,7 @@
                                 $logLabel = match ($logType) {
                                     'printing' => \App\Support\OrderWorkflowStatus::printingLabel($log->status),
                                     'shipping' => \App\Support\OrderWorkflowStatus::shippingLabel($log->status),
-                                    default => (string) __('order_status.'.$log->status),
+                                    default => \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $log->status),
                                 };
                                 $logTypeLabel = ['order' => 'الطلب', 'printing' => 'الطباعة', 'shipping' => 'الشحن'][$logType] ?? 'الطلب';
                             @endphp

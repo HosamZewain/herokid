@@ -4,6 +4,7 @@ namespace App\Services\Mobile;
 
 use App\Models\Order;
 use App\Models\User;
+use App\Support\OrderStatusRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Ramsey\Uuid\Uuid;
@@ -14,7 +15,7 @@ class MobileOrderReorderService
 
     public function reorder(User $user, Order $order, string $requestKey): array
     {
-        if (! in_array($order->status, ['delivered', 'cancelled'], true)) {
+        if (! in_array(OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status), ['delivered', 'cancelled'], true)) {
             throw ValidationException::withMessages(['order' => 'Only delivered or cancelled orders can be reordered.']);
         }
 
