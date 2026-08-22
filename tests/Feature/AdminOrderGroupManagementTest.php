@@ -57,7 +57,13 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(93_800, $group['total_cents']);
         $this->assertSame(4_000, $group['delivery_cents']);
         $this->assertSame(['رنا', 'آدم'], $group['child_names']);
-        $this->assertSame(['checkouts' => 1, 'stories' => 2, 'products' => 3], $stats);
+        $this->assertSame(1, $stats['checkouts']);
+        $this->assertSame(2, $stats['stories']);
+        $this->assertSame(3, $stats['products']);
+        $this->assertSame(93_800, $stats['total_value_cents']);
+        $this->assertSame(0, $stats['cancelled_checkouts']);
+        $this->assertSame(0, $stats['paid_checkouts']);
+        $this->assertSame(0, $stats['shipped_checkouts']);
     }
 
     public function test_dashboard_counts_and_lists_a_multi_story_checkout_once(): void
@@ -123,6 +129,82 @@ class AdminOrderGroupManagementTest extends TestCase
             ->get(route('admin.orders.index', ['status' => 'delivered']))
             ->assertOk()
             ->assertDontSee('GROUP-MULTI');
+    }
+
+    public function test_filtered_order_statistics_count_each_checkout_once_and_show_order_source(): void
+    {
+        $cancelled = $this->createStoryOrder('HK-STATS-CANCELLED', 'GROUP-STATS-CANCELLED', 'سلمى', 'cancelled');
+        $cancelled->update(['order_source' => 'phone']);
+        $cancelled->items()->create([
+            'item_type' => 'story',
+            'story_id' => $cancelled->story_id,
+            'title' => 'قصة سلمى',
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $paid = $this->createStoryOrder('HK-STATS-PAID', 'GROUP-STATS-PAID', 'آدم', 'under_review');
+        $paid->update([
+            'order_source' => 'whatsapp',
+            'payment_status' => 'paid_in_full',
+            'paid_amount_cents' => 43_900,
+        ]);
+        $paid->items()->create([
+            'item_type' => 'story',
+            'story_id' => $paid->story_id,
+            'title' => 'قصة آدم',
+            'unit_price_cents' => 39_900,
+            'quantity' => 1,
+            'total_price_cents' => 39_900,
+        ]);
+
+        $shipped = $this->createStoryOrder('HK-STATS-SHIPPED', 'GROUP-STATS-SHIPPED', 'نور', 'shipped');
+        $shipped->update(['shipping_status' => 'shipped']);
+        $shipped->items()->create([
+            'item_type' => 'story',
+            'story_id' => $shipped->story_id,
+            'title' => 'قصة نور',
+            'unit_price_cents' => 25_000,
+            'quantity' => 1,
+            'total_price_cents' => 25_000,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', [
+                'from' => now()->toDateString(),
+                'to' => now()->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('إحصائيات الطلبات المطابقة للفلاتر', false)
+            ->assertSee('إجمالي قيمة الطلبات')
+            ->assertSee('قيمة الطلبات الملغاة')
+            ->assertSee('قيمة الطلبات المدفوعة كليًا')
+            ->assertSee('الطلبات المشحونة')
+            ->assertSee('المصدر')
+            ->assertSee('مكالمة هاتفية')
+            ->assertSee('واتساب')
+            ->assertSee('الموقع');
+
+        $stats = $response->viewData('stats');
+        $this->assertSame(3, $stats['checkouts']);
+        $this->assertSame(106_800, $stats['total_value_cents']);
+        $this->assertSame(1, $stats['cancelled_checkouts']);
+        $this->assertSame(33_900, $stats['cancelled_value_cents']);
+        $this->assertSame(1, $stats['paid_checkouts']);
+        $this->assertSame(43_900, $stats['paid_value_cents']);
+        $this->assertSame(1, $stats['shipped_checkouts']);
+
+        $cancelledStats = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', ['status' => 'cancelled']))
+            ->assertOk()
+            ->viewData('stats');
+
+        $this->assertSame(1, $cancelledStats['checkouts']);
+        $this->assertSame(33_900, $cancelledStats['total_value_cents']);
+        $this->assertSame(1, $cancelledStats['cancelled_checkouts']);
+        $this->assertSame(0, $cancelledStats['paid_checkouts']);
+        $this->assertSame(0, $cancelledStats['shipped_checkouts']);
     }
 
     public function test_multi_story_checkout_opens_first_production_order_and_keeps_sibling_navigation(): void

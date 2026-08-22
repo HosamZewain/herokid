@@ -133,6 +133,37 @@
                 </form>
             </div>
 
+            <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+                <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                    <p class="text-xs font-black text-indigo-700">إجمالي الطلبات</p>
+                    <p class="mt-2 text-2xl font-black text-indigo-950">{{ number_format($stats['checkouts']) }}</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p class="text-xs font-black text-slate-600">إجمالي قيمة الطلبات</p>
+                    <p class="mt-2 text-lg font-black text-slate-950">{{ format_money($stats['total_value_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                    <p class="text-xs font-black text-rose-700">الطلبات الملغاة</p>
+                    <p class="mt-2 text-2xl font-black text-rose-950">{{ number_format($stats['cancelled_checkouts']) }}</p>
+                </div>
+                <div class="rounded-2xl border border-rose-100 bg-white p-4">
+                    <p class="text-xs font-black text-rose-600">قيمة الطلبات الملغاة</p>
+                    <p class="mt-2 text-lg font-black text-rose-950">{{ format_money($stats['cancelled_value_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                    <p class="text-xs font-black text-emerald-700">الطلبات المدفوعة كليًا</p>
+                    <p class="mt-2 text-2xl font-black text-emerald-950">{{ number_format($stats['paid_checkouts']) }}</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-100 bg-white p-4">
+                    <p class="text-xs font-black text-emerald-600">قيمة الطلبات المدفوعة كليًا</p>
+                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_money($stats['paid_value_cents'] / 100) }}</p>
+                </div>
+                <div class="col-span-2 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 lg:col-span-1">
+                    <p class="text-xs font-black text-cyan-700">الطلبات المشحونة</p>
+                    <p class="mt-2 text-2xl font-black text-cyan-950">{{ number_format($stats['shipped_checkouts']) }}</p>
+                </div>
+            </section>
+
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="divide-y divide-gray-100 md:hidden">
                     @forelse($groups as $group)
@@ -147,9 +178,7 @@
                                 <div class="min-w-0 text-right">
                                     <a href="{{ $detailsUrl }}" class="block truncate font-mono text-sm font-black text-gray-950" dir="ltr">{{ $group['key'] }}</a>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
-                                    @if($group['order_source'] !== 'website')
-                                        <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
-                                    @endif
+                                    <p class="mt-2 text-[10px] font-black text-amber-700">المصدر: {{ \App\Support\OrderSource::label($group['order_source']) }}</p>
                                 </div>
                                 <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                     <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -212,6 +241,7 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">عملية الشراء</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">المصدر</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
@@ -234,9 +264,10 @@
                                         <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-xs font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
-                                        @if($group['order_source'] !== 'website')
-                                            <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
-                                        @endif
+                                    </td>
+                                    <td class="px-4 py-4">
+                                        <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
+                                        @if($group['source_notes'])<p class="mt-2 line-clamp-2 max-w-32 text-[10px] leading-4 text-gray-400">{{ $group['source_notes'] }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4">
                                         @can('customers.view')
@@ -312,12 +343,12 @@
                                 @can('orders.update')
                                     @if(!$trash)
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="8" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="9" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
                                         </tr>
                                     @endif
                                 @endcan
                             @empty
-                                <tr><td colspan="8" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</td></tr>
+                                <tr><td colspan="9" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $trash ? 'سلة المحذوفات فارغة.' : 'لا توجد عمليات شراء تطابق الفلاتر.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>

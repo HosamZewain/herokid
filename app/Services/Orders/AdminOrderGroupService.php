@@ -72,6 +72,7 @@ class AdminOrderGroupService
 
         $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
         $matchingOrders = $this->ordersForStats($allKeys, $trash);
+        $financialStats = $this->financialStats($matchingOrders);
 
         return [
             'groups' => $groups,
@@ -79,6 +80,7 @@ class AdminOrderGroupService
                 'checkouts' => $allKeys->count(),
                 'stories' => $matchingOrders->filter(fn (Order $order): bool => $this->isStoryOrder($order))->count(),
                 'products' => (int) $matchingOrders->flatMap->items->whereIn('item_type', ['product', 'product_add_on'])->sum('quantity'),
+                ...$financialStats,
             ],
             'trash' => $trash,
         ];
@@ -336,10 +338,72 @@ class AdminOrderGroupService
         $query = $trash ? Order::onlyTrashed() : Order::query();
 
         return $query
-            ->select(['id', 'story_id', 'checkout_group_key'])
-            ->with('items:id,order_id,item_type,quantity')
+            ->select([
+                'id',
+                'story_id',
+                'checkout_group_key',
+                'status',
+                'payment_status',
+                'shipping_status',
+                'discount_cents',
+                'delivery_details',
+            ])
+            ->with([
+                'story:id,price',
+                'items:id,order_id,item_type,quantity,total_price_cents',
+            ])
             ->whereIn('checkout_group_key', $keys)
             ->get();
+    }
+
+    private function financialStats(Collection $orders): array
+    {
+        $checkouts = $orders
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
+            ->map(function (Collection $group): array {
+                $group = $group->sortBy('id')->values();
+                $first = $group->first();
+                $itemsCents = (int) $group->flatMap->items->sum('total_price_cents');
+
+                if ($itemsCents === 0) {
+                    $itemsCents = (int) round($group->sum(
+                        fn (Order $order): float => (float) (data_get($order->delivery_details, 'item_price') ?? $order->story?->price ?? 0)
+                    ) * 100);
+                }
+
+                $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
+                $discountCents = (int) $group->max('discount_cents');
+                $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
+                $statuses = $group->pluck('status')->filter()->unique();
+                $shippingStatuses = $group->pluck('shipping_status')
+                    ->map(fn (?string $status): string => in_array($status, OrderWorkflowStatus::SHIPPING_STATUSES, true)
+                        ? $status
+                        : OrderWorkflowStatus::SHIPPING_NOT_READY)
+                    ->unique();
+                $paymentStatus = in_array($first->payment_status, OrderPaymentStatus::STATUSES, true)
+                    ? $first->payment_status
+                    : OrderPaymentStatus::UNPAID;
+
+                return [
+                    'total_cents' => $totalCents,
+                    'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
+                    'payment_status' => $paymentStatus,
+                    'shipping_status' => $shippingStatuses->count() === 1 ? $shippingStatuses->first() : 'mixed',
+                ];
+            })
+            ->values();
+
+        $cancelled = $checkouts->where('status', 'cancelled');
+        $paid = $checkouts->where('payment_status', OrderPaymentStatus::PAID_IN_FULL);
+
+        return [
+            'total_value_cents' => (int) $checkouts->sum('total_cents'),
+            'cancelled_checkouts' => $cancelled->count(),
+            'cancelled_value_cents' => (int) $cancelled->sum('total_cents'),
+            'paid_checkouts' => $paid->count(),
+            'paid_value_cents' => (int) $paid->sum('total_cents'),
+            'shipped_checkouts' => $checkouts->where('shipping_status', OrderWorkflowStatus::SHIPPING_SHIPPED)->count(),
+        ];
     }
 
     private function isStoryOrder(Order $order): bool
