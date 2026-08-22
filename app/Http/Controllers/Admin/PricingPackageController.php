@@ -9,6 +9,7 @@ use App\Models\Story;
 use App\Services\Pricing\StoryPricingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class PricingPackageController extends Controller
@@ -29,6 +30,7 @@ class PricingPackageController extends Controller
     {
         $data = $this->validated($request);
         $data['features'] = $this->parseFeatures($request->input('features_raw', ''));
+        $data['image_path'] = $this->storeImage($request);
         DB::transaction(function () use ($request, $data): void {
             $package = PricingPackage::create($data);
             $this->syncProducts($package, $request->input('products', []));
@@ -51,10 +53,21 @@ class PricingPackageController extends Controller
     {
         $data = $this->validated($request);
         $data['features'] = $this->parseFeatures($request->input('features_raw', ''));
+        $oldImagePath = $pricing->image_path;
+        if ($request->boolean('remove_image')) {
+            $data['image_path'] = null;
+        }
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $this->storeImage($request);
+        }
         DB::transaction(function () use ($request, $pricing, $data): void {
             $pricing->update($data);
             $this->syncProducts($pricing, $request->input('products', []));
         });
+
+        if (array_key_exists('image_path', $data) && $oldImagePath !== $data['image_path']) {
+            $this->deleteUploadedImage($oldImagePath);
+        }
 
         return redirect()->route('admin.pricing.index')->with('success', 'تم تحديث الباقة بنجاح.');
     }
@@ -73,6 +86,7 @@ class PricingPackageController extends Controller
             'subtitle' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
             'price' => 'required|numeric|min:0',
+            'regular_price' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|max:20',
             'is_featured' => 'boolean',
             'badge' => 'nullable|string|max:100',
@@ -85,6 +99,8 @@ class PricingPackageController extends Controller
             'products' => 'nullable|array',
             'products.*.quantity' => 'nullable|integer|min:0|max:50',
             'products.*.variant_id' => 'nullable|integer|exists:product_variants,id',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'remove_image' => 'nullable|boolean',
         ]) + [
             'is_featured' => false,
             'active' => false,
@@ -92,7 +108,7 @@ class PricingPackageController extends Controller
             'show_on_homepage' => false,
         ];
 
-        unset($data['products']);
+        unset($data['products'], $data['image'], $data['remove_image']);
 
         $data['slug'] = $this->uniqueSlug($request->input('name'), $request->route('pricing'));
 
@@ -166,5 +182,19 @@ class PricingPackageController extends Controller
         }
 
         return $slug;
+    }
+
+    private function storeImage(Request $request): ?string
+    {
+        return $request->hasFile('image')
+            ? $request->file('image')->store('packages', 'public')
+            : null;
+    }
+
+    private function deleteUploadedImage(?string $path): void
+    {
+        if ($path && ! str_starts_with($path, 'images/') && ! str_starts_with($path, 'http')) {
+            Storage::disk('public')->delete($path);
+        }
     }
 }

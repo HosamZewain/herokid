@@ -3,6 +3,12 @@
 {{-- ══ SEO ══ --}}
 <x-slot name="pageTitle">{{ setting('seo_pricing_title', $settings['seo_pricing_title'] ?? '') }}</x-slot>
 <x-slot name="pageDescription">{{ setting('seo_pricing_description', $settings['seo_pricing_description'] ?? '') }}</x-slot>
+@if($packages->first()?->image_url)
+<x-slot name="pageImage">{{ $packages->first()->image_url }}</x-slot>
+<x-slot name="pageImageAlt">باقات قصص وأنشطة HeroKid المخصصة</x-slot>
+<x-slot name="ogImageWidth">900</x-slot>
+<x-slot name="ogImageHeight">900</x-slot>
+@endif
 
 @php
     $paymentMethods = setting_array('payment_methods');
@@ -32,7 +38,7 @@
                         'priceCurrency' => 'EGP',
                         'price' => (string) $pkg->price,
                         'availability' => 'https://schema.org/InStock',
-                        'url' => \App\Support\Seo::url('/stories'),
+                        'url' => route('shop.package.show', $pkg),
                     ],
                 ],
             ])->all(),
@@ -45,20 +51,20 @@
 @endpush
 
     <!-- Header -->
-    <div class="relative overflow-hidden bg-gradient-to-br from-slate-900 to-indigo-900 py-20">
+    <div class="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-fuchsia-900 py-16 sm:py-20">
         <div class="absolute inset-0 opacity-10">
             <div class="absolute top-0 left-0 w-72 h-72 bg-indigo-400 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
         </div>
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-            <span class="inline-block px-4 py-1.5 mb-4 text-sm font-bold tracking-wider text-indigo-300 uppercase bg-indigo-900/50 rounded-full">الأسعار</span>
-            <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-6">سعر بسيط، قيمة لا تُقدَّر</h1>
-            <p class="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">لا رسوم خفية، لا اشتراكات. تدفع مرة واحدة وتحصل على كتاب مخصص يبقى مع طفلك للأبد.</p>
+            <span class="inline-block px-4 py-1.5 mb-4 text-sm font-black text-amber-950 bg-amber-300 rounded-full">وفر مع باقات HeroKid</span>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-6">قصص وأنشطة أكثر لطفلك بسعر أوفر</h1>
+            <p class="text-lg text-slate-200 max-w-2xl mx-auto leading-8">اختر الباقة المناسبة، ثم اختر كل قصة وبيانات طفلها في طلب واحد. السعر الظاهر هو السعر النهائي للباقة قبل مصاريف التوصيل.</p>
         </div>
     </div>
 
     <!-- Pricing Cards -->
-    <section class="py-24 bg-slate-50">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section class="py-14 sm:py-20 bg-gradient-to-b from-indigo-50 to-white">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
             @if($packages->isEmpty())
                 <div class="text-center py-20 text-slate-400">
@@ -66,83 +72,7 @@
                     <p>الباقات قيد التحضير، تواصل معنا للاستفسار.</p>
                 </div>
             @else
-                <div class="grid grid-cols-1 {{ $packages->count() == 2 ? 'md:grid-cols-2' : ($packages->count() >= 3 ? 'md:grid-cols-3' : '') }} gap-8 mb-16">
-                    @foreach($packages as $pkg)
-                        @if($pkg->is_featured)
-                        {{-- Featured / highlighted card --}}
-                        <div class="bg-indigo-600 rounded-3xl shadow-2xl p-10 flex flex-col relative overflow-hidden">
-                            @if($pkg->badge)
-                            <div class="absolute top-6 left-6">
-                                <span class="bg-yellow-400 text-yellow-900 text-xs font-extrabold px-3 py-1 rounded-full">{{ $pkg->badge }}</span>
-                            </div>
-                            @endif
-                            <div class="mb-8">
-                                <span class="inline-block px-3 py-1 bg-indigo-500 text-indigo-100 text-xs font-bold rounded-lg mb-4">{{ $pkg->name }}</span>
-                                @if($pkg->subtitle)
-                                <h3 class="text-2xl font-extrabold text-white mb-2">{{ $pkg->subtitle }}</h3>
-                                @endif
-                                @if($pkg->description)
-                                <p class="text-indigo-100 leading-relaxed">{{ $pkg->description }}</p>
-                                @endif
-                            </div>
-                            <div class="flex items-end gap-1 mb-8">
-                                <span class="text-5xl font-extrabold text-white">{{ arabic_number(number_format($pkg->price, 0)) }}</span>
-                                <span class="text-2xl font-bold text-indigo-200 mb-1">{{ $pkg->currency }}</span>
-                            </div>
-                            @if(!empty($pkg->features))
-                            <ul class="space-y-3 mb-10 flex-grow">
-                                @foreach($pkg->features as $feature)
-                                <li class="flex items-center gap-3 text-indigo-100">
-                                    <span class="w-5 h-5 bg-white/20 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                                    {{ $feature }}
-                                </li>
-                                @endforeach
-                            </ul>
-                            @endif
-                            <p class="mb-4 text-sm font-black text-indigo-100">{{ $pkg->componentSummary() }}</p>
-                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white text-indigo-600 font-bold py-4 rounded-2xl hover:bg-indigo-50 transition duration-300 mt-auto">
-                                {{ $pkg->button_text ?: 'اختر قصتك الآن' }}
-                            </a>
-                        </div>
-                        @else
-                        {{-- Standard card --}}
-                        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-10 flex flex-col relative">
-                            @if($pkg->badge)
-                            <div class="absolute top-6 left-6">
-                                <span class="bg-slate-100 text-slate-600 text-xs font-extrabold px-3 py-1 rounded-full">{{ $pkg->badge }}</span>
-                            </div>
-                            @endif
-                            <div class="mb-8">
-                                <span class="inline-block px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg mb-4">{{ $pkg->name }}</span>
-                                @if($pkg->subtitle)
-                                <h3 class="text-2xl font-extrabold text-slate-900 mb-2">{{ $pkg->subtitle }}</h3>
-                                @endif
-                                @if($pkg->description)
-                                <p class="text-slate-500 leading-relaxed">{{ $pkg->description }}</p>
-                                @endif
-                            </div>
-                            <div class="flex items-end gap-1 mb-8">
-                                <span class="text-5xl font-extrabold text-indigo-600">{{ arabic_number(number_format($pkg->price, 0)) }}</span>
-                                <span class="text-2xl font-bold text-slate-500 mb-1">{{ $pkg->currency }}</span>
-                            </div>
-                            @if(!empty($pkg->features))
-                            <ul class="space-y-3 mb-10 flex-grow">
-                                @foreach($pkg->features as $feature)
-                                <li class="flex items-center gap-3 text-slate-700">
-                                    <span class="w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                                    {{ $feature }}
-                                </li>
-                                @endforeach
-                            </ul>
-                            @endif
-                            <p class="mb-4 text-sm font-black text-indigo-700">{{ $pkg->componentSummary() }}</p>
-                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-slate-100 hover:bg-indigo-600 text-slate-800 hover:text-white font-bold py-4 rounded-2xl transition duration-300 mt-auto">
-                                {{ $pkg->button_text ?: 'اختر قصتك الآن' }}
-                            </a>
-                        </div>
-                        @endif
-                    @endforeach
-                </div>
+                <div class="mb-16">@include('front.packages._cards', ['packages' => $packages])</div>
             @endif
 
             <!-- FAQ about pricing -->

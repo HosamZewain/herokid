@@ -9,9 +9,11 @@ use App\Models\Permission;
 use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\VisitorCartItem;
+use App\Services\Pricing\DefaultPackageInstaller;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +22,81 @@ use Tests\TestCase;
 class PurchasablePackagesTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_default_discounted_packages_are_installed_from_current_catalog_prices(): void
+    {
+        $story = $this->story('package-reference-story', 'قصة مرجعية', 399);
+        $category = ProductCategory::query()->firstOrFail();
+        $coloring = Product::create([
+            'product_category_id' => $category->id,
+            'name_ar' => 'كتاب تلوين مخصص بصورة الطفل',
+            'slug' => 'ktab-tloyn-mkhss-bsor-altfl',
+            'price_cents' => 29900,
+            'is_active' => true,
+        ]);
+        $maze = Product::create([
+            'product_category_id' => $category->id,
+            'name_ar' => 'كتاب المتاهات - المستوى الأول',
+            'slug' => 'maze-book-level-1',
+            'price_cents' => 17900,
+            'is_active' => true,
+        ]);
+        Setting::updateOrCreate(['key' => 'story_global_price_enabled'], ['value' => '1']);
+        Setting::updateOrCreate(['key' => 'story_regular_price'], ['value' => '399']);
+        Setting::updateOrCreate(['key' => 'story_offer_enabled'], ['value' => '1']);
+        Setting::updateOrCreate(['key' => 'story_offer_price'], ['value' => '349']);
+
+        $result = app(DefaultPackageInstaller::class)->install();
+
+        $this->assertCount(3, $result['installed']);
+        $this->assertSame([], $result['skipped']);
+
+        $storiesOnly = PricingPackage::where('slug', 'three-personalized-stories')->firstOrFail();
+        $threeBundle = PricingPackage::where('slug', 'three-stories-coloring-maze')->firstOrFail();
+        $fiveBundle = PricingPackage::where('slug', 'five-stories-coloring-maze')->firstOrFail();
+
+        $this->assertSame('1047.00', $storiesOnly->regular_price);
+        $this->assertSame('942.30', $storiesOnly->price);
+        $this->assertSame('1525.00', $threeBundle->regular_price);
+        $this->assertSame('1372.50', $threeBundle->price);
+        $this->assertSame('2223.00', $fiveBundle->regular_price);
+        $this->assertSame('2000.70', $fiveBundle->price);
+        $this->assertSame(10, $fiveBundle->discountPercentage());
+        $this->assertTrue($fiveBundle->show_on_homepage);
+        $this->assertTrue($fiveBundle->show_in_store);
+        $this->assertNotNull($fiveBundle->image_url);
+        $this->assertSame([$coloring->id, $maze->id], $threeBundle->items()->pluck('product_id')->all());
+
+        $this->get(route('home'))->assertOk()->assertSee($storiesOnly->name)->assertSee($threeBundle->name)->assertSee($fiveBundle->name);
+        $this->get(route('pricing'))->assertOk()->assertSee('خصم ١٠٪')->assertSee($fiveBundle->image_url, false);
+    }
+
+    public function test_package_story_picker_shows_cover_thumbnail_with_each_story_name(): void
+    {
+        $story = Story::create([
+            'title' => 'قصة الاختيار المصورة',
+            'slug' => 'pictured-package-story',
+            'cover_image' => 'stories/pictured-package-story.jpg',
+            'price' => 349,
+            'language' => 'ar',
+            'active' => true,
+        ]);
+        $package = PricingPackage::create([
+            'name' => 'باقة اختيار القصص',
+            'slug' => 'pictured-story-picker-package',
+            'price' => 900,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+
+        $this->get(route('shop.package.show', $package))
+            ->assertOk()
+            ->assertSee('data-package-story-dialog', false)
+            ->assertSee('data-choose-story', false)
+            ->assertSee($story->title)
+            ->assertSee($story->cover_url, false);
+    }
 
     public function test_admin_can_build_package_from_story_count_and_store_products_with_custom_price(): void
     {

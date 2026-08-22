@@ -9,7 +9,7 @@
     <div class="py-8" dir="rtl">
         <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-sm rounded-xl p-8">
-                <form action="{{ route('admin.pricing.update', $package) }}" method="POST" class="space-y-5">
+                <form action="{{ route('admin.pricing.update', $package) }}" method="POST" enctype="multipart/form-data" class="space-y-5">
                     @csrf @method('PUT')
                     @include('admin.pricing._form', ['package' => $package])
                     <div class="flex gap-3 pt-2">

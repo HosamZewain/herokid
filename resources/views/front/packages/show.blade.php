@@ -2,19 +2,28 @@
     <x-slot name="pageTitle">{{ $pricingPackage->name }} | باقات HeroKid</x-slot>
     <x-slot name="pageDescription">{{ $pricingPackage->description ?: 'اختر قصص ومنتجات باقة '.$pricingPackage->name.' بسعر موفر من HeroKid.' }}</x-slot>
     <x-slot name="canonical">/shop/package/{{ $pricingPackage->slug }}</x-slot>
+    @if($pricingPackage->image_url)
+        <x-slot name="pageImage">{{ $pricingPackage->image_url }}</x-slot>
+        <x-slot name="pageImageAlt">{{ $pricingPackage->name }}</x-slot>
+        <x-slot name="ogImageWidth">900</x-slot>
+        <x-slot name="ogImageHeight">900</x-slot>
+    @endif
 
     <div class="min-h-screen bg-gradient-to-b from-indigo-50 to-white py-8 sm:py-12" dir="rtl">
         <div class="mx-auto max-w-5xl px-4 sm:px-6">
             <nav class="mb-5 text-sm font-bold text-slate-500"><a href="{{ route('shop.index') }}" class="hover:text-indigo-700">متجر القصص والمنتجات</a> / {{ $pricingPackage->name }}</nav>
 
             <header class="rounded-3xl bg-gradient-to-bl from-indigo-950 via-violet-900 to-fuchsia-800 p-6 text-right text-white shadow-xl sm:p-9">
-                <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                <div class="grid gap-6 sm:grid-cols-[minmax(0,1fr)_240px] sm:items-center">
                     <div>
                         @if($pricingPackage->badge)<span class="rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-amber-950">{{ $pricingPackage->badge }}</span>@endif
                         <h1 class="mt-3 text-3xl font-black sm:text-4xl">{{ $pricingPackage->name }}</h1>
                         <p class="mt-3 max-w-2xl leading-8 text-indigo-100">{{ $pricingPackage->description ?: $pricingPackage->componentSummary() }}</p>
                     </div>
-                    <div class="shrink-0 rounded-2xl bg-white/10 px-5 py-4 text-left backdrop-blur">
+                    @if($pricingPackage->image_url)
+                        <img src="{{ $pricingPackage->image_url }}" alt="{{ $pricingPackage->name }}" width="480" height="480" class="order-first aspect-square w-full rounded-2xl object-cover shadow-lg sm:order-last">
+                    @endif
+                    <div class="rounded-2xl bg-white/10 px-5 py-4 text-left backdrop-blur sm:col-span-2">
                         @if($regularTotal > (int) round((float) $pricingPackage->price * 100))
                             <p class="text-sm text-indigo-200 line-through">{{ format_money($regularTotal / 100) }}</p>
                         @endif
@@ -44,12 +53,20 @@
                                 <fieldset class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
                                     <legend class="px-2 text-base font-black text-indigo-900">القصة {{ $slot + 1 }}</legend>
                                     <div class="grid gap-3 sm:grid-cols-2">
-                                        <label class="sm:col-span-2"><span class="mb-1 block text-sm font-bold text-slate-700">اختر القصة</span>
-                                            <select name="stories[{{ $slot }}][story_id]" required class="w-full rounded-xl border-slate-300">
+                                        @php $selectedStory = $stories->firstWhere('id', (int) old("stories.$slot.story_id")); @endphp
+                                        <div class="sm:col-span-2" data-package-story-slot data-slot="{{ $slot }}">
+                                            <span class="mb-1 block text-sm font-bold text-slate-700">اختر القصة</span>
+                                            <select name="stories[{{ $slot }}][story_id]" required class="w-full rounded-xl border-slate-300" data-package-story-select>
                                                 <option value="">اختر قصة</option>
-                                                @foreach($stories as $story)<option value="{{ $story->id }}" @selected((string) old("stories.$slot.story_id") === (string) $story->id)>{{ $story->title }}</option>@endforeach
+                                                @foreach($stories as $story)<option value="{{ $story->id }}" data-title="{{ $story->title }}" data-image="{{ $story->cover_url }}" @selected((string) old("stories.$slot.story_id") === (string) $story->id)>{{ $story->title }}</option>@endforeach
                                             </select>
-                                        </label>
+                                            <button type="button" class="mt-2 hidden w-full items-center gap-3 rounded-2xl border-2 border-indigo-200 bg-white p-3 text-right transition hover:border-indigo-500" data-open-story-picker>
+                                                <span class="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100"><x-story-cover-image :src="$selectedStory?->cover_url" alt="" class="{{ $selectedStory ? '' : 'hidden' }} h-full w-full object-cover" data-selected-story-image /></span>
+                                                <span class="min-w-0 flex-1"><strong class="block truncate text-base text-slate-950" data-selected-story-title>{{ $selectedStory?->title ?: 'اضغط لاختيار القصة' }}</strong><span class="mt-1 block text-xs font-bold text-indigo-600">ستشاهد صورة كل قصة قبل اختيارها</span></span>
+                                                <span class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">اختيار</span>
+                                            </button>
+                                            <p class="mt-1 hidden text-xs font-bold text-red-600" data-story-picker-error>اختر قصة لهذه الخانة.</p>
+                                        </div>
                                         <label><span class="mb-1 block text-sm font-bold text-slate-700">اسم الطفل</span><input name="stories[{{ $slot }}][child_name]" value="{{ old("stories.$slot.child_name") }}" required autocomplete="off" class="w-full rounded-xl border-slate-300"></label>
                                         <label><span class="mb-1 block text-sm font-bold text-slate-700">العمر</span><select name="stories[{{ $slot }}][child_age]" required class="w-full rounded-xl border-slate-300"><option value="">اختر العمر</option>@foreach(\App\Support\StoryAgeOptions::forPersonalization() as $age)<option value="{{ $age }}" @selected((string) old("stories.$slot.child_age") === (string) $age)>{{ $age }} سنوات</option>@endforeach</select></label>
                                         <label><span class="mb-1 block text-sm font-bold text-slate-700">الجنس</span><select name="stories[{{ $slot }}][child_gender]" required class="w-full rounded-xl border-slate-300"><option value="">اختر</option><option value="boy" @selected(old("stories.$slot.child_gender") === 'boy')>ولد</option><option value="girl" @selected(old("stories.$slot.child_gender") === 'girl')>بنت</option></select></label>
@@ -83,6 +100,21 @@
         </div>
     </div>
 
+    <dialog data-package-story-dialog class="m-auto max-h-[88vh] w-[calc(100%-2rem)] max-w-4xl rounded-3xl p-0 shadow-2xl backdrop:bg-slate-950/70">
+        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+            <div><h2 class="text-xl font-black text-slate-950">اختر القصة</h2><p class="text-xs text-slate-500">اضغط على صورة القصة لإضافتها إلى الباقة.</p></div>
+            <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xl font-black text-slate-700" data-close-story-picker aria-label="إغلاق">×</button>
+        </div>
+        <div class="grid gap-3 bg-slate-50 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+            @foreach($stories as $story)
+                <button type="button" class="group flex items-center gap-3 rounded-2xl border-2 border-transparent bg-white p-2 text-right shadow-sm transition hover:border-indigo-500" data-choose-story data-id="{{ $story->id }}" data-title="{{ $story->title }}" data-image="{{ $story->cover_url }}">
+                    <span class="h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100"><x-story-cover-image :src="$story->cover_url" :alt="$story->title" loading="lazy" class="h-full w-full object-cover" /></span>
+                    <span class="min-w-0"><strong class="line-clamp-2 text-sm text-slate-950">{{ $story->title }}</strong><span class="mt-2 block text-xs font-bold text-indigo-600">اختر هذه القصة</span></span>
+                </button>
+            @endforeach
+        </div>
+    </dialog>
+
     @push('scripts')
     <script>
     (() => {
@@ -91,6 +123,44 @@
         const form = document.querySelector('[data-package-order-form]');
         const states = new Map();
         const escape = value => { const span = document.createElement('span'); span.textContent = value; return span.innerHTML; };
+        const dialog = document.querySelector('[data-package-story-dialog]');
+        let activeStorySlot = null;
+
+        document.querySelectorAll('[data-package-story-slot]').forEach(slot => {
+            const select = slot.querySelector('[data-package-story-select]');
+            const trigger = slot.querySelector('[data-open-story-picker]');
+            const title = slot.querySelector('[data-selected-story-title]');
+            const image = slot.querySelector('[data-selected-story-image]');
+            const error = slot.querySelector('[data-story-picker-error]');
+            select.required = false;
+            select.classList.add('hidden');
+            trigger.classList.remove('hidden');
+            trigger.classList.add('flex');
+            trigger.addEventListener('click', () => { activeStorySlot = slot; dialog?.showModal(); });
+            select.addEventListener('change', () => {
+                const option = select.options[select.selectedIndex];
+                title.textContent = option?.dataset.title || 'اضغط لاختيار القصة';
+                if (option?.dataset.image) {
+                    image.dataset.originalSrc = option.dataset.image;
+                    image.dataset.coverRetryState = 'original';
+                    image.src = option.dataset.image;
+                    image.classList.remove('hidden');
+                } else {
+                    image.removeAttribute('data-original-src');
+                    image.classList.add('hidden');
+                }
+                error.classList.toggle('hidden', Boolean(select.value));
+            });
+        });
+        dialog?.querySelector('[data-close-story-picker]')?.addEventListener('click', () => dialog.close());
+        dialog?.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+        dialog?.querySelectorAll('[data-choose-story]').forEach(button => button.addEventListener('click', () => {
+            const select = activeStorySlot?.querySelector('[data-package-story-select]');
+            if (!select) return;
+            select.value = button.dataset.id;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            dialog.close();
+        }));
 
         document.querySelectorAll('[data-package-uploader]').forEach(uploader => {
             const slot = Number(uploader.dataset.slot);
@@ -135,6 +205,13 @@
         });
 
         form?.addEventListener('submit', event => {
+            const missingStory = [...document.querySelectorAll('[data-package-story-slot]')].find(slot => !slot.querySelector('[data-package-story-select]')?.value);
+            if (missingStory) {
+                event.preventDefault();
+                missingStory.querySelector('[data-story-picker-error]')?.classList.remove('hidden');
+                missingStory.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
             const incomplete = [...states.values()].some(items => items.filter(item => item.status === 'done').length < 2 || items.some(item => item.status === 'uploading'));
             if (!incomplete) return;
             event.preventDefault();

@@ -85,10 +85,32 @@
               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ old('description', $p?->description) }}</textarea>
 </div>
 
+{{-- Marketing image --}}
+<div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+    <label class="block text-sm font-bold text-gray-700 mb-2">صورة الباقة</label>
+    @if($p?->image_url)
+        <div class="mb-3 flex items-center gap-4">
+            <img src="{{ $p->image_url }}" alt="صورة {{ $p->name }}" class="h-24 w-24 rounded-xl object-cover shadow-sm">
+            <label class="flex items-center gap-2 text-sm font-bold text-red-600">
+                <input type="checkbox" name="remove_image" value="1" class="rounded border-gray-300 text-red-600">
+                حذف الصورة الحالية
+            </label>
+        </div>
+    @endif
+    <input type="file" name="image" accept="image/jpeg,image/png,image/webp" class="block w-full rounded-lg border border-gray-300 bg-white p-2 text-sm">
+    <p class="mt-1 text-xs text-gray-500">JPG أو PNG أو WebP حتى ٥ ميجابايت. يفضل صورة مربعة.</p>
+</div>
+
 {{-- Price + Currency --}}
-<div class="grid grid-cols-2 gap-4">
+<div class="grid gap-4 sm:grid-cols-3">
     <div>
-        <label class="block text-sm font-bold text-gray-700 mb-1">السعر <span class="text-red-500">*</span></label>
+        <label class="block text-sm font-bold text-gray-700 mb-1">السعر الأصلي للمكونات</label>
+        <input type="number" name="regular_price" value="{{ old('regular_price', $p?->regular_price) }}" min="0" step="0.01"
+               class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+        <p class="mt-1 text-xs text-gray-400">يظهر مشطوبًا عند وجود خصم.</p>
+    </div>
+    <div>
+        <label class="block text-sm font-bold text-gray-700 mb-1">سعر الباقة بعد الخصم <span class="text-red-500">*</span></label>
         <input type="number" name="price" value="{{ old('price', $p?->price) }}" required min="0" step="0.01"
                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
     </div>

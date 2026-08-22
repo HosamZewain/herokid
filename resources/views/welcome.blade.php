@@ -903,11 +903,13 @@
                         @endif
                         <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 18px 18px;"></div>
                         <div class="relative z-10">
+                            @if($pkg->image_url)<a href="{{ route('shop.package.show', $pkg) }}" class="mb-5 block aspect-[4/3] overflow-hidden rounded-2xl bg-white/10"><img src="{{ $pkg->image_url }}" alt="{{ $pkg->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 hover:scale-105"></a>@endif
                             <h3 class="text-xl font-bold text-white mb-1">{{ $pkg->name }}</h3>
                             @if($pkg->subtitle)<p class="text-white/70 text-sm mb-5">{{ $pkg->subtitle }}</p>@else<div class="mb-5"></div>@endif
                             <div class="flex items-end gap-2 mb-6 justify-end">
                                 <span class="text-white/70 text-xl">{{ $pkg->currency }}</span>
                                 <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
+                                @if((float) $pkg->regular_price > (float) $pkg->price)<span class="text-sm font-bold text-white/60 line-through">{{ number_format($pkg->regular_price, 0) }}</span>@endif
                             </div>
                             @if($pkg->features && count($pkg->features))
                             <ul class="space-y-3 text-sm text-white/90 mb-8">
@@ -926,6 +928,7 @@
                     @else
                     {{-- Standard card --}}
                     <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-6 md:p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
+                        @if($pkg->image_url)<a href="{{ route('shop.package.show', $pkg) }}" class="mb-5 block aspect-[4/3] overflow-hidden rounded-2xl bg-white/10"><img src="{{ $pkg->image_url }}" alt="{{ $pkg->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 hover:scale-105"></a>@endif
                         @if($pkg->badge)
                         <span class="inline-block bg-indigo-500/20 text-indigo-300 text-xs font-bold px-3 py-1 rounded-full border border-indigo-500/30 mb-3">{{ $pkg->badge }}</span>
                         @endif
@@ -934,6 +937,7 @@
                         <div class="flex items-end gap-2 mb-6 justify-end">
                             <span class="text-slate-400 text-xl">{{ $pkg->currency }}</span>
                             <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
+                            @if((float) $pkg->regular_price > (float) $pkg->price)<span class="text-sm font-bold text-slate-500 line-through">{{ number_format($pkg->regular_price, 0) }}</span>@endif
                         </div>
                         @if($pkg->features && count($pkg->features))
                         <ul class="space-y-3 text-sm text-slate-300 mb-8">
@@ -954,7 +958,7 @@
             @endif
 
             <div class="text-center mt-8">
-                <a href="{{ route('shop.index') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض المتجر وكل الباقات ←</a>
+                <a href="{{ route('pricing') }}" class="text-indigo-300 font-bold hover:text-indigo-100 transition text-sm">عرض كل الباقات والتفاصيل ←</a>
             </div>
         </div>
     </section>
