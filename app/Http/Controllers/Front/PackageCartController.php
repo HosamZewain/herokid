@@ -30,11 +30,12 @@ class PackageCartController extends Controller
         TemporaryPhotoUploadService $uploads,
     ) {
         abort_unless($pricingPackage->active && $pricingPackage->show_in_store, 404);
-        $pricingPackage->load(['items.product', 'items.variant']);
+        $pricingPackage->load(['items.product', 'items.variant', 'eligibleStories']);
+        $allowedStoryIds = $pricingPackage->availableStoriesQuery()->pluck('stories.id')->all();
 
         $rules = [
             'stories' => ['array', 'size:'.$pricingPackage->story_count],
-            'stories.*.story_id' => ['required', Rule::exists('stories', 'id')->where(fn ($query) => $query->where('active', true))],
+            'stories.*.story_id' => ['required', 'integer', Rule::in($allowedStoryIds)],
             'stories.*.child_name' => ['required', 'string', 'max:255'],
             'stories.*.child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
             'stories.*.child_gender' => ['required', Rule::in(['boy', 'girl'])],
@@ -51,6 +52,7 @@ class PackageCartController extends Controller
         $messages = [
             'stories.size' => 'يجب استكمال بيانات كل قصص الباقة.',
             'stories.*.story_id.required' => 'اختر قصة لكل عنصر في الباقة.',
+            'stories.*.story_id.in' => 'القصة المختارة غير متاحة ضمن هذه الباقة.',
             'stories.*.child_name.required' => 'اكتب اسم الطفل لكل قصة.',
             'stories.*.child_age.required' => 'اختر عمر الطفل لكل قصة.',
             'stories.*.child_gender.required' => 'اختر جنس الطفل لكل قصة.',

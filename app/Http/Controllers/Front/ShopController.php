@@ -70,7 +70,7 @@ class ShopController extends Controller
             [
                 'currentCategory' => $category,
                 'isStoriesAlias' => false,
-                'packages' => PricingPackage::active()->purchasable()->where('show_in_store', true)->with(['items.product', 'items.variant'])->ordered()->get()->filter->availableForPurchase(),
+                'packages' => PricingPackage::active()->purchasable()->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase(),
             ],
         ));
     }

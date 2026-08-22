@@ -6,17 +6,28 @@ use App\Http\Controllers\Controller;
 use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\Story;
+use App\Services\Pricing\PackageAnalyticsService;
 use App\Services\Pricing\StoryPricingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PricingPackageController extends Controller
 {
-    public function index()
+    public function index(PackageAnalyticsService $analytics)
     {
-        $packages = PricingPackage::with(['items.product', 'items.variant'])->ordered()->get();
+        $packages = PricingPackage::with(['items.product', 'items.variant', 'eligibleStories'])
+            ->withCount('views')
+            ->ordered()
+            ->get();
+        $purchaseCounts = $analytics->purchaseCounts($packages->pluck('id'));
+        $packages->each(fn (PricingPackage $package) => $package->setAttribute(
+            'purchases_count',
+            $purchaseCounts[$package->id] ?? 0,
+        ));
 
         return view('admin.pricing.index', compact('packages'));
     }
@@ -34,6 +45,7 @@ class PricingPackageController extends Controller
         DB::transaction(function () use ($request, $data): void {
             $package = PricingPackage::create($data);
             $this->syncProducts($package, $request->input('products', []));
+            $this->syncStories($package, $request->input('story_ids', []));
         });
 
         return redirect()->route('admin.pricing.index')->with('success', 'تم إضافة الباقة بنجاح.');
@@ -41,7 +53,7 @@ class PricingPackageController extends Controller
 
     public function edit(PricingPackage $pricing, StoryPricingService $storyPricing)
     {
-        $pricing->load(['items.product', 'items.variant']);
+        $pricing->load(['items.product', 'items.variant', 'eligibleStories']);
 
         return view('admin.pricing.edit', array_merge(
             ['package' => $pricing],
@@ -63,6 +75,7 @@ class PricingPackageController extends Controller
         DB::transaction(function () use ($request, $pricing, $data): void {
             $pricing->update($data);
             $this->syncProducts($pricing, $request->input('products', []));
+            $this->syncStories($pricing, $request->input('story_ids', []));
         });
 
         if (array_key_exists('image_path', $data) && $oldImagePath !== $data['image_path']) {
@@ -94,6 +107,9 @@ class PricingPackageController extends Controller
             'sort_order' => 'integer|min:0',
             'active' => 'boolean',
             'story_count' => 'required|integer|min:0|max:10',
+            'story_scope' => ['nullable', Rule::in(['all', 'specific'])],
+            'story_ids' => 'nullable|array',
+            'story_ids.*' => 'integer|distinct|exists:stories,id',
             'show_in_store' => 'boolean',
             'show_on_homepage' => 'boolean',
             'products' => 'nullable|array',
@@ -108,7 +124,15 @@ class PricingPackageController extends Controller
             'show_on_homepage' => false,
         ];
 
-        unset($data['products'], $data['image'], $data['remove_image']);
+        $storyScope = $request->input('story_scope', 'all');
+        if ((int) $data['story_count'] > 0 && $storyScope === 'specific' && $request->collect('story_ids')->filter()->isEmpty()) {
+            throw ValidationException::withMessages([
+                'story_ids' => 'اختر قصة واحدة على الأقل، أو اجعل الباقة متاحة لجميع القصص.',
+            ]);
+        }
+
+        $data['applies_to_all_stories'] = (int) $data['story_count'] === 0 || $storyScope === 'all';
+        unset($data['products'], $data['image'], $data['remove_image'], $data['story_scope'], $data['story_ids']);
 
         $data['slug'] = $this->uniqueSlug($request->input('name'), $request->route('pricing'));
 
@@ -134,12 +158,37 @@ class PricingPackageController extends Controller
     private function formData(StoryPricingService $storyPricing): array
     {
         $products = Product::query()->with(['category', 'activeVariants'])->where('is_active', true)->orderBy('name_ar')->get();
-        $referenceStory = Story::query()->where('active', true)->first();
+        $stories = Story::query()->where('active', true)->orderBy('title')->get();
+        $referenceStory = $stories->first();
 
         return [
             'products' => $products,
+            'stories' => $stories,
             'storyPriceCents' => $referenceStory ? (int) round($storyPricing->effectivePrice($referenceStory) * 100) : 0,
         ];
+    }
+
+    private function syncStories(PricingPackage $package, array $storyIds): void
+    {
+        if ($package->applies_to_all_stories || $package->story_count === 0) {
+            $package->eligibleStories()->detach();
+
+            return;
+        }
+
+        $activeStoryIds = Story::query()
+            ->where('active', true)
+            ->whereIn('id', array_map('intval', $storyIds))
+            ->pluck('id')
+            ->all();
+
+        if ($activeStoryIds === []) {
+            throw ValidationException::withMessages([
+                'story_ids' => 'القصص المحددة غير متاحة حاليًا. اختر قصة نشطة واحدة على الأقل.',
+            ]);
+        }
+
+        $package->eligibleStories()->sync($activeStoryIds);
     }
 
     private function syncProducts(PricingPackage $package, array $products): void

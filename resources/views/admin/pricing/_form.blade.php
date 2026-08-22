@@ -29,6 +29,46 @@
             class="w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500" data-package-story-count>
     </div>
 
+    @php
+        $storyScope = old('story_scope', $p && !$p->applies_to_all_stories ? 'specific' : 'all');
+        $selectedStoryIds = collect(old('story_ids', $p?->eligibleStories?->pluck('id')->all() ?? []))->map(fn ($id) => (int) $id)->all();
+    @endphp
+    <div class="mb-5 rounded-2xl border border-indigo-100 bg-white p-4" data-package-story-scope>
+        <div>
+            <h4 class="text-sm font-black text-gray-900">القصص المتاحة داخل الباقة</h4>
+            <p class="mt-1 text-xs text-gray-500">اختر جميع القصص، أو حدد قصصًا بعينها مثل قصص كرة القدم فقط.</p>
+        </div>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                <input type="radio" name="story_scope" value="all" @checked($storyScope === 'all') class="mt-1 border-gray-300 text-indigo-600" data-story-scope-option>
+                <span><strong class="block text-sm text-gray-900">كل القصص</strong><span class="text-xs text-gray-500">يختار العميل من جميع القصص النشطة الحالية والمستقبلية.</span></span>
+            </label>
+            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                <input type="radio" name="story_scope" value="specific" @checked($storyScope === 'specific') class="mt-1 border-gray-300 text-indigo-600" data-story-scope-option>
+                <span><strong class="block text-sm text-gray-900">قصص محددة فقط</strong><span class="text-xs text-gray-500">يختار العميل فقط من القصص التي تحددها هنا.</span></span>
+            </label>
+        </div>
+
+        <div class="mt-4 {{ $storyScope === 'specific' ? '' : 'hidden' }}" data-specific-stories>
+            <label class="block">
+                <span class="sr-only">ابحث باسم القصة</span>
+                <input type="search" placeholder="ابحث باسم القصة..." class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500" data-admin-story-search>
+            </label>
+            <div class="mt-3 grid max-h-80 gap-2 overflow-y-auto rounded-xl bg-gray-50 p-2 sm:grid-cols-2" data-admin-story-list>
+                @foreach($stories as $story)
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white p-2 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50" data-admin-story-option data-title="{{ $story->title }}">
+                        <input type="checkbox" name="story_ids[]" value="{{ $story->id }}" @checked(in_array($story->id, $selectedStoryIds, true)) class="rounded border-gray-300 text-indigo-600">
+                        <span class="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100"><x-story-cover-image :src="$story->cover_url" alt="" class="h-full w-full object-cover" /></span>
+                        <span class="min-w-0 text-sm font-bold text-gray-900">{{ $story->title }}</span>
+                    </label>
+                @endforeach
+            </div>
+            <p class="mt-2 hidden rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-800" data-admin-story-empty>لا توجد قصة بهذا الاسم.</p>
+            @error('story_ids')<p class="mt-2 text-xs font-bold text-red-600">{{ $message }}</p>@enderror
+            @error('story_ids.*')<p class="mt-2 text-xs font-bold text-red-600">{{ $message }}</p>@enderror
+        </div>
+    </div>
+
     <div class="grid gap-3 sm:grid-cols-2">
         @foreach($products as $product)
             @php
@@ -187,6 +227,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const builder = document.querySelector('[data-package-builder]');
     if (!builder) return;
     const priceInput = document.querySelector('input[name="price"]');
+    const storyScopeInputs = [...builder.querySelectorAll('[data-story-scope-option]')];
+    const specificStories = builder.querySelector('[data-specific-stories]');
+    const storySearch = builder.querySelector('[data-admin-story-search]');
+    const storyOptions = [...builder.querySelectorAll('[data-admin-story-option]')];
+    const storyEmpty = builder.querySelector('[data-admin-story-empty]');
+    const updateStoryScope = () => {
+        const isSpecific = storyScopeInputs.find(input => input.checked)?.value === 'specific';
+        specificStories?.classList.toggle('hidden', !isSpecific);
+    };
     const money = cents => `${new Intl.NumberFormat('ar-EG').format(cents / 100)} ج.م`;
     const update = () => {
         const storyCount = Number(builder.querySelector('[data-package-story-count]')?.value || 0);
@@ -204,7 +253,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     builder.addEventListener('input', update);
     builder.addEventListener('change', update);
+    storyScopeInputs.forEach(input => input.addEventListener('change', updateStoryScope));
+    storySearch?.addEventListener('input', () => {
+        const term = storySearch.value.trim().toLocaleLowerCase('ar');
+        let visible = 0;
+        storyOptions.forEach(option => {
+            const matches = !term || (option.dataset.title || '').toLocaleLowerCase('ar').includes(term);
+            option.classList.toggle('hidden', !matches);
+            if (matches) visible += 1;
+        });
+        storyEmpty?.classList.toggle('hidden', visible !== 0);
+    });
     priceInput?.addEventListener('input', update);
+    updateStoryScope();
     update();
 });
 </script>

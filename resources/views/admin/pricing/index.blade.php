@@ -23,6 +23,8 @@
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الترتيب</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">الباقة</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase">السعر</th>
+                            <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الزيارات</th>
+                            <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مرات الشراء</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مميزة</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الحالة</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">إجراءات</th>
@@ -45,6 +47,8 @@
                             <td class="px-4 py-3 font-bold text-indigo-600">
                                 {{ number_format($package->price, 0) }} {{ $package->currency }}
                             </td>
+                            <td class="px-4 py-3 text-center font-bold text-sky-700">{{ number_format($package->views_count) }}</td>
+                            <td class="px-4 py-3 text-center font-bold text-emerald-700">{{ number_format($package->purchases_count) }}</td>
                             <td class="px-4 py-3 text-center">
                                 @if($package->is_featured)
                                     <span class="text-yellow-500 text-lg">⭐</span>
@@ -80,7 +84,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-12 text-center text-gray-400">
+                            <td colspan="8" class="px-6 py-12 text-center text-gray-400">
                                 لا توجد باقات بعد. <a href="{{ route('admin.pricing.create') }}" class="text-indigo-600 hover:underline">أضف أول باقة</a>
                             </td>
                         </tr>

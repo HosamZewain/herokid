@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\CustomerPackageView;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Permission;
 use App\Models\PricingPackage;
 use App\Models\Product;
@@ -15,6 +17,7 @@ use App\Models\User;
 use App\Models\VisitorCartItem;
 use App\Services\Pricing\DefaultPackageDeduplicator;
 use App\Services\Pricing\DefaultPackageInstaller;
+use App\Services\Pricing\PackageAnalyticsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -260,6 +263,130 @@ class PurchasablePackagesTest extends TestCase
             'product_id' => $product->id,
             'quantity' => 1,
         ]);
+    }
+
+    public function test_admin_can_limit_a_package_to_selected_active_stories(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::whereIn('key', [
+            'settings.pricing.view', 'settings.pricing.create',
+        ])->pluck('id'));
+        $football = $this->story('football-package-story', 'بطل كرة القدم', 349);
+        $adventure = $this->story('adventure-package-story', 'مغامرة الغابة', 349);
+
+        $this->actingAs($admin)->post(route('admin.pricing.store'), [
+            'name' => 'باقة كرة القدم',
+            'price' => 900,
+            'currency' => 'ج.م',
+            'story_count' => 3,
+            'story_scope' => 'specific',
+            'story_ids' => [$football->id],
+            'active' => 1,
+            'show_in_store' => 1,
+            'sort_order' => 1,
+        ])->assertRedirect(route('admin.pricing.index'));
+
+        $package = PricingPackage::where('name', 'باقة كرة القدم')->firstOrFail();
+        $this->assertFalse($package->applies_to_all_stories);
+        $this->assertSame([$football->id], $package->eligibleStories()->pluck('stories.id')->all());
+
+        $this->get(route('shop.package.show', $package))
+            ->assertOk()
+            ->assertSee($football->title)
+            ->assertDontSee($adventure->title);
+    }
+
+    public function test_package_cart_rejects_a_story_outside_the_selected_scope(): void
+    {
+        $allowed = $this->story('allowed-package-story', 'القصة المتاحة', 349);
+        $blocked = $this->story('blocked-package-story', 'القصة غير المتاحة', 349);
+        $package = PricingPackage::create([
+            'name' => 'باقة محددة',
+            'slug' => 'restricted-story-package',
+            'price' => 300,
+            'story_count' => 1,
+            'applies_to_all_stories' => false,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+        $package->eligibleStories()->sync([$allowed->id]);
+
+        $this->from(route('shop.package.show', $package))
+            ->post(route('cart.packages.store', $package), [
+                'stories' => [[
+                    'story_id' => $blocked->id,
+                    'child_name' => 'نور',
+                    'child_age' => 7,
+                    'child_gender' => 'girl',
+                ]],
+            ])
+            ->assertRedirect(route('shop.package.show', $package))
+            ->assertSessionHasErrors('stories.0.story_id');
+
+        $this->assertEmpty(session('cart.items', []));
+    }
+
+    public function test_package_page_visit_is_recorded_and_admin_shows_unique_purchase_count(): void
+    {
+        $package = PricingPackage::create([
+            'name' => 'باقة الإحصائيات',
+            'slug' => 'analytics-package',
+            'price' => 900,
+            'story_count' => 1,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+        $story = $this->story('analytics-package-story', 'قصة الإحصائيات', 349);
+
+        $this->get(route('shop.package.show', $package))->assertOk();
+        $this->assertDatabaseHas('customer_package_views', [
+            'pricing_package_id' => $package->id,
+        ]);
+
+        $firstOrder = Order::create([
+            'order_number' => 'HK-PACKAGE-ANALYTICS-1',
+            'checkout_group_key' => 'PACKAGE-GROUP-1',
+            'story_id' => $story->id,
+            'child_name' => 'نور',
+            'child_age' => 7,
+            'child_gender' => 'girl',
+            'status' => 'new',
+        ]);
+        $secondOrder = Order::create([
+            'order_number' => 'HK-PACKAGE-ANALYTICS-2',
+            'checkout_group_key' => 'PACKAGE-GROUP-1',
+            'story_id' => $story->id,
+            'child_name' => 'نور',
+            'child_age' => 7,
+            'child_gender' => 'girl',
+            'status' => 'new',
+        ]);
+        foreach ([$firstOrder, $secondOrder] as $order) {
+            OrderItem::create([
+                'order_id' => $order->id,
+                'item_type' => 'story',
+                'story_id' => $story->id,
+                'title' => $story->title,
+                'unit_price_cents' => 45_000,
+                'quantity' => 1,
+                'total_price_cents' => 45_000,
+                'item_snapshot' => ['package' => [
+                    'id' => $package->id,
+                    'instance_key' => 'PACKAGE-INSTANCE-1',
+                ]],
+            ]);
+        }
+
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::where('key', 'settings.pricing.view')->pluck('id'));
+        $this->actingAs($admin)->get(route('admin.pricing.index'))
+            ->assertOk()
+            ->assertSee($package->name)
+            ->assertSeeInOrder(['الزيارات', 'مرات الشراء']);
+
+        $this->assertSame(1, CustomerPackageView::where('pricing_package_id', $package->id)->count());
+        $this->assertSame(1, (int) $package->fresh()->loadCount('views')->views_count);
+        $this->assertSame(1, app(PackageAnalyticsService::class)->purchaseCounts(collect([$package->id]))[$package->id]);
     }
 
     public function test_package_is_a_separate_store_and_homepage_section(): void

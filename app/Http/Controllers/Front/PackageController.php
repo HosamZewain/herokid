@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomerPackageView;
 use App\Models\PricingPackage;
 use App\Models\Story;
 use App\Services\Catalog\CatalogSalesRankingService;
@@ -21,11 +22,19 @@ class PackageController extends Controller
         CatalogSalesRankingService $salesRanking,
     ) {
         abort_unless($pricingPackage->active && $pricingPackage->show_in_store, 404);
-        $pricingPackage->load(['items.product.category', 'items.variant']);
+        $pricingPackage->load(['items.product.category', 'items.variant', 'eligibleStories']);
         abort_unless($pricingPackage->availableForPurchase(), 404);
 
-        $stories = Story::query()
-            ->where('active', true)
+        CustomerPackageView::create([
+            'user_id' => $request->user()?->id,
+            'pricing_package_id' => $pricingPackage->id,
+            'session_id' => $request->session()->getId(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'viewed_at' => now(),
+        ]);
+
+        $stories = $pricingPackage->availableStoriesQuery()
             ->with('categories')
             ->get();
         $salesCounts = $salesRanking->counts($stories->pluck('id'), collect())['stories'];

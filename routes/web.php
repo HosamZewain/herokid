@@ -112,7 +112,7 @@ Route::get('/', function () {
         ? Testimonial::where('active', true)->orderBy('sort_order')->get()
         : collect();
     $packages = homepage_section_enabled('pricing')
-        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant'])->ordered()->get()->filter->availableForPurchase()
+        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase()
         : collect();
     $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
         ? HomepageStoreSection::query()
@@ -259,8 +259,8 @@ Route::get('/sitemap.xml', function () {
         ->get() : collect();
     $packages = $shopEnabled ? PricingPackage::active()->purchasable()
         ->where('show_in_store', true)
-        ->with(['items.product', 'items.variant'])
-        ->select('id', 'slug', 'active', 'story_count', 'updated_at')
+        ->with(['items.product', 'items.variant', 'eligibleStories'])
+        ->select('id', 'slug', 'active', 'story_count', 'applies_to_all_stories', 'updated_at')
         ->get()
         ->filter->availableForPurchase() : collect();
 
