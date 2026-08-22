@@ -66,6 +66,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\Testimonial;
+use App\Services\Catalog\CatalogSalesRankingService;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 
@@ -91,9 +92,19 @@ Route::get('/storage/{path}', function (string $path) {
 
 // Homepage
 Route::get('/', function () {
-    $featuredStories = homepage_section_enabled('hero') || homepage_section_enabled('stories')
-        ? Story::where('active', true)->with('categories')->inRandomOrder()->take(8)->get()
-        : collect();
+    $featuredStories = collect();
+    if (homepage_section_enabled('hero') || homepage_section_enabled('stories')) {
+        $activeStories = Story::where('active', true)->with('categories')->get();
+        $salesCounts = app(CatalogSalesRankingService::class)
+            ->counts($activeStories->pluck('id'), collect())['stories'];
+        $featuredStories = $activeStories
+            ->sortBy(fn (Story $story): array => [
+                -($salesCounts[$story->id] ?? 0),
+                $story->title,
+            ])
+            ->take(8)
+            ->values();
+    }
     $faqs = homepage_section_enabled('faq')
         ? FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get()
         : collect();
