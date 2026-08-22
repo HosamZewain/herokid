@@ -131,6 +131,73 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertDontSee('GROUP-MULTI');
     }
 
+    public function test_orders_index_defaults_to_twenty_five_checkouts_per_page(): void
+    {
+        foreach (range(1, 26) as $index) {
+            $this->createStoryOrder(
+                'HK-PAGE-'.$index,
+                'GROUP-PAGE-'.$index,
+                'طفل '.$index,
+                'new',
+            );
+        }
+
+        $groups = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertSee('تصدير Excel (CSV)')
+            ->viewData('groups');
+
+        $this->assertSame(25, $groups->perPage());
+        $this->assertCount(25, $groups->items());
+        $this->assertSame(26, $groups->total());
+    }
+
+    public function test_orders_csv_export_contains_only_checkouts_matching_the_active_filters(): void
+    {
+        $included = $this->createStoryOrder('HK-EXPORT-NEW', 'GROUP-EXPORT-NEW', 'مريم', 'new');
+        $included->update(['order_source' => 'whatsapp']);
+        $included->items()->create([
+            'item_type' => 'story',
+            'story_id' => $included->story_id,
+            'title' => 'قصة مريم',
+            'unit_price_cents' => 34_900,
+            'quantity' => 1,
+            'total_price_cents' => 34_900,
+        ]);
+
+        $excluded = $this->createStoryOrder('HK-EXPORT-DONE', 'GROUP-EXPORT-DONE', 'عمر', 'delivered');
+        $excluded->items()->create([
+            'item_type' => 'story',
+            'story_id' => $excluded->story_id,
+            'title' => 'قصة عمر',
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.orders.export', [
+            'status' => 'new',
+            'from' => now()->toDateString(),
+            'to' => now()->toDateString(),
+        ]));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8')
+            ->assertHeader('cache-control', 'must-revalidate, no-cache, no-store, private');
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('عملية الشراء', $csv);
+        $this->assertStringContainsString('GROUP-EXPORT-NEW', $csv);
+        $this->assertStringContainsString('قصة مريم', $csv);
+        $this->assertStringContainsString('واتساب', $csv);
+        $this->assertStringNotContainsString('GROUP-EXPORT-DONE', $csv);
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'user_id' => $this->admin->id,
+            'action' => 'orders.exported',
+        ]);
+    }
+
     public function test_filtered_order_statistics_count_each_checkout_once_and_show_order_source(): void
     {
         $cancelled = $this->createStoryOrder('HK-STATS-CANCELLED', 'GROUP-STATS-CANCELLED', 'سلمى', 'cancelled');

@@ -40,21 +40,11 @@ class AdminOrderGroupService
     public function paginate(Request $request): array
     {
         $trash = $request->query('view') === 'trash';
-        $query = $this->filteredQuery($request, $trash);
+        $query = $this->groupedFilteredQuery($request, $trash);
 
-        if ($request->query('status') === 'mixed') {
-            $mixedKeys = (clone $query)
-                ->get(['checkout_group_key', 'status'])
-                ->groupBy('checkout_group_key')
-                ->filter(fn (Collection $orders): bool => $orders->pluck('status')->unique()->count() > 1)
-                ->keys();
-
-            $query->whereIn('checkout_group_key', $mixedKeys);
-        }
-
-        $perPage = in_array($request->integer('per_page', 15), [15, 30, 50], true)
-            ? $request->integer('per_page', 15)
-            : 15;
+        $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
+            ? $request->integer('per_page', 25)
+            : 25;
 
         $groups = (clone $query)
             ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MIN(id) as representative_id')
@@ -85,6 +75,24 @@ class AdminOrderGroupService
             ],
             'trash' => $trash,
         ];
+    }
+
+    public function export(Request $request): Collection
+    {
+        $trash = $request->query('view') === 'trash';
+        $query = $this->groupedFilteredQuery($request, $trash);
+        $keys = (clone $query)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at')
+            ->groupBy('checkout_group_key')
+            ->orderByDesc('latest_at')
+            ->pluck('checkout_group_key');
+        $orders = $this->ordersForKeys($keys, $trash)
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+        return $keys
+            ->map(fn (string $key): array => $this->present($orders->get($key, collect()), $trash))
+            ->filter()
+            ->values();
     }
 
     public function findByRepresentative(int $representativeId): array
@@ -316,6 +324,23 @@ class AdminOrderGroupService
                         ->where('title', 'like', '%'.$term.'%')
                         ->orWhere('sku', 'like', '%'.$term.'%'));
             });
+        }
+
+        return $query;
+    }
+
+    private function groupedFilteredQuery(Request $request, bool $trash): Builder
+    {
+        $query = $this->filteredQuery($request, $trash);
+
+        if ($request->query('status') === 'mixed') {
+            $mixedKeys = (clone $query)
+                ->get(['checkout_group_key', 'status'])
+                ->groupBy('checkout_group_key')
+                ->filter(fn (Collection $orders): bool => $orders->pluck('status')->unique()->count() > 1)
+                ->keys();
+
+            $query->whereIn('checkout_group_key', $mixedKeys);
         }
 
         return $query;

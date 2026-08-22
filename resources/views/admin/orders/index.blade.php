@@ -45,7 +45,7 @@
             @endif
 
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-                <div class="mb-4 flex flex-wrap gap-2">
+                <div class="mb-4 flex flex-wrap items-center gap-2">
                     <a href="{{ route('admin.orders.index', request()->except(['view', 'page'])) }}"
                        class="rounded-xl px-4 py-2 text-sm font-black {{ !$trash ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
                         الطلبات الحالية
@@ -56,9 +56,13 @@
                             سلة المحذوفات
                         </a>
                     @endcan
+                    <a href="{{ route('admin.orders.export', request()->except('page')) }}"
+                       class="me-auto rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100">
+                        تصدير Excel (CSV)
+                    </a>
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-9">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-10">
                     @if($trash)<input type="hidden" name="view" value="trash">@endif
                     <div class="xl:col-span-2">
                         <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
@@ -100,6 +104,14 @@
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">إلى تاريخ</label>
                         <input name="to" type="date" value="{{ request('to') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">عدد الطلبات</label>
+                        <select name="per_page" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            @foreach([25, 50, 100] as $size)
+                                <option value="{{ $size }}" @selected($groups->perPage() === $size)>{{ $size }} طلب</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="flex items-end gap-2">
                         <button class="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>

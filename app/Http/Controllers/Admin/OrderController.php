@@ -26,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderController extends Controller
 {
@@ -34,6 +35,84 @@ class OrderController extends Controller
         $result = $groups->paginate($request);
 
         return view('admin.orders.index', $result);
+    }
+
+    public function export(Request $request, AdminOrderGroupService $groups): StreamedResponse
+    {
+        $rows = $groups->export($request);
+
+        AdminActivityLogger::log(
+            action: 'orders.exported',
+            description: 'تم تصدير جدول الطلبات المطابق للفلاتر الحالية.',
+            properties: [
+                'row_count' => $rows->count(),
+                'view' => $request->query('view', 'current'),
+                'status' => $request->query('status'),
+                'payment_status' => $request->query('payment_status'),
+                'printing_status' => $request->query('printing_status'),
+                'shipping_status' => $request->query('shipping_status'),
+                'from' => $request->query('from'),
+                'to' => $request->query('to'),
+                'has_search' => $request->filled('q'),
+            ],
+            request: $request,
+        );
+
+        return response()->streamDownload(function () use ($rows): void {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, [
+                'تاريخ الطلب', 'وقت الطلب', 'عملية الشراء', 'أرقام الطلبات', 'المصدر',
+                'اسم العميل', 'الهاتف', 'أسماء الأطفال', 'القصص', 'المنتجات', 'الإضافات',
+                'عدد القصص', 'عدد المنتجات', 'عدد الإضافات', 'حالة الطلب', 'حالة الدفع',
+                'حالة الطباعة', 'حالة الشحن', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي',
+                'المدفوع', 'المتبقي', 'طريقة الدفع', 'الدولة', 'المحافظة', 'المدينة',
+                'الشارع', 'تفاصيل العنوان', 'ملاحظات المصدر',
+            ]);
+
+            foreach ($rows as $row) {
+                $delivery = $row['delivery'];
+                fputcsv($output, array_map($this->csvCell(...), [
+                    optional($row['latest_at'])->format('Y-m-d'),
+                    optional($row['latest_at'])->format('H:i:s'),
+                    $row['key'],
+                    implode('، ', $row['order_numbers']),
+                    OrderSource::label($row['order_source']),
+                    $row['customer_name'],
+                    $row['phone'],
+                    implode('، ', $row['child_names']),
+                    implode('، ', $row['story_titles']),
+                    implode('، ', $row['product_titles']),
+                    implode('، ', $row['add_on_titles']),
+                    $row['story_count'],
+                    $row['product_quantity'],
+                    $row['add_on_quantity'],
+                    $row['status_label'],
+                    $row['payment_status_label'],
+                    $row['printing_status_label'],
+                    $row['shipping_status_label'],
+                    number_format($row['items_cents'] / 100, 2, '.', ''),
+                    number_format($row['delivery_cents'] / 100, 2, '.', ''),
+                    number_format($row['discount_cents'] / 100, 2, '.', ''),
+                    number_format($row['total_cents'] / 100, 2, '.', ''),
+                    number_format($row['paid_amount_cents'] / 100, 2, '.', ''),
+                    number_format($row['remaining_amount_cents'] / 100, 2, '.', ''),
+                    $row['payment_method'],
+                    data_get($delivery, 'country'),
+                    data_get($delivery, 'governorate'),
+                    data_get($delivery, 'city'),
+                    data_get($delivery, 'street'),
+                    data_get($delivery, 'address_details', data_get($delivery, 'address')),
+                    $row['source_notes'],
+                ]));
+            }
+
+            fclose($output);
+        }, 'herokid-orders-'.now()->format('Y-m-d-His').'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function create(StoryPricingService $storyPricing)
@@ -60,6 +139,13 @@ class OrderController extends Controller
             'paymentStatuses' => OrderPaymentStatus::labels(),
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
         ]);
+    }
+
+    private function csvCell(mixed $value): string
+    {
+        $value = (string) ($value ?? '');
+
+        return preg_match('/^[=+\-@]/', $value) === 1 ? "'".$value : $value;
     }
 
     public function store(Request $request, AdminOrderCreationService $creator)
