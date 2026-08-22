@@ -220,6 +220,41 @@ class PurchasablePackagesTest extends TestCase
             ->assertSee($story->cover_url, false);
     }
 
+    public function test_package_page_has_product_seo_and_mobile_purchase_landmarks(): void
+    {
+        $story = $this->story('seo-package-story', 'قصة باقة السيو', 349);
+        $package = PricingPackage::create([
+            'name' => 'باقة أبطال HeroKid',
+            'slug' => 'hero-kid-seo-package',
+            'description' => 'ثلاث قصص مخصصة يختارها ولي الأمر لطفله.',
+            'image_path' => 'images/packages/three-stories.webp',
+            'price' => 900,
+            'regular_price' => 1047,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+
+        $response = $this->get(route('shop.package.show', $package));
+
+        $response
+            ->assertOk()
+            ->assertSee('<meta property="og:type" content="product">', false)
+            ->assertSee('<link rel="canonical"', false)
+            ->assertSee('/shop/package/'.$package->slug, false)
+            ->assertSee('باقة أبطال HeroKid — باقة قصص أطفال مخصصة | HeroKid')
+            ->assertSee('https://schema.org/InStock', false)
+            ->assertSee('"@type":"Product"', false)
+            ->assertSee('"priceCurrency":"EGP"', false)
+            ->assertSee('data-package-progress-text', false)
+            ->assertSee('data-package-story-card', false)
+            ->assertSee('fixed inset-x-2 bottom-2', false)
+            ->assertSee('aria-labelledby="package-story-dialog-title"', false)
+            ->assertSee('إضافة الباقة إلى السلة');
+
+        $this->assertSame($story->id, $story->fresh()->id);
+    }
+
     public function test_admin_can_build_package_from_story_count_and_store_products_with_custom_price(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
