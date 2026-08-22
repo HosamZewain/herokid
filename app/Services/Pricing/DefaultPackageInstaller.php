@@ -9,11 +9,16 @@ use Illuminate\Support\Facades\DB;
 
 class DefaultPackageInstaller
 {
-    public function __construct(private readonly StoryPricingService $storyPricing) {}
+    public function __construct(
+        private readonly StoryPricingService $storyPricing,
+        private readonly DefaultPackageDeduplicator $deduplicator,
+    ) {}
 
     /** @return array{installed: list<string>, skipped: list<string>} */
     public function install(): array
     {
+        $this->deduplicator->deactivateGeneratedDuplicates();
+
         $story = Story::query()->where('active', true)->orderBy('id')->first();
         if (! $story) {
             return ['installed' => [], 'skipped' => ['لا توجد قصة نشطة لحساب سعر الباقات.']];
@@ -81,7 +86,11 @@ class DefaultPackageInstaller
                     + collect($definition['products'])->sum(fn (Product $product): float => $product->effectivePrice());
                 $packagePrice = round($regularPrice * 0.90, 2);
 
-                $package = PricingPackage::query()->firstOrCreate(
+                $package = $this->deduplicator->findAdminEquivalent(
+                    $definition['name'],
+                    $definition['story_count'],
+                    $definition['slug'],
+                ) ?? PricingPackage::query()->firstOrCreate(
                     ['slug' => $definition['slug']],
                     [
                         'name' => $definition['name'],

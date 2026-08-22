@@ -64,7 +64,7 @@ class SecurityAndCacheHeaders
             return;
         }
 
-        if ($request->routeIs('home') && ! $this->hasSessionCookie($request)) {
+        if ($request->routeIs(['home', 'packages']) && ! $this->hasSessionCookie($request)) {
             $response->headers->set('Cache-Control', self::PUBLIC_REVALIDATE_CACHE);
             $response->headers->remove('Pragma');
             $response->headers->remove('Expires');

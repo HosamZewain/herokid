@@ -13,6 +13,7 @@ use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\VisitorCartItem;
+use App\Services\Pricing\DefaultPackageDeduplicator;
 use App\Services\Pricing\DefaultPackageInstaller;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -82,12 +83,92 @@ class PurchasablePackagesTest extends TestCase
             ->assertSee('/packages', false)
             ->assertSee('خصم ١٠٪')
             ->assertSee($fiveBundle->image_url, false);
+        $this->assertStringContainsString('s-maxage=0', (string) $packagesPage->headers->get('Cache-Control'));
+        $this->assertStringContainsString('must-revalidate', (string) $packagesPage->headers->get('Cache-Control'));
 
         $this->get('/pricing')->assertRedirect('/packages')->assertStatus(301);
 
         $shopHtml = $this->get(route('shop.index'))->assertOk()->getContent();
         $this->assertGreaterThan(strpos($shopHtml, 'id="catalog-results"'), strpos($shopHtml, 'id="packages-title"'));
         $this->assertStringContainsString(route('packages'), $shopHtml);
+    }
+
+    public function test_default_installer_reuses_an_equivalent_admin_package_instead_of_publishing_a_duplicate(): void
+    {
+        $this->story('existing-package-reference-story', 'قصة مرجعية', 349);
+        $category = ProductCategory::query()->firstOrFail();
+        Product::create([
+            'product_category_id' => $category->id,
+            'name_ar' => 'كتاب تلوين مخصص بصورة الطفل',
+            'slug' => 'ktab-tloyn-mkhss-bsor-altfl',
+            'price_cents' => 29900,
+            'is_active' => true,
+        ]);
+        Product::create([
+            'product_category_id' => $category->id,
+            'name_ar' => 'كتاب المتاهات - المستوى الأول',
+            'slug' => 'maze-book-level-1',
+            'price_cents' => 17900,
+            'is_active' => true,
+        ]);
+        $adminPackage = PricingPackage::create([
+            'name' => 'باقة ٣ قصص مخصصة',
+            'slug' => 'bak-3-kss-mkhss',
+            'price' => 899,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => true,
+        ]);
+
+        app(DefaultPackageInstaller::class)->install();
+
+        $this->assertDatabaseCount('pricing_packages', 3);
+        $this->assertDatabaseMissing('pricing_packages', ['slug' => 'three-personalized-stories']);
+        $this->assertDatabaseHas('pricing_packages', [
+            'id' => $adminPackage->id,
+            'price' => 899,
+            'active' => true,
+            'show_in_store' => true,
+        ]);
+    }
+
+    public function test_generated_duplicate_is_made_private_without_deleting_the_admin_package(): void
+    {
+        $adminPackage = PricingPackage::create([
+            'name' => 'باقة ٣ قصص مخصصة',
+            'slug' => 'bak-3-kss-mkhss',
+            'price' => 899,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => true,
+        ]);
+        $generatedPackage = PricingPackage::create([
+            'name' => 'باقة ٣ قصص مخصصة',
+            'slug' => 'three-personalized-stories',
+            'price' => 942.30,
+            'story_count' => 3,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => true,
+        ]);
+
+        $deactivated = app(DefaultPackageDeduplicator::class)->deactivateGeneratedDuplicates();
+
+        $this->assertSame([$generatedPackage->id], $deactivated);
+        $this->assertDatabaseHas('pricing_packages', [
+            'id' => $generatedPackage->id,
+            'active' => false,
+            'show_in_store' => false,
+            'show_on_homepage' => false,
+        ]);
+        $this->assertDatabaseHas('pricing_packages', [
+            'id' => $adminPackage->id,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => true,
+        ]);
     }
 
     public function test_package_story_picker_shows_cover_thumbnail_with_each_story_name(): void
