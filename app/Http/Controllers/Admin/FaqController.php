@@ -11,6 +11,7 @@ class FaqController extends Controller
     public function index()
     {
         $faqs = FaqItem::orderBy('sort_order')->get();
+
         return view('admin.faqs.index', compact('faqs'));
     }
 
@@ -22,12 +23,13 @@ class FaqController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'question'   => 'required|string|max:500',
-            'answer'     => 'required|string',
+            'question' => 'required|string|max:500',
+            'answer' => 'required|string',
             'sort_order' => 'required|integer|min:0',
         ]);
 
         $validated['active'] = $request->has('active');
+        $validated['show_on_packages'] = $request->has('show_on_packages');
 
         FaqItem::create($validated);
 
@@ -42,12 +44,13 @@ class FaqController extends Controller
     public function update(Request $request, FaqItem $faq)
     {
         $validated = $request->validate([
-            'question'   => 'required|string|max:500',
-            'answer'     => 'required|string',
+            'question' => 'required|string|max:500',
+            'answer' => 'required|string',
             'sort_order' => 'required|integer|min:0',
         ]);
 
         $validated['active'] = $request->has('active');
+        $validated['show_on_packages'] = $request->has('show_on_packages');
 
         $faq->update($validated);
 
@@ -57,6 +60,7 @@ class FaqController extends Controller
     public function destroy(FaqItem $faq)
     {
         $faq->delete();
+
         return redirect()->route('admin.faqs.index')->with('success', 'تم حذف السؤال بنجاح.');
     }
 
@@ -74,6 +78,6 @@ class FaqController extends Controller
 
         return redirect()
             ->route('admin.faqs.index')
-            ->with('success', 'تم حذف ' . $deletedCount . ' سؤال بنجاح.');
+            ->with('success', 'تم حذف '.$deletedCount.' سؤال بنجاح.');
     }
 }

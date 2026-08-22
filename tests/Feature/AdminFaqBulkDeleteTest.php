@@ -30,7 +30,7 @@ class AdminFaqBulkDeleteTest extends TestCase
             ->assertSee('id="faq-bulk-delete-form"', false)
             ->assertSee('data-faq-select-all', false)
             ->assertSee('name="faq_ids[]"', false)
-            ->assertSee('value="' . $faq->id . '"', false)
+            ->assertSee('value="'.$faq->id.'"', false)
             ->assertSee('حذف المحدد');
     }
 
@@ -69,5 +69,30 @@ class AdminFaqBulkDeleteTest extends TestCase
         $this->assertDatabaseMissing('faq_items', ['id' => $first->id]);
         $this->assertDatabaseMissing('faq_items', ['id' => $second->id]);
         $this->assertDatabaseHas('faq_items', ['id' => $kept->id]);
+    }
+
+    public function test_admin_can_choose_questions_shown_on_packages_page(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.faqs.create'))
+            ->assertOk()
+            ->assertSee('name="show_on_packages"', false);
+
+        $this->actingAs($admin)
+            ->post(route('admin.faqs.store'), [
+                'question' => 'هل تظهر في صفحة الباقات؟',
+                'answer' => 'نعم، ويمكن التحكم بها من لوحة الإدارة.',
+                'sort_order' => 5,
+                'active' => 1,
+                'show_on_packages' => 1,
+            ])
+            ->assertRedirect(route('admin.faqs.index'));
+
+        $this->assertDatabaseHas('faq_items', [
+            'question' => 'هل تظهر في صفحة الباقات؟',
+            'show_on_packages' => true,
+        ]);
     }
 }

@@ -33,10 +33,17 @@
                         <x-input-error :messages="$errors->get('sort_order')" class="mt-2" />
                     </div>
 
-                    <div class="flex items-center pt-6">
-                        <input type="checkbox" name="active" id="active" value="1" checked
-                               class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                        <label for="active" class="mr-2 block text-sm font-medium text-gray-700">نشط (يظهر للزوار)</label>
+                    <div class="space-y-3 pt-6">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="active" id="active" value="1" checked
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <span class="mr-2 block text-sm font-medium text-gray-700">نشط (يظهر للزوار)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="show_on_packages" value="1" {{ old('show_on_packages') ? 'checked' : '' }}
+                                   class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <span class="mr-2 block text-sm font-medium text-gray-700">يظهر في صفحة الباقات</span>
+                        </label>
                     </div>
                 </div>
             </div>

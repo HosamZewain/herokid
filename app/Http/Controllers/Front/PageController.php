@@ -75,8 +75,13 @@ class PageController extends Controller
     public function pricing()
     {
         $packages = PricingPackage::active()->purchasable()->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase();
+        $packageFaqs = FaqItem::query()
+            ->where('active', true)
+            ->where('show_on_packages', true)
+            ->orderBy('sort_order')
+            ->get();
 
-        return view('front.pages.pricing', compact('packages'));
+        return view('front.pages.pricing', compact('packages', 'packageFaqs'));
     }
 
     public function howItWorks()

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CustomerPackageView;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
+use App\Models\FaqItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Permission;
@@ -74,6 +75,8 @@ class PurchasablePackagesTest extends TestCase
         $this->get(route('home'))
             ->assertOk()
             ->assertSee('data-home-section="pricing"', false)
+            ->assertSee('data-home-package-carousel', false)
+            ->assertSee('dir="rtl"', false)
             ->assertSee($storiesOnly->name)
             ->assertSee($threeBundle->name)
             ->assertSee($fiveBundle->name);
@@ -95,6 +98,106 @@ class PurchasablePackagesTest extends TestCase
         $shopHtml = $this->get(route('shop.index'))->assertOk()->getContent();
         $this->assertGreaterThan(strpos($shopHtml, 'id="catalog-results"'), strpos($shopHtml, 'id="packages-title"'));
         $this->assertStringContainsString(route('packages'), $shopHtml);
+    }
+
+    public function test_homepage_package_carousel_is_limited_to_five_visible_packages(): void
+    {
+        $this->story('homepage-carousel-story', 'قصة للسلايدر', 349);
+
+        foreach (range(1, 6) as $index) {
+            PricingPackage::create([
+                'name' => 'باقة السلايدر '.$index,
+                'slug' => 'homepage-carousel-package-'.$index,
+                'price' => 500 + $index,
+                'story_count' => 1,
+                'active' => true,
+                'show_in_store' => true,
+                'show_on_homepage' => true,
+                'sort_order' => $index,
+            ]);
+        }
+
+        $html = $this->get(route('home'))->assertOk()->getContent();
+
+        $this->assertSame(5, substr_count($html, 'data-home-package-slide'));
+        $this->assertStringContainsString('باقة السلايدر 1', $html);
+        $this->assertStringNotContainsString('باقة السلايدر 6', $html);
+        $this->assertStringContainsString('data-home-package-previous', $html);
+        $this->assertStringContainsString('data-home-package-next', $html);
+    }
+
+    public function test_admin_controls_homepage_package_visibility_with_a_five_package_limit(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::whereIn('key', [
+            'settings.pricing.view', 'settings.pricing.update',
+        ])->pluck('id'));
+
+        $visiblePackages = collect(range(1, 5))->map(fn (int $index) => PricingPackage::create([
+            'name' => 'باقة ظاهرة '.$index,
+            'slug' => 'visible-home-package-'.$index,
+            'price' => 500,
+            'story_count' => 1,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => true,
+            'sort_order' => $index,
+        ]));
+        $hiddenPackage = PricingPackage::create([
+            'name' => 'باقة مخفية',
+            'slug' => 'hidden-home-package',
+            'price' => 500,
+            'story_count' => 1,
+            'active' => true,
+            'show_in_store' => true,
+            'show_on_homepage' => false,
+            'sort_order' => 6,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.pricing.index'))
+            ->assertOk()
+            ->assertSee('في الرئيسية')
+            ->assertSee(route('admin.pricing.homepage-visibility', $hiddenPackage), false);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.pricing.homepage-visibility', $hiddenPackage), ['visible' => 1])
+            ->assertSessionHasErrors('show_on_homepage');
+
+        $this->actingAs($admin)
+            ->patch(route('admin.pricing.homepage-visibility', $visiblePackages->last()), ['visible' => 0])
+            ->assertSessionHasNoErrors();
+        $this->actingAs($admin)
+            ->patch(route('admin.pricing.homepage-visibility', $hiddenPackage), ['visible' => 1])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($hiddenPackage->fresh()->show_on_homepage);
+        $this->assertFalse($visiblePackages->last()->fresh()->show_on_homepage);
+    }
+
+    public function test_package_page_questions_are_managed_by_active_package_faqs(): void
+    {
+        FaqItem::create([
+            'question' => 'سؤال خاص بالباقات',
+            'answer' => 'إجابة يمكن تعديلها من لوحة الإدارة.',
+            'sort_order' => 1,
+            'active' => true,
+            'show_on_packages' => true,
+        ]);
+        FaqItem::create([
+            'question' => 'سؤال غير مخصص للباقات',
+            'answer' => 'لا يجب أن يظهر هنا.',
+            'sort_order' => 2,
+            'active' => true,
+            'show_on_packages' => false,
+        ]);
+
+        $this->get(route('packages'))
+            ->assertOk()
+            ->assertSee('سؤال خاص بالباقات')
+            ->assertSee('إجابة يمكن تعديلها من لوحة الإدارة.')
+            ->assertDontSee('سؤال غير مخصص للباقات')
+            ->assertSee('https://schema.org', false)
+            ->assertSee('FAQPage', false);
     }
 
     public function test_default_installer_reuses_an_equivalent_admin_package_instead_of_publishing_a_duplicate(): void

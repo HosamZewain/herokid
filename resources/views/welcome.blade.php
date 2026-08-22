@@ -888,73 +888,8 @@
                 <p class="text-lg text-indigo-300">اختر عدد القصص والمنتجات داخل باقة واحدة بسعر ثابت.</p>
             </div>
 
-            @if(isset($packages) && $packages->count())
-            @php $colClass = $packages->count() >= 3 ? 'md:grid-cols-3' : ($packages->count() == 2 ? 'md:grid-cols-2' : 'md:grid-cols-1 max-w-sm mx-auto'); @endphp
-            <div class="grid grid-cols-1 {{ $colClass }} gap-8">
-                @foreach($packages as $pkg)
-                    @if($pkg->is_featured)
-                    {{-- Featured: gradient card --}}
-                    <div class="relative rounded-3xl p-6 md:p-10 text-right overflow-hidden"
-                        style="background: linear-gradient(135deg, #f97316, #ec4899, #8b5cf6); box-shadow: 0 20px 60px rgba(139,92,246,.4);">
-                        @if($pkg->badge)
-                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                            <span class="bg-yellow-400 text-yellow-900 text-xs font-extrabold px-4 py-1.5 rounded-full shadow-lg">⭐ {{ $pkg->badge }}</span>
-                        </div>
-                        @endif
-                        <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 18px 18px;"></div>
-                        <div class="relative z-10">
-                            @if($pkg->image_url)<a href="{{ route('shop.package.show', $pkg) }}" class="mb-5 block aspect-[4/3] overflow-hidden rounded-2xl bg-white/10"><img src="{{ $pkg->image_url }}" alt="{{ $pkg->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 hover:scale-105"></a>@endif
-                            <h3 class="text-xl font-bold text-white mb-1">{{ $pkg->name }}</h3>
-                            @if($pkg->subtitle)<p class="text-white/70 text-sm mb-5">{{ $pkg->subtitle }}</p>@else<div class="mb-5"></div>@endif
-                            <div class="flex items-end gap-2 mb-6 justify-end">
-                                <span class="text-white/70 text-xl">{{ $pkg->currency }}</span>
-                                <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
-                                @if((float) $pkg->regular_price > (float) $pkg->price)<span class="text-sm font-bold text-white/60 line-through">{{ number_format($pkg->regular_price, 0) }}</span>@endif
-                            </div>
-                            @if($pkg->features && count($pkg->features))
-                            <ul class="space-y-3 text-sm text-white/90 mb-8">
-                                @foreach($pkg->features as $feature)
-                                <li class="flex items-center gap-2 justify-end">
-                                    <span>{{ $feature }}</span>
-                                    <span class="w-5 h-5 rounded-full bg-white/20 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                                </li>
-                                @endforeach
-                            </ul>
-                            @endif
-                            <p class="mb-4 text-sm font-black text-white">{{ $pkg->componentSummary() }}</p>
-                            <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white font-extrabold py-3 rounded-xl hover:shadow-2xl hover:scale-105 transition" style="color: #7c3aed;">{{ $pkg->button_text ?: 'اختر الباقة' }}</a>
-                        </div>
-                    </div>
-                    @else
-                    {{-- Standard card --}}
-                    <div class="bg-white/5 backdrop-blur-sm rounded-3xl p-6 md:p-10 border border-white/10 text-right hover:bg-white/8 hover:border-white/20 transition">
-                        @if($pkg->image_url)<a href="{{ route('shop.package.show', $pkg) }}" class="mb-5 block aspect-[4/3] overflow-hidden rounded-2xl bg-white/10"><img src="{{ $pkg->image_url }}" alt="{{ $pkg->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 hover:scale-105"></a>@endif
-                        @if($pkg->badge)
-                        <span class="inline-block bg-indigo-500/20 text-indigo-300 text-xs font-bold px-3 py-1 rounded-full border border-indigo-500/30 mb-3">{{ $pkg->badge }}</span>
-                        @endif
-                        <h3 class="text-xl font-bold text-white mb-1">{{ $pkg->name }}</h3>
-                        @if($pkg->subtitle)<p class="text-slate-400 text-sm mb-5">{{ $pkg->subtitle }}</p>@else<div class="mb-5"></div>@endif
-                        <div class="flex items-end gap-2 mb-6 justify-end">
-                            <span class="text-slate-400 text-xl">{{ $pkg->currency }}</span>
-                            <span class="text-5xl font-extrabold text-white">{{ number_format($pkg->price, 0) }}</span>
-                            @if((float) $pkg->regular_price > (float) $pkg->price)<span class="text-sm font-bold text-slate-500 line-through">{{ number_format($pkg->regular_price, 0) }}</span>@endif
-                        </div>
-                        @if($pkg->features && count($pkg->features))
-                        <ul class="space-y-3 text-sm text-slate-300 mb-8">
-                            @foreach($pkg->features as $feature)
-                            <li class="flex items-center gap-2 justify-end">
-                                <span>{{ $feature }}</span>
-                                <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                            </li>
-                            @endforeach
-                        </ul>
-                        @endif
-                        <p class="mb-4 text-sm font-black text-indigo-200">{{ $pkg->componentSummary() }}</p>
-                        <a href="{{ route('shop.package.show', $pkg) }}" class="block text-center bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition border border-white/20">{{ $pkg->button_text ?: 'اختر الباقة' }}</a>
-                    </div>
-                    @endif
-                @endforeach
-            </div>
+            @if(isset($packages) && $packages->isNotEmpty())
+                @include('front.packages._home-carousel', ['packages' => $packages])
             @endif
 
             <div class="text-center mt-8">

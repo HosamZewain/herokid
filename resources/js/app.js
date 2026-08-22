@@ -7,6 +7,7 @@ import { initializeOrderSceneTexts } from './order-scene-texts';
 import { initializeOrderPaymentSummaries } from './order-payment-summary';
 import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
 import { storyCoverRecovery } from './story-cover-recovery';
+import { initializeHomePackageCarousels } from './home-package-carousel';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeOrderSceneTexts();
     initializeOrderPaymentSummaries();
     initializeFootballStories();
+    initializeHomePackageCarousels();
 
     document.querySelectorAll('[data-floating-whatsapp]').forEach((link) => {
         link.addEventListener('click', () => trackHeroKidEvent('WhatsAppClick', {

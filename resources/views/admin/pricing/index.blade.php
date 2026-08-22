@@ -16,6 +16,16 @@
                 <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">{{ session('success') }}</div>
             @endif
 
+            @if($errors->any())
+                <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700" role="alert">
+                    {{ $errors->first() }}
+                </div>
+            @endif
+
+            <div class="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm leading-6 text-indigo-900">
+                اختر من هنا حتى <strong>٥ باقات</strong> لعرضها في سلايدر الصفحة الرئيسية. يحدد رقم الترتيب ترتيبها داخل السلايدر.
+            </div>
+
             <div class="bg-white shadow-sm rounded-lg overflow-hidden">
                 <table class="min-w-full divide-y divide-gray-200 text-right text-sm">
                     <thead class="bg-gray-50">
@@ -26,6 +36,7 @@
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الزيارات</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مرات الشراء</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">مميزة</th>
+                            <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">في الرئيسية</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">الحالة</th>
                             <th class="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">إجراءات</th>
                         </tr>
@@ -57,6 +68,21 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-center">
+                                @can('settings.pricing.update')
+                                    <form action="{{ route('admin.pricing.homepage-visibility', $package) }}" method="POST">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="visible" value="{{ $package->show_on_homepage ? 0 : 1 }}">
+                                        <button type="submit" class="inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black transition {{ $package->show_on_homepage ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200' }}" aria-pressed="{{ $package->show_on_homepage ? 'true' : 'false' }}">
+                                            <span class="h-2 w-2 rounded-full {{ $package->show_on_homepage ? 'bg-indigo-500' : 'bg-gray-300' }}"></span>
+                                            {{ $package->show_on_homepage ? 'ظاهرة' : 'مخفية' }}
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="text-xs font-bold {{ $package->show_on_homepage ? 'text-indigo-700' : 'text-gray-400' }}">{{ $package->show_on_homepage ? 'ظاهرة' : 'مخفية' }}</span>
+                                @endcan
+                            </td>
+                            <td class="px-4 py-3 text-center">
                                 @if($package->active)
                                     <span class="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
                                         <span class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>نشطة
@@ -84,7 +110,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-12 text-center text-gray-400">
+                            <td colspan="9" class="px-6 py-12 text-center text-gray-400">
                                 لا توجد باقات بعد. <a href="{{ route('admin.pricing.create') }}" class="text-indigo-600 hover:underline">أضف أول باقة</a>
                             </td>
                         </tr>

@@ -10,5 +10,6 @@ class FaqItem extends Model
 
     protected $casts = [
         'active' => 'boolean',
+        'show_on_packages' => 'boolean',
     ];
 }

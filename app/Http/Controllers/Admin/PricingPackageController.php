@@ -92,6 +92,24 @@ class PricingPackageController extends Controller
         return redirect()->route('admin.pricing.index')->with('success', 'تم حذف الباقة.');
     }
 
+    public function updateHomepageVisibility(Request $request, PricingPackage $pricing)
+    {
+        $data = $request->validate([
+            'visible' => ['required', 'boolean'],
+        ]);
+        $visible = (bool) $data['visible'];
+
+        $this->ensureHomepageCapacity($visible, $pricing);
+        $pricing->update(['show_on_homepage' => $visible]);
+
+        return back()->with(
+            'success',
+            $visible
+                ? 'ستظهر باقة «'.$pricing->name.'» في سلايدر الصفحة الرئيسية.'
+                : 'تم إخفاء باقة «'.$pricing->name.'» من الصفحة الرئيسية.',
+        );
+    }
+
     private function validated(Request $request): array
     {
         $data = $request->validate([
@@ -132,6 +150,10 @@ class PricingPackageController extends Controller
         }
 
         $data['applies_to_all_stories'] = (int) $data['story_count'] === 0 || $storyScope === 'all';
+        $this->ensureHomepageCapacity(
+            (bool) $data['show_on_homepage'],
+            $request->route('pricing'),
+        );
         unset($data['products'], $data['image'], $data['remove_image'], $data['story_scope'], $data['story_ids']);
 
         $data['slug'] = $this->uniqueSlug($request->input('name'), $request->route('pricing'));
@@ -142,6 +164,19 @@ class PricingPackageController extends Controller
         }
 
         return $data;
+    }
+
+    private function ensureHomepageCapacity(bool $visible, ?PricingPackage $current = null): void
+    {
+        if (! $visible || $current?->show_on_homepage) {
+            return;
+        }
+
+        if (PricingPackage::query()->where('show_on_homepage', true)->count() >= 5) {
+            throw ValidationException::withMessages([
+                'show_on_homepage' => 'يمكن عرض ٥ باقات فقط في سلايدر الصفحة الرئيسية. أخفِ باقة أخرى أولًا.',
+            ]);
+        }
     }
 
     private function parseFeatures(?string $raw): array

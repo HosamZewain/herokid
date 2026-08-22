@@ -11,11 +11,6 @@
 <x-slot name="ogImageHeight">900</x-slot>
 @endif
 
-@php
-    $paymentMethods = setting_array('payment_methods');
-    $shippingFeeRange = shipping_fee_range();
-@endphp
-
 @push('schema')
 @php
     $pricingSchema = [
@@ -49,6 +44,22 @@
 <script type="application/ld+json">
 @json($pricingSchema, \App\Support\Seo::jsonFlags())
 </script>
+@if($packageFaqs->isNotEmpty())
+@php
+    $packageFaqSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => $packageFaqs->map(fn ($faq) => [
+            '@type' => 'Question',
+            'name' => $faq->question,
+            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq->answer],
+        ])->values()->all(),
+    ];
+@endphp
+<script type="application/ld+json">
+@json($packageFaqSchema, \App\Support\Seo::jsonFlags())
+</script>
+@endif
 @endpush
 
     <!-- Header -->
@@ -76,41 +87,19 @@
                 <div class="mb-16">@include('front.packages._cards', ['packages' => $packages])</div>
             @endif
 
-            <!-- FAQ about pricing -->
-            <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-10">
-                <h3 class="text-2xl font-extrabold text-slate-900 mb-8 text-center">أسئلة عن الأسعار</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                        <h4 class="font-bold text-slate-900 mb-2">هل السعر شامل الشحن؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">
-                            رسوم الشحن تُحسب في السلة حسب محافظتك، وتظهر لك بوضوح قبل تأكيد الطلب
-                            @if($shippingFeeRange)
-                                (النطاق الحالي من مناطق التوصيل: {{ $shippingFeeRange }}).
-                            @else
-                                .
-                            @endif
-                        </p>
+            @if($packageFaqs->isNotEmpty())
+                <section class="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm sm:p-10" aria-labelledby="package-faq-title">
+                    <h2 id="package-faq-title" class="mb-8 text-center text-2xl font-extrabold text-slate-900">أسئلة عن الباقات والأسعار</h2>
+                    <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                        @foreach($packageFaqs as $faq)
+                            <article class="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+                                <h3 class="font-black text-slate-900">{{ $faq->question }}</h3>
+                                <p class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{{ $faq->answer }}</p>
+                            </article>
+                        @endforeach
                     </div>
-                    <div>
-                        <h4 class="font-bold text-slate-900 mb-2">متى يتم الدفع؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">يتم الدفع بعد مراجعة الطلب وإرسالك رابط الدفع. لن يُطلب منك الدفع قبل رؤية القصة أولاً.</p>
-                    </div>
-                    <div>
-                        <h4 class="font-bold text-slate-900 mb-2">ما هي طرق الدفع المتاحة؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">
-                            @if($paymentMethods)
-                                نقبل {{ implode('، ', $paymentMethods) }}.
-                            @else
-                                يتم تأكيد طريقة الدفع المناسبة معك قبل بدء الإنتاج.
-                            @endif
-                        </p>
-                    </div>
-                    <div>
-                        <h4 class="font-bold text-slate-900 mb-2">هل يوجد سياسة استرجاع؟</h4>
-                        <p class="text-slate-600 text-sm leading-relaxed">نضمن رضاك التام. إذا لم تكن راضياً عن النتيجة النهائية بعد مرحلة المراجعة، نعيد لك المبلغ كاملاً.</p>
-                    </div>
-                </div>
-            </div>
+                </section>
+            @endif
         </div>
     </section>
 </x-front-layout>

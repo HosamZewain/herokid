@@ -112,7 +112,7 @@ Route::get('/', function () {
         ? Testimonial::where('active', true)->orderBy('sort_order')->get()
         : collect();
     $packages = homepage_section_enabled('pricing')
-        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase()
+        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase()->take(5)->values()
         : collect();
     $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
         ? HomepageStoreSection::query()
@@ -746,6 +746,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor('destroy', 'permission:admin_users.delete');
 
     // Pricing Packages
+    Route::patch('pricing/{pricing}/homepage-visibility', [PricingPackageController::class, 'updateHomepageVisibility'])
+        ->middleware('permission:settings.pricing.update')
+        ->name('pricing.homepage-visibility');
     Route::resource('pricing', PricingPackageController::class)->except(['show'])
         ->middlewareFor('index', 'permission:settings.pricing.view')
         ->middlewareFor(['create', 'store'], 'permission:settings.pricing.create')

@@ -45,6 +45,7 @@
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الترتيب</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">السؤال</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">صفحة الباقات</th>
                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">إجراءات</th>
                 </tr>
             </thead>
@@ -74,6 +75,9 @@
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">معطل</span>
                             @endif
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="rounded-full px-2 py-1 text-xs font-bold {{ $faq->show_on_packages ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400' }}">{{ $faq->show_on_packages ? 'ظاهر' : 'مخفي' }}</span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium flex gap-3">
                             <a href="{{ route('admin.faqs.edit', $faq) }}" class="text-indigo-600 hover:text-indigo-900">تعديل</a>
                             <form action="{{ route('admin.faqs.destroy', $faq) }}" method="POST" class="inline-block">
@@ -85,7 +89,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">لا توجد أسئلة مضافة بعد.</td>
+                        <td colspan="6" class="px-6 py-8 text-center text-gray-500">لا توجد أسئلة مضافة بعد.</td>
                     </tr>
                 @endforelse
             </tbody>
