@@ -880,7 +880,7 @@
         <div class="absolute bottom-0 left-0 w-80 h-80 blur-3xl opacity-10 rounded-full pointer-events-none"
             style="background: radial-gradient(circle, #ec4899, transparent);"></div>
 
-        <div class="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="relative z-10 mx-auto w-full max-w-[90rem] px-4 sm:px-6 lg:px-10">
             <div class="text-center mb-14">
                 <span class="inline-flex items-center gap-2 bg-indigo-500/20 text-indigo-300 font-black text-xs px-4 py-2 rounded-full border border-indigo-500/30 mb-4">🎁 باقات HeroKid</span>
                 <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">قصص وأنشطة أكثر بسعر أوفر</h2>

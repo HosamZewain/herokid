@@ -113,6 +113,7 @@ class PurchasablePackagesTest extends TestCase
                 'active' => true,
                 'show_in_store' => true,
                 'show_on_homepage' => true,
+                'is_featured' => $index === 1,
                 'sort_order' => $index,
             ]);
         }
@@ -124,6 +125,7 @@ class PurchasablePackagesTest extends TestCase
         $this->assertStringNotContainsString('باقة السلايدر 6', $html);
         $this->assertStringContainsString('data-home-package-previous', $html);
         $this->assertStringContainsString('data-home-package-next', $html);
+        $this->assertStringContainsString('data-initial-index="2"', $html);
     }
 
     public function test_admin_controls_homepage_package_visibility_with_a_five_package_limit(): void

@@ -1,6 +1,5 @@
 @php
-    $initialPackageIndex = $packages->search(fn ($package) => $package->is_featured);
-    $initialPackageIndex = $initialPackageIndex === false ? (int) floor(($packages->count() - 1) / 2) : $initialPackageIndex;
+    $initialPackageIndex = (int) floor($packages->count() / 2);
 @endphp
 
 <div data-home-package-carousel data-initial-index="{{ $initialPackageIndex }}" class="home-package-carousel" dir="rtl" aria-roledescription="carousel" aria-label="باقات HeroKid">

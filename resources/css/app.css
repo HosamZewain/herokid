@@ -148,8 +148,8 @@
 
     @media (min-width: 768px) {
         .home-package-track {
-            --home-package-card-width: min(31%, 22rem);
-            gap: 1.25rem;
+            --home-package-card-width: clamp(20rem, 28vw, 25rem);
+            gap: 1.5rem;
             padding-block: 2rem 2.75rem;
         }
 
@@ -159,7 +159,7 @@
         }
 
         .home-package-slide.is-active {
-            transform: scale(1.055);
+            transform: scale(1.035);
         }
 
         .home-package-arrow-previous {

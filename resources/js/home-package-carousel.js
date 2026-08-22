@@ -11,11 +11,14 @@ export function initializeHomePackageCarousels() {
             return;
         }
 
-        let activeIndex = Math.min(
+        const initialIndex = Math.min(
             Math.max(Number.parseInt(carousel.dataset.initialIndex || '0', 10), 0),
             slides.length - 1,
         );
+        let activeIndex = initialIndex;
+        let initialized = false;
         let scrollFrame = null;
+        let settleTimer = null;
 
         const centerSlide = (slide, behavior = 'smooth') => {
             const trackBounds = track.getBoundingClientRect();
@@ -23,7 +26,9 @@ export function initializeHomePackageCarousels() {
             const horizontalOffset = (slideBounds.left + (slideBounds.width / 2))
                 - (trackBounds.left + (trackBounds.width / 2));
 
-            track.scrollBy({ left: horizontalOffset, behavior });
+            if (Math.abs(horizontalOffset) > 1) {
+                track.scrollBy({ left: horizontalOffset, behavior });
+            }
         };
 
         const activate = (index, shouldScroll = false, announce = false) => {
@@ -70,13 +75,27 @@ export function initializeHomePackageCarousels() {
         };
 
         track.addEventListener('scroll', () => {
+            if (! initialized) {
+                return;
+            }
+
             if (scrollFrame !== null) {
                 window.cancelAnimationFrame(scrollFrame);
+            }
+            if (settleTimer !== null) {
+                window.clearTimeout(settleTimer);
             }
             scrollFrame = window.requestAnimationFrame(() => {
                 activateNearestSlide();
                 scrollFrame = null;
             });
+            settleTimer = window.setTimeout(() => {
+                activateNearestSlide();
+                centerSlide(
+                    slides[activeIndex],
+                    window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                );
+            }, 140);
         }, { passive: true });
 
         previous?.addEventListener('click', () => activate(activeIndex - 1, true, true));
@@ -92,7 +111,25 @@ export function initializeHomePackageCarousels() {
             }
         });
 
-        activate(activeIndex);
-        window.requestAnimationFrame(() => centerSlide(slides[activeIndex], 'auto'));
+        const initializePosition = () => {
+            activeIndex = initialIndex;
+            activate(initialIndex);
+            centerSlide(slides[initialIndex], 'auto');
+            window.requestAnimationFrame(() => {
+                initialized = true;
+            });
+        };
+
+        activate(initialIndex);
+        window.requestAnimationFrame(initializePosition);
+
+        if ('ResizeObserver' in window) {
+            const resizeObserver = new ResizeObserver(() => {
+                if (initialized) {
+                    centerSlide(slides[activeIndex], 'auto');
+                }
+            });
+            resizeObserver.observe(track);
+        }
     });
 }
