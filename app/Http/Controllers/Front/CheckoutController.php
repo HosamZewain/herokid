@@ -84,6 +84,7 @@ class CheckoutController extends Controller
         $checkoutGroup = 'CHK-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
         $checkoutSessionId = $request->session()->getId();
         $attribution = $this->attributionSnapshot($request);
+        $isNewCustomer = $this->isNewCustomer($validated['phone']);
         $orderIds = [];
         app(CartTrackingService::class)->recordCheckoutStarted($request);
 
@@ -368,7 +369,15 @@ class CheckoutController extends Controller
         app(CartTrackingService::class)->recordConverted($request, $orderIds);
         $metaPurchaseEvent = $metaPurchaseTracking->record($request, $orderIds, $checkoutGroup);
         if ($metaPurchaseEvent !== []) {
-            session(['meta.purchase_event' => $metaPurchaseEvent]);
+            session([
+                'meta.purchase_event' => $metaPurchaseEvent,
+                'google_ads.purchase_event' => [
+                    'value' => (float) $metaPurchaseEvent['value'],
+                    'currency' => 'EGP',
+                    'transaction_id' => $checkoutGroup,
+                    'new_customer' => $isNewCustomer,
+                ],
+            ]);
         }
 
         return redirect()->route('checkout.success');
@@ -387,7 +396,35 @@ class CheckoutController extends Controller
             'orders' => $orders,
             'order' => $orders->first(),
             'metaPurchaseEvent' => session()->pull('meta.purchase_event'),
+            'googleAdsPurchaseEvent' => session()->pull('google_ads.purchase_event'),
         ]);
+    }
+
+    private function isNewCustomer(string $phone): bool
+    {
+        $whatsAppPhone = Phone::forWhatsApp($phone);
+        $phoneCandidates = array_values(array_unique(array_filter([
+            Phone::normalize($phone),
+            $whatsAppPhone,
+            $whatsAppPhone ? '+'.$whatsAppPhone : null,
+            $whatsAppPhone && str_starts_with($whatsAppPhone, '20') ? '0'.substr($whatsAppPhone, 2) : null,
+        ])));
+
+        return ! Order::query()
+            ->where(function ($query) use ($phoneCandidates): void {
+                if (auth()->check()) {
+                    $query->where('user_id', auth()->id());
+
+                    if ($phoneCandidates !== []) {
+                        $query->orWhereIn('delivery_details->phone', $phoneCandidates);
+                    }
+
+                    return;
+                }
+
+                $query->whereIn('delivery_details->phone', $phoneCandidates);
+            })
+            ->exists();
     }
 
     private function newOrderNumber(): string

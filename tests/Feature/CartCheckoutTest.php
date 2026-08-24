@@ -95,7 +95,10 @@ class CartCheckoutTest extends TestCase
     public function test_public_tracking_keeps_page_views_and_purchase_has_egp_currency(): void
     {
         Storage::fake('local');
-        config(['services.meta_pixel.id' => '1011553001490691']);
+        config([
+            'services.meta_pixel.id' => '1011553001490691',
+            'services.google_analytics.id' => 'G-HEROKIDTEST',
+        ]);
 
         $this->get(route('home'))
             ->assertOk()
@@ -136,7 +139,11 @@ class CartCheckoutTest extends TestCase
             ->assertRedirect(route('checkout.success'))
             ->assertSessionHas('meta.purchase_event', fn (array $event): bool => $event['currency'] === 'EGP'
                 && $event['value'] === 140.0
-                && str_starts_with($event['event_id'], 'purchase-'));
+                && str_starts_with($event['event_id'], 'purchase-'))
+            ->assertSessionHas('google_ads.purchase_event', fn (array $event): bool => $event['currency'] === 'EGP'
+                && $event['value'] === 140.0
+                && $event['new_customer'] === true
+                && str_starts_with($event['transaction_id'], 'CHK-'));
         $this->assertSame(
             'fb.1.1234567890.checkout',
             MetaConversionEvent::query()->sole()->user_data_encrypted['fbp'],
@@ -148,8 +155,17 @@ class CartCheckoutTest extends TestCase
             ->assertSee('"currency":"EGP"', false)
             ->assertSee('"value":140', false)
             ->assertSee('eventID:', false)
-            ->assertDontSee("gtag('event'", false)
-            ->assertSessionMissing('meta.purchase_event');
+            ->assertSee("gtag('event', 'conversion_event_purchase'", false)
+            ->assertSee('"currency":"EGP"', false)
+            ->assertSee('"transaction_id":"CHK-', false)
+            ->assertSee('"new_customer":true', false)
+            ->assertSessionMissing('meta.purchase_event')
+            ->assertSessionMissing('google_ads.purchase_event');
+
+        $this->get(route('checkout.success'))
+            ->assertOk()
+            ->assertDontSee("gtag('event', 'conversion_event_purchase'", false)
+            ->assertDontSee("window.fbq('track', 'Purchase'", false);
     }
 
     public function test_adding_a_story_and_continuing_shopping_redirects_to_shop_with_named_toast(): void
@@ -174,6 +190,46 @@ class CartCheckoutTest extends TestCase
             ->assertSee('الذهاب إلى السلة')
             ->assertSee('اختيار منتج آخر')
             ->assertSee(route('cart.index'), false);
+    }
+
+    public function test_google_ads_purchase_marks_a_returning_guest_by_normalized_phone(): void
+    {
+        Storage::fake('local');
+        config(['services.google_analytics.id' => 'G-HEROKIDTEST']);
+
+        Order::create([
+            'order_number' => 'HK-PREVIOUS-CUSTOMER',
+            'checkout_group_key' => 'CHK-PREVIOUS-CUSTOMER',
+            'parent_name' => 'Previous Parent',
+            'delivery_details' => ['phone' => '01000000000'],
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('returning-google-customer', 'عودة العميل', 100);
+
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('رينا', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'Parent Name',
+            'phone' => '201000000000',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'city' => 'Nasr City',
+            'street' => 'Street 1',
+            'address_details' => 'Building 2, Apartment 3',
+        ])
+            ->assertRedirect(route('checkout.success'))
+            ->assertSessionHas('google_ads.purchase_event', fn (array $event): bool => $event['new_customer'] === false);
+
+        $this->get(route('checkout.success'))
+            ->assertOk()
+            ->assertSee('"new_customer":false', false);
     }
 
     public function test_adding_a_story_and_completing_order_keeps_cart_redirect_with_named_toast(): void

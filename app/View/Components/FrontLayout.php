@@ -7,6 +7,10 @@ use Illuminate\View\View;
 
 class FrontLayout extends Component
 {
+    public function __construct(
+        public ?array $googleAdsPurchaseEvent = null,
+    ) {}
+
     /**
      * Get the view / contents that represents the component.
      */

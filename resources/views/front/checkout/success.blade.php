@@ -1,4 +1,13 @@
-<x-front-layout>
+@php
+    $googleAdsPurchasePayload = !empty($googleAdsPurchaseEvent) ? [
+        'value' => (float) $googleAdsPurchaseEvent['value'],
+        'currency' => 'EGP',
+        'transaction_id' => (string) $googleAdsPurchaseEvent['transaction_id'],
+        'new_customer' => (bool) $googleAdsPurchaseEvent['new_customer'],
+    ] : null;
+@endphp
+
+<x-front-layout :google-ads-purchase-event="$googleAdsPurchasePayload">
 
 {{-- ══ SEO ══ --}}
 <x-slot name="pageTitle">تم استلام طلبك بنجاح</x-slot>

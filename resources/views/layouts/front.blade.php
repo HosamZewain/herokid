@@ -142,6 +142,13 @@
             gtag('js', new Date());
             gtag('config', @json($googleAnalyticsId));
         </script>
+
+        @if(!empty($googleAdsPurchaseEvent))
+            <!-- Google Ads purchase conversion event -->
+            <script>
+                gtag('event', 'conversion_event_purchase', @json($googleAdsPurchaseEvent, \App\Support\Seo::jsonFlags()));
+            </script>
+        @endif
     @endif
 
     <!-- ══ Fonts ══ -->
