@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,16 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $products = Product::with('category')
+            ->withCount('views')
+            ->selectSub(
+                DB::table('order_items')
+                    ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                    ->whereColumn('order_items.product_id', 'products.id')
+                    ->whereIn('order_items.item_type', ['product', 'product_add_on'])
+                    ->whereNull('orders.deleted_at')
+                    ->selectRaw('COUNT(DISTINCT order_items.order_id)'),
+                'orders_count'
+            )
             ->when($request->filled('category'), fn ($query) => $query->where('product_category_id', $request->category))
             ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->status === 'active'))
             ->latest()
