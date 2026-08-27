@@ -8,7 +8,10 @@ use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Services\Catalog\UnifiedStorefrontService;
+use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ShopController extends Controller
 {
@@ -25,7 +28,7 @@ class ShopController extends Controller
         return $this->listing($request, $storefront, $category);
     }
 
-    public function show(Request $request, Product $product)
+    public function show(Request $request, Product $product, TemporaryPhotoUploadService $uploads)
     {
         abort_unless(setting('shop_enabled', '1') === '1', 404);
         abort_unless($product->is_active && $product->category?->is_active && $product->category?->show_in_store, 404);
@@ -53,7 +56,34 @@ class ShopController extends Controller
             ->take(4)
             ->get();
 
-        return view('front.shop.show', compact('product', 'storyItems', 'relatedProducts'));
+        $photoUploadConfig = null;
+
+        if ($product->personalization_mode === 'collect_child_details') {
+            $uploadSession = $uploads->ensureSession($request);
+            $photoUploadConfig = [
+                'sessionToken' => $uploadSession['token'],
+                'batchToken' => Str::random(48),
+                'uploadUrl' => route('photo-uploads.store'),
+                'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
+                'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
+                'maxFiles' => (int) config('photo_uploads.max_files', 3),
+                'minimumFiles' => (int) config('photo_uploads.min_files', 2),
+                'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
+                'concurrency' => (int) config('photo_uploads.concurrency', 2),
+                'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
+                'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
+                'storageKey' => 'herokid:product:'.$product->slug.':photo-upload-ids',
+                'readyLabel' => 'إضافة المنتج للسلة',
+                'clearStorageOnSubmit' => true,
+            ];
+        }
+
+        return view('front.shop.show', compact(
+            'product',
+            'storyItems',
+            'relatedProducts',
+            'photoUploadConfig',
+        ) + ['ageOptions' => StoryAgeOptions::forPersonalization()]);
     }
 
     private function listing(Request $request, UnifiedStorefrontService $storefront, ?ProductCategory $category = null)

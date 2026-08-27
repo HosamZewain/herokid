@@ -40,6 +40,8 @@
                     {{ $item['story_count'] ?? 0 }} قصة · {{ $item['product_count'] ?? 0 }} منتج
                 @elseif($mobileItemType === 'product_add_on')
                     إضافة مرتبطة · الكمية {{ $item['quantity'] ?? 1 }}
+                @elseif(($item['personalization_mode'] ?? null) === 'collect_child_details')
+                    {{ $item['child_name'] ?? 'الطفل' }} · {{ $item['child_age'] ?? '-' }} سنة · {{ count($item['uploaded_photos'] ?? []) }} صورة
                 @else
                     الكمية {{ $item['quantity'] ?? 1 }}@if(!empty($item['variant_name'])) · {{ $item['variant_name'] }}@endif
                 @endif

@@ -38,7 +38,9 @@ export function initializeIdentityPhotoUploader() {
     const concurrency = Math.max(1, Number(config.concurrency || 2));
     const maxLongEdge = Number(config.maxLongEdge || 2560);
     const jpegQuality = Math.min(1, Math.max(0.5, Number(config.jpegQuality || 90) / 100));
-    const storageKey = 'herokid:child-identity:photo-upload-ids';
+    const storageKey = String(config.storageKey || 'herokid:child-identity:photo-upload-ids');
+    const readyLabel = String(config.readyLabel || 'إنشاء هوية طفلي');
+    const submittingLabel = String(config.submittingLabel || 'جاري بدء إنشاء الهوية...');
     const items = [];
     let activeUploads = 0;
     let submitting = false;
@@ -137,7 +139,7 @@ export function initializeIdentityPhotoUploader() {
         }
 
         if (submitting) {
-            submitLabel.textContent = 'جاري بدء إنشاء الهوية...';
+            submitLabel.textContent = submittingLabel;
         } else if (busy) {
             submitLabel.textContent = 'انتظر اكتمال رفع الصور';
         } else if (failed) {
@@ -147,7 +149,7 @@ export function initializeIdentityPhotoUploader() {
         } else if (remainingRequired > 1) {
             submitLabel.textContent = 'اختر صورتين للمتابعة';
         } else {
-            submitLabel.textContent = 'إنشاء هوية طفلي';
+            submitLabel.textContent = readyLabel;
         }
 
         if (failed) {
@@ -464,6 +466,9 @@ export function initializeIdentityPhotoUploader() {
         }
 
         submitting = true;
+        if (config.clearStorageOnSubmit) {
+            sessionStorage.removeItem(storageKey);
+        }
         updateState();
     });
 
@@ -472,10 +477,12 @@ export function initializeIdentityPhotoUploader() {
     }
 
     try {
-        const stored = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+        const restored = Array.isArray(config.restoredUploadIds) && config.restoredUploadIds.length > 0
+            ? config.restoredUploadIds
+            : JSON.parse(sessionStorage.getItem(storageKey) || '[]');
 
-        if (Array.isArray(stored)) {
-            stored.slice(0, maximum).forEach((id) => items.push({
+        if (Array.isArray(restored)) {
+            restored.slice(0, maximum).forEach((id) => items.push({
                 id: uid(),
                 file: null,
                 name: 'صورة مرفوعة',

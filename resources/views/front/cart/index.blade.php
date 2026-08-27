@@ -318,6 +318,21 @@
                                                         <div class="rounded-2xl bg-emerald-50 px-3 py-3"><p class="text-xs font-bold text-emerald-600 mb-1">إجمالي منفصل</p><p class="font-black text-emerald-800 line-through">{{ format_money($item['regular_total_cents'] / 100) }}</p></div>
                                                     @endif
                                                 </div>
+                                            @elseif(($item['personalization_mode'] ?? null) === 'collect_child_details')
+                                                <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
+                                                        <p class="mb-1 text-xs font-bold text-indigo-500">اسم الطفل</p>
+                                                        <p class="font-black text-slate-900">{{ $item['child_name'] ?? '-' }}</p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
+                                                        <p class="mb-1 text-xs font-bold text-indigo-500">العمر والجنس</p>
+                                                        <p class="font-black text-slate-900">{{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? null) === 'boy' ? 'ولد' : 'بنت' }}</p>
+                                                    </div>
+                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
+                                                        <p class="mb-1 text-xs font-bold text-indigo-500">الصور المرفقة</p>
+                                                        <p class="font-black text-slate-900">{{ count($item['uploaded_photos'] ?? []) }} صورة</p>
+                                                    </div>
+                                                </div>
                                             @else
                                                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                     <div class="rounded-2xl bg-slate-50 px-3 py-3">

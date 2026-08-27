@@ -260,7 +260,15 @@ class CheckoutController extends Controller
                     }
                 }
 
-                if ($storyItems->isEmpty() && $productItems->isNotEmpty()) {
+                $hasRegularStandaloneProduct = $productItems->contains(function (array $item) use ($products): bool {
+                    $product = $products->get($item['product_id'] ?? null);
+
+                    return $product
+                        && empty($item['linked_story_key'])
+                        && $product->personalization_mode !== 'collect_child_details';
+                });
+
+                if ($storyItems->isEmpty() && $hasRegularStandaloneProduct) {
                     $firstOrder = Order::create([
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
@@ -307,9 +315,56 @@ class CheckoutController extends Controller
                     }
 
                     $linkedStoryKey = $item['linked_story_key'] ?? null;
-                    $targetOrder = $linkedStoryKey && isset($ordersByStoryCartKey[$linkedStoryKey])
-                        ? $ordersByStoryCartKey[$linkedStoryKey]
-                        : $firstOrder;
+                    $collectsChildDetails = $product->personalization_mode === 'collect_child_details';
+                    $targetOrder = null;
+
+                    if ($linkedStoryKey && isset($ordersByStoryCartKey[$linkedStoryKey])) {
+                        $targetOrder = $ordersByStoryCartKey[$linkedStoryKey];
+                    } elseif ($collectsChildDetails) {
+                        $uploadedPhotos = array_values($item['uploaded_photos'] ?? []);
+                        $targetOrder = Order::create([
+                            'order_number' => $this->newOrderNumber(),
+                            'checkout_group_key' => $checkoutGroup,
+                            'user_id' => auth()->id(),
+                            'order_source' => 'website',
+                            'parent_name' => $validated['parent_name'],
+                            'story_id' => null,
+                            'child_name' => $item['child_name'] ?? null,
+                            'child_age' => $item['child_age'] ?? null,
+                            'child_gender' => $item['child_gender'] ?? null,
+                            'language' => null,
+                            'lesson' => null,
+                            'interests' => $item['interests'] ?? null,
+                            'gift_note' => null,
+                            'notes' => null,
+                            'parent_notes' => null,
+                            'delivery_details' => $this->deliverySnapshot(
+                                $validated,
+                                $country,
+                                $governorate,
+                                $checkoutGroup,
+                                $checkoutSessionId,
+                                count($orderIds) + 1,
+                                $itemCount,
+                                $subtotal,
+                                $deliveryFee,
+                                $attribution,
+                            ),
+                            'uploaded_photos' => $uploadedPhotos,
+                            'status' => 'new',
+                        ]);
+
+                        $targetOrder->statusLogs()->create([
+                            'status' => 'new',
+                            'notes' => 'تم إنشاء طلب منتج مخصص بنجاح وسيتم مراجعته قريباً.',
+                        ]);
+
+                        $photoUploads->markOrderAttached($uploadedPhotos, $targetOrder);
+                        $orderIds[] = $targetOrder->id;
+                        $firstOrder ??= $targetOrder;
+                    } else {
+                        $targetOrder = $firstOrder;
+                    }
 
                     if (! $targetOrder) {
                         continue;
@@ -341,7 +396,15 @@ class CheckoutController extends Controller
                             'name_en' => $variant->name_en,
                             'sku' => $variant->sku,
                         ] : null,
-                        'personalization_snapshot' => $item['linked_story_snapshot'] ?? null,
+                        'personalization_snapshot' => $collectsChildDetails
+                            ? ($item['personalization_snapshot'] ?? [
+                                'child_name' => $item['child_name'] ?? null,
+                                'child_age' => $item['child_age'] ?? null,
+                                'child_gender' => $item['child_gender'] ?? null,
+                                'interests' => $item['interests'] ?? null,
+                                'uploaded_photos_count' => count($item['uploaded_photos'] ?? []),
+                            ])
+                            : ($item['linked_story_snapshot'] ?? null),
                     ]);
 
                     $this->decrementStock($product, $variant, $quantity);

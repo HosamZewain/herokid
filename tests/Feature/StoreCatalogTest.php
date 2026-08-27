@@ -10,8 +10,11 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
 use App\Models\Story;
+use App\Models\TemporaryPhotoUpload;
 use App\Models\User;
+use App\Services\Uploads\TemporaryPhotoUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StoreCatalogTest extends TestCase
@@ -124,6 +127,125 @@ class StoreCatalogTest extends TestCase
         $this->assertSame('product', $item['item_type']);
         $this->assertSame(30000, $item['line_total_cents']);
         $this->assertSame('A3', $item['variant_name']);
+    }
+
+    public function test_collect_child_details_product_displays_and_requires_personalization_fields(): void
+    {
+        $product = $this->product('school-sticker', 195, [
+            'name_ar' => 'ستيكر مخصص باسم وصورة طفلك',
+            'personalization_mode' => 'collect_child_details',
+        ]);
+
+        $this->get(route('shop.product.show', $product))
+            ->assertOk()
+            ->assertSee('بيانات الطفل والصور')
+            ->assertSee('name="child_name"', false)
+            ->assertSee('name="child_age"', false)
+            ->assertSee('name="child_gender"', false)
+            ->assertSee('data-identity-photo-input', false);
+
+        $this->post(route('cart.products.store', $product), ['quantity' => 1])
+            ->assertSessionHasErrors(['child_name', 'child_age', 'child_gender', 'photo_upload_ids']);
+
+        $this->assertSame([], session('cart.items', []));
+    }
+
+    public function test_collect_child_details_product_keeps_child_data_and_photos_through_checkout(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('school-sticker-order', 195, [
+            'name_ar' => 'ستيكر المدرسة المخصص',
+            'personalization_mode' => 'collect_child_details',
+        ]);
+        $sessionToken = 'product-personalization-test-token';
+        $firstUpload = $this->temporaryPhoto($sessionToken, 'product-child-one');
+        $secondUpload = $this->temporaryPhoto($sessionToken, 'product-child-two');
+
+        $this->withSession(['photo_upload.token' => $sessionToken])
+            ->post(route('cart.products.store', $product), [
+                'quantity' => 1,
+                'upload_session_token' => $sessionToken,
+                'child_name' => 'سليم',
+                'child_age' => 7,
+                'child_gender' => 'boy',
+                'interests' => 'كرة القدم',
+                'photo_upload_ids' => [$firstUpload->public_id, $secondUpload->public_id],
+            ])->assertRedirect(route('cart.index'));
+
+        $item = collect(session('cart.items'))->first();
+        $this->assertSame('collect_child_details', $item['personalization_mode']);
+        $this->assertSame('سليم', $item['child_name']);
+        $this->assertSame(7, $item['child_age']);
+        $this->assertSame('boy', $item['child_gender']);
+        $this->assertSame('كرة القدم', $item['interests']);
+        $this->assertCount(2, $item['uploaded_photos']);
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('سليم')
+            ->assertSee('2 صورة');
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $order = Order::with('items')->firstOrFail();
+        $productItem = $order->items->firstWhere('product_id', $product->id);
+
+        $this->assertNull($order->story_id);
+        $this->assertSame('سليم', $order->child_name);
+        $this->assertSame(7, $order->child_age);
+        $this->assertSame('boy', $order->child_gender);
+        $this->assertSame('كرة القدم', $order->interests);
+        $this->assertCount(2, $order->uploaded_photos);
+        $this->assertNotNull($productItem);
+        $this->assertSame('سليم', $productItem->personalization_snapshot['child_name']);
+        $this->assertSame(2, $productItem->personalization_snapshot['uploaded_photos_count']);
+        $this->assertDatabaseHas('temporary_photo_uploads', [
+            'public_id' => $firstUpload->public_id,
+            'status' => 'attached',
+            'attached_order_id' => $order->id,
+        ]);
+    }
+
+    public function test_standalone_personalized_product_does_not_overwrite_story_child_in_mixed_checkout(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $story = $this->story('mixed-child-story', 'قصة رينا');
+        $product = $this->product('mixed-child-sticker', 195, [
+            'name_ar' => 'ستيكر سليم',
+            'personalization_mode' => 'collect_child_details',
+        ]);
+        $sessionToken = 'mixed-product-personalization-token';
+        $firstUpload = $this->temporaryPhoto($sessionToken, 'mixed-child-one');
+        $secondUpload = $this->temporaryPhoto($sessionToken, 'mixed-child-two');
+
+        $this->withSession([
+            'photo_upload.token' => $sessionToken,
+            'cart.items' => [
+                'story-key' => $this->storyCartItem('story-key', $story, 'رينا'),
+            ],
+        ])->post(route('cart.products.store', $product), [
+            'upload_session_token' => $sessionToken,
+            'child_name' => 'سليم',
+            'child_age' => 8,
+            'child_gender' => 'boy',
+            'photo_upload_ids' => [$firstUpload->public_id, $secondUpload->public_id],
+        ])->assertRedirect(route('cart.index'));
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $orders = Order::with('items')->orderBy('id')->get();
+        $this->assertCount(2, $orders);
+        $this->assertSame('رينا', $orders->firstWhere('story_id', $story->id)->child_name);
+
+        $productOrder = $orders->first(fn (Order $order) => $order->items->contains('product_id', $product->id));
+        $this->assertNotNull($productOrder);
+        $this->assertSame('سليم', $productOrder->child_name);
+        $this->assertSame(8, $productOrder->child_age);
+        $this->assertCount(2, $productOrder->uploaded_photos);
     }
 
     public function test_product_views_and_add_to_cart_do_not_emit_external_ecommerce_events(): void
@@ -539,5 +661,23 @@ class StoreCatalogTest extends TestCase
             'street' => 'Street 1',
             'address_details' => 'Building 2',
         ];
+    }
+
+    private function temporaryPhoto(string $sessionToken, string $publicId): TemporaryPhotoUpload
+    {
+        return TemporaryPhotoUpload::create([
+            'public_id' => (string) Str::uuid(),
+            'session_hash' => app(TemporaryPhotoUploadService::class)->sessionHash($sessionToken),
+            'batch_hash' => hash('sha256', 'product-personalization-tests'),
+            'disk' => 'local',
+            'path' => 'temporary-uploads/child-photos/tests/'.$publicId.'.jpg',
+            'mime_type' => 'image/jpeg',
+            'file_size' => 1024,
+            'width' => 800,
+            'height' => 800,
+            'checksum' => hash('sha256', $publicId),
+            'status' => 'uploaded',
+            'expires_at' => now()->addHour(),
+        ]);
     }
 }
