@@ -326,6 +326,7 @@ class OrderController extends Controller
             'sceneTextSnapshots',
             'statusLogs',
             'previews',
+            'attachments.uploader:id,name',
             'bookletPreview.currentVersion',
             'bookletPreview.versions.uploader',
             'items.product',

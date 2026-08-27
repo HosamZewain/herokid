@@ -53,6 +53,11 @@ class OrderGroupController extends Controller
                 ->values();
         }
 
+        $attachmentTarget = $group['active_orders']->first() ?: $group['orders']->first();
+        $attachmentOrders = $group['active_orders']->isNotEmpty()
+            ? $group['active_orders']
+            : $group['orders'];
+
         return view('admin.orders.group-show', [
             'group' => $group,
             'statuses' => $statuses,
@@ -61,6 +66,8 @@ class OrderGroupController extends Controller
             'printingStatuses' => $printingStatuses,
             'shippingStatuses' => $shippingStatuses,
             'productProductionPrompts' => $productProductionPrompts,
+            'attachmentTarget' => $attachmentTarget,
+            'attachmentOrders' => $attachmentOrders,
         ]);
     }
 

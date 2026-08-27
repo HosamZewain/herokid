@@ -108,6 +108,11 @@
                 @endcan
             @endif
 
+            @include('admin.orders._attachments', [
+                'attachmentTarget' => $attachmentTarget,
+                'attachmentOrders' => $attachmentOrders,
+            ])
+
             <section class="space-y-4">
                 <div class="flex items-center justify-between gap-3">
                     <span class="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">{{ $visibleStoryOrders->count() }} قصة نشطة</span>

@@ -64,6 +64,11 @@ class Order extends Model
         return $this->hasMany(OrderPreview::class);
     }
 
+    public function attachments()
+    {
+        return $this->hasMany(OrderAttachment::class)->latest();
+    }
+
     public function bookletPreview()
     {
         return $this->hasOne(BookletPreview::class);

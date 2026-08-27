@@ -35,6 +35,7 @@ class AdminOrderGroupService
         'items.linkedAddOns.product:id,name_ar',
         'statusLogs',
         'previews',
+        'attachments.uploader:id,name',
         'productionProject.assignedTo:id,name',
     ];
 

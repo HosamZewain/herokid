@@ -8,6 +8,7 @@ use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationStuckChecker;
+use App\Services\Orders\OrderAttachmentService;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
@@ -155,6 +156,19 @@ Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to proc
 })->purpose('Expire and delete unattached temporary child photo uploads');
 
 Schedule::command('photo-uploads:cleanup')->hourly();
+
+Artisan::command('order-attachments:cleanup {--batch=100 : Maximum expired attachments to delete}', function (OrderAttachmentService $attachments) {
+    $result = $attachments->cleanupExpired((int) $this->option('batch'));
+    $this->info(sprintf(
+        'Expired order attachments cleaned. Records: %d, deleted files: %d.',
+        $result['expired'] ?? 0,
+        $result['deleted_files'] ?? 0,
+    ));
+
+    return Command::SUCCESS;
+})->purpose('Permanently delete expired private order attachments');
+
+Schedule::command('order-attachments:cleanup')->hourly()->withoutOverlapping(10);
 Schedule::command('notifications:check-stuck-production')
     ->everyTenMinutes()
     ->withoutOverlapping(10);
