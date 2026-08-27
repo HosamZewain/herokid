@@ -19,6 +19,7 @@ use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -71,6 +72,30 @@ class CheckoutController extends Controller
         $productItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') !== 'story');
         $stories = Story::whereIn('id', $storyItems->pluck('story_id')->filter()->all())->get()->keyBy('id');
         $products = Product::with('variants')->whereIn('id', $productItems->pluck('product_id')->filter()->all())->get()->keyBy('id');
+
+        $incompletePersonalizedProduct = $productItems->first(function (array $item) use ($products): bool {
+            $product = $products->get($item['product_id'] ?? null);
+
+            if (! $product || $product->personalization_mode !== 'collect_child_details') {
+                return false;
+            }
+
+            $photos = array_values(array_filter($item['uploaded_photos'] ?? []));
+
+            return trim((string) ($item['child_name'] ?? '')) === ''
+                || ! in_array((int) ($item['child_age'] ?? 0), StoryAgeOptions::forPersonalization(), true)
+                || ! in_array($item['child_gender'] ?? null, ['boy', 'girl'], true)
+                || count($photos) < (int) config('photo_uploads.min_files', 2)
+                || count($photos) > (int) config('photo_uploads.max_files', 3);
+        });
+
+        if ($incompletePersonalizedProduct) {
+            return redirect()->route('cart.index')->with(
+                'error',
+                'هذا المنتج المخصص يحتاج اسم الطفل وعمره وجنسه وصورتين على الأقل. احذف المنتج من السلة ثم أضفه مرة أخرى بعد استكمال البيانات.'
+            );
+        }
+
         $subtotal = collect($cart)->sum(function (array $item) use ($stories, $storyPricing): float {
             if (($item['item_type'] ?? 'story') === 'story') {
                 $story = $stories->get($item['story_id'] ?? null);

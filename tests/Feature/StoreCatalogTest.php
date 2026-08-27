@@ -574,6 +574,34 @@ class StoreCatalogTest extends TestCase
         ]);
     }
 
+    public function test_checkout_rejects_legacy_personalized_product_cart_item_without_child_data(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('legacy-personalized-product', 195, [
+            'personalization_mode' => 'collect_child_details',
+        ]);
+
+        $this->withSession(['cart.items' => [
+            'legacy-personalized-product' => [
+                'key' => 'legacy-personalized-product',
+                'item_type' => 'product',
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'quantity' => 1,
+                'unit_price_cents' => 19500,
+                'line_total_cents' => 19500,
+                'personalization_mode' => 'collect_child_details',
+            ],
+        ]]);
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('cart.index'))
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_homepage_sections_render_only_when_category_has_active_products(): void
     {
         $visibleCategory = ProductCategory::create(['name_ar' => 'قسم ظاهر', 'slug' => 'visible-home', 'is_active' => true, 'show_in_store' => true]);
