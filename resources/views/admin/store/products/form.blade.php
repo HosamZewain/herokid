@@ -13,6 +13,16 @@
     <div class="py-8" dir="rtl">
         <div class="mx-auto max-w-5xl space-y-6 sm:px-6 lg:px-8">
             @if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-bold text-green-700">{{ session('success') }}</div>@endif
+            @if($errors->any())
+                <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-right text-sm font-bold text-red-700" role="alert" aria-live="assertive">
+                    <p class="font-black">لم يتم حفظ المنتج. راجع الحقول التالية:</p>
+                    <ul class="mt-2 list-inside list-disc space-y-1">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
             <form action="{{ $product->exists ? route('admin.products.update', $product) : route('admin.products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6 rounded-2xl bg-white p-6 shadow-sm">
                 @csrf
                 @if($product->exists) @method('PUT') @endif

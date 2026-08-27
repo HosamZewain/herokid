@@ -21,6 +21,7 @@ class AdminProductProductionPromptTest extends TestCase
         $product = $this->product('school-sticker', <<<'PROMPT'
 Order: {{order_number}}
 Child: {{child_full_name}}
+Age: {{child_age}}
 School: {{school_name}}
 Class: {{class_name}}
 Gender: {{child_gender}}
@@ -47,6 +48,7 @@ PROMPT);
             'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
             'personalization_snapshot' => [
                 'child_name' => 'Roqaya Ahmed Ali',
+                'child_age' => 8,
                 'school_name' => 'HeroKid School',
                 'class_name' => 'Class 3A',
                 'child_gender' => 'girl',
@@ -60,6 +62,7 @@ PROMPT);
             ->assertSee('ستيكر المدرسة')
             ->assertSee('نسخة محفوظة مع الطلب')
             ->assertSee('Roqaya Ahmed Ali')
+            ->assertSee('Age: 8')
             ->assertSee('HeroKid School')
             ->assertSee('Class 3A')
             ->assertSee('/orders/'.$order->id.'/production-photos/0', false)
@@ -96,6 +99,40 @@ PROMPT);
             ->assertSee('برومبت إنتاج المنتج')
             ->assertSee('name="production_prompt_template"', false)
             ->assertSee('Sticker prompt for {{child_full_name}}');
+    }
+
+    public function test_product_edit_form_persists_an_updated_prompt_template(): void
+    {
+        $product = $this->product('school-sticker', 'Original prompt for {{child_full_name}}');
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.products.update', $product), [
+                'product_category_id' => $product->product_category_id,
+                'name_ar' => $product->name_ar,
+                'slug' => $product->slug,
+                'price' => 195,
+                'fulfillment_type' => 'physical',
+                'purchase_mode' => 'standalone',
+                'personalization_mode' => 'collect_child_details',
+                'personalization_fields' => [
+                    'child_name' => ['enabled' => 1, 'required' => 1, 'label' => 'اسم الطفل'],
+                ],
+                'production_prompt_template' => 'Updated product prompt for {{child_full_name}}, age {{child_age}}',
+                'inventory_mode' => 'no_tracking',
+                'is_active' => 1,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.products.edit', $product));
+
+        $this->assertSame(
+            'Updated product prompt for {{child_full_name}}, age {{child_age}}',
+            $product->fresh()->production_prompt_template,
+        );
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSee('Updated product prompt for {{child_full_name}}, age {{child_age}}');
     }
 
     public function test_product_only_group_page_shows_the_sticker_prompt(): void
@@ -221,6 +258,80 @@ PROMPT);
         $product->update(['production_prompt_template' => 'Changed template']);
 
         $this->assertSame('Saved template for سليم', ProductProductionPrompt::renderForItem($item->fresh()));
+    }
+
+    public function test_admin_can_edit_the_prompt_for_one_product_order(): void
+    {
+        $product = $this->product('school-sticker', 'Original for {{child_full_name}}');
+        $order = Order::create(['order_number' => 'HK-EDIT-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+            'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
+            'personalization_snapshot' => ['child_name' => 'سليم'],
+        ]);
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.orders.products.production-prompt.update', [$order, $item]), [
+                'production_prompt_template' => 'Updated for {{child_full_name}}',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('Updated for سليم', ProductProductionPrompt::renderForItem($item->fresh()));
+        $this->assertSame('Original for {{child_full_name}}', $product->fresh()->production_prompt_template);
+    }
+
+    public function test_admin_can_apply_the_latest_product_template_to_an_existing_order(): void
+    {
+        $product = $this->product('school-sticker', 'Old for {{child_full_name}}');
+        $order = Order::create(['order_number' => 'HK-SYNC-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+            'item_snapshot' => ['production_prompt_template' => 'Frozen old for {{child_full_name}}'],
+            'personalization_snapshot' => ['child_name' => 'ليلى'],
+        ]);
+        $product->update(['production_prompt_template' => 'Latest for {{child_full_name}}']);
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.orders.products.production-prompt.use-current', [$order, $item]))
+            ->assertRedirect();
+
+        $this->assertSame('Latest for ليلى', ProductProductionPrompt::renderForItem($item->fresh()));
+    }
+
+    public function test_order_prompt_edit_rejects_unsupported_variables(): void
+    {
+        $product = $this->product('school-sticker', 'Original for {{child_full_name}}');
+        $order = Order::create(['order_number' => 'HK-INVALID-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
+        ]);
+
+        $this->actingAs($this->admin())
+            ->from(route('admin.orders.products.production', [$order, $item]))
+            ->put(route('admin.orders.products.production-prompt.update', [$order, $item]), [
+                'production_prompt_template' => 'Invalid {{unknown_variable}}',
+            ])
+            ->assertSessionHasErrors('production_prompt_template');
+
+        $this->assertSame('Original for {{child_full_name}}', data_get($item->fresh()->item_snapshot, 'production_prompt_template'));
     }
 
     public function test_default_sticker_prompt_uses_only_supported_variables(): void

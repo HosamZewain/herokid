@@ -602,6 +602,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->whereNumber(['order', 'item'])
         ->middleware('permission:orders.production_prompt.manage')
         ->name('orders.products.production');
+    Route::put('orders/{order}/products/{item}/production-prompt', [OrderProductProductionController::class, 'updatePrompt'])
+        ->whereNumber(['order', 'item'])
+        ->middleware('permission:orders.production_prompt.manage')
+        ->name('orders.products.production-prompt.update');
+    Route::post('orders/{order}/products/{item}/production-prompt/use-current', [OrderProductProductionController::class, 'useCurrentPrompt'])
+        ->whereNumber(['order', 'item'])
+        ->middleware('permission:orders.production_prompt.manage')
+        ->name('orders.products.production-prompt.use-current');
     Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
     Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');

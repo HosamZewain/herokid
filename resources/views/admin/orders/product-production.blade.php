@@ -16,6 +16,12 @@
 
     <div class="py-8">
         <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+            @if(session('success'))
+                <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-right font-bold text-green-700" role="status">{{ session('success') }}</div>
+            @endif
+            @if($errors->any())
+                <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-right font-bold text-red-700" role="alert">{{ $errors->first() }}</div>
+            @endif
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.groups.show', $order) }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-50">
                     العودة إلى عملية الشراء
@@ -26,7 +32,7 @@
                     @endcan
                     @if($item->product)
                         @can('store.products.update')
-                            <a href="{{ route('admin.products.edit', $item->product) }}" class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100">تعديل قالب البرومبت</a>
+                            <a href="{{ route('admin.products.edit', $item->product) }}" class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100">تعديل القالب العام للطلبات الجديدة</a>
                         @endcan
                     @endif
                 </div>
@@ -85,6 +91,40 @@
                 @else
                     <p class="mt-5 rounded-2xl border border-dashed border-red-200 bg-red-50 p-5 text-sm font-bold text-red-700">لا توجد صور طفل مرفقة. أضف الصور من تعديل بيانات الطلب قبل بدء الإنتاج.</p>
                 @endif
+            </section>
+
+            <section class="rounded-3xl border border-fuchsia-200 bg-fuchsia-50/40 p-5 shadow-sm sm:p-6">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="text-right">
+                        <h3 class="text-xl font-black text-fuchsia-950">تعديل برومبت هذا الطلب</h3>
+                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">التعديل هنا يخص هذا المنتج داخل هذا الطلب فقط. تعديل القالب العام للمنتج لا يغيّر الطلبات القديمة المحفوظة تلقائيًا.</p>
+                    </div>
+                    @if($item->product)
+                        <form action="{{ route('admin.orders.products.production-prompt.use-current', [$order, $item]) }}" method="POST">
+                            @csrf
+                            <button type="submit" class="w-full rounded-xl border border-fuchsia-200 bg-white px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100 sm:w-auto">
+                                استخدام أحدث قالب للمنتج
+                            </button>
+                        </form>
+                    @endif
+                </div>
+
+                <form action="{{ route('admin.orders.products.production-prompt.update', [$order, $item]) }}" method="POST" class="mt-5">
+                    @csrf
+                    @method('PUT')
+                    <textarea
+                        name="production_prompt_template"
+                        rows="20"
+                        maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}"
+                        dir="ltr"
+                        spellcheck="false"
+                        class="block w-full rounded-2xl border-fuchsia-200 bg-white text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"
+                    >{{ old('production_prompt_template', $promptTemplate) }}</textarea>
+                    <x-input-error :messages="$errors->get('production_prompt_template')" class="mt-2" />
+                    <button type="submit" class="mt-4 w-full rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white hover:bg-fuchsia-700 sm:w-auto">
+                        حفظ برومبت هذا الطلب
+                    </button>
+                </form>
             </section>
 
             @include('admin.orders._product-production-prompts', [
