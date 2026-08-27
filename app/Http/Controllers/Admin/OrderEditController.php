@@ -14,7 +14,9 @@ use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\Phone;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -30,6 +32,7 @@ class OrderEditController extends Controller
 
         $orders = $group['active_orders']->loadMissing([
             'story',
+            'items.order',
             'items.product',
             'items.variant',
         ]);
@@ -91,6 +94,9 @@ class OrderEditController extends Controller
                 'variant_id' => $item->product_variant_id,
                 'linked_story_index' => $linkedOrderId !== null ? $storyOrderIndex->get($linkedOrderId) : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
+                'existing_order_id' => (int) $item->order_id,
+                'existing_photo_count' => count($item->order->uploaded_photos ?? []),
+                'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
             ];
         }
 
@@ -216,6 +222,71 @@ class OrderEditController extends Controller
             throw ValidationException::withMessages([
                 'discount_reason' => 'اكتب سبب الخصم لحفظه مع الطلب.',
             ]);
+        }
+
+        $selectedProductInputs = collect($validated['products'] ?? [])
+            ->filter(fn (array $product): bool => (int) ($product['quantity'] ?? 0) > 0);
+        $selectedProductModels = Product::query()
+            ->whereIn('id', $selectedProductInputs->keys()->map(fn (string|int $id): int => (int) $id))
+            ->get()
+            ->keyBy('id');
+        $existingProductItems = Order::query()
+            ->with(['items.order', 'items.product'])
+            ->where('checkout_group_key', $representative->checkoutGroupKey())
+            ->get()
+            ->flatMap->items
+            ->whereIn('item_type', ['product', 'product_add_on'])
+            ->keyBy('product_id');
+
+        foreach ($selectedProductInputs as $productId => $productInput) {
+            $product = $selectedProductModels->get((int) $productId);
+            if (! $product || $product->personalization_mode !== 'collect_child_details') {
+                continue;
+            }
+
+            $schema = ProductPersonalizationSchema::forProduct($product);
+            $existingItem = $existingProductItems->get((int) $productId);
+            if ($existingItem && ! $request->has("products.$productId.personalization")) {
+                continue;
+            }
+            $existingValues = ProductPersonalizationSchema::formValues($existingItem?->personalization_snapshot ?? []);
+            $submittedValues = (array) $request->input("products.$productId.personalization", []);
+            $personalizationInput = array_replace($existingValues, $submittedValues);
+            $newPhotos = array_values($request->file("products.$productId.personalization.photos", []));
+            $existingPhotoCount = count($existingItem?->order?->uploaded_photos ?? []);
+            $rules = ProductPersonalizationSchema::adminOrderValidationRules($schema);
+
+            if (isset($rules['photos'])) {
+                $photoField = ProductPersonalizationSchema::enabledFields($schema)['photos'];
+                $remaining = max(0, (int) $photoField['max_files'] - $existingPhotoCount);
+                $needed = max(0, (int) $photoField['min_files'] - $existingPhotoCount);
+                $rules['photos'] = [
+                    $needed > 0 ? 'required' : 'nullable',
+                    'array',
+                    ...($needed > 0 ? ['min:'.$needed] : []),
+                    'max:'.$remaining,
+                ];
+                $personalizationInput['photos'] = $newPhotos;
+            }
+
+            try {
+                $personalization = Validator::make(
+                    $personalizationInput,
+                    $rules,
+                    ProductPersonalizationSchema::adminOrderValidationMessages($schema),
+                )->validate();
+            } catch (ValidationException $exception) {
+                $errors = [];
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors["products.$productId.personalization.$field"] = $messages;
+                }
+
+                throw ValidationException::withMessages($errors);
+            }
+
+            $validated['products'][$productId]['personalization'] = $personalization;
+            $validated['products'][$productId]['personalization_schema'] = $schema;
+            $validated['products'][$productId]['existing_photo_count'] = $existingPhotoCount;
         }
 
         $result = $updater->update($representative, $validated, $request->user(), $request);

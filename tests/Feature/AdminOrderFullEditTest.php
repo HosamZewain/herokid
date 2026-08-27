@@ -348,6 +348,102 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame(1, Order::query()->where('checkout_group_key', $order->checkout_group_key)->count());
     }
 
+    public function test_admin_can_complete_missing_personalization_fields_and_photos_on_a_legacy_product_order(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة القديم',
+            'slug' => 'legacy-personalized-product-completion',
+            'price_cents' => 19_500,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل كامل'],
+                'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة'],
+                'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل'],
+                'child_age' => ['enabled' => true, 'required' => true, 'label' => 'عمر الطفل'],
+                'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
+            ],
+            'is_active' => true,
+        ]);
+        $order = Order::create([
+            'order_number' => 'HK-2026-LEGACY-PRODUCT',
+            'checkout_group_key' => 'CHK-LEGACY-PRODUCT',
+            'parent_name' => 'ولي أمر قديم',
+            'order_source' => 'whatsapp',
+            'status' => 'new',
+            'uploaded_photos' => [],
+            'delivery_details' => [
+                'phone' => '01011112222',
+                'delivery_country_id' => $this->country->id,
+                'delivery_governorate_id' => $this->governorate->id,
+                'country' => $this->country->name,
+                'governorate' => $this->governorate->name,
+                'city' => 'القاهرة',
+                'street' => 'شارع قديم',
+                'address_details' => 'تفاصيل قديمة',
+                'delivery_fee' => 50,
+                'subtotal' => 195,
+                'total' => 245,
+            ],
+        ]);
+        $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => 19_500,
+            'quantity' => 1,
+            'total_price_cents' => 19_500,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_snapshot' => null,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.edit', $order->id))
+            ->assertOk()
+            ->assertSee('بيانات التخصيص لهذا المنتج')
+            ->assertSee('اسم الطفل كامل')
+            ->assertSee('اسم المدرسة')
+            ->assertSee('اسم الفصل');
+
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order->id), [
+            'parent_name' => 'ولي أمر قديم',
+            'phone' => '01011112222',
+            'order_source' => 'whatsapp',
+            'delivery_country_id' => $this->country->id,
+            'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'القاهرة',
+            'street' => 'شارع قديم',
+            'address_details' => 'تفاصيل قديمة',
+            'stories' => [],
+            'products' => [
+                $product->id => [
+                    'quantity' => 1,
+                    'personalization' => [
+                        'child_name' => 'سليم محمد كامل',
+                        'school_name' => 'مدرسة الأمل',
+                        'class_name' => '3A',
+                        'child_age' => 8,
+                        'photos' => $this->photos('legacy-product'),
+                    ],
+                ],
+            ],
+            'payment_status' => 'unpaid',
+            'change_reason' => 'استكمال بيانات وصور المنتج التي وصلت عبر واتساب.',
+        ])->assertRedirect();
+
+        $order->refresh();
+        $item = $order->items()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame('سليم محمد كامل', $order->child_name);
+        $this->assertSame(8, $order->child_age);
+        $this->assertCount(2, $order->uploaded_photos ?? []);
+        $this->assertSame('سليم محمد كامل', $item->personalization_snapshot['child_name']);
+        $this->assertSame('مدرسة الأمل', $item->personalization_snapshot['school_name']);
+        $this->assertSame('3A', $item->personalization_snapshot['class_name']);
+        $this->assertSame(2, $item->personalization_snapshot['uploaded_photos_count']);
+        foreach ($order->uploaded_photos as $path) {
+            Storage::disk('local')->assertExists($path);
+        }
+    }
+
     private function createCheckout(): array
     {
         $firstStory = $this->story('القصة الأولى', 400);

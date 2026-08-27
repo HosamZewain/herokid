@@ -14,6 +14,7 @@ use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -199,6 +200,9 @@ class AdminOrderUpdateService
                     }
 
                     $this->createProductItem($targetOrder, $linkedStoryItem, $line, $linkedIndex);
+                    if ($line['photos'] !== []) {
+                        $this->photoUploads->append($targetOrder, $line['photos']);
+                    }
                     $this->decrementStock($line['product'], $line['variant'], $line['quantity']);
                 }
 
@@ -565,6 +569,25 @@ class AdminOrderUpdateService
                 ? (int) $old['unit_price_cents']
                 : $product->effectivePriceCents($variant);
 
+            $personalizationSnapshot = $old['personalization_snapshot'] ?? null;
+            $photos = [];
+            if (
+                $linkedIndex === null
+                && $product->personalization_mode === 'collect_child_details'
+                && array_key_exists('personalization_schema', $input)
+            ) {
+                $schema = is_array($input['personalization_schema'] ?? null)
+                    ? $input['personalization_schema']
+                    : ProductPersonalizationSchema::forProduct($product);
+                $personalization = is_array($input['personalization'] ?? null) ? $input['personalization'] : [];
+                $photos = array_values($personalization['photos'] ?? []);
+                $personalizationSnapshot = ProductPersonalizationSchema::snapshot(
+                    $schema,
+                    $personalization,
+                    (int) ($input['existing_photo_count'] ?? 0) + count($photos),
+                );
+            }
+
             return [
                 'product' => $product,
                 'variant' => $variant,
@@ -573,7 +596,8 @@ class AdminOrderUpdateService
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedIndex,
                 'existing_order_id' => $old ? (int) $old['order_id'] : null,
-                'personalization_snapshot' => $old['personalization_snapshot'] ?? null,
+                'personalization_snapshot' => $personalizationSnapshot,
+                'photos' => $photos,
             ];
         });
     }
@@ -613,6 +637,17 @@ class AdminOrderUpdateService
                 'child_gender' => $order->child_gender,
             ] : $line['personalization_snapshot'],
         ]);
+
+        if (! $linkedStoryItem && is_array($line['personalization_snapshot'])) {
+            $snapshot = $line['personalization_snapshot'];
+            $order->forceFill([
+                'child_name' => $snapshot['child_name'] ?? $order->child_name,
+                'child_age' => $snapshot['child_age'] ?? $order->child_age,
+                'child_gender' => $snapshot['child_gender'] ?? $order->child_gender,
+                'interests' => $snapshot['interests'] ?? $order->interests,
+                'parent_notes' => $snapshot['parent_notes'] ?? $order->parent_notes,
+            ])->save();
+        }
     }
 
     private function incrementStock(OrderItem $item, User $admin): void

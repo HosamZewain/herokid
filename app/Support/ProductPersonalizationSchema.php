@@ -77,7 +77,9 @@ class ProductPersonalizationSchema
      */
     public static function normalize(array $schema): array
     {
-        $submittedFields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
+        $submittedFields = is_array($schema['fields'] ?? null)
+            ? $schema['fields']
+            : array_intersect_key($schema, self::definitions());
         $fields = [];
 
         foreach (self::definitions() as $key => $definition) {
@@ -297,6 +299,39 @@ class ProductPersonalizationSchema
             'parent_notes' => $validated['parent_notes'] ?? null,
             'uploaded_photos_count' => $photoCount,
         ];
+    }
+
+    /**
+     * Recover editable values from both current snapshots and the legacy
+     * snapshots that stored field values directly under `fields`.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public static function formValues(array $snapshot): array
+    {
+        $values = [];
+        $snapshotFields = is_array($snapshot['fields'] ?? null) ? $snapshot['fields'] : [];
+
+        foreach (self::definitions() as $key => $definition) {
+            if ($definition['type'] === 'photos') {
+                continue;
+            }
+
+            $value = $snapshot[$key] ?? null;
+            if (array_key_exists($key, $snapshotFields)) {
+                $field = $snapshotFields[$key];
+                $value = is_array($field) && array_key_exists('value', $field)
+                    ? $field['value']
+                    : $field;
+            }
+
+            if ($value !== null && $value !== '') {
+                $values[$key] = $value;
+            }
+        }
+
+        return $values;
     }
 
     /**

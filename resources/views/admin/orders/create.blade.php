@@ -146,7 +146,7 @@
                                                 </div>
                                             @endif
                                         </div>
-                                        @if(!$isEditing && $product->personalization_mode === 'collect_child_details')
+                                        @if($product->personalization_mode === 'collect_child_details')
                                             @include('admin.orders._manual-product-personalization', [
                                                 'product' => $product,
                                                 'productForm' => $productForm,
