@@ -567,21 +567,21 @@ class AdminOrderGroupService
     private function cancelledCheckoutKeys(): \Illuminate\Database\Query\Builder
     {
         $cancelledOrderKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled');
-        $cancelledShippingKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'cancelled');
 
         return DB::table('orders as cancelled_orders')
             ->select('cancelled_orders.checkout_group_key')
             ->whereNotNull('cancelled_orders.checkout_group_key')
-            ->where(function ($query) use ($cancelledOrderKeys, $cancelledShippingKeys): void {
-                $query->whereNotNull('cancelled_orders.deleted_at');
-
-                if ($cancelledOrderKeys !== []) {
-                    $query->orWhereIn('cancelled_orders.status', $cancelledOrderKeys);
-                }
-
-                if ($cancelledShippingKeys !== []) {
-                    $query->orWhereIn('cancelled_orders.shipping_status', $cancelledShippingKeys);
-                }
+            ->whereNotExists(function ($query) use ($cancelledOrderKeys): void {
+                $query->selectRaw('1')
+                    ->from('orders as live_orders')
+                    ->whereColumn('live_orders.checkout_group_key', 'cancelled_orders.checkout_group_key')
+                    ->whereNull('live_orders.deleted_at')
+                    ->when(
+                        $cancelledOrderKeys !== [],
+                        fn ($live) => $live->where(fn ($status) => $status
+                            ->whereNull('live_orders.status')
+                            ->orWhereNotIn('live_orders.status', $cancelledOrderKeys)),
+                    );
             })
             ->distinct();
     }

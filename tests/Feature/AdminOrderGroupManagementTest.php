@@ -690,6 +690,38 @@ class AdminOrderGroupManagementTest extends TestCase
             'total_price_cents' => 29_900,
         ]);
 
+        $supersededActive = $this->createStoryOrder(
+            'HK-TABS-SUPERSEDED-ACTIVE',
+            $storyWithProducts->checkout_group_key,
+            'نسخة قديمة نشطة',
+            'cancelled',
+        );
+        $supersededActive->delete();
+
+        $supersededFinished = $this->createStoryOrder(
+            'HK-TABS-SUPERSEDED-FINISHED',
+            $finished->checkout_group_key,
+            'نسخة قديمة منتهية',
+            'cancelled',
+        );
+        $supersededFinished->delete();
+
+        $cancelledShipment = $this->createStoryOrder(
+            'HK-TABS-SHIPMENT-CANCELLED',
+            'GROUP-TABS-SHIPMENT-CANCELLED',
+            'إعادة حجز الشحنة',
+            'under_review',
+        );
+        $cancelledShipment->update(['shipping_status' => 'cancelled']);
+        $cancelledShipment->items()->create([
+            'item_type' => 'story',
+            'story_id' => $cancelledShipment->story_id,
+            'title' => $cancelledShipment->story->title,
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
         $deletedProduct = Order::create([
             'order_number' => 'HK-TABS-DELETED-PRODUCT',
             'checkout_group_key' => 'GROUP-TABS-DELETED-PRODUCT',
@@ -718,6 +750,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('الطلبات المنتهية')
             ->assertSee('ملغاة / محذوفة')
             ->assertSee($storyWithProducts->checkout_group_key)
+            ->assertSee('GROUP-TABS-SHIPMENT-CANCELLED')
             ->assertDontSee('GROUP-TABS-PRODUCT')
             ->assertDontSee('GROUP-TABS-FINISHED')
             ->assertDontSee('GROUP-TABS-CANCELLED');
@@ -734,6 +767,7 @@ class AdminOrderGroupManagementTest extends TestCase
             'lifecycle' => 'finished',
         ]))->assertOk()
             ->assertSee('GROUP-TABS-FINISHED')
+            ->assertDontSee('HK-TABS-SUPERSEDED-FINISHED')
             ->assertDontSee($storyWithProducts->checkout_group_key);
 
         $this->actingAs($this->admin)->get(route('admin.orders.index', [
@@ -741,7 +775,9 @@ class AdminOrderGroupManagementTest extends TestCase
             'lifecycle' => 'cancelled',
         ]))->assertOk()
             ->assertSee('GROUP-TABS-CANCELLED')
-            ->assertDontSee('GROUP-TABS-FINISHED');
+            ->assertDontSee('GROUP-TABS-FINISHED')
+            ->assertDontSee($storyWithProducts->checkout_group_key)
+            ->assertDontSee('GROUP-TABS-SHIPMENT-CANCELLED');
 
         $this->actingAs($this->admin)->get(route('admin.orders.index', [
             'catalog_type' => 'products',
