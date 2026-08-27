@@ -28,7 +28,7 @@
             </form>
             <div class="overflow-x-auto rounded-2xl bg-white shadow-sm">
                 <table class="min-w-[1100px] divide-y divide-gray-100 text-right text-sm">
-                    <thead class="bg-gray-50 text-xs font-bold text-gray-500"><tr><th class="px-4 py-3">المنتج</th><th class="px-4 py-3">التصنيف</th><th class="px-4 py-3">السعر</th><th class="px-4 py-3">المشاهدات</th><th class="px-4 py-3">عدد الطلبات</th><th class="px-4 py-3">التخصيص</th><th class="px-4 py-3">المخزون</th><th class="px-4 py-3">الحالة</th><th class="px-4 py-3">إجراءات</th></tr></thead>
+                    <thead class="bg-gray-50 text-xs font-bold text-gray-500"><tr><th class="px-4 py-3">المنتج</th><th class="px-4 py-3">التصنيف</th><th class="px-4 py-3">السعر</th><th class="px-4 py-3">المشاهدات</th><th class="px-4 py-3">الكمية المباعة</th><th class="px-4 py-3">التخصيص</th><th class="px-4 py-3">المخزون</th><th class="px-4 py-3">الحالة</th><th class="px-4 py-3">إجراءات</th></tr></thead>
                     <tbody class="divide-y divide-gray-100">
                         @foreach($products as $product)
                             <tr>
@@ -43,7 +43,7 @@
                                 <td class="px-4 py-3">{{ $product->category?->name_ar ?? '-' }}</td>
                                 <td class="px-4 py-3">{{ number_format($product->effectivePrice(), 0) }} ج.م</td>
                                 <td class="px-4 py-3 font-bold text-slate-700">{{ number_format($product->views_count) }}</td>
-                                <td class="px-4 py-3 font-bold text-slate-700">{{ number_format($product->orders_count) }}</td>
+                                <td class="px-4 py-3 font-bold text-slate-700">{{ number_format($product->sold_quantity) }}</td>
                                 <td class="px-4 py-3">{{ $product->personalization_mode }}</td>
                                 <td class="px-4 py-3">{{ $product->inventory_mode }} @if($product->stock_quantity !== null) / {{ $product->stock_quantity }} @endif</td>
                                 <td class="px-4 py-3">{{ $product->is_active ? 'نشط' : 'معطل' }}</td>

@@ -24,8 +24,8 @@ class ProductController extends Controller
                     ->whereColumn('order_items.product_id', 'products.id')
                     ->whereIn('order_items.item_type', ['product', 'product_add_on'])
                     ->whereNull('orders.deleted_at')
-                    ->selectRaw('COUNT(DISTINCT order_items.order_id)'),
-                'orders_count'
+                    ->selectRaw('COALESCE(SUM(order_items.quantity), 0)'),
+                'sold_quantity'
             )
             ->when($request->filled('category'), fn ($query) => $query->where('product_category_id', $request->category))
             ->when($request->filled('status'), fn ($query) => $query->where('is_active', $request->status === 'active'))

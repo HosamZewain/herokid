@@ -14,7 +14,7 @@ class AdminProductAnalyticsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_products_index_displays_views_and_distinct_order_counts_from_the_database(): void
+    public function test_products_index_displays_views_and_total_sold_quantity_from_the_database(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         $category = ProductCategory::create([
@@ -46,11 +46,8 @@ class AdminProductAnalyticsTest extends TestCase
         $firstOrder = Order::create(['order_number' => 'HK-PRODUCT-STATS-1']);
         $secondOrder = Order::create(['order_number' => 'HK-PRODUCT-STATS-2']);
 
-        $firstOrder->items()->createMany([
-            $this->productItem($product, 'product'),
-            $this->productItem($product, 'product_add_on'),
-        ]);
-        $secondOrder->items()->create($this->productItem($product, 'product'));
+        $firstOrder->items()->create($this->productItem($product, 'product', 3));
+        $secondOrder->items()->create($this->productItem($product, 'product', 3));
 
         $deletedOrder = Order::create(['order_number' => 'HK-PRODUCT-STATS-DELETED']);
         $deletedOrder->items()->create($this->productItem($product, 'product'));
@@ -60,26 +57,26 @@ class AdminProductAnalyticsTest extends TestCase
             ->get(route('admin.products.index'))
             ->assertOk()
             ->assertSee('المشاهدات')
-            ->assertSee('عدد الطلبات')
+            ->assertSee('الكمية المباعة')
             ->assertViewHas('products', function ($products) use ($product): bool {
                 $listedProduct = $products->firstWhere('id', $product->id);
 
                 return $listedProduct !== null
                     && (int) $listedProduct->views_count === 3
-                    && (int) $listedProduct->orders_count === 2;
+                    && (int) $listedProduct->sold_quantity === 6;
             });
     }
 
     /** @return array<string, mixed> */
-    private function productItem(Product $product, string $type): array
+    private function productItem(Product $product, string $type, int $quantity = 1): array
     {
         return [
             'item_type' => $type,
             'product_id' => $product->id,
             'title' => $product->name_ar,
             'unit_price_cents' => $product->price_cents,
-            'quantity' => 1,
-            'total_price_cents' => $product->price_cents,
+            'quantity' => $quantity,
+            'total_price_cents' => $product->price_cents * $quantity,
         ];
     }
 }
