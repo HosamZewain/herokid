@@ -266,6 +266,26 @@ class AdminManualOrderCreationTest extends TestCase
         foreach ($order->uploaded_photos as $path) {
             Storage::disk('local')->assertExists($path);
         }
+
+        $groupPage = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $order));
+        $groupPage
+            ->assertOk()
+            ->assertSee('صور الطفل المرفقة')
+            ->assertSee(route('admin.orders.photo', [$order, 0]), false)
+            ->assertSee(route('admin.orders.photo', [$order, 1]), false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.photo', [$order, 0]))
+            ->assertOk();
+
+        $viewOnlyAdmin = User::factory()->create(['role' => 'admin']);
+        $viewOnlyAdmin->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $viewOnlyAdmin->unsetRelation('permissions');
+        $this->actingAs($viewOnlyAdmin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertDontSee(route('admin.orders.photo', [$order, 0]), false);
     }
 
     public function test_admin_can_create_regular_product_only_order_without_child_data(): void

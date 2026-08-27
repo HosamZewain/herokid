@@ -228,6 +228,10 @@
                     <h3 class="text-lg font-black text-gray-900">المنتجات المباشرة</h3>
                     <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         @foreach($group['direct_products'] as $product)
+                            @php
+                                $productOrder = $group['active_orders']->firstWhere('id', (int) $product->order_id);
+                                $productPhotos = $productOrder?->uploaded_photos ?? [];
+                            @endphp
                             <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                                 @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-2 text-xs font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
                                 <p class="font-black text-gray-900">{{ $product->title }}</p>
@@ -242,6 +246,20 @@
                                             </div>
                                         @endforeach
                                     </dl>
+                                    @can('orders.photos.view')
+                                        @if($productOrder && count($productPhotos))
+                                            <div class="mt-4 border-t border-emerald-100 pt-3">
+                                                <p class="mb-2 text-[11px] font-black text-emerald-700">صور الطفل المرفقة</p>
+                                                <div class="flex flex-wrap gap-2">
+                                                    @foreach($productPhotos as $photo)
+                                                        <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-20 w-20 overflow-hidden rounded-xl border-2 border-white bg-white shadow-sm" title="فتح الصورة بالحجم الكامل">
+                                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                    @endcan
                                 @endif
                             </div>
                         @endforeach
