@@ -360,6 +360,7 @@ class AdminOrderFullEditTest extends TestCase
                 'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة'],
                 'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل'],
                 'child_age' => ['enabled' => true, 'required' => true, 'label' => 'عمر الطفل'],
+                'child_gender' => ['enabled' => true, 'required' => false, 'label' => 'جنس الطفل'],
                 'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
             ],
             'is_active' => true,
@@ -368,6 +369,11 @@ class AdminOrderFullEditTest extends TestCase
             'order_number' => 'HK-2026-LEGACY-PRODUCT',
             'checkout_group_key' => 'CHK-LEGACY-PRODUCT',
             'parent_name' => 'ولي أمر قديم',
+            'child_name' => 'طفل محفوظ قديمًا',
+            'child_age' => 7,
+            'child_gender' => 'boy',
+            'interests' => 'كرة القدم',
+            'parent_notes' => 'بيانات وصلت قبل إضافة حقول المنتج',
             'order_source' => 'whatsapp',
             'status' => 'new',
             'uploaded_photos' => [],
@@ -396,13 +402,25 @@ class AdminOrderFullEditTest extends TestCase
             'personalization_snapshot' => null,
         ]);
 
-        $this->actingAs($this->admin)
-            ->get(route('admin.orders.groups.edit', $order->id))
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.edit', $order->id));
+
+        $this->assertSame(
+            'طفل محفوظ قديمًا',
+            data_get($response->viewData('initialProducts'), $product->id.'.units.0.personalization.child_name'),
+        );
+        $this->assertMatchesRegularExpression(
+            '/name="products\['.$product->id.'\]\[units\]\[0\]\[personalization\]\[child_name\]" value="طفل محفوظ قديمًا"/u',
+            $response->getContent(),
+        );
+        $response
             ->assertOk()
             ->assertSee('بيانات مستقلة لكل طفل')
             ->assertSee('اسم الطفل كامل')
             ->assertSee('اسم المدرسة')
-            ->assertSee('اسم الفصل');
+            ->assertSee('اسم الفصل')
+            ->assertSee('value="7" selected', false)
+            ->assertSee('value="boy" selected', false);
 
         $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order->id), [
             'parent_name' => 'ولي أمر قديم',

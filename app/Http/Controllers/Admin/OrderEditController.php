@@ -88,6 +88,7 @@ class OrderEditController extends Controller
                 continue;
             }
 
+            $product = $products->firstWhere('id', $item->product_id);
             $linkedOrderId = $item->item_type === 'product_add_on' ? $item->order_id : null;
             $existing = $initialProducts[$item->product_id] ?? [
                 'quantity' => 0,
@@ -96,11 +97,22 @@ class OrderEditController extends Controller
                 'unit_price_cents' => (int) $item->unit_price_cents,
             ];
             $existing['quantity'] += (int) $item->quantity;
-            if ($item->product?->personalization_mode === 'collect_child_details') {
+            if ($product?->personalization_mode === 'collect_child_details') {
+                $orderPersonalization = array_filter([
+                    'child_name' => $item->order?->child_name,
+                    'child_age' => $item->order?->child_age,
+                    'child_gender' => $item->order?->child_gender,
+                    'interests' => $item->order?->interests,
+                    'parent_notes' => $item->order?->parent_notes,
+                ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
                 $existing['units'][] = [
                     'existing_order_id' => (int) $item->order_id,
                     'existing_photo_count' => count($item->order->uploaded_photos ?? []),
-                    'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
+                    'personalization' => array_replace(
+                        $orderPersonalization,
+                        ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
+                    ),
                 ];
             }
             $initialProducts[$item->product_id] = $existing;
