@@ -75,8 +75,8 @@
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <button type="button" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700" data-add-story>+ إضافة قصة أخرى</button>
                             <div class="text-right">
-                                <h3 class="text-lg font-black text-gray-950">القصص وبيانات الأطفال</h3>
-                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إضافة عدة قصص لنفس الطفل أو لأطفال مختلفين.</p>
+                                <h3 class="text-lg font-black text-gray-950">القصص وبيانات الأطفال <span class="text-xs text-gray-400">(اختياري)</span></h3>
+                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إضافة عدة قصص لنفس الطفل أو لأطفال مختلفين، أو حذف كل القصص وإنشاء طلب منتجات فقط.</p>
                             </div>
                         </div>
 
@@ -94,8 +94,8 @@
                     @if($products->isNotEmpty())
                         <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                             <div class="mb-5 text-right">
-                                <h3 class="text-lg font-black text-gray-950">منتجات وإضافات اختيارية</h3>
-                                <p class="mt-1 text-xs font-bold text-gray-500">ضع الكمية المطلوبة فقط. المنتجات المخصصة يجب ربطها بالقصة/الطفل الصحيح.</p>
+                                <h3 class="text-lg font-black text-gray-950">منتجات وإضافات</h3>
+                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إنشاء طلب منتجات فقط. عند اختيار منتج مخصص ستظهر حقوله وصوره المطلوبة تلقائيًا.</p>
                             </div>
                             <div class="grid gap-3 md:grid-cols-2">
                                 @foreach($products as $product)
@@ -146,6 +146,12 @@
                                                 </div>
                                             @endif
                                         </div>
+                                        @if(!$isEditing && $product->personalization_mode === 'collect_child_details')
+                                            @include('admin.orders._manual-product-personalization', [
+                                                'product' => $product,
+                                                'productForm' => $productForm,
+                                            ])
+                                        @endif
                                     </article>
                                 @endforeach
                             </div>
@@ -278,7 +284,6 @@
                 const addButton = root.querySelector('[data-add-story]');
                 const country = root.querySelector('[data-country-select]');
                 const governorate = root.querySelector('[data-governorate-select]');
-                const editMode = root.dataset.editMode === '1';
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
                 const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
@@ -346,10 +351,6 @@
 
                 const bindRow = row => {
                     row.querySelector('[data-remove-story]')?.addEventListener('click', () => {
-                        if (!editMode && rows.querySelectorAll('[data-story-row]').length === 1) {
-                            alert('يجب أن يحتوي الطلب على قصة واحدة على الأقل.');
-                            return;
-                        }
                         row.remove();
                         refreshStoryLinks();
                         calculate();
@@ -370,7 +371,41 @@
                     });
                 };
 
+                const bindProductRow = row => {
+                    const quantity = row.querySelector('[data-product-quantity]');
+                    const personalization = row.querySelector('[data-product-personalization]');
+
+                    const refreshPersonalization = () => {
+                        if (!personalization) return;
+                        const selected = Number(quantity?.value || 0) > 0;
+                        personalization.hidden = !selected;
+                        personalization.querySelectorAll('[data-product-personalization-input]').forEach(input => {
+                            input.disabled = !selected;
+                            input.required = selected && input.dataset.required === '1';
+                        });
+                    };
+
+                    quantity?.addEventListener('input', refreshPersonalization);
+                    row.querySelector('[data-product-photo-input]')?.addEventListener('change', event => {
+                        const files = Array.from(event.target.files || []);
+                        const maximum = Number(event.target.dataset.maxFiles || 3);
+                        const label = row.querySelector('[data-product-photo-names]');
+
+                        if (files.length > maximum) {
+                            event.target.value = '';
+                            label.textContent = `الحد الأقصى ${maximum} صور.`;
+                            label.classList.add('text-red-600');
+                            return;
+                        }
+
+                        label.classList.remove('text-red-600');
+                        if (files.length) label.textContent = files.map(file => file.name).join('، ');
+                    });
+                    refreshPersonalization();
+                };
+
                 rows.querySelectorAll('[data-story-row]').forEach(bindRow);
+                root.querySelectorAll('[data-product-row]').forEach(bindProductRow);
                 addButton.addEventListener('click', () => {
                     const html = template.innerHTML.replaceAll('__INDEX__', String(nextIndex++));
                     rows.insertAdjacentHTML('beforeend', html);

@@ -198,6 +198,70 @@ class ProductPersonalizationSchema
     }
 
     /**
+     * Rules for files submitted directly from the admin order form.
+     * Public checkout uses temporary upload UUIDs, while admins upload the
+     * actual files together with the order.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, array<int, mixed>>
+     */
+    public static function adminOrderValidationRules(array $schema): array
+    {
+        $rules = [];
+
+        foreach (self::enabledFields($schema) as $key => $field) {
+            $presence = $field['required'] ? 'required' : 'nullable';
+
+            $rules[$key] = match ($field['type']) {
+                'text' => [$presence, 'string', 'max:'.(self::definitions()[$key]['max'] ?? 255)],
+                'textarea' => [$presence, 'string', 'max:'.(self::definitions()[$key]['max'] ?? 1000)],
+                'age' => [$presence, 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
+                'gender' => [$presence, Rule::in(['boy', 'girl'])],
+                'photos' => [
+                    $presence,
+                    'array',
+                    ...($field['required'] ? ['min:'.$field['min_files']] : []),
+                    'max:'.$field['max_files'],
+                ],
+                default => [$presence],
+            };
+
+            if ($field['type'] === 'photos') {
+                $rules['photos.*'] = [
+                    'required',
+                    'file',
+                    'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024),
+                ];
+            }
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     * @return array<string, string>
+     */
+    public static function adminOrderValidationMessages(array $schema): array
+    {
+        $messages = self::validationMessages($schema);
+
+        if (array_key_exists('photo_upload_ids.required', $messages)) {
+            foreach ($messages as $key => $message) {
+                if (str_starts_with($key, 'photo_upload_ids')) {
+                    $messages['photos'.substr($key, strlen('photo_upload_ids'))] = $message;
+                    unset($messages[$key]);
+                }
+            }
+        }
+
+        $messages['photos.*.file'] = 'تعذر قراءة إحدى الصور المرفوعة. أعد اختيارها وحاول مرة أخرى.';
+        $messages['photos.*.max'] = 'حجم كل صورة يجب ألا يزيد عن '.(int) config('photo_uploads.max_size_mb', 15).' ميجا.';
+
+        return $messages;
+    }
+
+    /**
      * @param  array<string, mixed>  $schema
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>

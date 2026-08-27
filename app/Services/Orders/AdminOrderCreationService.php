@@ -13,6 +13,7 @@ use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +72,11 @@ class AdminOrderCreationService
                 }
 
                 $productLines = $this->resolveProductLines($data['products'] ?? [], $storyIndexes);
+                if ($storyInputs->isEmpty() && $productLines->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        'stories' => 'أضف قصة أو منتجًا واحدًا على الأقل إلى الطلب.',
+                    ]);
+                }
                 $storyPrices = $storyInputs->map(function (array $input) use ($stories): array {
                     $story = $stories->get($input['story_id']);
 
@@ -204,14 +210,71 @@ class AdminOrderCreationService
                     $this->sceneTexts->snapshotForOrder($order, $story);
                 }
 
-                $firstStoryIndex = (int) $storyIndexes->first();
+                $firstStoryIndex = $storyIndexes->first();
+                $firstOrder = $firstStoryIndex !== null ? $orders[(int) $firstStoryIndex] : null;
+
+                $hasRegularProduct = $productLines->contains(fn (array $line): bool => $line['linked_story_index'] === null
+                    && $line['product']->personalization_mode !== 'collect_child_details'
+                );
+
+                if (! $firstOrder && $hasRegularProduct) {
+                    $firstRegularLine = $productLines->first(fn (array $line): bool => $line['linked_story_index'] === null
+                        && $line['product']->personalization_mode !== 'collect_child_details'
+                    );
+                    $firstOrder = $this->createProductOrder(
+                        data: $data,
+                        admin: $admin,
+                        country: $country,
+                        governorate: $governorate,
+                        checkoutGroup: $checkoutGroup,
+                        lineCount: $lineCount,
+                        itemPriceCents: (int) $firstRegularLine['total_price_cents'],
+                        itemsSubtotalCents: $itemsSubtotalCents,
+                        deliveryCents: $deliveryCents,
+                        discountCents: $discountCents,
+                        payment: $payment,
+                        personalizationSnapshot: [],
+                    );
+                    $createdOrderIds[] = $firstOrder->id;
+                    $orders['product-base'] = $firstOrder;
+                }
 
                 foreach ($productLines as $line) {
                     $linkedIndex = $line['linked_story_index'];
-                    $targetOrder = $linkedIndex !== null ? $orders[$linkedIndex] : $orders[$firstStoryIndex];
+                    $targetOrder = $linkedIndex !== null ? $orders[$linkedIndex] : $firstOrder;
                     $linkedStoryItem = $linkedIndex !== null ? $storyOrderItems[$linkedIndex] : null;
                     $product = $line['product'];
                     $variant = $line['variant'];
+
+                    if ($linkedIndex === null && $product->personalization_mode === 'collect_child_details') {
+                        $targetOrder = $this->createProductOrder(
+                            data: $data,
+                            admin: $admin,
+                            country: $country,
+                            governorate: $governorate,
+                            checkoutGroup: $checkoutGroup,
+                            lineCount: $lineCount,
+                            itemPriceCents: (int) $line['total_price_cents'],
+                            itemsSubtotalCents: $itemsSubtotalCents,
+                            deliveryCents: $deliveryCents,
+                            discountCents: $discountCents,
+                            payment: $payment,
+                            personalizationSnapshot: $line['personalization_snapshot'],
+                        );
+                        $createdOrderIds[] = $targetOrder->id;
+                        $orders['product-'.$product->id] = $targetOrder;
+                        $firstOrder ??= $targetOrder;
+
+                        if ($line['photos'] !== []) {
+                            $this->photoUploads->append($targetOrder, $line['photos']);
+                        }
+                    }
+
+                    if (! $targetOrder) {
+                        throw ValidationException::withMessages([
+                            'products.'.$product->id.'.quantity' => 'تعذر تحديد سجل الطلب المناسب لهذا المنتج.',
+                        ]);
+                    }
 
                     $targetOrder->items()->create([
                         'item_type' => $linkedStoryItem ? 'product_add_on' : 'product',
@@ -242,7 +305,7 @@ class AdminOrderCreationService
                             'child_name' => $targetOrder->child_name,
                             'child_age' => $targetOrder->child_age,
                             'child_gender' => $targetOrder->child_gender,
-                        ] : null,
+                        ] : $line['personalization_snapshot'],
                     ]);
 
                     $this->decrementStock($product, $variant, $line['quantity']);
@@ -253,8 +316,9 @@ class AdminOrderCreationService
                 }
 
                 return [
-                    'representative' => $orders[$firstStoryIndex]->fresh(),
+                    'representative' => $firstOrder->fresh(),
                     'orders' => array_values(array_map(fn (Order $order): Order => $order->fresh(), $orders)),
+                    'story_count' => $storyInputs->count(),
                     'items_subtotal_cents' => $itemsSubtotalCents,
                     'delivery_cents' => $deliveryCents,
                     'discount_cents' => $discountCents,
@@ -278,7 +342,7 @@ class AdminOrderCreationService
                 'checkout_group_key' => $result['representative']->checkoutGroupKey(),
                 'order_ids' => collect($result['orders'])->pluck('id')->all(),
                 'order_numbers' => collect($result['orders'])->pluck('order_number')->all(),
-                'story_count' => count($result['orders']),
+                'story_count' => $result['story_count'],
                 'source' => $data['order_source'],
                 'items_subtotal_cents' => $result['items_subtotal_cents'],
                 'delivery_cents' => $result['delivery_cents'],
@@ -356,6 +420,34 @@ class AdminOrderCreationService
             }
 
             $unitPriceCents = $product->effectivePriceCents($variant);
+            $personalizationSchema = null;
+            $personalizationSnapshot = null;
+            $photos = [];
+
+            if ($linkedStoryIndex === null && $product->personalization_mode === 'collect_child_details') {
+                $personalizationSchema = is_array($input['personalization_schema'] ?? null)
+                    ? $input['personalization_schema']
+                    : ProductPersonalizationSchema::forProduct($product);
+                $personalization = is_array($input['personalization'] ?? null)
+                    ? $input['personalization']
+                    : [];
+                $photos = array_values($personalization['photos'] ?? []);
+                $personalizationSnapshot = ProductPersonalizationSchema::snapshot(
+                    $personalizationSchema,
+                    $personalization,
+                    count($photos),
+                );
+
+                if (! ProductPersonalizationSchema::cartItemIsComplete($personalizationSchema, [
+                    ...$personalization,
+                    'uploaded_photos' => $photos,
+                    'personalization_snapshot' => $personalizationSnapshot,
+                ])) {
+                    throw ValidationException::withMessages([
+                        'products.'.$product->id.'.personalization' => 'استكمل بيانات التخصيص المطلوبة للمنتج '.$product->name_ar.'.',
+                    ]);
+                }
+            }
 
             return [
                 'product' => $product,
@@ -364,8 +456,102 @@ class AdminOrderCreationService
                 'unit_price_cents' => $unitPriceCents,
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedStoryIndex,
+                'personalization_schema' => $personalizationSchema,
+                'personalization_snapshot' => $personalizationSnapshot,
+                'photos' => $photos,
             ];
         });
+    }
+
+    /**
+     * Create the normal Order record that owns standalone product items.
+     * Personalized products get their own order so their child data and
+     * photos stay isolated from stories and other personalized products.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $payment
+     * @param  array<string, mixed>  $personalizationSnapshot
+     */
+    private function createProductOrder(
+        array $data,
+        User $admin,
+        DeliveryCountry $country,
+        DeliveryGovernorate $governorate,
+        string $checkoutGroup,
+        int $lineCount,
+        int $itemPriceCents,
+        int $itemsSubtotalCents,
+        int $deliveryCents,
+        int $discountCents,
+        array $payment,
+        array $personalizationSnapshot,
+    ): Order {
+        $delivery = [
+            'phone' => $data['phone'],
+            'delivery_country_id' => $country->id,
+            'delivery_governorate_id' => $governorate->id,
+            'country' => $country->name,
+            'governorate' => $governorate->name,
+            'city' => $data['city'],
+            'street' => $data['street'],
+            'address_details' => $data['address_details'],
+            'address' => trim($data['street'].' - '.$data['address_details']),
+            'checkout_group' => $checkoutGroup,
+            'checkout_session_id' => null,
+            'cart_item_index' => 1,
+            'cart_items_count' => $lineCount,
+            'item_price' => $itemPriceCents / 100,
+            'subtotal' => $itemsSubtotalCents / 100,
+            'delivery_fee' => $deliveryCents / 100,
+            'discount' => $discountCents / 100,
+            'total' => ($itemsSubtotalCents + $deliveryCents - $discountCents) / 100,
+            'payment_status' => $payment['payment_status'],
+            'payment_method' => $payment['payment_method'],
+            'paid_amount' => $payment['paid_amount_cents'] / 100,
+            'remaining_amount' => $payment['remaining_amount_cents'] / 100,
+            'order_source' => $data['order_source'],
+            'source_notes' => $data['source_notes'] ?? null,
+            'created_manually' => true,
+        ];
+
+        $order = Order::create([
+            'order_number' => $this->newOrderNumber(),
+            'checkout_group_key' => $checkoutGroup,
+            'discount_cents' => $discountCents,
+            'discount_reason' => $discountCents > 0 ? $data['discount_reason'] : null,
+            'payment_status' => $payment['payment_status'],
+            'paid_amount_cents' => $payment['paid_amount_cents'],
+            'payment_method' => $payment['payment_method'],
+            'payment_updated_by_user_id' => $payment['payment_status'] !== OrderPaymentStatus::UNPAID ? $admin->id : null,
+            'payment_updated_at' => $payment['payment_status'] !== OrderPaymentStatus::UNPAID ? now() : null,
+            'user_id' => null,
+            'created_by_admin_id' => $admin->id,
+            'order_source' => $data['order_source'],
+            'source_notes' => $data['source_notes'] ?? null,
+            'parent_name' => $data['parent_name'],
+            'story_id' => null,
+            'child_name' => $personalizationSnapshot['child_name'] ?? null,
+            'child_age' => $personalizationSnapshot['child_age'] ?? null,
+            'child_gender' => $personalizationSnapshot['child_gender'] ?? null,
+            'language' => null,
+            'lesson' => null,
+            'interests' => $personalizationSnapshot['interests'] ?? null,
+            'gift_note' => null,
+            'notes' => $data['admin_notes'] ?? null,
+            'parent_notes' => $personalizationSnapshot['parent_notes'] ?? null,
+            'delivery_details' => $delivery,
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+
+        $order->statusLogs()->create([
+            'status' => 'new',
+            'notes' => $personalizationSnapshot === []
+                ? 'تم إنشاء طلب منتج يدويًا من لوحة الإدارة بواسطة '.$admin->name.'.'
+                : 'تم إنشاء طلب منتج مخصص يدويًا من لوحة الإدارة بواسطة '.$admin->name.'.',
+        ]);
+
+        return $order;
     }
 
     private function decrementStock(Product $product, ?ProductVariant $variant, int $quantity): void

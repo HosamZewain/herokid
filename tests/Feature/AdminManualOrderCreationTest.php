@@ -210,6 +210,133 @@ class AdminManualOrderCreationTest extends TestCase
         $this->assertSame(['مريم'], $orders->pluck('child_name')->unique()->values()->all());
     }
 
+    public function test_admin_can_create_product_only_order_with_configured_child_fields_and_photos(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة',
+            'slug' => 'manual-school-sticker',
+            'price_cents' => 19_500,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+            'inventory_mode' => 'made_to_order',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.create'))
+            ->assertOk()
+            ->assertSee('يمكن إنشاء طلب منتجات فقط')
+            ->assertSee('اسم الطفل كاملًا')
+            ->assertSee('اسم المدرسة')
+            ->assertSee('اسم الفصل / الكلاس');
+
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [
+            $product->id => [
+                'quantity' => 1,
+                'personalization' => [
+                    'child_name' => 'سليم أحمد محمد',
+                    'school_name' => 'مدرسة النور',
+                    'class_name' => '3A',
+                    'photos' => $this->photos('school-sticker'),
+                ],
+            ],
+        ];
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect();
+
+        $order = Order::query()->with('items')->sole();
+        $item = $order->items->sole();
+
+        $this->assertNull($order->story_id);
+        $this->assertSame('سليم أحمد محمد', $order->child_name);
+        $this->assertNull($order->child_age);
+        $this->assertNull($order->child_gender);
+        $this->assertCount(2, $order->uploaded_photos);
+        $this->assertSame($product->id, $item->product_id);
+        $this->assertSame('مدرسة النور', $item->personalization_snapshot['school_name']);
+        $this->assertSame('3A', $item->personalization_snapshot['class_name']);
+        $this->assertSame(2, $item->personalization_snapshot['uploaded_photos_count']);
+        $this->assertSame(24_500, app(AdminOrderGroupService::class)->findByRepresentative($order->id)['total_cents']);
+
+        foreach ($order->uploaded_photos as $path) {
+            Storage::disk('local')->assertExists($path);
+        }
+    }
+
+    public function test_admin_can_create_regular_product_only_order_without_child_data(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'كتاب متاهات',
+            'slug' => 'manual-product-only-maze',
+            'price_cents' => 17_900,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'none',
+            'inventory_mode' => 'track_stock',
+            'stock_quantity' => 4,
+            'is_active' => true,
+        ]);
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [$product->id => ['quantity' => 2]];
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect();
+
+        $order = Order::query()->with('items')->sole();
+        $item = $order->items->sole();
+
+        $this->assertNull($order->story_id);
+        $this->assertNull($order->child_name);
+        $this->assertSame($product->id, $item->product_id);
+        $this->assertSame(2, $item->quantity);
+        $this->assertSame(35_800, $item->total_price_cents);
+        $this->assertSame(2, $product->refresh()->stock_quantity);
+        $this->assertSame(40_800, app(AdminOrderGroupService::class)->findByRepresentative($order->id)['total_cents']);
+    }
+
+    public function test_product_only_order_validates_its_configured_fields_and_requires_any_item(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة',
+            'slug' => 'manual-school-sticker-validation',
+            'price_cents' => 19_500,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+            'inventory_mode' => 'made_to_order',
+            'is_active' => true,
+        ]);
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [$product->id => ['quantity' => 1]];
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.create'))
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect(route('admin.orders.create'))
+            ->assertSessionHasErrors([
+                "products.{$product->id}.personalization.child_name",
+                "products.{$product->id}.personalization.school_name",
+                "products.{$product->id}.personalization.class_name",
+                "products.{$product->id}.personalization.photos",
+            ]);
+
+        $payload['products'] = [];
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.create'))
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect(route('admin.orders.create'))
+            ->assertSessionHasErrors('stories');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_each_story_requires_two_photos_and_failed_request_creates_nothing(): void
     {
         $story = $this->story('قصة الصور', 349);
@@ -287,6 +414,26 @@ class AdminManualOrderCreationTest extends TestCase
         return [
             UploadedFile::fake()->image($prefix.'-1.jpg', 900, 900),
             UploadedFile::fake()->image($prefix.'-2.jpg', 900, 900),
+        ];
+    }
+
+    private function schoolStickerPersonalizationFields(): array
+    {
+        return [
+            'version' => 1,
+            'fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل كاملًا', 'type' => 'text'],
+                'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة', 'type' => 'text'],
+                'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل / الكلاس', 'type' => 'text'],
+                'photos' => [
+                    'enabled' => true,
+                    'required' => true,
+                    'label' => 'صور الطفل',
+                    'type' => 'photos',
+                    'min_files' => 2,
+                    'max_files' => 3,
+                ],
+            ],
         ];
     }
 }

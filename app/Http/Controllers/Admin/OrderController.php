@@ -21,9 +21,11 @@ use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\Phone;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -153,6 +155,7 @@ class OrderController extends Controller
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
             'payment_status' => $request->input('payment_status', OrderPaymentStatus::UNPAID),
+            'stories' => $request->input('stories', []),
         ]);
 
         $validated = $request->validate([
@@ -171,7 +174,7 @@ class OrderController extends Controller
             'city' => ['required', 'string', 'max:255'],
             'street' => ['required', 'string', 'max:255'],
             'address_details' => ['required', 'string', 'max:1000'],
-            'stories' => ['required', 'array', 'min:1', 'max:10'],
+            'stories' => ['array', 'max:10'],
             'stories.*.story_id' => [
                 'required',
                 Rule::exists('stories', 'id')->where(fn ($query) => $query->where('active', true)),
@@ -188,6 +191,7 @@ class OrderController extends Controller
             'products.*.quantity' => ['nullable', 'integer', 'min:0', 'max:99'],
             'products.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
             'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:9'],
+            'products.*.personalization' => ['nullable', 'array'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
@@ -203,7 +207,6 @@ class OrderController extends Controller
             'city.required' => 'اكتب المدينة أو المنطقة.',
             'street.required' => 'اكتب اسم الشارع.',
             'address_details.required' => 'اكتب تفاصيل عنوان التوصيل.',
-            'stories.required' => 'أضف قصة واحدة على الأقل.',
             'stories.*.story_id.required' => 'اختر القصة.',
             'stories.*.child_name.required' => 'اكتب اسم الطفل لكل قصة.',
             'stories.*.child_age.required' => 'اختر عمر الطفل لكل قصة.',
@@ -212,6 +215,51 @@ class OrderController extends Controller
             'stories.*.photos.min' => 'يجب رفع صورتين على الأقل للطفل لكل قصة.',
             'stories.*.photos.max' => 'الحد الأقصى 3 صور للطفل لكل قصة.',
         ]);
+
+        $selectedProducts = collect($validated['products'] ?? [])
+            ->filter(fn (array $product): bool => (int) ($product['quantity'] ?? 0) > 0);
+
+        if ($validated['stories'] === [] && $selectedProducts->isEmpty()) {
+            throw ValidationException::withMessages([
+                'stories' => 'أضف قصة أو منتجًا واحدًا على الأقل إلى الطلب.',
+            ]);
+        }
+
+        $products = Product::query()
+            ->where('is_active', true)
+            ->whereIn('id', $selectedProducts->keys()->map(fn (string|int $id): int => (int) $id))
+            ->get()
+            ->keyBy('id');
+
+        foreach ($selectedProducts as $productId => $productInput) {
+            $product = $products->get((int) $productId);
+
+            if (! $product || $product->personalization_mode !== 'collect_child_details') {
+                continue;
+            }
+
+            $schema = ProductPersonalizationSchema::forProduct($product);
+            $personalizationInput = (array) ($productInput['personalization'] ?? []);
+            $personalizationInput['photos'] = $request->file("products.$productId.personalization.photos", []);
+
+            try {
+                $personalization = Validator::make(
+                    $personalizationInput,
+                    ProductPersonalizationSchema::adminOrderValidationRules($schema),
+                    ProductPersonalizationSchema::adminOrderValidationMessages($schema),
+                )->validate();
+            } catch (ValidationException $exception) {
+                $errors = [];
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors["products.$productId.personalization.$field"] = $messages;
+                }
+
+                throw ValidationException::withMessages($errors);
+            }
+
+            $validated['products'][$productId]['personalization'] = $personalization;
+            $validated['products'][$productId]['personalization_schema'] = $schema;
+        }
 
         if ((float) ($validated['discount_amount'] ?? 0) > 0 && blank($validated['discount_reason'] ?? null)) {
             throw ValidationException::withMessages([

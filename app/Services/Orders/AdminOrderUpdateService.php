@@ -183,9 +183,13 @@ class AdminOrderUpdateService
                     ?: $ordersByInput->first()
                     ?: $activeOrders->first();
 
+                $activeOrdersById = $activeOrders->keyBy('id');
+
                 foreach ($productLines as $line) {
                     $linkedIndex = $line['linked_story_index'];
-                    $targetOrder = $linkedIndex !== null ? $ordersByInput->get($linkedIndex) : $carrier;
+                    $targetOrder = $linkedIndex !== null
+                        ? $ordersByInput->get($linkedIndex)
+                        : ($activeOrdersById->get($line['existing_order_id']) ?: $carrier);
                     $linkedStoryItem = $linkedIndex !== null
                         ? $targetOrder?->items()->where('item_type', 'story')->first()
                         : null;
@@ -482,6 +486,8 @@ class AdminOrderUpdateService
             $prices[(int) $item->product_id] = [
                 'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
+                'order_id' => (int) $item->order_id,
+                'personalization_snapshot' => $item->personalization_snapshot,
             ];
             $this->incrementStock($item, $admin);
         }
@@ -566,6 +572,8 @@ class AdminOrderUpdateService
                 'unit_price_cents' => $unitPriceCents,
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedIndex,
+                'existing_order_id' => $old ? (int) $old['order_id'] : null,
+                'personalization_snapshot' => $old['personalization_snapshot'] ?? null,
             ];
         });
     }
@@ -603,7 +611,7 @@ class AdminOrderUpdateService
                 'child_name' => $order->child_name,
                 'child_age' => $order->child_age,
                 'child_gender' => $order->child_gender,
-            ] : null,
+            ] : $line['personalization_snapshot'],
         ]);
     }
 

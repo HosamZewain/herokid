@@ -261,6 +261,93 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame('الجيزة', data_get($order->refresh()->delivery_details, 'city'));
     }
 
+    public function test_editing_a_personalized_product_order_preserves_its_child_snapshot_and_photos(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'استيكر المدرسة',
+            'slug' => 'personalized-product-edit-preservation',
+            'price_cents' => 20_000,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل كامل'],
+                'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة'],
+                'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل'],
+                'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
+            ],
+            'is_active' => true,
+        ]);
+        $photoPaths = [
+            'orders/photos/HK-PERSONALIZED/child-1.jpg',
+            'orders/photos/HK-PERSONALIZED/child-2.jpg',
+        ];
+        foreach ($photoPaths as $path) {
+            Storage::disk('local')->put($path, 'photo');
+        }
+        $order = Order::create([
+            'order_number' => 'HK-2026-PERSONALIZED',
+            'checkout_group_key' => 'CHK-PERSONALIZED-PRODUCT',
+            'parent_name' => 'ولي أمر المنتج',
+            'child_name' => 'سليم محمد',
+            'order_source' => 'whatsapp',
+            'status' => 'new',
+            'uploaded_photos' => $photoPaths,
+            'delivery_details' => [
+                'phone' => '01011112222',
+                'delivery_country_id' => $this->country->id,
+                'delivery_governorate_id' => $this->governorate->id,
+                'country' => $this->country->name,
+                'governorate' => $this->governorate->name,
+                'city' => 'القاهرة',
+                'street' => 'شارع قديم',
+                'address_details' => 'تفاصيل قديمة',
+                'delivery_fee' => 50,
+                'subtotal' => 200,
+                'total' => 250,
+            ],
+        ]);
+        $snapshot = [
+            'schema_version' => 1,
+            'fields' => [
+                'child_name' => 'سليم محمد',
+                'school_name' => 'مدرسة الأمل',
+                'class_name' => '3A',
+                'photos' => $photoPaths,
+            ],
+            'uploaded_photos_count' => 2,
+        ];
+        $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => 20_000,
+            'quantity' => 1,
+            'total_price_cents' => 20_000,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_snapshot' => $snapshot,
+        ]);
+
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order->id), [
+            'parent_name' => 'ولي أمر المنتج بعد التعديل',
+            'phone' => '01033334444',
+            'order_source' => 'phone',
+            'delivery_country_id' => $this->country->id,
+            'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'الجيزة',
+            'street' => 'شارع جديد',
+            'address_details' => 'عنوان المنتج الجديد',
+            'stories' => [],
+            'products' => [$product->id => ['quantity' => 1]],
+            'payment_status' => 'unpaid',
+            'change_reason' => 'تحديث بيانات ولي الأمر والعنوان فقط.',
+        ])->assertRedirect();
+
+        $order->refresh();
+        $this->assertSame($photoPaths, $order->uploaded_photos);
+        $this->assertSame('سليم محمد', $order->child_name);
+        $this->assertEquals($snapshot, $order->items()->where('product_id', $product->id)->firstOrFail()->personalization_snapshot);
+        $this->assertSame(1, Order::query()->where('checkout_group_key', $order->checkout_group_key)->count());
+    }
+
     private function createCheckout(): array
     {
         $firstStory = $this->story('القصة الأولى', 400);
