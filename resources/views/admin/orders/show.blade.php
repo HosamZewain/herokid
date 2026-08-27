@@ -421,6 +421,16 @@
                                                 @if($orderItem->variant_snapshot)
                                                     <p class="text-xs text-gray-500">النوع: {{ $orderItem->variant_snapshot['name_ar'] ?? '-' }}</p>
                                                 @endif
+                                                @if($orderItem->personalization_mode === 'collect_child_details')
+                                                    <dl class="mt-3 grid gap-2 sm:grid-cols-2">
+                                                        @foreach($orderItem->personalizationDisplayValues() as $value)
+                                                            <div class="rounded-lg bg-white px-3 py-2">
+                                                                <dt class="text-[11px] font-bold text-indigo-500">{{ $value['label'] }}</dt>
+                                                                <dd class="mt-1 break-words text-sm font-black text-gray-900">{{ $value['value'] }}</dd>
+                                                            </div>
+                                                        @endforeach
+                                                    </dl>
+                                                @endif
                                             </div>
                                             <div class="text-sm font-bold text-gray-700">
                                                 {{ $orderItem->quantity }} × {{ number_format($orderItem->unit_price_cents / 100, 0) }} ج.م

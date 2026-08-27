@@ -11,7 +11,9 @@
         $collectsChildDetails = $product->personalization_mode === 'collect_child_details';
         $canSubmit = ! $requiresStory || $storyItems->count() > 0;
         $singleStoryItem = $storyItems->count() === 1 ? $storyItems->first() : null;
-        $productUploadConfig = $collectsChildDetails ? array_merge($photoUploadConfig, [
+        $photoField = $personalizationFields['photos'] ?? null;
+        $hasPhotoField = $collectsChildDetails && $photoField;
+        $productUploadConfig = $hasPhotoField ? array_merge($photoUploadConfig, [
             'serverRejectedUploads' => $errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*'),
             'restoredUploadIds' => $errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*')
                 ? []
@@ -82,11 +84,13 @@
                     @endif
 
                     <form action="{{ route('cart.products.store', $product) }}" method="POST" class="mt-6 space-y-4"
-                        @if($collectsChildDetails) data-identity-intake @endif>
+                        @if($hasPhotoField) data-identity-intake @endif>
                         @csrf
                         @if($collectsChildDetails)
-                            <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] }}">
-                            <script type="application/json" data-identity-upload-config>@json($productUploadConfig)</script>
+                            @if($hasPhotoField)
+                                <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] }}">
+                                <script type="application/json" data-identity-upload-config>@json($productUploadConfig)</script>
+                            @endif
 
                             <section class="rounded-3xl border border-indigo-200 bg-indigo-50/60 p-4 sm:p-5">
                                 <div class="mb-4 text-right">
@@ -102,62 +106,65 @@
                                 @endif
 
                                 <div class="grid gap-3 sm:grid-cols-2">
-                                    <label for="product-child-name" class="block text-sm font-black text-slate-700">
-                                        اسم الطفل
-                                        <input id="product-child-name" name="child_name" value="{{ old('child_name') }}" required autocomplete="off"
-                                            class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">
-                                        <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
-                                    </label>
-                                    <label for="product-child-age" class="block text-sm font-black text-slate-700">
-                                        عمر الطفل
-                                        <select id="product-child-age" name="child_age" required class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
-                                            <option value="">اختر العمر</option>
-                                            @foreach($ageOptions as $age)
-                                                <option value="{{ $age }}" @selected((string) old('child_age') === (string) $age)>{{ arabic_number($age) }} سنوات</option>
-                                            @endforeach
-                                        </select>
-                                        <x-input-error :messages="$errors->get('child_age')" class="mt-1" />
-                                    </label>
-                                    <label for="product-child-gender" class="block text-sm font-black text-slate-700 sm:col-span-2">
-                                        جنس الطفل
-                                        <select id="product-child-gender" name="child_gender" required class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
-                                            <option value="">اختر الجنس</option>
-                                            <option value="boy" @selected(old('child_gender') === 'boy')>ولد 👦</option>
-                                            <option value="girl" @selected(old('child_gender') === 'girl')>بنت 👧</option>
-                                        </select>
-                                        <x-input-error :messages="$errors->get('child_gender')" class="mt-1" />
-                                    </label>
-                                    <label for="product-interests" class="block text-sm font-black text-slate-700 sm:col-span-2">
-                                        اهتمامات أو ملاحظات عن الطفل <span class="font-bold text-slate-400">(اختياري)</span>
-                                        <textarea id="product-interests" name="interests" rows="2" class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">{{ old('interests') }}</textarea>
-                                        <x-input-error :messages="$errors->get('interests')" class="mt-1" />
-                                    </label>
+                                    @foreach($personalizationFields as $fieldKey => $field)
+                                        @continue($field['type'] === 'photos')
+                                        <label for="product-{{ str_replace('_', '-', $fieldKey) }}" class="block text-sm font-black text-slate-700 {{ $field['type'] === 'textarea' || $field['type'] === 'gender' ? 'sm:col-span-2' : '' }}">
+                                            {{ $field['label'] }}
+                                            @unless($field['required'])
+                                                <span class="font-bold text-slate-400">(اختياري)</span>
+                                            @endunless
+
+                                            @if($field['type'] === 'age')
+                                                <select id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" @required($field['required']) class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="">اختر العمر</option>
+                                                    @foreach($ageOptions as $age)
+                                                        <option value="{{ $age }}" @selected((string) old($fieldKey) === (string) $age)>{{ arabic_number($age) }} سنوات</option>
+                                                    @endforeach
+                                                </select>
+                                            @elseif($field['type'] === 'gender')
+                                                <select id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" @required($field['required']) class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="">اختر الجنس</option>
+                                                    <option value="boy" @selected(old($fieldKey) === 'boy')>ولد 👦</option>
+                                                    <option value="girl" @selected(old($fieldKey) === 'girl')>بنت 👧</option>
+                                                </select>
+                                            @elseif($field['type'] === 'textarea')
+                                                <textarea id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" rows="2" @required($field['required'])
+                                                    class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">{{ old($fieldKey) }}</textarea>
+                                            @else
+                                                <input id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" value="{{ old($fieldKey) }}" @required($field['required']) autocomplete="off"
+                                                    class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">
+                                            @endif
+                                            <x-input-error :messages="$errors->get($fieldKey)" class="mt-1" />
+                                        </label>
+                                    @endforeach
                                 </div>
 
+                                @if($hasPhotoField)
                                 <div class="mt-4 rounded-2xl border-2 border-dashed border-indigo-200 bg-white p-4">
                                     <div class="flex flex-wrap items-center justify-between gap-2">
                                         <div class="text-right">
-                                            <h3 class="font-black text-indigo-950">صور الطفل</h3>
-                                            <p class="mt-1 text-xs font-bold text-indigo-700">اختر صورتين أو ٣ صور واضحة وسيبدأ رفعها تلقائيًا.</p>
+                                            <h3 class="font-black text-indigo-950">{{ $photoField['label'] }} @unless($photoField['required'])<span class="text-xs text-slate-400">(اختياري)</span>@endunless</h3>
+                                            <p class="mt-1 text-xs font-bold text-indigo-700">يمكنك رفع من {{ arabic_number($photoField['min_files']) }} إلى {{ arabic_number($photoField['max_files']) }} صور واضحة.</p>
                                         </div>
-                                        <span class="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count>تم رفع ٠ من ٢ المطلوبة</span>
+                                        <span class="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count></span>
                                     </div>
                                     <input type="file" id="product-child-photos" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" class="sr-only" data-identity-photo-input>
                                     <div data-identity-photo-ids></div>
                                     <label for="product-child-photos" data-identity-photo-picker
                                         class="mt-4 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-4 text-center transition hover:border-indigo-400">
-                                        <span class="font-black text-indigo-700" data-identity-photo-picker-title>اختيار صور الطفل</span>
-                                        <span class="mt-1 text-xs font-bold text-slate-500" data-identity-photo-picker-help>اختر صورتين أو ٣ صور مرة واحدة وسيبدأ رفعها تلقائيًا.</span>
+                                        <span class="font-black text-indigo-700" data-identity-photo-picker-title>اختيار الصور</span>
+                                        <span class="mt-1 text-xs font-bold text-slate-500" data-identity-photo-picker-help>اختر الصور معًا وسيبدأ رفعها تلقائيًا.</span>
                                     </label>
                                     <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" data-identity-photo-queue aria-live="polite"></div>
                                     <div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2" role="status" aria-live="polite" data-identity-photo-requirement>
-                                        <p class="text-sm font-black text-indigo-950" data-identity-photo-requirement-title>اختر صورتين للمتابعة</p>
-                                        <p class="mt-1 text-xs font-bold leading-5 text-indigo-700" data-identity-photo-requirement-description>نحتاج صورتين واضحتين على الأقل، ويمكنك إضافة صورة ثالثة اختيارية.</p>
+                                        <p class="text-sm font-black text-indigo-950" data-identity-photo-requirement-title></p>
+                                        <p class="mt-1 text-xs font-bold leading-5 text-indigo-700" data-identity-photo-requirement-description></p>
                                     </div>
                                     <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700" data-identity-photo-error></div>
                                     <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-2" />
                                     <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-2" />
                                 </div>
+                                @endif
                             </section>
                         @endif
 
@@ -197,11 +204,11 @@
                             <input type="number" name="quantity" min="1" value="1" class="w-32 rounded-2xl border-slate-200 text-center">
                         </div>
 
-                        <button type="submit" @disabled(! $canSubmit || $collectsChildDetails)
-                            @if($collectsChildDetails) data-identity-submit @endif
+                        <button type="submit" @disabled(! $canSubmit || $hasPhotoField)
+                            @if($hasPhotoField) data-identity-submit @endif
                             class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-                            @if($collectsChildDetails)
-                                <span data-submit-label>اختر صورتين للمتابعة</span>
+                            @if($hasPhotoField)
+                                <span data-submit-label>{{ $photoField['required'] ? 'أكمل الصور المطلوبة للمتابعة' : 'إضافة للسلة' }}</span>
                             @else
                                 {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
                             @endif

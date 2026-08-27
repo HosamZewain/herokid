@@ -9,6 +9,9 @@
     $mobilePrice = $mobileItemType === 'story'
         ? (float) ($item['story_price'] ?? 0)
         : ((int) ($item['line_total_cents'] ?? 0) / 100);
+    $mobilePersonalizationValues = ($item['personalization_mode'] ?? null) === 'collect_child_details'
+        ? collect(\App\Support\ProductPersonalizationSchema::displayValues($item['personalization_snapshot'] ?? []))
+        : collect();
 @endphp
 
 <article class="relative px-3 py-2.5 pl-12 transition duration-200" data-cart-mobile-item data-cart-item-key="{{ $key }}">
@@ -41,7 +44,7 @@
                 @elseif($mobileItemType === 'product_add_on')
                     إضافة مرتبطة · الكمية {{ $item['quantity'] ?? 1 }}
                 @elseif(($item['personalization_mode'] ?? null) === 'collect_child_details')
-                    {{ $item['child_name'] ?? 'الطفل' }} · {{ $item['child_age'] ?? '-' }} سنة · {{ count($item['uploaded_photos'] ?? []) }} صورة
+                    {{ $mobilePersonalizationValues->take(3)->map(fn ($value) => $value['label'].': '.$value['value'])->implode(' · ') ?: 'بيانات تخصيص محفوظة' }}
                 @else
                     الكمية {{ $item['quantity'] ?? 1 }}@if(!empty($item['variant_name'])) · {{ $item['variant_name'] }}@endif
                 @endif

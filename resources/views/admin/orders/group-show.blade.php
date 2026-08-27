@@ -233,6 +233,16 @@
                                 <p class="font-black text-gray-900">{{ $product->title }}</p>
                                 @if($product->sku)<p class="mt-1 text-xs text-gray-400" dir="ltr">SKU: {{ $product->sku }}</p>@endif
                                 <p class="mt-3 text-sm font-bold text-emerald-800">{{ $product->quantity }} × {{ format_money($product->unit_price_cents / 100) }}</p>
+                                @if($product->personalization_mode === 'collect_child_details')
+                                    <dl class="mt-3 grid gap-2 border-t border-emerald-100 pt-3">
+                                        @foreach($product->personalizationDisplayValues() as $value)
+                                            <div>
+                                                <dt class="text-[11px] font-bold text-emerald-600">{{ $value['label'] }}</dt>
+                                                <dd class="break-words text-sm font-black text-gray-900">{{ $value['value'] }}</dd>
+                                            </div>
+                                        @endforeach
+                                    </dl>
+                                @endif
                             </div>
                         @endforeach
                     </div>

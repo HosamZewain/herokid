@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -56,9 +57,12 @@ class ShopController extends Controller
             ->take(4)
             ->get();
 
+        $personalizationSchema = ProductPersonalizationSchema::forProduct($product);
+        $personalizationFields = ProductPersonalizationSchema::enabledFields($personalizationSchema);
+        $photoField = $personalizationFields['photos'] ?? null;
         $photoUploadConfig = null;
 
-        if ($product->personalization_mode === 'collect_child_details') {
+        if ($photoField) {
             $uploadSession = $uploads->ensureSession($request);
             $photoUploadConfig = [
                 'sessionToken' => $uploadSession['token'],
@@ -66,8 +70,8 @@ class ShopController extends Controller
                 'uploadUrl' => route('photo-uploads.store'),
                 'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
-                'maxFiles' => (int) config('photo_uploads.max_files', 3),
-                'minimumFiles' => (int) config('photo_uploads.min_files', 2),
+                'maxFiles' => (int) $photoField['max_files'],
+                'minimumFiles' => $photoField['required'] ? (int) $photoField['min_files'] : 0,
                 'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
                 'concurrency' => (int) config('photo_uploads.concurrency', 2),
                 'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
@@ -83,6 +87,8 @@ class ShopController extends Controller
             'storyItems',
             'relatedProducts',
             'photoUploadConfig',
+            'personalizationSchema',
+            'personalizationFields',
         ) + ['ageOptions' => StoryAgeOptions::forPersonalization()]);
     }
 

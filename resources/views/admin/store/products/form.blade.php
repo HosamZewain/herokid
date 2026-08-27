@@ -1,3 +1,13 @@
+@php
+    $personalizationDefinitions = \App\Support\ProductPersonalizationSchema::definitions();
+    $savedPersonalization = \App\Support\ProductPersonalizationSchema::normalize(
+        $product->personalization_fields ?: \App\Support\ProductPersonalizationSchema::legacyDefault()
+    );
+    $personalizationFieldValues = session()->hasOldInput()
+        ? old('personalization_fields', [])
+        : $savedPersonalization['fields'];
+@endphp
+
 <x-admin-layout>
     <x-slot name="header"><h2 class="text-xl font-semibold text-gray-800">{{ $product->exists ? 'تعديل منتج' : 'إضافة منتج' }}</h2></x-slot>
     <div class="py-8" dir="rtl">
@@ -27,11 +37,71 @@
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div><label class="mb-1 block font-bold">نوع التنفيذ</label><select name="fulfillment_type" class="w-full rounded-xl border-gray-300 text-right"><option value="physical" @selected(old('fulfillment_type', $product->fulfillment_type) === 'physical')>Physical</option><option value="digital" @selected(old('fulfillment_type', $product->fulfillment_type) === 'digital')>Digital</option></select></div>
                     <div><label class="mb-1 block font-bold">وضع الشراء</label><select name="purchase_mode" class="w-full rounded-xl border-gray-300 text-right"><option value="standalone" @selected(old('purchase_mode', $product->purchase_mode) === 'standalone')>Standalone</option><option value="add_on_only" @selected(old('purchase_mode', $product->purchase_mode) === 'add_on_only')>Add-on only</option><option value="standalone_or_add_on" @selected(old('purchase_mode', $product->purchase_mode) === 'standalone_or_add_on')>Standalone or add-on</option></select></div>
-                    <div><label class="mb-1 block font-bold">وضع التخصيص</label><select name="personalization_mode" class="w-full rounded-xl border-gray-300 text-right"><option value="none" @selected(old('personalization_mode', $product->personalization_mode) === 'none')>None</option><option value="inherit_from_linked_story" @selected(old('personalization_mode', $product->personalization_mode) === 'inherit_from_linked_story')>Inherit from linked story</option><option value="collect_child_details" @selected(old('personalization_mode', $product->personalization_mode) === 'collect_child_details')>Collect child details</option></select></div>
+                    <div><label class="mb-1 block font-bold">وضع التخصيص</label><select name="personalization_mode" data-product-personalization-mode class="w-full rounded-xl border-gray-300 text-right"><option value="none" @selected(old('personalization_mode', $product->personalization_mode) === 'none')>None</option><option value="inherit_from_linked_story" @selected(old('personalization_mode', $product->personalization_mode) === 'inherit_from_linked_story')>Inherit from linked story</option><option value="collect_child_details" @selected(old('personalization_mode', $product->personalization_mode) === 'collect_child_details')>Collect child details</option></select></div>
                     <div><label class="mb-1 block font-bold">المخزون</label><select name="inventory_mode" class="w-full rounded-xl border-gray-300 text-right"><option value="no_tracking" @selected(old('inventory_mode', $product->inventory_mode) === 'no_tracking')>No tracking</option><option value="track_stock" @selected(old('inventory_mode', $product->inventory_mode) === 'track_stock')>Track stock</option><option value="made_to_order" @selected(old('inventory_mode', $product->inventory_mode) === 'made_to_order')>Made to order</option></select></div>
                     <div><label class="mb-1 block font-bold">كمية المخزون</label><input type="number" name="stock_quantity" value="{{ old('stock_quantity', $product->stock_quantity) }}" class="w-full rounded-xl border-gray-300"></div>
                     <div><label class="mb-1 block font-bold">مدة الإنتاج بالأيام</label><input type="number" name="production_lead_time_days" value="{{ old('production_lead_time_days', $product->production_lead_time_days ?? 0) }}" class="w-full rounded-xl border-gray-300"></div>
                 </div>
+
+                <section data-product-personalization-fields class="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5">
+                    <div class="mb-4 text-right">
+                        <h3 class="text-lg font-black text-indigo-950">بيانات التخصيص المطلوبة</h3>
+                        <p class="mt-1 text-sm leading-6 text-indigo-700">حدد ما يظهر لولي الأمر، وما إذا كان كل حقل مطلوبًا أو اختياريًا. يتم التحقق من الإعدادات والبيانات على الخادم.</p>
+                    </div>
+
+                    <x-input-error :messages="$errors->get('personalization_fields')" class="mb-3" />
+
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        @foreach($personalizationDefinitions as $fieldKey => $definition)
+                            @php
+                                $fieldValue = $personalizationFieldValues[$fieldKey] ?? [];
+                                $enabled = filter_var($fieldValue['enabled'] ?? false, FILTER_VALIDATE_BOOL);
+                                $required = filter_var($fieldValue['required'] ?? false, FILTER_VALIDATE_BOOL);
+                                $label = $fieldValue['label'] ?? $definition['label'];
+                            @endphp
+                            <div class="rounded-xl border border-indigo-100 bg-white p-4" data-personalization-field-row>
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <p class="font-black text-slate-900">{{ $definition['label'] }}</p>
+                                    <div class="flex flex-wrap gap-4 text-sm font-bold">
+                                        <label class="inline-flex items-center gap-2">
+                                            <input type="hidden" name="personalization_fields[{{ $fieldKey }}][enabled]" value="0">
+                                            <input type="checkbox" name="personalization_fields[{{ $fieldKey }}][enabled]" value="1" data-field-enabled @checked($enabled)>
+                                            إظهار
+                                        </label>
+                                        <label class="inline-flex items-center gap-2">
+                                            <input type="hidden" name="personalization_fields[{{ $fieldKey }}][required]" value="0">
+                                            <input type="checkbox" name="personalization_fields[{{ $fieldKey }}][required]" value="1" data-field-required @checked($required)>
+                                            مطلوب
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <label class="mt-3 block text-xs font-black text-slate-600">
+                                    الاسم الظاهر لولي الأمر
+                                    <input name="personalization_fields[{{ $fieldKey }}][label]" value="{{ $label }}" maxlength="100"
+                                        class="mt-1.5 w-full rounded-lg border-gray-300 text-right text-sm">
+                                </label>
+
+                                @if($definition['type'] === 'photos')
+                                    <div class="mt-3 grid grid-cols-2 gap-3">
+                                        <label class="block text-xs font-black text-slate-600">
+                                            أقل عدد صور
+                                            <input type="number" min="1" max="3" name="personalization_fields[photos][min_files]"
+                                                value="{{ $fieldValue['min_files'] ?? config('photo_uploads.min_files', 2) }}"
+                                                class="mt-1.5 w-full rounded-lg border-gray-300 text-center text-sm">
+                                        </label>
+                                        <label class="block text-xs font-black text-slate-600">
+                                            أقصى عدد صور
+                                            <input type="number" min="1" max="3" name="personalization_fields[photos][max_files]"
+                                                value="{{ $fieldValue['max_files'] ?? config('photo_uploads.max_files', 3) }}"
+                                                class="mt-1.5 w-full rounded-lg border-gray-300 text-center text-sm">
+                                        </label>
+                                    </div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
 
                 <div>
                     <label class="mb-2 block font-bold">الفئات العمرية</label>
@@ -101,4 +171,29 @@
             @endif
         </div>
     </div>
+
+    <script>
+        (() => {
+            const mode = document.querySelector('[data-product-personalization-mode]');
+            const fields = document.querySelector('[data-product-personalization-fields]');
+
+            if (!mode || !fields) return;
+
+            const syncSection = () => fields.classList.toggle('hidden', mode.value !== 'collect_child_details');
+            const syncRequired = (row) => {
+                const enabled = row.querySelector('[data-field-enabled]');
+                const required = row.querySelector('[data-field-required]');
+                if (!enabled || !required) return;
+                required.disabled = !enabled.checked;
+                if (!enabled.checked) required.checked = false;
+            };
+
+            fields.querySelectorAll('[data-personalization-field-row]').forEach((row) => {
+                syncRequired(row);
+                row.querySelector('[data-field-enabled]')?.addEventListener('change', () => syncRequired(row));
+            });
+            mode.addEventListener('change', syncSection);
+            syncSection();
+        })();
+    </script>
 </x-admin-layout>

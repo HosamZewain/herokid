@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -91,6 +93,12 @@ class ProductController extends Controller
             'fulfillment_type' => 'required|string|in:physical,digital',
             'purchase_mode' => 'required|string|in:standalone,add_on_only,standalone_or_add_on',
             'personalization_mode' => 'required|string|in:none,inherit_from_linked_story,collect_child_details',
+            'personalization_fields' => 'nullable|array',
+            'personalization_fields.*.enabled' => 'nullable|boolean',
+            'personalization_fields.*.required' => 'nullable|boolean',
+            'personalization_fields.*.label' => 'nullable|string|max:100',
+            'personalization_fields.photos.min_files' => 'nullable|integer|min:1|max:3',
+            'personalization_fields.photos.max_files' => 'nullable|integer|min:1|max:3|gte:personalization_fields.photos.min_files',
             'inventory_mode' => 'required|string|in:no_tracking,track_stock,made_to_order',
             'stock_quantity' => 'nullable|integer|min:0|max:999999',
             'production_lead_time_days' => 'nullable|integer|min:0|max:365',
@@ -120,6 +128,16 @@ class ProductController extends Controller
             ->filter()
             ->values()
             ->all();
+        $validated['personalization_fields'] = ProductPersonalizationSchema::fromAdminInput(
+            $validated['personalization_fields'] ?? []
+        );
+
+        if ($validated['personalization_mode'] === 'collect_child_details'
+            && ProductPersonalizationSchema::enabledFields($validated['personalization_fields']) === []) {
+            throw ValidationException::withMessages([
+                'personalization_fields' => 'اختر حقل تخصيص واحدًا على الأقل لهذا المنتج.',
+            ]);
+        }
 
         unset($validated['price'], $validated['sale_price'], $validated['features_text']);
 

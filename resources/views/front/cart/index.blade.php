@@ -319,19 +319,18 @@
                                                     @endif
                                                 </div>
                                             @elseif(($item['personalization_mode'] ?? null) === 'collect_child_details')
+                                                @php
+                                                    $personalizationValues = \App\Support\ProductPersonalizationSchema::displayValues($item['personalization_snapshot'] ?? []);
+                                                @endphp
                                                 <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
-                                                        <p class="mb-1 text-xs font-bold text-indigo-500">اسم الطفل</p>
-                                                        <p class="font-black text-slate-900">{{ $item['child_name'] ?? '-' }}</p>
-                                                    </div>
-                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
-                                                        <p class="mb-1 text-xs font-bold text-indigo-500">العمر والجنس</p>
-                                                        <p class="font-black text-slate-900">{{ $item['child_age'] ?? '-' }} سنة · {{ ($item['child_gender'] ?? null) === 'boy' ? 'ولد' : 'بنت' }}</p>
-                                                    </div>
-                                                    <div class="rounded-2xl bg-indigo-50 px-3 py-3">
-                                                        <p class="mb-1 text-xs font-bold text-indigo-500">الصور المرفقة</p>
-                                                        <p class="font-black text-slate-900">{{ count($item['uploaded_photos'] ?? []) }} صورة</p>
-                                                    </div>
+                                                    @forelse($personalizationValues as $value)
+                                                        <div class="rounded-2xl bg-indigo-50 px-3 py-3">
+                                                            <p class="mb-1 text-xs font-bold text-indigo-500">{{ $value['label'] }}</p>
+                                                            <p class="break-words font-black text-slate-900">{{ $value['value'] }}</p>
+                                                        </div>
+                                                    @empty
+                                                        <div class="rounded-2xl bg-indigo-50 px-3 py-3 text-sm font-bold text-indigo-700 sm:col-span-3">بيانات التخصيص محفوظة مع المنتج.</div>
+                                                    @endforelse
                                                 </div>
                                             @else
                                                 <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Database\Eloquent\Model;
 
 class OrderItem extends Model
@@ -53,5 +54,13 @@ class OrderItem extends Model
     public function getTotalPriceAttribute(): float
     {
         return ((int) $this->total_price_cents) / 100;
+    }
+
+    /**
+     * @return array<int, array{key: string, label: string, value: string}>
+     */
+    public function personalizationDisplayValues(): array
+    {
+        return ProductPersonalizationSchema::displayValues($this->personalization_snapshot ?? []);
     }
 }

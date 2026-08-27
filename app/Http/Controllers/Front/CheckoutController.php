@@ -19,7 +19,7 @@ use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
-use App\Support\StoryAgeOptions;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -80,19 +80,16 @@ class CheckoutController extends Controller
                 return false;
             }
 
-            $photos = array_values(array_filter($item['uploaded_photos'] ?? []));
+            $schema = data_get($item, 'personalization_snapshot.schema');
+            $schema = is_array($schema) ? $schema : ProductPersonalizationSchema::forProduct($product);
 
-            return trim((string) ($item['child_name'] ?? '')) === ''
-                || ! in_array((int) ($item['child_age'] ?? 0), StoryAgeOptions::forPersonalization(), true)
-                || ! in_array($item['child_gender'] ?? null, ['boy', 'girl'], true)
-                || count($photos) < (int) config('photo_uploads.min_files', 2)
-                || count($photos) > (int) config('photo_uploads.max_files', 3);
+            return ! ProductPersonalizationSchema::cartItemIsComplete($schema, $item);
         });
 
         if ($incompletePersonalizedProduct) {
             return redirect()->route('cart.index')->with(
                 'error',
-                'هذا المنتج المخصص يحتاج اسم الطفل وعمره وجنسه وصورتين على الأقل. احذف المنتج من السلة ثم أضفه مرة أخرى بعد استكمال البيانات.'
+                'بيانات تخصيص أحد المنتجات غير مكتملة. احذف المنتج من السلة ثم أضفه مرة أخرى بعد استكمال الحقول المطلوبة.'
             );
         }
 
@@ -362,7 +359,7 @@ class CheckoutController extends Controller
                             'interests' => $item['interests'] ?? null,
                             'gift_note' => null,
                             'notes' => null,
-                            'parent_notes' => null,
+                            'parent_notes' => $item['parent_notes'] ?? null,
                             'delivery_details' => $this->deliverySnapshot(
                                 $validated,
                                 $country,
@@ -424,9 +421,12 @@ class CheckoutController extends Controller
                         'personalization_snapshot' => $collectsChildDetails
                             ? ($item['personalization_snapshot'] ?? [
                                 'child_name' => $item['child_name'] ?? null,
+                                'school_name' => $item['school_name'] ?? null,
+                                'class_name' => $item['class_name'] ?? null,
                                 'child_age' => $item['child_age'] ?? null,
                                 'child_gender' => $item['child_gender'] ?? null,
                                 'interests' => $item['interests'] ?? null,
+                                'parent_notes' => $item['parent_notes'] ?? null,
                                 'uploaded_photos_count' => count($item['uploaded_photos'] ?? []),
                             ])
                             : ($item['linked_story_snapshot'] ?? null),

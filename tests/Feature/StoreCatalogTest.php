@@ -150,6 +150,113 @@ class StoreCatalogTest extends TestCase
         $this->assertSame([], session('cart.items', []));
     }
 
+    public function test_product_can_collect_only_its_configured_personalization_fields(): void
+    {
+        $product = $this->product('custom-school-sticker', 195, [
+            'name_ar' => 'ستيكر المدرسة المخصص',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+        ]);
+
+        $this->get(route('shop.product.show', $product))
+            ->assertOk()
+            ->assertSee('اسم الطفل كاملًا')
+            ->assertSee('name="school_name"', false)
+            ->assertSee('name="class_name"', false)
+            ->assertSee('data-identity-photo-input', false)
+            ->assertDontSee('name="child_age"', false)
+            ->assertDontSee('name="child_gender"', false);
+
+        $this->post(route('cart.products.store', $product), ['quantity' => 1])
+            ->assertSessionHasErrors(['child_name', 'school_name', 'class_name', 'photo_upload_ids'])
+            ->assertSessionDoesntHaveErrors(['child_age', 'child_gender']);
+
+        $this->assertSame([], session('cart.items', []));
+    }
+
+    public function test_admin_can_control_enabled_required_and_labels_for_product_personalization(): void
+    {
+        $admin = $this->admin();
+        $product = $this->product('admin-configured-sticker', 195, [
+            'name_ar' => 'ستيكر المدرسة',
+            'personalization_mode' => 'collect_child_details',
+        ]);
+
+        $this->actingAs($admin)->put(route('admin.products.update', $product), [
+            'product_category_id' => $product->product_category_id,
+            'name_ar' => $product->name_ar,
+            'slug' => $product->slug,
+            'price' => 195,
+            'fulfillment_type' => 'physical',
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'inventory_mode' => 'no_tracking',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => 1, 'required' => 1, 'label' => 'الاسم الرباعي للطفل'],
+                'school_name' => ['enabled' => 1, 'required' => 1, 'label' => 'المدرسة'],
+                'class_name' => ['enabled' => 1, 'required' => 0, 'label' => 'الفصل (اختياري)'],
+                'photos' => ['enabled' => 1, 'required' => 1, 'label' => 'صور واضحة', 'min_files' => 2, 'max_files' => 3],
+            ],
+            'is_active' => 1,
+        ])->assertRedirect(route('admin.products.edit', $product));
+
+        $product->refresh();
+        $fields = $product->personalization_fields['fields'];
+
+        $this->assertTrue($fields['school_name']['enabled']);
+        $this->assertTrue($fields['school_name']['required']);
+        $this->assertFalse($fields['class_name']['required']);
+        $this->assertFalse($fields['child_age']['enabled']);
+        $this->assertSame('الاسم الرباعي للطفل', $fields['child_name']['label']);
+        $this->assertSame(2, $fields['photos']['min_files']);
+        $this->assertSame(3, $fields['photos']['max_files']);
+    }
+
+    public function test_custom_product_personalization_is_snapshotted_and_survives_product_changes(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('school-sticker-snapshot', 195, [
+            'name_ar' => 'ستيكر المدرسة',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+        ]);
+        $sessionToken = 'custom-product-personalization-token';
+        $firstUpload = $this->temporaryPhoto($sessionToken, 'custom-one');
+        $secondUpload = $this->temporaryPhoto($sessionToken, 'custom-two');
+
+        $this->withSession(['photo_upload.token' => $sessionToken])
+            ->post(route('cart.products.store', $product), [
+                'quantity' => 1,
+                'upload_session_token' => $sessionToken,
+                'child_name' => 'سليم أحمد',
+                'school_name' => 'مدرسة النور',
+                'class_name' => '3A',
+                'photo_upload_ids' => [$firstUpload->public_id, $secondUpload->public_id],
+            ])->assertRedirect(route('cart.index'));
+
+        $item = collect(session('cart.items'))->first();
+        $this->assertSame('سليم أحمد', $item['personalization_snapshot']['child_name']);
+        $this->assertSame('مدرسة النور', $item['personalization_snapshot']['school_name']);
+        $this->assertSame('3A', $item['personalization_snapshot']['class_name']);
+        $this->assertArrayNotHasKey('child_age', $item['personalization_snapshot']['fields']);
+
+        $product->update(['personalization_fields' => null]);
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $order = Order::with('items')->firstOrFail();
+        $productItem = $order->items->firstWhere('product_id', $product->id);
+
+        $this->assertNotNull($productItem);
+        $this->assertSame('مدرسة النور', $productItem->personalization_snapshot['school_name']);
+        $this->assertSame('3A', $productItem->personalization_snapshot['class_name']);
+        $schoolValue = collect($productItem->personalizationDisplayValues())->firstWhere('key', 'school_name');
+        $this->assertSame('اسم المدرسة', $schoolValue['label']);
+        $this->assertSame('مدرسة النور', $schoolValue['value']);
+    }
+
     public function test_collect_child_details_product_keeps_child_data_and_photos_through_checkout(): void
     {
         $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
@@ -707,5 +814,18 @@ class StoreCatalogTest extends TestCase
             'status' => 'uploaded',
             'expires_at' => now()->addHour(),
         ]);
+    }
+
+    private function schoolStickerPersonalizationFields(): array
+    {
+        return [
+            'version' => 1,
+            'fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل كاملًا'],
+                'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة'],
+                'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل / الكلاس'],
+                'photos' => ['enabled' => true, 'required' => true, 'label' => 'صور الطفل', 'min_files' => 2, 'max_files' => 3],
+            ],
+        ];
     }
 }

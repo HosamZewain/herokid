@@ -32,8 +32,8 @@ export function initializeIdentityPhotoUploader() {
     }
 
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const maximum = Number(config.maxFiles || 3);
-    const minimum = Number(config.minimumFiles || 2);
+    const maximum = Number(config.maxFiles ?? 3);
+    const minimum = Number(config.minimumFiles ?? 2);
     const maximumBytes = Number(config.maxSizeMb || 15) * 1024 * 1024;
     const concurrency = Math.max(1, Number(config.concurrency || 2));
     const maxLongEdge = Number(config.maxLongEdge || 2560);
@@ -113,7 +113,9 @@ export function initializeIdentityPhotoUploader() {
 
             return hidden;
         }));
-        count.textContent = uploaded.length < minimum
+        count.textContent = minimum === 0
+            ? `${arabicNumber(uploaded.length)} / ${arabicNumber(maximum)} صور اختيارية`
+            : uploaded.length < minimum
             ? `تم رفع ${arabicNumber(uploaded.length)} من ${arabicNumber(minimum)} المطلوبة`
             : `${arabicNumber(uploaded.length)} / ${arabicNumber(maximum)}`;
         submit.disabled = submitting || busy || failed || uploaded.length < minimum;
@@ -127,15 +129,17 @@ export function initializeIdentityPhotoUploader() {
         if (reachedMaximum) {
             pickerTitle.textContent = 'اكتمل اختيار الصور';
             pickerHelp.textContent = `وصلت إلى الحد الأقصى: ${arabicNumber(maximum)} صور.`;
-        } else if (uploaded.length === 1) {
+        } else if (uploaded.length > 0 && uploaded.length < minimum) {
             pickerTitle.textContent = 'إضافة صورة أخرى';
-            pickerHelp.textContent = 'اختر صورة أخرى واحدة على الأقل ليتفعّل زر إنشاء الهوية.';
-        } else if (uploaded.length >= minimum) {
-            pickerTitle.textContent = 'إضافة صورة ثالثة (اختياري)';
-            pickerHelp.textContent = 'الصور المطلوبة جاهزة؛ إضافة الصورة الثالثة اختيارية.';
+            pickerHelp.textContent = `أضف ${arabicNumber(minimum - uploaded.length)} صورة أخرى لاستكمال المطلوب.`;
+        } else if (uploaded.length >= minimum && uploaded.length > 0) {
+            pickerTitle.textContent = 'إضافة صورة أخرى (اختياري)';
+            pickerHelp.textContent = `الصور المطلوبة جاهزة، والحد الأقصى ${arabicNumber(maximum)} صور.`;
         } else {
-            pickerTitle.textContent = 'اختيار صور الطفل';
-            pickerHelp.textContent = 'اختر صورتين أو ٣ صور مرة واحدة وسيبدأ رفعها تلقائيًا.';
+            pickerTitle.textContent = 'اختيار الصور';
+            pickerHelp.textContent = minimum === 0
+                ? `الصور اختيارية، ويمكنك رفع حتى ${arabicNumber(maximum)} صور.`
+                : `اختر من ${arabicNumber(minimum)} إلى ${arabicNumber(maximum)} صور وسيبدأ رفعها تلقائيًا.`;
         }
 
         if (submitting) {
@@ -147,7 +151,7 @@ export function initializeIdentityPhotoUploader() {
         } else if (remainingRequired === 1) {
             submitLabel.textContent = 'أضف صورة أخرى للمتابعة';
         } else if (remainingRequired > 1) {
-            submitLabel.textContent = 'اختر صورتين للمتابعة';
+            submitLabel.textContent = `أضف ${arabicNumber(remainingRequired)} صور للمتابعة`;
         } else {
             submitLabel.textContent = readyLabel;
         }
@@ -156,7 +160,7 @@ export function initializeIdentityPhotoUploader() {
             setRequirementState(
                 'danger',
                 'راجع الصورة التي فشل رفعها',
-                'أعد محاولة الصورة أو احذفها، ثم تأكد من وجود صورتين ناجحتين على الأقل.',
+                `أعد محاولة الصورة أو احذفها، ثم تأكد من وجود ${arabicNumber(minimum)} صور ناجحة على الأقل.`,
             );
         } else if (busy) {
             setRequirementState(
@@ -168,21 +172,27 @@ export function initializeIdentityPhotoUploader() {
             setRequirementState(
                 'warning',
                 'أضف صورة أخرى للمتابعة',
-                'تم رفع صورة واحدة بنجاح. نحتاج صورتين على الأقل لإنشاء هوية طفلك.',
+                `تم رفع الصور بنجاح. نحتاج صورة أخرى لاستكمال ${arabicNumber(minimum)} صور مطلوبة.`,
             );
         } else if (remainingRequired > 1) {
             setRequirementState(
                 'info',
-                'اختر صورتين للمتابعة',
-                'نحتاج صورتين واضحتين على الأقل، ويمكنك إضافة صورة ثالثة اختيارية.',
+                `اختر ${arabicNumber(minimum)} صور للمتابعة`,
+                `نحتاج ${arabicNumber(minimum)} صور واضحة على الأقل، والحد الأقصى ${arabicNumber(maximum)} صور.`,
+            );
+        } else if (minimum === 0 && uploaded.length === 0) {
+            setRequirementState(
+                'info',
+                'الصور اختيارية لهذا المنتج',
+                `يمكنك إضافة حتى ${arabicNumber(maximum)} صور، أو المتابعة بدون صور.`,
             );
         } else {
             setRequirementState(
                 'success',
-                'الصور جاهزة لإنشاء الهوية',
+                'الصور جاهزة',
                 uploaded.length === maximum
-                    ? `تم رفع ${arabicNumber(uploaded.length)} صور بنجاح. يمكنك إنشاء الهوية الآن.`
-                    : 'تم رفع صورتين بنجاح. يمكنك إنشاء الهوية الآن أو إضافة صورة ثالثة اختيارية.',
+                    ? `تم رفع ${arabicNumber(uploaded.length)} صور بنجاح. يمكنك المتابعة الآن.`
+                    : `تم رفع ${arabicNumber(uploaded.length)} صور بنجاح. يمكنك المتابعة أو إضافة صور أخرى.`,
             );
         }
 

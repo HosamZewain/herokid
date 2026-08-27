@@ -15,6 +15,7 @@ class Product extends Model
         'gallery_images' => 'array',
         'age_groups' => 'array',
         'features' => 'array',
+        'personalization_fields' => 'array',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
     ];

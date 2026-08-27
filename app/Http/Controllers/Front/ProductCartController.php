@@ -8,11 +8,10 @@ use App\Models\ProductVariant;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
-use App\Support\StoryAgeOptions;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 class ProductCartController extends Controller
 {
@@ -21,8 +20,9 @@ class ProductCartController extends Controller
         abort_unless($product->is_active, 404);
 
         $collectsChildDetails = $product->personalization_mode === 'collect_child_details';
-        $minimumPhotos = (int) config('photo_uploads.min_files', 2);
-        $maximumPhotos = (int) config('photo_uploads.max_files', 3);
+        $personalizationSchema = ProductPersonalizationSchema::forProduct($product);
+        $personalizationFields = ProductPersonalizationSchema::enabledFields($personalizationSchema);
+        $photoField = $personalizationFields['photos'] ?? null;
         $rules = [
             'variant_id' => 'nullable|integer|exists:product_variants,id',
             'quantity' => 'nullable|integer|min:1|max:50',
@@ -30,32 +30,14 @@ class ProductCartController extends Controller
         ];
 
         if ($collectsChildDetails) {
-            $rules += [
-                'child_name' => ['required', 'string', 'max:255'],
-                'child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
-                'child_gender' => ['required', Rule::in(['boy', 'girl'])],
-                'interests' => ['nullable', 'string', 'max:500'],
-                'photo_upload_ids' => ['required', 'array', 'min:'.$minimumPhotos, 'max:'.$maximumPhotos],
-                'photo_upload_ids.*' => ['required', 'string', 'uuid', 'distinct'],
-            ];
+            $rules += ProductPersonalizationSchema::validationRules($personalizationSchema);
         }
 
-        $validated = Validator::make($request->all(), $rules, [
-            'child_name.required' => 'يرجى إدخال اسم الطفل.',
-            'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفًا.',
-            'child_age.required' => 'يرجى اختيار عمر الطفل.',
-            'child_age.integer' => 'يرجى اختيار عمر صحيح للطفل.',
-            'child_age.in' => 'يرجى اختيار عمر الطفل من ٣ إلى ١٢ سنة.',
-            'child_gender.required' => 'يرجى اختيار جنس الطفل.',
-            'child_gender.in' => 'يرجى اختيار جنس صحيح للطفل.',
-            'interests.max' => 'الاهتمامات والملاحظات يجب ألا تزيد عن 500 حرف.',
-            'photo_upload_ids.required' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
-            'photo_upload_ids.array' => 'يرجى رفع صور الطفل بطريقة صحيحة.',
-            'photo_upload_ids.min' => 'يرجى رفع صورتين واضحتين للطفل على الأقل.',
-            'photo_upload_ids.max' => 'يمكنك رفع '.$maximumPhotos.' صور كحد أقصى.',
-            'photo_upload_ids.*.uuid' => 'بعض الصور المرفوعة غير صالحة. احذفها وارفعها مرة أخرى.',
-            'photo_upload_ids.*.distinct' => 'لا يمكن استخدام الصورة نفسها أكثر من مرة.',
-        ])->validate();
+        $validated = Validator::make(
+            $request->all(),
+            $rules,
+            $collectsChildDetails ? ProductPersonalizationSchema::validationMessages($personalizationSchema) : [],
+        )->validate();
 
         $quantity = (int) ($validated['quantity'] ?? 1);
         $variant = null;
@@ -102,7 +84,7 @@ class ProductCartController extends Controller
         $linkedStory = $linkedStoryKey ? $cart[$linkedStoryKey] : null;
         $uploadedPhotos = [];
 
-        if ($collectsChildDetails) {
+        if ($collectsChildDetails && $photoField && ! empty($validated['photo_upload_ids'])) {
             try {
                 $uploadedPhotos = $uploads->attachIdsToCart(
                     $request,
@@ -118,13 +100,9 @@ class ProductCartController extends Controller
             }
         }
 
-        $personalizationSnapshot = $collectsChildDetails ? [
-            'child_name' => $validated['child_name'],
-            'child_age' => (int) $validated['child_age'],
-            'child_gender' => $validated['child_gender'],
-            'interests' => $validated['interests'] ?? null,
-            'uploaded_photos_count' => count($uploadedPhotos),
-        ] : null;
+        $personalizationSnapshot = $collectsChildDetails
+            ? ProductPersonalizationSchema::snapshot($personalizationSchema, $validated, count($uploadedPhotos))
+            : null;
 
         $cart[$itemKey] = [
             'key' => $itemKey,
@@ -146,6 +124,9 @@ class ProductCartController extends Controller
             'child_age' => $personalizationSnapshot['child_age'] ?? null,
             'child_gender' => $personalizationSnapshot['child_gender'] ?? null,
             'interests' => $personalizationSnapshot['interests'] ?? null,
+            'school_name' => $personalizationSnapshot['school_name'] ?? null,
+            'class_name' => $personalizationSnapshot['class_name'] ?? null,
+            'parent_notes' => $personalizationSnapshot['parent_notes'] ?? null,
             'uploaded_photos' => $uploadedPhotos,
             'personalization_snapshot' => $personalizationSnapshot,
             'linked_story_key' => $linkedStoryKey,
