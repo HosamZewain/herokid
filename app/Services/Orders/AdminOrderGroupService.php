@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AdminOrderGroupService
 {
@@ -39,8 +40,10 @@ class AdminOrderGroupService
 
     public function paginate(Request $request): array
     {
-        $trash = $request->query('view') === 'trash';
-        $query = $this->groupedFilteredQuery($request, $trash);
+        $catalogType = $this->catalogType($request);
+        $lifecycle = $this->lifecycle($request);
+        $includeDeleted = $this->includeDeleted($request, $lifecycle);
+        $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
 
         $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
             ? $request->integer('per_page', 25)
@@ -54,15 +57,18 @@ class AdminOrderGroupService
             ->withQueryString();
 
         $keys = $groups->getCollection()->pluck('checkout_group_key');
-        $orders = $this->ordersForKeys($keys, $trash)->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+        $orders = $this->ordersForKeys($keys, $includeDeleted)->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
         $groups->setCollection($groups->getCollection()
-            ->map(fn ($group): array => $this->present($orders->get($group->checkout_group_key, collect()), $trash))
+            ->map(fn ($group): array => $this->present($orders->get($group->checkout_group_key, collect()), $includeDeleted))
             ->filter()
             ->values());
 
         $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
-        $matchingOrders = $this->ordersForStats($allKeys, $trash);
+        $matchingOrders = $this->visibleOrdersForStats(
+            $this->ordersForStats($allKeys, $includeDeleted),
+            $includeDeleted,
+        );
         $financialStats = $this->financialStats($matchingOrders);
 
         return [
@@ -73,24 +79,28 @@ class AdminOrderGroupService
                 'products' => (int) $matchingOrders->flatMap->items->whereIn('item_type', ['product', 'product_add_on'])->sum('quantity'),
                 ...$financialStats,
             ],
-            'trash' => $trash,
+            'trash' => $request->query('view') === 'trash',
+            'catalogType' => $catalogType,
+            'lifecycle' => $lifecycle,
         ];
     }
 
     public function export(Request $request): Collection
     {
-        $trash = $request->query('view') === 'trash';
-        $query = $this->groupedFilteredQuery($request, $trash);
+        $catalogType = $this->catalogType($request);
+        $lifecycle = $this->lifecycle($request);
+        $includeDeleted = $this->includeDeleted($request, $lifecycle);
+        $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
         $keys = (clone $query)
             ->selectRaw('checkout_group_key, MAX(created_at) as latest_at')
             ->groupBy('checkout_group_key')
             ->orderByDesc('latest_at')
             ->pluck('checkout_group_key');
-        $orders = $this->ordersForKeys($keys, $trash)
+        $orders = $this->ordersForKeys($keys, $includeDeleted)
             ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
         return $keys
-            ->map(fn (string $key): array => $this->present($orders->get($key, collect()), $trash))
+            ->map(fn (string $key): array => $this->present($orders->get($key, collect()), $includeDeleted))
             ->filter()
             ->values();
     }
@@ -215,7 +225,7 @@ class AdminOrderGroupService
         return [
             'key' => $first->checkoutGroupKey(),
             'representative_id' => (int) $first->id,
-            'direct_order_id' => ! $trash && $storyOrders->isNotEmpty()
+            'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
                 : null,
             'created_at' => $orders->min('created_at'),
@@ -269,9 +279,15 @@ class AdminOrderGroupService
         ];
     }
 
-    private function filteredQuery(Request $request, bool $trash): Builder
-    {
-        $query = $trash ? Order::onlyTrashed() : Order::query();
+    private function filteredQuery(
+        Request $request,
+        bool $includeDeleted,
+        string $catalogType,
+        string $lifecycle,
+    ): Builder {
+        $query = $includeDeleted ? Order::withTrashed() : Order::query();
+        $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
+        $this->applyLifecycleFilter($query, $lifecycle);
         $status = (string) $request->query('status', '');
 
         if ($status !== '' && $status !== 'mixed') {
@@ -329,9 +345,13 @@ class AdminOrderGroupService
         return $query;
     }
 
-    private function groupedFilteredQuery(Request $request, bool $trash): Builder
-    {
-        $query = $this->filteredQuery($request, $trash);
+    private function groupedFilteredQuery(
+        Request $request,
+        bool $includeDeleted,
+        string $catalogType,
+        string $lifecycle,
+    ): Builder {
+        $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
 
         if ($request->query('status') === 'mixed') {
             $mixedKeys = (clone $query)
@@ -346,13 +366,13 @@ class AdminOrderGroupService
         return $query;
     }
 
-    private function ordersForKeys(Collection $keys, bool $trash): Collection
+    private function ordersForKeys(Collection $keys, bool $includeDeleted): Collection
     {
         if ($keys->isEmpty()) {
             return collect();
         }
 
-        $query = $trash ? Order::onlyTrashed() : Order::query();
+        $query = $includeDeleted ? Order::withTrashed() : Order::query();
 
         return $query
             ->with(self::INDEX_RELATIONS)
@@ -361,13 +381,13 @@ class AdminOrderGroupService
             ->get();
     }
 
-    private function ordersForStats(Collection $keys, bool $trash): Collection
+    private function ordersForStats(Collection $keys, bool $includeDeleted): Collection
     {
         if ($keys->isEmpty()) {
             return collect();
         }
 
-        $query = $trash ? Order::onlyTrashed() : Order::query();
+        $query = $includeDeleted ? Order::withTrashed() : Order::query();
 
         return $query
             ->select([
@@ -445,5 +465,164 @@ class AdminOrderGroupService
     private function isStoryOrder(Order $order): bool
     {
         return $order->story_id !== null || $order->items->contains('item_type', 'story');
+    }
+
+    private function visibleOrdersForStats(Collection $orders, bool $includeDeleted): Collection
+    {
+        if (! $includeDeleted) {
+            return $orders;
+        }
+
+        return $orders
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
+            ->flatMap(function (Collection $group): Collection {
+                $active = $group->reject->trashed()->values();
+
+                return $active->isNotEmpty() ? $active : $group->values();
+            })
+            ->values();
+    }
+
+    private function catalogType(Request $request): string
+    {
+        if ($request->query('view') === 'trash') {
+            return 'all';
+        }
+
+        $type = (string) $request->query('catalog_type', 'stories');
+
+        return in_array($type, ['stories', 'products'], true) ? $type : 'stories';
+    }
+
+    private function lifecycle(Request $request): string
+    {
+        if ($request->query('view') === 'trash') {
+            return 'cancelled';
+        }
+
+        $lifecycle = (string) $request->query('lifecycle', 'active');
+
+        return in_array($lifecycle, ['active', 'finished', 'cancelled'], true) ? $lifecycle : 'active';
+    }
+
+    private function includeDeleted(Request $request, string $lifecycle): bool
+    {
+        return $lifecycle === 'cancelled'
+            && (bool) $request->user()?->hasPermission('orders.delete');
+    }
+
+    private function checkoutKeysForCatalogType(string $catalogType): \Illuminate\Database\Query\Builder
+    {
+        if ($catalogType === 'all') {
+            return DB::table('orders as catalog_orders')
+                ->select('catalog_orders.checkout_group_key')
+                ->whereNotNull('catalog_orders.checkout_group_key')
+                ->distinct();
+        }
+
+        $storyExists = fn ($query) => $query
+            ->selectRaw('1')
+            ->from('orders as story_orders')
+            ->whereColumn('story_orders.checkout_group_key', 'catalog_orders.checkout_group_key')
+            ->where(function ($story): void {
+                $story->whereNotNull('story_orders.story_id')
+                    ->orWhereExists(fn ($items) => $items
+                        ->selectRaw('1')
+                        ->from('order_items as story_items')
+                        ->whereColumn('story_items.order_id', 'story_orders.id')
+                        ->where('story_items.item_type', 'story'));
+            });
+
+        return DB::table('orders as catalog_orders')
+            ->select('catalog_orders.checkout_group_key')
+            ->whereNotNull('catalog_orders.checkout_group_key')
+            ->when(
+                $catalogType === 'stories',
+                fn ($query) => $query->whereExists($storyExists),
+                fn ($query) => $query->whereNotExists($storyExists),
+            )
+            ->distinct();
+    }
+
+    private function applyLifecycleFilter(Builder $query, string $lifecycle): void
+    {
+        $cancelledKeys = $this->cancelledCheckoutKeys();
+        $unfinishedKeys = $this->unfinishedCheckoutKeys();
+
+        if ($lifecycle === 'cancelled') {
+            $query->whereIn('checkout_group_key', $cancelledKeys);
+
+            return;
+        }
+
+        $query->whereNotIn('checkout_group_key', $cancelledKeys);
+
+        if ($lifecycle === 'finished') {
+            $query->whereNotIn('checkout_group_key', $unfinishedKeys);
+        } else {
+            $query->whereIn('checkout_group_key', $unfinishedKeys);
+        }
+    }
+
+    private function cancelledCheckoutKeys(): \Illuminate\Database\Query\Builder
+    {
+        $cancelledOrderKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled');
+        $cancelledShippingKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'cancelled');
+
+        return DB::table('orders as cancelled_orders')
+            ->select('cancelled_orders.checkout_group_key')
+            ->whereNotNull('cancelled_orders.checkout_group_key')
+            ->where(function ($query) use ($cancelledOrderKeys, $cancelledShippingKeys): void {
+                $query->whereNotNull('cancelled_orders.deleted_at');
+
+                if ($cancelledOrderKeys !== []) {
+                    $query->orWhereIn('cancelled_orders.status', $cancelledOrderKeys);
+                }
+
+                if ($cancelledShippingKeys !== []) {
+                    $query->orWhereIn('cancelled_orders.shipping_status', $cancelledShippingKeys);
+                }
+            })
+            ->distinct();
+    }
+
+    private function unfinishedCheckoutKeys(): \Illuminate\Database\Query\Builder
+    {
+        $doneOrderKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'delivered');
+        $donePaymentKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, 'paid_in_full');
+        $donePrintingKeys = array_values(array_unique(array_merge(
+            OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'completed'),
+            OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'not_required'),
+        )));
+        $doneShippingKeys = array_values(array_unique(array_merge(
+            OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'delivered'),
+            OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'not_required'),
+        )));
+
+        return DB::table('orders as unfinished_orders')
+            ->select('unfinished_orders.checkout_group_key')
+            ->whereNull('unfinished_orders.deleted_at')
+            ->whereNotNull('unfinished_orders.checkout_group_key')
+            ->where(function ($query) use ($doneOrderKeys, $donePaymentKeys, $donePrintingKeys, $doneShippingKeys): void {
+                $this->whereStatusIsNotDone($query, 'unfinished_orders.status', $doneOrderKeys);
+                $this->orWhereStatusIsNotDone($query, 'unfinished_orders.payment_status', $donePaymentKeys);
+                $this->orWhereStatusIsNotDone($query, 'unfinished_orders.printing_status', $donePrintingKeys);
+                $this->orWhereStatusIsNotDone($query, 'unfinished_orders.shipping_status', $doneShippingKeys);
+            })
+            ->distinct();
+    }
+
+    private function whereStatusIsNotDone($query, string $column, array $doneKeys): void
+    {
+        $query->where(fn ($status) => $status
+            ->whereNull($column)
+            ->when($doneKeys !== [], fn ($value) => $value->orWhereNotIn($column, $doneKeys)));
+    }
+
+    private function orWhereStatusIsNotDone($query, string $column, array $doneKeys): void
+    {
+        $query->orWhere(fn ($status) => $status
+            ->whereNull($column)
+            ->when($doneKeys !== [], fn ($value) => $value->orWhereNotIn($column, $doneKeys)));
     }
 }

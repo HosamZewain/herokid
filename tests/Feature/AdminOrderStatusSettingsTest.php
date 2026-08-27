@@ -162,7 +162,11 @@ class AdminOrderStatusSettingsTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('admin.orders.index', ['status' => 'customer_cancelled']))
+            ->get(route('admin.orders.index', [
+                'catalog_type' => 'products',
+                'lifecycle' => 'cancelled',
+                'status' => 'customer_cancelled',
+            ]))
             ->assertOk()
             ->assertSee('ألغاه العميل')
             ->assertSee('HK-CUSTOM-CANCELLED')

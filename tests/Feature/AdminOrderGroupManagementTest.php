@@ -249,22 +249,22 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('قيمة الطلبات المدفوعة كليًا')
             ->assertSee('الطلبات المشحونة')
             ->assertSee('المصدر')
-            ->assertSee('مكالمة هاتفية')
             ->assertSee('واتساب')
             ->assertSee('الموقع');
 
         $stats = $response->viewData('stats');
-        $this->assertSame(3, $stats['checkouts']);
-        $this->assertSame(106_800, $stats['total_value_cents']);
-        $this->assertSame(1, $stats['cancelled_checkouts']);
-        $this->assertSame(33_900, $stats['cancelled_value_cents']);
+        $this->assertSame(2, $stats['checkouts']);
+        $this->assertSame(72_900, $stats['total_value_cents']);
+        $this->assertSame(0, $stats['cancelled_checkouts']);
+        $this->assertSame(0, $stats['cancelled_value_cents']);
         $this->assertSame(1, $stats['paid_checkouts']);
         $this->assertSame(43_900, $stats['paid_value_cents']);
         $this->assertSame(1, $stats['shipped_checkouts']);
 
         $cancelledStats = $this->actingAs($this->admin)
-            ->get(route('admin.orders.index', ['status' => 'cancelled']))
+            ->get(route('admin.orders.index', ['lifecycle' => 'cancelled']))
             ->assertOk()
+            ->assertSee('مكالمة هاتفية')
             ->viewData('stats');
 
         $this->assertSame(1, $cancelledStats['checkouts']);
@@ -623,7 +623,10 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $this->assertSame('ORDER-'.$order->id, $order->refresh()->checkout_group_key);
 
-        $response = $this->actingAs($this->admin)->get(route('admin.orders.index'));
+        $response = $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'products',
+            'lifecycle' => 'active',
+        ]));
         $response->assertOk()->assertSee('HK-PRODUCT-ONLY')->assertSee('هدية مباشرة');
         $this->assertSame(1, $response->viewData('stats')['checkouts']);
         $this->assertSame(0, $response->viewData('stats')['stories']);
@@ -634,6 +637,126 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertOk()
             ->assertSee('المنتجات المباشرة')
             ->assertSee('GIFT-DIRECT');
+    }
+
+    public function test_order_tabs_separate_story_product_active_finished_and_cancelled_checkouts(): void
+    {
+        [$storyWithProducts] = $this->checkoutFixture(singleStory: true);
+
+        $product = Product::create([
+            'name_ar' => 'منتج مباشر للتبويبات',
+            'slug' => 'tabs-direct-product',
+            'price_cents' => 12_000,
+            'is_active' => true,
+        ]);
+        $productOnly = Order::create([
+            'order_number' => 'HK-TABS-PRODUCT',
+            'checkout_group_key' => 'GROUP-TABS-PRODUCT',
+            'parent_name' => 'عميل منتج',
+            'delivery_details' => ['phone' => '01012345678', 'delivery_fee' => 30],
+            'status' => 'new',
+        ]);
+        $productOnly->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => 12_000,
+            'quantity' => 1,
+            'total_price_cents' => 12_000,
+        ]);
+
+        $finished = $this->createStoryOrder('HK-TABS-FINISHED', 'GROUP-TABS-FINISHED', 'تميم', 'delivered');
+        $finished->update([
+            'payment_status' => 'paid_in_full',
+            'printing_status' => 'completed',
+            'shipping_status' => 'delivered',
+        ]);
+        $finished->items()->create([
+            'item_type' => 'story',
+            'story_id' => $finished->story_id,
+            'title' => $finished->story->title,
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $cancelled = $this->createStoryOrder('HK-TABS-CANCELLED', 'GROUP-TABS-CANCELLED', 'سليم', 'cancelled');
+        $cancelled->items()->create([
+            'item_type' => 'story',
+            'story_id' => $cancelled->story_id,
+            'title' => $cancelled->story->title,
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $deletedProduct = Order::create([
+            'order_number' => 'HK-TABS-DELETED-PRODUCT',
+            'checkout_group_key' => 'GROUP-TABS-DELETED-PRODUCT',
+            'parent_name' => 'عميل محذوف',
+            'delivery_details' => ['phone' => '01087654321'],
+            'status' => 'new',
+        ]);
+        $deletedProduct->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => 12_000,
+            'quantity' => 1,
+            'total_price_cents' => 12_000,
+        ]);
+        $deletedProduct->delete();
+
+        $storyActive = $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'stories',
+            'lifecycle' => 'active',
+        ]));
+        $storyActive->assertOk()
+            ->assertSee('طلبات القصص')
+            ->assertSee('طلبات المنتجات')
+            ->assertSee('الطلبات النشطة')
+            ->assertSee('الطلبات المنتهية')
+            ->assertSee('ملغاة / محذوفة')
+            ->assertSee($storyWithProducts->checkout_group_key)
+            ->assertDontSee('GROUP-TABS-PRODUCT')
+            ->assertDontSee('GROUP-TABS-FINISHED')
+            ->assertDontSee('GROUP-TABS-CANCELLED');
+
+        $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'products',
+            'lifecycle' => 'active',
+        ]))->assertOk()
+            ->assertSee('GROUP-TABS-PRODUCT')
+            ->assertDontSee($storyWithProducts->checkout_group_key);
+
+        $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'stories',
+            'lifecycle' => 'finished',
+        ]))->assertOk()
+            ->assertSee('GROUP-TABS-FINISHED')
+            ->assertDontSee($storyWithProducts->checkout_group_key);
+
+        $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'stories',
+            'lifecycle' => 'cancelled',
+        ]))->assertOk()
+            ->assertSee('GROUP-TABS-CANCELLED')
+            ->assertDontSee('GROUP-TABS-FINISHED');
+
+        $this->actingAs($this->admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'products',
+            'lifecycle' => 'cancelled',
+        ]))->assertOk()
+            ->assertSee('GROUP-TABS-DELETED-PRODUCT')
+            ->assertDontSee('GROUP-TABS-PRODUCT');
+
+        $csv = $this->actingAs($this->admin)->get(route('admin.orders.export', [
+            'catalog_type' => 'products',
+            'lifecycle' => 'active',
+        ]))->streamedContent();
+        $this->assertStringContainsString('GROUP-TABS-PRODUCT', $csv);
+        $this->assertStringNotContainsString($storyWithProducts->checkout_group_key, $csv);
+        $this->assertStringNotContainsString('GROUP-TABS-DELETED-PRODUCT', $csv);
     }
 
     public function test_group_catalog_query_count_does_not_grow_with_checkout_contents(): void

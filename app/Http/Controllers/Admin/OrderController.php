@@ -49,6 +49,8 @@ class OrderController extends Controller
             properties: [
                 'row_count' => $rows->count(),
                 'view' => $request->query('view', 'current'),
+                'catalog_type' => $request->query('catalog_type', 'stories'),
+                'lifecycle' => $request->query('lifecycle', 'active'),
                 'status' => $request->query('status'),
                 'payment_status' => $request->query('payment_status'),
                 'printing_status' => $request->query('printing_status'),

@@ -34,7 +34,7 @@ class AdminPermissionsTest extends TestCase
             ->get(route('admin.orders.index'))
             ->assertOk()
             ->assertSee('الطلبات')
-            ->assertDontSee('القصص')
+            ->assertDontSee(route('admin.stories.index'), false)
             ->assertDontSee('إعدادات الموقع');
 
         $this->actingAs($admin)
