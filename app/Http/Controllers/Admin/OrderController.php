@@ -195,6 +195,9 @@ class OrderController extends Controller
             'products.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
             'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:9'],
             'products.*.personalization' => ['nullable', 'array'],
+            'products.*.units' => ['nullable', 'array', 'max:10'],
+            'products.*.units.*.reuse_first' => ['nullable', 'boolean'],
+            'products.*.units.*.personalization' => ['nullable', 'array'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
@@ -242,25 +245,59 @@ class OrderController extends Controller
             }
 
             $schema = ProductPersonalizationSchema::forProduct($product);
-            $personalizationInput = (array) ($productInput['personalization'] ?? []);
-            $personalizationInput['photos'] = $request->file("products.$productId.personalization.photos", []);
+            $quantity = (int) ($productInput['quantity'] ?? 1);
+            if ($quantity > 10) {
+                throw ValidationException::withMessages(["products.$productId.quantity" => 'الحد الأقصى للمنتج المخصص هو ١٠ أطفال في الطلب.']);
+            }
+            $hasUnits = is_array($productInput['units'] ?? null);
+            $rawUnits = (array) $request->input("products.$productId.units", []);
+            if ($hasUnits) {
+                $submittedUnits = $productInput['units'];
+                ksort($submittedUnits, SORT_NUMERIC);
+                $submittedUnits = array_values($submittedUnits);
+            } else {
+                $submittedUnits = [['personalization' => (array) ($productInput['personalization'] ?? [])]];
+            }
+            $validatedUnits = [];
 
-            try {
-                $personalization = Validator::make(
-                    $personalizationInput,
-                    ProductPersonalizationSchema::adminOrderValidationRules($schema),
-                    ProductPersonalizationSchema::adminOrderValidationMessages($schema),
-                )->validate();
-            } catch (ValidationException $exception) {
-                $errors = [];
-                foreach ($exception->errors() as $field => $messages) {
-                    $errors["products.$productId.personalization.$field"] = $messages;
+            for ($unitIndex = 0; $unitIndex < $quantity; $unitIndex++) {
+                $unit = (array) ($submittedUnits[$unitIndex] ?? []);
+                $rawUnit = (array) ($rawUnits[$unitIndex] ?? []);
+                $reuseFirst = filter_var($unit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL)
+                    || filter_var($rawUnit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL);
+                if ($unitIndex > 0 && $reuseFirst) {
+                    $validatedUnits[] = ['personalization' => $validatedUnits[0]['personalization'], 'reuse_first' => true];
+
+                    continue;
                 }
 
-                throw ValidationException::withMessages($errors);
+                $personalizationInput = (array) ($unit['personalization'] ?? []);
+                $personalizationInput['photos'] = $request->file(
+                    $hasUnits ? "products.$productId.units.$unitIndex.personalization.photos" : "products.$productId.personalization.photos",
+                    [],
+                );
+
+                try {
+                    $personalization = Validator::make(
+                        $personalizationInput,
+                        ProductPersonalizationSchema::adminOrderValidationRules($schema),
+                        ProductPersonalizationSchema::adminOrderValidationMessages($schema),
+                    )->validate();
+                } catch (ValidationException $exception) {
+                    $errors = [];
+                    foreach ($exception->errors() as $field => $messages) {
+                        $prefix = $hasUnits
+                            ? "products.$productId.units.$unitIndex.personalization"
+                            : "products.$productId.personalization";
+                        $errors[$prefix.'.'.$field] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
+
+                $validatedUnits[] = ['personalization' => $personalization, 'reuse_first' => false];
             }
 
-            $validated['products'][$productId]['personalization'] = $personalization;
+            $validated['products'][$productId]['units'] = $validatedUnits;
             $validated['products'][$productId]['personalization_schema'] = $schema;
         }
 

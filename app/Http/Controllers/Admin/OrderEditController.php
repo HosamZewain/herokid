@@ -89,15 +89,21 @@ class OrderEditController extends Controller
             }
 
             $linkedOrderId = $item->item_type === 'product_add_on' ? $item->order_id : null;
-            $initialProducts[$item->product_id] = [
-                'quantity' => (int) $item->quantity,
+            $existing = $initialProducts[$item->product_id] ?? [
+                'quantity' => 0,
                 'variant_id' => $item->product_variant_id,
                 'linked_story_index' => $linkedOrderId !== null ? $storyOrderIndex->get($linkedOrderId) : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
-                'existing_order_id' => (int) $item->order_id,
-                'existing_photo_count' => count($item->order->uploaded_photos ?? []),
-                'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
             ];
+            $existing['quantity'] += (int) $item->quantity;
+            if ($item->product?->personalization_mode === 'collect_child_details') {
+                $existing['units'][] = [
+                    'existing_order_id' => (int) $item->order_id,
+                    'existing_photo_count' => count($item->order->uploaded_photos ?? []),
+                    'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
+                ];
+            }
+            $initialProducts[$item->product_id] = $existing;
         }
 
         $paymentStatuses = OrderPaymentStatus::labels();
@@ -190,6 +196,12 @@ class OrderEditController extends Controller
             'products.*.quantity' => ['nullable', 'integer', 'min:0', 'max:99'],
             'products.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
             'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:99'],
+            'products.*.personalization' => ['nullable', 'array'],
+            'products.*.units' => ['nullable', 'array', 'max:10'],
+            'products.*.units.*.existing_order_id' => ['nullable', 'integer'],
+            'products.*.units.*.reuse_first' => ['nullable', 'boolean'],
+            'products.*.units.*.reuse_source_order_id' => ['nullable', 'integer'],
+            'products.*.units.*.personalization' => ['nullable', 'array'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
@@ -235,8 +247,7 @@ class OrderEditController extends Controller
             ->where('checkout_group_key', $representative->checkoutGroupKey())
             ->get()
             ->flatMap->items
-            ->whereIn('item_type', ['product', 'product_add_on'])
-            ->keyBy('product_id');
+            ->whereIn('item_type', ['product', 'product_add_on']);
 
         foreach ($selectedProductInputs as $productId => $productInput) {
             $product = $selectedProductModels->get((int) $productId);
@@ -245,48 +256,97 @@ class OrderEditController extends Controller
             }
 
             $schema = ProductPersonalizationSchema::forProduct($product);
-            $existingItem = $existingProductItems->get((int) $productId);
-            if ($existingItem && ! $request->has("products.$productId.personalization")) {
-                continue;
+            $quantity = (int) ($productInput['quantity'] ?? 1);
+            if ($quantity > 10) {
+                throw ValidationException::withMessages(["products.$productId.quantity" => 'الحد الأقصى للمنتج المخصص هو ١٠ أطفال.']);
             }
-            $existingValues = ProductPersonalizationSchema::formValues($existingItem?->personalization_snapshot ?? []);
-            $submittedValues = (array) $request->input("products.$productId.personalization", []);
-            $personalizationInput = array_replace($existingValues, $submittedValues);
-            $newPhotos = array_values($request->file("products.$productId.personalization.photos", []));
-            $existingPhotoCount = count($existingItem?->order?->uploaded_photos ?? []);
-            $rules = ProductPersonalizationSchema::adminOrderValidationRules($schema);
+            $productExistingItems = $existingProductItems
+                ->filter(fn ($item) => (int) $item->product_id === (int) $productId)
+                ->values();
+            $usesLegacyPersonalizationInput = ! is_array($productInput['units'] ?? null)
+                && is_array($productInput['personalization'] ?? null);
 
-            if (isset($rules['photos'])) {
-                $photoField = ProductPersonalizationSchema::enabledFields($schema)['photos'];
-                $remaining = max(0, (int) $photoField['max_files'] - $existingPhotoCount);
-                $needed = max(0, (int) $photoField['min_files'] - $existingPhotoCount);
-                $rules['photos'] = [
-                    $needed > 0 ? 'required' : 'nullable',
-                    'array',
-                    ...($needed > 0 ? ['min:'.$needed] : []),
-                    'max:'.$remaining,
-                ];
-                $personalizationInput['photos'] = $newPhotos;
+            if (is_array($productInput['units'] ?? null)) {
+                $units = $productInput['units'];
+                ksort($units, SORT_NUMERIC);
+                $units = array_values($units);
+            } elseif ($usesLegacyPersonalizationInput) {
+                $units = [[
+                    'existing_order_id' => $productExistingItems->first()?->order_id,
+                    'personalization' => $productInput['personalization'],
+                ]];
+            } else {
+                $units = $productExistingItems->map(fn ($item): array => [
+                    'existing_order_id' => $item->order_id,
+                    'personalization' => [],
+                ])->all();
             }
+            $validatedUnits = [];
 
-            try {
-                $personalization = Validator::make(
-                    $personalizationInput,
-                    $rules,
-                    ProductPersonalizationSchema::adminOrderValidationMessages($schema),
-                )->validate();
-            } catch (ValidationException $exception) {
-                $errors = [];
-                foreach ($exception->errors() as $field => $messages) {
-                    $errors["products.$productId.personalization.$field"] = $messages;
+            for ($unitIndex = 0; $unitIndex < $quantity; $unitIndex++) {
+                $unit = (array) ($units[$unitIndex] ?? []);
+                $reuseFirst = filter_var($unit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL)
+                    || $request->boolean("products.$productId.units.$unitIndex.reuse_first");
+                if ($unitIndex > 0 && $reuseFirst) {
+                    $validatedUnits[] = [
+                        'personalization' => $validatedUnits[0]['personalization'],
+                        'reuse_first' => true,
+                        'existing_order_id' => null,
+                        'existing_photo_count' => $validatedUnits[0]['existing_photo_count'],
+                        'reuse_source_order_id' => $validatedUnits[0]['existing_order_id'] ?? null,
+                    ];
+
+                    continue;
                 }
 
-                throw ValidationException::withMessages($errors);
+                $existingItem = $existingProductItems->first(fn ($item) => (int) $item->product_id === (int) $productId
+                    && (int) $item->order_id === (int) ($unit['existing_order_id'] ?? 0));
+                $submittedPersonalization = (array) ($unit['personalization'] ?? []);
+                $originalPersonalization = ProductPersonalizationSchema::formValues($existingItem?->personalization_snapshot ?? []);
+                $personalizationInput = array_replace(
+                    $originalPersonalization,
+                    $submittedPersonalization,
+                );
+                $photoInputPath = $usesLegacyPersonalizationInput
+                    ? "products.$productId.personalization.photos"
+                    : "products.$productId.units.$unitIndex.personalization.photos";
+                $newPhotos = array_values($request->file($photoInputPath, []));
+                $existingPhotoCount = count($existingItem?->order?->uploaded_photos ?? []);
+                $rules = ProductPersonalizationSchema::adminOrderValidationRules($schema);
+                if (isset($rules['photos'])) {
+                    $photoField = ProductPersonalizationSchema::enabledFields($schema)['photos'];
+                    $remaining = max(0, (int) $photoField['max_files'] - $existingPhotoCount);
+                    $needed = max(0, (int) $photoField['min_files'] - $existingPhotoCount);
+                    $rules['photos'] = [$needed > 0 ? 'required' : 'nullable', 'array', ...($needed > 0 ? ['min:'.$needed] : []), 'max:'.$remaining];
+                    $personalizationInput['photos'] = $newPhotos;
+                }
+                try {
+                    $personalization = Validator::make($personalizationInput, $rules, ProductPersonalizationSchema::adminOrderValidationMessages($schema))->validate();
+                } catch (ValidationException $exception) {
+                    $errors = [];
+                    $errorPrefix = $usesLegacyPersonalizationInput
+                        ? "products.$productId.personalization"
+                        : "products.$productId.units.$unitIndex.personalization";
+                    foreach ($exception->errors() as $field => $messages) {
+                        $errors["$errorPrefix.$field"] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
+                $validatedUnits[] = [
+                    'personalization' => $personalization,
+                    'reuse_first' => false,
+                    'existing_order_id' => $unit['existing_order_id'] ?? null,
+                    'existing_photo_count' => $existingPhotoCount,
+                    'preserve_original_snapshot' => $existingItem !== null
+                        && $newPhotos === []
+                        && collect($submittedPersonalization)->every(
+                            fn (mixed $value, string $key): bool => (string) ($originalPersonalization[$key] ?? '') === (string) ($value ?? ''),
+                        ),
+                ];
             }
 
-            $validated['products'][$productId]['personalization'] = $personalization;
+            $validated['products'][$productId]['units'] = $validatedUnits;
             $validated['products'][$productId]['personalization_schema'] = $schema;
-            $validated['products'][$productId]['existing_photo_count'] = $existingPhotoCount;
         }
 
         $result = $updater->update($representative, $validated, $request->user(), $request);

@@ -399,7 +399,7 @@ class AdminOrderFullEditTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.edit', $order->id))
             ->assertOk()
-            ->assertSee('بيانات التخصيص لهذا المنتج')
+            ->assertSee('بيانات مستقلة لكل طفل')
             ->assertSee('اسم الطفل كامل')
             ->assertSee('اسم المدرسة')
             ->assertSee('اسم الفصل');
@@ -441,6 +441,102 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame(2, $item->personalization_snapshot['uploaded_photos_count']);
         foreach ($order->uploaded_photos as $path) {
             Storage::disk('local')->assertExists($path);
+        }
+    }
+
+    public function test_admin_can_split_a_legacy_multi_quantity_sticker_into_child_specific_production_orders(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة لعدة أطفال',
+            'slug' => 'split-legacy-multi-sticker',
+            'price_cents' => 19_500,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل كامل'],
+                'school_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم المدرسة'],
+                'class_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الفصل'],
+                'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
+            ],
+            'production_prompt_template' => 'Sticker for {{child_full_name}} at {{school_name}}',
+            'is_active' => true,
+        ]);
+        $existingPhotos = ['orders/photos/legacy-multi/one.jpg', 'orders/photos/legacy-multi/two.jpg'];
+        foreach ($existingPhotos as $path) {
+            Storage::disk('local')->put($path, 'photo');
+        }
+        $order = Order::create([
+            'order_number' => 'HK-LEGACY-MULTI-STICKER',
+            'checkout_group_key' => 'CHK-LEGACY-MULTI-STICKER',
+            'parent_name' => 'ولي أمر الاستيكر',
+            'child_name' => 'سليم أحمد',
+            'order_source' => 'whatsapp',
+            'status' => 'new',
+            'uploaded_photos' => $existingPhotos,
+            'delivery_details' => [
+                'phone' => '01011112222',
+                'delivery_country_id' => $this->country->id,
+                'delivery_governorate_id' => $this->governorate->id,
+                'country' => $this->country->name,
+                'governorate' => $this->governorate->name,
+                'city' => 'القاهرة', 'street' => 'شارع قديم', 'address_details' => 'تفاصيل قديمة',
+                'delivery_fee' => 50, 'subtotal' => 585, 'total' => 635,
+            ],
+        ]);
+        $item = $order->items()->create([
+            'item_type' => 'product', 'product_id' => $product->id, 'title' => $product->name_ar,
+            'unit_price_cents' => 19_500, 'quantity' => 3, 'total_price_cents' => 58_500,
+            'personalization_mode' => 'collect_child_details',
+            'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
+            'personalization_snapshot' => [
+                'child_name' => 'سليم أحمد', 'school_name' => 'مدرسة النور', 'class_name' => '3A',
+                'uploaded_photos_count' => 2,
+            ],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.edit', $order))
+            ->assertOk()
+            ->assertSee('الطفل ١')
+            ->assertSee('الطفل ٢')
+            ->assertSee('الطفل ٣');
+
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order), [
+            'parent_name' => 'ولي أمر الاستيكر', 'phone' => '01011112222', 'order_source' => 'whatsapp',
+            'delivery_country_id' => $this->country->id, 'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'القاهرة', 'street' => 'شارع قديم', 'address_details' => 'تفاصيل قديمة',
+            'stories' => [],
+            'products' => [$product->id => [
+                'quantity' => 3,
+                'units' => [
+                    ['existing_order_id' => $order->id, 'personalization' => [
+                        'child_name' => 'سليم أحمد', 'school_name' => 'مدرسة النور', 'class_name' => '3A',
+                    ]],
+                    ['personalization' => [
+                        'child_name' => 'مريم أحمد', 'school_name' => 'مدرسة الأمل', 'class_name' => '2B',
+                        'photos' => $this->photos('split-mariam'),
+                    ]],
+                    ['personalization' => [
+                        'child_name' => 'عمر أحمد', 'school_name' => 'مدرسة المستقبل', 'class_name' => '1C',
+                        'photos' => $this->photos('split-omar'),
+                    ]],
+                ],
+            ]],
+            'payment_status' => 'unpaid',
+            'change_reason' => 'فصل النسخ القديمة إلى بيانات إنتاج مستقلة لكل طفل.',
+        ])->assertRedirect();
+
+        $orders = Order::query()->with('items')->where('checkout_group_key', $order->checkout_group_key)->orderBy('id')->get();
+        $this->assertCount(3, $orders);
+        $this->assertSame(['سليم أحمد', 'مريم أحمد', 'عمر أحمد'], $orders->pluck('child_name')->all());
+        $this->assertSame([1, 1, 1], $orders->map(fn (Order $childOrder): int => $childOrder->items->sole()->quantity)->all());
+        $this->assertSame([2, 2, 2], $orders->map(fn (Order $childOrder): int => count($childOrder->uploaded_photos ?? []))->all());
+        $this->assertDatabaseMissing('order_items', ['id' => $item->id]);
+
+        $groupPage = $this->actingAs($this->admin)->get(route('admin.orders.groups.show', $orders->first()));
+        foreach ($orders as $childOrder) {
+            $groupPage
+                ->assertSee($childOrder->child_name)
+                ->assertSee(route('admin.orders.products.production', [$childOrder, $childOrder->items->sole()]), false);
         }
     }
 

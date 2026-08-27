@@ -261,6 +261,17 @@
                                         @endif
                                     @endcan
                                 @endif
+                                @can('orders.production_prompt.manage')
+                                    @if($productOrder && \App\Support\ProductProductionPrompt::templateForItem($product) !== null)
+                                        <a
+                                            href="{{ route('admin.orders.products.production', [$productOrder, $product]) }}"
+                                            class="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-fuchsia-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
+                                        >
+                                            <span aria-hidden="true">✨</span>
+                                            فتح صفحة إنتاج الاستيكر
+                                        </a>
+                                    @endif
+                                @endcan
                             </div>
                         @endforeach
                     </div>

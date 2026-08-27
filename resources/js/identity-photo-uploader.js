@@ -1,21 +1,25 @@
 import { prepareImageForUpload } from './image-upload-preparer';
 
 export function initializeIdentityPhotoUploader() {
-    const form = document.querySelector('[data-identity-intake]');
-    const input = form?.querySelector('[data-identity-photo-input]');
-    const queue = form?.querySelector('[data-identity-photo-queue]');
-    const hiddenInputs = form?.querySelector('[data-identity-photo-ids]');
-    const error = form?.querySelector('[data-identity-photo-error]');
-    const count = form?.querySelector('[data-identity-photo-count]');
-    const submit = form?.querySelector('[data-identity-submit]');
-    const submitLabel = form?.querySelector('[data-submit-label]');
-    const picker = form?.querySelector('[data-identity-photo-picker]');
-    const pickerTitle = form?.querySelector('[data-identity-photo-picker-title]');
-    const pickerHelp = form?.querySelector('[data-identity-photo-picker-help]');
-    const requirement = form?.querySelector('[data-identity-photo-requirement]');
-    const requirementTitle = form?.querySelector('[data-identity-photo-requirement-title]');
-    const requirementDescription = form?.querySelector('[data-identity-photo-requirement-description]');
-    const configNode = form?.querySelector('[data-identity-upload-config]');
+    document.querySelectorAll('[data-identity-intake]').forEach(initializeIdentityPhotoUploaderForRoot);
+}
+
+function initializeIdentityPhotoUploaderForRoot(root) {
+    const form = root.closest('form') || root;
+    const input = root.querySelector('[data-identity-photo-input]');
+    const queue = root.querySelector('[data-identity-photo-queue]');
+    const hiddenInputs = root.querySelector('[data-identity-photo-ids]');
+    const error = root.querySelector('[data-identity-photo-error]');
+    const count = root.querySelector('[data-identity-photo-count]');
+    const submit = root.querySelector('[data-identity-submit]');
+    const submitLabel = root.querySelector('[data-submit-label]');
+    const picker = root.querySelector('[data-identity-photo-picker]');
+    const pickerTitle = root.querySelector('[data-identity-photo-picker-title]');
+    const pickerHelp = root.querySelector('[data-identity-photo-picker-help]');
+    const requirement = root.querySelector('[data-identity-photo-requirement]');
+    const requirementTitle = root.querySelector('[data-identity-photo-requirement-title]');
+    const requirementDescription = root.querySelector('[data-identity-photo-requirement-description]');
+    const configNode = root.querySelector('[data-identity-upload-config]');
 
     if (!form || !input || !queue || !hiddenInputs || !count || !submit || !submitLabel
         || !picker || !pickerTitle || !pickerHelp || !requirement || !requirementTitle
@@ -34,6 +38,8 @@ export function initializeIdentityPhotoUploader() {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const maximum = Number(config.maxFiles ?? 3);
     const minimum = Number(config.minimumFiles ?? 2);
+    const hiddenInputName = String(config.hiddenInputName || 'photo_upload_ids[]');
+    const reuseFirstInput = root.querySelector('[data-reuse-first-child]');
     const maximumBytes = Number(config.maxSizeMb || 15) * 1024 * 1024;
     const concurrency = Math.max(1, Number(config.concurrency || 2));
     const maxLongEdge = Number(config.maxLongEdge || 2560);
@@ -99,34 +105,47 @@ export function initializeIdentityPhotoUploader() {
     }
 
     function updateState() {
+        const unitActive = !root.hidden;
+        const reuseFirst = Boolean(reuseFirstInput?.checked);
+        const requiredMinimum = reuseFirst ? 0 : minimum;
         const uploaded = uploadedItems();
         const busy = items.some((item) => ['waiting', 'preparing', 'uploading'].includes(item.status));
         const failed = items.some((item) => item.status === 'failed');
-        const remainingRequired = Math.max(0, minimum - uploaded.length);
+        const remainingRequired = Math.max(0, requiredMinimum - uploaded.length);
         const reachedMaximum = items.length >= maximum;
 
         hiddenInputs.replaceChildren(...uploaded.map((item) => {
             const hidden = document.createElement('input');
             hidden.type = 'hidden';
-            hidden.name = 'photo_upload_ids[]';
+            hidden.name = hiddenInputName;
             hidden.value = item.uploadId;
 
             return hidden;
         }));
-        count.textContent = minimum === 0
+        count.textContent = reuseFirst
+            ? 'سيتم استخدام صور وبيانات الطفل الأول'
+            : minimum === 0
             ? `${arabicNumber(uploaded.length)} / ${arabicNumber(maximum)} صور اختيارية`
             : uploaded.length < minimum
             ? `تم رفع ${arabicNumber(uploaded.length)} من ${arabicNumber(minimum)} المطلوبة`
             : `${arabicNumber(uploaded.length)} / ${arabicNumber(maximum)}`;
-        submit.disabled = submitting || busy || failed || uploaded.length < minimum;
+        submit.disabled = submitting || (!reuseFirst && (busy || failed || uploaded.length < requiredMinimum));
         submit.classList.toggle('opacity-60', submit.disabled);
         submit.classList.toggle('cursor-not-allowed', submit.disabled);
-        input.disabled = reachedMaximum;
+        input.disabled = !unitActive || reuseFirst || reachedMaximum;
+        root.querySelectorAll('[data-personalization-field]').forEach((field) => {
+            field.disabled = !unitActive || reuseFirst;
+            field.required = unitActive && !reuseFirst && field.dataset.required === '1';
+        });
+        root.querySelector('[data-personalization-fields]')?.classList.toggle('opacity-50', reuseFirst);
         picker.setAttribute('aria-disabled', reachedMaximum ? 'true' : 'false');
         picker.classList.toggle('cursor-not-allowed', reachedMaximum);
         picker.classList.toggle('opacity-60', reachedMaximum);
 
-        if (reachedMaximum) {
+        if (reuseFirst) {
+            pickerTitle.textContent = 'نفس بيانات الطفل الأول';
+            pickerHelp.textContent = 'لن تحتاج إلى إدخال البيانات أو رفع الصور مرة أخرى.';
+        } else if (reachedMaximum) {
             pickerTitle.textContent = 'اكتمل اختيار الصور';
             pickerHelp.textContent = `وصلت إلى الحد الأقصى: ${arabicNumber(maximum)} صور.`;
         } else if (uploaded.length > 0 && uploaded.length < minimum) {
@@ -156,7 +175,9 @@ export function initializeIdentityPhotoUploader() {
             submitLabel.textContent = readyLabel;
         }
 
-        if (failed) {
+        if (reuseFirst) {
+            setRequirementState('success', 'سيتم نسخ بيانات الطفل الأول', 'يمكنك إلغاء الاختيار لإدخال بيانات طفل مختلف.');
+        } else if (failed) {
             setRequirementState(
                 'danger',
                 'راجع الصورة التي فشل رفعها',
@@ -460,11 +481,15 @@ export function initializeIdentityPhotoUploader() {
     });
 
     form.addEventListener('submit', (event) => {
+        if (root.hidden) {
+            return;
+        }
         const uploaded = uploadedItems().length;
         const busy = items.some((item) => ['waiting', 'preparing', 'uploading'].includes(item.status));
         const failed = items.some((item) => item.status === 'failed');
 
-        if (busy || failed || uploaded < minimum) {
+        const reuseFirst = Boolean(reuseFirstInput?.checked);
+        if (!reuseFirst && (busy || failed || uploaded < minimum)) {
             event.preventDefault();
             setError(
                 busy
@@ -481,6 +506,9 @@ export function initializeIdentityPhotoUploader() {
         }
         updateState();
     });
+
+    reuseFirstInput?.addEventListener('change', updateState);
+    root.addEventListener('identity-unit-state', updateState);
 
     if (config.serverRejectedUploads) {
         sessionStorage.removeItem(storageKey);

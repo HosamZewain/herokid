@@ -138,10 +138,11 @@ class StoreCatalogTest extends TestCase
 
         $this->get(route('shop.product.show', $product))
             ->assertOk()
-            ->assertSee('بيانات الطفل والصور')
-            ->assertSee('name="child_name"', false)
-            ->assertSee('name="child_age"', false)
-            ->assertSee('name="child_gender"', false)
+            ->assertSee('بيانات وصور الطفل')
+            ->assertSee('name="personalizations[0][child_name]"', false)
+            ->assertSee('name="personalizations[0][child_age]"', false)
+            ->assertSee('name="personalizations[0][child_gender]"', false)
+            ->assertSee('استخدم نفس بيانات وصور الطفل الأول')
             ->assertSee('data-identity-photo-input', false);
 
         $this->post(route('cart.products.store', $product), ['quantity' => 1])
@@ -161,11 +162,11 @@ class StoreCatalogTest extends TestCase
         $this->get(route('shop.product.show', $product))
             ->assertOk()
             ->assertSee('اسم الطفل كاملًا')
-            ->assertSee('name="school_name"', false)
-            ->assertSee('name="class_name"', false)
+            ->assertSee('name="personalizations[0][school_name]"', false)
+            ->assertSee('name="personalizations[0][class_name]"', false)
             ->assertSee('data-identity-photo-input', false)
-            ->assertDontSee('name="child_age"', false)
-            ->assertDontSee('name="child_gender"', false);
+            ->assertDontSee('name="personalizations[0][child_age]"', false)
+            ->assertDontSee('name="personalizations[0][child_gender]"', false);
 
         $this->post(route('cart.products.store', $product), ['quantity' => 1])
             ->assertSessionHasErrors(['child_name', 'school_name', 'class_name', 'photo_upload_ids'])
@@ -318,6 +319,91 @@ class StoreCatalogTest extends TestCase
             'status' => 'attached',
             'attached_order_id' => $order->id,
         ]);
+    }
+
+    public function test_multiple_personalized_product_units_create_independent_children_orders(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('multi-child-school-sticker', 195, [
+            'name_ar' => 'ستيكر المدرسة لعدة أطفال',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+            'production_prompt_template' => 'Sticker for {{child_full_name}} at {{school_name}}',
+        ]);
+        $sessionToken = 'multi-child-product-token';
+        $uploads = collect(['one-a', 'one-b', 'two-a', 'two-b'])
+            ->map(fn (string $id) => $this->temporaryPhoto($sessionToken, $id));
+
+        $this->withSession(['photo_upload.token' => $sessionToken])
+            ->post(route('cart.products.store', $product), [
+                'quantity' => 2,
+                'upload_session_token' => $sessionToken,
+                'personalizations' => [
+                    [
+                        'child_name' => 'سليم أحمد',
+                        'school_name' => 'مدرسة النور',
+                        'class_name' => '3A',
+                        'photo_upload_ids' => $uploads->take(2)->pluck('public_id')->all(),
+                    ],
+                    [
+                        'child_name' => 'مريم أحمد',
+                        'school_name' => 'مدرسة الأمل',
+                        'class_name' => '2B',
+                        'photo_upload_ids' => $uploads->skip(2)->pluck('public_id')->all(),
+                    ],
+                ],
+            ])->assertRedirect(route('cart.index'));
+
+        $cart = collect(session('cart.items'));
+        $this->assertCount(2, $cart);
+        $this->assertSame(['سليم أحمد', 'مريم أحمد'], $cart->pluck('child_name')->values()->all());
+        $this->assertSame([1, 1], $cart->pluck('quantity')->values()->all());
+        $this->assertSame([2, 2], $cart->map(fn (array $item): int => count($item['uploaded_photos']))->values()->all());
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $orders = Order::query()->with('items')->orderBy('id')->get();
+        $this->assertCount(2, $orders);
+        $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
+        $this->assertSame(['سليم أحمد', 'مريم أحمد'], $orders->pluck('child_name')->all());
+        $this->assertSame([2, 2], $orders->map(fn (Order $order): int => count($order->uploaded_photos ?? []))->all());
+        $this->assertSame(['مدرسة النور', 'مدرسة الأمل'], $orders->map(fn (Order $order) => $order->items->sole()->personalization_snapshot['school_name'])->all());
+        $this->assertSame([1, 1], $orders->map(fn (Order $order): int => $order->items->sole()->quantity)->all());
+    }
+
+    public function test_personalized_product_can_reuse_first_child_data_and_photos_for_another_unit(): void
+    {
+        $product = $this->product('reused-child-school-sticker', 195, [
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+        ]);
+        $sessionToken = 'reuse-child-product-token';
+        $firstUpload = $this->temporaryPhoto($sessionToken, 'reuse-one');
+        $secondUpload = $this->temporaryPhoto($sessionToken, 'reuse-two');
+
+        $this->withSession(['photo_upload.token' => $sessionToken])
+            ->post(route('cart.products.store', $product), [
+                'quantity' => 2,
+                'upload_session_token' => $sessionToken,
+                'personalizations' => [
+                    [
+                        'child_name' => 'سليم أحمد',
+                        'school_name' => 'مدرسة النور',
+                        'class_name' => '3A',
+                        'photo_upload_ids' => [$firstUpload->public_id, $secondUpload->public_id],
+                    ],
+                    ['reuse_first' => 1],
+                ],
+            ])->assertRedirect(route('cart.index'));
+
+        $items = collect(session('cart.items'))->values();
+        $this->assertCount(2, $items);
+        $this->assertSame('سليم أحمد', $items[1]['child_name']);
+        $this->assertSame($items[0]['uploaded_photos'], $items[1]['uploaded_photos']);
+        $this->assertSame(1, $items[1]['reused_from_unit']);
+        $this->assertNotSame($items[0]['key'], $items[1]['key']);
     }
 
     public function test_standalone_personalized_product_does_not_overwrite_story_child_in_mixed_checkout(): void

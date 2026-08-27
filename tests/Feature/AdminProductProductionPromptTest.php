@@ -131,6 +131,72 @@ PROMPT);
             ->assertSee('نسخ برومبت المنتج');
     }
 
+    public function test_product_only_group_card_links_to_a_dedicated_product_production_page(): void
+    {
+        Storage::fake('local');
+        $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}} at {{school_name}}');
+        $photoPath = 'orders/photos/sticker/child.png';
+        Storage::disk('local')->put($photoPath, 'image');
+        $order = Order::create([
+            'order_number' => 'HK-STICKER-PRODUCTION-PAGE',
+            'parent_name' => 'Parent',
+            'uploaded_photos' => [$photoPath],
+            'status' => 'new',
+        ]);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+            'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
+            'personalization_snapshot' => [
+                'child_name' => 'سليم محمد',
+                'school_name' => 'مدرسة النور',
+            ],
+        ]);
+
+        $productionUrl = route('admin.orders.products.production', [$order, $item]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('فتح صفحة إنتاج الاستيكر')
+            ->assertSee($productionUrl, false);
+
+        $this->actingAs($this->admin())
+            ->get($productionUrl)
+            ->assertOk()
+            ->assertSee('إنتاج ستيكر المدرسة')
+            ->assertSee('سليم محمد')
+            ->assertSee('مدرسة النور')
+            ->assertSee('Sticker prompt for سليم محمد at مدرسة النور')
+            ->assertSee(route('admin.orders.photo', [$order, 0]), false)
+            ->assertDontSee($photoPath);
+    }
+
+    public function test_product_production_page_rejects_an_item_from_another_order(): void
+    {
+        $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}}');
+        $order = Order::create(['order_number' => 'HK-STICKER-FIRST', 'status' => 'new']);
+        $otherOrder = Order::create(['order_number' => 'HK-STICKER-SECOND', 'status' => 'new']);
+        $item = $otherOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.orders.products.production', [$order, $item]))
+            ->assertNotFound();
+    }
+
     public function test_order_snapshot_is_not_changed_when_product_template_changes(): void
     {
         $product = $this->product('snapshot-sticker', 'Saved template for {{child_full_name}}');

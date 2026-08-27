@@ -117,7 +117,7 @@
                                         <div class="mt-4 grid gap-3 {{ $product->isPersonalizedAddon() ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }}">
                                             <div>
                                                 <label class="mb-1 block text-[10px] font-black text-gray-500">الكمية</label>
-                                                <input name="products[{{ $product->id }}][quantity]" type="number" min="0" max="99" value="{{ $quantity }}" class="w-full rounded-xl border-gray-200 text-center text-sm" data-product-quantity>
+                                                <input name="products[{{ $product->id }}][quantity]" type="number" min="0" max="{{ $product->personalization_mode === 'collect_child_details' ? 10 : 99 }}" value="{{ $quantity }}" class="w-full rounded-xl border-gray-200 text-center text-sm" data-product-quantity>
                                             </div>
                                             @if($product->activeVariants->isNotEmpty())
                                                 <div>
@@ -377,19 +377,28 @@
 
                     const refreshPersonalization = () => {
                         if (!personalization) return;
-                        const selected = Number(quantity?.value || 0) > 0;
+                        const count = Math.max(0, Math.min(10, Number(quantity?.value || 0)));
+                        const selected = count > 0;
                         personalization.hidden = !selected;
-                        personalization.querySelectorAll('[data-product-personalization-input]').forEach(input => {
-                            input.disabled = !selected;
-                            input.required = selected && input.dataset.required === '1';
+                        personalization.querySelectorAll('[data-product-personalization-unit]').forEach((unit, index) => {
+                            const active = index < count;
+                            const reuse = unit.querySelector('[data-admin-reuse-first]')?.checked;
+                            unit.hidden = !active;
+                            unit.querySelectorAll('[data-admin-unit-field]').forEach(input => {
+                                input.disabled = !active || reuse;
+                                input.required = active && !reuse && input.dataset.required === '1';
+                            });
+                            const reuseInput = unit.querySelector('[data-admin-reuse-first]');
+                            if (reuseInput) reuseInput.disabled = !active;
                         });
                     };
 
                     quantity?.addEventListener('input', refreshPersonalization);
-                    row.querySelector('[data-product-photo-input]')?.addEventListener('change', event => {
+                    row.querySelectorAll('[data-admin-reuse-first]').forEach(input => input.addEventListener('change', refreshPersonalization));
+                    row.querySelectorAll('[data-product-photo-input]').forEach(input => input.addEventListener('change', event => {
                         const files = Array.from(event.target.files || []);
                         const maximum = Number(event.target.dataset.maxFiles || 3);
-                        const label = row.querySelector('[data-product-photo-names]');
+                        const label = event.target.closest('[data-product-personalization-unit]')?.querySelector('[data-product-photo-names]');
 
                         if (files.length > maximum) {
                             event.target.value = '';
@@ -400,7 +409,7 @@
 
                         label.classList.remove('text-red-600');
                         if (files.length) label.textContent = files.map(file => file.name).join('، ');
-                    });
+                    }));
                     refreshPersonalization();
                 };
 

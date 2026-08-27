@@ -191,6 +191,13 @@ class AdminOrderUpdateService
                     $targetOrder = $linkedIndex !== null
                         ? $ordersByInput->get($linkedIndex)
                         : ($activeOrdersById->get($line['existing_order_id']) ?: $carrier);
+                    if ($linkedIndex === null
+                        && $line['product']->personalization_mode === 'collect_child_details'
+                        && ! $line['existing_order_id']) {
+                        $targetOrder = $this->createProductCarrier($groupKey, $activeOrders->first(), $data, $admin);
+                        $activeOrdersById->put($targetOrder->id, $targetOrder);
+                        $carrier ??= $targetOrder;
+                    }
                     $linkedStoryItem = $linkedIndex !== null
                         ? $targetOrder?->items()->where('item_type', 'story')->first()
                         : null;
@@ -200,6 +207,10 @@ class AdminOrderUpdateService
                     }
 
                     $this->createProductItem($targetOrder, $linkedStoryItem, $line, $linkedIndex);
+                    if (! empty($line['reuse_source_order_id'])) {
+                        $sourceOrder = $activeOrdersById->get((int) $line['reuse_source_order_id']);
+                        $targetOrder->forceFill(['uploaded_photos' => array_values($sourceOrder?->uploaded_photos ?? [])])->save();
+                    }
                     if ($line['photos'] !== []) {
                         $this->photoUploads->append($targetOrder, $line['photos']);
                     }
@@ -487,7 +498,7 @@ class AdminOrderUpdateService
         $prices = [];
 
         foreach ($items as $item) {
-            $prices[(int) $item->product_id] = [
+            $prices[(int) $item->product_id][] = [
                 'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
                 'order_id' => (int) $item->order_id,
@@ -521,7 +532,7 @@ class AdminOrderUpdateService
             ->get()
             ->keyBy('id');
 
-        return $selected->map(function (array $input) use ($products, $storyIndexes, $oldPrices): array {
+        return $selected->flatMap(function (array $input) use ($products, $storyIndexes, $oldPrices): array {
             $product = $products->get($input['product_id']);
             if (! $product) {
                 throw ValidationException::withMessages(['products' => 'أحد المنتجات المختارة غير موجود.']);
@@ -564,32 +575,53 @@ class AdminOrderUpdateService
                 }
             }
 
-            $old = $oldPrices[$product->id] ?? null;
+            $oldCandidates = $oldPrices[$product->id] ?? [];
+            $old = $oldCandidates[0] ?? null;
             $variantId = $variant?->id;
             $unitPriceCents = $old && $old['variant_id'] === $variantId
                 ? (int) $old['unit_price_cents']
                 : $product->effectivePriceCents($variant);
 
-            $personalizationSnapshot = $old['personalization_snapshot'] ?? null;
-            $photos = [];
-            if (
-                $linkedIndex === null
-                && $product->personalization_mode === 'collect_child_details'
-                && array_key_exists('personalization_schema', $input)
-            ) {
+            if ($linkedIndex === null && $product->personalization_mode === 'collect_child_details') {
                 $schema = is_array($input['personalization_schema'] ?? null)
                     ? $input['personalization_schema']
                     : ProductPersonalizationSchema::forProduct($product);
-                $personalization = is_array($input['personalization'] ?? null) ? $input['personalization'] : [];
-                $photos = array_values($personalization['photos'] ?? []);
-                $personalizationSnapshot = ProductPersonalizationSchema::snapshot(
-                    $schema,
-                    $personalization,
-                    (int) ($input['existing_photo_count'] ?? 0) + count($photos),
-                );
+                $units = array_values((array) ($input['units'] ?? []));
+                if ($units === [] && is_array($input['personalization'] ?? null)) {
+                    $units = [[
+                        'existing_order_id' => $old['order_id'] ?? null,
+                        'existing_photo_count' => (int) data_get($old, 'personalization_snapshot.uploaded_photos_count', 0),
+                        'personalization' => $input['personalization'],
+                    ]];
+                }
+
+                return collect($units)->take($quantity)->map(function (array $unit, int $unitIndex) use ($product, $variant, $unitPriceCents, $schema, $oldCandidates): array {
+                    $existingOrderId = (int) ($unit['existing_order_id'] ?? 0);
+                    $oldUnit = collect($oldCandidates)->first(fn (array $candidate): bool => (int) $candidate['order_id'] === $existingOrderId);
+                    $personalization = (array) ($unit['personalization'] ?? []);
+                    $photos = array_values($personalization['photos'] ?? []);
+                    $snapshot = ! empty($unit['preserve_original_snapshot']) && $oldUnit
+                        ? $oldUnit['personalization_snapshot']
+                        : ProductPersonalizationSchema::snapshot(
+                            $schema,
+                            $personalization,
+                            (int) ($unit['existing_photo_count'] ?? 0) + count($photos),
+                        );
+
+                    return [
+                        'product' => $product, 'variant' => $variant, 'quantity' => 1,
+                        'unit_price_cents' => $unitPriceCents, 'total_price_cents' => $unitPriceCents,
+                        'linked_story_index' => null,
+                        'existing_order_id' => $oldUnit ? (int) $oldUnit['order_id'] : null,
+                        'personalization_snapshot' => $snapshot,
+                        'production_prompt_template' => $oldUnit['production_prompt_template'] ?? $product->production_prompt_template,
+                        'photos' => $photos, 'personalization_unit' => $unitIndex + 1,
+                        'reuse_source_order_id' => $unit['reuse_source_order_id'] ?? null,
+                    ];
+                })->all();
             }
 
-            return [
+            return [[
                 'product' => $product,
                 'variant' => $variant,
                 'quantity' => $quantity,
@@ -597,10 +629,10 @@ class AdminOrderUpdateService
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedIndex,
                 'existing_order_id' => $old ? (int) $old['order_id'] : null,
-                'personalization_snapshot' => $personalizationSnapshot,
+                'personalization_snapshot' => $old['personalization_snapshot'] ?? null,
                 'production_prompt_template' => $old['production_prompt_template'] ?? $product->production_prompt_template,
-                'photos' => $photos,
-            ];
+                'photos' => [],
+            ]];
         });
     }
 

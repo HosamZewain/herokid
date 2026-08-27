@@ -239,6 +239,8 @@ class AdminOrderCreationService
                     $orders['product-base'] = $firstOrder;
                 }
 
+                $firstPersonalizedProductOrders = [];
+
                 foreach ($productLines as $line) {
                     $linkedIndex = $line['linked_story_index'];
                     $targetOrder = $linkedIndex !== null ? $orders[$linkedIndex] : $firstOrder;
@@ -262,12 +264,24 @@ class AdminOrderCreationService
                             personalizationSnapshot: $line['personalization_snapshot'],
                         );
                         $createdOrderIds[] = $targetOrder->id;
-                        $orders['product-'.$product->id] = $targetOrder;
+                        $orders['product-'.$product->id.'-'.$line['personalization_unit']] = $targetOrder;
                         $firstOrder ??= $targetOrder;
 
-                        if ($line['photos'] !== []) {
+                        if (! empty($line['reuse_first'])) {
+                            $sourceOrder = $firstPersonalizedProductOrders[$product->id] ?? null;
+                            if (! $sourceOrder) {
+                                throw ValidationException::withMessages([
+                                    'products.'.$product->id.'.units' => 'تعذر استخدام صور الطفل الأول. أعد إدخال بيانات الأطفال وحاول مرة أخرى.',
+                                ]);
+                            }
+                            $targetOrder->forceFill([
+                                'uploaded_photos' => array_values($sourceOrder->fresh()->uploaded_photos ?? []),
+                            ])->save();
+                        } elseif ($line['photos'] !== []) {
                             $this->photoUploads->append($targetOrder, $line['photos']);
                         }
+
+                        $firstPersonalizedProductOrders[$product->id] ??= $targetOrder;
                     }
 
                     if (! $targetOrder) {
@@ -380,7 +394,7 @@ class AdminOrderCreationService
             throw ValidationException::withMessages(['products' => 'أحد المنتجات المختارة لم يعد متاحًا.']);
         }
 
-        return $selected->map(function (array $input) use ($products, $storyIndexes): array {
+        return $selected->flatMap(function (array $input) use ($products, $storyIndexes): array {
             $product = $products->get($input['product_id']);
             $quantity = max(1, (int) $input['quantity']);
             $variant = null;
@@ -421,46 +435,53 @@ class AdminOrderCreationService
             }
 
             $unitPriceCents = $product->effectivePriceCents($variant);
-            $personalizationSchema = null;
-            $personalizationSnapshot = null;
-            $photos = [];
-
             if ($linkedStoryIndex === null && $product->personalization_mode === 'collect_child_details') {
                 $personalizationSchema = is_array($input['personalization_schema'] ?? null)
                     ? $input['personalization_schema']
                     : ProductPersonalizationSchema::forProduct($product);
-                $personalization = is_array($input['personalization'] ?? null)
-                    ? $input['personalization']
-                    : [];
-                $photos = array_values($personalization['photos'] ?? []);
-                $personalizationSnapshot = ProductPersonalizationSchema::snapshot(
-                    $personalizationSchema,
-                    $personalization,
-                    count($photos),
-                );
+                $units = is_array($input['units'] ?? null)
+                    ? array_values($input['units'])
+                    : [['personalization' => (array) ($input['personalization'] ?? [])]];
 
-                if (! ProductPersonalizationSchema::cartItemIsComplete($personalizationSchema, [
-                    ...$personalization,
-                    'uploaded_photos' => $photos,
-                    'personalization_snapshot' => $personalizationSnapshot,
-                ])) {
-                    throw ValidationException::withMessages([
-                        'products.'.$product->id.'.personalization' => 'استكمل بيانات التخصيص المطلوبة للمنتج '.$product->name_ar.'.',
-                    ]);
-                }
+                return collect($units)->take($quantity)->map(function (array $unit, int $unitIndex) use ($product, $variant, $unitPriceCents, $personalizationSchema): array {
+                    $personalization = (array) ($unit['personalization'] ?? []);
+                    $reuseFirst = ! empty($unit['reuse_first']);
+                    $submittedPhotos = array_values($personalization['photos'] ?? []);
+                    $photos = $reuseFirst ? [] : $submittedPhotos;
+                    $snapshot = ProductPersonalizationSchema::snapshot($personalizationSchema, $personalization, count($submittedPhotos));
+
+                    if (! ProductPersonalizationSchema::cartItemIsComplete($personalizationSchema, [
+                        ...$personalization,
+                        'uploaded_photos' => $submittedPhotos,
+                        'personalization_snapshot' => $snapshot,
+                    ])) {
+                        throw ValidationException::withMessages([
+                            'products.'.$product->id.'.units.'.$unitIndex.'.personalization' => 'استكمل بيانات الطفل رقم '.($unitIndex + 1).' للمنتج '.$product->name_ar.'.',
+                        ]);
+                    }
+
+                    return [
+                        'product' => $product, 'variant' => $variant, 'quantity' => 1,
+                        'unit_price_cents' => $unitPriceCents, 'total_price_cents' => $unitPriceCents,
+                        'linked_story_index' => null, 'personalization_schema' => $personalizationSchema,
+                        'personalization_snapshot' => $snapshot, 'photos' => $photos,
+                        'personalization_unit' => $unitIndex + 1,
+                        'reuse_first' => $reuseFirst,
+                    ];
+                })->all();
             }
 
-            return [
+            return [[
                 'product' => $product,
                 'variant' => $variant,
                 'quantity' => $quantity,
                 'unit_price_cents' => $unitPriceCents,
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedStoryIndex,
-                'personalization_schema' => $personalizationSchema,
-                'personalization_snapshot' => $personalizationSnapshot,
-                'photos' => $photos,
-            ];
+                'personalization_schema' => null,
+                'personalization_snapshot' => null,
+                'photos' => [],
+            ]];
         });
     }
 

@@ -29,7 +29,7 @@ class ProductCartController extends Controller
             'linked_story_key' => 'nullable|string',
         ];
 
-        if ($collectsChildDetails) {
+        if ($collectsChildDetails && ! $request->has('personalizations')) {
             $rules += ProductPersonalizationSchema::validationRules($personalizationSchema);
         }
 
@@ -40,6 +40,10 @@ class ProductCartController extends Controller
         )->validate();
 
         $quantity = (int) ($validated['quantity'] ?? 1);
+
+        if ($collectsChildDetails && $quantity > 10) {
+            return $this->errorResponse($request, 'الحد الأقصى للمنتج المخصص في الطلب الواحد هو ١٠ أطفال.', 'quantity');
+        }
         $variant = null;
 
         if (! empty($validated['variant_id'])) {
@@ -80,78 +84,152 @@ class ProductCartController extends Controller
         }
 
         $unitPriceCents = $product->effectivePriceCents($variant);
-        $itemKey = (string) Str::uuid();
         $linkedStory = $linkedStoryKey ? $cart[$linkedStoryKey] : null;
-        $uploadedPhotos = [];
+        $personalizationUnits = [];
 
-        if ($collectsChildDetails && $photoField && ! empty($validated['photo_upload_ids'])) {
-            try {
-                $uploadedPhotos = $uploads->attachIdsToCart(
-                    $request,
-                    $validated['photo_upload_ids'],
-                    $itemKey,
-                )->pluck('path')->all();
-            } catch (UploadValidationException $exception) {
-                return $this->errorResponse(
-                    $request,
-                    $exception->getMessage(),
-                    $exception->field ?: 'photo_upload_ids',
+        if ($collectsChildDetails) {
+            $submittedUnits = $request->input('personalizations');
+            $submittedUnits = is_array($submittedUnits) ? array_values($submittedUnits) : [$request->all()];
+
+            if (count($submittedUnits) < $quantity) {
+                return $this->errorResponse($request, 'أدخل بيانات كل طفل أو اختر استخدام بيانات الطفل الأول.', 'personalizations');
+            }
+
+            for ($index = 0; $index < $quantity; $index++) {
+                $unit = (array) ($submittedUnits[$index] ?? []);
+                $reuseFirst = $index > 0 && filter_var($unit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL);
+
+                if ($reuseFirst) {
+                    $personalizationUnits[] = [
+                        ...$personalizationUnits[0],
+                        'key' => (string) Str::uuid(),
+                        'reused_from_unit' => 1,
+                    ];
+
+                    continue;
+                }
+
+                $unitValidator = Validator::make(
+                    $unit,
+                    ProductPersonalizationSchema::validationRules($personalizationSchema),
+                    ProductPersonalizationSchema::validationMessages($personalizationSchema),
                 );
+
+                if ($unitValidator->fails()) {
+                    $errors = [];
+                    foreach ($unitValidator->errors()->toArray() as $field => $messages) {
+                        $errors['personalizations.'.$index.'.'.$field] = $messages;
+                    }
+
+                    if ($request->expectsJson()) {
+                        return response()->json([
+                            'message' => 'استكمل بيانات الطفل رقم '.($index + 1).'.',
+                            'errors' => $errors,
+                        ], 422);
+                    }
+
+                    return back()->withErrors($errors)->withInput();
+                }
+
+                $unitData = $unitValidator->validated();
+                $unitKey = (string) Str::uuid();
+                $uploadedPhotos = [];
+
+                if ($photoField && ! empty($unitData['photo_upload_ids'])) {
+                    try {
+                        $uploadedPhotos = $uploads->attachIdsToCart(
+                            $request,
+                            $unitData['photo_upload_ids'],
+                            $unitKey,
+                        )->pluck('path')->all();
+                    } catch (UploadValidationException $exception) {
+                        return $this->errorResponse(
+                            $request,
+                            $exception->getMessage(),
+                            'personalizations.'.$index.'.'.($exception->field ?: 'photo_upload_ids'),
+                        );
+                    }
+                }
+
+                $personalizationUnits[] = [
+                    'key' => $unitKey,
+                    'data' => $unitData,
+                    'uploaded_photos' => $uploadedPhotos,
+                    'snapshot' => ProductPersonalizationSchema::snapshot($personalizationSchema, $unitData, count($uploadedPhotos)),
+                    'reused_from_unit' => null,
+                ];
             }
         }
 
-        $personalizationSnapshot = $collectsChildDetails
-            ? ProductPersonalizationSchema::snapshot($personalizationSchema, $validated, count($uploadedPhotos))
-            : null;
-
-        $cart[$itemKey] = [
-            'key' => $itemKey,
-            'item_type' => $linkedStoryKey ? 'product_add_on' : 'product',
-            'product_id' => $product->id,
-            'product_title' => $product->name_ar,
-            'product_slug' => $product->slug,
-            'product_image' => $product->featured_image,
-            'product_image_url' => $product->featured_image_url,
-            'variant_id' => $variant?->id,
-            'variant_name' => $variant?->name_ar,
-            'sku' => $variant?->sku ?: $product->sku,
-            'unit_price_cents' => $unitPriceCents,
-            'unit_price' => $unitPriceCents / 100,
+        $unitsToAdd = $collectsChildDetails ? $personalizationUnits : [[
+            'key' => (string) Str::uuid(),
+            'data' => [],
+            'uploaded_photos' => [],
+            'snapshot' => null,
             'quantity' => $quantity,
-            'line_total_cents' => $unitPriceCents * $quantity,
-            'personalization_mode' => $product->personalization_mode,
-            'child_name' => $personalizationSnapshot['child_name'] ?? null,
-            'child_age' => $personalizationSnapshot['child_age'] ?? null,
-            'child_gender' => $personalizationSnapshot['child_gender'] ?? null,
-            'interests' => $personalizationSnapshot['interests'] ?? null,
-            'school_name' => $personalizationSnapshot['school_name'] ?? null,
-            'class_name' => $personalizationSnapshot['class_name'] ?? null,
-            'parent_notes' => $personalizationSnapshot['parent_notes'] ?? null,
-            'uploaded_photos' => $uploadedPhotos,
-            'personalization_snapshot' => $personalizationSnapshot,
-            'linked_story_key' => $linkedStoryKey,
-            'linked_story_snapshot' => $linkedStory ? [
-                'story_id' => $linkedStory['story_id'] ?? null,
-                'story_title' => $linkedStory['story_title'] ?? null,
-                'child_name' => $linkedStory['child_name'] ?? null,
-                'child_age' => $linkedStory['child_age'] ?? null,
-                'child_gender' => $linkedStory['child_gender'] ?? null,
-            ] : null,
-        ];
+        ]];
+        $addedKeys = [];
+
+        foreach ($unitsToAdd as $unitIndex => $unit) {
+            $itemKey = $unit['key'] ?? (string) Str::uuid();
+            $personalizationSnapshot = $unit['snapshot'] ?? null;
+            $uploadedPhotos = $unit['uploaded_photos'] ?? [];
+            $lineQuantity = $collectsChildDetails ? 1 : $quantity;
+
+            $cart[$itemKey] = [
+                'key' => $itemKey,
+                'item_type' => $linkedStoryKey ? 'product_add_on' : 'product',
+                'product_id' => $product->id,
+                'product_title' => $product->name_ar,
+                'product_slug' => $product->slug,
+                'product_image' => $product->featured_image,
+                'product_image_url' => $product->featured_image_url,
+                'variant_id' => $variant?->id,
+                'variant_name' => $variant?->name_ar,
+                'sku' => $variant?->sku ?: $product->sku,
+                'unit_price_cents' => $unitPriceCents,
+                'unit_price' => $unitPriceCents / 100,
+                'quantity' => $lineQuantity,
+                'line_total_cents' => $unitPriceCents * $lineQuantity,
+                'personalization_mode' => $product->personalization_mode,
+                'child_name' => $personalizationSnapshot['child_name'] ?? null,
+                'child_age' => $personalizationSnapshot['child_age'] ?? null,
+                'child_gender' => $personalizationSnapshot['child_gender'] ?? null,
+                'interests' => $personalizationSnapshot['interests'] ?? null,
+                'school_name' => $personalizationSnapshot['school_name'] ?? null,
+                'class_name' => $personalizationSnapshot['class_name'] ?? null,
+                'parent_notes' => $personalizationSnapshot['parent_notes'] ?? null,
+                'uploaded_photos' => $uploadedPhotos,
+                'personalization_snapshot' => $personalizationSnapshot,
+                'personalization_unit' => $collectsChildDetails ? $unitIndex + 1 : null,
+                'reused_from_unit' => $unit['reused_from_unit'] ?? null,
+                'linked_story_key' => $linkedStoryKey,
+                'linked_story_snapshot' => $linkedStory ? [
+                    'story_id' => $linkedStory['story_id'] ?? null,
+                    'story_title' => $linkedStory['story_title'] ?? null,
+                    'child_name' => $linkedStory['child_name'] ?? null,
+                    'child_age' => $linkedStory['child_age'] ?? null,
+                    'child_gender' => $linkedStory['child_gender'] ?? null,
+                ] : null,
+            ];
+            $addedKeys[] = $itemKey;
+        }
 
         session(['cart.items' => $cart]);
-        app(CartTrackingService::class)->recordItemAdded($request, $itemKey);
+        foreach ($addedKeys as $addedKey) {
+            app(CartTrackingService::class)->recordItemAdded($request, $addedKey);
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'تمت إضافة '.$product->name_ar.' إلى السلة.',
-                'item_key' => $itemKey,
+                'item_key' => $addedKeys[0],
                 'product_name' => $product->name_ar,
                 'added_line_total' => ($unitPriceCents * $quantity) / 100,
                 'cart_count' => count($cart),
                 'mobile_item_html' => view('front.cart._mobile_item', [
-                    'key' => $itemKey,
-                    'item' => $cart[$itemKey],
+                    'key' => $addedKeys[0],
+                    'item' => $cart[$addedKeys[0]],
                     'addOnItems' => collect(),
                 ])->render(),
             ]);

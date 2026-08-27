@@ -13,12 +13,6 @@
         $singleStoryItem = $storyItems->count() === 1 ? $storyItems->first() : null;
         $photoField = $personalizationFields['photos'] ?? null;
         $hasPhotoField = $collectsChildDetails && $photoField;
-        $productUploadConfig = $hasPhotoField ? array_merge($photoUploadConfig, [
-            'serverRejectedUploads' => $errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*'),
-            'restoredUploadIds' => $errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*')
-                ? []
-                : old('photo_upload_ids', []),
-        ]) : null;
     @endphp
 
     <div class="bg-slate-50 py-10 lg:py-14">
@@ -83,89 +77,21 @@
                         </div>
                     @endif
 
-                    <form action="{{ route('cart.products.store', $product) }}" method="POST" class="mt-6 space-y-4"
-                        @if($hasPhotoField) data-identity-intake @endif>
+                    <form action="{{ route('cart.products.store', $product) }}" method="POST" class="mt-6 space-y-4" data-product-order-form>
                         @csrf
                         @if($collectsChildDetails)
-                            @if($hasPhotoField)
-                                <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] }}">
-                                <script type="application/json" data-identity-upload-config>@json($productUploadConfig)</script>
-                            @endif
-
-                            <section class="rounded-3xl border border-indigo-200 bg-indigo-50/60 p-4 sm:p-5">
-                                <div class="mb-4 text-right">
-                                    <span class="inline-flex rounded-full bg-pink-500 px-3 py-1 text-xs font-black text-white">مطلوب للتخصيص</span>
-                                    <h2 class="mt-2 text-xl font-black text-slate-950">بيانات الطفل والصور</h2>
-                                    <p class="mt-1 text-sm leading-6 text-slate-600">تُحفظ هذه البيانات مع المنتج داخل طلبك.</p>
-                                </div>
-
-                                @if($errors->any())
-                                    <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700" data-scroll-on-load tabindex="-1">
-                                        {{ $errors->first() }}
-                                    </div>
-                                @endif
-
-                                <div class="grid gap-3 sm:grid-cols-2">
-                                    @foreach($personalizationFields as $fieldKey => $field)
-                                        @continue($field['type'] === 'photos')
-                                        <label for="product-{{ str_replace('_', '-', $fieldKey) }}" class="block text-sm font-black text-slate-700 {{ $field['type'] === 'textarea' || $field['type'] === 'gender' ? 'sm:col-span-2' : '' }}">
-                                            {{ $field['label'] }}
-                                            @unless($field['required'])
-                                                <span class="font-bold text-slate-400">(اختياري)</span>
-                                            @endunless
-
-                                            @if($field['type'] === 'age')
-                                                <select id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" @required($field['required']) class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
-                                                    <option value="">اختر العمر</option>
-                                                    @foreach($ageOptions as $age)
-                                                        <option value="{{ $age }}" @selected((string) old($fieldKey) === (string) $age)>{{ arabic_number($age) }} سنوات</option>
-                                                    @endforeach
-                                                </select>
-                                            @elseif($field['type'] === 'gender')
-                                                <select id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" @required($field['required']) class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 focus:border-indigo-500 focus:ring-indigo-500">
-                                                    <option value="">اختر الجنس</option>
-                                                    <option value="boy" @selected(old($fieldKey) === 'boy')>ولد 👦</option>
-                                                    <option value="girl" @selected(old($fieldKey) === 'girl')>بنت 👧</option>
-                                                </select>
-                                            @elseif($field['type'] === 'textarea')
-                                                <textarea id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" rows="2" @required($field['required'])
-                                                    class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">{{ old($fieldKey) }}</textarea>
-                                            @else
-                                                <input id="product-{{ str_replace('_', '-', $fieldKey) }}" name="{{ $fieldKey }}" value="{{ old($fieldKey) }}" @required($field['required']) autocomplete="off"
-                                                    class="mt-2 w-full rounded-xl border-slate-300 px-4 py-3 text-right focus:border-indigo-500 focus:ring-indigo-500">
-                                            @endif
-                                            <x-input-error :messages="$errors->get($fieldKey)" class="mt-1" />
-                                        </label>
-                                    @endforeach
-                                </div>
-
-                                @if($hasPhotoField)
-                                <div class="mt-4 rounded-2xl border-2 border-dashed border-indigo-200 bg-white p-4">
-                                    <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <div class="text-right">
-                                            <h3 class="font-black text-indigo-950">{{ $photoField['label'] }} @unless($photoField['required'])<span class="text-xs text-slate-400">(اختياري)</span>@endunless</h3>
-                                            <p class="mt-1 text-xs font-bold text-indigo-700">يمكنك رفع من {{ arabic_number($photoField['min_files']) }} إلى {{ arabic_number($photoField['max_files']) }} صور واضحة.</p>
-                                        </div>
-                                        <span class="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count></span>
-                                    </div>
-                                    <input type="file" id="product-child-photos" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" class="sr-only" data-identity-photo-input>
-                                    <div data-identity-photo-ids></div>
-                                    <label for="product-child-photos" data-identity-photo-picker
-                                        class="mt-4 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-4 text-center transition hover:border-indigo-400">
-                                        <span class="font-black text-indigo-700" data-identity-photo-picker-title>اختيار الصور</span>
-                                        <span class="mt-1 text-xs font-bold text-slate-500" data-identity-photo-picker-help>اختر الصور معًا وسيبدأ رفعها تلقائيًا.</span>
-                                    </label>
-                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3" data-identity-photo-queue aria-live="polite"></div>
-                                    <div class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2" role="status" aria-live="polite" data-identity-photo-requirement>
-                                        <p class="text-sm font-black text-indigo-950" data-identity-photo-requirement-title></p>
-                                        <p class="mt-1 text-xs font-bold leading-5 text-indigo-700" data-identity-photo-requirement-description></p>
-                                    </div>
-                                    <div class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700" data-identity-photo-error></div>
-                                    <x-input-error :messages="$errors->get('photo_upload_ids')" class="mt-2" />
-                                    <x-input-error :messages="$errors->get('photo_upload_ids.*')" class="mt-2" />
-                                </div>
-                                @endif
-                            </section>
+                            @php($initialQuantity = max(1, min(10, (int) old('quantity', 1))))
+                            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                                <label for="personalized-product-quantity" class="block text-sm font-black text-indigo-950">عدد الأطفال / النسخ</label>
+                                <input id="personalized-product-quantity" type="number" name="quantity" min="1" max="10" value="{{ $initialQuantity }}"
+                                    class="mt-2 w-32 rounded-xl border-indigo-200 text-center" data-personalized-product-quantity>
+                                <p class="mt-2 text-xs font-bold text-indigo-700">سيظهر نموذج مستقل لكل طفل، أو يمكنك استخدام بيانات الطفل الأول.</p>
+                            </div>
+                            <div class="space-y-4" data-personalization-units>
+                                @for($unitIndex = 0; $unitIndex < 10; $unitIndex++)
+                                    @include('front.shop._personalization-unit', compact('unitIndex', 'initialQuantity'))
+                                @endfor
+                            </div>
                         @endif
 
                         @if($product->activeVariants->count())
@@ -199,19 +125,14 @@
                             </div>
                         @endif
 
-                        <div>
+                        @unless($collectsChildDetails)<div>
                             <label class="mb-2 block text-sm font-black text-slate-700">الكمية</label>
                             <input type="number" name="quantity" min="1" value="1" class="w-32 rounded-2xl border-slate-200 text-center">
-                        </div>
+                        </div>@endunless
 
-                        <button type="submit" @disabled(! $canSubmit || $hasPhotoField)
-                            @if($hasPhotoField) data-identity-submit @endif
+                        <button type="submit" @disabled(! $canSubmit)
                             class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
-                            @if($hasPhotoField)
-                                <span data-submit-label>{{ $photoField['required'] ? 'أكمل الصور المطلوبة للمتابعة' : 'إضافة للسلة' }}</span>
-                            @else
-                                {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
-                            @endif
+                            {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
                         </button>
                     </form>
 
@@ -246,4 +167,40 @@
             @endif
         </div>
     </div>
+    @if($collectsChildDetails)
+        @push('scripts')
+            <script>
+                (() => {
+                    const form = document.querySelector('[data-product-order-form]');
+                    const quantity = form?.querySelector('[data-personalized-product-quantity]');
+                    const units = Array.from(form?.querySelectorAll('[data-personalization-unit]') || []);
+                    if (!form || !quantity || !units.length) return;
+
+                    const refresh = () => {
+                        const count = Math.max(1, Math.min(10, Number(quantity.value || 1)));
+                        quantity.value = count;
+                        units.forEach((unit, index) => {
+                            const active = index < count;
+                            unit.hidden = !active;
+                            unit.querySelectorAll('input, select, textarea, button').forEach(field => {
+                                if (field.matches('[data-reuse-first-child]')) {
+                                    field.disabled = !active;
+                                    return;
+                                }
+                                if (!active) field.disabled = true;
+                                else if (!unit.querySelector('[data-reuse-first-child]')?.checked) field.disabled = false;
+                            });
+                            unit.dispatchEvent(new Event('identity-unit-state'));
+                        });
+                    };
+
+                    quantity.addEventListener('input', refresh);
+                    form.addEventListener('change', (event) => {
+                        if (event.target.matches('[data-reuse-first-child]')) refresh();
+                    });
+                    refresh();
+                })();
+            </script>
+        @endpush
+    @endif
 </x-front-layout>

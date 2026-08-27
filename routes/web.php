@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
+use App\Http\Controllers\Admin\OrderProductProductionController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
 use App\Http\Controllers\Admin\PricingPackageController;
@@ -597,6 +598,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
     Route::delete('orders/groups/{representative}', [OrderGroupController::class, 'destroy'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.destroy');
     Route::post('orders/groups/{representative}/restore', [OrderGroupController::class, 'restore'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.restore');
+    Route::get('orders/{order}/products/{item}/production', OrderProductProductionController::class)
+        ->whereNumber(['order', 'item'])
+        ->middleware('permission:orders.production_prompt.manage')
+        ->name('orders.products.production');
     Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
     Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');

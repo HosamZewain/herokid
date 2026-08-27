@@ -247,7 +247,8 @@ class AdminManualOrderCreationTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post(route('admin.orders.store'), $payload)
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
         $order = Order::query()->with('items')->sole();
         $item = $order->items->sole();
@@ -286,6 +287,106 @@ class AdminManualOrderCreationTest extends TestCase
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertDontSee(route('admin.orders.photo', [$order, 0]), false);
+    }
+
+    public function test_admin_can_create_multiple_sticker_units_for_different_children_in_one_checkout(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة لعدة أطفال',
+            'slug' => 'manual-multi-child-sticker',
+            'price_cents' => 19_500,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+            'production_prompt_template' => 'Sticker for {{child_full_name}} at {{school_name}}',
+            'inventory_mode' => 'made_to_order',
+            'is_active' => true,
+        ]);
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [
+            $product->id => [
+                'quantity' => 3,
+                'units' => [
+                    ['personalization' => [
+                        'child_name' => 'سليم أحمد', 'school_name' => 'مدرسة النور', 'class_name' => '3A',
+                        'photos' => $this->photos('multi-sticker-salim'),
+                    ]],
+                    ['personalization' => [
+                        'child_name' => 'مريم أحمد', 'school_name' => 'مدرسة الأمل', 'class_name' => '2B',
+                        'photos' => $this->photos('multi-sticker-mariam'),
+                    ]],
+                    ['personalization' => [
+                        'child_name' => 'عمر أحمد', 'school_name' => 'مدرسة المستقبل', 'class_name' => '1C',
+                        'photos' => $this->photos('multi-sticker-omar'),
+                    ]],
+                ],
+            ],
+        ];
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect();
+
+        $orders = Order::query()->with('items')->orderBy('id')->get();
+        $this->assertCount(3, $orders);
+        $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
+        $this->assertSame(['سليم أحمد', 'مريم أحمد', 'عمر أحمد'], $orders->pluck('child_name')->all());
+        $this->assertSame([2, 2, 2], $orders->map(fn (Order $order): int => count($order->uploaded_photos ?? []))->all());
+        $this->assertSame([1, 1, 1], $orders->map(fn (Order $order): int => $order->items->sole()->quantity)->all());
+
+        $groupPage = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $orders->first()));
+        foreach ($orders as $order) {
+            $item = $order->items->sole();
+            $groupPage
+                ->assertSee($order->child_name)
+                ->assertSee(route('admin.orders.products.production', [$order, $item]), false);
+        }
+    }
+
+    public function test_admin_can_reuse_the_first_child_for_another_sticker_unit(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر المدرسة مع تكرار الطفل',
+            'slug' => 'manual-reused-child-sticker',
+            'price_cents' => 19_500,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+            'production_prompt_template' => 'Sticker for {{child_full_name}} at {{school_name}}',
+            'inventory_mode' => 'made_to_order',
+            'is_active' => true,
+        ]);
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [
+            $product->id => [
+                'quantity' => 2,
+                'units' => [
+                    ['personalization' => [
+                        'child_name' => 'سليم أحمد', 'school_name' => 'مدرسة النور', 'class_name' => '3A',
+                        'photos' => $this->photos('reused-sticker-child'),
+                    ]],
+                    ['reuse_first' => 1],
+                ],
+            ],
+        ];
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $orders = Order::query()->with('items')->orderBy('id')->get();
+        $this->assertCount(2, $orders);
+        $this->assertSame(['سليم أحمد', 'سليم أحمد'], $orders->pluck('child_name')->all());
+        $this->assertSame([2, 2], $orders->map(fn (Order $order): int => count($order->uploaded_photos ?? []))->all());
+        $this->assertSame($orders[0]->uploaded_photos, $orders[1]->uploaded_photos);
+        $this->assertSame(
+            $orders[0]->items->sole()->personalization_snapshot['school_name'],
+            $orders[1]->items->sole()->personalization_snapshot['school_name'],
+        );
     }
 
     public function test_admin_can_create_regular_product_only_order_without_child_data(): void
