@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -110,6 +111,7 @@ class ProductController extends Controller
             'personalization_fields.*.label' => 'nullable|string|max:100',
             'personalization_fields.photos.min_files' => 'nullable|integer|min:1|max:3',
             'personalization_fields.photos.max_files' => 'nullable|integer|min:1|max:3|gte:personalization_fields.photos.min_files',
+            'production_prompt_template' => 'nullable|string|max:'.ProductProductionPrompt::MAX_TEMPLATE_LENGTH,
             'inventory_mode' => 'required|string|in:no_tracking,track_stock,made_to_order',
             'stock_quantity' => 'nullable|integer|min:0|max:999999',
             'production_lead_time_days' => 'nullable|integer|min:0|max:365',
@@ -147,6 +149,15 @@ class ProductController extends Controller
             && ProductPersonalizationSchema::enabledFields($validated['personalization_fields']) === []) {
             throw ValidationException::withMessages([
                 'personalization_fields' => 'اختر حقل تخصيص واحدًا على الأقل لهذا المنتج.',
+            ]);
+        }
+
+        $unsupportedPromptVariables = ProductProductionPrompt::unsupportedVariables(
+            (string) ($validated['production_prompt_template'] ?? '')
+        );
+        if ($unsupportedPromptVariables !== []) {
+            throw ValidationException::withMessages([
+                'production_prompt_template' => 'متغيرات غير مدعومة في برومبت المنتج: '.implode('، ', $unsupportedPromptVariables),
             ]);
         }
 

@@ -264,6 +264,7 @@ class StoreCatalogTest extends TestCase
         $product = $this->product('school-sticker-order', 195, [
             'name_ar' => 'ستيكر المدرسة المخصص',
             'personalization_mode' => 'collect_child_details',
+            'production_prompt_template' => 'Sticker prompt for {{child_full_name}}',
         ]);
         $sessionToken = 'product-personalization-test-token';
         $firstUpload = $this->temporaryPhoto($sessionToken, 'product-child-one');
@@ -308,6 +309,10 @@ class StoreCatalogTest extends TestCase
         $this->assertNotNull($productItem);
         $this->assertSame('سليم', $productItem->personalization_snapshot['child_name']);
         $this->assertSame(2, $productItem->personalization_snapshot['uploaded_photos_count']);
+        $this->assertSame(
+            'Sticker prompt for {{child_full_name}}',
+            $productItem->item_snapshot['production_prompt_template']
+        );
         $this->assertDatabaseHas('temporary_photo_uploads', [
             'public_id' => $firstUpload->public_id,
             'status' => 'attached',

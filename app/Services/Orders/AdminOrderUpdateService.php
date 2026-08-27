@@ -492,6 +492,7 @@ class AdminOrderUpdateService
                 'unit_price_cents' => (int) $item->unit_price_cents,
                 'order_id' => (int) $item->order_id,
                 'personalization_snapshot' => $item->personalization_snapshot,
+                'production_prompt_template' => data_get($item->item_snapshot, 'production_prompt_template'),
             ];
             $this->incrementStock($item, $admin);
         }
@@ -597,6 +598,7 @@ class AdminOrderUpdateService
                 'linked_story_index' => $linkedIndex,
                 'existing_order_id' => $old ? (int) $old['order_id'] : null,
                 'personalization_snapshot' => $personalizationSnapshot,
+                'production_prompt_template' => $old['production_prompt_template'] ?? $product->production_prompt_template,
                 'photos' => $photos,
             ];
         });
@@ -624,6 +626,7 @@ class AdminOrderUpdateService
                 'name_en' => $product->name_en,
                 'fulfillment_type' => $product->fulfillment_type,
                 'purchase_mode' => $product->purchase_mode,
+                'production_prompt_template' => $line['production_prompt_template'],
                 'updated_manually' => true,
             ],
             'variant_snapshot' => $variant ? [

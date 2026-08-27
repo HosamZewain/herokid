@@ -22,6 +22,7 @@ use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductProductionPrompt;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -307,12 +308,14 @@ class OrderController extends Controller
         $globalStoryProductionPrompt = null;
         $productionPromptTemplateSetting = null;
         $childIdentityPrompt = null;
+        $productProductionPrompts = collect();
 
         if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
             $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
             $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
             $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
             $childIdentityPrompt = $identityPrompts->forOrder($order);
+            $productProductionPrompts = ProductProductionPrompt::forOrder($order);
         }
 
         AdminActivityLogger::log(
@@ -337,6 +340,7 @@ class OrderController extends Controller
             'globalStoryProductionPrompt',
             'productionPromptTemplateSetting',
             'childIdentityPrompt',
+            'productProductionPrompts',
             'sceneTextHandoff',
         ));
     }

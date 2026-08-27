@@ -103,6 +103,35 @@
                     </div>
                 </section>
 
+                <section class="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/50 p-5">
+                    <div class="mb-4 text-right">
+                        <h3 class="text-lg font-black text-fuchsia-950">برومبت إنتاج المنتج</h3>
+                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">اتركه فارغًا للمنتجات التي لا تحتاج برومبت. عند إدخال قالب هنا سيظهر البرومبت المكتمل فقط داخل الطلبات التي تحتوي على هذا المنتج.</p>
+                    </div>
+
+                    <textarea
+                        name="production_prompt_template"
+                        rows="24"
+                        maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}"
+                        dir="ltr"
+                        spellcheck="false"
+                        class="block w-full rounded-xl border-fuchsia-200 bg-white text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"
+                    >{{ old('production_prompt_template', $product->production_prompt_template) }}</textarea>
+                    <x-input-error :messages="$errors->get('production_prompt_template')" class="mt-2" />
+
+                    <details class="mt-4 rounded-xl border border-fuchsia-100 bg-white p-4 text-right">
+                        <summary class="cursor-pointer text-sm font-black text-fuchsia-800">المتغيرات المتاحة داخل القالب</summary>
+                        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                            @foreach(\App\Support\ProductProductionPrompt::supportedVariables() as $variable => $details)
+                                <div class="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                                    <code dir="ltr" class="font-bold text-fuchsia-700">{{ '{{'.$variable.'}}' }}</code>
+                                    <span class="mr-2 text-slate-600">{{ $details['label'] }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </details>
+                </section>
+
                 <div>
                     <label class="mb-2 block font-bold">الفئات العمرية</label>
                     <div class="flex flex-wrap gap-4">
