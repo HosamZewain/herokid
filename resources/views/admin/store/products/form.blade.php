@@ -123,8 +123,9 @@
                         <summary class="cursor-pointer text-sm font-black text-fuchsia-800">المتغيرات المتاحة داخل القالب</summary>
                         <div class="mt-3 grid gap-2 sm:grid-cols-2">
                             @foreach(\App\Support\ProductProductionPrompt::supportedVariables() as $variable => $details)
+                                @php($promptToken = chr(123).chr(123).$variable.chr(125).chr(125))
                                 <div class="rounded-lg bg-slate-50 px-3 py-2 text-xs">
-                                    <code dir="ltr" class="font-bold text-fuchsia-700">{{ '{{'.$variable.'}}' }}</code>
+                                    <code dir="ltr" class="font-bold text-fuchsia-700">{{ $promptToken }}</code>
                                     <span class="mr-2 text-slate-600">{{ $details['label'] }}</span>
                                 </div>
                             @endforeach

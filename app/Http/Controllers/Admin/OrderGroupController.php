@@ -12,6 +12,7 @@ use App\Services\Orders\OrderWorkflowStatusService;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
+use App\Support\ProductProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -45,6 +46,13 @@ class OrderGroupController extends Controller
             $shippingStatuses[$group['shipping_status']] = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']);
         }
 
+        $productProductionPrompts = collect();
+        if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
+            $productProductionPrompts = $group['active_orders']
+                ->flatMap(fn (Order $order) => ProductProductionPrompt::forOrder($order))
+                ->values();
+        }
+
         return view('admin.orders.group-show', [
             'group' => $group,
             'statuses' => $statuses,
@@ -52,6 +60,7 @@ class OrderGroupController extends Controller
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
             'printingStatuses' => $printingStatuses,
             'shippingStatuses' => $shippingStatuses,
+            'productProductionPrompts' => $productProductionPrompts,
         ]);
     }
 

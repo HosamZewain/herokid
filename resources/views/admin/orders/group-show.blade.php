@@ -267,6 +267,10 @@
                 </section>
             @endif
 
+            @can('orders.production_prompt.manage')
+                @include('admin.orders._product-production-prompts')
+            @endcan
+
             @if($deletedStoryOrders->isNotEmpty())
                 <section class="rounded-3xl border border-red-100 bg-red-50 p-6">
                     <h3 class="text-lg font-black text-red-900">قصص محذوفة من هذه العملية</h3>

@@ -9,11 +9,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('products', function (Blueprint $table): void {
-            $table->longText('production_prompt_template')->nullable()->after('personalization_fields');
-        });
+        if (! Schema::hasColumn('products', 'production_prompt_template')) {
+            Schema::table('products', function (Blueprint $table): void {
+                $table->longText('production_prompt_template')->nullable()->after('personalization_fields');
+            });
+        }
 
-        $template = file_get_contents(resource_path('prompts/school-sticker-production.md'));
+        $promptPath = resource_path('prompts/school-sticker-production.md');
+        $template = is_file($promptPath) ? file_get_contents($promptPath) : false;
 
         if (is_string($template) && trim($template) !== '') {
             DB::table('products')
@@ -25,8 +28,10 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('products', function (Blueprint $table): void {
-            $table->dropColumn('production_prompt_template');
-        });
+        if (Schema::hasColumn('products', 'production_prompt_template')) {
+            Schema::table('products', function (Blueprint $table): void {
+                $table->dropColumn('production_prompt_template');
+            });
+        }
     }
 };

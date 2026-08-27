@@ -57,7 +57,7 @@ PROMPT);
 
         $response->assertOk()
             ->assertSee('Product Production Prompt')
-            ->assertSee('برومبت إنتاج: ستيكر المدرسة')
+            ->assertSee('ستيكر المدرسة')
             ->assertSee('نسخة محفوظة مع الطلب')
             ->assertSee('Roqaya Ahmed Ali')
             ->assertSee('HeroKid School')
@@ -84,6 +84,51 @@ PROMPT);
             ->get(route('admin.orders.show', $order))
             ->assertOk()
             ->assertDontSee('برومبت إنتاج: منتج');
+    }
+
+    public function test_product_edit_page_renders_the_prompt_editor(): void
+    {
+        $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}}');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSee('برومبت إنتاج المنتج')
+            ->assertSee('name="production_prompt_template"', false)
+            ->assertSee('Sticker prompt for {{child_full_name}}');
+    }
+
+    public function test_product_only_group_page_shows_the_sticker_prompt(): void
+    {
+        $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}} at {{school_name}}');
+        $order = Order::create([
+            'order_number' => 'HK-GROUP-STICKER-PROMPT',
+            'parent_name' => 'Parent',
+            'child_name' => 'سليم محمد',
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+        $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+            'item_snapshot' => ['production_prompt_template' => $product->production_prompt_template],
+            'personalization_snapshot' => [
+                'child_name' => 'سليم محمد',
+                'school_name' => 'مدرسة النور',
+            ],
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('برومبت إنتاج المنتج')
+            ->assertSee('Sticker prompt for سليم محمد at مدرسة النور')
+            ->assertSee('نسخ برومبت المنتج');
     }
 
     public function test_order_snapshot_is_not_changed_when_product_template_changes(): void
