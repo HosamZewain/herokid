@@ -35,7 +35,7 @@
             @if(!($group['trashed'] ?? false))
                 <form method="POST" action="{{ route('admin.orders.groups.assignment.acquire', $group['representative_id']) }}" class="inline">
                     @csrf
-                    <button class="rounded-lg bg-sky-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-sky-700">استلام الطلب</button>
+                    <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm hover:bg-indigo-700">استلام الطلب</button>
                 </form>
             @endif
         @endcan

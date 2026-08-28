@@ -23,19 +23,47 @@
         </div>
 
         @can('orders.update')
-            <form method="POST" action="{{ route('admin.orders.attachments.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-5 grid gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] lg:items-end">
+            <form method="POST" action="{{ route('admin.orders.attachments.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-5 grid gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-end" data-order-attachment-form>
                 @csrf
                 <div>
                     <label for="order-attachments-files-{{ $attachmentTarget->id }}" class="mb-1.5 block text-xs font-black text-gray-700">الملفات</label>
-                    <input id="order-attachments-files-{{ $attachmentTarget->id }}" name="attachments[]" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" multiple required class="block w-full rounded-xl border border-sky-200 bg-white text-sm file:ml-3 file:border-0 file:bg-sky-600 file:px-4 file:py-2.5 file:font-black file:text-white">
+                    <input id="order-attachments-files-{{ $attachmentTarget->id }}" name="attachments[]" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" multiple required class="block w-full rounded-xl border border-sky-200 bg-white text-sm file:ml-3 file:border-0 file:bg-sky-600 file:px-4 file:py-2.5 file:font-black file:text-white" data-order-attachment-input>
                     <p class="mt-1 text-[11px] font-bold text-gray-400">PDF، JPG، PNG، WEBP، HEIC · حتى 50 ميجا للملف · تُحذف بعد 30 يومًا</p>
+                    <p class="mt-2 hidden text-xs font-black text-sky-700" data-order-attachment-selection aria-live="polite"></p>
+                    <x-input-error :messages="$errors->get('attachments')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('attachments.*')" class="mt-1" />
                 </div>
                 <div>
                     <label for="order-attachments-note-{{ $attachmentTarget->id }}" class="mb-1.5 block text-xs font-black text-gray-700">ملاحظة (اختياري)</label>
                     <input id="order-attachments-note-{{ $attachmentTarget->id }}" name="note" value="{{ old('note') }}" maxlength="1000" class="w-full rounded-xl border-sky-200 bg-white text-sm" placeholder="مثال: الملف المعتمد للطباعة">
                 </div>
-                <button class="min-h-11 rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2">رفع المرفقات</button>
+                <button type="submit" class="min-h-12 w-full rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 lg:col-span-2" data-order-attachment-submit>
+                    ⬆️ رفع المرفقات الآن
+                </button>
             </form>
+
+            @once
+                @push('scripts')
+                    <script>
+                        document.addEventListener('change', (event) => {
+                            const input = event.target.closest('[data-order-attachment-input]');
+                            if (!input) return;
+
+                            const form = input.closest('[data-order-attachment-form]');
+                            const selection = form?.querySelector('[data-order-attachment-selection]');
+                            if (!selection) return;
+
+                            const count = input.files?.length ?? 0;
+                            selection.textContent = count === 1
+                                ? `تم اختيار الملف: ${input.files[0].name}`
+                                : count > 1
+                                    ? `تم اختيار ${count} ملفات — اضغط «رفع المرفقات الآن» لإكمال الرفع.`
+                                    : '';
+                            selection.classList.toggle('hidden', count === 0);
+                        });
+                    </script>
+                @endpush
+            @endonce
         @endcan
 
         <div class="mt-5 grid gap-3 md:grid-cols-2">

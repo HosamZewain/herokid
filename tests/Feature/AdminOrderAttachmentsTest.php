@@ -96,6 +96,8 @@ class AdminOrderAttachmentsTest extends TestCase
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('مرفقات الطلب')
+            ->assertSee('رفع المرفقات الآن')
+            ->assertSee('data-order-attachment-form', false)
             ->assertSee('تُحذف بعد 30 يومًا');
 
         $this->actingAs($this->admin)
