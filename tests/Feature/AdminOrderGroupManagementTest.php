@@ -37,6 +37,9 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $response->assertOk()
             ->assertSee('w-full max-w-none space-y-5', false)
+            ->assertSee('data-order-primary-cell', false)
+            ->assertSee('data-order-row-actions', false)
+            ->assertDontSee('>إجراءات</th>', false)
             ->assertSee('GROUP-MULTI')
             ->assertSee(route('admin.orders.show', $first), false)
             ->assertSee($first->order_number)

@@ -267,7 +267,6 @@
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الدفع</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">التاريخ</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">إجراءات</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -279,10 +278,32 @@
                                         : route('admin.orders.groups.show', $group['representative_id']);
                                 @endphp
                                 <tr class="align-top transition hover:bg-slate-50">
-                                    <td class="w-44 max-w-44 px-4 py-4">
+                                    <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>
                                         <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-xs font-black text-gray-900 hover:text-indigo-700 hover:underline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
+                                        <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>
+                                            <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-8 w-8 place-items-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
+                                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                            </a>
+                                            @can('orders.update')
+                                                @if(!$group['trashed'])
+                                                    <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" title="تعديل الطلب" aria-label="تعديل الطلب" class="grid h-8 w-8 place-items-center rounded-md bg-violet-600 text-white hover:bg-violet-700"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-7.414a2 2 0 112.828 2.828L11.828 17H9v-2.828l8.586-8.586z"/></svg></a>
+                                                    <button type="button" data-workflow-toggle="{{ $group['representative_id'] }}" title="تغيير الحالات" aria-label="تغيير الحالات" class="grid h-8 w-8 place-items-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+                                                @endif
+                                            @endcan
+                                            @if($whatsappNumber && !$group['trashed'])
+                                                <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" title="واتساب" aria-label="واتساب" class="grid h-8 w-8 place-items-center rounded-md bg-green-50 text-green-700 hover:bg-green-100"><svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.52 3.48A11.91 11.91 0 0012.06 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.15 1.59 5.95L.06 24l6.29-1.65a11.9 11.9 0 005.7 1.45h.01c6.56 0 11.9-5.34 11.9-11.9 0-3.18-1.22-6.16-3.44-8.42zm-8.46 18.31h-.01a9.88 9.88 0 01-5.04-1.38l-.36-.21-3.73.98 1-3.64-.24-.37a9.86 9.86 0 01-1.51-5.27c0-5.45 4.44-9.89 9.9-9.89a9.82 9.82 0 017 2.9 9.82 9.82 0 012.9 7c-.01 5.45-4.45 9.88-9.9 9.88zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47a8.94 8.94 0 01-1.65-2.05c-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.27.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.3.18-1.42-.08-.12-.27-.2-.57-.35z"/></svg></a>
+                                            @endif
+                                            @can('orders.delete')
+                                                @if($group['trashed'])
+                                                    <form method="POST" action="{{ route('admin.orders.groups.restore', $group['representative_id']) }}" onsubmit="return confirm('استعادة عملية الشراء وكل قصصها؟')">
+                                                        @csrf
+                                                        <button class="rounded-md bg-green-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-green-700">استعادة الكل</button>
+                                                    </form>
+                                                @endif
+                                            @endcan
+                                        </div>
                                     </td>
                                     <td class="px-4 py-4">
                                         <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
@@ -337,40 +358,16 @@
                                         <p>{{ optional($group['latest_at'])->format('d/m/Y') }}</p>
                                         <p class="mt-1 text-xs text-gray-400">{{ optional($group['latest_at'])->format('h:i A') }}</p>
                                     </td>
-                                    <td class="px-4 py-4">
-                                        <div class="flex min-w-36 flex-wrap gap-1.5">
-                                            <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
-                                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                            </a>
-                                            @can('orders.update')
-                                                @if(!$group['trashed'])
-                                                    <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" title="تعديل الطلب" aria-label="تعديل الطلب" class="grid h-9 w-9 place-items-center rounded-lg bg-violet-600 text-white hover:bg-violet-700"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-7.414a2 2 0 112.828 2.828L11.828 17H9v-2.828l8.586-8.586z"/></svg></a>
-                                                    <button type="button" data-workflow-toggle="{{ $group['representative_id'] }}" title="تغيير الحالات" aria-label="تغيير الحالات" class="grid h-9 w-9 place-items-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-                                                @endif
-                                            @endcan
-                                            @if($whatsappNumber && !$group['trashed'])
-                                                <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" title="واتساب" aria-label="واتساب" class="grid h-9 w-9 place-items-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.52 3.48A11.91 11.91 0 0012.06 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.15 1.59 5.95L.06 24l6.29-1.65a11.9 11.9 0 005.7 1.45h.01c6.56 0 11.9-5.34 11.9-11.9 0-3.18-1.22-6.16-3.44-8.42zm-8.46 18.31h-.01a9.88 9.88 0 01-5.04-1.38l-.36-.21-3.73.98 1-3.64-.24-.37a9.86 9.86 0 01-1.51-5.27c0-5.45 4.44-9.89 9.9-9.89a9.82 9.82 0 017 2.9 9.82 9.82 0 012.9 7c-.01 5.45-4.45 9.88-9.9 9.88zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47a8.94 8.94 0 01-1.65-2.05c-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.27.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.3.18-1.42-.08-.12-.27-.2-.57-.35z"/></svg></a>
-                                            @endif
-                                            @can('orders.delete')
-                                                @if($group['trashed'])
-                                                    <form method="POST" action="{{ route('admin.orders.groups.restore', $group['representative_id']) }}" onsubmit="return confirm('استعادة عملية الشراء وكل قصصها؟')">
-                                                        @csrf
-                                                        <button class="w-full rounded-lg bg-green-600 px-3 py-2 text-xs font-black text-white hover:bg-green-700">استعادة الكل</button>
-                                                    </form>
-                                                @endif
-                                            @endcan
-                                        </div>
-                                    </td>
                                 </tr>
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="10" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="9" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
                                         </tr>
                                     @endif
                                 @endcan
                             @empty
-                                <tr><td colspan="10" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
+                                <tr><td colspan="9" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
