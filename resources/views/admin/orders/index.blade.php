@@ -238,7 +238,10 @@
                                         <button class="w-full rounded-xl bg-green-600 px-3 py-2.5 text-xs font-black text-white">استعادة الكل</button>
                                     </form>
                                 @else
-                                    <span class="rounded-xl bg-gray-50 px-3 py-2.5 text-center text-xs font-bold text-gray-400">{{ optional($group['latest_at'])->format('d/m/Y') }}</span>
+                                    @php
+                                        $displayOrderDate = \App\Support\OrderDateTime::display($group['latest_at']);
+                                    @endphp
+                                    <span class="rounded-xl bg-gray-50 px-3 py-2.5 text-center text-xs font-bold text-gray-400" dir="ltr">{{ $displayOrderDate?->format('d/m/Y h:i A') }}</span>
                                 @endif
                             </div>
                             @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
@@ -357,8 +360,11 @@
                                         @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">
-                                        <p>{{ optional($group['latest_at'])->format('d/m/Y') }}</p>
-                                        <p class="mt-1 text-xs text-gray-400">{{ optional($group['latest_at'])->format('h:i A') }}</p>
+                                        @php
+                                            $displayOrderDate = \App\Support\OrderDateTime::display($group['latest_at']);
+                                        @endphp
+                                        <p>{{ $displayOrderDate?->format('d/m/Y') }}</p>
+                                        <p class="mt-1 text-xs text-gray-400">{{ $displayOrderDate?->format('h:i A') }}</p>
                                     </td>
                                 </tr>
                                 @can('orders.update')

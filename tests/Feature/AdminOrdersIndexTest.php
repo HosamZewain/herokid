@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,6 +40,47 @@ class AdminOrdersIndexTest extends TestCase
             ->assertSee('Customer Parent')
             ->assertSee('href="'.route('admin.stories.edit', $story).'"', false)
             ->assertSee('رحلة القمر قبل النوم');
+    }
+
+    public function test_order_time_is_displayed_exported_and_filtered_in_cairo_time_without_changing_storage(): void
+    {
+        config(['orders.display_timezone' => 'Africa/Cairo']);
+
+        [$admin, , , $order] = $this->linkedOrderFixture();
+        $storedUtc = CarbonImmutable::parse('2026-01-15 23:30:00', 'UTC');
+
+        $order->timestamps = false;
+        $order->forceFill([
+            'created_at' => $storedUtc,
+            'updated_at' => $storedUtc,
+        ])->saveQuietly();
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertSee('16/01/2026')
+            ->assertSee('01:30 AM');
+
+        $cairoDayGroups = $this->actingAs($admin)
+            ->get(route('admin.orders.index', ['from' => '2026-01-16', 'to' => '2026-01-16']))
+            ->assertOk()
+            ->viewData('groups');
+        $previousCairoDayGroups = $this->actingAs($admin)
+            ->get(route('admin.orders.index', ['from' => '2026-01-15', 'to' => '2026-01-15']))
+            ->assertOk()
+            ->viewData('groups');
+
+        $this->assertSame(1, $cairoDayGroups->total());
+        $this->assertSame(0, $previousCairoDayGroups->total());
+
+        $csv = $this->actingAs($admin)
+            ->get(route('admin.orders.export'))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('2026-01-16', $csv);
+        $this->assertStringContainsString('01:30:00', $csv);
+        $this->assertSame('2026-01-15 23:30:00', $order->fresh()->created_at->utc()->format('Y-m-d H:i:s'));
     }
 
     private function linkedOrderFixture(): array

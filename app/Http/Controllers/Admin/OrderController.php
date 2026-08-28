@@ -20,6 +20,7 @@ use App\Services\Orders\OrderWhatsAppMessageService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\Phone;
@@ -87,9 +88,10 @@ class OrderController extends Controller
 
             foreach ($rows as $row) {
                 $delivery = $row['delivery'];
+                $orderDate = OrderDateTime::display($row['latest_at']);
                 fputcsv($output, array_map($this->csvCell(...), [
-                    optional($row['latest_at'])->format('Y-m-d'),
-                    optional($row['latest_at'])->format('H:i:s'),
+                    $orderDate?->format('Y-m-d'),
+                    $orderDate?->format('H:i:s'),
                     $row['short_reference'],
                     $row['key'],
                     implode('، ', $row['order_numbers']),

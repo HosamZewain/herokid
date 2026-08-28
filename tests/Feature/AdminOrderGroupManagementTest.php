@@ -10,6 +10,7 @@ use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Support\OrderDateTime;
 use App\Support\Phone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -119,7 +120,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ['q' => 'DIRECT-BOOK'],
             ['q' => 'رنا'],
             ['q' => '01000000000'],
-            ['from' => now()->toDateString(), 'to' => now()->toDateString()],
+            ['from' => OrderDateTime::display(now())->toDateString(), 'to' => OrderDateTime::display(now())->toDateString()],
         ] as $query) {
             $groups = $this->actingAs($this->admin)
                 ->get(route('admin.orders.index', $query))
@@ -182,8 +183,8 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $response = $this->actingAs($this->admin)->get(route('admin.orders.export', [
             'status' => 'new',
-            'from' => now()->toDateString(),
-            'to' => now()->toDateString(),
+            'from' => OrderDateTime::display(now())->toDateString(),
+            'to' => OrderDateTime::display(now())->toDateString(),
         ]));
 
         $response->assertOk()
@@ -243,8 +244,8 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->get(route('admin.orders.index', [
-                'from' => now()->toDateString(),
-                'to' => now()->toDateString(),
+                'from' => OrderDateTime::display(now())->toDateString(),
+                'to' => OrderDateTime::display(now())->toDateString(),
             ]))
             ->assertOk()
             ->assertSee('إحصائيات الطلبات المطابقة للفلاتر', false)

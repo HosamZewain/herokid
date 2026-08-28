@@ -3,10 +3,10 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -320,7 +320,7 @@ class AdminOrderGroupService
 
         if ($request->filled('from')) {
             try {
-                $query->where('created_at', '>=', CarbonImmutable::parse((string) $request->query('from'))->startOfDay());
+                $query->where('created_at', '>=', OrderDateTime::utcStartOfDay((string) $request->query('from')));
             } catch (\Throwable) {
                 // Ignore malformed query dates and keep the list usable.
             }
@@ -328,7 +328,7 @@ class AdminOrderGroupService
 
         if ($request->filled('to')) {
             try {
-                $query->where('created_at', '<=', CarbonImmutable::parse((string) $request->query('to'))->endOfDay());
+                $query->where('created_at', '<=', OrderDateTime::utcEndOfDay((string) $request->query('to')));
             } catch (\Throwable) {
                 // Ignore malformed query dates and keep the list usable.
             }
