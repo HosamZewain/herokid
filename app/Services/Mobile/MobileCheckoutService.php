@@ -385,7 +385,6 @@ class MobileCheckoutService
                     'fulfillment_type' => $product->fulfillment_type,
                     'purchase_mode' => $product->purchase_mode,
                     'production_lead_time_days' => $product->production_lead_time_days,
-                    'production_prompt_template' => $product->production_prompt_template,
                     'mobile_cart_item_id' => $cartItem->uuid,
                 ],
                 'variant_snapshot' => $variant ? ['name_ar' => $variant->name_ar, 'name_en' => $variant->name_en, 'sku' => $variant->sku] : null,

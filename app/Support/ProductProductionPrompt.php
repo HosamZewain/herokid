@@ -15,7 +15,7 @@ class ProductProductionPrompt
     private const NOT_AVAILABLE = '[MISSING — CONFIRM BEFORE PRODUCTION]';
 
     /**
-     * @return Collection<int, array{item: OrderItem, prompt: string, uses_snapshot: bool}>
+     * @return Collection<int, array{item: OrderItem, prompt: string, uses_live_template: bool, uses_snapshot: bool}>
      */
     public static function forOrder(Order $order): Collection
     {
@@ -26,7 +26,8 @@ class ProductProductionPrompt
             ->map(fn (OrderItem $item): array => [
                 'item' => $item,
                 'prompt' => self::renderForItem($item),
-                'uses_snapshot' => filled(data_get($item->item_snapshot, 'production_prompt_template')),
+                'uses_live_template' => self::usesLiveTemplate($item),
+                'uses_snapshot' => ! self::usesLiveTemplate($item),
             ])
             ->values();
     }
@@ -44,12 +45,30 @@ class ProductProductionPrompt
 
     public static function templateForItem(OrderItem $item): ?string
     {
-        $snapshot = data_get($item->item_snapshot, 'production_prompt_template');
-        $template = is_string($snapshot) && trim($snapshot) !== ''
-            ? $snapshot
-            : $item->product?->production_prompt_template;
+        $item->loadMissing('product');
+
+        if ($item->product !== null) {
+            $currentTemplate = $item->product->production_prompt_template;
+
+            return is_string($currentTemplate) && trim($currentTemplate) !== ''
+                ? $currentTemplate
+                : null;
+        }
+
+        // Historical orders may outlive their linked product. Preserve the old
+        // snapshot only for that orphaned case; every linked item always reads
+        // the current product template, including when an admin clears it.
+        $template = data_get($item->item_snapshot, 'production_prompt_template');
 
         return is_string($template) && trim($template) !== '' ? $template : null;
+    }
+
+    public static function usesLiveTemplate(OrderItem $item): bool
+    {
+        $item->loadMissing('product');
+        $template = $item->product?->production_prompt_template;
+
+        return is_string($template) && trim($template) !== '';
     }
 
     /** @return array<string, array{label: string, example: string}> */

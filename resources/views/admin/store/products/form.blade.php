@@ -116,7 +116,7 @@
                 <section class="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/50 p-5">
                     <div class="mb-4 text-right">
                         <h3 class="text-lg font-black text-fuchsia-950">برومبت إنتاج المنتج</h3>
-                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">اتركه فارغًا للمنتجات التي لا تحتاج برومبت. عند إدخال قالب هنا سيظهر البرومبت المكتمل فقط داخل الطلبات التي تحتوي على هذا المنتج.</p>
+                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">اتركه فارغًا للمنتجات التي لا تحتاج برومبت. عند حفظ أي تعديل هنا يُطبّق القالب فورًا على كل الطلبات الحالية والجديدة التي تحتوي على هذا المنتج، مع تعبئة بيانات وصور الطفل الخاصة بكل طلب.</p>
                     </div>
 
                     <textarea

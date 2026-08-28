@@ -13,8 +13,8 @@
                         <p class="mt-1 text-xs font-bold text-gray-500">Product Production Prompt</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex rounded-full border px-3 py-1.5 text-xs font-black {{ $productPrompt['uses_snapshot'] ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
-                            {{ $productPrompt['uses_snapshot'] ? 'نسخة محفوظة مع الطلب' : 'القالب الحالي للمنتج — طلب قديم' }}
+                        <span class="inline-flex rounded-full border px-3 py-1.5 text-xs font-black {{ $productPrompt['uses_live_template'] ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">
+                            {{ $productPrompt['uses_live_template'] ? 'قالب المنتج الحالي — يتحدّث تلقائيًا' : 'نسخة تاريخية احتياطية' }}
                         </span>
                         <button
                             type="button"

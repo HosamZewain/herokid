@@ -609,7 +609,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->name('orders.products.production');
     Route::put('orders/{order}/products/{item}/production-prompt', [OrderProductProductionController::class, 'updatePrompt'])
         ->whereNumber(['order', 'item'])
-        ->middleware('permission:orders.production_prompt.manage')
+        ->middleware(['permission:orders.production_prompt.manage', 'permission:store.products.update'])
         ->name('orders.products.production-prompt.update');
     Route::post('orders/{order}/products/{item}/production-prompt/use-current', [OrderProductProductionController::class, 'useCurrentPrompt'])
         ->whereNumber(['order', 'item'])

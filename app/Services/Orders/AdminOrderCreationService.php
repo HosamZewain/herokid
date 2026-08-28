@@ -308,7 +308,6 @@ class AdminOrderCreationService
                             'name_en' => $product->name_en,
                             'fulfillment_type' => $product->fulfillment_type,
                             'purchase_mode' => $product->purchase_mode,
-                            'production_prompt_template' => $product->production_prompt_template,
                             'created_manually' => true,
                         ],
                         'variant_snapshot' => $variant ? [

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -60,7 +61,7 @@ PROMPT);
         $response->assertOk()
             ->assertSee('Product Production Prompt')
             ->assertSee('ستيكر المدرسة')
-            ->assertSee('نسخة محفوظة مع الطلب')
+            ->assertSee('قالب المنتج الحالي — يتحدّث تلقائيًا')
             ->assertSee('Roqaya Ahmed Ali')
             ->assertSee('Age: 8')
             ->assertSee('HeroKid School')
@@ -234,7 +235,7 @@ PROMPT);
             ->assertNotFound();
     }
 
-    public function test_order_snapshot_is_not_changed_when_product_template_changes(): void
+    public function test_existing_orders_immediately_use_the_latest_product_template(): void
     {
         $product = $this->product('snapshot-sticker', 'Saved template for {{child_full_name}}');
         $order = Order::create([
@@ -257,10 +258,11 @@ PROMPT);
 
         $product->update(['production_prompt_template' => 'Changed template']);
 
-        $this->assertSame('Saved template for سليم', ProductProductionPrompt::renderForItem($item->fresh()));
+        $this->assertSame('Changed template', ProductProductionPrompt::renderForItem($item->fresh()));
+        $this->assertTrue(ProductProductionPrompt::usesLiveTemplate($item->fresh()));
     }
 
-    public function test_admin_can_edit_the_prompt_for_one_product_order(): void
+    public function test_editing_from_product_production_page_updates_the_global_product_template(): void
     {
         $product = $this->product('school-sticker', 'Original for {{child_full_name}}');
         $order = Order::create(['order_number' => 'HK-EDIT-STICKER-PROMPT', 'status' => 'new']);
@@ -283,7 +285,20 @@ PROMPT);
             ->assertRedirect();
 
         $this->assertSame('Updated for سليم', ProductProductionPrompt::renderForItem($item->fresh()));
-        $this->assertSame('Original for {{child_full_name}}', $product->fresh()->production_prompt_template);
+        $this->assertSame('Updated for {{child_full_name}}', $product->fresh()->production_prompt_template);
+
+        $secondOrder = Order::create(['order_number' => 'HK-SECOND-STICKER-PROMPT', 'status' => 'new']);
+        $secondItem = $secondOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_snapshot' => ['child_name' => 'ليلى'],
+        ]);
+
+        $this->assertSame('Updated for ليلى', ProductProductionPrompt::renderForItem($secondItem));
     }
 
     public function test_admin_can_apply_the_latest_product_template_to_an_existing_order(): void
@@ -308,6 +323,7 @@ PROMPT);
             ->assertRedirect();
 
         $this->assertSame('Latest for ليلى', ProductProductionPrompt::renderForItem($item->fresh()));
+        $this->assertArrayNotHasKey('production_prompt_template', $item->fresh()->item_snapshot);
     }
 
     public function test_order_prompt_edit_rejects_unsupported_variables(): void
@@ -331,7 +347,81 @@ PROMPT);
             ])
             ->assertSessionHasErrors('production_prompt_template');
 
-        $this->assertSame('Original for {{child_full_name}}', data_get($item->fresh()->item_snapshot, 'production_prompt_template'));
+        $this->assertSame('Original for {{child_full_name}}', $product->fresh()->production_prompt_template);
+    }
+
+    public function test_order_prompt_permission_alone_cannot_change_the_global_product_template(): void
+    {
+        $product = $this->product('protected-sticker', 'Original for {{child_full_name}}');
+        $order = Order::create(['order_number' => 'HK-PROTECTED-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+        ]);
+        $limitedAdmin = User::create([
+            'name' => 'Production only',
+            'email' => fake()->unique()->safeEmail(),
+            'password' => 'password',
+            'role' => 'admin',
+        ]);
+        $limitedAdmin->permissions()->sync(Permission::query()
+            ->whereIn('key', ['orders.production_prompt.manage', 'orders.view'])
+            ->pluck('id'));
+        $limitedAdmin->unsetRelation('permissions');
+
+        $this->actingAs($limitedAdmin)
+            ->put(route('admin.orders.products.production-prompt.update', [$order, $item]), [
+                'production_prompt_template' => 'Unauthorized change',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('Original for {{child_full_name}}', $product->fresh()->production_prompt_template);
+    }
+
+    public function test_clearing_a_product_template_removes_the_prompt_from_existing_orders(): void
+    {
+        $product = $this->product('legacy-sticker', null);
+        $order = Order::create(['order_number' => 'HK-LEGACY-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'item_snapshot' => ['production_prompt_template' => 'Historical for {{child_full_name}}'],
+            'personalization_snapshot' => ['child_name' => 'نور'],
+        ]);
+
+        $this->assertFalse(ProductProductionPrompt::usesLiveTemplate($item));
+        $this->assertNull(ProductProductionPrompt::templateForItem($item));
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertDontSee('Historical for نور');
+    }
+
+    public function test_historical_snapshot_is_only_used_when_the_product_link_no_longer_exists(): void
+    {
+        $order = Order::create(['order_number' => 'HK-ORPHANED-STICKER-PROMPT', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => null,
+            'title' => 'منتج تاريخي',
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'item_snapshot' => ['production_prompt_template' => 'Historical for {{child_full_name}}'],
+            'personalization_snapshot' => ['child_name' => 'نور'],
+        ]);
+
+        $this->assertFalse(ProductProductionPrompt::usesLiveTemplate($item));
+        $this->assertSame('Historical for نور', ProductProductionPrompt::renderForItem($item));
     }
 
     public function test_default_sticker_prompt_uses_only_supported_variables(): void

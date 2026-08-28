@@ -32,7 +32,7 @@
                     @endcan
                     @if($item->product)
                         @can('store.products.update')
-                            <a href="{{ route('admin.products.edit', $item->product) }}" class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100">تعديل القالب العام للطلبات الجديدة</a>
+                            <a href="{{ route('admin.products.edit', $item->product) }}" class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100">تعديل المنتج والقالب العام</a>
                         @endcan
                     @endif
                 </div>
@@ -96,35 +96,33 @@
             <section class="rounded-3xl border border-fuchsia-200 bg-fuchsia-50/40 p-5 shadow-sm sm:p-6">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div class="text-right">
-                        <h3 class="text-xl font-black text-fuchsia-950">تعديل برومبت هذا الطلب</h3>
-                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">التعديل هنا يخص هذا المنتج داخل هذا الطلب فقط. تعديل القالب العام للمنتج لا يغيّر الطلبات القديمة المحفوظة تلقائيًا.</p>
+                        <h3 class="text-xl font-black text-fuchsia-950">تعديل قالب برومبت المنتج</h3>
+                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">هذا هو القالب العام للمنتج. أي تعديل وحفظ هنا ينعكس فورًا على كل الطلبات الحالية والجديدة لهذا المنتج مع الاحتفاظ ببيانات كل طفل وصوره.</p>
                     </div>
-                    @if($item->product)
-                        <form action="{{ route('admin.orders.products.production-prompt.use-current', [$order, $item]) }}" method="POST">
-                            @csrf
-                            <button type="submit" class="w-full rounded-xl border border-fuchsia-200 bg-white px-4 py-2.5 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-100 sm:w-auto">
-                                استخدام أحدث قالب للمنتج
-                            </button>
-                        </form>
-                    @endif
                 </div>
 
-                <form action="{{ route('admin.orders.products.production-prompt.update', [$order, $item]) }}" method="POST" class="mt-5">
-                    @csrf
-                    @method('PUT')
-                    <textarea
-                        name="production_prompt_template"
-                        rows="20"
-                        maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}"
-                        dir="ltr"
-                        spellcheck="false"
-                        class="block w-full rounded-2xl border-fuchsia-200 bg-white text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"
-                    >{{ old('production_prompt_template', $promptTemplate) }}</textarea>
-                    <x-input-error :messages="$errors->get('production_prompt_template')" class="mt-2" />
-                    <button type="submit" class="mt-4 w-full rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white hover:bg-fuchsia-700 sm:w-auto">
-                        حفظ برومبت هذا الطلب
-                    </button>
-                </form>
+                @if($item->product && auth()->user()->hasPermission('store.products.update'))
+                    <form action="{{ route('admin.orders.products.production-prompt.update', [$order, $item]) }}" method="POST" class="mt-5">
+                        @csrf
+                        @method('PUT')
+                        <textarea
+                            name="production_prompt_template"
+                            rows="20"
+                            maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}"
+                            dir="ltr"
+                            spellcheck="false"
+                            class="block w-full rounded-2xl border-fuchsia-200 bg-white text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"
+                        >{{ old('production_prompt_template', $promptTemplate) }}</textarea>
+                        <x-input-error :messages="$errors->get('production_prompt_template')" class="mt-2" />
+                        <button type="submit" class="mt-4 w-full rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white hover:bg-fuchsia-700 sm:w-auto">
+                            حفظ القالب وتطبيقه على كل الطلبات
+                        </button>
+                    </form>
+                @elseif(!$item->product)
+                    <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">المنتج الأصلي غير متاح حاليًا؛ يظهر البرومبت التاريخي للقراءة فقط ولا يمكن تعديل قالب عام.</p>
+                @else
+                    <p class="mt-5 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-600">يمكنك نسخ البرومبت الحالي، لكن تعديل القالب العام يحتاج صلاحية تعديل منتجات المتجر.</p>
+                @endif
             </section>
 
             @include('admin.orders._product-production-prompts', [

@@ -33,7 +33,8 @@ class OrderProductProductionController extends Controller
         $productPrompt = [
             'item' => $item,
             'prompt' => ProductProductionPrompt::renderForItem($item),
-            'uses_snapshot' => filled(data_get($item->item_snapshot, 'production_prompt_template')),
+            'uses_live_template' => ProductProductionPrompt::usesLiveTemplate($item),
+            'uses_snapshot' => ! ProductProductionPrompt::usesLiveTemplate($item),
         ];
         $promptTemplate = ProductProductionPrompt::templateForItem($item) ?? '';
 
@@ -79,23 +80,33 @@ class OrderProductProductionController extends Controller
             ]);
         }
 
-        $snapshot = $item->item_snapshot ?? [];
-        $snapshot['production_prompt_template'] = $template;
-        $item->update(['item_snapshot' => $snapshot]);
+        $item->loadMissing('product');
+        $product = $item->product;
+
+        if (! $product) {
+            return back()->withErrors([
+                'production_prompt_template' => 'لا يمكن تحديث القالب العام لأن المنتج لم يعد موجودًا.',
+            ]);
+        }
+
+        $oldTemplate = $product->production_prompt_template;
+        $product->update(['production_prompt_template' => $template]);
 
         AdminActivityLogger::log(
-            action: 'order.product_production_prompt.updated',
-            description: 'تحديث برومبت إنتاج المنتج داخل الطلب: '.$order->order_number,
-            subject: $order,
+            action: 'product.production_prompt_template.updated',
+            description: 'تحديث قالب برومبت إنتاج المنتج من طلب: '.$order->order_number,
+            subject: $product,
             properties: [
                 'order_number' => $order->order_number,
                 'order_item_id' => $item->id,
                 'product_id' => $item->product_id,
+                'template_changed' => $oldTemplate !== $template,
+                'applies_to_all_product_orders' => true,
             ],
             request: $request,
         );
 
-        return back()->with('success', 'تم حفظ برومبت هذا الطلب وتحديث النسخة الجاهزة للنسخ.');
+        return back()->with('success', 'تم حفظ قالب المنتج، وسيظهر فورًا في كل الطلبات الحالية والجديدة لهذا المنتج.');
     }
 
     public function useCurrentPrompt(Request $request, Order $order, OrderItem $item): RedirectResponse
@@ -111,7 +122,7 @@ class OrderProductProductionController extends Controller
         }
 
         $snapshot = $item->item_snapshot ?? [];
-        $snapshot['production_prompt_template'] = $template;
+        unset($snapshot['production_prompt_template']);
         $item->update(['item_snapshot' => $snapshot]);
 
         AdminActivityLogger::log(
@@ -126,7 +137,7 @@ class OrderProductProductionController extends Controller
             request: $request,
         );
 
-        return back()->with('success', 'تم تطبيق أحدث قالب للمنتج على هذا الطلب.');
+        return back()->with('success', 'هذا الطلب يقرأ الآن قالب المنتج الحالي تلقائيًا.');
     }
 
     private function assertItemBelongsToOrder(Order $order, OrderItem $item): void

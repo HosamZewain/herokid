@@ -411,7 +411,6 @@ class CheckoutController extends Controller
                             'fulfillment_type' => $product->fulfillment_type,
                             'purchase_mode' => $product->purchase_mode,
                             'production_lead_time_days' => $product->production_lead_time_days,
-                            'production_prompt_template' => $product->production_prompt_template,
                             'package' => $item['package_snapshot'] ?? null,
                         ],
                         'variant_snapshot' => $variant ? [

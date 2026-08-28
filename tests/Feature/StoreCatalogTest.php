@@ -13,6 +13,7 @@ use App\Models\Story;
 use App\Models\TemporaryPhotoUpload;
 use App\Models\User;
 use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Support\ProductProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -310,9 +311,10 @@ class StoreCatalogTest extends TestCase
         $this->assertNotNull($productItem);
         $this->assertSame('سليم', $productItem->personalization_snapshot['child_name']);
         $this->assertSame(2, $productItem->personalization_snapshot['uploaded_photos_count']);
+        $this->assertArrayNotHasKey('production_prompt_template', $productItem->item_snapshot);
         $this->assertSame(
-            'Sticker prompt for {{child_full_name}}',
-            $productItem->item_snapshot['production_prompt_template']
+            'Sticker prompt for سليم',
+            ProductProductionPrompt::renderForItem($productItem),
         );
         $this->assertDatabaseHas('temporary_photo_uploads', [
             'public_id' => $firstUpload->public_id,
