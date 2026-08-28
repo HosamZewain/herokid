@@ -63,6 +63,16 @@
                 </div>
             @endif
 
+            <div class="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-black text-gray-900">مسؤول تنفيذ الطلب</h3>
+                        <p class="mt-1 text-xs font-bold text-gray-500">استلام الطلب يوضح لباقي الفريق من يعمل عليه الآن.</p>
+                    </div>
+                    @include('admin.orders._assignment-controls', ['group' => $group])
+                </div>
+            </div>
+
             <div class="grid gap-5 lg:grid-cols-3">
                 <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
                     <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>

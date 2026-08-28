@@ -119,6 +119,11 @@ class User extends Authenticatable
         return $this->hasMany(AdminActivityLog::class);
     }
 
+    public function assignedOrderGroups(): HasMany
+    {
+        return $this->hasMany(OrderGroupAssignment::class, 'assigned_to_user_id');
+    }
+
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class)->withTimestamps();

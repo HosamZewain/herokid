@@ -159,6 +159,23 @@ return [
             'description_en' => 'Update order status, notes, and operational fields.',
             'sort_order' => 30,
         ],
+        'orders.assign' => [
+            'group_key' => 'orders',
+            'name_ar' => 'استلام وترك الطلبات',
+            'name_en' => 'Acquire and release orders',
+            'description_ar' => 'استلام عملية شراء باسم المستخدم الحالي وتركها للفريق عند الانتهاء أو التوقف.',
+            'description_en' => 'Acquire a checkout for the current administrator and release it back to the team.',
+            'sort_order' => 35,
+        ],
+        'orders.assignment.manage' => [
+            'group_key' => 'orders',
+            'name_ar' => 'إدارة مسؤولي الطلبات',
+            'name_en' => 'Manage order assignments',
+            'description_ar' => 'نقل مسؤولية طلب مستلم إلى المستخدم الحالي أو تحريره من مسؤول آخر.',
+            'description_en' => 'Take over or release checkouts assigned to another administrator.',
+            'sort_order' => 36,
+            'sensitive' => true,
+        ],
         'orders.preview.upload' => [
             'group_key' => 'orders',
             'name_ar' => 'رفع معاينات التصميم',

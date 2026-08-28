@@ -58,6 +58,7 @@ class OrderController extends Controller
                 'shipping_status' => $request->query('shipping_status'),
                 'from' => $request->query('from'),
                 'to' => $request->query('to'),
+                'assignment' => $request->query('assignment'),
                 'has_search' => $request->filled('q'),
             ],
             request: $request,
@@ -72,7 +73,7 @@ class OrderController extends Controller
                 'عدد القصص', 'عدد المنتجات', 'عدد الإضافات', 'حالة الطلب', 'حالة الدفع',
                 'حالة الطباعة', 'حالة الشحن', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي',
                 'المدفوع', 'المتبقي', 'طريقة الدفع', 'الدولة', 'المحافظة', 'المدينة',
-                'الشارع', 'تفاصيل العنوان', 'ملاحظات المصدر',
+                'الشارع', 'تفاصيل العنوان', 'مسؤول الطلب', 'ملاحظات المصدر',
             ]);
 
             foreach ($rows as $row) {
@@ -108,6 +109,7 @@ class OrderController extends Controller
                     data_get($delivery, 'city'),
                     data_get($delivery, 'street'),
                     data_get($delivery, 'address_details', data_get($delivery, 'address')),
+                    $row['assigned_admin']?->name,
                     $row['source_notes'],
                 ]));
             }

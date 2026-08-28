@@ -49,6 +49,11 @@ class Order extends Model
         return $this->belongsTo(User::class, 'payment_updated_by_user_id');
     }
 
+    public function groupAssignment()
+    {
+        return $this->hasOne(OrderGroupAssignment::class, 'checkout_group_key', 'checkout_group_key');
+    }
+
     public function story()
     {
         return $this->belongsTo(Story::class);

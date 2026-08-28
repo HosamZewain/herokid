@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
+use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
@@ -597,6 +598,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::patch('orders/groups/{representative}/status', [OrderGroupController::class, 'updateStatus'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.status');
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
+    Route::post('orders/groups/{representative}/assignment/acquire', [OrderAssignmentController::class, 'acquire'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.acquire');
+    Route::post('orders/groups/{representative}/assignment/takeover', [OrderAssignmentController::class, 'takeover'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.takeover');
+    Route::delete('orders/groups/{representative}/assignment', [OrderAssignmentController::class, 'release'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.release');
     Route::delete('orders/groups/{representative}', [OrderGroupController::class, 'destroy'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.destroy');
     Route::post('orders/groups/{representative}/restore', [OrderGroupController::class, 'restore'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.restore');
     Route::get('orders/{order}/products/{item}/production', OrderProductProductionController::class)

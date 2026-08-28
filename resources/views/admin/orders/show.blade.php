@@ -77,6 +77,16 @@
             </div>
             @endif
 
+            <div class="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-black text-gray-900">مسؤول تنفيذ عملية الشراء</h3>
+                        <p class="mt-1 text-xs font-bold text-gray-500">التعيين يشمل جميع القصص والمنتجات الموجودة في نفس الطلب.</p>
+                    </div>
+                    @include('admin.orders._assignment-controls', ['group' => $checkoutGroup])
+                </div>
+            </div>
+
             <!-- Top Bar -->
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">

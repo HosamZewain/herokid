@@ -25,6 +25,7 @@ class AdminOrderGroupService
         'user:id,name,role',
         'createdByAdmin:id,name',
         'paymentUpdatedBy:id,name',
+        'groupAssignment.assignee:id,name',
         'story:id,title,price',
         'items.product:id,name_ar,inventory_mode,stock_quantity',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
@@ -246,6 +247,9 @@ class AdminOrderGroupService
             'order_source' => $first->order_source ?: 'website',
             'source_notes' => $first->source_notes,
             'created_by_admin' => $first->createdByAdmin,
+            'assignment' => $first->groupAssignment,
+            'assigned_admin' => $first->groupAssignment?->assignee,
+            'assigned_at' => $first->groupAssignment?->assigned_at,
             'story_count' => $displayStoryOrders->count(),
             'product_quantity' => (int) $directProducts->sum('quantity'),
             'add_on_quantity' => (int) $addOns->sum('quantity'),
@@ -341,6 +345,25 @@ class AdminOrderGroupService
                         ->where('title', 'like', '%'.$term.'%')
                         ->orWhere('sku', 'like', '%'.$term.'%'));
             });
+        }
+
+        $assignment = (string) $request->query('assignment', '');
+        if ($assignment === 'mine' && $request->user()) {
+            $query->whereExists(fn ($assigned) => $assigned
+                ->selectRaw('1')
+                ->from('order_group_assignments')
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key')
+                ->where('order_group_assignments.assigned_to_user_id', $request->user()->id));
+        } elseif ($assignment === 'unassigned') {
+            $query->whereNotExists(fn ($assigned) => $assigned
+                ->selectRaw('1')
+                ->from('order_group_assignments')
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
+        } elseif ($assignment === 'assigned') {
+            $query->whereExists(fn ($assigned) => $assigned
+                ->selectRaw('1')
+                ->from('order_group_assignments')
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
         }
 
         return $query;

@@ -82,7 +82,7 @@
                     </div>
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-10">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-11">
                     <input type="hidden" name="catalog_type" value="{{ $catalogType === 'all' ? 'stories' : $catalogType }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
                     <div class="xl:col-span-2">
@@ -125,6 +125,15 @@
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">إلى تاريخ</label>
                         <input name="to" type="date" value="{{ request('to') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
+                        <select name="assignment" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="">كل الطلبات</option>
+                            <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
+                            <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
+                            <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>
+                        </select>
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">عدد الطلبات</label>
@@ -230,6 +239,7 @@
                                     <span class="rounded-xl bg-gray-50 px-3 py-2.5 text-center text-xs font-bold text-gray-400">{{ optional($group['latest_at'])->format('d/m/Y') }}</span>
                                 @endif
                             </div>
+                            @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
                             @can('orders.update')
                                 @if(!$group['trashed'])
                                     <details>
@@ -251,6 +261,7 @@
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">عملية الشراء</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المصدر</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">المسؤول</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
@@ -284,6 +295,9 @@
                                             <p class="font-bold text-gray-900">{{ $group['customer_name'] }}</p>
                                         @endcan
                                         @if($group['phone'])<p class="mt-1 text-xs text-gray-400" dir="ltr">{{ $group['phone'] }}</p>@endif
+                                    </td>
+                                    <td class="min-w-36 px-4 py-4">
+                                        @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
                                     </td>
                                     <td class="min-w-64 px-4 py-4">
                                         <div class="flex flex-wrap gap-1.5">
@@ -351,12 +365,12 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="9" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="10" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
                                         </tr>
                                     @endif
                                 @endcan
                             @empty
-                                <tr><td colspan="9" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
+                                <tr><td colspan="10" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
