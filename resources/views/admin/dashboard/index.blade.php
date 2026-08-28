@@ -176,7 +176,10 @@
                                     @if($group['child_names'])<p class="mt-1 text-xs font-normal text-gray-400">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                 </td>
                                 <td class="px-4 py-3 text-xs text-gray-400 text-right">{{ optional($group['latest_at'])->format('d/m/Y') }}</td>
-                                <td class="px-4 py-3 text-sm font-mono text-gray-600 text-right" dir="ltr">{{ $group['key'] }}</td>
+                                <td class="px-4 py-3 text-right" dir="ltr">
+                                    <p class="font-mono text-sm font-black text-indigo-700">{{ $group['short_reference'] ?: $group['key'] }}</p>
+                                    @if($group['short_reference'])<p class="mt-1 max-w-40 truncate font-mono text-[9px] text-gray-400" title="{{ $group['key'] }}">{{ $group['key'] }}</p>@endif
+                                </td>
                             </tr>
                             @endforeach
                         </tbody>

@@ -68,7 +68,7 @@ class OrderController extends Controller
             $output = fopen('php://output', 'wb');
             fwrite($output, "\xEF\xBB\xBF");
             fputcsv($output, [
-                'تاريخ الطلب', 'وقت الطلب', 'عملية الشراء', 'أرقام الطلبات', 'المصدر',
+                'تاريخ الطلب', 'وقت الطلب', 'المرجع المختصر', 'عملية الشراء', 'أرقام الطلبات', 'المصدر',
                 'اسم العميل', 'الهاتف', 'أسماء الأطفال', 'القصص', 'المنتجات', 'الإضافات',
                 'عدد القصص', 'عدد المنتجات', 'عدد الإضافات', 'حالة الطلب', 'حالة الدفع',
                 'حالة الطباعة', 'حالة الشحن', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي',
@@ -81,6 +81,7 @@ class OrderController extends Controller
                 fputcsv($output, array_map($this->csvCell(...), [
                     optional($row['latest_at'])->format('Y-m-d'),
                     optional($row['latest_at'])->format('H:i:s'),
+                    $row['short_reference'],
                     $row['key'],
                     implode('، ', $row['order_numbers']),
                     OrderSource::label($row['order_source']),

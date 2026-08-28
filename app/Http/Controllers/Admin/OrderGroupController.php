@@ -156,7 +156,15 @@ class OrderGroupController extends Controller
             'confirmation' => 'required|string',
         ]);
 
-        if (! hash_equals($order->checkoutGroupKey(), trim($validated['confirmation']))) {
+        $confirmation = trim($validated['confirmation']);
+        $acceptedReferences = array_filter([
+            $order->checkoutGroupKey(),
+            $order->checkoutReference?->short_reference,
+        ]);
+
+        if (! collect($acceptedReferences)->contains(
+            fn (string $reference): bool => hash_equals($reference, $confirmation)
+        )) {
             throw ValidationException::withMessages(['confirmation' => 'اكتب مرجع عملية الشراء كما هو لتأكيد الحذف.']);
         }
 

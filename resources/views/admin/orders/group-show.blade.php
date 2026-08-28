@@ -3,7 +3,8 @@
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-right">
                 <p class="text-xs font-black text-indigo-500">تفاصيل عملية الشراء</p>
-                <h2 class="mt-1 text-xl font-black text-gray-900" dir="ltr">{{ $group['key'] }}</h2>
+                <h2 class="mt-1 text-2xl font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</h2>
+                @if($group['short_reference'])<p class="mt-1 text-[10px] font-mono text-gray-400" dir="ltr">{{ $group['key'] }}</p>@endif
             </div>
             <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
                 <span data-workflow-badge="status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
@@ -44,7 +45,7 @@
                         @endif
                     @endcan
                     @if($whatsappNumber && !$group['trashed'])
-                        <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.$group['key']) }}" target="_blank" rel="noopener" class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-black text-white hover:bg-green-700">واتساب العميل</a>
+                        <a href="https://wa.me/{{ $whatsappNumber }}?text={{ urlencode('مرحباً، بخصوص طلبك '.($group['short_reference'] ?: $group['key'])) }}" target="_blank" rel="noopener" class="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-black text-white hover:bg-green-700">واتساب العميل</a>
                     @endif
                     @can('orders.delete')
                         @if($group['trashed'])
@@ -325,7 +326,7 @@
                             @csrf
                             @method('DELETE')
                             <textarea name="deletion_reason" required minlength="5" rows="2" class="rounded-xl border-red-200 text-sm" placeholder="سبب الحذف"></textarea>
-                            <input name="confirmation" required class="rounded-xl border-red-200 text-sm" placeholder="اكتب {{ $group['key'] }}" dir="ltr">
+                            <input name="confirmation" required class="rounded-xl border-red-200 text-sm" placeholder="اكتب {{ $group['short_reference'] ?: $group['key'] }}" dir="ltr">
                             <button class="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700">نقل العملية للمحذوفات</button>
                         </form>
                     </details>

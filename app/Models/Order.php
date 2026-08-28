@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Orders\OrderShortReferenceService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -24,13 +25,13 @@ class Order extends Model
     protected static function booted(): void
     {
         static::created(function (Order $order): void {
-            if (filled($order->checkout_group_key)) {
-                return;
+            if (blank($order->checkout_group_key)) {
+                $order->forceFill([
+                    'checkout_group_key' => data_get($order->delivery_details, 'checkout_group') ?: 'ORDER-'.$order->id,
+                ])->saveQuietly();
             }
 
-            $order->forceFill([
-                'checkout_group_key' => data_get($order->delivery_details, 'checkout_group') ?: 'ORDER-'.$order->id,
-            ])->saveQuietly();
+            app(OrderShortReferenceService::class)->ensureForOrder($order);
         });
     }
 
@@ -52,6 +53,11 @@ class Order extends Model
     public function groupAssignment()
     {
         return $this->hasOne(OrderGroupAssignment::class, 'checkout_group_key', 'checkout_group_key');
+    }
+
+    public function checkoutReference()
+    {
+        return $this->hasOne(OrderCheckoutReference::class, 'checkout_group_key', 'checkout_group_key');
     }
 
     public function story()

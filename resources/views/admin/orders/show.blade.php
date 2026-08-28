@@ -31,6 +31,7 @@
             'direct_products' => collect(),
             'add_ons' => collect(),
             'key' => $order->checkoutGroupKey(),
+            'short_reference' => $order->checkoutReference?->short_reference,
             'order_numbers' => [$order->order_number],
             'created_at' => $order->created_at,
             'customer_name' => $order->parent_name ?: $order->user?->name ?: 'زائر',
@@ -104,7 +105,7 @@
 
             @if($checkoutGroup['story_orders']->count() > 1)
                 <div class="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-right">
-                    <p class="mb-3 text-xs font-black text-violet-700">قصص أخرى في نفس عملية الشراء {{ $checkoutGroup['key'] }}</p>
+                    <p class="mb-3 text-xs font-black text-violet-700">قصص أخرى في نفس عملية الشراء {{ $checkoutGroup['short_reference'] ?: $checkoutGroup['key'] }}</p>
                     <div class="flex flex-wrap gap-2">
                         @foreach($checkoutGroup['story_orders'] as $sibling)
                             <a href="{{ route('admin.orders.show', $sibling) }}"

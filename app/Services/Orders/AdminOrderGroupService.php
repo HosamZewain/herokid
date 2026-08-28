@@ -26,6 +26,7 @@ class AdminOrderGroupService
         'createdByAdmin:id,name',
         'paymentUpdatedBy:id,name',
         'groupAssignment.assignee:id,name',
+        'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
         'story:id,title,price',
         'items.product:id,name_ar,inventory_mode,stock_quantity',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
@@ -226,6 +227,7 @@ class AdminOrderGroupService
 
         return [
             'key' => $first->checkoutGroupKey(),
+            'short_reference' => $first->checkoutReference?->short_reference,
             'representative_id' => (int) $first->id,
             'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
@@ -336,6 +338,8 @@ class AdminOrderGroupService
             $query->where(function (Builder $builder) use ($term): void {
                 $builder
                     ->where('checkout_group_key', 'like', '%'.$term.'%')
+                    ->orWhereHas('checkoutReference', fn (Builder $reference): Builder => $reference
+                        ->where('short_reference', 'like', '%'.$term.'%'))
                     ->orWhere('order_number', 'like', '%'.$term.'%')
                     ->orWhere('parent_name', 'like', '%'.$term.'%')
                     ->orWhere('child_name', 'like', '%'.$term.'%')
