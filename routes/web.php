@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\OrderGroupController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderProductProductionController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
+use App\Http\Controllers\Admin\OrderWhatsAppTemplateController;
 use App\Http\Controllers\Admin\PricingPackageController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
@@ -731,6 +732,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('settings/order-statuses', [OrderStatusDefinitionController::class, 'store'])->middleware('permission:settings.order_statuses.manage')->name('settings.order-statuses.store');
     Route::put('settings/order-statuses/{orderStatusDefinition}', [OrderStatusDefinitionController::class, 'update'])->middleware('permission:settings.order_statuses.manage')->name('settings.order-statuses.update');
     Route::delete('settings/order-statuses/{orderStatusDefinition}', [OrderStatusDefinitionController::class, 'destroy'])->middleware('permission:settings.order_statuses.manage')->name('settings.order-statuses.destroy');
+    Route::get('settings/order-whatsapp-messages', [OrderWhatsAppTemplateController::class, 'edit'])->middleware('permission:settings.site.view')->name('settings.order-whatsapp-messages.edit');
+    Route::put('settings/order-whatsapp-messages', [OrderWhatsAppTemplateController::class, 'update'])->middleware('permission:settings.site.update')->name('settings.order-whatsapp-messages.update');
     Route::get('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'edit'])->middleware('permission:settings.production_prompt.view')->name('settings.story-production-prompt.edit');
     Route::put('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'update'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.update');
     Route::post('settings/story-production-prompt/preview', [StoryProductionPromptTemplateController::class, 'preview'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.preview');

@@ -189,6 +189,9 @@
                         @can('settings.order_statuses.manage')
                             <a href="{{ route('admin.settings.order-statuses.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.order-statuses.*') ? $activeLink : $idleLink }}">حالات الطلبات</a>
                         @endcan
+                        @can('settings.site.view')
+                            <a href="{{ route('admin.settings.order-whatsapp-messages.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.order-whatsapp-messages.*') ? $activeLink : $idleLink }}">رسائل واتساب للطلبات</a>
+                        @endcan
                         @can('settings.delivery_zones.view')
                             <a href="{{ route('admin.delivery-zones.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.delivery-zones.*') ? $activeLink : $idleLink }}">مناطق التوصيل</a>
                         @endcan

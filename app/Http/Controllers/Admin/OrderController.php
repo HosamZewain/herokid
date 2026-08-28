@@ -15,6 +15,7 @@ use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderDetailsUpdateService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Orders\OrderWhatsAppMessageService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -33,9 +34,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderController extends Controller
 {
-    public function index(Request $request, AdminOrderGroupService $groups)
+    public function index(Request $request, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsappMessages)
     {
         $result = $groups->paginate($request);
+        $result['groups']->setCollection(
+            $result['groups']->getCollection()->map(function (array $group) use ($whatsappMessages): array {
+                $group['whatsapp_messages'] = $whatsappMessages->messagesForGroup($group);
+
+                return $group;
+            })
+        );
 
         return view('admin.orders.index', $result);
     }
@@ -322,6 +330,7 @@ class OrderController extends Controller
         AdminOrderGroupService $groups,
         OrderSceneTextService $sceneTexts,
         OrderChildIdentityPromptService $identityPrompts,
+        OrderWhatsAppMessageService $whatsapp,
     ) {
         $order->load([
             'user',
@@ -372,6 +381,7 @@ class OrderController extends Controller
         );
 
         $checkoutGroup = $groups->findByRepresentative($order->id);
+        $whatsappMessages = $whatsapp->messagesForGroup($checkoutGroup);
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
 
         return view('admin.orders.show', compact(
@@ -383,6 +393,7 @@ class OrderController extends Controller
             'childIdentityPrompt',
             'productProductionPrompts',
             'sceneTextHandoff',
+            'whatsappMessages',
         ));
     }
 

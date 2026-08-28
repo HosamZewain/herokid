@@ -8,6 +8,7 @@ use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Orders\OrderWhatsAppMessageService;
 use App\Services\Orders\OrderWorkflowStatusService;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
@@ -19,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 
 class OrderGroupController extends Controller
 {
-    public function show(int $representative, AdminOrderGroupService $groups)
+    public function show(int $representative, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsapp)
     {
         $group = $groups->findByRepresentative($representative);
 
@@ -68,6 +69,7 @@ class OrderGroupController extends Controller
             'productProductionPrompts' => $productProductionPrompts,
             'attachmentTarget' => $attachmentTarget,
             'attachmentOrders' => $attachmentOrders,
+            'whatsappMessages' => $whatsapp->messagesForGroup($group),
         ]);
     }
 

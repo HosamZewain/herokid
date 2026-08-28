@@ -27,6 +27,7 @@ class AdminOrderGroupService
         'paymentUpdatedBy:id,name',
         'groupAssignment.assignee:id,name',
         'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
+        'bookletPreview:id,order_id,uuid,status,current_version_id,public_token_encrypted',
         'story:id,title,price',
         'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',

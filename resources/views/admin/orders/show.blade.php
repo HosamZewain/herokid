@@ -913,15 +913,10 @@
                     @endif
 
                     <!-- WhatsApp Quick Link -->
-                    @if(isset($order->delivery_details['phone']))
+                    @if(!empty($whatsappMessages))
                     <div class="bg-green-50 rounded-2xl border border-green-100 p-5">
-                        <h3 class="font-bold text-green-800 text-sm mb-3 text-right">التواصل مع العميل</h3>
-                        <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone']) }}?text={{ urlencode('مرحبا، بخصوص طلبك '.$order->order_number) }}"
-                            target="_blank"
-                            class="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 rounded-xl transition text-sm">
-                            <span aria-hidden="true">💬</span>
-                            واتساب العميل
-                        </a>
+                        <h3 class="font-bold text-green-800 text-sm mb-3 text-right">رسائل واتساب للعميل</h3>
+                        @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $whatsappMessages])
                     </div>
                     @endif
                 </div>
