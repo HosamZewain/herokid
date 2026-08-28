@@ -37,7 +37,7 @@
     @endphp
 
     <div class="py-8">
-        <div class="mx-auto max-w-7xl space-y-5 sm:px-6 lg:px-8">
+        <div class="w-full max-w-none space-y-5 px-4 sm:px-6 lg:px-8">
             @if(session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-800">{{ session('success') }}</div>
             @endif

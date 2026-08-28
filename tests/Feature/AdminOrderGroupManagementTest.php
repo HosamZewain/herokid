@@ -36,6 +36,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $response = $this->actingAs($this->admin)->get(route('admin.orders.index'));
 
         $response->assertOk()
+            ->assertSee('w-full max-w-none space-y-5', false)
             ->assertSee('GROUP-MULTI')
             ->assertSee(route('admin.orders.show', $first), false)
             ->assertSee($first->order_number)
