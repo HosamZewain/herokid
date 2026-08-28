@@ -73,6 +73,11 @@
                 </div>
             </div>
 
+            @include('admin.orders._admin-notes', [
+                'noteTargetOrder' => $attachmentTarget,
+                'orderAdminNotes' => $orderAdminNotes ?? collect(),
+            ])
+
             <div class="grid gap-5 lg:grid-cols-3">
                 <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
                     <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>

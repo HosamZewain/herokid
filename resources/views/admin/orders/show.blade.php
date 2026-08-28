@@ -119,6 +119,11 @@
 
             @include('admin.orders._payment-summary')
 
+            @include('admin.orders._admin-notes', [
+                'noteTargetOrder' => $order,
+                'orderAdminNotes' => $orderAdminNotes ?? collect(),
+            ])
+
             @include('admin.orders._attachments', [
                 'attachmentTarget' => $order,
                 'attachmentOrders' => $checkoutGroup['active_orders'] ?? collect([$order]),

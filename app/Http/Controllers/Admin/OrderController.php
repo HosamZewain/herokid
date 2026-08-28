@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderDetailsUpdateService;
@@ -331,6 +332,7 @@ class OrderController extends Controller
         OrderSceneTextService $sceneTexts,
         OrderChildIdentityPromptService $identityPrompts,
         OrderWhatsAppMessageService $whatsapp,
+        OrderAdminNoteService $adminNotes,
     ) {
         $order->load([
             'user',
@@ -382,6 +384,7 @@ class OrderController extends Controller
 
         $checkoutGroup = $groups->findByRepresentative($order->id);
         $whatsappMessages = $whatsapp->messagesForGroup($checkoutGroup);
+        $orderAdminNotes = $adminNotes->notesFor($order);
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
 
         return view('admin.orders.show', compact(
@@ -394,6 +397,7 @@ class OrderController extends Controller
             'productProductionPrompts',
             'sceneTextHandoff',
             'whatsappMessages',
+            'orderAdminNotes',
         ));
     }
 

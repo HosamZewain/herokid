@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
@@ -20,8 +21,12 @@ use Illuminate\Validation\ValidationException;
 
 class OrderGroupController extends Controller
 {
-    public function show(int $representative, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsapp)
-    {
+    public function show(
+        int $representative,
+        AdminOrderGroupService $groups,
+        OrderWhatsAppMessageService $whatsapp,
+        OrderAdminNoteService $adminNotes,
+    ) {
         $group = $groups->findByRepresentative($representative);
 
         if ($group['direct_order_id']) {
@@ -70,6 +75,7 @@ class OrderGroupController extends Controller
             'attachmentTarget' => $attachmentTarget,
             'attachmentOrders' => $attachmentOrders,
             'whatsappMessages' => $whatsapp->messagesForGroup($group),
+            'orderAdminNotes' => $adminNotes->notesFor($attachmentTarget),
         ]);
     }
 
