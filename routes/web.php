@@ -20,8 +20,8 @@ use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
-use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAdminNoteController;
+use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderProductProductionController;
+use App\Http\Controllers\Admin\OrderReportController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
 use App\Http\Controllers\Admin\OrderWhatsAppTemplateController;
 use App\Http\Controllers\Admin\PricingPackageController;
@@ -384,6 +385,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('sales-report/export', [SalesReportController::class, 'export'])
         ->middleware(['permission:sales_reports.view', 'throttle:10,1'])
         ->name('sales-report.export');
+    Route::get('order-report', [OrderReportController::class, 'index'])
+        ->middleware('permission:order_reports.view')
+        ->name('order-report.index');
+    Route::get('order-report/export', [OrderReportController::class, 'export'])
+        ->middleware(['permission:order_reports.view', 'throttle:10,1'])
+        ->name('order-report.export');
     Route::get('expenses', [ExpenseController::class, 'index'])
         ->middleware('permission:expenses.view')
         ->name('expenses.index');

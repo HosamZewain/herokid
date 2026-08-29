@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
+use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -318,6 +319,14 @@ class AdminOrderGroupService
             $query->where('shipping_status', $request->query('shipping_status'));
         }
 
+        if ($request->filled('order_source') && array_key_exists((string) $request->query('order_source'), OrderSource::options())) {
+            $query->where('order_source', $request->query('order_source'));
+        }
+
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', trim((string) $request->query('payment_method')));
+        }
+
         if ($request->filled('from')) {
             try {
                 $query->where('created_at', '>=', OrderDateTime::utcStartOfDay((string) $request->query('from')));
@@ -520,7 +529,7 @@ class AdminOrderGroupService
 
         $type = (string) $request->query('catalog_type', 'stories');
 
-        return in_array($type, ['stories', 'products'], true) ? $type : 'stories';
+        return in_array($type, ['all', 'stories', 'products'], true) ? $type : 'stories';
     }
 
     private function lifecycle(Request $request): string
@@ -531,13 +540,18 @@ class AdminOrderGroupService
 
         $lifecycle = (string) $request->query('lifecycle', 'active');
 
-        return in_array($lifecycle, ['active', 'finished', 'cancelled'], true) ? $lifecycle : 'active';
+        return in_array($lifecycle, ['all', 'active', 'finished', 'cancelled'], true) ? $lifecycle : 'active';
     }
 
     private function includeDeleted(Request $request, string $lifecycle): bool
     {
-        return $lifecycle === 'cancelled'
-            && (bool) $request->user()?->hasPermission('orders.delete');
+        if (! in_array($lifecycle, ['all', 'cancelled'], true)) {
+            return false;
+        }
+
+        return (bool) $request->user()?->hasPermission('orders.delete')
+            || ($request->attributes->getBoolean('order_report')
+                && (bool) $request->user()?->hasPermission('order_reports.view'));
     }
 
     private function checkoutKeysForCatalogType(string $catalogType): \Illuminate\Database\Query\Builder
@@ -575,6 +589,10 @@ class AdminOrderGroupService
 
     private function applyLifecycleFilter(Builder $query, string $lifecycle): void
     {
+        if ($lifecycle === 'all') {
+            return;
+        }
+
         $cancelledKeys = $this->cancelledCheckoutKeys();
         $unfinishedKeys = $this->unfinishedCheckoutKeys();
 

@@ -61,7 +61,7 @@
                 $activeLink = 'bg-indigo-600 text-white';
                 $canHome = auth()->user()->hasAnyPermission(['dashboard.view']);
                 $canReports = auth()->user()->hasAnyPermission([
-                    'analytics.view', 'sales_reports.view', 'visitor_carts.view', 'child_identities.view_share_report',
+                    'analytics.view', 'sales_reports.view', 'order_reports.view', 'visitor_carts.view', 'child_identities.view_share_report',
                 ]);
                 $canFinance = auth()->user()->hasAnyPermission(['expenses.view']);
                 $canFulfillment = auth()->user()->hasAnyPermission([
@@ -92,24 +92,6 @@
                     @can('dashboard.view')
                         <a href="{{ route('admin.dashboard.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.dashboard.*') ? $activeLink : $idleLink }}">لوحة القيادة</a>
                     @endcan
-                @endif
-
-                @if($canReports)
-                    <div class="pt-4">
-                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التقارير</p>
-                        @can('analytics.view')
-                            <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
-                        @endcan
-                        @can('sales_reports.view')
-                            <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
-                        @endcan
-                        @can('child_identities.view_share_report')
-                            <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>
-                        @endcan
-                        @can('visitor_carts.view')
-                            <a href="{{ route('admin.visitor-carts.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.visitor-carts.*') ? $activeLink : $idleLink }}">سلات الزوار</a>
-                        @endcan
-                    </div>
                 @endif
 
                 @if($canFinance)
@@ -176,6 +158,27 @@
                         @endcan
                         @can('content.messages.view')
                             <a href="{{ route('admin.messages.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.messages.*') ? $activeLink : $idleLink }}">الرسائل الواردة</a>
+                        @endcan
+                    </div>
+                @endif
+
+                @if($canReports)
+                    <div class="pt-4">
+                        <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التقارير</p>
+                        @can('analytics.view')
+                            <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
+                        @endcan
+                        @can('sales_reports.view')
+                            <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
+                        @endcan
+                        @can('order_reports.view')
+                            <a href="{{ route('admin.order-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.order-report.*') ? $activeLink : $idleLink }}">تقرير الطلبات</a>
+                        @endcan
+                        @can('child_identities.view_share_report')
+                            <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>
+                        @endcan
+                        @can('visitor_carts.view')
+                            <a href="{{ route('admin.visitor-carts.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.visitor-carts.*') ? $activeLink : $idleLink }}">سلات الزوار</a>
                         @endcan
                     </div>
                 @endif

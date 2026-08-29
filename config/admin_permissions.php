@@ -124,6 +124,15 @@ return [
             'sort_order' => 25,
             'sensitive' => true,
         ],
+        'order_reports.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض تقرير الطلبات',
+            'name_en' => 'View order report',
+            'description_ar' => 'عرض وتصفية وتصدير تقرير تشغيلي ومالي شامل لكل عمليات الشراء.',
+            'description_en' => 'View, filter, and export comprehensive operational and financial order reporting.',
+            'sort_order' => 27,
+            'sensitive' => true,
+        ],
         'visitor_carts.view' => [
             'group_key' => 'dashboard',
             'name_ar' => 'عرض سلات الزوار',
