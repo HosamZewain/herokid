@@ -6,11 +6,13 @@ use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
 use App\Models\Permission;
+use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Pricing\PackageAnalyticsService;
 use App\Services\Sales\SalesReportFilters;
 use App\Services\Sales\SalesReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -190,6 +192,95 @@ class AdminManualOrderCreationTest extends TestCase
             ->assertOk()
             ->assertSee('واتساب')
             ->assertSee('خصم -');
+    }
+
+    public function test_admin_can_create_an_order_from_a_package_using_its_fixed_price_and_components(): void
+    {
+        $firstStory = $this->story('قصة الباقة الأولى', 400);
+        $secondStory = $this->story('قصة الباقة الثانية', 300);
+        $product = Product::create([
+            'name_ar' => 'كتاب متاهات الباقة',
+            'slug' => 'admin-package-maze',
+            'price_cents' => 10_000,
+            'inventory_mode' => 'track_stock',
+            'stock_quantity' => 5,
+            'is_active' => true,
+        ]);
+        $package = PricingPackage::create([
+            'name' => 'باقة قصتين ومتاهات',
+            'slug' => 'admin-two-stories-maze',
+            'price' => 700,
+            'story_count' => 2,
+            'active' => true,
+            'applies_to_all_stories' => true,
+        ]);
+        $package->items()->create(['product_id' => $product->id, 'quantity' => 1]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.create'))
+            ->assertOk()
+            ->assertSee('إضافة باقة')
+            ->assertSee($package->name);
+
+        $payload = $this->basePayload();
+        $payload['pricing_package_id'] = $package->id;
+        $payload['stories'] = [
+            ['story_id' => $firstStory->id, 'child_name' => 'ليلى', 'child_age' => 6, 'child_gender' => 'girl', 'photos' => $this->photos('package-layla')],
+            ['story_id' => $secondStory->id, 'child_name' => 'عمر', 'child_age' => 8, 'child_gender' => 'boy', 'photos' => $this->photos('package-omar')],
+        ];
+        $payload['discount_amount'] = 50;
+        $payload['discount_reason'] = 'خصم إضافي للعميل';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect();
+
+        $orders = Order::with('items')->orderBy('id')->get();
+        $this->assertCount(2, $orders);
+        $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
+        $this->assertSame(80_000, $orders->flatMap->items->sum('total_price_cents'));
+        $this->assertSame(15_000, $orders->first()->discount_cents);
+        $this->assertStringContainsString('سعر باقة: '.$package->name, (string) $orders->first()->discount_reason);
+        $this->assertStringContainsString('خصم إضافي للعميل', (string) $orders->first()->discount_reason);
+        $this->assertSame(4, $product->fresh()->stock_quantity);
+
+        $group = app(AdminOrderGroupService::class)->findByRepresentative($orders->first()->id);
+        $this->assertSame(70_000, $group['total_cents']);
+        $this->assertSame($package->id, data_get($orders->first()->items->first()->item_snapshot, 'package.id'));
+        $this->assertSame(
+            $package->id,
+            data_get($orders->flatMap->items->firstWhere('product_id', $product->id)->item_snapshot, 'package.id'),
+        );
+        $this->assertSame(1, app(PackageAnalyticsService::class)->purchaseCounts(collect([$package->id]))[$package->id]);
+    }
+
+    public function test_admin_package_rejects_wrong_story_count_and_ineligible_story(): void
+    {
+        $eligibleStory = $this->story('قصة الباقة المتاحة', 349);
+        $otherStory = $this->story('قصة خارج الباقة', 349);
+        $package = PricingPackage::create([
+            'name' => 'باقة محددة',
+            'slug' => 'admin-restricted-package',
+            'price' => 300,
+            'story_count' => 1,
+            'active' => true,
+            'applies_to_all_stories' => false,
+        ]);
+        $package->eligibleStories()->sync([$eligibleStory->id]);
+
+        $payload = $this->basePayload();
+        $payload['pricing_package_id'] = $package->id;
+        $payload['stories'] = [
+            ['story_id' => $otherStory->id, 'child_name' => 'سليم', 'child_age' => 7, 'child_gender' => 'boy', 'photos' => $this->photos('restricted-story')],
+        ];
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.orders.create'))
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect(route('admin.orders.create'))
+            ->assertSessionHasErrors('stories');
+
+        $this->assertDatabaseCount('orders', 0);
     }
 
     public function test_same_story_can_be_ordered_more_than_once_for_the_same_child(): void

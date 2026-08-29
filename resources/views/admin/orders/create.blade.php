@@ -20,7 +20,7 @@
         </div>
     </x-slot>
 
-    <div class="py-6" data-admin-order-form data-edit-mode="{{ $isEditing ? '1' : '0' }}">
+    <div class="py-6" data-admin-order-form data-edit-mode="{{ $isEditing ? '1' : '0' }}" data-restored-package="{{ old('pricing_package_id') ? '1' : '0' }}">
         <div class="mx-auto max-w-7xl space-y-5 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.index') }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
@@ -41,6 +41,44 @@
                 @if($isEditing) @method('PUT') @endif
 
                 <div class="space-y-5">
+                    @if(! $isEditing && $pricingPackages->isNotEmpty())
+                        <section class="rounded-3xl border border-amber-200 bg-gradient-to-l from-amber-50 to-white p-5 shadow-sm sm:p-6">
+                            <div class="grid items-end gap-4 md:grid-cols-2">
+                                <div class="text-right">
+                                    <h3 class="text-lg font-black text-gray-950">إضافة باقة <span class="text-xs text-gray-400">(اختياري)</span></h3>
+                                    <p class="mt-1 text-xs font-bold leading-6 text-gray-600">اختر الباقة أولًا؛ سنحدد عدد القصص ونضيف منتجاتها ونطبق سعرها الثابت تلقائيًا. المنتجات التي تزيدها لاحقًا تُحسب كإضافات خارج الباقة.</p>
+                                    <div class="mt-3 hidden rounded-2xl bg-white px-4 py-3 text-xs font-bold text-amber-900 ring-1 ring-amber-200" data-package-description></div>
+                                </div>
+                                <div>
+                                    <label for="pricing-package" class="mb-1.5 block text-xs font-black text-gray-700">الباقة</label>
+                                    <select id="pricing-package" name="pricing_package_id" class="w-full rounded-xl border-amber-200 bg-white text-right text-sm" data-package-select>
+                                        <option value="">بدون باقة — طلب عادي</option>
+                                        @foreach($pricingPackages as $package)
+                                            @php
+                                                $packageItems = $package->items->map(fn ($item): array => [
+                                                    'product_id' => (int) $item->product_id,
+                                                    'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
+                                                    'quantity' => (int) $item->quantity,
+                                                ])->values();
+                                            @endphp
+                                            <option
+                                                value="{{ $package->id }}"
+                                                data-story-count="{{ (int) $package->story_count }}"
+                                                data-price-cents="{{ (int) round(((float) $package->price) * 100) }}"
+                                                data-all-stories="{{ $package->applies_to_all_stories ? '1' : '0' }}"
+                                                data-story-ids="{{ $package->eligibleStories->pluck('id')->implode(',') }}"
+                                                data-items='@json($packageItems)'
+                                                data-summary="{{ $package->componentSummary() }}"
+                                                @selected((string) old('pricing_package_id') === (string) $package->id)
+                                            >{{ $package->name }} — {{ format_money((float) $package->price) }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('pricing_package_id')<p class="mt-1 text-xs font-bold text-red-600">{{ $message }}</p>@enderror
+                                </div>
+                            </div>
+                        </section>
+                    @endif
+
                     <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                         <div class="mb-5 text-right">
                             <h3 class="text-lg font-black text-gray-950">بيانات العميل ومصدر الطلب</h3>
@@ -106,7 +144,7 @@
                                             ? (int) $productForm['unit_price_cents']
                                             : $product->effectivePriceCents();
                                     @endphp
-                                    <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4" data-product-row data-base-price-cents="{{ $basePrice }}">
+                                    <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4" data-product-row data-product-id="{{ $product->id }}" data-base-price-cents="{{ $basePrice }}">
                                         <div class="flex items-start justify-between gap-3">
                                             <span class="font-black text-indigo-700">{{ format_money($basePrice / 100) }}</span>
                                             <div class="text-right">
@@ -257,6 +295,7 @@
                         <div class="mt-5 space-y-3 text-sm font-bold">
                             <div class="flex justify-between gap-3 text-indigo-100"><span>القصص</span><span data-stories-total>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 text-indigo-100"><span>المنتجات</span><span data-products-total>٠ ج.م</span></div>
+                            <div class="hidden flex justify-between gap-3 text-amber-200" data-package-saving-row><span>توفير الباقة</span><span data-package-saving>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 text-indigo-100"><span>التوصيل</span><span data-delivery-total>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 text-rose-200"><span>الخصم</span><span data-discount-total>٠ ج.م</span></div>
                             <div class="flex justify-between gap-3 border-t border-indigo-700 pt-4 text-xl font-black"><span>الإجمالي</span><span data-grand-total>٠ ج.م</span></div>
@@ -282,11 +321,30 @@
                 const rows = root.querySelector('[data-story-rows]');
                 const template = root.querySelector('[data-story-template]');
                 const addButton = root.querySelector('[data-add-story]');
+                const packageSelect = root.querySelector('[data-package-select]');
+                const packageDescription = root.querySelector('[data-package-description]');
                 const country = root.querySelector('[data-country-select]');
                 const governorate = root.querySelector('[data-governorate-select]');
+                let restoringPackage = root.dataset.restoredPackage === '1';
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
                 const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
+
+                const selectedPackage = () => {
+                    const option = packageSelect?.selectedOptions[0];
+                    if (!option?.value) return null;
+
+                    return {
+                        id: Number(option.value),
+                        name: option.textContent.split('—')[0].trim(),
+                        storyCount: Number(option.dataset.storyCount || 0),
+                        priceCents: Number(option.dataset.priceCents || 0),
+                        allStories: option.dataset.allStories === '1',
+                        storyIds: (option.dataset.storyIds || '').split(',').filter(Boolean),
+                        items: JSON.parse(option.dataset.items || '[]'),
+                        summary: option.dataset.summary || '',
+                    };
+                };
 
                 const refreshStoryLinks = () => {
                     const storyRows = Array.from(rows.querySelectorAll('[data-story-row]'));
@@ -320,13 +378,31 @@
                         return sum + quantity * unit;
                     }, 0);
                     const deliveryCents = Number(governorate?.selectedOptions[0]?.dataset.feeCents || 0);
-                    const discountCents = Math.round(Math.max(0, Number(root.querySelector('[data-discount-input]')?.value || 0)) * 100);
+                    const manualDiscountCents = Math.round(Math.max(0, Number(root.querySelector('[data-discount-input]')?.value || 0)) * 100);
+                    const activePackage = selectedPackage();
+                    let packageRegularCents = 0;
+                    if (activePackage) {
+                        packageRegularCents += Array.from(rows.querySelectorAll('[data-story-select]'))
+                            .slice(0, activePackage.storyCount)
+                            .reduce((sum, select) => sum + Number(select.selectedOptions[0]?.dataset.priceCents || 0), 0);
+                        activePackage.items.forEach(item => {
+                            const productRow = root.querySelector(`[data-product-row][data-product-id="${item.product_id}"]`);
+                            const variant = productRow?.querySelector('[data-product-variant]');
+                            const unit = Number(variant?.selectedOptions[0]?.dataset.priceCents || productRow?.dataset.basePriceCents || 0);
+                            packageRegularCents += unit * Number(item.quantity || 0);
+                        });
+                    }
+                    const packageDiscountCents = activePackage ? Math.max(0, packageRegularCents - activePackage.priceCents) : 0;
+                    const discountCents = manualDiscountCents + packageDiscountCents;
                     const totalCents = Math.max(0, storiesCents + productsCents + deliveryCents - discountCents);
 
                     root.querySelector('[data-stories-total]').textContent = money(storiesCents);
                     root.querySelector('[data-products-total]').textContent = money(productsCents);
                     root.querySelector('[data-delivery-total]').textContent = money(deliveryCents);
                     root.querySelector('[data-discount-total]').textContent = money(discountCents);
+                    const savingRow = root.querySelector('[data-package-saving-row]');
+                    savingRow?.classList.toggle('hidden', packageDiscountCents < 1);
+                    root.querySelector('[data-package-saving]').textContent = money(packageDiscountCents);
                     root.querySelector('[data-grand-total]').textContent = money(totalCents);
                     const paymentSelect = root.querySelector('[data-payment-status]');
                     const paymentStatus = paymentSelect?.value || 'unpaid';
@@ -352,6 +428,12 @@
                 const bindRow = row => {
                     row.querySelector('[data-remove-story]')?.addEventListener('click', () => {
                         row.remove();
+                        const activePackage = selectedPackage();
+                        if (activePackage) {
+                            addButton.disabled = rows.querySelectorAll('[data-story-row]').length >= activePackage.storyCount;
+                            addButton.classList.toggle('opacity-50', addButton.disabled);
+                            addButton.classList.toggle('cursor-not-allowed', addButton.disabled);
+                        }
                         refreshStoryLinks();
                         calculate();
                     });
@@ -413,16 +495,84 @@
                     refreshPersonalization();
                 };
 
-                rows.querySelectorAll('[data-story-row]').forEach(bindRow);
-                root.querySelectorAll('[data-product-row]').forEach(bindProductRow);
-                addButton.addEventListener('click', () => {
+                const appendStoryRow = ({ scroll = false } = {}) => {
                     const html = template.innerHTML.replaceAll('__INDEX__', String(nextIndex++));
                     rows.insertAdjacentHTML('beforeend', html);
                     bindRow(rows.lastElementChild);
                     refreshStoryLinks();
                     calculate();
-                    rows.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                });
+                    if (scroll) rows.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                };
+
+                const applyPackage = () => {
+                    root.querySelectorAll('[data-product-row]').forEach(row => {
+                        const quantity = row.querySelector('[data-product-quantity]');
+                        const previousMinimum = Number(row.dataset.packageMinimum || 0);
+                        if (quantity && previousMinimum > 0) {
+                            quantity.value = Math.max(0, Number(quantity.value || 0) - previousMinimum);
+                            quantity.dispatchEvent(new Event('input'));
+                        }
+                        row.dataset.packageMinimum = '0';
+                    });
+
+                    const activePackage = selectedPackage();
+                    const currentRows = () => Array.from(rows.querySelectorAll('[data-story-row]'));
+                    if (!activePackage) {
+                        currentRows().forEach(row => row.querySelectorAll('[data-story-select] option').forEach(option => {
+                            option.hidden = false;
+                            option.disabled = false;
+                        }));
+                        addButton.disabled = false;
+                        addButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                        packageDescription?.classList.add('hidden');
+                        calculate();
+                        return;
+                    }
+
+                    while (currentRows().length < activePackage.storyCount) appendStoryRow();
+                    if (activePackage.storyCount === 0 && currentRows().length === 1 && !currentRows()[0].querySelector('[data-story-select]').value) {
+                        currentRows()[0].remove();
+                    }
+
+                    currentRows().forEach(row => {
+                        const select = row.querySelector('[data-story-select]');
+                        select.querySelectorAll('option').forEach(option => {
+                            if (!option.value) return;
+                            const allowed = activePackage.allStories || activePackage.storyIds.includes(String(option.value));
+                            option.hidden = !allowed;
+                            option.disabled = !allowed;
+                        });
+                        if (select.selectedOptions[0]?.disabled) select.value = '';
+                    });
+
+                    activePackage.items.forEach(item => {
+                        const row = root.querySelector(`[data-product-row][data-product-id="${item.product_id}"]`);
+                        const quantity = row?.querySelector('[data-product-quantity]');
+                        if (!row || !quantity) return;
+                        const minimum = Math.max(1, Number(item.quantity || 1));
+                        if (! restoringPackage) quantity.value = Math.max(0, Number(quantity.value || 0)) + minimum;
+                        row.dataset.packageMinimum = String(minimum);
+                        const variant = row.querySelector('[data-product-variant]');
+                        if (variant) variant.value = item.variant_id ? String(item.variant_id) : '';
+                        quantity.dispatchEvent(new Event('input'));
+                    });
+
+                    addButton.disabled = currentRows().length >= activePackage.storyCount;
+                    addButton.classList.toggle('opacity-50', addButton.disabled);
+                    addButton.classList.toggle('cursor-not-allowed', addButton.disabled);
+                    if (packageDescription) {
+                        packageDescription.textContent = `${activePackage.summary} — سعر الباقة ${money(activePackage.priceCents)}. أدخل بيانات ${activePackage.storyCount} قصة بالضبط.`;
+                        packageDescription.classList.remove('hidden');
+                    }
+                    refreshStoryLinks();
+                    calculate();
+                    restoringPackage = false;
+                };
+
+                rows.querySelectorAll('[data-story-row]').forEach(bindRow);
+                root.querySelectorAll('[data-product-row]').forEach(bindProductRow);
+                addButton.addEventListener('click', () => appendStoryRow({ scroll: true }));
+                packageSelect?.addEventListener('change', applyPackage);
 
                 country?.addEventListener('change', () => {
                     const countryId = country.value;
@@ -442,7 +592,8 @@
 
                 country?.dispatchEvent(new Event('change'));
                 refreshStoryLinks();
-                calculate();
+                if (packageSelect?.value) applyPackage();
+                else calculate();
             })();
         </script>
     @endpush

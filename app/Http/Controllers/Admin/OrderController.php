@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\AdminPackageOrderService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderDeletionService;
@@ -134,7 +135,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function create(StoryPricingService $storyPricing)
+    public function create(StoryPricingService $storyPricing, AdminPackageOrderService $packages)
     {
         $stories = Story::query()->where('active', true)->orderBy('title')->get();
 
@@ -157,6 +158,7 @@ class OrderController extends Controller
             'sourceOptions' => OrderSource::manualOptions(),
             'paymentStatuses' => OrderPaymentStatus::labels(),
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
+            'pricingPackages' => $packages->availablePackages(),
         ]);
     }
 
@@ -167,8 +169,13 @@ class OrderController extends Controller
         return preg_match('/^[=+\-@]/', $value) === 1 ? "'".$value : $value;
     }
 
-    public function store(Request $request, AdminOrderCreationService $creator)
-    {
+    public function store(
+        Request $request,
+        AdminOrderCreationService $creator,
+        AdminPackageOrderService $packages,
+    ) {
+        $pricingPackage = $packages->prepareRequest($request);
+
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
             'payment_status' => $request->input('payment_status', OrderPaymentStatus::UNPAID),
@@ -212,6 +219,7 @@ class OrderController extends Controller
             'products.*.units' => ['nullable', 'array', 'max:10'],
             'products.*.units.*.reuse_first' => ['nullable', 'boolean'],
             'products.*.units.*.personalization' => ['nullable', 'array'],
+            'pricing_package_id' => ['nullable', 'integer', 'exists:pricing_packages,id'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:2000'],
@@ -234,6 +242,7 @@ class OrderController extends Controller
             'stories.*.photos.required' => 'ارفع صورتين أو 3 صور للطفل لكل قصة.',
             'stories.*.photos.min' => 'يجب رفع صورتين على الأقل للطفل لكل قصة.',
             'stories.*.photos.max' => 'الحد الأقصى 3 صور للطفل لكل قصة.',
+            'pricing_package_id.exists' => 'الباقة المختارة غير موجودة.',
         ]);
 
         $selectedProducts = collect($validated['products'] ?? [])
@@ -314,6 +323,8 @@ class OrderController extends Controller
             $validated['products'][$productId]['units'] = $validatedUnits;
             $validated['products'][$productId]['personalization_schema'] = $schema;
         }
+
+        $validated = $packages->applyPackage($validated, $pricingPackage);
 
         if ((float) ($validated['discount_amount'] ?? 0) > 0 && blank($validated['discount_reason'] ?? null)) {
             throw ValidationException::withMessages([

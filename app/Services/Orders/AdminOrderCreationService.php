@@ -195,6 +195,7 @@ class AdminOrderCreationService
                             'offer_applied' => $price['offer_applied'],
                             'offer_label' => $price['offer_label'],
                             'created_manually' => true,
+                            ...(! empty($data['_package_snapshot']) ? ['package' => $data['_package_snapshot']] : []),
                         ],
                         'personalization_snapshot' => [
                             'child_name' => $input['child_name'],
@@ -309,6 +310,9 @@ class AdminOrderCreationService
                             'fulfillment_type' => $product->fulfillment_type,
                             'purchase_mode' => $product->purchase_mode,
                             'created_manually' => true,
+                            ...(! empty($data['_package_snapshot']) && in_array((int) $product->id, $data['_package_product_ids'] ?? [], true)
+                                ? ['package' => $data['_package_snapshot']]
+                                : []),
                         ],
                         'variant_snapshot' => $variant ? [
                             'name_ar' => $variant->name_ar,
@@ -363,6 +367,7 @@ class AdminOrderCreationService
                 'discount_cents' => $result['discount_cents'],
                 'total_cents' => $result['total_cents'],
                 'payment' => $result['payment'],
+                'package' => $data['_package_snapshot'] ?? null,
             ],
             admin: $admin,
             request: $request,
