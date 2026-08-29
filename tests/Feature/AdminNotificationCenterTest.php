@@ -14,6 +14,7 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\ProductionProject;
 use App\Models\SceneGenerationJob;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Notifications\AdminNotificationDispatcher;
@@ -72,9 +73,166 @@ class AdminNotificationCenterTest extends TestCase
         $delivery = NotificationDelivery::where('event_key', 'order.created')->firstOrFail();
 
         Queue::assertPushed(SendNotificationJob::class);
-        $this->assertStringContainsString($order->order_number, $delivery->payload_json['body']);
+        $this->assertStringContainsString($order->checkoutReference()->firstOrFail()->short_reference, $delivery->payload_json['body']);
         $this->assertStringContainsString(route('admin.orders.show', $order), $delivery->payload_json['body']);
         $this->assertStringNotContainsString('private-child-photo.png', $delivery->payload_json['body']);
+    }
+
+    public function test_checkout_with_multiple_stories_dispatches_one_grouped_notification(): void
+    {
+        Queue::fake();
+        $this->configureTelegram(['order.created']);
+        $firstStory = $this->story(['title' => 'بطل الملعب', 'price' => 100]);
+        $secondStory = $this->story(['title' => 'موعد القمة', 'price' => 125]);
+        [$country, $governorate] = $this->deliveryZone();
+
+        $this->withSession([
+            'cart.items' => [
+                'first-story' => [
+                    'key' => 'first-story',
+                    'item_type' => 'story',
+                    'story_id' => $firstStory->id,
+                    'story_title' => $firstStory->title,
+                    'story_slug' => $firstStory->slug,
+                    'story_price' => (float) $firstStory->price,
+                    'child_name' => 'سليم',
+                    'child_age' => 7,
+                    'child_gender' => 'boy',
+                    'uploaded_photos' => ['first-private-photo.png'],
+                ],
+                'second-story' => [
+                    'key' => 'second-story',
+                    'item_type' => 'story',
+                    'story_id' => $secondStory->id,
+                    'story_title' => $secondStory->title,
+                    'story_slug' => $secondStory->slug,
+                    'story_price' => (float) $secondStory->price,
+                    'child_name' => 'ليلى',
+                    'child_age' => 6,
+                    'child_gender' => 'girl',
+                    'uploaded_photos' => ['second-private-photo.png'],
+                ],
+            ],
+        ]);
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'Multi Story Parent',
+            'phone' => '201000000000',
+            'delivery_country_id' => $country->id,
+            'delivery_governorate_id' => $governorate->id,
+            'city' => 'Nasr City',
+            'street' => 'Street 1',
+            'address_details' => 'Building 2',
+        ])->assertRedirect(route('checkout.success'));
+
+        $this->assertSame(2, Order::count());
+        $this->assertSame(1, NotificationDelivery::where('event_key', 'order.created')->count());
+        Queue::assertPushed(SendNotificationJob::class, 1);
+
+        $body = NotificationDelivery::where('event_key', 'order.created')->firstOrFail()->payload_json['body'];
+        $this->assertStringContainsString('بطل الملعب', $body);
+        $this->assertStringContainsString('موعد القمة', $body);
+        $this->assertStringContainsString('سليم', $body);
+        $this->assertStringContainsString('ليلى', $body);
+        $this->assertStringContainsString('القصص (2)', $body);
+        $this->assertStringNotContainsString('first-private-photo.png', $body);
+        $this->assertStringNotContainsString('second-private-photo.png', $body);
+    }
+
+    public function test_order_created_dedupe_is_shared_by_all_orders_in_checkout_group(): void
+    {
+        Queue::fake();
+        $this->configureTelegram(['order.created']);
+        $checkoutGroup = 'CHK-GROUP-ONE-MESSAGE';
+        $first = $this->orderWithStory(['checkout_group_key' => $checkoutGroup]);
+        $second = $this->orderWithStory(['checkout_group_key' => $checkoutGroup]);
+        $dispatcher = app(AdminNotificationDispatcher::class);
+
+        $dispatcher->dispatchOrderCreated($first);
+        $dispatcher->dispatchOrderCreated($second);
+
+        $this->assertSame(1, NotificationDelivery::where('event_key', 'order.created')->count());
+        Queue::assertPushed(SendNotificationJob::class, 1);
+    }
+
+    public function test_product_only_order_notification_lists_product_quantities_and_group_link(): void
+    {
+        Queue::fake();
+        $this->configureTelegram(['order.created']);
+        $order = $this->orderWithStory([
+            'story_id' => null,
+            'child_name' => null,
+            'child_age' => null,
+            'child_gender' => null,
+        ]);
+        $order->items()->create([
+            'item_type' => 'product',
+            'title' => 'ستيكر المدرسة',
+            'unit_price_cents' => 19500,
+            'quantity' => 3,
+            'total_price_cents' => 58500,
+            'personalization_snapshot' => [
+                'children' => [
+                    ['child_name' => 'آدم'],
+                    ['child_name' => 'ليلى'],
+                    ['child_name' => 'عمر'],
+                ],
+            ],
+        ]);
+
+        app(AdminNotificationDispatcher::class)->dispatchOrderCreated($order);
+
+        $body = NotificationDelivery::where('event_key', 'order.created')->firstOrFail()->payload_json['body'];
+        $this->assertStringContainsString('المنتجات والإضافات (3)', $body);
+        $this->assertStringContainsString('ستيكر المدرسة × 3', $body);
+        $this->assertStringContainsString('آدم، ليلى، عمر', $body);
+        $this->assertStringContainsString(route('admin.orders.groups.show', $order), $body);
+    }
+
+    public function test_admin_can_edit_order_created_message_template_and_it_is_used(): void
+    {
+        Queue::fake();
+        $this->configureTelegram(['order.created']);
+        $admin = $this->adminWithPermissions([
+            'settings.notifications.view',
+            'settings.notifications.manage',
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('admin.settings.notifications.order-created-template.update'), [
+                'notification_order_created_template' => "طلب {{order_reference}}\nالعميل {{customer_name}}\nالعناصر {{items_count}}\n{{admin_url}}",
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'تم حفظ قالب رسالة الطلب الجديد.');
+
+        $this->assertSame(
+            "طلب {{order_reference}}\nالعميل {{customer_name}}\nالعناصر {{items_count}}\n{{admin_url}}",
+            Setting::query()->where('key', 'notification_order_created_template')->value('value')
+        );
+
+        $order = $this->orderWithStory(['parent_name' => 'Template Parent']);
+        app(AdminNotificationDispatcher::class)->dispatchOrderCreated($order);
+
+        $body = NotificationDelivery::where('event_key', 'order.created')->firstOrFail()->payload_json['body'];
+        $this->assertStringContainsString('Template Parent', $body);
+        $this->assertStringContainsString($order->checkoutReference()->firstOrFail()->short_reference, $body);
+        $this->assertStringNotContainsString('{{customer_name}}', $body);
+    }
+
+    public function test_order_created_template_rejects_unknown_variables(): void
+    {
+        $admin = $this->adminWithPermissions([
+            'settings.notifications.view',
+            'settings.notifications.manage',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.settings.notifications.index'))
+            ->put(route('admin.settings.notifications.order-created-template.update'), [
+                'notification_order_created_template' => 'طلب {{order_reference}} {{secret_value}}',
+            ])
+            ->assertRedirect(route('admin.settings.notifications.index'))
+            ->assertSessionHasErrors('notification_order_created_template');
     }
 
     public function test_telegram_token_is_encrypted_and_not_visible_in_html(): void
@@ -167,7 +325,7 @@ class AdminNotificationCenterTest extends TestCase
         ]);
 
         $delivery = NotificationDelivery::firstOrFail();
-        $this->assertStringContainsString($order->order_number, $delivery->payload_json['body']);
+        $this->assertStringContainsString($order->checkoutReference()->firstOrFail()->short_reference, $delivery->payload_json['body']);
         $this->assertStringContainsString(route('admin.orders.show', $order), $delivery->payload_json['body']);
         $this->assertStringNotContainsString('orders/photos/private-child.png', $delivery->payload_json['body']);
     }

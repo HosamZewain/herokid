@@ -10,6 +10,7 @@ use App\Models\NotificationRule;
 use App\Models\Setting;
 use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationSettings;
+use App\Services\Notifications\OrderCreatedNotificationMessage;
 use App\Services\Notifications\TelegramNotificationChannel;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class NotificationCenterController extends Controller
     public function __construct(
         private readonly NotificationCredentialService $credentials,
         private readonly NotificationSettings $settings,
+        private readonly OrderCreatedNotificationMessage $orderCreatedMessage,
     ) {}
 
     public function index(Request $request)
@@ -58,6 +60,7 @@ class NotificationCenterController extends Controller
             'deliveries' => $deliveries,
             'stats' => $stats,
             'notificationSettings' => $this->settingsForView(),
+            'orderCreatedTemplateVariables' => OrderCreatedNotificationMessage::VARIABLE_LABELS,
         ]);
     }
 
@@ -231,6 +234,38 @@ class NotificationCenterController extends Controller
         ], request: $request);
 
         return back()->with('success', 'تم تحديث حدود التنبيهات.');
+    }
+
+    public function updateOrderCreatedTemplate(Request $request)
+    {
+        $validated = $request->validate([
+            'notification_order_created_template' => ['required', 'string', 'max:5000'],
+        ], [
+            'notification_order_created_template.required' => 'اكتب محتوى رسالة الطلب الجديد.',
+            'notification_order_created_template.max' => 'يجب ألا يزيد قالب الرسالة عن 5000 حرف.',
+        ]);
+
+        $template = trim($validated['notification_order_created_template']);
+        $unknownVariables = $this->orderCreatedMessage->unknownVariables($template);
+
+        if ($unknownVariables !== []) {
+            return back()
+                ->withErrors([
+                    'notification_order_created_template' => 'يحتوي القالب على متغيرات غير مدعومة: '.implode('، ', $unknownVariables),
+                ])
+                ->withInput();
+        }
+
+        $key = OrderCreatedNotificationMessage::TEMPLATE_SETTING;
+        $before = (string) $this->settings->get($key, '');
+        $this->settings->save([$key => $template]);
+
+        AdminActivityLogger::log('notifications.order_created_template_updated', 'تم تحديث قالب رسالة Telegram للطلب الجديد.', properties: [
+            'changed' => $before !== $template,
+            'template_length' => mb_strlen($template),
+        ], request: $request);
+
+        return back()->with('success', 'تم حفظ قالب رسالة الطلب الجديد.');
     }
 
     private function ensureDefaults(): void

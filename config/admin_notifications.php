@@ -91,6 +91,7 @@ return [
         'notification_ai_project_warning_cost_usd' => '2.00',
         'notification_notify_on_budget_80_percent' => '1',
         'notification_last_stuck_check_run_at' => '',
+        'notification_order_created_template' => "🧾 طلب جديد على HeroKid\n\nرقم الطلب: {{order_reference}}\nالعميل: {{customer_name}}\nالهاتف: {{phone}}\nالأطفال: {{children}}\n\nالقصص ({{stories_count}}):\n{{stories}}\n\nالمنتجات والإضافات ({{products_count}}):\n{{products}}\n\nالإجمالي: {{total}}\nالتوصيل: {{delivery_fee}}\nالمحافظة: {{governorate}}\nالدفع: {{payment_method}}\nالمصدر: {{source}}\nالحالة: {{status}}\n\nفتح الطلب:\n{{admin_url}}",
     ],
 
     'telegram' => [

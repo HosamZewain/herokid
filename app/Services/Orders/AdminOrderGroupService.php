@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Models\OrderGroupMergeAlias;
 use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
@@ -345,7 +346,11 @@ class AdminOrderGroupService
 
         if ($request->filled('q')) {
             $term = trim((string) $request->query('q'));
-            $query->where(function (Builder $builder) use ($term): void {
+            $mergedTargetKeys = OrderGroupMergeAlias::query()
+                ->where('source_short_reference', 'like', '%'.$term.'%')
+                ->orWhere('source_checkout_group_key', 'like', '%'.$term.'%')
+                ->pluck('target_checkout_group_key');
+            $query->where(function (Builder $builder) use ($term, $mergedTargetKeys): void {
                 $builder
                     ->where('checkout_group_key', 'like', '%'.$term.'%')
                     ->orWhereHas('checkoutReference', fn (Builder $reference): Builder => $reference
@@ -358,6 +363,9 @@ class AdminOrderGroupService
                     ->orWhereHas('items', fn (Builder $items): Builder => $items
                         ->where('title', 'like', '%'.$term.'%')
                         ->orWhere('sku', 'like', '%'.$term.'%'));
+                if ($mergedTargetKeys->isNotEmpty()) {
+                    $builder->orWhereIn('checkout_group_key', $mergedTargetKeys);
+                }
             });
         }
 

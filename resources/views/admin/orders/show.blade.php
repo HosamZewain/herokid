@@ -124,6 +124,8 @@
                 'orderAdminNotes' => $orderAdminNotes ?? collect(),
             ])
 
+            @include('admin.orders._merge-checkout', ['mergeGroup' => $checkoutGroup])
+
             @include('admin.orders._attachments', [
                 'attachmentTarget' => $order,
                 'attachmentOrders' => $checkoutGroup['active_orders'] ?? collect([$order]),

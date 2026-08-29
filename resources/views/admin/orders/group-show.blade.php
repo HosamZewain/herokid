@@ -78,6 +78,8 @@
                 'orderAdminNotes' => $orderAdminNotes ?? collect(),
             ])
 
+            @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
+
             <div class="grid gap-5 lg:grid-cols-3">
                 <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
                     <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>

@@ -443,14 +443,13 @@ class CheckoutController extends Controller
             return redirect()->route('cart.index')->with('error', 'تعذر إنشاء الطلب لأن بعض القصص لم تعد متاحة.');
         }
 
-        Order::query()
-            ->with('story')
+        $representativeOrder = Order::query()
             ->whereKey($orderIds)
-            ->get()
-            ->each(fn (Order $order) => app(AdminNotificationDispatcher::class)->dispatchSafely('order.created', $order, [
-                'dedupe_key' => 'order.created:'.$order->id,
-                'status' => $order->status,
-            ]));
+            ->orderBy('id')
+            ->first();
+        if ($representativeOrder) {
+            app(AdminNotificationDispatcher::class)->dispatchOrderCreated($representativeOrder);
+        }
 
         session()->forget('cart.items');
         session(['checkout.last_order_ids' => $orderIds]);

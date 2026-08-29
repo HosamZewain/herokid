@@ -143,15 +143,9 @@ class MobileCheckoutService
             throw $exception;
         }
 
-        foreach ($result['orders'] ?? [] as $orderPayload) {
-            $order = Order::query()->with('story')->find($orderPayload['id']);
-            if ($order) {
-                $this->notifications->dispatchSafely('order.created', $order, [
-                    'dedupe_key' => 'order.created:'.$order->id,
-                    'status' => $order->status,
-                    'source' => 'mobile',
-                ]);
-            }
+        $firstOrderId = data_get($result, 'orders.0.id');
+        if ($firstOrderId && ($order = Order::query()->find($firstOrderId))) {
+            $this->notifications->dispatchOrderCreated($order, ['source' => 'mobile']);
         }
         if (($result['status'] ?? null) === 'completed' && ! empty($result['orders'][0]['id'])) {
             $representative = Order::query()->with('user')->find($result['orders'][0]['id']);

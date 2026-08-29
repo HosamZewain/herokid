@@ -153,6 +153,33 @@
 
         <section class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
             <div class="mb-5 border-b border-gray-100 pb-4 text-right">
+                <h3 class="text-lg font-black text-gray-950">قالب رسالة الطلب الجديد</h3>
+                <p class="mt-1 text-sm text-gray-500">تُرسل رسالة واحدة لكل عملية شراء، حتى لو احتوت على أكثر من قصة أو منتج.</p>
+            </div>
+            <form method="POST" action="{{ route('admin.settings.notifications.order-created-template.update') }}" class="space-y-5">
+                @csrf
+                @method('PUT')
+                <label class="block text-right">
+                    <span class="text-sm font-black text-gray-700">محتوى رسالة Telegram</span>
+                    <textarea name="notification_order_created_template" rows="16" dir="rtl" @cannot('settings.notifications.manage') readonly @endcannot class="mt-2 w-full rounded-xl border-gray-300 font-mono text-sm leading-7">{{ old('notification_order_created_template', $notificationSettings['notification_order_created_template'] ?? '') }}</textarea>
+                </label>
+                <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                    <p class="text-sm font-black text-indigo-950">المتغيرات المتاحة</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @foreach($orderCreatedTemplateVariables as $variable => $label)
+                            <span class="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-900" title="{{ $label }}" dir="ltr">{{ '{'.'{'.$variable.'}'.'}' }}</span>
+                        @endforeach
+                    </div>
+                    <p class="mt-3 text-xs text-indigo-800">مرر المؤشر فوق أي متغير لمعرفة معناه. المتغيرات غير المعروفة تُرفض عند الحفظ لحماية القالب من الأخطاء.</p>
+                </div>
+                @can('settings.notifications.manage')
+                    <button class="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white hover:bg-indigo-700">حفظ قالب الطلب الجديد</button>
+                @endcan
+            </form>
+        </section>
+
+        <section class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div class="mb-5 border-b border-gray-100 pb-4 text-right">
                 <h3 class="text-lg font-black text-gray-950">حدود التوقف والميزانية</h3>
             </div>
             <form method="POST" action="{{ route('admin.settings.notifications.thresholds.update') }}" class="grid grid-cols-1 gap-4 md:grid-cols-3">

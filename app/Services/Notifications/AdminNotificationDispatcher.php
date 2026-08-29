@@ -7,6 +7,7 @@ use App\Models\NotificationChannel;
 use App\Models\NotificationDelivery;
 use App\Models\NotificationEventLog;
 use App\Models\NotificationRule;
+use App\Models\Order;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -31,6 +32,23 @@ class AdminNotificationDispatcher
                 'error' => $this->safeError($exception->getMessage()),
             ]);
         }
+    }
+
+    public function dispatchOrderCreated(Order $order, array $context = []): void
+    {
+        $groupKey = $order->checkoutGroupKey();
+        $representative = Order::query()
+            ->where('checkout_group_key', $groupKey)
+            ->orderBy('id')
+            ->first() ?: $order;
+
+        $this->dispatchSafely('order.created', $representative, [
+            ...$context,
+            'checkout_group_key' => $groupKey,
+            'dedupe_scope' => 'checkout_group',
+            'dedupe_key' => 'order.created:checkout:'.$groupKey,
+            'status' => $representative->status,
+        ]);
     }
 
     public function dispatch(string $eventKey, ?Model $notifiable = null, array $context = [], ?string $severity = null): void
@@ -109,9 +127,13 @@ class AdminNotificationDispatcher
             ->where('event_key', $eventKey)
             ->where('channel_type', $channelType)
             ->where('recipient', $recipient)
-            ->where('dedupe_key', $dedupeKey)
-            ->where('notifiable_type', $notifiable ? $notifiable::class : null)
-            ->where('notifiable_id', $notifiable?->getKey());
+            ->where('dedupe_key', $dedupeKey);
+
+        if (($context['dedupe_scope'] ?? null) !== 'checkout_group') {
+            $query
+                ->where('notifiable_type', $notifiable ? $notifiable::class : null)
+                ->where('notifiable_id', $notifiable?->getKey());
+        }
 
         $repeatAfter = (int) ($context['allow_repeat_after_minutes'] ?? 0);
 

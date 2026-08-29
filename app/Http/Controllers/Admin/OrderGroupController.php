@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderGroupMergeService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
@@ -154,6 +155,35 @@ class OrderGroupController extends Controller
         );
 
         return back()->with('success', 'تم تحديث حالة الدفع وحساب المبلغ المتبقي بنجاح.');
+    }
+
+    public function merge(
+        Request $request,
+        int $representative,
+        OrderGroupMergeService $merges,
+    ) {
+        $validated = $request->validate([
+            'source_reference' => ['required', 'string', 'max:255'],
+            'merge_reason' => ['required', 'string', 'min:5', 'max:1000'],
+            'confirm_primary_delivery' => ['accepted'],
+        ], [
+            'source_reference.required' => 'اكتب رقم الطلب أو مرجع عملية الشراء المراد دمجها.',
+            'merge_reason.required' => 'اكتب سبب الدمج.',
+            'merge_reason.min' => 'سبب الدمج يجب ألا يقل عن 5 أحرف.',
+            'confirm_primary_delivery.accepted' => 'يجب تأكيد استخدام عنوان وشحن الطلب الحالي.',
+        ]);
+        $target = Order::query()->findOrFail($representative);
+        $group = $merges->merge(
+            $target,
+            $validated['source_reference'],
+            $validated['merge_reason'],
+            $request->user(),
+            $request,
+        );
+
+        return redirect()
+            ->route('admin.orders.groups.show', $group['representative_id'])
+            ->with('success', 'تم دمج الطلبين بنجاح، واحتساب مصاريف التوصيل مرة واحدة فقط.');
     }
 
     public function destroy(Request $request, int $representative, OrderDeletionService $deletions)

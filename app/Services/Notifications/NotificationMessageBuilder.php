@@ -11,12 +11,16 @@ use Illuminate\Support\Str;
 
 class NotificationMessageBuilder
 {
+    public function __construct(
+        private readonly OrderCreatedNotificationMessage $orderCreatedMessage,
+    ) {}
+
     public function build(string $eventKey, string $channelType, string $recipient, ?Model $notifiable, array $context = [], ?string $severity = null): NotificationMessage
     {
         $definition = config("admin_notifications.events.{$eventKey}", []);
         $severity ??= $definition['severity'] ?? 'info';
         $body = match ($eventKey) {
-            'order.created' => $this->orderCreated($notifiable),
+            'order.created' => $this->orderCreatedMessage->build($notifiable instanceof Order ? $notifiable : null),
             'production.project.created' => $this->productionCreated($this->projectFrom($notifiable)),
             'production.project.started' => $this->productionStarted($this->projectFrom($notifiable)),
             'production.project.completed' => $this->productionCompleted($this->projectFrom($notifiable)),
@@ -44,34 +48,6 @@ class NotificationMessageBuilder
                 'dedupe_key' => $context['dedupe_key'] ?? null,
             ],
         );
-    }
-
-    private function orderCreated(?Model $notifiable): string
-    {
-        $order = $notifiable instanceof Order ? $notifiable->loadMissing('story') : null;
-
-        if (! $order) {
-            return '🧾 طلب جديد على HeroKid';
-        }
-
-        $delivery = $order->delivery_details ?? [];
-        $total = $delivery['total'] ?? $order->items()->sum('total_price_cents') / 100;
-
-        return implode("\n", array_filter([
-            '🧾 طلب جديد على HeroKid',
-            '',
-            'رقم الطلب: '.$this->safe($order->order_number),
-            'العميل: '.$this->safe($order->parent_name ?? $order->user?->name ?? 'غير محدد'),
-            'الطفل: '.$this->safe($order->child_name ?? 'غير محدد').' / '.$this->safe($order->child_age ?? 'غير محدد').' سنوات',
-            'القصة: '.$this->safe($order->story?->title ?? 'منتجات متجر'),
-            'الإجمالي: '.$this->money($total, 'ج.م'),
-            'المحافظة: '.$this->safe($delivery['governorate'] ?? 'غير محدد'),
-            'الدفع: '.$this->safe($delivery['payment_method'] ?? 'عند الاستلام'),
-            'الحالة: '.$this->safe($order->status),
-            '',
-            'فتح الطلب:',
-            route('admin.orders.show', $order),
-        ], fn ($line): bool => $line !== null));
     }
 
     private function productionCreated(?ProductionProject $project): string
@@ -276,11 +252,6 @@ class NotificationMessageBuilder
         }
 
         return trim('#'.$job->scene->scene_number.' '.$job->scene->title);
-    }
-
-    private function money(mixed $amount, string $currency): string
-    {
-        return number_format((float) ($amount ?? 0), 2).' '.$currency;
     }
 
     private function safe(mixed $value): string
