@@ -292,7 +292,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->get(route('admin.orders.show', $first))
             ->assertOk()
             ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
-            ->assertSeeInOrder(['دمج طلب آخر مع هذه العملية', 'مسؤول تنفيذ عملية الشراء'])
+            ->assertSeeInOrder(['دمج طلب آخر', 'مسؤول تنفيذ عملية الشراء'])
             ->assertSee('قصص أخرى في نفس عملية الشراء')
             ->assertSee('مغامرة رنا')
             ->assertSee('ملصق باسم الطفل')

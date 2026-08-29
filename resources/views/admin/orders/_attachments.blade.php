@@ -9,11 +9,12 @@
         ->sortByDesc(fn ($entry) => $entry['attachment']->created_at)
         ->values();
     $collapsible ??= false;
+    $openByDefault ??= false;
 @endphp
 
 @if($attachmentTarget)
     @if($collapsible)
-        <details class="group rounded-2xl border border-sky-100 bg-white shadow-sm" @if($errors->hasAny(['attachments', 'attachments.*', 'note'])) open @endif>
+        <details class="group rounded-2xl border border-sky-100 bg-white shadow-sm" @if($openByDefault || $errors->hasAny(['attachments', 'attachments.*', 'note'])) open @endif data-order-attachments>
             <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right [&::-webkit-details-marker]:hidden">
                 <span class="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $orderAttachments->count() }} مرفق</span>
                 <span>

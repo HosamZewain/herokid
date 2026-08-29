@@ -1,17 +1,14 @@
 @can('orders.update')
     @if(!($mergeGroup['trashed'] ?? false))
-        <details class="rounded-2xl border border-amber-200 bg-amber-50/70 shadow-sm" @if($errors->hasAny(['source_reference', 'merge_reason', 'confirm_primary_delivery'])) open @endif>
-            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right">
-                <div>
-                    <h3 class="text-sm font-black text-amber-950">دمج طلب آخر مع هذه العملية</h3>
-                    <p class="mt-1 text-xs font-bold text-amber-800">اجمع طلبات نفس العميل واحتسب مصاريف التوصيل مرة واحدة.</p>
-                </div>
-                <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-amber-800">فتح</span>
+        <details class="group" @if($errors->hasAny(['source_reference', 'merge_reason', 'confirm_primary_delivery'])) open @endif>
+            <summary class="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-black text-amber-900 shadow-sm transition hover:bg-amber-100 [&::-webkit-details-marker]:hidden" data-order-merge-trigger>
+                <span aria-hidden="true">⇆</span>
+                <span>دمج طلب آخر</span>
             </summary>
 
             <form method="POST"
                   action="{{ route('admin.orders.groups.merge', $mergeGroup['representative_id']) }}"
-                  class="border-t border-amber-200 px-5 py-5 text-right"
+                  class="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-5 text-right shadow-sm"
                   onsubmit="return confirm('سيتم نقل كل قصص ومنتجات الطلب الآخر إلى هذه العملية وحذف مصاريف شحنه من الإجمالي. هل تريد المتابعة؟')">
                 @csrf
 

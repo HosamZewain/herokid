@@ -245,34 +245,34 @@
                     </div>
                     <div @class([
                         'mt-4 grid gap-4',
-                        'lg:grid-cols-2' => $group['direct_products']->count() > 1,
+                        'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' => $group['direct_products']->count() > 1,
                     ])>
                         @foreach($group['direct_products'] as $product)
                             @php
                                 $productOrder = $group['active_orders']->firstWhere('id', (int) $product->order_id);
                                 $productPhotos = $productOrder?->uploaded_photos ?? [];
                             @endphp
-                            <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                                @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-2 text-xs font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
-                                <p class="font-black text-gray-900">{{ $product->title }}</p>
+                            <div class="flex h-full flex-col rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                                @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-1.5 text-[10px] font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
+                                <p class="text-sm font-black leading-6 text-gray-900">{{ $product->title }}</p>
                                 @if($product->sku)<p class="mt-1 text-xs text-gray-400" dir="ltr">SKU: {{ $product->sku }}</p>@endif
-                                <p class="mt-3 text-sm font-bold text-emerald-800">{{ $product->quantity }} × {{ format_money($product->unit_price_cents / 100) }}</p>
+                                <p class="mt-2 text-xs font-bold text-emerald-800">{{ $product->quantity }} × {{ format_money($product->unit_price_cents / 100) }}</p>
                                 @if($product->personalization_mode === 'collect_child_details')
-                                    <dl class="mt-3 grid gap-2 border-t border-emerald-100 pt-3">
+                                    <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-emerald-100 pt-2">
                                         @foreach($product->personalizationDisplayValues() as $value)
-                                            <div>
-                                                <dt class="text-[11px] font-bold text-emerald-600">{{ $value['label'] }}</dt>
-                                                <dd class="break-words text-sm font-black text-gray-900">{{ $value['value'] }}</dd>
+                                            <div class="min-w-0">
+                                                <dt class="text-[10px] font-bold text-emerald-600">{{ $value['label'] }}</dt>
+                                                <dd class="break-words text-xs font-black leading-5 text-gray-900">{{ $value['value'] }}</dd>
                                             </div>
                                         @endforeach
                                     </dl>
                                     @can('orders.photos.view')
                                         @if($productOrder && count($productPhotos))
-                                            <div class="mt-4 border-t border-emerald-100 pt-3">
-                                                <p class="mb-2 text-[11px] font-black text-emerald-700">صور الطفل المرفقة</p>
-                                                <div class="flex flex-wrap gap-2">
+                                            <div class="mt-2 border-t border-emerald-100 pt-2">
+                                                <p class="mb-1.5 text-[10px] font-black text-emerald-700">صور الطفل المرفقة</p>
+                                                <div class="flex flex-wrap gap-1.5">
                                                     @foreach($productPhotos as $photo)
-                                                        <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-20 w-20 overflow-hidden rounded-xl border-2 border-white bg-white shadow-sm" title="فتح الصورة بالحجم الكامل">
+                                                        <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-14 w-14 overflow-hidden rounded-lg border-2 border-white bg-white shadow-sm" title="فتح الصورة بالحجم الكامل">
                                                             <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
                                                         </a>
                                                     @endforeach
@@ -285,7 +285,7 @@
                                     @if($productOrder && \App\Support\ProductProductionPrompt::templateForItem($product) !== null)
                                         <a
                                             href="{{ route('admin.orders.products.production', [$productOrder, $product]) }}"
-                                            class="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-fuchsia-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
+                                            class="mt-auto inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-black text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
                                         >
                                             <span aria-hidden="true">✨</span>
                                             فتح صفحة إنتاج الاستيكر
@@ -318,12 +318,14 @@
                     'noteTargetOrder' => $attachmentTarget,
                     'orderAdminNotes' => $orderAdminNotes ?? collect(),
                     'collapsible' => true,
+                    'openWhenPresent' => true,
                 ])
 
                 @include('admin.orders._attachments', [
                     'attachmentTarget' => $attachmentTarget,
                     'attachmentOrders' => $attachmentOrders,
                     'collapsible' => true,
+                    'openByDefault' => true,
                 ])
             </section>
 

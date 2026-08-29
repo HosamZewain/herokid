@@ -25,8 +25,9 @@ class AdminOrderGroupMergeTest extends TestCase
             ->get(route('admin.orders.groups.show', $target))
             ->assertOk()
             ->assertSee('<title>'.$targetShortReference.' — '.config('app.name').'</title>', false)
-            ->assertSee('دمج طلب آخر مع هذه العملية')
-            ->assertSeeInOrder(['دمج طلب آخر مع هذه العملية', 'العودة إلى الطلبات'])
+            ->assertSee('data-order-merge-trigger', false)
+            ->assertSee('دمج طلب آخر')
+            ->assertSeeInOrder(['دمج طلب آخر', 'العودة إلى الطلبات'])
             ->assertSee(route('admin.orders.groups.merge', $target), false);
 
         $this->actingAs($admin)

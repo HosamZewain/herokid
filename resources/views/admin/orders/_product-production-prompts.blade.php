@@ -1,15 +1,28 @@
 @if(($productProductionPrompts ?? collect())->isNotEmpty())
     @php($collapsed ??= false)
     @if($collapsed)
-        <details class="group rounded-3xl border border-fuchsia-100 bg-white shadow-sm" data-product-production-prompts>
-            <summary class="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right sm:px-6 [&::-webkit-details-marker]:hidden">
-                <span class="rounded-full bg-fuchsia-50 px-3 py-1.5 text-xs font-black text-fuchsia-700">{{ $productProductionPrompts->count() }} برومبت</span>
-                <span>
-                    <span class="block text-lg font-black text-gray-900">برومبت إنتاج المنتج</span>
-                    <span class="mt-1 block text-xs font-bold text-gray-500">افتح القسم عند بدء الإنتاج لعرض البرومبت ونسخه.</span>
-                </span>
-            </summary>
-            <div class="space-y-4 border-t border-fuchsia-100 p-4 sm:p-6">
+        <section class="rounded-3xl border border-fuchsia-100 bg-white shadow-sm" data-product-production-prompts>
+            <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <div class="flex flex-wrap gap-2">
+                    @foreach($productProductionPrompts as $productPrompt)
+                        <button
+                            type="button"
+                            data-copy-product-production-prompt-target="product-production-prompt-{{ $productPrompt['item']->id }}"
+                            class="inline-flex min-h-10 items-center justify-center rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-black text-white transition hover:bg-fuchsia-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
+                        >
+                            نسخ برومبت {{ $loop->iteration }}
+                        </button>
+                    @endforeach
+                </div>
+                <div class="text-right">
+                    <h3 class="text-base font-black text-gray-900">برومبت إنتاج المنتج</h3>
+                    <p class="mt-1 text-xs font-bold text-gray-500">النسخ متاح مباشرة، بينما النصوص مخفية لتوفير المساحة.</p>
+                </div>
+            </div>
+            <div data-product-production-prompt-quick-message class="mx-5 mb-3 hidden rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-right text-xs font-black text-green-700 sm:mx-6" role="status" aria-live="polite">تم نسخ برومبت إنتاج المنتج بنجاح</div>
+            <details class="group border-t border-fuchsia-100">
+                <summary class="cursor-pointer list-none px-5 py-3 text-xs font-black text-fuchsia-700 sm:px-6 [&::-webkit-details-marker]:hidden">عرض نصوص البرومبتات</summary>
+                <div class="space-y-4 border-t border-fuchsia-100 p-4 sm:p-6">
     @else
     <section class="space-y-4" data-product-production-prompts>
         <div class="flex items-center justify-between gap-3">
@@ -32,7 +45,7 @@
                         <button
                             type="button"
                             data-copy-product-production-prompt
-                            class="inline-flex items-center justify-center rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
+                            class="inline-flex items-center justify-center rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-fuchsia-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
                         >
                             نسخ برومبت المنتج
                         </button>
@@ -40,6 +53,7 @@
                 </div>
 
                 <textarea
+                    id="product-production-prompt-{{ $productPrompt['item']->id }}"
                     rows="{{ $collapsed ? 18 : 26 }}"
                     readonly
                     dir="ltr"
@@ -53,8 +67,9 @@
             </div>
         @endforeach
     @if($collapsed)
-            </div>
-        </details>
+                </div>
+            </details>
+        </section>
     @else
         </section>
     @endif
@@ -63,14 +78,9 @@
         @push('scripts')
         <script>
         document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('[data-product-production-prompt-card]').forEach(function (card) {
-                var button = card.querySelector('[data-copy-product-production-prompt]');
-                var textarea = card.querySelector('[data-product-production-prompt]');
-                var message = card.querySelector('[data-product-production-prompt-message]');
-
-                if (!button || !textarea || !message) return;
-
+            function copyPrompt(textarea, message) {
                 function showMessage() {
+                    if (!message) return;
                     message.classList.remove('hidden');
                     window.setTimeout(function () { message.classList.add('hidden'); }, 3000);
                 }
@@ -82,17 +92,49 @@
                     window.getSelection().removeAllRanges();
                 }
 
-                button.addEventListener('click', function () {
-                    if (navigator.clipboard && window.isSecureContext) {
-                        navigator.clipboard.writeText(textarea.value).then(showMessage).catch(function () {
-                            fallbackCopy();
-                            showMessage();
-                        });
-                        return;
-                    }
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(textarea.value).then(showMessage).catch(function () {
+                        fallbackCopy();
+                        showMessage();
+                    });
+                    return;
+                }
 
-                    fallbackCopy();
-                    showMessage();
+                fallbackCopy();
+                showMessage();
+            }
+
+            function flashCopyButton(button) {
+                var originalText = button.textContent;
+                button.textContent = 'تم النسخ ✓';
+                button.classList.remove('bg-fuchsia-600');
+                button.classList.add('bg-emerald-600');
+                window.setTimeout(function () {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-emerald-600');
+                    button.classList.add('bg-fuchsia-600');
+                }, 1800);
+            }
+
+            document.querySelectorAll('[data-product-production-prompt-card]').forEach(function (card) {
+                var button = card.querySelector('[data-copy-product-production-prompt]');
+                var textarea = card.querySelector('[data-product-production-prompt]');
+                var message = card.querySelector('[data-product-production-prompt-message]');
+
+                if (!button || !textarea || !message) return;
+
+                button.addEventListener('click', function () {
+                    copyPrompt(textarea, message);
+                    flashCopyButton(button);
+                });
+            });
+
+            document.querySelectorAll('[data-copy-product-production-prompt-target]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var textarea = document.getElementById(button.dataset.copyProductProductionPromptTarget);
+                    if (!textarea) return;
+                    copyPrompt(textarea, button.closest('[data-product-production-prompts]')?.querySelector('[data-product-production-prompt-quick-message]'));
+                    flashCopyButton(button);
                 });
             });
         });

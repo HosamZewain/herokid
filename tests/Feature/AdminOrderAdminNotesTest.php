@@ -100,6 +100,7 @@ class AdminOrderAdminNotesTest extends TestCase
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('ملاحظات فريق العمل')
+            ->assertSee('data-order-admin-notes', false)
             ->assertSee('مشرف المنتجات')
             ->assertSee('تم استلام صور الملصق من العميل.');
     }

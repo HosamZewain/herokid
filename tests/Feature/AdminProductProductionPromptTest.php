@@ -189,6 +189,8 @@ PROMPT);
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('برومبت إنتاج المنتج')
+            ->assertSee('data-copy-product-production-prompt-target', false)
+            ->assertSee('عرض نصوص البرومبتات')
             ->assertSee('Sticker prompt for سليم محمد at مدرسة النور')
             ->assertSee('نسخ برومبت المنتج');
     }

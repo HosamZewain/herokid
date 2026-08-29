@@ -1,12 +1,13 @@
 @php
     $notes = collect($orderAdminNotes ?? []);
     $collapsible ??= false;
+    $openWhenPresent ??= false;
 @endphp
 
 @if($collapsible)
-    <details class="group rounded-2xl border border-amber-100 bg-white shadow-sm" @if($errors->has('body')) open @endif>
+    <details class="group rounded-2xl border {{ $notes->isNotEmpty() ? 'border-amber-300 bg-amber-50/40' : 'border-amber-100 bg-white' }} shadow-sm" @if($errors->has('body') || ($openWhenPresent && $notes->isNotEmpty())) open @endif data-order-admin-notes>
         <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right [&::-webkit-details-marker]:hidden">
-            <span class="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800">{{ $notes->count() }} ملاحظة</span>
+            <span class="rounded-full {{ $notes->isNotEmpty() ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-800' }} px-3 py-1.5 text-xs font-black">{{ $notes->count() }} ملاحظة</span>
             <span>
                 <span class="block text-base font-black text-gray-950">ملاحظات فريق العمل</span>
                 <span class="mt-1 block text-xs font-bold text-gray-500">سجل دائم لا يمكن تعديل ملاحظاته أو حذفها.</span>
