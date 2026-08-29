@@ -35,7 +35,7 @@ class AdminOrdersIndexTest extends TestCase
             ->get(route('admin.orders.show', $order))
             ->assertOk()
             ->assertSee('href="'.route('admin.orders.show', $order).'"', false)
-            ->assertSee('#HK-2026-LINKS1')
+            ->assertSee($order->checkoutReference->short_reference)
             ->assertSee('href="'.route('admin.customers.show', 'user-'.$customer->id).'"', false)
             ->assertSee('Customer Parent')
             ->assertSee('href="'.route('admin.stories.edit', $story).'"', false)

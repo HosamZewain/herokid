@@ -1,12 +1,25 @@
 @if(($productProductionPrompts ?? collect())->isNotEmpty())
+    @php($collapsed ??= false)
+    @if($collapsed)
+        <details class="group rounded-3xl border border-fuchsia-100 bg-white shadow-sm" data-product-production-prompts>
+            <summary class="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right sm:px-6 [&::-webkit-details-marker]:hidden">
+                <span class="rounded-full bg-fuchsia-50 px-3 py-1.5 text-xs font-black text-fuchsia-700">{{ $productProductionPrompts->count() }} برومبت</span>
+                <span>
+                    <span class="block text-lg font-black text-gray-900">برومبت إنتاج المنتج</span>
+                    <span class="mt-1 block text-xs font-bold text-gray-500">افتح القسم عند بدء الإنتاج لعرض البرومبت ونسخه.</span>
+                </span>
+            </summary>
+            <div class="space-y-4 border-t border-fuchsia-100 p-4 sm:p-6">
+    @else
     <section class="space-y-4" data-product-production-prompts>
         <div class="flex items-center justify-between gap-3">
             <span class="rounded-full bg-fuchsia-50 px-3 py-1.5 text-xs font-black text-fuchsia-700">{{ $productProductionPrompts->count() }} برومبت</span>
             <h3 class="text-xl font-black text-gray-900">برومبت إنتاج المنتج</h3>
         </div>
+    @endif
 
         @foreach($productProductionPrompts as $productPrompt)
-            <div class="rounded-2xl border border-fuchsia-100 bg-white p-6 shadow-sm" data-product-production-prompt-card>
+            <div class="rounded-2xl border border-fuchsia-100 bg-white p-4 shadow-sm sm:p-6" data-product-production-prompt-card>
                 <div class="mb-4 flex flex-col gap-3 border-b pb-3 md:flex-row md:items-center md:justify-between">
                     <div class="text-right">
                         <h4 class="text-lg font-bold">{{ $productPrompt['item']->title }}</h4>
@@ -27,7 +40,7 @@
                 </div>
 
                 <textarea
-                    rows="26"
+                    rows="{{ $collapsed ? 18 : 26 }}"
                     readonly
                     dir="ltr"
                     spellcheck="false"
@@ -39,7 +52,12 @@
                 </div>
             </div>
         @endforeach
-    </section>
+    @if($collapsed)
+            </div>
+        </details>
+    @else
+        </section>
+    @endif
 
     @once
         @push('scripts')

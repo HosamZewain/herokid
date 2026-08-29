@@ -23,10 +23,12 @@
         $visibleStoryOrders = $group['story_orders'];
         $deletedStoryOrders = $group['deleted_orders']->filter(fn ($order) => $order->story_id || $order->items->contains('item_type', 'story'));
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
+        $adminNotesCount = collect($orderAdminNotes ?? [])->count();
+        $attachmentsCount = collect($attachmentOrders ?? [])->sum(fn ($order) => $order->attachments->count());
     @endphp
 
     <div class="py-8">
-        <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
+        <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
             @if(session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-800">{{ session('success') }}</div>
             @endif
@@ -38,16 +40,17 @@
 
             @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <a href="{{ route('admin.orders.index', $group['trashed'] ? ['view' => 'trash'] : []) }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
-                <div class="flex flex-wrap gap-2">
+            <section class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm" aria-label="إجراءات الطلب الأساسية">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="{{ route('admin.orders.index', $group['trashed'] ? ['view' => 'trash'] : []) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
                     @can('orders.update')
                         @if(!$group['trashed'])
-                            <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700">تعديل الطلب بالكامل</a>
+                                <a href="{{ route('admin.orders.groups.edit', $group['representative_id']) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700">تعديل الطلب بالكامل</a>
                         @endif
                     @endcan
                     @if(!empty($whatsappMessages) && !$group['trashed'])
-                        @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $whatsappMessages])
+                            @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $whatsappMessages, 'compact' => true, 'labelledCompact' => true])
                     @endif
                     @can('orders.delete')
                         @if($group['trashed'])
@@ -57,8 +60,16 @@
                             </form>
                         @endif
                     @endcan
+                    </div>
+                    <div class="flex flex-col gap-2 rounded-xl bg-sky-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between xl:min-w-[22rem]">
+                        <div>
+                            <p class="text-xs font-black text-gray-900">مسؤول تنفيذ الطلب</p>
+                            <p class="mt-0.5 text-[11px] font-bold text-gray-500">حدد بوضوح من يعمل على الطلب الآن.</p>
+                        </div>
+                        @include('admin.orders._assignment-controls', ['group' => $group])
+                    </div>
                 </div>
-            </div>
+            </section>
 
             @if($group['trashed'])
                 <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800">
@@ -66,23 +77,8 @@
                 </div>
             @endif
 
-            <div class="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h3 class="text-sm font-black text-gray-900">مسؤول تنفيذ الطلب</h3>
-                        <p class="mt-1 text-xs font-bold text-gray-500">استلام الطلب يوضح لباقي الفريق من يعمل عليه الآن.</p>
-                    </div>
-                    @include('admin.orders._assignment-controls', ['group' => $group])
-                </div>
-            </div>
-
-            @include('admin.orders._admin-notes', [
-                'noteTargetOrder' => $attachmentTarget,
-                'orderAdminNotes' => $orderAdminNotes ?? collect(),
-            ])
-
-            <div class="grid gap-5 lg:grid-cols-3">
-                <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
+            <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
+                <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                     <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>
                     <div class="grid gap-4 text-sm md:grid-cols-2">
                         <div><p class="text-xs font-bold text-gray-400">اسم ولي الأمر</p><p class="mt-1 font-black text-gray-900">{{ $group['customer_name'] }}</p></div>
@@ -95,7 +91,7 @@
                         @if($group['source_notes'])<div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-1 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
                     </div>
                 </div>
-                <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-6">
+                <aside class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 xl:sticky xl:top-5 xl:self-start">
                     <h3 class="text-base font-black text-indigo-900">ملخص القيمة</h3>
                     <div class="mt-5 space-y-3 text-sm font-bold text-indigo-900">
                         <div class="flex justify-between gap-3"><span>العناصر</span><span>{{ format_money($group['items_cents'] / 100) }}</span></div>
@@ -117,8 +113,8 @@
                         </div>
                         @if($group['payment_method'])<p class="mt-3 text-xs font-bold text-indigo-800">طريقة الدفع: {{ $group['payment_method'] }}</p>@endif
                     </div>
-                </div>
-            </div>
+                </aside>
+            </section>
 
             @if(!$group['trashed'] && $group['active_orders']->isNotEmpty())
                 @can('orders.update')
@@ -126,18 +122,14 @@
                 @endcan
             @endif
 
-            @include('admin.orders._attachments', [
-                'attachmentTarget' => $attachmentTarget,
-                'attachmentOrders' => $attachmentOrders,
-            ])
-
-            <section class="space-y-4">
+            @if($visibleStoryOrders->isNotEmpty())
+            <section id="order-stories" class="space-y-4" data-order-page-section="items">
                 <div class="flex items-center justify-between gap-3">
                     <span class="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">{{ $visibleStoryOrders->count() }} قصة نشطة</span>
                     <h3 class="text-xl font-black text-gray-900">القصص والأطفال</h3>
                 </div>
 
-                @forelse($visibleStoryOrders as $order)
+                @foreach($visibleStoryOrders as $order)
                     @php
                         $storyItem = $order->items->firstWhere('item_type', 'story');
                         $linkedAddOns = $order->items->where('item_type', 'product_add_on');
@@ -241,15 +233,20 @@
                             @endcan
                         </div>
                     </article>
-                @empty
-                    <div class="rounded-3xl border border-dashed border-gray-200 bg-white p-10 text-center text-sm font-bold text-gray-400">لا توجد قصص نشطة في هذه العملية.</div>
-                @endforelse
+                @endforeach
             </section>
+            @endif
 
             @if($group['direct_products']->isNotEmpty())
-                <section class="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-black text-gray-900">المنتجات المباشرة</h3>
-                    <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <section id="order-products" class="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="items">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{{ $group['direct_products']->sum('quantity') }} منتج</span>
+                        <h3 class="text-lg font-black text-gray-900">المنتجات المباشرة</h3>
+                    </div>
+                    <div @class([
+                        'mt-4 grid gap-4',
+                        'lg:grid-cols-2' => $group['direct_products']->count() > 1,
+                    ])>
                         @foreach($group['direct_products'] as $product)
                             @php
                                 $productOrder = $group['active_orders']->firstWhere('id', (int) $product->order_id);
@@ -302,8 +299,33 @@
             @endif
 
             @can('orders.production_prompt.manage')
-                @include('admin.orders._product-production-prompts')
+                @include('admin.orders._product-production-prompts', ['collapsed' => true])
             @endcan
+
+            <section id="order-follow-up" class="space-y-4" data-order-page-section="follow-up">
+                <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+                    <div class="flex flex-wrap gap-2 text-xs font-black">
+                        <span class="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{{ $adminNotesCount }} ملاحظة</span>
+                        <span class="rounded-full bg-sky-50 px-3 py-1.5 text-sky-700">{{ $attachmentsCount }} مرفق</span>
+                    </div>
+                    <div class="text-right">
+                        <h3 class="text-xl font-black text-gray-900">المتابعة والملفات</h3>
+                        <p class="mt-1 text-xs font-bold text-gray-500">الملاحظات الداخلية والمرفقات محفوظة مع الطلب دون تعطيل شاشة التنفيذ.</p>
+                    </div>
+                </div>
+
+                @include('admin.orders._admin-notes', [
+                    'noteTargetOrder' => $attachmentTarget,
+                    'orderAdminNotes' => $orderAdminNotes ?? collect(),
+                    'collapsible' => true,
+                ])
+
+                @include('admin.orders._attachments', [
+                    'attachmentTarget' => $attachmentTarget,
+                    'attachmentOrders' => $attachmentOrders,
+                    'collapsible' => true,
+                ])
+            </section>
 
             @if($deletedStoryOrders->isNotEmpty())
                 <section class="rounded-3xl border border-red-100 bg-red-50 p-6">

@@ -8,10 +8,23 @@
         ]))
         ->sortByDesc(fn ($entry) => $entry['attachment']->created_at)
         ->values();
+    $collapsible ??= false;
 @endphp
 
 @if($attachmentTarget)
-    <section class="rounded-3xl border border-sky-100 bg-white p-5 text-right shadow-sm sm:p-6" aria-labelledby="order-attachments-heading">
+    @if($collapsible)
+        <details class="group rounded-2xl border border-sky-100 bg-white shadow-sm" @if($errors->hasAny(['attachments', 'attachments.*', 'note'])) open @endif>
+            <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right [&::-webkit-details-marker]:hidden">
+                <span class="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $orderAttachments->count() }} مرفق</span>
+                <span>
+                    <span class="block text-base font-black text-gray-950">مرفقات الطلب</span>
+                    <span class="mt-1 block text-xs font-bold text-gray-500">صور وملفات PDF خاصة مرتبطة بالطلب.</span>
+                </span>
+            </summary>
+    @endif
+
+    <section class="{{ $collapsible ? 'border-t border-sky-100 p-5 text-right sm:p-6' : 'rounded-3xl border border-sky-100 bg-white p-5 text-right shadow-sm sm:p-6' }}" aria-labelledby="order-attachments-heading">
+        @unless($collapsible)
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h3 id="order-attachments-heading" class="text-lg font-black text-gray-900">📎 مرفقات الطلب</h3>
@@ -21,6 +34,7 @@
                 <span class="w-fit rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $orderAttachments->count() }} مرفق</span>
             @endif
         </div>
+        @endunless
 
         @can('orders.update')
             <form method="POST" action="{{ route('admin.orders.attachments.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-5 grid gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-end" data-order-attachment-form>
@@ -116,4 +130,8 @@
             @endforelse
         </div>
     </section>
+
+    @if($collapsible)
+        </details>
+    @endif
 @endif

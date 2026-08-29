@@ -643,7 +643,13 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order->id))
             ->assertOk()
+            ->assertSee('data-order-page-section="overview"', false)
+            ->assertSee('data-order-page-section="items"', false)
+            ->assertSee('data-order-page-section="follow-up"', false)
             ->assertSee('المنتجات المباشرة')
+            ->assertSee('ملاحظات فريق العمل')
+            ->assertSee('مرفقات الطلب')
+            ->assertDontSee('لا توجد قصص نشطة في هذه العملية.')
             ->assertSee('GIFT-DIRECT');
     }
 

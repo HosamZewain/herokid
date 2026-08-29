@@ -1,6 +1,21 @@
-@php($notes = collect($orderAdminNotes ?? []))
+@php
+    $notes = collect($orderAdminNotes ?? []);
+    $collapsible ??= false;
+@endphp
 
-<section class="rounded-3xl border border-amber-100 bg-white p-5 shadow-sm" aria-labelledby="order-admin-notes-title">
+@if($collapsible)
+    <details class="group rounded-2xl border border-amber-100 bg-white shadow-sm" @if($errors->has('body')) open @endif>
+        <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right [&::-webkit-details-marker]:hidden">
+            <span class="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800">{{ $notes->count() }} ملاحظة</span>
+            <span>
+                <span class="block text-base font-black text-gray-950">ملاحظات فريق العمل</span>
+                <span class="mt-1 block text-xs font-bold text-gray-500">سجل دائم لا يمكن تعديل ملاحظاته أو حذفها.</span>
+            </span>
+        </summary>
+@endif
+
+<section class="{{ $collapsible ? 'border-t border-amber-100 p-5' : 'rounded-3xl border border-amber-100 bg-white p-5 shadow-sm' }}" aria-labelledby="order-admin-notes-title">
+    @unless($collapsible)
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div class="text-right">
             <h3 id="order-admin-notes-title" class="text-lg font-black text-gray-950">ملاحظات فريق العمل</h3>
@@ -8,6 +23,7 @@
         </div>
         <span class="self-start rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800">{{ $notes->count() }} ملاحظة</span>
     </div>
+    @endunless
 
     @can('orders.update')
         <form method="POST" action="{{ route('admin.orders.notes.store', $noteTargetOrder) }}" class="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4">
@@ -35,3 +51,7 @@
         @endforelse
     </div>
 </section>
+
+@if($collapsible)
+    </details>
+@endif
