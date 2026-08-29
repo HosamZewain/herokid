@@ -56,17 +56,20 @@
         ];
     }
     $sceneTextHandoff ??= null;
+    $orderPageReference = $checkoutGroup['short_reference'] ?: $order->order_number;
 @endphp
 
 <x-admin-layout>
+    <x-slot name="title">{{ $orderPageReference }}</x-slot>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            تفاصيل الطلب
+        <div class="text-right">
+            <p class="text-xs font-black text-indigo-500">تفاصيل الطلب</p>
             <a href="{{ route('admin.orders.show', $order) }}"
-               class="text-gray-800 hover:text-indigo-600 hover:underline transition">
-                #{{ $order->order_number }}
+               class="mt-1 inline-block font-mono text-2xl font-black text-indigo-700 transition hover:text-indigo-900 hover:underline"
+               dir="ltr">
+                {{ $orderPageReference }}
             </a>
-        </h2>
+        </div>
     </x-slot>
 
     <div class="py-8">
@@ -77,6 +80,8 @@
                 ✅ {{ session('success') }}
             </div>
             @endif
+
+            @include('admin.orders._merge-checkout', ['mergeGroup' => $checkoutGroup])
 
             <div class="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -123,8 +128,6 @@
                 'noteTargetOrder' => $order,
                 'orderAdminNotes' => $orderAdminNotes ?? collect(),
             ])
-
-            @include('admin.orders._merge-checkout', ['mergeGroup' => $checkoutGroup])
 
             @include('admin.orders._attachments', [
                 'attachmentTarget' => $order,

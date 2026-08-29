@@ -19,11 +19,14 @@ class AdminOrderGroupMergeTest extends TestCase
         $target = $this->order('CHECKOUT-TARGET', 'TARGET-ORDER', '01012345678', 34_900, 6_500, 10_000);
         $source = $this->order('CHECKOUT-SOURCE', 'SOURCE-ORDER', '01012345678', 19_500, 6_500, 5_000);
         $sourceShortReference = $source->checkoutReference()->value('short_reference');
+        $targetShortReference = $target->checkoutReference()->value('short_reference');
 
         $this->actingAs($admin)
             ->get(route('admin.orders.groups.show', $target))
             ->assertOk()
+            ->assertSee('<title>'.$targetShortReference.' — '.config('app.name').'</title>', false)
             ->assertSee('دمج طلب آخر مع هذه العملية')
+            ->assertSeeInOrder(['دمج طلب آخر مع هذه العملية', 'العودة إلى الطلبات'])
             ->assertSee(route('admin.orders.groups.merge', $target), false);
 
         $this->actingAs($admin)

@@ -1,4 +1,5 @@
 <x-admin-layout>
+    <x-slot name="title">{{ $group['short_reference'] ?: $group['key'] }}</x-slot>
     <x-slot name="header">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-right">
@@ -34,6 +35,8 @@
                     @foreach($errors->all() as $message)<p>{{ $message }}</p>@endforeach
                 </div>
             @endif
+
+            @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.index', $group['trashed'] ? ['view' => 'trash'] : []) }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
@@ -77,8 +80,6 @@
                 'noteTargetOrder' => $attachmentTarget,
                 'orderAdminNotes' => $orderAdminNotes ?? collect(),
             ])
-
-            @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
             <div class="grid gap-5 lg:grid-cols-3">
                 <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">

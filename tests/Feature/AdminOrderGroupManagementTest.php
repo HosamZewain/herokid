@@ -282,6 +282,7 @@ class AdminOrderGroupManagementTest extends TestCase
     public function test_multi_story_checkout_opens_first_production_order_and_keeps_sibling_navigation(): void
     {
         [$first, $second] = $this->checkoutFixture();
+        $shortReference = $first->checkoutReference()->value('short_reference');
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $first->id))
@@ -290,6 +291,8 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $first))
             ->assertOk()
+            ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
+            ->assertSeeInOrder(['دمج طلب آخر مع هذه العملية', 'مسؤول تنفيذ عملية الشراء'])
             ->assertSee('قصص أخرى في نفس عملية الشراء')
             ->assertSee('مغامرة رنا')
             ->assertSee('ملصق باسم الطفل')
