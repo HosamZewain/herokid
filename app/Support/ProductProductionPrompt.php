@@ -34,7 +34,7 @@ class ProductProductionPrompt
 
     public static function renderForItem(OrderItem $item): string
     {
-        $item->loadMissing(['order', 'product']);
+        $item->loadMissing(['order.checkoutReference', 'product']);
         $template = self::templateForItem($item) ?? '';
         $values = self::variablesForItem($item);
 
@@ -75,7 +75,7 @@ class ProductProductionPrompt
     public static function supportedVariables(): array
     {
         return [
-            'order_number' => ['label' => 'رقم الطلب', 'example' => 'HK-2026-ABC123'],
+            'order_number' => ['label' => 'رقم الطلب المختصر', 'example' => 'HK08-151'],
             'product_name' => ['label' => 'اسم المنتج', 'example' => 'ستيكر مخصص باسم وصورة طفلك'],
             'child_full_name' => ['label' => 'اسم الطفل كاملًا', 'example' => 'Roqaya Ahmed Ali'],
             'sticker_name' => ['label' => 'الاسم كما سيظهر على الاستيكر', 'example' => 'Roqaya Ahmed Ali'],
@@ -113,7 +113,7 @@ class ProductProductionPrompt
         $notes = self::snapshotValue($snapshot, 'parent_notes') ?? $order->parent_notes;
 
         return [
-            'order_number' => self::value($order->order_number),
+            'order_number' => self::value($order->checkoutReference?->short_reference ?: $order->order_number),
             'product_name' => self::value($item->title),
             'child_full_name' => self::value($childName),
             'sticker_name' => self::value($childName),

@@ -56,6 +56,10 @@ PROMPT);
             ],
         ]);
 
+        $renderedPrompt = ProductProductionPrompt::renderForItem($order->items()->firstOrFail());
+        $this->assertStringContainsString('Order: '.$order->checkoutReference->short_reference, $renderedPrompt);
+        $this->assertStringNotContainsString('Order: '.$order->order_number, $renderedPrompt);
+
         $response = $this->actingAs($this->admin())->get(route('admin.orders.show', $order));
 
         $response->assertOk()
@@ -68,6 +72,26 @@ PROMPT);
             ->assertSee('Class 3A')
             ->assertSee('/orders/'.$order->id.'/production-photos/0', false)
             ->assertDontSee($photoPath);
+    }
+
+    public function test_product_prompt_falls_back_to_the_historical_order_number_when_short_reference_is_missing(): void
+    {
+        $product = $this->product('school-sticker', 'Order: {{order_number}}');
+        $order = Order::create(['order_number' => 'HK-HISTORICAL-STICKER', 'status' => 'new']);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+        ]);
+
+        $order->checkoutReference()->delete();
+        $order->unsetRelation('checkoutReference');
+        $item->unsetRelation('order');
+
+        $this->assertSame('Order: HK-HISTORICAL-STICKER', ProductProductionPrompt::renderForItem($item));
     }
 
     public function test_prompt_is_absent_for_products_without_a_template(): void
