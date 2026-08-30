@@ -270,7 +270,7 @@ class CartTrackingService
                 'product_id' => $item['product_id'] ?? null,
                 'product_variant_id' => $item['variant_id'] ?? null,
                 'title_snapshot' => $this->titleFromSessionItem($item),
-                'variant_snapshot' => $item['variant_name'] ?? null,
+                'variant_snapshot' => $item['variant_snapshot'] ?? ($item['variant_name'] ?? null),
                 'package_snapshot' => $item['sku'] ?? null,
                 'linked_cart_item_key' => $item['linked_story_key'] ?? null,
                 'quantity' => $quantity,

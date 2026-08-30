@@ -14,7 +14,10 @@ use App\Models\TemporaryPhotoUpload;
 use App\Models\User;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\ProductProductionPrompt;
+use App\Support\Seo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -115,9 +118,23 @@ class StoreCatalogTest extends TestCase
         $variant = ProductVariant::create([
             'product_id' => $product->id,
             'name_ar' => 'A3',
+            'sku' => 'POSTER-A3',
+            'image' => 'store/products/variants/a3.jpg',
+            'gallery_images' => ['store/products/variants/gallery/a3-side.jpg'],
             'price_override_cents' => 15000,
+            'attributes' => ['مقاس A3', 'إطار أبيض'],
             'is_active' => true,
         ]);
+
+        $this->get(route('shop.product.show', $product))
+            ->assertOk()
+            ->assertSee('data-product-variants', false)
+            ->assertSee('data-variant-option', false)
+            ->assertSee('POSTER-A3')
+            ->assertSee('١٥٠ ج.م');
+
+        $this->post(route('cart.products.store', $product), ['quantity' => 1])
+            ->assertSessionHasErrors(['variant_id']);
 
         $this->post(route('cart.products.store', $product), [
             'variant_id' => $variant->id,
@@ -128,6 +145,135 @@ class StoreCatalogTest extends TestCase
         $this->assertSame('product', $item['item_type']);
         $this->assertSame(30000, $item['line_total_cents']);
         $this->assertSame('A3', $item['variant_name']);
+        $this->assertSame($variant->id, $item['variant_id']);
+        $this->assertSame('poster — A3', $item['product_title']);
+        $this->assertSame('store/products/variants/a3.jpg', $item['product_image']);
+        $this->assertSame(15000, $item['variant_snapshot']['effective_price_cents']);
+        $this->assertSame(['مقاس A3', 'إطار أبيض'], $item['variant_snapshot']['attributes']);
+    }
+
+    public function test_checkout_records_the_exact_selected_variant_as_the_purchased_item(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('variant-product', 100);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'الحجم الكبير',
+            'sku' => 'VARIANT-LARGE',
+            'image' => 'store/products/variants/large.jpg',
+            'gallery_images' => ['store/products/variants/gallery/large-2.jpg'],
+            'price_override_cents' => 17500,
+            'is_active' => true,
+        ]);
+
+        $this->post(route('cart.products.store', $product), [
+            'variant_id' => $variant->id,
+            'quantity' => 2,
+        ])->assertRedirect(route('cart.index'));
+
+        $variant->update([
+            'name_ar' => 'اسم تغير بعد الإضافة للسلة',
+            'sku' => 'CHANGED-AFTER-CART',
+            'image' => 'store/products/variants/changed-after-cart.jpg',
+            'gallery_images' => [],
+            'price_override_cents' => 25000,
+        ]);
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $item = Order::with('items')->firstOrFail()->items->firstOrFail();
+        $this->assertSame($variant->id, $item->product_variant_id);
+        $this->assertSame('variant-product — الحجم الكبير', $item->title);
+        $this->assertSame('VARIANT-LARGE', $item->sku);
+        $this->assertSame(17500, $item->unit_price_cents);
+        $this->assertSame(2, $item->quantity);
+        $this->assertSame(35000, $item->total_price_cents);
+        $this->assertSame('store/products/variants/large.jpg', $item->variant_snapshot['image']);
+        $this->assertSame('VARIANT-LARGE', $item->variant_snapshot['sku']);
+        $this->assertSame('الحجم الكبير', $item->variant_snapshot['name_ar']);
+        $this->assertSame(17500, $item->variant_snapshot['effective_price_cents']);
+    }
+
+    public function test_variant_without_own_images_inherits_the_product_gallery(): void
+    {
+        $product = $this->product('variant-gallery-fallback', 100, [
+            'featured_image' => 'store/products/base-main.jpg',
+            'gallery_images' => ['store/products/base-side.jpg'],
+        ]);
+        ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'نسخة بدون صور مستقلة',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('shop.product.show', $product))->assertOk();
+        preg_match("/data-images='([^']+)'/", $response->getContent(), $matches);
+        $images = json_decode(html_entity_decode($matches[1] ?? ''), true);
+
+        $this->assertSame([
+            $product->featured_image_url,
+            Seo::imageUrl(Storage::disk('public')->url('store/products/base-side.jpg')),
+        ], $images);
+    }
+
+    public function test_admin_cannot_delete_a_purchased_variant_or_its_images(): void
+    {
+        Storage::fake('public');
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('protected-purchased-variant', 100);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'متغير مستخدم',
+            'image' => 'store/products/variants/protected.jpg',
+            'gallery_images' => ['store/products/variants/gallery/protected-side.jpg'],
+            'is_active' => true,
+        ]);
+        Storage::disk('public')->put($variant->image, 'main');
+        Storage::disk('public')->put($variant->gallery_images[0], 'side');
+
+        $this->post(route('cart.products.store', $product), [
+            'variant_id' => $variant->id,
+            'quantity' => 1,
+        ])->assertRedirect(route('cart.index'));
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))
+            ->assertRedirect(route('checkout.success'));
+
+        $this->actingAs($this->admin())
+            ->delete(route('admin.product-variants.destroy', $variant))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('product_variants', ['id' => $variant->id]);
+        Storage::disk('public')->assertExists($variant->image);
+        Storage::disk('public')->assertExists($variant->gallery_images[0]);
+    }
+
+    public function test_admin_can_store_multiple_images_for_a_product_variant(): void
+    {
+        Storage::fake('public');
+        $product = $this->product('variant-gallery-product', 100);
+
+        $this->actingAs($this->admin())->post(route('admin.products.variants.store', $product), [
+            'name_ar' => 'نسخة الصور',
+            'sku' => 'GALLERY-1',
+            'price_override' => 125,
+            'image' => UploadedFile::fake()->image('main.jpg'),
+            'gallery_images' => [
+                UploadedFile::fake()->image('one.jpg'),
+                UploadedFile::fake()->image('two.jpg'),
+            ],
+            'is_active' => 1,
+        ])->assertRedirect();
+
+        $variant = $product->variants()->firstOrFail();
+        $this->assertCount(2, $variant->gallery_images);
+        Storage::disk('public')->assertExists($variant->image);
+        foreach ($variant->gallery_images as $image) {
+            Storage::disk('public')->assertExists($image);
+        }
     }
 
     public function test_collect_child_details_product_displays_and_requires_personalization_fields(): void

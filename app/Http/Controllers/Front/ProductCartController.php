@@ -9,6 +9,7 @@ use App\Services\Cart\CartTrackingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -50,6 +51,10 @@ class ProductCartController extends Controller
             $variant = ProductVariant::where('product_id', $product->id)
                 ->where('is_active', true)
                 ->findOrFail($validated['variant_id']);
+        }
+
+        if ($product->activeVariants()->exists() && ! $variant) {
+            return $this->errorResponse($request, 'اختر النوع المطلوب قبل إضافته إلى السلة.', 'variant_id');
         }
 
         $cart = session('cart.items', []);
@@ -180,12 +185,13 @@ class ProductCartController extends Controller
                 'key' => $itemKey,
                 'item_type' => $linkedStoryKey ? 'product_add_on' : 'product',
                 'product_id' => $product->id,
-                'product_title' => $product->name_ar,
+                'product_title' => ProductVariantSnapshot::title($product, $variant),
                 'product_slug' => $product->slug,
-                'product_image' => $product->featured_image,
-                'product_image_url' => $product->featured_image_url,
+                'product_image' => ProductVariantSnapshot::imagePath($product, $variant),
+                'product_image_url' => ProductVariantSnapshot::imageUrl($product, $variant),
                 'variant_id' => $variant?->id,
                 'variant_name' => $variant?->name_ar,
+                'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
                 'sku' => $variant?->sku ?: $product->sku,
                 'unit_price_cents' => $unitPriceCents,
                 'unit_price' => $unitPriceCents / 100,

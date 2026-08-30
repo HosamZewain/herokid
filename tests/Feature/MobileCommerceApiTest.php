@@ -11,6 +11,7 @@ use App\Models\MobilePromoCode;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
@@ -166,6 +167,62 @@ class MobileCommerceApiTest extends TestCase
         $this->postJson('/api/v1/checkout', $this->checkoutPayload($address, (string) Str::uuid(), 'cash_on_delivery'))->assertCreated();
         $this->assertSame(0, $product->refresh()->stock_quantity);
         $this->assertDatabaseHas('order_items', ['product_id' => $product->id, 'quantity' => 2, 'total_price_cents' => 10000]);
+    }
+
+    public function test_mobile_product_variants_expose_media_and_keep_the_cart_snapshot_at_checkout(): void
+    {
+        $user = User::factory()->create();
+        $address = $this->address($user);
+        $product = $this->product('mobile-variant-product', 5000, 2);
+        $product->update([
+            'featured_image' => 'store/products/mobile-base.jpg',
+            'gallery_images' => ['store/products/mobile-base-side.jpg'],
+        ]);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'الحجم الكبير',
+            'sku' => 'MOBILE-LARGE',
+            'image' => 'store/products/variants/mobile-large.jpg',
+            'gallery_images' => ['store/products/variants/gallery/mobile-large-side.jpg'],
+            'attributes' => ['مقاس A3', 'إطار أبيض'],
+            'price_override_cents' => 7500,
+            'stock_quantity' => 2,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($user, ['mobile']);
+        $this->getJson('/api/v1/catalog/product/'.$product->slug)
+            ->assertOk()
+            ->assertJsonPath('data.details.variants.0.name_ar', 'الحجم الكبير')
+            ->assertJsonPath('data.details.variants.0.image_url', $variant->image_url)
+            ->assertJsonPath('data.details.variants.0.gallery_images.0', $variant->gallery_image_urls[0])
+            ->assertJsonPath('data.details.variants.0.attributes.0', 'مقاس A3')
+            ->assertJsonPath('data.details.variants.0.available', true);
+
+        $this->postJson('/api/v1/cart/items', [
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'variant_id' => $variant->id,
+            'quantity' => 1,
+            'idempotency_key' => (string) Str::uuid(),
+        ])->assertCreated();
+
+        $variant->update([
+            'name_ar' => 'اسم جديد بعد السلة',
+            'sku' => 'MOBILE-CHANGED',
+            'image' => 'store/products/variants/mobile-changed.jpg',
+            'gallery_images' => [],
+            'attributes' => ['صفة جديدة'],
+        ]);
+
+        $this->postJson('/api/v1/checkout', $this->checkoutPayload($address, (string) Str::uuid(), 'cash_on_delivery'))
+            ->assertCreated();
+
+        $item = Order::with('items')->firstOrFail()->items->firstOrFail();
+        $this->assertSame('الحجم الكبير', $item->variant_snapshot['name_ar']);
+        $this->assertSame('MOBILE-LARGE', $item->variant_snapshot['sku']);
+        $this->assertSame('store/products/variants/mobile-large.jpg', $item->variant_snapshot['image']);
+        $this->assertSame(['مقاس A3', 'إطار أبيض'], $item->variant_snapshot['attributes']);
     }
 
     public function test_delivered_story_order_can_be_reordered_idempotently_with_reusable_photos(): void

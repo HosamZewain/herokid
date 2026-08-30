@@ -20,6 +20,7 @@ use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Support\OrderPaymentStatus;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -366,7 +367,7 @@ class MobileCheckoutService
                 'product_variant_id' => $variant?->id,
                 'linked_order_item_id' => $cartItem->linked_mobile_cart_item_id ? ($storyOrderItems[$cartItem->linked_mobile_cart_item_id]?->id ?? null) : null,
                 'linked_cart_item_key' => $cartItem->linkedItem?->uuid,
-                'title' => $product->name_ar,
+                'title' => ProductVariantSnapshot::title($product, $variant),
                 'sku' => $variant?->sku ?? $product->sku,
                 'unit_price_cents' => $cartItem->unit_price_cents,
                 'quantity' => $cartItem->quantity,
@@ -381,7 +382,9 @@ class MobileCheckoutService
                     'production_lead_time_days' => $product->production_lead_time_days,
                     'mobile_cart_item_id' => $cartItem->uuid,
                 ],
-                'variant_snapshot' => $variant ? ['name_ar' => $variant->name_ar, 'name_en' => $variant->name_en, 'sku' => $variant->sku] : null,
+                'variant_snapshot' => is_array(data_get($cartItem->personalization, 'variant_snapshot'))
+                    ? data_get($cartItem->personalization, 'variant_snapshot')
+                    : ProductVariantSnapshot::make($product, $variant),
                 'personalization_snapshot' => $cartItem->linkedItem ? ['child_profile_uuid' => $cartItem->linkedItem->childProfile?->uuid] : null,
             ]);
             $this->decrementStock($product, $variant, $cartItem->quantity);

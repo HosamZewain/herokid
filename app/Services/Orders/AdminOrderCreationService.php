@@ -14,6 +14,7 @@ use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -297,7 +298,7 @@ class AdminOrderCreationService
                         'product_variant_id' => $variant?->id,
                         'linked_order_item_id' => $linkedStoryItem?->id,
                         'linked_cart_item_key' => $linkedStoryItem ? 'admin-story-'.$linkedIndex : null,
-                        'title' => $product->name_ar,
+                        'title' => ProductVariantSnapshot::title($product, $variant),
                         'sku' => $variant?->sku ?? $product->sku,
                         'unit_price_cents' => $line['unit_price_cents'],
                         'quantity' => $line['quantity'],
@@ -314,11 +315,7 @@ class AdminOrderCreationService
                                 ? ['package' => $data['_package_snapshot']]
                                 : []),
                         ],
-                        'variant_snapshot' => $variant ? [
-                            'name_ar' => $variant->name_ar,
-                            'name_en' => $variant->name_en,
-                            'sku' => $variant->sku,
-                        ] : null,
+                        'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
                         'personalization_snapshot' => $linkedStoryItem ? [
                             'child_name' => $targetOrder->child_name,
                             'child_age' => $targetOrder->child_age,

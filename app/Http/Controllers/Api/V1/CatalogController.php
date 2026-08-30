@@ -8,9 +8,11 @@ use App\Models\Story;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Mobile\MobileAnalyticsRecorder;
 use App\Services\Mobile\MobileCatalogPresenter;
+use App\Support\Seo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Storage;
 
 class CatalogController extends Controller
 {
@@ -92,6 +94,14 @@ class CatalogController extends Controller
                     'name_ar' => $variant->name_ar,
                     'name_en' => $variant->name_en,
                     'sku' => $variant->sku,
+                    'image_url' => $variant->image_url ?: $product->featured_image_url,
+                    'gallery_images' => $variant->gallery_image_urls !== []
+                        ? $variant->gallery_image_urls
+                        : collect($product->gallery_images ?? [])
+                            ->map(fn (string $image): string => Seo::imageUrl(Storage::disk('public')->url($image)))
+                            ->values()
+                            ->all(),
+                    'attributes' => $variant->attributes ?? [],
                     'price_amount' => $product->effectivePriceCents($variant) / 100,
                     'available' => $product->hasStock(1, $variant),
                 ])->values(),

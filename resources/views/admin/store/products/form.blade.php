@@ -177,19 +177,45 @@
 
             @if($product->exists)
                 <section class="rounded-2xl bg-white p-6 shadow-sm">
-                    <h3 class="mb-4 text-lg font-black">متغيرات المنتج</h3>
-                    <div class="space-y-3">
+                    <div class="mb-5">
+                        <h3 class="text-lg font-black">متغيرات المنتج</h3>
+                        <p class="mt-1 text-sm text-gray-500">كل متغير يُباع كخيار محدد بسعره وصوره وSKU ومخزونه، ويُحفظ كما اختاره العميل داخل الطلب.</p>
+                    </div>
+                    <div class="space-y-5">
                         @foreach($product->variants as $variant)
-                            <form action="{{ route('admin.product-variants.update', $variant) }}" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 gap-3 rounded-xl border p-3 md:grid-cols-6">
+                            <form action="{{ route('admin.product-variants.update', $variant) }}" method="POST" enctype="multipart/form-data" class="rounded-2xl border p-4">
                                 @csrf
                                 @method('PUT')
-                                <input name="name_ar" value="{{ $variant->name_ar }}" class="rounded-xl border-gray-300 text-right" placeholder="الاسم">
-                                <input name="sku" value="{{ $variant->sku }}" class="rounded-xl border-gray-300 text-left" dir="ltr" placeholder="SKU">
-                                <input type="number" step="0.01" name="price_adjustment" value="{{ $variant->price_adjustment_cents / 100 }}" class="rounded-xl border-gray-300" placeholder="فرق السعر">
-                                <input type="number" step="0.01" name="price_override" value="{{ $variant->price_override_cents !== null ? $variant->price_override_cents / 100 : '' }}" class="rounded-xl border-gray-300" placeholder="سعر ثابت">
-                                <label class="inline-flex items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($variant->is_active)> نشط</label>
-                                <div class="flex gap-2">
-                                    <button class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-bold text-white">حفظ</button>
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                                    <div><label class="mb-1 block text-xs font-bold">اسم المتغير</label><input name="name_ar" value="{{ $variant->name_ar }}" required class="w-full rounded-xl border-gray-300 text-right"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">SKU</label><input name="sku" value="{{ $variant->sku }}" class="w-full rounded-xl border-gray-300 text-left" dir="ltr"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">السعر المستقل</label><input type="number" step="0.01" name="price_override" value="{{ $variant->price_override_cents !== null ? $variant->price_override_cents / 100 : '' }}" class="w-full rounded-xl border-gray-300" placeholder="يستبدل سعر المنتج"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">فرق السعر</label><input type="number" step="0.01" name="price_adjustment" value="{{ $variant->price_adjustment_cents / 100 }}" class="w-full rounded-xl border-gray-300" placeholder="يضاف لسعر المنتج"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">المخزون</label><input type="number" name="stock_quantity" value="{{ $variant->stock_quantity }}" class="w-full rounded-xl border-gray-300"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">الترتيب</label><input type="number" name="sort_order" value="{{ $variant->sort_order }}" class="w-full rounded-xl border-gray-300"></div>
+                                    <div class="md:col-span-2"><label class="mb-1 block text-xs font-bold">الخصائص (كل سطر خاصية)</label><textarea name="attributes_text" rows="2" class="w-full rounded-xl border-gray-300 text-right">{{ implode("\n", $variant->attributes ?? []) }}</textarea></div>
+                                    <div><label class="mb-1 block text-xs font-bold">الصورة الرئيسية</label><input type="file" name="image" accept="image/*" class="w-full text-sm"></div>
+                                    <div class="md:col-span-2"><label class="mb-1 block text-xs font-bold">صور إضافية (حتى ٨)</label><input type="file" name="gallery_images[]" accept="image/*" multiple class="w-full text-sm"></div>
+                                </div>
+                                @if($variant->all_image_urls)
+                                    <div class="mt-4 flex flex-wrap gap-3">
+                                        @if($variant->image_url)
+                                            <img src="{{ $variant->image_url }}" alt="{{ $variant->name_ar }}" class="h-20 w-20 rounded-xl border object-cover">
+                                        @endif
+                                        @foreach(($variant->gallery_images ?? []) as $index => $path)
+                                            <label class="relative block">
+                                                <img src="{{ $variant->gallery_image_urls[$index] ?? '' }}" alt="" class="h-20 w-20 rounded-xl border object-cover">
+                                                <span class="mt-1 flex items-center gap-1 text-xs text-red-600"><input type="checkbox" name="remove_gallery_images[]" value="{{ $path }}"> حذف</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                    <div class="flex items-center gap-4">
+                                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($variant->is_active)> نشط</label>
+                                        <span class="text-sm font-bold text-emerald-700">تم طلبه {{ (int) ($variant->sold_quantity ?? 0) }} مرة</span>
+                                    </div>
+                                    <button class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">حفظ المتغير</button>
                                 </div>
                             </form>
                             <form action="{{ route('admin.product-variants.destroy', $variant) }}" method="POST" onsubmit="return confirm('حذف المتغير؟')" class="-mt-2">
@@ -199,12 +225,15 @@
                             </form>
                         @endforeach
                     </div>
-                    <form action="{{ route('admin.products.variants.store', $product) }}" method="POST" enctype="multipart/form-data" class="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-dashed p-4 md:grid-cols-5">
+                    <form action="{{ route('admin.products.variants.store', $product) }}" method="POST" enctype="multipart/form-data" class="mt-6 grid grid-cols-1 gap-3 rounded-xl border border-dashed p-4 md:grid-cols-4">
                         @csrf
                         <input name="name_ar" required class="rounded-xl border-gray-300 text-right" placeholder="اسم المتغير">
                         <input name="sku" class="rounded-xl border-gray-300 text-left" dir="ltr" placeholder="SKU">
-                        <input type="number" step="0.01" name="price_adjustment" class="rounded-xl border-gray-300" placeholder="فرق السعر">
+                        <input type="number" step="0.01" name="price_override" class="rounded-xl border-gray-300" placeholder="السعر المستقل">
                         <input type="number" name="stock_quantity" class="rounded-xl border-gray-300" placeholder="المخزون">
+                        <input type="file" name="image" accept="image/*" class="text-sm">
+                        <input type="file" name="gallery_images[]" accept="image/*" multiple class="text-sm md:col-span-2">
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="is_active" value="1" checked> نشط</label>
                         <button class="rounded-xl bg-emerald-600 px-3 py-2 font-bold text-white">إضافة متغير</button>
                     </form>
                 </section>

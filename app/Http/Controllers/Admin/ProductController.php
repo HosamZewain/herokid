@@ -60,7 +60,7 @@ class ProductController extends Controller
 
     public function edit(Product $product)
     {
-        $product->load('variants');
+        $product->load(['variants' => fn ($query) => $query->withSum('orderItems as sold_quantity', 'quantity')]);
 
         return view('admin.store.products.form', [
             'product' => $product,

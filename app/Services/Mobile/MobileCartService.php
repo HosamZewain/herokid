@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -165,7 +166,7 @@ class MobileCartService
                     'id' => $item->childProfile->uuid,
                     'name' => $item->childProfile->name,
                 ] : null,
-                'personalization' => collect($item->personalization ?? [])->except(['photo_ids'])->all(),
+                'personalization' => collect($item->personalization ?? [])->except(['photo_ids', 'variant_snapshot'])->all(),
             ])->values(),
             'promo_code' => $cart->promoCode?->code,
             'totals' => [
@@ -332,12 +333,15 @@ class MobileCartService
             'product_variant_id' => $variant?->id,
             'linked_mobile_cart_item_id' => $linkedItem?->id,
             'child_profile_id' => $linkedItem?->child_profile_id,
-            'title' => $product->name_ar,
+            'title' => ProductVariantSnapshot::title($product, $variant),
             'sku' => $variant?->sku ?? $product->sku,
             'unit_price_cents' => $price,
             'quantity' => $quantity,
             'total_price_cents' => $price * $quantity,
-            'personalization' => $linkedItem ? ['inherited_from_item_id' => $linkedItem->uuid] : null,
+            'personalization' => [
+                ...($linkedItem ? ['inherited_from_item_id' => $linkedItem->uuid] : []),
+                'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
+            ],
             'idempotency_key' => $data['idempotency_key'],
         ]);
     }

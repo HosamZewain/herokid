@@ -10,6 +10,7 @@ use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\Pricing\PackagePricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
+use App\Support\ProductVariantSnapshot;
 use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -153,12 +154,13 @@ class PackageCartController extends Controller
                     'key' => $packageKey.'-product-'.$packageProduct->id,
                     'item_type' => $requiresStory ? 'product_add_on' : 'product',
                     'product_id' => $product->id,
-                    'product_title' => $product->name_ar,
+                    'product_title' => ProductVariantSnapshot::title($product, $variant),
                     'product_slug' => $product->slug,
-                    'product_image' => $product->featured_image,
-                    'product_image_url' => $product->featured_image_url,
+                    'product_image' => ProductVariantSnapshot::imagePath($product, $variant),
+                    'product_image_url' => ProductVariantSnapshot::imageUrl($product, $variant),
                     'variant_id' => $variant?->id,
                     'variant_name' => $variant?->name_ar,
+                    'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
                     'sku' => $variant?->sku ?: $product->sku,
                     'unit_price_cents' => $packageProduct->quantity > 0 ? intdiv($allocated, $packageProduct->quantity) : $allocated,
                     'unit_price' => $packageProduct->quantity > 0 ? intdiv($allocated, $packageProduct->quantity) / 100 : $allocated / 100,

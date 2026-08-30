@@ -7,10 +7,12 @@ use App\Models\DeliveryGovernorate;
 use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -196,6 +198,14 @@ class AdminOrderFullEditTest extends TestCase
             'stock_quantity' => 4,
             'is_active' => true,
         ]);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name_ar' => 'نسخة الطلب الأصلية',
+            'sku' => 'ADMIN-ORIGINAL',
+            'image' => 'store/products/variants/admin-original.jpg',
+            'price_override_cents' => 12_000,
+            'is_active' => true,
+        ]);
         $order = Order::create([
             'order_number' => 'HK-2026-PRODUCT',
             'checkout_group_key' => 'CHK-PRODUCT-ONLY',
@@ -220,12 +230,21 @@ class AdminOrderFullEditTest extends TestCase
         $order->items()->create([
             'item_type' => 'product',
             'product_id' => $product->id,
-            'title' => $product->name_ar,
+            'product_variant_id' => $variant->id,
+            'title' => $product->name_ar.' — '.$variant->name_ar,
+            'sku' => $variant->sku,
             'unit_price_cents' => 12_000,
             'quantity' => 1,
             'total_price_cents' => 12_000,
+            'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
         ]);
         $product->decrement('stock_quantity');
+
+        $variant->update([
+            'name_ar' => 'نسخة تغيرت بعد الطلب',
+            'sku' => 'ADMIN-CHANGED',
+            'image' => 'store/products/variants/admin-changed.jpg',
+        ]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.edit', $order->id))
@@ -242,7 +261,7 @@ class AdminOrderFullEditTest extends TestCase
             'street' => 'شارع جديد',
             'address_details' => 'عنوان المنتج الجديد',
             'stories' => [],
-            'products' => [$product->id => ['quantity' => 2]],
+            'products' => [$product->id => ['quantity' => 2, 'variant_id' => $variant->id]],
             'discount_amount' => 20,
             'discount_reason' => 'خصم منتجين',
             'payment_status' => 'unpaid',
@@ -259,6 +278,10 @@ class AdminOrderFullEditTest extends TestCase
         ]);
         $this->assertSame(2, $product->refresh()->stock_quantity);
         $this->assertSame('الجيزة', data_get($order->refresh()->delivery_details, 'city'));
+        $updatedItem = $order->items()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame('نسخة الطلب الأصلية', $updatedItem->variant_snapshot['name_ar']);
+        $this->assertSame('ADMIN-ORIGINAL', $updatedItem->variant_snapshot['sku']);
+        $this->assertSame('store/products/variants/admin-original.jpg', $updatedItem->variant_snapshot['image']);
     }
 
     public function test_editing_a_personalized_product_order_preserves_its_child_snapshot_and_photos(): void

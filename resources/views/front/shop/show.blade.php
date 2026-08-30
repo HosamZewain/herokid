@@ -13,6 +13,15 @@
         $singleStoryItem = $storyItems->count() === 1 ? $storyItems->first() : null;
         $photoField = $personalizationFields['photos'] ?? null;
         $hasPhotoField = $collectsChildDetails && $photoField;
+        $productImageUrls = collect([
+            $product->featured_image_url,
+            ...collect($product->gallery_images ?? [])->map(
+                fn ($image) => \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk('public')->url($image))
+            ),
+        ])->filter()->unique()->values()->all();
+        $initialVariant = $product->activeVariants->first();
+        $initialDisplayImage = $initialVariant?->all_image_urls[0] ?? ($productImageUrls[0] ?? null);
+        $initialDisplayPrice = $product->effectivePriceCents($initialVariant) / 100;
     @endphp
 
     <div class="bg-slate-50 py-10 lg:py-14">
@@ -33,17 +42,17 @@
             <div class="grid grid-cols-1 gap-8 lg:grid-cols-[0.9fr_1.1fr]">
                 <div class="space-y-4">
                     <div class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
-                        @if($product->featured_image_url)
-                            <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}" class="aspect-[4/3] w-full object-cover">
+                        @if($initialDisplayImage)
+                            <img src="{{ $initialDisplayImage }}" alt="{{ $product->name_ar }}" class="aspect-[4/3] w-full object-cover" data-product-main-image>
                         @else
                             <div class="aspect-[4/3]">
                                 <x-product-image-placeholder />
                             </div>
                         @endif
                     </div>
-                    @if($product->gallery_images)
-                        <div class="grid grid-cols-4 gap-3">
-                            @foreach($product->gallery_images as $image)
+                    @if($product->gallery_images || $product->activeVariants->count())
+                        <div class="grid grid-cols-4 gap-3" data-product-gallery>
+                            @foreach(($product->gallery_images ?? []) as $image)
                                 <img src="{{ \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk('public')->url($image)) }}" alt="{{ $product->name_ar }}" class="aspect-square rounded-2xl object-cover">
                             @endforeach
                         </div>
@@ -60,7 +69,7 @@
                     <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-slate-50 p-5">
                         <div>
                             <p class="text-sm font-bold text-slate-500">السعر</p>
-                            <p class="text-3xl font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
+                            <p class="text-3xl font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
                         </div>
                         <div class="text-left">
                             <p class="text-sm font-bold text-slate-500">العمر المناسب</p>
@@ -80,7 +89,9 @@
                     <form action="{{ route('cart.products.store', $product) }}" method="POST" class="mt-6 space-y-4" data-product-order-form>
                         @csrf
                         @if($collectsChildDetails)
-                            @php($initialQuantity = max(1, min(10, (int) old('quantity', 1))))
+                            @php
+                                $initialQuantity = max(1, min(10, (int) old('quantity', 1)));
+                            @endphp
                             <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-right">
                                 <label for="personalized-product-quantity" class="block text-sm font-black text-indigo-950">عدد الأطفال / النسخ</label>
                                 <input id="personalized-product-quantity" type="number" name="quantity" min="1" max="10" value="{{ $initialQuantity }}"
@@ -95,14 +106,40 @@
                         @endif
 
                         @if($product->activeVariants->count())
-                            <div>
-                                <label class="mb-2 block text-sm font-black text-slate-700">اختيار النوع</label>
-                                <select name="variant_id" class="w-full rounded-2xl border-slate-200 text-right">
+                            <fieldset data-product-variants>
+                                <legend class="mb-3 block text-sm font-black text-slate-700">اختر النوع المطلوب</legend>
+                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                                     @foreach($product->activeVariants as $variant)
-                                        <option value="{{ $variant->id }}">{{ $variant->name_ar }} - {{ format_money($product->effectivePriceCents($variant) / 100) }}</option>
+                                        @php
+                                            $variantImages = $variant->all_image_urls ?: $productImageUrls;
+                                            $variantPrice = format_money($product->effectivePriceCents($variant) / 100);
+                                        @endphp
+                                        <label class="group relative cursor-pointer rounded-2xl border-2 border-slate-200 bg-white p-2 transition has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-400">
+                                            <input type="radio" name="variant_id" value="{{ $variant->id }}" required
+                                                @checked((string) old('variant_id', $product->activeVariants->first()?->id) === (string) $variant->id)
+                                                class="sr-only"
+                                                data-variant-option
+                                                data-price="{{ $variantPrice }}"
+                                                data-images='@json($variantImages)'
+                                                data-name="{{ $variant->name_ar }}">
+                                            @if($variantImages[0] ?? null)
+                                                <img src="{{ $variantImages[0] }}" alt="{{ $variant->name_ar }}" class="aspect-square w-full rounded-xl object-cover">
+                                            @else
+                                                <div class="aspect-square rounded-xl bg-slate-100"></div>
+                                            @endif
+                                            <span class="mt-2 block text-sm font-black text-slate-900">{{ $variant->name_ar }}</span>
+                                            <span class="block text-sm font-black text-indigo-700">{{ $variantPrice }}</span>
+                                            @if($variant->sku)
+                                                <span class="block text-[11px] text-slate-400" dir="ltr">{{ $variant->sku }}</span>
+                                            @endif
+                                            @if($variant->attributes)
+                                                <span class="mt-1 block text-xs text-slate-500">{{ implode(' · ', $variant->attributes) }}</span>
+                                            @endif
+                                        </label>
                                     @endforeach
-                                </select>
-                            </div>
+                                </div>
+                                <x-input-error :messages="$errors->get('variant_id')" class="mt-2" />
+                            </fieldset>
                         @endif
 
                         @if($requiresStory && $storyItems->count() > 1)
@@ -167,6 +204,44 @@
             @endif
         </div>
     </div>
+    @if($product->activeVariants->count())
+        @push('scripts')
+            <script>
+                (() => {
+                    const options = Array.from(document.querySelectorAll('[data-variant-option]'));
+                    const mainImage = document.querySelector('[data-product-main-image]');
+                    const price = document.querySelector('[data-product-price]');
+                    const gallery = document.querySelector('[data-product-gallery]');
+                    if (!options.length) return;
+
+                    const selectVariant = (option) => {
+                        const images = JSON.parse(option.dataset.images || '[]');
+                        if (price) price.textContent = option.dataset.price || '';
+                        if (mainImage && images[0]) {
+                            mainImage.src = images[0];
+                            mainImage.alt = option.dataset.name || mainImage.alt;
+                        }
+                        if (gallery) {
+                            gallery.replaceChildren(...images.slice(1).map((source) => {
+                                const image = document.createElement('img');
+                                image.src = source;
+                                image.alt = option.dataset.name || '';
+                                image.className = 'aspect-square rounded-2xl object-cover';
+                                image.loading = 'lazy';
+                                image.addEventListener('click', () => {
+                                    if (mainImage) mainImage.src = source;
+                                });
+                                return image;
+                            }));
+                        }
+                    };
+
+                    options.forEach(option => option.addEventListener('change', () => selectVariant(option)));
+                    selectVariant(options.find(option => option.checked) || options[0]);
+                })();
+            </script>
+        @endpush
+    @endif
     @if($collectsChildDetails)
         @push('scripts')
             <script>

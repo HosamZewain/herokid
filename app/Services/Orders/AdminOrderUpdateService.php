@@ -15,6 +15,7 @@ use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -502,6 +503,7 @@ class AdminOrderUpdateService
                 'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
                 'order_id' => (int) $item->order_id,
+                'variant_snapshot' => $item->variant_snapshot,
                 'personalization_snapshot' => $item->personalization_snapshot,
             ];
             $this->incrementStock($item, $admin);
@@ -612,6 +614,9 @@ class AdminOrderUpdateService
                         'unit_price_cents' => $unitPriceCents, 'total_price_cents' => $unitPriceCents,
                         'linked_story_index' => null,
                         'existing_order_id' => $oldUnit ? (int) $oldUnit['order_id'] : null,
+                        'variant_snapshot' => $oldUnit && $oldUnit['variant_id'] === $variant?->id
+                            ? $oldUnit['variant_snapshot']
+                            : ProductVariantSnapshot::make($product, $variant),
                         'personalization_snapshot' => $snapshot,
                         'photos' => $photos, 'personalization_unit' => $unitIndex + 1,
                         'reuse_source_order_id' => $unit['reuse_source_order_id'] ?? null,
@@ -627,6 +632,9 @@ class AdminOrderUpdateService
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedIndex,
                 'existing_order_id' => $old ? (int) $old['order_id'] : null,
+                'variant_snapshot' => $old && $old['variant_id'] === $variant?->id
+                    ? $old['variant_snapshot']
+                    : ProductVariantSnapshot::make($product, $variant),
                 'personalization_snapshot' => $old['personalization_snapshot'] ?? null,
                 'photos' => [],
             ]];
@@ -643,7 +651,7 @@ class AdminOrderUpdateService
             'product_variant_id' => $variant?->id,
             'linked_order_item_id' => $linkedStoryItem?->id,
             'linked_cart_item_key' => $linkedStoryItem ? 'admin-story-'.$linkedIndex : null,
-            'title' => $product->name_ar,
+            'title' => ProductVariantSnapshot::title($product, $variant),
             'sku' => $variant?->sku ?? $product->sku,
             'unit_price_cents' => $line['unit_price_cents'],
             'quantity' => $line['quantity'],
@@ -657,11 +665,7 @@ class AdminOrderUpdateService
                 'purchase_mode' => $product->purchase_mode,
                 'updated_manually' => true,
             ],
-            'variant_snapshot' => $variant ? [
-                'name_ar' => $variant->name_ar,
-                'name_en' => $variant->name_en,
-                'sku' => $variant->sku,
-            ] : null,
+            'variant_snapshot' => $line['variant_snapshot'] ?? ProductVariantSnapshot::make($product, $variant),
             'personalization_snapshot' => $linkedStoryItem ? [
                 'child_name' => $order->child_name,
                 'child_age' => $order->child_age,

@@ -20,6 +20,7 @@ use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -413,11 +414,9 @@ class CheckoutController extends Controller
                             'production_lead_time_days' => $product->production_lead_time_days,
                             'package' => $item['package_snapshot'] ?? null,
                         ],
-                        'variant_snapshot' => $variant ? [
-                            'name_ar' => $variant->name_ar,
-                            'name_en' => $variant->name_en,
-                            'sku' => $variant->sku,
-                        ] : null,
+                        'variant_snapshot' => is_array($item['variant_snapshot'] ?? null)
+                            ? $item['variant_snapshot']
+                            : ProductVariantSnapshot::make($product, $variant),
                         'personalization_snapshot' => $collectsChildDetails
                             ? ($item['personalization_snapshot'] ?? [
                                 'child_name' => $item['child_name'] ?? null,
