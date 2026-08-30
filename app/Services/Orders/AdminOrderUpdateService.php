@@ -267,6 +267,9 @@ class AdminOrderUpdateService
                     $grossCents - $discountCents,
                     $deliveryCents,
                 );
+                $paymentChanged = $beforeGroup['payment_status'] !== $payment['payment_status']
+                    || (int) $beforeGroup['paid_amount_cents'] !== $payment['paid_amount_cents']
+                    || $beforeGroup['payment_method'] !== $payment['payment_method'];
                 $lineCount = $ordersByInput->count() + $productLines->count();
 
                 foreach ($activeOrders as $position => $order) {
@@ -311,8 +314,8 @@ class AdminOrderUpdateService
                         'payment_status' => $payment['payment_status'],
                         'paid_amount_cents' => $payment['paid_amount_cents'],
                         'payment_method' => $payment['payment_method'],
-                        'payment_updated_by_user_id' => $admin->id,
-                        'payment_updated_at' => now(),
+                        'payment_updated_by_user_id' => $paymentChanged ? $admin->id : $order->payment_updated_by_user_id,
+                        'payment_updated_at' => $paymentChanged ? now() : $order->payment_updated_at,
                         'order_source' => $data['order_source'],
                         'source_notes' => $data['source_notes'] ?? null,
                         'notes' => $data['admin_notes'] ?? null,

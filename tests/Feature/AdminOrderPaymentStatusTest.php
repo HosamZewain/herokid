@@ -94,6 +94,39 @@ class AdminOrderPaymentStatusTest extends TestCase
         $this->assertSame(0, data_get($first->delivery_details, 'remaining_amount'));
     }
 
+    public function test_saving_workflow_without_a_payment_change_does_not_create_a_payment_event(): void
+    {
+        [$first, $second] = $this->checkout();
+
+        foreach ([$first, $second] as $order) {
+            $order->forceFill([
+                'payment_status' => 'partially_paid',
+                'paid_amount_cents' => 20_000,
+                'payment_method' => 'انستاباي',
+                'payment_updated_at' => now()->subDay(),
+            ])->save();
+        }
+
+        $originalPaymentTime = $first->refresh()->payment_updated_at;
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.orders.groups.workflow-statuses', $first->id), [
+                'status' => 'new',
+                'payment_status' => 'partially_paid',
+                'paid_amount' => 200,
+                'payment_method' => 'انستاباي',
+                'printing_status' => 'printing_not_started',
+                'shipping_status' => 'shipping_not_ready',
+            ])
+            ->assertRedirect();
+
+        $this->assertTrue($first->refresh()->payment_updated_at->equalTo($originalPaymentTime));
+        $this->assertDatabaseMissing('admin_activity_logs', [
+            'action' => 'checkout.payment_updated',
+            'subject_id' => $first->id,
+        ]);
+    }
+
     public function test_partial_payment_requires_a_valid_amount_and_payment_method(): void
     {
         [$first] = $this->checkout();

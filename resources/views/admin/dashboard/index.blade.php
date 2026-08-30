@@ -38,11 +38,20 @@
                     </div>
                     <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">بتوقيت القاهرة</span>
                 </div>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     <a href="{{ route('admin.orders.index', ['from' => \App\Support\OrderDateTime::display(now())->toDateString(), 'to' => \App\Support\OrderDateTime::display(now())->toDateString()]) }}" class="group rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-indigo-50 p-3 text-2xl">🛍️</span><span class="text-xs font-black text-indigo-600">طلبات جديدة اليوم</span></div>
                         <p class="mt-5 text-4xl font-black text-slate-950">{{ arabic_number($todayStats['new_checkouts']) }}</p>
-                        <p class="mt-1 text-xs text-slate-500">عملية شراء تم إنشاؤها اليوم</p>
+                        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                            <span class="text-slate-500">أمس: {{ arabic_number($todayStats['yesterday_checkouts']) }}</span>
+                            @if($todayStats['new_checkouts_difference'] > 0)
+                                <span class="rounded-full bg-emerald-50 px-2 py-1 font-black text-emerald-700">↑ {{ arabic_number($todayStats['new_checkouts_difference']) }} عن أمس</span>
+                            @elseif($todayStats['new_checkouts_difference'] < 0)
+                                <span class="rounded-full bg-rose-50 px-2 py-1 font-black text-rose-700">↓ {{ arabic_number(abs($todayStats['new_checkouts_difference'])) }} عن أمس</span>
+                            @else
+                                <span class="rounded-full bg-slate-100 px-2 py-1 font-black text-slate-600">مثل أمس</span>
+                            @endif
+                        </div>
                     </a>
                     <div class="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-violet-50 p-3 text-2xl">📈</span><span class="text-xs font-black text-violet-600">قيمة طلبات اليوم</span></div>
@@ -52,12 +61,17 @@
                     <div class="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-emerald-100 p-3 text-2xl">💳</span><span class="text-xs font-black text-emerald-700">مدفوعات اليوم</span></div>
                         <p class="mt-5 text-3xl font-black text-emerald-900">{{ format_money($todayStats['payments_cents'] / 100) }}</p>
-                        <p class="mt-1 text-xs text-emerald-700">المبالغ المسجلة في آخر تحديث دفع اليوم</p>
+                        <p class="mt-1 text-xs text-emerald-700">الزيادات الفعلية المسجلة في المبلغ المدفوع اليوم</p>
                     </div>
                     <div class="rounded-3xl border border-cyan-100 bg-white p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-cyan-50 p-3 text-2xl">🧾</span><span class="text-xs font-black text-cyan-700">عمليات دفع اليوم</span></div>
                         <p class="mt-5 text-4xl font-black text-slate-950">{{ arabic_number($todayStats['payment_checkouts']) }}</p>
-                        <p class="mt-1 text-xs text-slate-500">عملية شراء لها مبلغ مدفوع مسجل اليوم</p>
+                        <p class="mt-1 text-xs text-slate-500">دفعات فعلية أضيفت اليوم</p>
+                    </div>
+                    <div class="rounded-3xl border border-amber-100 bg-white p-5 shadow-sm">
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-amber-50 p-3 text-2xl">🧮</span><span class="text-xs font-black text-amber-700">متوسط الطلب</span></div>
+                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['average_order_cents'] / 100) }}</p>
+                        <p class="mt-1 text-xs text-slate-500">متوسط قيمة عمليات الشراء الجديدة اليوم</p>
                     </div>
                 </div>
             </section>

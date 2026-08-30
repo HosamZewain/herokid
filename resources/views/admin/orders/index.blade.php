@@ -150,7 +150,7 @@
                 </form>
             </div>
 
-            <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+            <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                     <p class="text-xs font-black text-indigo-700">إجمالي الطلبات</p>
                     <p class="mt-2 text-2xl font-black text-indigo-950">{{ number_format($stats['checkouts']) }}</p>
@@ -158,6 +158,15 @@
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
                     <p class="text-xs font-black text-slate-600">إجمالي قيمة الطلبات</p>
                     <p class="mt-2 text-lg font-black text-slate-950">{{ format_money($stats['total_value_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                    <p class="text-xs font-black text-amber-700">متوسط الطلب</p>
+                    <p class="mt-2 text-lg font-black text-amber-950">{{ format_money($stats['average_order_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                    <p class="text-xs font-black text-emerald-700">إجمالي المدفوع</p>
+                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_money($stats['collected_cents'] / 100) }}</p>
+                    <p class="mt-1 text-[10px] font-bold text-emerald-700">من {{ number_format($stats['payment_checkouts']) }} عملية شراء</p>
                 </div>
                 <div class="rounded-2xl border border-rose-100 bg-rose-50 p-4">
                     <p class="text-xs font-black text-rose-700">الطلبات الملغاة</p>
@@ -175,7 +184,7 @@
                     <p class="text-xs font-black text-emerald-600">قيمة الطلبات المدفوعة كليًا</p>
                     <p class="mt-2 text-lg font-black text-emerald-950">{{ format_money($stats['paid_value_cents'] / 100) }}</p>
                 </div>
-                <div class="col-span-2 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 lg:col-span-1">
+                <div class="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
                     <p class="text-xs font-black text-cyan-700">الطلبات المشحونة</p>
                     <p class="mt-2 text-2xl font-black text-cyan-950">{{ number_format($stats['shipped_checkouts']) }}</p>
                 </div>

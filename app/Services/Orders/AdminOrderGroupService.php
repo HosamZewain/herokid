@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Support\OrderDateTime;
@@ -157,12 +158,16 @@ class AdminOrderGroupService
             ->distinct()
             ->pluck('checkout_group_key');
         $todayFinancial = $this->financialStats($this->ordersForStats($todayKeys, false));
-        $todayPayments = Order::query()
-            ->whereBetween('payment_updated_at', [$todayStart, $todayEnd])
-            ->where('paid_amount_cents', '>', 0)
-            ->selectRaw('checkout_group_key, MAX(paid_amount_cents) as paid_amount_cents')
-            ->groupBy('checkout_group_key')
-            ->get();
+        $todayPayments = $this->paymentActivityBetween($todayStart, $todayEnd);
+
+        $yesterday = OrderDateTime::display(now())->subDay()->toDateString();
+        $yesterdayStart = OrderDateTime::utcStartOfDay($yesterday);
+        $yesterdayEnd = OrderDateTime::utcEndOfDay($yesterday);
+        $yesterdayCheckouts = Order::query()
+            ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
+            ->distinct()
+            ->count('checkout_group_key');
+        $newCheckoutDifference = $todayKeys->count() - $yesterdayCheckouts;
 
         $activeKeys = Order::query()
             ->whereNotIn('checkout_group_key', $this->cancelledCheckoutKeys())
@@ -186,9 +191,17 @@ class AdminOrderGroupService
             'records' => $records,
             'today' => [
                 'new_checkouts' => $todayKeys->count(),
+                'yesterday_checkouts' => $yesterdayCheckouts,
+                'new_checkouts_difference' => $newCheckoutDifference,
+                'new_checkouts_change_percent' => $yesterdayCheckouts > 0
+                    ? (int) round(($newCheckoutDifference / $yesterdayCheckouts) * 100)
+                    : null,
                 'order_value_cents' => $todayFinancial['total_value_cents'],
-                'payment_checkouts' => $todayPayments->count(),
-                'payments_cents' => (int) $todayPayments->sum('paid_amount_cents'),
+                'average_order_cents' => $todayKeys->isNotEmpty()
+                    ? (int) round($todayFinancial['total_value_cents'] / $todayKeys->count())
+                    : 0,
+                'payment_checkouts' => $todayPayments['count'],
+                'payments_cents' => $todayPayments['amount_cents'],
             ],
             'operations' => [
                 'active_checkouts' => $activeKeys->count(),
@@ -197,6 +210,41 @@ class AdminOrderGroupService
                 'collected_cents' => $activeFinancial['collected_cents'],
                 'outstanding_cents' => $activeFinancial['outstanding_cents'],
             ],
+        ];
+    }
+
+    /** @return array{count:int,amount_cents:int} */
+    private function paymentActivityBetween(mixed $start, mixed $end): array
+    {
+        $logs = AdminActivityLog::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->whereIn('action', [
+                'checkout.payment_updated',
+                'checkout.full_order_updated',
+                'order.created_manually',
+            ])
+            ->get(['action', 'properties']);
+
+        $deltas = $logs->map(function (AdminActivityLog $log): int {
+            $properties = $log->properties ?? [];
+
+            return match ($log->action) {
+                'checkout.payment_updated' => max(0,
+                    (int) data_get($properties, 'new.paid_amount_cents', 0)
+                    - (int) data_get($properties, 'old.paid_amount_cents', 0)
+                ),
+                'checkout.full_order_updated' => max(0,
+                    (int) data_get($properties, 'after.paid_amount_cents', 0)
+                    - (int) data_get($properties, 'before.paid_amount_cents', 0)
+                ),
+                'order.created_manually' => max(0, (int) data_get($properties, 'payment.paid_amount_cents', 0)),
+                default => 0,
+            };
+        })->filter(fn (int $delta): bool => $delta > 0);
+
+        return [
+            'count' => $deltas->count(),
+            'amount_cents' => (int) $deltas->sum(),
         ];
     }
 
@@ -544,10 +592,16 @@ class AdminOrderGroupService
 
         $cancelled = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $checkout['status']) === 'cancelled');
         $paid = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $checkout['payment_status']) === 'paid_in_full');
+        $withPayments = $checkouts->filter(fn (array $checkout): bool => $checkout['paid_amount_cents'] > 0);
+        $totalValueCents = (int) $checkouts->sum('total_cents');
 
         return [
-            'total_value_cents' => (int) $checkouts->sum('total_cents'),
+            'total_value_cents' => $totalValueCents,
+            'average_order_cents' => $checkouts->isNotEmpty()
+                ? (int) round($totalValueCents / $checkouts->count())
+                : 0,
             'collected_cents' => (int) $checkouts->sum('paid_amount_cents'),
+            'payment_checkouts' => $withPayments->count(),
             'outstanding_cents' => (int) $checkouts->sum(
                 fn (array $checkout): int => max(0, $checkout['total_cents'] - $checkout['paid_amount_cents'])
             ),

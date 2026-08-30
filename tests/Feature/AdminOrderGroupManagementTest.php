@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
@@ -66,6 +67,9 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(2, $stats['stories']);
         $this->assertSame(3, $stats['products']);
         $this->assertSame(93_800, $stats['total_value_cents']);
+        $this->assertSame(93_800, $stats['average_order_cents']);
+        $this->assertSame(0, $stats['collected_cents']);
+        $this->assertSame(0, $stats['payment_checkouts']);
         $this->assertSame(0, $stats['cancelled_checkouts']);
         $this->assertSame(0, $stats['paid_checkouts']);
         $this->assertSame(0, $stats['shipped_checkouts']);
@@ -88,9 +92,21 @@ class AdminOrderGroupManagementTest extends TestCase
             $order->forceFill([
                 'payment_status' => 'partially_paid',
                 'paid_amount_cents' => 10_000,
-                'payment_updated_at' => now(),
+                'payment_updated_at' => now()->subDay(),
             ])->save();
         }
+
+        AdminActivityLog::create([
+            'user_id' => $this->admin->id,
+            'action' => 'checkout.payment_updated',
+            'subject_type' => Order::class,
+            'subject_id' => $first->id,
+            'properties' => [
+                'checkout_group_key' => 'GROUP-DASHBOARD',
+                'old' => ['paid_amount_cents' => 0],
+                'new' => ['paid_amount_cents' => 10_000],
+            ],
+        ]);
 
         $response = $this->actingAs($this->admin)
             ->get(route('admin.dashboard.index'));
@@ -108,7 +124,10 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(1, $response->viewData('totalOrders'));
         $this->assertSame(2, $response->viewData('orderRecordCounts')['new']);
         $this->assertSame(1, $response->viewData('todayStats')['new_checkouts']);
+        $this->assertSame(0, $response->viewData('todayStats')['yesterday_checkouts']);
+        $this->assertSame(1, $response->viewData('todayStats')['new_checkouts_difference']);
         $this->assertSame(63_800, $response->viewData('todayStats')['order_value_cents']);
+        $this->assertSame(63_800, $response->viewData('todayStats')['average_order_cents']);
         $this->assertSame(1, $response->viewData('todayStats')['payment_checkouts']);
         $this->assertSame(10_000, $response->viewData('todayStats')['payments_cents']);
         $this->assertSame(1, $response->viewData('operationsStats')['active_checkouts']);
@@ -124,6 +143,56 @@ class AdminOrderGroupManagementTest extends TestCase
             ->viewData('groups');
 
         $this->assertSame(1, $groups->total());
+    }
+
+    public function test_dashboard_uses_actual_payment_deltas_and_compares_new_orders_with_yesterday(): void
+    {
+        $order = $this->createStoryOrder('HK-DASH-OLD', 'GROUP-DASHBOARD-OLD', 'سلمى', 'under_review');
+        $order->items()->create([
+            'item_type' => 'story',
+            'story_id' => $order->story_id,
+            'title' => $order->story->title,
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+        $order->forceFill([
+            'created_at' => now()->subDay(),
+            'payment_status' => 'partially_paid',
+            'paid_amount_cents' => 20_000,
+            'payment_updated_at' => now(),
+        ])->save();
+
+        $withoutPaymentLog = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->viewData('todayStats');
+
+        $this->assertSame(0, $withoutPaymentLog['new_checkouts']);
+        $this->assertSame(1, $withoutPaymentLog['yesterday_checkouts']);
+        $this->assertSame(-1, $withoutPaymentLog['new_checkouts_difference']);
+        $this->assertSame(0, $withoutPaymentLog['payment_checkouts']);
+        $this->assertSame(0, $withoutPaymentLog['payments_cents']);
+        $this->assertSame(0, $withoutPaymentLog['average_order_cents']);
+
+        AdminActivityLog::create([
+            'user_id' => $this->admin->id,
+            'action' => 'checkout.payment_updated',
+            'subject_type' => Order::class,
+            'subject_id' => $order->id,
+            'properties' => [
+                'old' => ['paid_amount_cents' => 13_000],
+                'new' => ['paid_amount_cents' => 20_000],
+            ],
+        ]);
+
+        $withPaymentLog = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->viewData('todayStats');
+
+        $this->assertSame(1, $withPaymentLog['payment_checkouts']);
+        $this->assertSame(7_000, $withPaymentLog['payments_cents']);
     }
 
     public function test_search_status_mixed_and_date_filters_match_checkout_contents(): void
@@ -266,6 +335,8 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertOk()
             ->assertSee('إحصائيات الطلبات المطابقة للفلاتر', false)
             ->assertSee('إجمالي قيمة الطلبات')
+            ->assertSee('متوسط الطلب')
+            ->assertSee('إجمالي المدفوع')
             ->assertSee('قيمة الطلبات الملغاة')
             ->assertSee('قيمة الطلبات المدفوعة كليًا')
             ->assertSee('الطلبات المشحونة')
@@ -276,6 +347,9 @@ class AdminOrderGroupManagementTest extends TestCase
         $stats = $response->viewData('stats');
         $this->assertSame(2, $stats['checkouts']);
         $this->assertSame(72_900, $stats['total_value_cents']);
+        $this->assertSame(36_450, $stats['average_order_cents']);
+        $this->assertSame(43_900, $stats['collected_cents']);
+        $this->assertSame(1, $stats['payment_checkouts']);
         $this->assertSame(0, $stats['cancelled_checkouts']);
         $this->assertSame(0, $stats['cancelled_value_cents']);
         $this->assertSame(1, $stats['paid_checkouts']);

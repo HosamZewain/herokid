@@ -98,6 +98,16 @@ class OrderPaymentService
                 'payment_method' => $orders->first()->payment_method,
             ];
 
+            $paymentChanged = $orders->contains(function (Order $order) use ($resolved): bool {
+                return ($order->payment_status ?: OrderPaymentStatus::UNPAID) !== $resolved['payment_status']
+                    || (int) $order->paid_amount_cents !== $resolved['paid_amount_cents']
+                    || $order->payment_method !== $resolved['payment_method'];
+            });
+
+            if (! $paymentChanged) {
+                return $resolved;
+            }
+
             foreach ($orders as $order) {
                 $delivery = $order->delivery_details ?? [];
                 $delivery['payment_status'] = $resolved['payment_status'];
