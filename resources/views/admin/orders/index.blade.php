@@ -5,11 +5,13 @@
                 <h2 class="text-xl font-black text-gray-900">إدارة الطلبات</h2>
                 <p class="mt-1 text-xs font-bold text-gray-500">كل صف يمثل عملية شراء واحدة حتى لو احتوت على أكثر من قصة.</p>
             </div>
-            <div class="flex flex-wrap gap-2 text-xs font-black">
-                <span class="rounded-full bg-indigo-50 px-3 py-2 text-indigo-700">{{ number_format($stats['checkouts']) }} عملية شراء</span>
-                <span class="rounded-full bg-violet-50 px-3 py-2 text-violet-700">{{ number_format($stats['stories']) }} قصة</span>
-                <span class="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{{ number_format($stats['products']) }} منتج وإضافة</span>
-            </div>
+            @can('orders.statistics.view')
+                <div class="flex flex-wrap gap-2 text-xs font-black">
+                    <span class="rounded-full bg-indigo-50 px-3 py-2 text-indigo-700">{{ number_format($stats['checkouts']) }} عملية شراء</span>
+                    <span class="rounded-full bg-violet-50 px-3 py-2 text-violet-700">{{ number_format($stats['stories']) }} قصة</span>
+                    <span class="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{{ number_format($stats['products']) }} منتج وإضافة</span>
+                </div>
+            @endcan
         </div>
     </x-slot>
 
@@ -150,6 +152,7 @@
                 </form>
             </div>
 
+            @can('orders.statistics.view')
             <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                     <p class="text-xs font-black text-indigo-700">إجمالي الطلبات</p>
@@ -189,6 +192,7 @@
                     <p class="mt-2 text-2xl font-black text-cyan-950">{{ number_format($stats['shipped_checkouts']) }}</p>
                 </div>
             </section>
+            @endcan
 
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="divide-y divide-gray-100 md:hidden">

@@ -15,31 +15,35 @@ class DashboardController extends Controller
         Ga4AnalyticsRepository $analytics,
         AdminOrderGroupService $orderGroups
     ) {
-        // A checkout may contain more than one story order. Dashboard totals
-        // intentionally match the grouped admin orders list.
-        $orderStats = $orderGroups->dashboardStats();
-        $totalOrders = $orderStats['checkouts']['total'];
-        $newOrders = $orderStats['checkouts']['new'];
-        $pendingPreview = $orderStats['checkouts']['preview_uploaded'];
-        $shippedOrders = $orderStats['checkouts']['shipped'];
-        $deliveredOrders = $orderStats['checkouts']['delivered'];
-        $orderRecordCounts = $orderStats['records'];
-        $todayStats = $orderStats['today'];
-        $operationsStats = $orderStats['operations'];
+        $canViewStatistics = auth()->user()->hasPermission('dashboard.statistics.view');
+        $orderStats = $canViewStatistics ? $orderGroups->dashboardStats() : null;
 
-        // Content stats
-        $totalStories = Story::count();
-        $activeStories = Story::where('active', true)->count();
-        $totalUsers = User::where('role', '!=', 'admin')->count();
-        $unreadMessages = ContactMessage::where('is_read', false)->count();
+        // Numeric dashboard data is not queried unless the separate sensitive
+        // statistics permission is present.
+        $totalOrders = data_get($orderStats, 'checkouts.total');
+        $newOrders = data_get($orderStats, 'checkouts.new');
+        $pendingPreview = data_get($orderStats, 'checkouts.preview_uploaded');
+        $shippedOrders = data_get($orderStats, 'checkouts.shipped');
+        $deliveredOrders = data_get($orderStats, 'checkouts.delivered');
+        $orderRecordCounts = data_get($orderStats, 'records');
+        $todayStats = data_get($orderStats, 'today');
+        $operationsStats = data_get($orderStats, 'operations');
+
+        $totalStories = $canViewStatistics ? Story::count() : null;
+        $activeStories = $canViewStatistics ? Story::where('active', true)->count() : null;
+        $totalUsers = $canViewStatistics ? User::where('role', '!=', 'admin')->count() : null;
+        $unreadMessages = $canViewStatistics ? ContactMessage::where('is_read', false)->count() : null;
 
         $recentOrders = $orderGroups->recent();
-        $analyticsWidget = auth()->user()->hasPermission('analytics.view') ? $analytics->widget() : null;
+        $analyticsWidget = $canViewStatistics && auth()->user()->hasPermission('analytics.view')
+            ? $analytics->widget()
+            : null;
 
         return view('admin.dashboard.index', compact(
             'totalOrders', 'newOrders', 'pendingPreview', 'shippedOrders', 'deliveredOrders',
             'totalStories', 'activeStories', 'totalUsers', 'unreadMessages',
-            'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats'
+            'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats',
+            'canViewStatistics'
         ));
     }
 }

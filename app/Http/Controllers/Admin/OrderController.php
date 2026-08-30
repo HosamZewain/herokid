@@ -40,7 +40,10 @@ class OrderController extends Controller
 {
     public function index(Request $request, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsappMessages)
     {
-        $result = $groups->paginate($request);
+        $result = $groups->paginate(
+            $request,
+            $request->user()->hasPermission('orders.statistics.view'),
+        );
         $result['groups']->setCollection(
             $result['groups']->getCollection()->map(function (array $group) use ($whatsappMessages): array {
                 $group['whatsapp_messages'] = $whatsappMessages->messagesForGroup($group);

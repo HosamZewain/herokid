@@ -45,7 +45,7 @@ class AdminOrderGroupService
         'productionProject.assignedTo:id,name',
     ];
 
-    public function paginate(Request $request): array
+    public function paginate(Request $request, bool $includeStatistics = true): array
     {
         $catalogType = $this->catalogType($request);
         $lifecycle = $this->lifecycle($request);
@@ -71,21 +71,27 @@ class AdminOrderGroupService
             ->filter()
             ->values());
 
-        $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
-        $matchingOrders = $this->visibleOrdersForStats(
-            $this->ordersForStats($allKeys, $includeDeleted),
-            $includeDeleted,
-        );
-        $financialStats = $this->financialStats($matchingOrders);
+        $stats = null;
 
-        return [
-            'groups' => $groups,
-            'stats' => [
+        if ($includeStatistics) {
+            $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
+            $matchingOrders = $this->visibleOrdersForStats(
+                $this->ordersForStats($allKeys, $includeDeleted),
+                $includeDeleted,
+            );
+            $financialStats = $this->financialStats($matchingOrders);
+
+            $stats = [
                 'checkouts' => $allKeys->count(),
                 'stories' => $matchingOrders->filter(fn (Order $order): bool => $this->isStoryOrder($order))->count(),
                 'products' => (int) $matchingOrders->flatMap->items->whereIn('item_type', ['product', 'product_add_on'])->sum('quantity'),
                 ...$financialStats,
-            ],
+            ];
+        }
+
+        return [
+            'groups' => $groups,
+            'stats' => $stats,
             'trash' => $request->query('view') === 'trash',
             'catalogType' => $catalogType,
             'lifecycle' => $lifecycle,

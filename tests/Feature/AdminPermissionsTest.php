@@ -59,6 +59,80 @@ class AdminPermissionsTest extends TestCase
             ->assertDontSee('class="flex-1 flex flex-col min-w-0 mr-64"', false);
     }
 
+    public function test_dashboard_statistics_require_the_separate_owner_permission(): void
+    {
+        $viewer = $this->adminWithPermissions([
+            'dashboard.view',
+            'analytics.view',
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('مرحبًا،')
+            ->assertDontSee('أهم أرقام اليوم')
+            ->assertDontSee('إجمالي عمليات الشراء')
+            ->assertDontSee('المتبقي تحصيله')
+            ->assertDontSee('ملخص Google Analytics');
+
+        $owner = $this->adminWithPermissions([
+            'dashboard.view',
+            'dashboard.statistics.view',
+            'analytics.view',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('أهم أرقام اليوم')
+            ->assertSee('إجمالي عمليات الشراء')
+            ->assertSee('المتبقي تحصيله')
+            ->assertSee('ملخص Google Analytics');
+    }
+
+    public function test_filtered_order_statistics_require_the_separate_owner_permission(): void
+    {
+        $viewer = $this->adminWithPermissions(['orders.view']);
+
+        $this->actingAs($viewer)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertViewHas('stats', fn (mixed $stats): bool => $stats === null)
+            ->assertDontSee('إحصائيات الطلبات المطابقة للفلاتر', false)
+            ->assertDontSee('إجمالي قيمة الطلبات');
+
+        $owner = $this->adminWithPermissions([
+            'orders.view',
+            'orders.statistics.view',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertViewHas('stats', fn (?array $stats): bool => is_array($stats))
+            ->assertSee('إحصائيات الطلبات المطابقة للفلاتر', false)
+            ->assertSee('إجمالي قيمة الطلبات');
+    }
+
+    public function test_sensitive_statistics_permissions_are_granted_only_to_existing_permission_managers(): void
+    {
+        $owner = $this->adminWithPermissions([
+            AdminPermissionRegistry::LAST_MANAGER_PERMISSION,
+        ]);
+        $staff = $this->adminWithPermissions([
+            'dashboard.view',
+            'orders.view',
+        ]);
+
+        $migration = require database_path('migrations/2026_08_30_230000_add_sensitive_statistics_permissions.php');
+        $migration->up();
+
+        $this->assertTrue($owner->fresh()->hasPermission('dashboard.statistics.view'));
+        $this->assertTrue($owner->fresh()->hasPermission('orders.statistics.view'));
+        $this->assertFalse($staff->fresh()->hasPermission('dashboard.statistics.view'));
+        $this->assertFalse($staff->fresh()->hasPermission('orders.statistics.view'));
+    }
+
     public function test_admin_sidebar_groups_pages_by_business_function_in_a_clear_order(): void
     {
         $admin = $this->adminWithPermissions(AdminPermissionRegistry::keys());

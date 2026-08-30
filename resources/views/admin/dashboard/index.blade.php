@@ -13,6 +13,7 @@
                         <h3 class="mt-2 text-2xl font-black sm:text-3xl">مرحبًا، {{ auth()->user()->name }}</h3>
                         <p class="mt-2 text-sm text-indigo-100">{{ \App\Support\OrderDateTime::display(now())->translatedFormat('l، j F Y') }}</p>
                     </div>
+                    @if($canViewStatistics)
                     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         <a href="{{ route('admin.orders.index', ['lifecycle' => 'active']) }}" class="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-right backdrop-blur transition hover:bg-white/15">
                             <p class="text-xs font-bold text-indigo-200">طلبات نشطة</p>
@@ -27,9 +28,11 @@
                             <p class="mt-1 text-xl font-black">{{ format_money($operationsStats['outstanding_cents'] / 100) }}</p>
                         </div>
                     </div>
+                    @endif
                 </div>
             </section>
 
+            @if($canViewStatistics)
             <section aria-labelledby="today-dashboard-heading">
                 <div class="mb-4 flex items-end justify-between gap-4">
                     <div class="text-right">
@@ -165,6 +168,9 @@
                 </div>
             </div>
 
+            @endif
+
+            @if($canViewStatistics)
             @can('analytics.view')
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -197,6 +203,7 @@
                     </div>
                 </div>
             @endcan
+            @endif
 
             <!-- Quick Actions -->
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">

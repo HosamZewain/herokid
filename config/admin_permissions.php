@@ -106,6 +106,15 @@ return [
             'description_en' => 'View dashboard and overview metrics.',
             'sort_order' => 10,
         ],
+        'dashboard.statistics.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض أرقام وإحصاءات لوحة القيادة',
+            'name_en' => 'View dashboard statistics',
+            'description_ar' => 'عرض أرقام الطلبات والمدفوعات والعملاء والمحتوى في لوحة القيادة. مخصصة للمالكين والإدارة المخولة.',
+            'description_en' => 'View order, payment, customer, and content metrics on the dashboard. Intended for owners and authorized management.',
+            'sort_order' => 15,
+            'sensitive' => true,
+        ],
         'analytics.view' => [
             'group_key' => 'dashboard',
             'name_ar' => 'عرض تحليلات الموقع',
@@ -150,6 +159,15 @@ return [
             'description_ar' => 'عرض قائمة الطلبات وتفاصيل الطلب.',
             'description_en' => 'View order list and order details.',
             'sort_order' => 10,
+        ],
+        'orders.statistics.view' => [
+            'group_key' => 'orders',
+            'name_ar' => 'عرض إحصاءات الطلبات',
+            'name_en' => 'View order statistics',
+            'description_ar' => 'عرض أعداد وقيم ومتوسطات الطلبات المطابقة للفلاتر في صفحة الطلبات. مخصصة للمالكين والإدارة المخولة.',
+            'description_en' => 'View counts, values, and averages for filtered orders. Intended for owners and authorized management.',
+            'sort_order' => 15,
+            'sensitive' => true,
         ],
         'orders.create' => [
             'group_key' => 'orders',
