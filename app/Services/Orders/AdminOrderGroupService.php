@@ -149,7 +149,55 @@ class AdminOrderGroupService
             $records[$behavior] = (int) $byStatus->only($keys)->sum('record_count');
         }
 
-        return compact('checkouts', 'records');
+        $today = OrderDateTime::display(now())->toDateString();
+        $todayStart = OrderDateTime::utcStartOfDay($today);
+        $todayEnd = OrderDateTime::utcEndOfDay($today);
+        $todayKeys = Order::query()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->distinct()
+            ->pluck('checkout_group_key');
+        $todayFinancial = $this->financialStats($this->ordersForStats($todayKeys, false));
+        $todayPayments = Order::query()
+            ->whereBetween('payment_updated_at', [$todayStart, $todayEnd])
+            ->where('paid_amount_cents', '>', 0)
+            ->selectRaw('checkout_group_key, MAX(paid_amount_cents) as paid_amount_cents')
+            ->groupBy('checkout_group_key')
+            ->get();
+
+        $activeKeys = Order::query()
+            ->whereNotIn('checkout_group_key', $this->cancelledCheckoutKeys())
+            ->whereIn('checkout_group_key', $this->unfinishedCheckoutKeys())
+            ->distinct()
+            ->pluck('checkout_group_key');
+        $activeFinancial = $this->financialStats($this->ordersForStats($activeKeys, false));
+        $unassignedCheckouts = $activeKeys->isEmpty()
+            ? 0
+            : Order::query()
+                ->whereIn('checkout_group_key', $activeKeys)
+                ->whereNotExists(fn ($query) => $query
+                    ->selectRaw('1')
+                    ->from('order_group_assignments')
+                    ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'))
+                ->distinct()
+                ->count('checkout_group_key');
+
+        return [
+            'checkouts' => $checkouts,
+            'records' => $records,
+            'today' => [
+                'new_checkouts' => $todayKeys->count(),
+                'order_value_cents' => $todayFinancial['total_value_cents'],
+                'payment_checkouts' => $todayPayments->count(),
+                'payments_cents' => (int) $todayPayments->sum('paid_amount_cents'),
+            ],
+            'operations' => [
+                'active_checkouts' => $activeKeys->count(),
+                'unassigned_checkouts' => $unassignedCheckouts,
+                'active_value_cents' => $activeFinancial['total_value_cents'],
+                'collected_cents' => $activeFinancial['collected_cents'],
+                'outstanding_cents' => $activeFinancial['outstanding_cents'],
+            ],
+        ];
     }
 
     public function recent(int $limit = 8): Collection
@@ -442,6 +490,8 @@ class AdminOrderGroupService
                 'checkout_group_key',
                 'status',
                 'payment_status',
+                'paid_amount_cents',
+                'payment_updated_at',
                 'shipping_status',
                 'discount_cents',
                 'delivery_details',
@@ -484,6 +534,7 @@ class AdminOrderGroupService
 
                 return [
                     'total_cents' => $totalCents,
+                    'paid_amount_cents' => min($totalCents, max(0, (int) $first->paid_amount_cents)),
                     'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
                     'payment_status' => $paymentStatus,
                     'shipping_status' => $shippingStatuses->count() === 1 ? $shippingStatuses->first() : 'mixed',
@@ -496,6 +547,10 @@ class AdminOrderGroupService
 
         return [
             'total_value_cents' => (int) $checkouts->sum('total_cents'),
+            'collected_cents' => (int) $checkouts->sum('paid_amount_cents'),
+            'outstanding_cents' => (int) $checkouts->sum(
+                fn (array $checkout): int => max(0, $checkout['total_cents'] - $checkout['paid_amount_cents'])
+            ),
             'cancelled_checkouts' => $cancelled->count(),
             'cancelled_value_cents' => (int) $cancelled->sum('total_cents'),
             'paid_checkouts' => $paid->count(),

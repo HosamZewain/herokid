@@ -85,6 +85,11 @@ class AdminOrderGroupManagementTest extends TestCase
                 'quantity' => 1,
                 'total_price_cents' => 29_900,
             ]);
+            $order->forceFill([
+                'payment_status' => 'partially_paid',
+                'paid_amount_cents' => 10_000,
+                'payment_updated_at' => now(),
+            ])->save();
         }
 
         $response = $this->actingAs($this->admin)
@@ -92,6 +97,9 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $response->assertOk()
             ->assertSee('عمليات شراء جديدة تنتظر المراجعة')
+            ->assertSee('طلبات جديدة اليوم')
+            ->assertSee('مدفوعات اليوم')
+            ->assertSee('قيمة الطلبات النشطة')
             ->assertSee('تتضمن 2 سجل طلب')
             ->assertSee('GROUP-DASHBOARD')
             ->assertSee('2 قصة');
@@ -99,6 +107,14 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(1, $response->viewData('newOrders'));
         $this->assertSame(1, $response->viewData('totalOrders'));
         $this->assertSame(2, $response->viewData('orderRecordCounts')['new']);
+        $this->assertSame(1, $response->viewData('todayStats')['new_checkouts']);
+        $this->assertSame(63_800, $response->viewData('todayStats')['order_value_cents']);
+        $this->assertSame(1, $response->viewData('todayStats')['payment_checkouts']);
+        $this->assertSame(10_000, $response->viewData('todayStats')['payments_cents']);
+        $this->assertSame(1, $response->viewData('operationsStats')['active_checkouts']);
+        $this->assertSame(1, $response->viewData('operationsStats')['unassigned_checkouts']);
+        $this->assertSame(10_000, $response->viewData('operationsStats')['collected_cents']);
+        $this->assertSame(53_800, $response->viewData('operationsStats')['outstanding_cents']);
         $this->assertCount(1, $response->viewData('recentOrders'));
         $this->assertSame(2, $response->viewData('recentOrders')->first()['story_count']);
 

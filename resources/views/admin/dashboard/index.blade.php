@@ -4,7 +4,63 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
+        <div class="mx-auto w-full max-w-none space-y-8 px-4 sm:px-6 lg:px-8">
+
+            <section class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-950 via-indigo-800 to-violet-700 p-6 text-white shadow-xl sm:p-8">
+                <div class="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                    <div class="text-right">
+                        <p class="text-xs font-black text-indigo-200">ملخص التشغيل المباشر</p>
+                        <h3 class="mt-2 text-2xl font-black sm:text-3xl">مرحبًا، {{ auth()->user()->name }}</h3>
+                        <p class="mt-2 text-sm text-indigo-100">{{ \App\Support\OrderDateTime::display(now())->translatedFormat('l، j F Y') }}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <a href="{{ route('admin.orders.index', ['lifecycle' => 'active']) }}" class="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-right backdrop-blur transition hover:bg-white/15">
+                            <p class="text-xs font-bold text-indigo-200">طلبات نشطة</p>
+                            <p class="mt-1 text-2xl font-black">{{ arabic_number($operationsStats['active_checkouts']) }}</p>
+                        </a>
+                        <a href="{{ route('admin.orders.index', ['assignment' => 'unassigned']) }}" class="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-right backdrop-blur transition hover:bg-white/15">
+                            <p class="text-xs font-bold text-indigo-200">غير مستلمة</p>
+                            <p class="mt-1 text-2xl font-black">{{ arabic_number($operationsStats['unassigned_checkouts']) }}</p>
+                        </a>
+                        <div class="col-span-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-right backdrop-blur sm:col-span-1">
+                            <p class="text-xs font-bold text-indigo-200">المتبقي تحصيله</p>
+                            <p class="mt-1 text-xl font-black">{{ format_money($operationsStats['outstanding_cents'] / 100) }}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="today-dashboard-heading">
+                <div class="mb-4 flex items-end justify-between gap-4">
+                    <div class="text-right">
+                        <p class="text-xs font-black text-indigo-600">نبض اليوم</p>
+                        <h3 id="today-dashboard-heading" class="mt-1 text-xl font-black text-slate-950">أهم أرقام اليوم</h3>
+                    </div>
+                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">بتوقيت القاهرة</span>
+                </div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <a href="{{ route('admin.orders.index', ['from' => \App\Support\OrderDateTime::display(now())->toDateString(), 'to' => \App\Support\OrderDateTime::display(now())->toDateString()]) }}" class="group rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-indigo-50 p-3 text-2xl">🛍️</span><span class="text-xs font-black text-indigo-600">طلبات جديدة اليوم</span></div>
+                        <p class="mt-5 text-4xl font-black text-slate-950">{{ arabic_number($todayStats['new_checkouts']) }}</p>
+                        <p class="mt-1 text-xs text-slate-500">عملية شراء تم إنشاؤها اليوم</p>
+                    </a>
+                    <div class="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-violet-50 p-3 text-2xl">📈</span><span class="text-xs font-black text-violet-600">قيمة طلبات اليوم</span></div>
+                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['order_value_cents'] / 100) }}</p>
+                        <p class="mt-1 text-xs text-slate-500">إجمالي قيمة عمليات الشراء الجديدة</p>
+                    </div>
+                    <div class="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5 shadow-sm">
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-emerald-100 p-3 text-2xl">💳</span><span class="text-xs font-black text-emerald-700">مدفوعات اليوم</span></div>
+                        <p class="mt-5 text-3xl font-black text-emerald-900">{{ format_money($todayStats['payments_cents'] / 100) }}</p>
+                        <p class="mt-1 text-xs text-emerald-700">المبالغ المسجلة في آخر تحديث دفع اليوم</p>
+                    </div>
+                    <div class="rounded-3xl border border-cyan-100 bg-white p-5 shadow-sm">
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-cyan-50 p-3 text-2xl">🧾</span><span class="text-xs font-black text-cyan-700">عمليات دفع اليوم</span></div>
+                        <p class="mt-5 text-4xl font-black text-slate-950">{{ arabic_number($todayStats['payment_checkouts']) }}</p>
+                        <p class="mt-1 text-xs text-slate-500">عملية شراء لها مبلغ مدفوع مسجل اليوم</p>
+                    </div>
+                </div>
+            </section>
 
             <!-- Stats Cards Row 1 -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
@@ -45,6 +101,21 @@
                     <p class="text-3xl font-extrabold text-gray-900">{{ $deliveredOrders }}</p>
                     <p class="text-sm text-gray-500 mt-1">عمليات شراء تم تسليمها</p>
                     <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['delivered'] }} سجل طلب</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p class="text-xs font-black text-slate-500">قيمة الطلبات النشطة</p>
+                    <p class="mt-2 text-2xl font-black text-slate-950">{{ format_money($operationsStats['active_value_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                    <p class="text-xs font-black text-emerald-700">المحصل من الطلبات النشطة</p>
+                    <p class="mt-2 text-2xl font-black text-emerald-900">{{ format_money($operationsStats['collected_cents'] / 100) }}</p>
+                </div>
+                <div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
+                    <p class="text-xs font-black text-rose-700">المتبقي من الطلبات النشطة</p>
+                    <p class="mt-2 text-2xl font-black text-rose-900">{{ format_money($operationsStats['outstanding_cents'] / 100) }}</p>
                 </div>
             </div>
 

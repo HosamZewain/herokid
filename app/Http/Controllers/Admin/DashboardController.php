@@ -24,6 +24,8 @@ class DashboardController extends Controller
         $shippedOrders = $orderStats['checkouts']['shipped'];
         $deliveredOrders = $orderStats['checkouts']['delivered'];
         $orderRecordCounts = $orderStats['records'];
+        $todayStats = $orderStats['today'];
+        $operationsStats = $orderStats['operations'];
 
         // Content stats
         $totalStories = Story::count();
@@ -37,7 +39,7 @@ class DashboardController extends Controller
         return view('admin.dashboard.index', compact(
             'totalOrders', 'newOrders', 'pendingPreview', 'shippedOrders', 'deliveredOrders',
             'totalStories', 'activeStories', 'totalUsers', 'unreadMessages',
-            'recentOrders', 'analyticsWidget', 'orderRecordCounts'
+            'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats'
         ));
     }
 }
