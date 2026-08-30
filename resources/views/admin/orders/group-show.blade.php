@@ -15,6 +15,9 @@
             </div>
         </div>
     </x-slot>
+    <x-slot name="headerActions">
+        @include('admin.orders._activity-log-button')
+    </x-slot>
 
     @php
         $sourceLabel = \App\Support\OrderSource::label($group['order_source']);
@@ -26,6 +29,8 @@
         $adminNotesCount = collect($orderAdminNotes ?? [])->count();
         $attachmentsCount = collect($attachmentOrders ?? [])->sum(fn ($order) => $order->attachments->count());
     @endphp
+
+    @include('admin.orders._activity-drawer', ['activityTargetOrder' => $attachmentTarget])
 
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">

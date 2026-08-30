@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderGroupMergeService;
@@ -27,6 +28,7 @@ class OrderGroupController extends Controller
         AdminOrderGroupService $groups,
         OrderWhatsAppMessageService $whatsapp,
         OrderAdminNoteService $adminNotes,
+        OrderActivityTimelineService $activityTimeline,
     ) {
         $group = $groups->findByRepresentative($representative);
 
@@ -77,6 +79,7 @@ class OrderGroupController extends Controller
             'attachmentOrders' => $attachmentOrders,
             'whatsappMessages' => $whatsapp->messagesForGroup($group),
             'orderAdminNotes' => $adminNotes->notesFor($attachmentTarget),
+            'orderActivity' => $activityTimeline->forGroup($group),
         ]);
     }
 

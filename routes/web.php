@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
 use App\Http\Controllers\Admin\OrderAdminNoteController;
+use App\Http\Controllers\Admin\OrderActivityController;
 use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
@@ -628,6 +629,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('orders/{order}', [OrderController::class, 'show'])->middleware('permission:orders.view')->name('orders.show');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->middleware('permission:orders.update')->name('orders.update');
     Route::post('orders/{order}/notes', [OrderAdminNoteController::class, 'store'])->whereNumber('order')->middleware('permission:orders.update')->name('orders.notes.store');
+    Route::post('orders/{order}/activity/prompt-copied', [OrderActivityController::class, 'promptCopied'])->whereNumber('order')->middleware('permission:orders.view')->name('orders.activity.prompt-copied');
     Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');

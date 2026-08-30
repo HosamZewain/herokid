@@ -8,6 +8,7 @@
                         <button
                             type="button"
                             data-copy-product-production-prompt-target="product-production-prompt-{{ $productPrompt['item']->id }}"
+                            data-order-item-id="{{ $productPrompt['item']->id }}"
                             class="inline-flex min-h-10 items-center justify-center rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-black text-white transition hover:bg-fuchsia-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
                         >
                             نسخ برومبت {{ $loop->iteration }}
@@ -45,6 +46,7 @@
                         <button
                             type="button"
                             data-copy-product-production-prompt
+                            data-order-item-id="{{ $productPrompt['item']->id }}"
                             class="inline-flex items-center justify-center rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-fuchsia-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
                         >
                             نسخ برومبت المنتج
@@ -78,11 +80,16 @@
         @push('scripts')
         <script>
         document.addEventListener('DOMContentLoaded', function () {
-            function copyPrompt(textarea, message) {
+            function copyPrompt(textarea, message, orderItemId) {
                 function showMessage() {
                     if (!message) return;
                     message.classList.remove('hidden');
                     window.setTimeout(function () { message.classList.add('hidden'); }, 3000);
+                }
+
+                function copied() {
+                    showMessage();
+                    window.HeroKidOrderActivity?.recordPromptCopy('product_production', orderItemId);
                 }
 
                 function fallbackCopy() {
@@ -93,15 +100,15 @@
                 }
 
                 if (navigator.clipboard && window.isSecureContext) {
-                    navigator.clipboard.writeText(textarea.value).then(showMessage).catch(function () {
+                    navigator.clipboard.writeText(textarea.value).then(copied).catch(function () {
                         fallbackCopy();
-                        showMessage();
+                        copied();
                     });
                     return;
                 }
 
                 fallbackCopy();
-                showMessage();
+                copied();
             }
 
             function flashCopyButton(button) {
@@ -124,7 +131,7 @@
                 if (!button || !textarea || !message) return;
 
                 button.addEventListener('click', function () {
-                    copyPrompt(textarea, message);
+                    copyPrompt(textarea, message, button.dataset.orderItemId);
                     flashCopyButton(button);
                 });
             });
@@ -133,7 +140,7 @@
                 button.addEventListener('click', function () {
                     var textarea = document.getElementById(button.dataset.copyProductProductionPromptTarget);
                     if (!textarea) return;
-                    copyPrompt(textarea, button.closest('[data-product-production-prompts]')?.querySelector('[data-product-production-prompt-quick-message]'));
+                    copyPrompt(textarea, button.closest('[data-product-production-prompts]')?.querySelector('[data-product-production-prompt-quick-message]'), button.dataset.orderItemId);
                     flashCopyButton(button);
                 });
             });

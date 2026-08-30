@@ -71,6 +71,11 @@
             </a>
         </div>
     </x-slot>
+    <x-slot name="headerActions">
+        @include('admin.orders._activity-log-button')
+    </x-slot>
+
+    @include('admin.orders._activity-drawer', ['activityTargetOrder' => $order])
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
@@ -950,6 +955,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showCopiedMessage() {
         message.classList.remove('hidden');
+        window.HeroKidOrderActivity?.recordPromptCopy('child_identity');
         window.clearTimeout(showCopiedMessage.timeout);
         showCopiedMessage.timeout = window.setTimeout(function () {
             message.classList.add('hidden');
@@ -1024,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showCopiedMessage() {
         message.classList.remove('hidden');
+        window.HeroKidOrderActivity?.recordPromptCopy('story_production');
         window.clearTimeout(showCopiedMessage.timeout);
         showCopiedMessage.timeout = window.setTimeout(function () {
             message.classList.add('hidden');

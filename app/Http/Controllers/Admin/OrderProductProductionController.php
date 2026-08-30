@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderActivityTimelineService;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Http\RedirectResponse;
@@ -14,8 +16,12 @@ use Illuminate\View\View;
 
 class OrderProductProductionController extends Controller
 {
-    public function __invoke(Order $order, OrderItem $item): View
-    {
+    public function __invoke(
+        Order $order,
+        OrderItem $item,
+        AdminOrderGroupService $groups,
+        OrderActivityTimelineService $activityTimeline,
+    ): View {
         abort_unless(
             (int) $item->order_id === (int) $order->id
                 && $item->item_type === 'product',
@@ -51,12 +57,17 @@ class OrderProductProductionController extends Controller
             request: request(),
         );
 
+        $checkoutGroup = $groups->findByRepresentative($order->id);
+        $orderActivity = $activityTimeline->forGroup($checkoutGroup);
+
         return view('admin.orders.product-production', compact(
             'order',
             'item',
             'photos',
             'productPrompt',
             'promptTemplate',
+            'checkoutGroup',
+            'orderActivity',
         ));
     }
 
@@ -104,6 +115,22 @@ class OrderProductProductionController extends Controller
                 'applies_to_all_product_orders' => true,
             ],
             request: $request,
+        );
+
+        AdminActivityLogger::log(
+            action: 'order.product_production_prompt.updated',
+            description: 'تم تحديث قالب برومبت '.$item->title.' من داخل الطلب '.$order->order_number.'.',
+            subject: $order,
+            properties: [
+                'order_number' => $order->order_number,
+                'order_item_id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_title' => $item->title,
+                'template_changed' => $oldTemplate !== $template,
+                'prompt_content_logged' => false,
+            ],
+            request: $request,
+            markRequestLogged: false,
         );
 
         return back()->with('success', 'تم حفظ قالب المنتج، وسيظهر فورًا في كل الطلبات الحالية والجديدة لهذا المنتج.');

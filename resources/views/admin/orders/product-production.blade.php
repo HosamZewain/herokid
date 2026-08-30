@@ -8,11 +8,16 @@
             <p class="font-mono text-sm font-black text-gray-500" dir="ltr">#{{ $order->order_number }}</p>
         </div>
     </x-slot>
+    <x-slot name="headerActions">
+        @include('admin.orders._activity-log-button')
+    </x-slot>
 
     @php
         $delivery = $order->delivery_details ?? [];
         $displayValues = $item->personalizationDisplayValues();
     @endphp
+
+    @include('admin.orders._activity-drawer', ['activityTargetOrder' => $order])
 
     <div class="py-8">
         <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
