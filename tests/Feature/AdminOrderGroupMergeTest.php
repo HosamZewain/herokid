@@ -58,6 +58,14 @@ class AdminOrderGroupMergeTest extends TestCase
             'action' => 'checkout.groups_merged',
             'subject_id' => $target->id,
         ]);
+        $this->assertDatabaseHas('order_payment_events', [
+            'checkout_group_key' => 'CHECKOUT-TARGET',
+            'event_type' => 'merge_reconciliation',
+            'source' => 'order_group_merge',
+            'new_paid_amount_cents' => 15_000,
+            'amount_delta_cents' => 0,
+            'affects_collection_stats' => false,
+        ]);
 
         $response = $this->actingAs($admin)->get(route('admin.orders.index', [
             'catalog_type' => 'products',

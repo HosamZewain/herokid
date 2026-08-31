@@ -129,6 +129,8 @@
 
             @include('admin.orders._payment-summary')
 
+            @include('admin.orders._payment-history', ['paymentEvents' => $paymentEvents ?? collect()])
+
             @include('admin.orders._admin-notes', [
                 'noteTargetOrder' => $order,
                 'orderAdminNotes' => $orderAdminNotes ?? collect(),

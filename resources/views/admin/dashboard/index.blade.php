@@ -30,6 +30,7 @@
                     </div>
                     @endif
                 </div>
+
             </section>
 
             @if($canViewStatistics)
@@ -76,6 +77,130 @@
                         <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['average_order_cents'] / 100) }}</p>
                         <p class="mt-1 text-xs text-slate-500">متوسط قيمة عمليات الشراء الجديدة اليوم</p>
                     </div>
+                </div>
+
+                <div class="mt-4 overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm">
+                    <div class="flex flex-col gap-2 border-b border-emerald-100 bg-emerald-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs font-bold text-emerald-800">كل سطر أدناه هو واقعة دفع فعلية محفوظة وغير قابلة للتعديل.</p>
+                        <h4 class="text-sm font-black text-slate-950">تفاصيل حركات الدفع اليوم</h4>
+                    </div>
+                    @if(count($todayStats['payment_events'] ?? []) > 0)
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[760px] text-right text-xs">
+                                <thead class="bg-slate-50 font-black text-slate-500">
+                                    <tr>
+                                        <th class="px-4 py-3">الطلب</th>
+                                        <th class="px-4 py-3">الحركة</th>
+                                        <th class="px-4 py-3">الحالة بعد التغيير</th>
+                                        <th class="px-4 py-3">المدفوع بعد التغيير</th>
+                                        <th class="px-4 py-3">الطريقة</th>
+                                        <th class="px-4 py-3">بواسطة</th>
+                                        <th class="px-4 py-3">الوقت</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach($todayStats['payment_events'] as $paymentEvent)
+                                        <tr class="hover:bg-emerald-50/30">
+                                            <td class="px-4 py-3 font-mono font-black text-indigo-700" dir="ltr">
+                                                @if($paymentEvent['order_id'])
+                                                    <a href="{{ route('admin.orders.groups.show', $paymentEvent['order_id']) }}" class="hover:underline">{{ $paymentEvent['reference'] }}</a>
+                                                @else
+                                                    {{ $paymentEvent['reference'] }}
+                                                @endif
+                                            </td>
+                                            <td class="whitespace-nowrap px-4 py-3 font-black {{ $paymentEvent['amount_delta_cents'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}" dir="ltr">
+                                                {{ $paymentEvent['amount_delta_cents'] >= 0 ? '+' : '−' }} {{ format_money(abs($paymentEvent['amount_delta_cents']) / 100) }}
+                                            </td>
+                                            <td class="px-4 py-3 font-bold text-slate-700">{{ $paymentEvent['status_label'] }}</td>
+                                            <td class="whitespace-nowrap px-4 py-3 font-black text-slate-900">{{ format_money($paymentEvent['new_paid_amount_cents'] / 100) }}</td>
+                                            <td class="px-4 py-3 text-slate-600">{{ $paymentEvent['payment_method'] ?: '—' }}</td>
+                                            <td class="px-4 py-3 text-slate-600">{{ $paymentEvent['actor_name'] }}</td>
+                                            <td class="whitespace-nowrap px-4 py-3 text-slate-500" dir="ltr">{{ $paymentEvent['occurred_at_label'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <p class="px-5 py-6 text-center text-sm font-bold text-slate-500">لا توجد أي دفعات فعلية مسجلة اليوم.</p>
+                    @endif
+                </div>
+            </section>
+
+            <section aria-labelledby="seven-day-dashboard-heading" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                    <div class="text-right">
+                        <p class="text-xs font-black text-indigo-600">اتجاه التشغيل اليومي</p>
+                        <h3 id="seven-day-dashboard-heading" class="mt-1 text-xl font-black text-slate-950">آخر 7 أيام</h3>
+                        <p class="mt-1 text-sm text-slate-500">الطلبات والقيم والمدفوعات الفعلية بتوقيت القاهرة.</p>
+                    </div>
+                    <span class="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black text-slate-600">7 أيام تقويمية</span>
+                </div>
+
+                <div class="hidden overflow-x-auto xl:block">
+                    <table class="w-full min-w-[1360px] text-right text-sm">
+                        <caption class="sr-only">إحصائيات الطلبات اليومية لآخر سبعة أيام</caption>
+                        <thead class="bg-slate-50 text-xs font-black text-slate-600">
+                            <tr>
+                                <th scope="col" class="sticky right-0 z-10 border-l border-slate-200 bg-slate-50 px-5 py-4">اليوم</th>
+                                <th scope="col" class="px-4 py-4">طلبات جديدة</th>
+                                <th scope="col" class="px-4 py-4 text-violet-700">طلبات القصص</th>
+                                <th scope="col" class="px-4 py-4 text-emerald-700">طلبات المتجر</th>
+                                <th scope="col" class="px-4 py-4">قيمة القصص</th>
+                                <th scope="col" class="px-4 py-4">قيمة المتجر</th>
+                                <th scope="col" class="px-4 py-4">إجمالي قيمة الطلبات</th>
+                                <th scope="col" class="px-4 py-4 text-emerald-700">مدفوع اليوم</th>
+                                <th scope="col" class="px-4 py-4 text-rose-700">ملغي اليوم</th>
+                                <th scope="col" class="px-4 py-4">متوسط الطلب</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach($lastSevenDaysStats as $day)
+                                <tr class="group transition hover:bg-indigo-50/30">
+                                    <th scope="row" class="sticky right-0 z-10 border-l border-slate-100 bg-white px-5 py-4 group-hover:bg-indigo-50/30">
+                                        <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'from' => $day['date'], 'to' => $day['date']]) }}" class="block hover:text-indigo-700">
+                                            <span class="block font-black text-slate-900">{{ $day['day_label'] }}</span>
+                                            <span class="mt-0.5 block text-xs font-bold text-slate-400" dir="ltr">{{ $day['date_label'] }}</span>
+                                        </a>
+                                    </th>
+                                    <td class="px-4 py-4 font-black text-slate-900">{{ arabic_number($day['new_checkouts']) }}</td>
+                                    <td class="px-4 py-4"><span class="rounded-full bg-violet-50 px-2.5 py-1 font-black text-violet-700">{{ arabic_number($day['story_checkouts']) }}</span></td>
+                                    <td class="px-4 py-4"><span class="rounded-full bg-emerald-50 px-2.5 py-1 font-black text-emerald-700">{{ arabic_number($day['product_checkouts']) }}</span></td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['story_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['product_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ format_money($day['total_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-black text-emerald-700">{{ format_money($day['payments_cents'] / 100) }}</td>
+                                    <td class="px-4 py-4"><span class="rounded-full {{ $day['cancelled_checkouts'] > 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-400' }} px-2.5 py-1 font-black">{{ arabic_number($day['cancelled_checkouts']) }}</span></td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['average_order_cents'] / 100) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="space-y-3 bg-slate-50/60 p-3 sm:p-4 xl:hidden">
+                    @foreach(array_reverse($lastSevenDaysStats) as $day)
+                        <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'from' => $day['date'], 'to' => $day['date']]) }}" class="font-black text-slate-950 hover:text-indigo-700">
+                                    {{ $day['day_label'] }} <span class="mr-1 text-xs text-slate-400" dir="ltr">{{ $day['date_label'] }}</span>
+                                </a>
+                                <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{{ arabic_number($day['new_checkouts']) }} طلب</span>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+                                <div class="rounded-xl bg-violet-50 p-3"><span class="block font-bold text-violet-600">طلبات القصص</span><strong class="mt-1 block text-base text-violet-900">{{ arabic_number($day['story_checkouts']) }}</strong></div>
+                                <div class="rounded-xl bg-emerald-50 p-3"><span class="block font-bold text-emerald-600">طلبات المتجر</span><strong class="mt-1 block text-base text-emerald-900">{{ arabic_number($day['product_checkouts']) }}</strong></div>
+                                <div class="col-span-2 rounded-xl bg-slate-100 p-3 sm:col-span-1"><span class="block font-bold text-slate-500">إجمالي القيمة</span><strong class="mt-1 block text-base text-slate-950">{{ format_money($day['total_value_cents'] / 100) }}</strong></div>
+                            </div>
+                            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                <div><dt class="text-slate-500">قيمة القصص</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_money($day['story_value_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-slate-500">قيمة المتجر</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_money($day['product_value_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-emerald-600">مدفوع اليوم</dt><dd class="mt-0.5 font-black text-emerald-800">{{ format_money($day['payments_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-rose-600">ملغي اليوم</dt><dd class="mt-0.5 font-black text-rose-800">{{ arabic_number($day['cancelled_checkouts']) }}</dd></div>
+                                <div class="col-span-2 border-t border-slate-100 pt-2"><dt class="text-slate-500">متوسط الطلب</dt><dd class="mt-0.5 font-black text-slate-900">{{ format_money($day['average_order_cents'] / 100) }}</dd></div>
+                            </dl>
+                        </article>
+                    @endforeach
                 </div>
             </section>
 

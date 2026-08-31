@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminActivityLog;
 use App\Models\Order;
+use App\Models\OrderPaymentEvent;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductionAutomationRun;
@@ -13,9 +14,11 @@ use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Support\OrderDateTime;
 use App\Support\Phone;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AdminOrderGroupManagementTest extends TestCase
@@ -96,15 +99,17 @@ class AdminOrderGroupManagementTest extends TestCase
             ])->save();
         }
 
+        $this->recordPaymentEvent($first, 0, 10_000);
+
+        // A legacy general activity log must never be interpreted as a payment.
         AdminActivityLog::create([
             'user_id' => $this->admin->id,
-            'action' => 'checkout.payment_updated',
+            'action' => 'checkout.full_order_updated',
             'subject_type' => Order::class,
             'subject_id' => $first->id,
             'properties' => [
-                'checkout_group_key' => 'GROUP-DASHBOARD',
-                'old' => ['paid_amount_cents' => 0],
-                'new' => ['paid_amount_cents' => 10_000],
+                'before' => ['paid_amount_cents' => 0],
+                'after' => ['paid_amount_cents' => 44_000],
             ],
         ]);
 
@@ -115,6 +120,10 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('عمليات شراء جديدة تنتظر المراجعة')
             ->assertSee('طلبات جديدة اليوم')
             ->assertSee('مدفوعات اليوم')
+            ->assertSee('تفاصيل حركات الدفع اليوم')
+            ->assertSee('واقعة دفع فعلية محفوظة وغير قابلة للتعديل')
+            ->assertSee('انستاباي')
+            ->assertSee($this->admin->name)
             ->assertSee('قيمة الطلبات النشطة')
             ->assertSee('تتضمن 2 سجل طلب')
             ->assertSee('GROUP-DASHBOARD')
@@ -130,6 +139,8 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(63_800, $response->viewData('todayStats')['average_order_cents']);
         $this->assertSame(1, $response->viewData('todayStats')['payment_checkouts']);
         $this->assertSame(10_000, $response->viewData('todayStats')['payments_cents']);
+        $this->assertCount(1, $response->viewData('todayStats')['payment_events']);
+        $this->assertSame(10_000, $response->viewData('todayStats')['payment_events'][0]['amount_delta_cents']);
         $this->assertSame(1, $response->viewData('operationsStats')['active_checkouts']);
         $this->assertSame(1, $response->viewData('operationsStats')['unassigned_checkouts']);
         $this->assertSame(10_000, $response->viewData('operationsStats')['collected_cents']);
@@ -175,16 +186,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(0, $withoutPaymentLog['payments_cents']);
         $this->assertSame(0, $withoutPaymentLog['average_order_cents']);
 
-        AdminActivityLog::create([
-            'user_id' => $this->admin->id,
-            'action' => 'checkout.payment_updated',
-            'subject_type' => Order::class,
-            'subject_id' => $order->id,
-            'properties' => [
-                'old' => ['paid_amount_cents' => 13_000],
-                'new' => ['paid_amount_cents' => 20_000],
-            ],
-        ]);
+        $this->recordPaymentEvent($order, 13_000, 20_000);
 
         $withPaymentLog = $this->actingAs($this->admin)
             ->get(route('admin.dashboard.index'))
@@ -193,6 +195,137 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $this->assertSame(1, $withPaymentLog['payment_checkouts']);
         $this->assertSame(7_000, $withPaymentLog['payments_cents']);
+    }
+
+    public function test_dashboard_assigns_payment_events_to_the_correct_cairo_calendar_day(): void
+    {
+        $cairoNow = CarbonImmutable::parse('2026-08-31 00:30:00', 'Africa/Cairo');
+        $this->travelTo($cairoNow->utc());
+
+        $order = $this->createStoryOrder('HK-CAIRO-PAYMENT', 'GROUP-CAIRO-PAYMENT', 'نور', 'under_review');
+        $order->items()->create([
+            'item_type' => 'story',
+            'story_id' => $order->story_id,
+            'title' => $order->story->title,
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $this->recordPaymentEvent($order, 0, 12_000);
+
+        OrderPaymentEvent::query()->create([
+            'event_uuid' => (string) Str::uuid(),
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'order_id' => $order->id,
+            'actor_user_id' => $this->admin->id,
+            'event_type' => 'payment_received',
+            'source' => 'admin_payment_update',
+            'previous_status' => 'unpaid',
+            'new_status' => 'partially_paid',
+            'previous_paid_amount_cents' => 0,
+            'new_paid_amount_cents' => 5_000,
+            'amount_delta_cents' => 5_000,
+            'affects_collection_stats' => true,
+            'payment_method' => 'نقدي',
+            'occurred_at' => $cairoNow->subMinutes(31)->utc(),
+        ]);
+
+        $todayStats = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->viewData('todayStats');
+
+        $this->assertSame(1, $todayStats['payment_checkouts']);
+        $this->assertSame(12_000, $todayStats['payments_cents']);
+        $this->assertCount(1, $todayStats['payment_events']);
+        $this->assertSame('31/08/2026 12:30 AM', $todayStats['payment_events'][0]['occurred_at_label']);
+    }
+
+    public function test_dashboard_last_seven_days_separates_story_and_product_checkouts_with_daily_values(): void
+    {
+        $now = CarbonImmutable::parse('2026-08-31 12:00:00', 'Africa/Cairo')->utc();
+        $this->travelTo($now);
+
+        $firstStory = $this->createStoryOrder('HK-WEEK-STORY-1', 'GROUP-WEEK-STORY', 'مريم', 'new');
+        $secondStory = $this->createStoryOrder('HK-WEEK-STORY-2', 'GROUP-WEEK-STORY', 'مريم', 'new');
+        foreach ([[$firstStory, 30_000], [$secondStory, 20_000]] as [$order, $price]) {
+            $order->items()->create([
+                'item_type' => 'story',
+                'story_id' => $order->story_id,
+                'title' => $order->story->title,
+                'unit_price_cents' => $price,
+                'quantity' => 1,
+                'total_price_cents' => $price,
+            ]);
+            $order->forceFill(['created_at' => now()])->save();
+        }
+
+        $product = Product::create([
+            'name_ar' => 'كتاب نشاط',
+            'slug' => 'weekly-product',
+            'price_cents' => 12_000,
+            'inventory_mode' => 'no_tracking',
+            'is_active' => true,
+        ]);
+        $productOrder = Order::create([
+            'order_number' => 'HK-WEEK-PRODUCT',
+            'checkout_group_key' => 'GROUP-WEEK-PRODUCT',
+            'parent_name' => 'عميل المتجر',
+            'delivery_details' => [
+                'checkout_group' => 'GROUP-WEEK-PRODUCT',
+                'phone' => '01000000001',
+                'delivery_fee' => 30,
+            ],
+            'status' => 'cancelled',
+        ]);
+        $productOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'unit_price_cents' => 12_000,
+            'quantity' => 2,
+            'total_price_cents' => 24_000,
+        ]);
+        $yesterday = now()->subDay();
+        $productOrder->forceFill(['created_at' => $yesterday])->save();
+        $productOrder->statusLogs()->create([
+            'status_type' => 'order',
+            'status' => 'cancelled',
+            'notes' => 'إلغاء للاختبار',
+            'created_at' => $yesterday,
+            'updated_at' => $yesterday,
+        ]);
+
+        $this->recordPaymentEvent($firstStory, 3_000, 10_000);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('آخر 7 أيام')
+            ->assertSee('إجمالي قيمة الطلبات')
+            ->assertSee('مدفوع اليوم');
+
+        $days = collect($response->viewData('lastSevenDaysStats'))->keyBy('date');
+        $this->assertCount(7, $days);
+
+        $today = $days->get('2026-08-31');
+        $this->assertSame(1, $today['new_checkouts']);
+        $this->assertSame(1, $today['story_checkouts']);
+        $this->assertSame(0, $today['product_checkouts']);
+        $this->assertSame(54_000, $today['story_value_cents']);
+        $this->assertSame(0, $today['product_value_cents']);
+        $this->assertSame(54_000, $today['total_value_cents']);
+        $this->assertSame(7_000, $today['payments_cents']);
+        $this->assertSame(54_000, $today['average_order_cents']);
+
+        $previousDay = $days->get('2026-08-30');
+        $this->assertSame(1, $previousDay['new_checkouts']);
+        $this->assertSame(0, $previousDay['story_checkouts']);
+        $this->assertSame(1, $previousDay['product_checkouts']);
+        $this->assertSame(27_000, $previousDay['product_value_cents']);
+        $this->assertSame(1, $previousDay['cancelled_checkouts']);
+        $this->assertSame(27_000, $previousDay['average_order_cents']);
     }
 
     public function test_search_status_mixed_and_date_filters_match_checkout_contents(): void
@@ -1019,6 +1152,26 @@ class AdminOrderGroupManagementTest extends TestCase
             ],
             'uploaded_photos' => ['orders/photos/reference.jpg'],
             'status' => $status,
+        ]);
+    }
+
+    private function recordPaymentEvent(Order $order, int $previousPaid, int $newPaid): OrderPaymentEvent
+    {
+        return OrderPaymentEvent::query()->create([
+            'event_uuid' => (string) Str::uuid(),
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'order_id' => $order->id,
+            'actor_user_id' => $this->admin->id,
+            'event_type' => $newPaid >= $previousPaid ? 'payment_received' : 'payment_reversed',
+            'source' => 'admin_payment_update',
+            'previous_status' => $previousPaid > 0 ? 'partially_paid' : 'unpaid',
+            'new_status' => 'partially_paid',
+            'previous_paid_amount_cents' => $previousPaid,
+            'new_paid_amount_cents' => $newPaid,
+            'amount_delta_cents' => $newPaid - $previousPaid,
+            'affects_collection_stats' => true,
+            'payment_method' => 'انستاباي',
+            'occurred_at' => now(),
         ]);
     }
 }

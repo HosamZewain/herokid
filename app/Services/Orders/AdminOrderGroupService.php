@@ -2,14 +2,15 @@
 
 namespace App\Services\Orders;
 
-use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
+use App\Models\OrderPaymentEvent;
 use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -208,6 +209,7 @@ class AdminOrderGroupService
                     : 0,
                 'payment_checkouts' => $todayPayments['count'],
                 'payments_cents' => $todayPayments['amount_cents'],
+                'payment_events' => $todayPayments['events'],
             ],
             'operations' => [
                 'active_checkouts' => $activeKeys->count(),
@@ -216,42 +218,161 @@ class AdminOrderGroupService
                 'collected_cents' => $activeFinancial['collected_cents'],
                 'outstanding_cents' => $activeFinancial['outstanding_cents'],
             ],
+            'last_seven_days' => $this->lastSevenDaysDashboardStats(),
         ];
     }
 
-    /** @return array{count:int,amount_cents:int} */
+    /**
+     * Daily checkout intake for the latest seven Cairo calendar days.
+     *
+     * Story checkouts contain at least one story; product checkouts contain no
+     * stories. This keeps both categories exclusive and counts delivery once.
+     *
+     * @return array<int, array<string, int|string>>
+     */
+    private function lastSevenDaysDashboardStats(): array
+    {
+        $today = OrderDateTime::display(now())->startOfDay();
+        $dates = collect(range(6, 0))
+            ->map(fn (int $daysAgo): CarbonImmutable => $today->subDays($daysAgo));
+        $start = OrderDateTime::utcStartOfDay($dates->first()->toDateString());
+        $end = OrderDateTime::utcEndOfDay($dates->last()->toDateString());
+
+        $createdCheckouts = Order::withTrashed()
+            ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at')
+            ->whereNotNull('checkout_group_key')
+            ->groupBy('checkout_group_key')
+            ->havingRaw('MIN(created_at) >= ? AND MIN(created_at) <= ?', [$start, $end])
+            ->get();
+
+        $checkoutDates = $createdCheckouts->mapWithKeys(function (Order $checkout): array {
+            $createdAt = CarbonImmutable::parse((string) $checkout->getRawOriginal('first_created_at'));
+
+            return [(string) $checkout->checkout_group_key => OrderDateTime::display($createdAt)->toDateString()];
+        });
+        $checkoutKeys = $checkoutDates->keys();
+        $ordersByCheckout = $this->visibleOrdersForStats(
+            $this->ordersForStats($checkoutKeys, true),
+            true,
+        )->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+        $paymentActivity = $this->paymentEventsBetween($start, $end)
+            ->map(function (OrderPaymentEvent $event): array {
+                return [
+                    'date' => OrderDateTime::display($event->occurred_at)->toDateString(),
+                    'amount_cents' => (int) $event->amount_delta_cents,
+                ];
+            })
+            ->groupBy('date');
+
+        $cancelledStatuses = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled');
+        $cancelledActivity = $cancelledStatuses === []
+            ? collect()
+            : DB::table('order_status_logs as status_logs')
+                ->join('orders as status_orders', 'status_orders.id', '=', 'status_logs.order_id')
+                ->where('status_logs.status_type', OrderStatusRegistry::TYPE_ORDER)
+                ->whereIn('status_logs.status', $cancelledStatuses)
+                ->whereBetween('status_logs.created_at', [$start, $end])
+                ->get(['status_orders.checkout_group_key', 'status_logs.created_at'])
+                ->map(function (object $event): array {
+                    return [
+                        'date' => OrderDateTime::display(CarbonImmutable::parse((string) $event->created_at))->toDateString(),
+                        'checkout_group_key' => (string) $event->checkout_group_key,
+                    ];
+                })
+                ->groupBy('date');
+
+        return $dates->map(function (CarbonImmutable $date) use (
+            $checkoutDates,
+            $ordersByCheckout,
+            $paymentActivity,
+            $cancelledActivity,
+        ): array {
+            $dateString = $date->toDateString();
+            $dayKeys = $checkoutDates
+                ->filter(fn (string $createdDate): bool => $createdDate === $dateString)
+                ->keys();
+            $dayOrders = $dayKeys
+                ->flatMap(fn (string $key): Collection => $ordersByCheckout->get($key, collect()))
+                ->values();
+            $storyKeys = $dayOrders
+                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
+                ->filter(fn (Collection $orders): bool => $orders->contains(fn (Order $order): bool => $this->isStoryOrder($order)))
+                ->keys();
+            $productKeys = $dayKeys->diff($storyKeys)->values();
+            $storyFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $storyKeys)->values());
+            $productFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $productKeys)->values());
+            $totalValueCents = $storyFinancial['total_value_cents'] + $productFinancial['total_value_cents'];
+            $newCheckouts = $dayKeys->count();
+
+            return [
+                'date' => $dateString,
+                'day_label' => $date->translatedFormat('l'),
+                'date_label' => $date->translatedFormat('d/m'),
+                'new_checkouts' => $newCheckouts,
+                'story_checkouts' => $storyKeys->count(),
+                'product_checkouts' => $productKeys->count(),
+                'story_value_cents' => $storyFinancial['total_value_cents'],
+                'product_value_cents' => $productFinancial['total_value_cents'],
+                'total_value_cents' => $totalValueCents,
+                'payments_cents' => (int) collect($paymentActivity->get($dateString, collect()))->sum('amount_cents'),
+                'cancelled_checkouts' => collect($cancelledActivity->get($dateString, collect()))
+                    ->pluck('checkout_group_key')
+                    ->unique()
+                    ->count(),
+                'average_order_cents' => $newCheckouts > 0
+                    ? (int) round($totalValueCents / $newCheckouts)
+                    : 0,
+            ];
+        })->all();
+    }
+
+    /**
+     * @return array{
+     *     count:int,
+     *     amount_cents:int,
+     *     events:array<int, array<string, int|string|null>>
+     * }
+     */
     private function paymentActivityBetween(mixed $start, mixed $end): array
     {
-        $logs = AdminActivityLog::query()
-            ->whereBetween('created_at', [$start, $end])
-            ->whereIn('action', [
-                'checkout.payment_updated',
-                'checkout.full_order_updated',
-                'order.created_manually',
-            ])
-            ->get(['action', 'properties']);
-
-        $deltas = $logs->map(function (AdminActivityLog $log): int {
-            $properties = $log->properties ?? [];
-
-            return match ($log->action) {
-                'checkout.payment_updated' => max(0,
-                    (int) data_get($properties, 'new.paid_amount_cents', 0)
-                    - (int) data_get($properties, 'old.paid_amount_cents', 0)
-                ),
-                'checkout.full_order_updated' => max(0,
-                    (int) data_get($properties, 'after.paid_amount_cents', 0)
-                    - (int) data_get($properties, 'before.paid_amount_cents', 0)
-                ),
-                'order.created_manually' => max(0, (int) data_get($properties, 'payment.paid_amount_cents', 0)),
-                default => 0,
-            };
-        })->filter(fn (int $delta): bool => $delta > 0);
+        $events = $this->paymentEventsBetween($start, $end);
 
         return [
-            'count' => $deltas->count(),
-            'amount_cents' => (int) $deltas->sum(),
+            'count' => $events->where('event_type', 'payment_received')->count(),
+            'amount_cents' => (int) $events->sum('amount_delta_cents'),
+            'events' => $events
+                ->sortByDesc('occurred_at')
+                ->map(function (OrderPaymentEvent $event): array {
+                    return [
+                        'id' => $event->id,
+                        'order_id' => $event->order_id,
+                        'checkout_group_key' => $event->checkout_group_key,
+                        'reference' => $event->order?->checkoutReference?->short_reference
+                            ?: $event->checkout_group_key,
+                        'event_type' => $event->event_type,
+                        'status_label' => OrderPaymentStatus::label($event->new_status),
+                        'amount_delta_cents' => (int) $event->amount_delta_cents,
+                        'new_paid_amount_cents' => (int) $event->new_paid_amount_cents,
+                        'payment_method' => $event->payment_method,
+                        'actor_name' => $event->actor?->name ?: 'النظام',
+                        'occurred_at_label' => OrderDateTime::display($event->occurred_at)?->format('d/m/Y h:i A'),
+                    ];
+                })
+                ->values()
+                ->all(),
         ];
+    }
+
+    /** @return Collection<int, OrderPaymentEvent> */
+    private function paymentEventsBetween(mixed $start, mixed $end): Collection
+    {
+        return OrderPaymentEvent::query()
+            ->with(['actor:id,name', 'order.checkoutReference'])
+            ->whereBetween('occurred_at', [$start, $end])
+            ->where('affects_collection_stats', true)
+            ->orderBy('occurred_at')
+            ->get();
     }
 
     public function recent(int $limit = 8): Collection
@@ -549,6 +670,7 @@ class AdminOrderGroupService
                 'shipping_status',
                 'discount_cents',
                 'delivery_details',
+                'deleted_at',
             ])
             ->with([
                 'story:id,price',

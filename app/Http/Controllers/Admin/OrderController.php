@@ -16,6 +16,7 @@ use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderDetailsUpdateService;
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
@@ -351,6 +352,7 @@ class OrderController extends Controller
         OrderWhatsAppMessageService $whatsapp,
         OrderAdminNoteService $adminNotes,
         OrderActivityTimelineService $activityTimeline,
+        OrderPaymentLedgerService $paymentLedger,
     ) {
         $order->load([
             'user',
@@ -405,6 +407,7 @@ class OrderController extends Controller
         $orderAdminNotes = $adminNotes->notesFor($order);
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
         $orderActivity = $activityTimeline->forGroup($checkoutGroup);
+        $paymentEvents = $paymentLedger->forCheckout($checkoutGroup['key']);
 
         return view('admin.orders.show', compact(
             'order',
@@ -418,6 +421,7 @@ class OrderController extends Controller
             'whatsappMessages',
             'orderAdminNotes',
             'orderActivity',
+            'paymentEvents',
         ));
     }
 

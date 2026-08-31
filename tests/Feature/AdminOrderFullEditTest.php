@@ -164,6 +164,52 @@ class AdminOrderFullEditTest extends TestCase
             'user_id' => $this->admin->id,
             'action' => 'checkout.full_order_updated',
         ]);
+        $this->assertDatabaseHas('order_payment_events', [
+            'checkout_group_key' => $groupKey,
+            'actor_user_id' => $this->admin->id,
+            'event_type' => 'payment_received',
+            'source' => 'admin_full_order_update',
+            'new_paid_amount_cents' => 30_000,
+            'amount_delta_cents' => 30_000,
+            'affects_collection_stats' => true,
+        ]);
+    }
+
+    public function test_recalculating_a_fully_paid_total_during_order_edit_is_a_non_cash_adjustment(): void
+    {
+        [$first, $second] = $this->createCheckout();
+
+        foreach ([$first, $second] as $order) {
+            $order->forceFill([
+                'payment_status' => 'paid_in_full',
+                'paid_amount_cents' => 95_000,
+                'payment_method' => 'انستاباي',
+                'payment_updated_at' => now()->subDay(),
+            ])->save();
+        }
+
+        $payload = $this->editBasePayload($first);
+        $payload['payment_status'] = 'paid_in_full';
+        $payload['payment_method'] = 'انستاباي';
+        $payload['change_reason'] = 'إزالة المنتجات مع بقاء حالة الدفع كما هي.';
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.orders.groups.update', $first->id), $payload)
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('order_payment_events', [
+            'checkout_group_key' => $first->checkout_group_key,
+            'event_type' => 'payment_balance_adjusted',
+            'source' => 'admin_full_order_update',
+            'previous_paid_amount_cents' => 95_000,
+            'new_paid_amount_cents' => 75_000,
+            'amount_delta_cents' => -20_000,
+            'affects_collection_stats' => false,
+        ]);
+
+        $dashboard = app(AdminOrderGroupService::class)->dashboardStats();
+        $this->assertSame(0, $dashboard['today']['payment_checkouts']);
+        $this->assertSame(0, $dashboard['today']['payments_cents']);
     }
 
     public function test_new_story_requires_two_photos_but_existing_story_does_not(): void

@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderPaymentEvent;
 use App\Models\Story;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use LogicException;
 use Tests\TestCase;
 
 class AdminOrderPaymentStatusTest extends TestCase
@@ -67,6 +69,24 @@ class AdminOrderPaymentStatusTest extends TestCase
             'action' => 'checkout.payment_updated',
             'subject_id' => $first->id,
         ]);
+        $this->assertDatabaseHas('order_payment_events', [
+            'checkout_group_key' => 'PAYMENT-GROUP',
+            'order_id' => $first->id,
+            'actor_user_id' => $this->admin->id,
+            'event_type' => 'payment_received',
+            'source' => 'admin_payment_update',
+            'previous_paid_amount_cents' => 0,
+            'new_paid_amount_cents' => 20_000,
+            'amount_delta_cents' => 20_000,
+            'affects_collection_stats' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $first))
+            ->assertOk()
+            ->assertSee('سجل الدفع المعتمد')
+            ->assertSee('دفعة مستلمة')
+            ->assertSee('تحديث الدفع من صفحة الطلب');
     }
 
     public function test_paid_without_shipping_and_paid_in_full_calculate_amounts_automatically(): void
@@ -108,6 +128,7 @@ class AdminOrderPaymentStatusTest extends TestCase
         }
 
         $originalPaymentTime = $first->refresh()->payment_updated_at;
+        $eventsBefore = OrderPaymentEvent::query()->where('checkout_group_key', 'PAYMENT-GROUP')->count();
 
         $this->actingAs($this->admin)
             ->patch(route('admin.orders.groups.workflow-statuses', $first->id), [
@@ -125,6 +146,40 @@ class AdminOrderPaymentStatusTest extends TestCase
             'action' => 'checkout.payment_updated',
             'subject_id' => $first->id,
         ]);
+        $this->assertSame($eventsBefore, OrderPaymentEvent::query()->where('checkout_group_key', 'PAYMENT-GROUP')->count());
+    }
+
+    public function test_payment_reversal_is_recorded_with_a_signed_delta_and_ledger_rows_are_immutable(): void
+    {
+        [$first] = $this->checkout();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.orders.groups.payment', $first->id), [
+                'payment_status' => 'partially_paid',
+                'paid_amount' => 200,
+                'payment_method' => 'انستاباي',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.orders.groups.payment', $first->id), [
+                'payment_status' => 'partially_paid',
+                'paid_amount' => 100,
+                'payment_method' => 'انستاباي',
+            ])
+            ->assertRedirect();
+
+        $event = OrderPaymentEvent::query()
+            ->where('checkout_group_key', 'PAYMENT-GROUP')
+            ->where('event_type', 'payment_reversed')
+            ->firstOrFail();
+
+        $this->assertSame(20_000, $event->previous_paid_amount_cents);
+        $this->assertSame(10_000, $event->new_paid_amount_cents);
+        $this->assertSame(-10_000, $event->amount_delta_cents);
+
+        $this->expectException(LogicException::class);
+        $event->update(['amount_delta_cents' => 0]);
     }
 
     public function test_partial_payment_requires_a_valid_amount_and_payment_method(): void

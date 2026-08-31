@@ -127,6 +127,8 @@
                 @endcan
             @endif
 
+            @include('admin.orders._payment-history', ['paymentEvents' => $paymentEvents ?? collect()])
+
             @if($visibleStoryOrders->isNotEmpty())
             <section id="order-stories" class="space-y-4" data-order-page-section="items">
                 <div class="flex items-center justify-between gap-3">

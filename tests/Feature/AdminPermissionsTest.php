@@ -71,6 +71,8 @@ class AdminPermissionsTest extends TestCase
             ->assertOk()
             ->assertSee('مرحبًا،')
             ->assertDontSee('أهم أرقام اليوم')
+            ->assertDontSee('تفاصيل حركات الدفع اليوم')
+            ->assertDontSee('آخر 7 أيام')
             ->assertDontSee('إجمالي عمليات الشراء')
             ->assertDontSee('المتبقي تحصيله')
             ->assertDontSee('ملخص Google Analytics');
@@ -85,6 +87,8 @@ class AdminPermissionsTest extends TestCase
             ->get(route('admin.dashboard.index'))
             ->assertOk()
             ->assertSee('أهم أرقام اليوم')
+            ->assertSee('تفاصيل حركات الدفع اليوم')
+            ->assertSee('آخر 7 أيام')
             ->assertSee('إجمالي عمليات الشراء')
             ->assertSee('المتبقي تحصيله')
             ->assertSee('ملخص Google Analytics');

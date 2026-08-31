@@ -33,6 +33,7 @@ class AdminOrderUpdateService
         private readonly OrderDetailsUpdateService $details,
         private readonly OrderDeletionService $deletions,
         private readonly AdminOrderGroupService $groups,
+        private readonly OrderPaymentLedgerService $paymentLedger,
     ) {}
 
     /** @return array{representative: Order, orders: Collection<int, Order>} */
@@ -362,6 +363,32 @@ class AdminOrderUpdateService
                     admin: $admin,
                     request: $request,
                 );
+
+                if ($paymentChanged) {
+                    $paymentStateWasExplicitlyChanged = $beforeGroup['payment_status'] !== $payment['payment_status']
+                        || $beforeGroup['payment_method'] !== $payment['payment_method']
+                        || OrderPaymentStatus::behavior($payment['payment_status']) === OrderPaymentStatus::PARTIALLY_PAID;
+
+                    $this->paymentLedger->recordTransition(
+                        representative: $representativeOrder,
+                        before: [
+                            'payment_status' => $beforeGroup['payment_status'],
+                            'paid_amount_cents' => (int) $beforeGroup['paid_amount_cents'],
+                            'payment_method' => $beforeGroup['payment_method'],
+                        ],
+                        after: [
+                            'payment_status' => $afterGroup['payment_status'],
+                            'paid_amount_cents' => (int) $afterGroup['paid_amount_cents'],
+                            'payment_method' => $afterGroup['payment_method'],
+                        ],
+                        source: 'admin_full_order_update',
+                        actor: $admin,
+                        request: $request,
+                        metadata: ['change_reason' => $data['change_reason']],
+                        forcedEventType: $paymentStateWasExplicitlyChanged ? null : 'payment_balance_adjusted',
+                        affectsCollectionStats: $paymentStateWasExplicitlyChanged ? null : false,
+                    );
+                }
 
                 return ['representative' => $representativeOrder, 'orders' => $activeOrders];
             });

@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class OrderPaymentService
 {
+    public function __construct(private readonly OrderPaymentLedgerService $ledger) {}
+
     /** @return array{payment_status:string,paid_amount_cents:int,payment_method:?string,remaining_amount_cents:int} */
     public function resolve(
         string $status,
@@ -137,6 +139,16 @@ class OrderPaymentService
                 ],
                 admin: $admin,
                 request: $request,
+            );
+
+            $this->ledger->recordTransition(
+                representative: $orders->first(),
+                before: $old,
+                after: $resolved,
+                source: 'admin_payment_update',
+                actor: $admin,
+                request: $request,
+                metadata: ['total_cents' => (int) $group['total_cents']],
             );
 
             return $resolved;

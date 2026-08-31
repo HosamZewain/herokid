@@ -22,7 +22,10 @@ use Illuminate\Validation\ValidationException;
 
 class OrderGroupMergeService
 {
-    public function __construct(private readonly AdminOrderGroupService $groups) {}
+    public function __construct(
+        private readonly AdminOrderGroupService $groups,
+        private readonly OrderPaymentLedgerService $paymentLedger,
+    ) {}
 
     /** @return array<string, mixed> */
     public function merge(
@@ -141,6 +144,29 @@ class OrderGroupMergeService
             ]);
 
             $representative = $targetOrders->first()->fresh();
+            $this->paymentLedger->recordTransition(
+                representative: $representative,
+                before: [
+                    'payment_status' => $target['payment_status'],
+                    'paid_amount_cents' => (int) $target['paid_amount_cents'],
+                    'payment_method' => $target['payment_method'],
+                ],
+                after: [
+                    'payment_status' => $paymentStatus,
+                    'paid_amount_cents' => $combinedPaidCents,
+                    'payment_method' => $paymentMethod,
+                ],
+                source: 'order_group_merge',
+                actor: $admin,
+                request: $request,
+                metadata: [
+                    'source_checkout_group_key' => $sourceKey,
+                    'source_paid_amount_cents' => (int) $source['paid_amount_cents'],
+                    'reconciliation_only' => true,
+                ],
+                forcedEventType: 'merge_reconciliation',
+            );
+
             AdminActivityLogger::log(
                 action: 'checkout.groups_merged',
                 description: 'تم دمج عملية الشراء '.$sourceReference.' داخل '.($targetReference?->short_reference ?: $targetKey).' واحتساب الشحن مرة واحدة.',

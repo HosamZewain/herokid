@@ -9,6 +9,7 @@ use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderGroupMergeService;
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
@@ -29,6 +30,7 @@ class OrderGroupController extends Controller
         OrderWhatsAppMessageService $whatsapp,
         OrderAdminNoteService $adminNotes,
         OrderActivityTimelineService $activityTimeline,
+        OrderPaymentLedgerService $paymentLedger,
     ) {
         $group = $groups->findByRepresentative($representative);
 
@@ -80,6 +82,7 @@ class OrderGroupController extends Controller
             'whatsappMessages' => $whatsapp->messagesForGroup($group),
             'orderAdminNotes' => $adminNotes->notesFor($attachmentTarget),
             'orderActivity' => $activityTimeline->forGroup($group),
+            'paymentEvents' => $paymentLedger->forCheckout($group['key']),
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderShortReferenceService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -32,6 +33,7 @@ class Order extends Model
             }
 
             app(OrderShortReferenceService::class)->ensureForOrder($order);
+            app(OrderPaymentLedgerService::class)->recordInitial($order);
         });
     }
 
@@ -48,6 +50,11 @@ class Order extends Model
     public function paymentUpdatedBy()
     {
         return $this->belongsTo(User::class, 'payment_updated_by_user_id');
+    }
+
+    public function paymentEvents()
+    {
+        return $this->hasMany(OrderPaymentEvent::class, 'checkout_group_key', 'checkout_group_key');
     }
 
     public function groupAssignment()
