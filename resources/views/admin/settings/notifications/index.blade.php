@@ -296,7 +296,7 @@
                                         <span class="rounded-full px-2 py-1 text-xs font-black {{ $delivery->status === 'sent' ? 'bg-green-50 text-green-700' : ($delivery->status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700') }}">{{ $delivery->status }}</span>
                                     </td>
                                     <td class="px-4 py-3">{{ $delivery->attempts }}</td>
-                                    <td class="px-4 py-3 font-mono text-xs" dir="ltr">{{ $delivery->sent_at?->format('Y-m-d H:i') }}</td>
+                                    <td class="px-4 py-3 font-mono text-xs" dir="ltr">{{ app_datetime($delivery->sent_at, 'Y-m-d H:i') }}</td>
                                     <td class="max-w-xs truncate px-4 py-3 text-red-700">{{ $delivery->error_message }}</td>
                                     <td class="px-4 py-3">
                                         @if($link)

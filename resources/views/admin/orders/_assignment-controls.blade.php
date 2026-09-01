@@ -6,7 +6,7 @@
 
 <div class="{{ $compact ? 'space-y-1.5' : 'flex flex-wrap items-center gap-2' }}">
     @if($assignedAdmin)
-        <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-800" title="تم الاستلام {{ optional($group['assigned_at'])->format('d/m/Y h:i A') }}">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-800" title="تم الاستلام {{ app_datetime($group['assigned_at']) }}">
             <span aria-hidden="true">👤</span>
             {{ $assignedAdmin->name }} @if($isMine)<span class="opacity-70">(أنت)</span>@endif
         </span>

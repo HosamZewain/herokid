@@ -282,7 +282,7 @@
                     <p class="font-black text-gray-900">آخر نشاط</p>
                     <p class="mt-2 text-sm text-gray-600">{{ $latestActivity?->description ?? 'لا يوجد نشاط مسجل بعد.' }}</p>
                     @if($latestActivity)
-                        <p class="mt-1 text-xs text-gray-400">{{ $latestActivity->actor?->name ?? 'System' }} · {{ $latestActivity->created_at?->format('Y-m-d H:i') }}</p>
+                        <p class="mt-1 text-xs text-gray-400">{{ $latestActivity->actor?->name ?? 'System' }} · {{ app_datetime($latestActivity->created_at, 'Y-m-d H:i') }}</p>
                     @endif
                 </div>
             </div>
@@ -1369,7 +1369,7 @@
                 <div class="rounded-xl border border-gray-100 bg-gray-50 p-4" data-layout-status-card data-layout-status-url="{{ $printLayout ? route('admin.production-studio.layout.status', [$project, $printLayout]) : '' }}">
                     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div><p class="font-black text-gray-950">آخر إصدار</p><p class="text-sm text-gray-500" data-layout-status-label>{{ $printLayout ? 'v'.$printLayout->version_number.' — '.($layoutStatusLabels[$printLayout->status] ?? $printLayout->status) : 'لا يوجد إصدار بعد' }}</p></div>
-                        @if($printLayout?->generated_at)<p class="text-xs text-gray-500">{{ $printLayout->generated_at->format('Y-m-d H:i') }}</p>@endif
+                        @if($printLayout?->generated_at)<p class="text-xs text-gray-500">{{ app_datetime($printLayout->generated_at, 'Y-m-d H:i') }}</p>@endif
                     </div>
                     <p data-layout-error class="mt-3 text-sm font-bold text-red-600">{{ $printLayout?->error_message }}</p>
                     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4" data-layout-downloads>
@@ -1515,7 +1515,7 @@
                                     <span class="font-black">v{{ $proofAttempt->proof_version }}</span>
                                     <span class="mx-2 text-gray-400">|</span>
                                     <span>{{ $proofAttempt->status }}</span>
-                                    @if($proofAttempt->reviewed_at)<span class="mx-2 text-gray-400">|</span><span>{{ $proofAttempt->reviewed_at->format('Y-m-d H:i') }}</span>@endif
+                                    @if($proofAttempt->reviewed_at)<span class="mx-2 text-gray-400">|</span><span>{{ app_datetime($proofAttempt->reviewed_at, 'Y-m-d H:i') }}</span>@endif
                                     @if($proofAttempt->affected_component)<span class="mx-2 text-gray-400">|</span><span>{{ $proofAttempt->affected_component }}</span>@endif
                                 </div>
                             @endforeach
@@ -1564,7 +1564,7 @@
                     <div class="rounded-xl bg-gray-50 p-4 text-right {{ $activity['is_extra'] ? 'hidden' : '' }}" data-activity-item data-activity-type="{{ $activity['type'] }}" data-activity-extra="{{ $activity['is_extra'] ? '1' : '0' }}">
                         <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                             <p class="font-black text-gray-900">{{ $activity['log']->description }}</p>
-                            <p class="text-xs text-gray-500">{{ $activity['log']->created_at?->format('Y-m-d H:i') }}</p>
+                            <p class="text-xs text-gray-500">{{ app_datetime($activity['log']->created_at, 'Y-m-d H:i') }}</p>
                         </div>
                         <p class="mt-1 text-sm text-gray-500">{{ $activity['log']->actor?->name ?? 'System' }} - {{ $activity['log']->action }}</p>
                     </div>

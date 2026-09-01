@@ -195,7 +195,7 @@
                             <span class="text-2xl flex-shrink-0">{{ $attachment->icon }}</span>
                             <div class="min-w-0">
                                 <p class="text-sm font-semibold text-gray-800 truncate">{{ $attachment->original_name }}</p>
-                                <p class="text-xs text-gray-400">{{ $attachment->human_size }} · {{ $attachment->created_at->format('Y/m/d H:i') }}</p>
+                                <p class="text-xs text-gray-400">{{ $attachment->human_size }} · {{ app_datetime($attachment->created_at, 'Y/m/d H:i') }}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0 mr-3">

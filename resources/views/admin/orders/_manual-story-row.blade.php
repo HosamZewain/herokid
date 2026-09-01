@@ -45,9 +45,9 @@
                 <label for="child-age-{{ $index }}" class="mb-1.5 block text-xs font-black text-gray-700">العمر *</label>
                 <select id="child-age-{{ $index }}" name="stories[{{ $index }}][child_age]" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm">
                     <option value="">اختر</option>
-                    @for($age = 3; $age <= 12; $age++)
+                    @foreach(\App\Support\StoryAgeOptions::forPersonalization() as $age)
                         <option value="{{ $age }}" @selected((string) ($row['child_age'] ?? '') === (string) $age)>{{ $age }} سنوات</option>
-                    @endfor
+                    @endforeach
                 </select>
             </div>
             <div>

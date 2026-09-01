@@ -72,7 +72,7 @@
                                     <div class="hidden sm:block w-px h-8 bg-slate-200"></div>
                                     <div>
                                         <span class="text-xs text-slate-400 block">تاريخ الطلب</span>
-                                        <span class="text-sm text-slate-700">{{ $order->created_at->format('d/m/Y') }}</span>
+                                        <span class="text-sm text-slate-700">{{ app_datetime($order->created_at, 'd/m/Y') }}</span>
                                     </div>
                                 </div>
                                 <span class="px-3 py-1.5 rounded-full text-xs font-bold {{ $colorClass }}">
@@ -154,7 +154,7 @@
                                                     @if($latestPreview->note)
                                                         <p class="text-xs text-slate-500 mt-0.5">{{ $latestPreview->note }}</p>
                                                     @endif
-                                                    <p class="text-xs text-slate-400 mt-0.5">رُفع في {{ $latestPreview->created_at->format('d/m/Y') }}</p>
+                                                    <p class="text-xs text-slate-400 mt-0.5">رُفع في {{ app_datetime($latestPreview->created_at, 'd/m/Y') }}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -214,7 +214,7 @@
                                     <div id="status-log-{{ $order->id }}" hidden class="mt-3 space-y-2 border-r-2 border-indigo-100 pr-3">
                                         @foreach($order->statusLogs->sortByDesc('created_at') as $log)
                                             <div class="flex items-start gap-2 text-xs text-slate-600">
-                                                <span class="text-slate-400 whitespace-nowrap">{{ $log->created_at->format('d/m H:i') }}</span>
+                                                <span class="text-slate-400 whitespace-nowrap">{{ app_datetime($log->created_at, 'd/m H:i') }}</span>
                                                 <span class="text-indigo-400 flex-shrink-0">•</span>
                                                 <span>{{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $log->status) }}{{ $log->notes ? ' — ' . $log->notes : '' }}</span>
                                             </div>
@@ -232,7 +232,7 @@
                                     💬 تواصل معنا بشأن هذا الطلب
                                 </a>
                                 <span class="text-slate-400">
-                                    آخر تحديث: {{ $order->updated_at->diffForHumans() }}
+                                    آخر تحديث: {{ app_datetime_human($order->updated_at) }}
                                 </span>
                             </div>
                         </div>

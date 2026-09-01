@@ -34,6 +34,7 @@ use App\Services\ProductionStudio\ScenePersonalizationService;
 use App\Services\Stories\StorySceneParser;
 use App\Support\AdminActivityLogger;
 use App\Support\Ai\SupportedProviderRegistry;
+use App\Support\AppDateTime;
 use App\Support\ProductionStudio;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Http\JsonResponse;
@@ -56,8 +57,8 @@ class ProductionStudioController extends Controller
             ->when($request->filled('current_stage'), fn ($query) => $query->where('current_stage', $request->current_stage))
             ->when($request->filled('assigned_to_user_id'), fn ($query) => $query->where('assigned_to_user_id', $request->assigned_to_user_id))
             ->when($request->filled('story_id'), fn ($query) => $query->whereHas('order', fn ($orders) => $orders->where('story_id', $request->story_id)))
-            ->when($request->filled('date_from'), fn ($query) => $query->whereDate('created_at', '>=', $request->date_from))
-            ->when($request->filled('date_to'), fn ($query) => $query->whereDate('created_at', '<=', $request->date_to))
+            ->when($request->filled('date_from'), fn ($query) => $query->where('created_at', '>=', AppDateTime::utcStartOfDay((string) $request->date_from)))
+            ->when($request->filled('date_to'), fn ($query) => $query->where('created_at', '<=', AppDateTime::utcEndOfDay((string) $request->date_to)))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = trim((string) $request->search);
 
@@ -1927,10 +1928,10 @@ class ProductionStudioController extends Controller
             'estimated_cost' => $job->estimated_cost,
             'actual_cost' => $job->actual_cost,
             'error_message' => $job->error_message,
-            'created_at' => $job->created_at?->format('Y-m-d H:i:s'),
-            'updated_at' => $job->updated_at?->format('Y-m-d H:i:s'),
-            'completed_at' => $job->completed_at?->format('Y-m-d H:i:s'),
-            'failed_at' => $job->failed_at?->format('Y-m-d H:i:s'),
+            'created_at' => AppDateTime::display($job->created_at)?->format('Y-m-d H:i:s'),
+            'updated_at' => AppDateTime::display($job->updated_at)?->format('Y-m-d H:i:s'),
+            'completed_at' => AppDateTime::display($job->completed_at)?->format('Y-m-d H:i:s'),
+            'failed_at' => AppDateTime::display($job->failed_at)?->format('Y-m-d H:i:s'),
             'asset_id' => data_get($job->output_metadata_json, 'asset_id'),
             'asset_url' => $asset ? route('admin.production-studio.assets.show', [$job->project, $asset]) : null,
             'asset_status' => $asset?->status,
@@ -2025,7 +2026,7 @@ class ProductionStudioController extends Controller
             'version' => $layout->version_number,
             'status' => $layout->status,
             'error_message' => $layout->error_message,
-            'generated_at' => $layout->generated_at?->format('Y-m-d H:i:s'),
+            'generated_at' => AppDateTime::display($layout->generated_at)?->format('Y-m-d H:i:s'),
             'downloads' => $layout->isReady() ? [
                 'reader' => route('admin.production-studio.layout.download', [$project, $layout, 'reader']),
                 'print' => route('admin.production-studio.layout.download', [$project, $layout, 'print']),

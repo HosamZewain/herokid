@@ -11,8 +11,8 @@
                 <p class="text-sm text-gray-500 mt-1">من: {{ $message->name }} &lt;<a href="mailto:{{ $message->email }}" class="text-indigo-600 dir-ltr inline-block">{{ $message->email }}</a>&gt;</p>
             </div>
             <div class="text-sm text-gray-500">
-                <p>{{ $message->created_at->format('Y/m/d') }}</p>
-                <p dir="ltr" class="text-right">{{ $message->created_at->format('H:i') }}</p>
+                <p>{{ app_datetime($message->created_at, 'Y/m/d') }}</p>
+                <p dir="ltr" class="text-right">{{ app_datetime($message->created_at, 'H:i') }}</p>
             </div>
         </div>
         

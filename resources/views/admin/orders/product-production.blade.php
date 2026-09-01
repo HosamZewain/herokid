@@ -73,7 +73,7 @@
                         <div><dt class="text-xs font-bold text-indigo-500">ولي الأمر</dt><dd class="mt-1 font-black text-gray-900">{{ $order->parent_name ?: $order->user?->name ?: '—' }}</dd></div>
                         <div><dt class="text-xs font-bold text-indigo-500">الهاتف</dt><dd class="mt-1 font-black text-gray-900" dir="ltr">{{ data_get($delivery, 'phone', '—') }}</dd></div>
                         <div><dt class="text-xs font-bold text-indigo-500">رقم الطلب</dt><dd class="mt-1 font-mono font-black text-gray-900" dir="ltr">{{ $order->order_number }}</dd></div>
-                        <div><dt class="text-xs font-bold text-indigo-500">تاريخ الطلب</dt><dd class="mt-1 font-black text-gray-900">{{ $order->created_at?->format('d/m/Y h:i A') }}</dd></div>
+                        <div><dt class="text-xs font-bold text-indigo-500">تاريخ الطلب</dt><dd class="mt-1 font-black text-gray-900">{{ app_datetime($order->created_at) }}</dd></div>
                     </dl>
                 </aside>
             </div>

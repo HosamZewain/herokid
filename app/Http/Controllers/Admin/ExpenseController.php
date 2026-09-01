@@ -8,6 +8,7 @@ use App\Models\ExpenseTransaction;
 use App\Models\User;
 use App\Services\Expenses\ExpenseLedgerService;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -143,7 +144,7 @@ class ExpenseController extends Controller
 
         $ledger->void($expense, $validated['void_reason'], $request->user());
 
-        return redirect()->route('admin.expenses.show', $expense)->with('success', 'تم إلغاء أثر العملية مع الاحتفاظ بالسجل.');
+        return redirect()->route('admin.expenses.show', $expense)->with('success', 'تم حذف أثر العملية من الرصيد مع الاحتفاظ بسجل التدقيق.');
     }
 
     public function attachment(ExpenseTransaction $expense)
@@ -215,7 +216,7 @@ class ExpenseController extends Controller
                     $transaction->status,
                     $transaction->attachment_original_name,
                     $transaction->createdBy?->name,
-                    $transaction->created_at?->format('Y-m-d H:i:s'),
+                    AppDateTime::format($transaction->created_at, 'Y-m-d H:i:s'),
                 ]));
             }
 

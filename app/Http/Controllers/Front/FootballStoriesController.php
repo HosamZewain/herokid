@@ -97,7 +97,7 @@ class FootballStoriesController extends Controller
             'child_name.max' => 'اسم الطفل يجب ألا يزيد عن ٢٥٥ حرفًا.',
             'child_age.required' => 'اختر عمر الطفل.',
             'child_age.integer' => 'اختر عمر الطفل من القائمة.',
-            'child_age.in' => 'اختر عمرًا من ٣ إلى ١٢ سنة.',
+            'child_age.in' => 'اختر عمرًا من ٢ إلى ١٦ سنة.',
             'child_gender.required' => 'اختر جنس الطفل لتخصيص النص والصور بصورة صحيحة.',
             'child_gender.in' => 'اختيار جنس الطفل غير صالح.',
             'gift_note.max' => 'الإهداء يجب ألا يزيد عن ٥٠٠ حرف.',

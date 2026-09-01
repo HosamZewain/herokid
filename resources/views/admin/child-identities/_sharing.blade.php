@@ -19,8 +19,8 @@
                 <div class="flex justify-between"><span class="text-slate-500">الرابط</span><strong>{{ $share->share_enabled ? 'مفعّل' : 'متوقف' }}</strong></div>
                 <div class="flex justify-between"><span class="text-slate-500">المحاولة</span><strong>{{ $share->generationAttempt?->attempt_number ?: '—' }}</strong></div>
                 <div class="flex justify-between"><span class="text-slate-500">الاسم</span><strong>{{ $share->display_child_first_name ? 'الاسم الأول' : 'بدون اسم' }}</strong></div>
-                <div class="flex justify-between"><span class="text-slate-500">الموافقة</span><strong>{{ $share->consent_accepted_at?->format('d/m/Y H:i') }}</strong></div>
-                <div class="flex justify-between"><span class="text-slate-500">آخر مشاهدة</span><strong>{{ $share->last_viewed_at?->format('d/m/Y H:i') ?: '—' }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-500">الموافقة</span><strong>{{ app_datetime($share->consent_accepted_at, 'd/m/Y H:i') }}</strong></div>
+                <div class="flex justify-between"><span class="text-slate-500">آخر مشاهدة</span><strong>{{ app_datetime($share->last_viewed_at, 'd/m/Y H:i', '') ?: '—' }}</strong></div>
                 <label class="block text-slate-500">الرابط العام
                     <input readonly value="{{ $sharePublicUrl }}" class="mt-1 w-full rounded-xl border-slate-200 bg-white text-xs" dir="ltr">
                 </label>

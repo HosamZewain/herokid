@@ -210,6 +210,32 @@ class AdminExpensesTest extends TestCase
             ->assertSee('٠ ج.م');
     }
 
+    public function test_edit_and_safe_delete_actions_are_visible_from_the_expenses_list_with_permissions(): void
+    {
+        $admin = $this->adminWithPermissions(['expenses.view', 'expenses.edit', 'expenses.void']);
+        $transaction = $this->createTransaction($admin, 'expense', 500, $this->category('expense', 'printing-ink'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.expenses.index', ['date_preset' => 'all']))
+            ->assertOk()
+            ->assertSee(route('admin.expenses.edit', $transaction), false)
+            ->assertSee('تعديل')
+            ->assertSee('حذف عملية مسجلة بالخطأ')
+            ->assertSee(route('admin.expenses.void', $transaction), false);
+    }
+
+    public function test_edit_and_safe_delete_actions_are_hidden_without_their_permissions(): void
+    {
+        $admin = $this->adminWithPermissions(['expenses.view']);
+        $transaction = $this->createTransaction($admin, 'expense', 500, $this->category('expense', 'printing-ink'));
+
+        $this->actingAs($admin)
+            ->get(route('admin.expenses.index', ['date_preset' => 'all']))
+            ->assertOk()
+            ->assertDontSee(route('admin.expenses.edit', $transaction), false)
+            ->assertDontSee('حذف عملية مسجلة بالخطأ');
+    }
+
     public function test_voided_transactions_cannot_be_edited(): void
     {
         $admin = $this->adminWithPermissions(['expenses.edit']);

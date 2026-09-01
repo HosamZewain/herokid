@@ -6,6 +6,7 @@ use App\DTOs\Notifications\NotificationMessage;
 use App\Models\Order;
 use App\Models\ProductionProject;
 use App\Models\SceneGenerationJob;
+use App\Support\AppDateTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -117,7 +118,7 @@ class NotificationMessageBuilder
             'المشروع: #'.$this->safe($project?->id),
             'رقم الطلب: '.$this->safe($project?->order?->order_number),
             'المرحلة: '.$this->safe($project?->stageLabel()),
-            'آخر تحديث: '.$this->safe($project?->updated_at?->format('Y-m-d H:i')),
+            'آخر تحديث: '.$this->safe(AppDateTime::format($project?->updated_at, 'Y-m-d H:i')),
             'السبب المحتمل: لم يحدث تقدم منذ '.$this->safe($age),
             '',
             'فتح المشروع:',

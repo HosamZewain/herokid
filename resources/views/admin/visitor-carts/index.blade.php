@@ -135,8 +135,8 @@
                                 </div>
                             </td>
                             <td class="px-4 py-4 font-black text-gray-900">{{ $money($cart->total) }}</td>
-                            <td class="px-4 py-4 text-gray-500">{{ $cart->first_added_at?->format('Y-m-d H:i') ?? '-' }}</td>
-                            <td class="px-4 py-4 text-gray-500">{{ $cart->last_activity_at?->diffForHumans() ?? '-' }}</td>
+                            <td class="px-4 py-4 text-gray-500">{{ app_datetime($cart->first_added_at, 'Y-m-d H:i', '-') ?? '-' }}</td>
+                            <td class="px-4 py-4 text-gray-500">{{ app_datetime_human($cart->last_activity_at, '-') ?? '-' }}</td>
                             <td class="px-4 py-4 text-xs text-gray-500">{{ trim(($cart->utm_source ?: '').' / '.($cart->utm_medium ?: ''), ' /') ?: 'Direct' }}</td>
                             <td class="px-4 py-4">
                                 @if($cart->relatedOrder)

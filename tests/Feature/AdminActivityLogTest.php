@@ -6,6 +6,7 @@ use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -124,13 +125,20 @@ class AdminActivityLogTest extends TestCase
                 ],
             ],
         ]);
+        $log->forceFill([
+            'created_at' => CarbonImmutable::parse('2026-08-31 12:00:00', 'UTC'),
+            'updated_at' => CarbonImmutable::parse('2026-08-31 12:00:00', 'UTC'),
+        ])->saveQuietly();
+        config(['display.timezone' => 'Africa/Cairo']);
 
         $this->actingAs($admin)
             ->get(route('admin.activity-logs.index'))
             ->assertOk()
             ->assertSee('سجل نشاط الإدارة')
             ->assertSee('settings.updated')
-            ->assertSee('تحديث إعدادات الموقع');
+            ->assertSee('تحديث إعدادات الموقع')
+            ->assertSee('15:00:00')
+            ->assertDontSee('12:00:00');
 
         $this->actingAs($admin)
             ->get(route('admin.activity-logs.show', $log))

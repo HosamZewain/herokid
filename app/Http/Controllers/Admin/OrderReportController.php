@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Orders\AdminOrderReportService;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
@@ -67,7 +68,7 @@ class OrderReportController extends Controller
             foreach ($rows as $row) {
                 $delivery = $row['delivery'];
                 fputcsv($output, array_map($this->csvCell(...), [
-                    $row['created_at']?->timezone((string) config('app.timezone', 'Africa/Cairo'))->format('Y-m-d H:i'),
+                    AppDateTime::format($row['created_at'], 'Y-m-d H:i'),
                     $row['short_reference'] ?: $row['key'],
                     implode('، ', $row['order_numbers']),
                     $row['catalog_type_label'],

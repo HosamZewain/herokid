@@ -15,6 +15,7 @@ use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -197,7 +198,7 @@ class OrderEditController extends Controller
                     ->orWhereIn('id', $currentStoryIds)),
             ],
             'stories.*.child_name' => ['required', 'string', 'max:100'],
-            'stories.*.child_age' => ['required', 'integer', 'min:3', 'max:12'],
+            'stories.*.child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
             'stories.*.child_gender' => ['required', Rule::in(['boy', 'girl'])],
             'stories.*.interests' => ['nullable', 'string', 'max:1000'],
             'stories.*.gift_note' => ['nullable', 'string', 'max:1000'],

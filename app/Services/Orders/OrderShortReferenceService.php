@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Models\OrderCheckoutReference;
+use App\Support\AppDateTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +40,7 @@ class OrderShortReferenceService
                     return $existing;
                 }
 
-                $month = $createdAt->format('m');
+                $month = AppDateTime::format($createdAt, 'm');
                 $now = now();
 
                 DB::table('order_checkout_reference_counters')->insertOrIgnore([

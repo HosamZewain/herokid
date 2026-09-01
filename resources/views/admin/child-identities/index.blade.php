@@ -105,7 +105,7 @@
                                             <a href="{{ route('admin.orders.show', $identity->convertedOrder) }}" class="mt-1 block text-xs font-black text-indigo-600">#{{ $identity->convertedOrder->order_number }}</a>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4 text-slate-500">{{ $identity->created_at->format('d/m/Y H:i') }}</td>
+                                    <td class="px-5 py-4 text-slate-500">{{ app_datetime($identity->created_at, 'd/m/Y H:i') }}</td>
                                     <td class="px-5 py-4"><a href="{{ route('admin.child-identities.show', $identity->id) }}" class="font-black text-indigo-600">عرض ←</a></td>
                                 </tr>
                             @endforeach
@@ -122,7 +122,7 @@
                             </div>
                             <div class="flex justify-between text-xs text-slate-500">
                                 <span>{{ arabic_number($identity->photos_count) }} صور • {{ arabic_number($identity->attempts_count) }} محاولات</span>
-                                <span>{{ $identity->created_at->format('d/m/Y') }}</span>
+                                <span>{{ app_datetime($identity->created_at, 'd/m/Y') }}</span>
                             </div>
                         </a>
                     @endforeach

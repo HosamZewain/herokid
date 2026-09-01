@@ -13,6 +13,7 @@ use App\Services\Notifications\NotificationSettings;
 use App\Services\Notifications\OrderCreatedNotificationMessage;
 use App\Services\Notifications\TelegramNotificationChannel;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
@@ -163,7 +164,7 @@ class NotificationCenterController extends Controller
                 '✅ اختبار تنبيه HeroKid',
                 '',
                 'تم إرسال هذه الرسالة من مركز التنبيهات.',
-                'التاريخ: '.now()->format('Y-m-d H:i'),
+                'التاريخ: '.AppDateTime::format(now(), 'Y-m-d H:i'),
             ])
         ));
 

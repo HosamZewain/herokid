@@ -60,7 +60,7 @@
                                     <p class="font-black text-gray-900">{{ $permissionKeys->count() }} صلاحية</p>
                                     <p class="mt-1 max-w-xs truncate text-xs text-gray-400" dir="ltr">{{ $permissionKeys->take(5)->implode(', ') }}{{ $permissionKeys->count() > 5 ? '...' : '' }}</p>
                                 </td>
-                                <td class="px-6 py-4 text-xs text-gray-400">{{ $admin->created_at->format('Y/m/d') }}</td>
+                                <td class="px-6 py-4 text-xs text-gray-400">{{ app_datetime($admin->created_at, 'Y/m/d') }}</td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center justify-center gap-3">
                                         @if($admin->id === auth()->id() || auth()->user()->hasAnyPermission(['admin_users.update', 'admin_users.permissions.manage']))

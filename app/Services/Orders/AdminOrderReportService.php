@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Support\AppDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
@@ -150,7 +151,7 @@ class AdminOrderReportService
     private function dailyBreakdown(Collection $rows): Collection
     {
         return $rows
-            ->groupBy(fn (array $row): string => $row['created_at']?->timezone((string) config('app.timezone', 'Africa/Cairo'))->format('Y-m-d') ?? 'غير محدد')
+            ->groupBy(fn (array $row): string => AppDateTime::format($row['created_at'], 'Y-m-d', 'غير محدد'))
             ->map(fn (Collection $group, string $date): array => [
                 'label' => $date,
                 'count' => $group->count(),

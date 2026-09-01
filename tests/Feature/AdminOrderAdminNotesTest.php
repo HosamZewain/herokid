@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\OrderAdminNoteService;
+use App\Support\AppDateTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use LogicException;
@@ -48,7 +49,7 @@ class AdminOrderAdminNotesTest extends TestCase
                 ->assertSee('مسؤول هيروكد')
                 ->assertSee('تم التواصل مع العميل.')
                 ->assertSee('طلب تعديل الاسم على الغلاف.')
-                ->assertSee($note->created_at->format('d/m/Y h:i A'));
+                ->assertSee(AppDateTime::format($note->created_at, 'd/m/Y h:i A'));
         }
 
         $this->assertDatabaseHas('admin_activity_logs', [

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
+use App\Support\AppDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
@@ -98,7 +99,7 @@ class SalesReportService
                 return [
                     'key' => $this->checkoutKey($first),
                     'created_at' => $first->created_at,
-                    'date' => $first->created_at?->timezone((string) config('app.timezone', 'Africa/Cairo'))->format('Y-m-d H:i'),
+                    'date' => AppDateTime::format($first->created_at, 'Y-m-d H:i'),
                     'order_ids' => $orders->pluck('id')->values()->all(),
                     'order_numbers' => $orders->pluck('order_number')->values()->all(),
                     'first_order_id' => $first->id,
@@ -365,8 +366,8 @@ class SalesReportService
     {
         $groupBy = $filters->resolvedGroupBy();
         $periods = [];
-        $cursor = $filters->start()->startOfDay();
-        $end = $filters->end()->startOfDay();
+        $cursor = $filters->localStart();
+        $end = $filters->localEnd()->startOfDay();
 
         while ($cursor->lte($end)) {
             $key = $this->periodKey($cursor, $groupBy);

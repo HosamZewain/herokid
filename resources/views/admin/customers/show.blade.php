@@ -19,8 +19,8 @@
     </x-slot>
 
     @php
-        $lastVisit = $customer['last_visit_at'] ? \Carbon\Carbon::parse($customer['last_visit_at'])->format('Y-m-d H:i') : 'Not available';
-        $lastOrder = $customer['last_order_at'] ? \Carbon\Carbon::parse($customer['last_order_at'])->format('Y-m-d H:i') : 'Not available';
+        $lastVisit = app_datetime($customer['last_visit_at'], 'Y-m-d H:i', 'Not available');
+        $lastOrder = app_datetime($customer['last_order_at'], 'Y-m-d H:i', 'Not available');
     @endphp
 
     <div class="space-y-6">
@@ -112,7 +112,7 @@
                                     @endif
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dir-ltr">
-                                    {{ $view->viewed_at?->format('Y-m-d H:i') ?? 'Not available' }}
+                                    {{ app_datetime($view->viewed_at, 'Y-m-d H:i', 'Not available') }}
                                 </td>
                                 <td class="px-5 py-4 text-xs text-gray-400 dir-ltr text-left">
                                     {{ $view->session_id ?: 'Not available' }}
@@ -175,7 +175,7 @@
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600 dir-ltr">
-                                    {{ $order->created_at?->format('Y-m-d H:i') }}
+                                    {{ app_datetime($order->created_at, 'Y-m-d H:i') }}
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-left">
                                     <a href="{{ route('admin.orders.show', $order) }}"

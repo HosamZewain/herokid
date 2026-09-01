@@ -190,7 +190,7 @@ class ProductPersonalizationSchema
                 $messages[$input.'.*.distinct'] = 'لا يمكن استخدام الصورة نفسها أكثر من مرة.';
             } elseif ($field['type'] === 'age') {
                 $messages[$input.'.integer'] = 'يرجى اختيار عمر صحيح للطفل.';
-                $messages[$input.'.in'] = 'يرجى اختيار عمر الطفل من ٣ إلى ١٢ سنة.';
+                $messages[$input.'.in'] = 'يرجى اختيار عمر الطفل من ٢ إلى ١٦ سنة.';
             } elseif ($field['type'] === 'gender') {
                 $messages[$input.'.in'] = 'يرجى اختيار جنس صحيح للطفل.';
             }

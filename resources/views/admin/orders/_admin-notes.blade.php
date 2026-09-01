@@ -42,7 +42,7 @@
         @forelse($notes as $note)
             <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-2 text-xs">
-                    <time datetime="{{ $note->created_at->toIso8601String() }}" class="font-bold text-gray-500" dir="ltr">{{ $note->created_at->format('d/m/Y h:i A') }}</time>
+                    <time datetime="{{ $note->created_at->toIso8601String() }}" class="font-bold text-gray-500" dir="ltr">{{ app_datetime($note->created_at) }}</time>
                     <p class="font-black text-gray-900">{{ $note->author_name }}</p>
                 </div>
                 <p class="mt-3 whitespace-pre-wrap break-words text-sm font-bold leading-7 text-gray-800">{{ $note->body }}</p>

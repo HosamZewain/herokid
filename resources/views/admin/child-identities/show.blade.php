@@ -40,11 +40,11 @@
                         <div><dt class="font-bold text-slate-500">الفئة العمرية المحفوظة</dt><dd class="mt-1">{{ $identity->age_range }}</dd></div>
                         <div><dt class="font-bold text-slate-500">التصنيف والقصة</dt><dd class="mt-1">{{ $identity->selectedCategory?->name ?: '—' }} / {{ $identity->selectedStory?->title ?: '—' }}</dd></div>
                         <div><dt class="font-bold text-slate-500">الطلب المرتبط</dt><dd class="mt-1">{{ $identity->convertedOrder?->order_number ?: 'لم يتحول' }}{{ $identity->convertedOrder ? ' • '.$identity->convertedOrder->status : '' }}</dd></div>
-                        <div><dt class="font-bold text-slate-500">موافقة المعالجة</dt><dd class="mt-1">{{ $identity->consent_version }} • {{ $identity->consent_accepted_at?->format('d/m/Y H:i') }}</dd></div>
-                        <div><dt class="font-bold text-slate-500">موافقة التسويق</dt><dd class="mt-1">{{ $identity->marketing_consent_at?->format('d/m/Y H:i') ?: 'لم يوافق' }}</dd></div>
+                        <div><dt class="font-bold text-slate-500">موافقة المعالجة</dt><dd class="mt-1">{{ $identity->consent_version }} • {{ app_datetime($identity->consent_accepted_at, 'd/m/Y H:i') }}</dd></div>
+                        <div><dt class="font-bold text-slate-500">موافقة التسويق</dt><dd class="mt-1">{{ app_datetime($identity->marketing_consent_at, 'd/m/Y H:i', '') ?: 'لم يوافق' }}</dd></div>
                         <div><dt class="font-bold text-slate-500">UTM</dt><dd class="mt-1 break-words">{{ collect([$identity->utm_source, $identity->utm_medium, $identity->utm_campaign, $identity->utm_content, $identity->utm_term])->filter()->implode(' / ') ?: '—' }}</dd></div>
                         <div><dt class="font-bold text-slate-500">صفحة الإحالة</dt><dd class="mt-1 break-all text-xs" dir="ltr">{{ $identity->referrer ?: '—' }}</dd></div>
-                        <div><dt class="font-bold text-slate-500">آخر نشاط</dt><dd class="mt-1">{{ $identity->last_activity_at?->format('d/m/Y H:i') ?: '—' }}</dd></div>
+                        <div><dt class="font-bold text-slate-500">آخر نشاط</dt><dd class="mt-1">{{ app_datetime($identity->last_activity_at, 'd/m/Y H:i', '') ?: '—' }}</dd></div>
                     </dl>
                 </section>
 
@@ -172,8 +172,8 @@
                                     <div><dt class="text-slate-400">صور الإدخال</dt><dd class="font-bold">{{ arabic_number($attempt->input_photos_count) }}</dd></div>
                                     <div><dt class="text-slate-400">API request ID</dt><dd class="break-all font-mono text-xs">{{ $attempt->api_request_id ?: '—' }}</dd></div>
                                     <div><dt class="text-slate-400">المدة</dt><dd class="font-bold">{{ $attempt->duration_ms !== null ? number_format($attempt->duration_ms).' ms' : '—' }}</dd></div>
-                                    <div><dt class="text-slate-400">بدأت</dt><dd class="font-bold">{{ $attempt->started_at?->format('d/m/Y H:i:s') ?: '—' }}</dd></div>
-                                    <div><dt class="text-slate-400">اكتملت</dt><dd class="font-bold">{{ $attempt->completed_at?->format('d/m/Y H:i:s') ?: '—' }}</dd></div>
+                                    <div><dt class="text-slate-400">بدأت</dt><dd class="font-bold">{{ app_datetime($attempt->started_at, 'd/m/Y H:i:s', '') ?: '—' }}</dd></div>
+                                    <div><dt class="text-slate-400">اكتملت</dt><dd class="font-bold">{{ app_datetime($attempt->completed_at, 'd/m/Y H:i:s', '') ?: '—' }}</dd></div>
                                     @can('child_identities.view_costs')
                                         <div><dt class="text-slate-400">التكلفة USD</dt><dd class="font-bold">{{ $attempt->cost_usd !== null ? '$'.number_format((float) $attempt->cost_usd, 6) : 'غير معروفة' }}</dd></div>
                                         <div><dt class="text-slate-400">الفوترة / الحساب</dt><dd class="font-bold">{{ $attempt->billing_status }} / {{ $attempt->cost_calculation_method }}</dd></div>
@@ -234,7 +234,7 @@
                             <span class="absolute -right-[1.63rem] top-1 h-3 w-3 rounded-full bg-indigo-500 ring-4 ring-white"></span>
                             <div class="flex flex-wrap items-center gap-2">
                                 <p class="font-black text-slate-800">{{ $event->event_type }}</p>
-                                <span class="text-xs text-slate-400">{{ $event->created_at->format('d/m/Y H:i:s') }} • {{ $event->actor_type }} / {{ $event->source }}</span>
+                                <span class="text-xs text-slate-400">{{ app_datetime($event->created_at, 'd/m/Y H:i:s') }} • {{ $event->actor_type }} / {{ $event->source }}</span>
                             </div>
                             @if($event->description)<p class="mt-1 text-sm text-slate-600">{{ $event->description }}</p>@endif
                             @if($event->from_status || $event->to_status)<p class="mt-1 text-xs text-slate-400">{{ $event->from_status }} ← {{ $event->to_status }}</p>@endif

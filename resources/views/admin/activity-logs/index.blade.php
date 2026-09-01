@@ -63,8 +63,8 @@
                     @forelse($logs as $log)
                         <tr class="hover:bg-gray-50">
                             <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
-                                <div class="font-bold text-gray-900">{{ $log->created_at->format('Y-m-d') }}</div>
-                                <div class="text-xs text-gray-400">{{ $log->created_at->format('H:i:s') }}</div>
+                                <div class="font-bold text-gray-900">{{ app_datetime($log->created_at, 'Y-m-d') }}</div>
+                                <div class="text-xs text-gray-400">{{ app_datetime($log->created_at, 'H:i:s') }}</div>
                             </td>
                             <td class="px-5 py-4 text-sm">
                                 <div class="font-bold text-gray-900">{{ $log->user?->name ?? 'غير معروف' }}</div>

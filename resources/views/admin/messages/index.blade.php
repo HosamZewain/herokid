@@ -31,7 +31,7 @@
                             <div class="text-sm text-gray-900">{{ Str::limit($msg->subject, 50) }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ $msg->created_at->format('Y/m/d H:i') }}
+                            {{ app_datetime($msg->created_at, 'Y/m/d H:i') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if($msg->is_read)

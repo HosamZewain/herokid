@@ -198,7 +198,30 @@
                                     </td>
                                     <td class="px-4 py-4">{{ $transaction->createdBy?->name ?? '—' }}</td>
                                     <td class="px-4 py-4"><span class="font-black {{ $transaction->status === 'posted' ? 'text-emerald-700' : 'text-gray-500' }}">{{ $statusLabels[$transaction->status] }}</span></td>
-                                    <td class="px-4 py-4"><a href="{{ route('admin.expenses.show', $transaction) }}" class="font-black text-indigo-600">عرض</a></td>
+                                    <td class="px-4 py-4">
+                                        <div class="flex min-w-32 flex-wrap items-center gap-2">
+                                            <a href="{{ route('admin.expenses.show', $transaction) }}" class="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700">عرض</a>
+                                            @if($transaction->status === 'posted')
+                                                @can('expenses.edit')
+                                                    <a href="{{ route('admin.expenses.edit', $transaction) }}" class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">تعديل</a>
+                                                @endcan
+                                                @can('expenses.void')
+                                                    <details class="w-full rounded-xl border border-rose-100 bg-rose-50 p-2">
+                                                        <summary class="cursor-pointer text-xs font-black text-rose-700">حذف عملية مسجلة بالخطأ</summary>
+                                                        <form method="POST" action="{{ route('admin.expenses.void', $transaction) }}" class="mt-3 space-y-2">
+                                                            @csrf
+                                                            <label class="block">
+                                                                <span class="mb-1 block text-xs font-bold text-rose-900">سبب الحذف *</span>
+                                                                <textarea name="void_reason" required minlength="5" rows="2" class="w-full rounded-lg border-rose-200 text-xs" placeholder="مثال: تم تسجيل المصروف مرتين"></textarea>
+                                                            </label>
+                                                            <p class="text-[11px] leading-5 text-rose-700">سيُستبعد المبلغ من الرصيد مع الاحتفاظ بسجل التدقيق.</p>
+                                                            <button onclick="return confirm('هل أنت متأكد من حذف أثر هذه العملية من الرصيد؟')" class="w-full rounded-lg bg-rose-600 px-3 py-2 text-xs font-black text-white">تأكيد الحذف</button>
+                                                        </form>
+                                                    </details>
+                                                @endcan
+                                            @endif
+                                        </div>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -218,8 +241,31 @@
                             <p class="text-sm text-gray-600">{{ $transaction->description ?: 'بدون وصف' }}</p>
                             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
                                 <span>{{ $transaction->transaction_date->format('Y-m-d') }} · {{ $transaction->vendor_name ?: 'بدون جهة' }}</span>
-                                <a href="{{ route('admin.expenses.show', $transaction) }}" class="rounded-lg bg-indigo-50 px-3 py-2 font-black text-indigo-700">التفاصيل</a>
+                                <div class="flex flex-wrap gap-2">
+                                    <a href="{{ route('admin.expenses.show', $transaction) }}" class="rounded-lg bg-indigo-50 px-3 py-2 font-black text-indigo-700">التفاصيل</a>
+                                    @if($transaction->status === 'posted')
+                                        @can('expenses.edit')
+                                            <a href="{{ route('admin.expenses.edit', $transaction) }}" class="rounded-lg bg-amber-50 px-3 py-2 font-black text-amber-700">تعديل</a>
+                                        @endcan
+                                    @endif
+                                </div>
                             </div>
+                            @if($transaction->status === 'posted')
+                                @can('expenses.void')
+                                    <details class="rounded-xl border border-rose-100 bg-rose-50 p-3">
+                                        <summary class="cursor-pointer text-xs font-black text-rose-700">حذف عملية مسجلة بالخطأ</summary>
+                                        <form method="POST" action="{{ route('admin.expenses.void', $transaction) }}" class="mt-3 space-y-2">
+                                            @csrf
+                                            <label class="block">
+                                                <span class="mb-1 block text-xs font-bold text-rose-900">سبب الحذف *</span>
+                                                <textarea name="void_reason" required minlength="5" rows="2" class="w-full rounded-lg border-rose-200 text-sm" placeholder="مثال: تم تسجيل المصروف مرتين"></textarea>
+                                            </label>
+                                            <p class="text-xs leading-5 text-rose-700">سيُستبعد المبلغ من الرصيد مع الاحتفاظ بسجل التدقيق.</p>
+                                            <button onclick="return confirm('هل أنت متأكد من حذف أثر هذه العملية من الرصيد؟')" class="w-full rounded-lg bg-rose-600 px-3 py-2 text-xs font-black text-white">تأكيد الحذف</button>
+                                        </form>
+                                    </details>
+                                @endcan
+                            @endif
                         </article>
                     @endforeach
                 </div>

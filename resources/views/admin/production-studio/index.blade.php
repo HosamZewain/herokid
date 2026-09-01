@@ -89,8 +89,8 @@
                                     <td class="px-4 py-3"><span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{{ $project->statusLabel() }}</span></td>
                                     <td class="px-4 py-3">{{ $project->stageLabel() }}</td>
                                     <td class="px-4 py-3">{{ $project->assignedTo?->name ?? 'غير معين' }}</td>
-                                    <td class="px-4 py-3 text-gray-500">{{ $project->created_at?->format('Y-m-d') }}</td>
-                                    <td class="px-4 py-3 text-gray-500">{{ $project->updated_at?->diffForHumans() }}</td>
+                                    <td class="px-4 py-3 text-gray-500">{{ app_datetime($project->created_at, 'Y-m-d') }}</td>
+                                    <td class="px-4 py-3 text-gray-500">{{ app_datetime_human($project->updated_at) }}</td>
                                     <td class="px-4 py-3">
                                         <a href="{{ route('admin.production-studio.show', $project) }}" class="font-black text-indigo-600 hover:underline">فتح</a>
                                     </td>

@@ -4,7 +4,7 @@
             <a href="{{ route('admin.activity-logs.index') }}" class="text-gray-400 hover:text-gray-600">← رجوع</a>
             <div>
                 <h2 class="text-xl font-bold text-gray-800">تفاصيل سجل النشاط #{{ $activityLog->id }}</h2>
-                <p class="text-xs text-gray-500 mt-1">{{ $activityLog->created_at->format('Y-m-d H:i:s') }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ app_datetime($activityLog->created_at, 'Y-m-d H:i:s') }}</p>
             </div>
         </div>
     </x-slot>

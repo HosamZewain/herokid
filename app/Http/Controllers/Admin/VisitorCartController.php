@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Story;
 use App\Models\VisitorCart;
+use App\Support\AppDateTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -63,8 +64,8 @@ class VisitorCartController extends Controller
             ->when($request->filled('story_id'), function (Builder $builder) use ($request): void {
                 $builder->whereHas('items', fn (Builder $items) => $items->where('story_id', $request->integer('story_id')));
             })
-            ->when($request->filled('date_from'), fn (Builder $builder) => $builder->whereDate('first_added_at', '>=', $request->date('date_from')))
-            ->when($request->filled('date_to'), fn (Builder $builder) => $builder->whereDate('first_added_at', '<=', $request->date('date_to')))
+            ->when($request->filled('date_from'), fn (Builder $builder) => $builder->where('first_added_at', '>=', AppDateTime::utcStartOfDay((string) $request->input('date_from'))))
+            ->when($request->filled('date_to'), fn (Builder $builder) => $builder->where('first_added_at', '<=', AppDateTime::utcEndOfDay((string) $request->input('date_to'))))
             ->when($request->filled('q'), function (Builder $builder) use ($request): void {
                 $term = trim((string) $request->input('q'));
                 $builder->where(function (Builder $nested) use ($term): void {

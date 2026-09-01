@@ -123,7 +123,7 @@ class CartController extends Controller
             'child_name.max' => 'اسم الطفل يجب ألا يزيد عن 255 حرفاً.',
             'child_age.required' => 'يرجى إدخال عمر الطفل.',
             'child_age.integer' => 'يرجى إدخال عمر الطفل كرقم صحيح.',
-            'child_age.in' => 'يرجى اختيار عمر الطفل من ٣ إلى ١٢ سنة.',
+            'child_age.in' => 'يرجى اختيار عمر الطفل من ٢ إلى ١٦ سنة.',
             'child_gender.required' => 'يرجى اختيار جنس الطفل.',
             'child_gender.in' => 'يرجى اختيار جنس صحيح للطفل.',
             'gift_note.max' => 'الإهداء يجب ألا يزيد عن 500 حرف.',

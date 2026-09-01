@@ -28,7 +28,7 @@
             @if($transaction->status === 'voided')
                 <div class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm leading-7 text-gray-700">
                     <p><span class="font-black">سبب الإلغاء:</span> {{ $transaction->void_reason }}</p>
-                    <p><span class="font-black">ألغاه:</span> {{ $transaction->voidedBy?->name ?? 'مستخدم محذوف' }} — {{ $transaction->voided_at?->format('Y-m-d H:i') }}</p>
+                    <p><span class="font-black">ألغاه:</span> {{ $transaction->voidedBy?->name ?? 'مستخدم محذوف' }} — {{ app_datetime($transaction->voided_at, 'Y-m-d H:i') }}</p>
                 </div>
             @endif
 
@@ -69,14 +69,15 @@
                         <a href="{{ route('admin.expenses.edit', $transaction) }}" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white">تعديل العملية</a>
                     @endcan
                     @can('expenses.void')
-                        <button type="button" data-void-toggle class="rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-black text-rose-700">إلغاء أثر العملية</button>
+                        <button type="button" data-void-toggle class="rounded-xl border border-rose-200 bg-rose-50 px-5 py-2.5 text-sm font-black text-rose-700">حذف عملية مسجلة بالخطأ</button>
                     @endcan
                 </div>
                 @can('expenses.void')
                     <form method="POST" action="{{ route('admin.expenses.void', $transaction) }}" data-void-form hidden class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-5">
                         @csrf
-                        <label class="block"><span class="mb-2 block text-sm font-black text-rose-900">سبب الإلغاء *</span><textarea name="void_reason" required minlength="5" rows="3" class="w-full rounded-xl border-rose-200" placeholder="اكتب سببًا واضحًا. ستبقى العملية محفوظة ولن تؤثر في الرصيد."></textarea></label>
-                        <button onclick="return confirm('هل أنت متأكد من إلغاء أثر هذه العملية؟')" class="mt-3 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-black text-white">تأكيد الإلغاء</button>
+                        <p class="mb-3 text-sm leading-7 text-rose-800">الحذف آمن: ستبقى العملية في سجل التدقيق، لكن لن تدخل في إجمالي المصروفات أو الرصيد.</p>
+                        <label class="block"><span class="mb-2 block text-sm font-black text-rose-900">سبب الحذف *</span><textarea name="void_reason" required minlength="5" rows="3" class="w-full rounded-xl border-rose-200" placeholder="مثال: تم تسجيل المصروف مرتين"></textarea></label>
+                        <button onclick="return confirm('هل أنت متأكد من حذف أثر هذه العملية من الرصيد؟')" class="mt-3 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-black text-white">تأكيد الحذف</button>
                     </form>
                 @endcan
             @endif
@@ -88,7 +89,7 @@
                 @foreach($transaction->activityLogs as $log)
                     <div class="border-r-2 border-indigo-200 pr-4">
                         <p class="text-sm font-black text-gray-800">{{ $log->description }}</p>
-                        <p class="mt-1 text-xs text-gray-400">{{ $log->actor?->name ?? 'مستخدم محذوف' }} · {{ $log->created_at?->format('Y-m-d H:i') }}</p>
+                        <p class="mt-1 text-xs text-gray-400">{{ $log->actor?->name ?? 'مستخدم محذوف' }} · {{ app_datetime($log->created_at, 'Y-m-d H:i') }}</p>
                     </div>
                 @endforeach
             </div>

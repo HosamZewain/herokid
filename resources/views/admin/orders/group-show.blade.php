@@ -191,7 +191,7 @@
                                             @foreach($order->previews->take(3) as $preview)
                                                 <a href="{{ route('admin.orders.show', $order) }}" class="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs hover:bg-fuchsia-100">
                                                     <span class="font-black text-gray-800">تصميم #{{ $loop->iteration }}@if($preview->note) — {{ $preview->note }}@endif</span>
-                                                    <span class="shrink-0 text-gray-400" dir="ltr">{{ $preview->created_at->format('d/m/Y') }}</span>
+                                                    <span class="shrink-0 text-gray-400" dir="ltr">{{ app_datetime($preview->created_at, 'd/m/Y') }}</span>
                                                 </a>
                                             @endforeach
                                         </div>

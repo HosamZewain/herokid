@@ -13,6 +13,7 @@ use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityDeletionService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
@@ -61,11 +62,11 @@ class ChildIdentityController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date('date_from'));
+            $query->where('created_at', '>=', AppDateTime::utcStartOfDay((string) $request->input('date_from')));
         }
 
         if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date('date_to'));
+            $query->where('created_at', '<=', AppDateTime::utcEndOfDay((string) $request->input('date_to')));
         }
 
         $identities = $query->latest()->paginate(20)->withQueryString();

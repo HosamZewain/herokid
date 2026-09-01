@@ -4,10 +4,14 @@ namespace App\Support;
 
 final class StoryAgeOptions
 {
+    public const MINIMUM_PERSONALIZATION_AGE = 2;
+
+    public const MAXIMUM_PERSONALIZATION_AGE = 16;
+
     /** @return array<int, int> */
     public static function forPersonalization(): array
     {
-        return range(3, 12);
+        return range(self::MINIMUM_PERSONALIZATION_AGE, self::MAXIMUM_PERSONALIZATION_AGE);
     }
 
     /** @return array<int, int> */

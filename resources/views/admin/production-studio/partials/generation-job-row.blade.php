@@ -19,7 +19,7 @@
                     — v{{ $job->assets->first()->version_number }}
                 @endif
             </p>
-            <p class="mt-1 text-xs text-gray-500">{{ $job->model?->display_name ?? $job->generation_mode }} · {{ $job->created_at?->diffForHumans() }}</p>
+            <p class="mt-1 text-xs text-gray-500">{{ $job->model?->display_name ?? $job->generation_mode }} · {{ app_datetime_human($job->created_at) }}</p>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2">
             @include('admin.production-studio.partials.status-badge', ['label' => $job->status, 'tone' => $statusTone])

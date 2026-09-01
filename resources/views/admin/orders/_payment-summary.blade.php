@@ -42,7 +42,7 @@
     $summaryImageData = [
         'reference' => $checkoutGroup['key'],
         'order_numbers' => implode(' • ', $checkoutGroup['order_numbers']),
-        'date' => optional($checkoutGroup['created_at'])->format('d/m/Y h:i A'),
+        'date' => app_datetime($checkoutGroup['created_at']),
         'customer' => $checkoutGroup['customer_name'],
         'phone' => $checkoutGroup['phone'] ?: '—',
         'location' => $location ?: '—',
@@ -130,7 +130,7 @@
 
             <div class="flex flex-col gap-1 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <span dir="ltr">{{ $checkoutGroup['key'] }}</span>
-                <span>{{ optional($checkoutGroup['created_at'])->format('d/m/Y — h:i A') }}</span>
+                <span>{{ app_datetime($checkoutGroup['created_at'], 'd/m/Y — h:i A') }}</span>
             </div>
         </div>
 

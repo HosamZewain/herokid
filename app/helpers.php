@@ -3,7 +3,23 @@
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Setting;
+use App\Support\AppDateTime;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
+
+if (! function_exists('app_datetime')) {
+    function app_datetime(CarbonInterface|DateTimeInterface|string|null $date, string $format = 'd/m/Y h:i A', string $fallback = '—'): string
+    {
+        return AppDateTime::format($date, $format, $fallback);
+    }
+}
+
+if (! function_exists('app_datetime_human')) {
+    function app_datetime_human(CarbonInterface|DateTimeInterface|string|null $date, string $fallback = '—'): string
+    {
+        return AppDateTime::human($date, $fallback);
+    }
+}
 
 if (! function_exists('setting')) {
     function setting(string $key, mixed $default = null): mixed

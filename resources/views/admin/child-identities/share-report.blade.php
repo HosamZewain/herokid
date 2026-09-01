@@ -60,7 +60,7 @@
                                 @forelse($report['top_shares'] as $share)
                                     <tr class="border-t">
                                         <td class="p-2"><a class="font-black text-indigo-700" href="{{ route('admin.child-identities.show', $share->child_identity_request_id) }}">#{{ $share->id }}</a></td>
-                                        <td class="p-2">{{ $share->created_at->format('d/m/Y') }}</td>
+                                        <td class="p-2">{{ app_datetime($share->created_at, 'd/m/Y') }}</td>
                                         <td class="p-2">{{ arabic_number($share->total_views) }}</td>
                                         <td class="p-2">{{ arabic_number($share->total_cta_clicks) }}</td>
                                         <td class="p-2">{{ arabic_number($share->referred_identities_count) }}</td>

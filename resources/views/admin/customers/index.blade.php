@@ -48,7 +48,7 @@
                         @forelse($customers as $customer)
                             @php
                                 $lastActivity = $customer['last_activity_at']
-                                    ? \Carbon\Carbon::parse($customer['last_activity_at'])->format('Y-m-d H:i')
+                                    ? app_datetime($customer['last_activity_at'], 'Y-m-d H:i')
                                     : 'Not available';
                             @endphp
                             <tr class="hover:bg-gray-50">

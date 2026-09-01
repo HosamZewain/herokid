@@ -86,8 +86,8 @@
                                 <p class="font-black text-indigo-700">{{ $money($item->total) }}</p>
                             </div>
                             <div class="mt-3 grid gap-2 text-xs text-gray-500 md:grid-cols-3">
-                                <div>أول إضافة: {{ $item->first_added_at?->format('Y-m-d H:i') ?? '-' }}</div>
-                                <div>آخر نشاط: {{ $item->last_activity_at?->format('Y-m-d H:i') ?? '-' }}</div>
+                                <div>أول إضافة: {{ app_datetime($item->first_added_at, 'Y-m-d H:i', '-') ?? '-' }}</div>
+                                <div>آخر نشاط: {{ app_datetime($item->last_activity_at, 'Y-m-d H:i', '-') ?? '-' }}</div>
                                 <div>مرتبط بسلة: {{ $item->linked_cart_item_key ?: '-' }}</div>
                             </div>
                         </div>
@@ -110,10 +110,10 @@
                 <section class="rounded-3xl border border-gray-100 bg-white p-6 text-right shadow-sm">
                     <h3 class="text-lg font-black text-gray-900">التوقيت</h3>
                     <dl class="mt-4 space-y-3 text-sm">
-                        <div class="flex justify-between gap-3"><dt class="text-gray-400">أول إضافة</dt><dd class="font-bold text-gray-900">{{ $cart->first_added_at?->format('Y-m-d H:i') ?? '-' }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-gray-400">آخر نشاط</dt><dd class="font-bold text-gray-900">{{ $cart->last_activity_at?->format('Y-m-d H:i') ?? '-' }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-gray-400">بدأ checkout</dt><dd class="font-bold text-gray-900">{{ $cart->checkout_started_at?->format('Y-m-d H:i') ?? '-' }}</dd></div>
-                        <div class="flex justify-between gap-3"><dt class="text-gray-400">تحول لطلب</dt><dd class="font-bold text-gray-900">{{ $cart->converted_at?->format('Y-m-d H:i') ?? '-' }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-gray-400">أول إضافة</dt><dd class="font-bold text-gray-900">{{ app_datetime($cart->first_added_at, 'Y-m-d H:i', '-') ?? '-' }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-gray-400">آخر نشاط</dt><dd class="font-bold text-gray-900">{{ app_datetime($cart->last_activity_at, 'Y-m-d H:i', '-') ?? '-' }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-gray-400">بدأ checkout</dt><dd class="font-bold text-gray-900">{{ app_datetime($cart->checkout_started_at, 'Y-m-d H:i', '-') ?? '-' }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-gray-400">تحول لطلب</dt><dd class="font-bold text-gray-900">{{ app_datetime($cart->converted_at, 'Y-m-d H:i', '-') ?? '-' }}</dd></div>
                     </dl>
                 </section>
             </aside>
@@ -128,7 +128,7 @@
                         <div class="flex-1">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <p class="font-black text-gray-900">{{ $activityLabels[$activity->type] ?? $activity->type }}</p>
-                                <p class="text-xs font-bold text-gray-400">{{ $activity->created_at?->format('Y-m-d H:i') }}</p>
+                                <p class="text-xs font-bold text-gray-400">{{ app_datetime($activity->created_at, 'Y-m-d H:i') }}</p>
                             </div>
                             <p class="mt-1 text-sm text-gray-600">{{ $activity->description }}</p>
                             @if($activity->item)

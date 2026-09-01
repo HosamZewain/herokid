@@ -328,12 +328,12 @@
 
                                     {{-- Created at --}}
                                     <td class="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                                        {{ $story->created_at->format('Y/m/d') }}
+                                        {{ app_datetime($story->created_at, 'Y/m/d') }}
                                     </td>
 
                                     {{-- Updated at --}}
                                     <td class="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">
-                                        {{ $story->updated_at->diffForHumans() }}
+                                        {{ app_datetime_human($story->updated_at) }}
                                     </td>
 
                                     {{-- Actions --}}

@@ -662,7 +662,7 @@
                                     @foreach($order->childIdentityPromptSnapshots as $snapshot)
                                         <details class="rounded-lg bg-white p-3">
                                             <summary class="cursor-pointer text-sm font-bold text-slate-700">
-                                                {{ $snapshot->created_at->format('Y-m-d H:i') }} — v{{ $snapshot->prompt_version }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
+                                                {{ app_datetime($snapshot->created_at, 'Y-m-d H:i') }} — v{{ $snapshot->prompt_version }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
                                                 @if($snapshot->creator)
                                                     — {{ $snapshot->creator->name }}
                                                 @endif
@@ -701,7 +701,7 @@
                             </div>
                         </div>
                         @if($productionPromptTemplateSetting)
-                            <p class="mb-3 text-right text-xs text-gray-400">آخر تحديث للقالب العام: {{ $productionPromptTemplateSetting->updated_at?->format('Y-m-d H:i') }}</p>
+                            <p class="mb-3 text-right text-xs text-gray-400">آخر تحديث للقالب العام: {{ app_datetime($productionPromptTemplateSetting->updated_at, 'Y-m-d H:i') }}</p>
                         @endif
                         <textarea
                             id="story-production-prompt"
@@ -754,7 +754,7 @@
                                     @foreach($order->productionPromptSnapshots as $snapshot)
                                         <details class="rounded-lg bg-white p-3">
                                             <summary class="cursor-pointer text-sm font-bold text-slate-700">
-                                                {{ $snapshot->created_at->format('Y-m-d H:i') }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
+                                                {{ app_datetime($snapshot->created_at, 'Y-m-d H:i') }} — {{ $snapshot->snapshot_reason ?? 'manual' }}
                                                 @if($snapshot->creator)
                                                     — {{ $snapshot->creator->name }}
                                                 @endif
@@ -784,7 +784,7 @@
                                 $logTypeLabel = ['order' => 'الطلب', 'printing' => 'الطباعة', 'shipping' => 'الشحن'][$logType] ?? 'الطلب';
                             @endphp
                             <div class="flex items-start gap-3 text-right">
-                                <div class="text-xs text-gray-400 flex-shrink-0 mt-1 w-24 text-left">{{ $log->created_at->format('d/m/Y') }}</div>
+                                <div class="text-xs text-gray-400 flex-shrink-0 mt-1 w-24 text-left">{{ app_datetime($log->created_at, 'd/m/Y') }}</div>
                                 <div class="flex-grow">
                                     <span class="text-sm font-bold text-gray-800">{{ $logLabel }}</span>
                                     <span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-500">{{ $logTypeLabel }}</span>
@@ -807,7 +807,7 @@
                             @foreach($order->previews as $preview)
                             <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 text-right">
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-400">{{ $preview->created_at->format('d/m/Y H:i') }}</span>
+                                    <span class="text-xs text-gray-400">{{ app_datetime($preview->created_at, 'd/m/Y H:i') }}</span>
                                     @if($order->story_id && !$order->bookletPreview && strtolower(pathinfo($preview->file_path, PATHINFO_EXTENSION)) === 'pdf')
                                         @can('orders.preview.upload')
                                             @can('booklet_previews.create')
@@ -882,7 +882,7 @@
                                     <div class="mt-3 space-y-2">
                                         @foreach($bookletPreview->versions as $version)
                                             <div class="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-[11px] font-bold text-slate-600">
-                                                <span>{{ $version->created_at->format('d/m/Y H:i') }}</span>
+                                                <span>{{ app_datetime($version->created_at, 'd/m/Y H:i') }}</span>
                                                 <span>الإصدار {{ $version->version_number }} · {{ $version->page_count }} صفحة @if($bookletPreview->current_version_id === $version->id)· الحالي@endif</span>
                                             </div>
                                         @endforeach

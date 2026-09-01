@@ -22,7 +22,7 @@
                             </p>
                             @if($setting)
                                 <p class="mt-2 text-xs text-gray-400">
-                                    آخر تحديث: {{ $setting->updated_at?->format('Y-m-d H:i') }}
+                                    آخر تحديث: {{ app_datetime($setting->updated_at, 'Y-m-d H:i') }}
                                     @if($setting->editor)
                                         بواسطة {{ $setting->editor->name }}
                                     @endif

@@ -295,7 +295,7 @@ class CartCheckoutTest extends TestCase
             ->assertSee('data-story-requirements', false);
     }
 
-    public function test_story_cart_requires_two_to_three_photos_and_accepts_ages_three_to_twelve_for_all_stories(): void
+    public function test_story_cart_requires_two_to_three_photos_and_accepts_ages_two_to_sixteen_for_all_stories(): void
     {
         Storage::fake('local');
         $story = $this->story('policy-story', 'قصة الفئة العمرية', 100);
@@ -309,9 +309,16 @@ class CartCheckoutTest extends TestCase
 
         $this->from(route('stories.show', $story->slug))
             ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
-                'child_age' => 2,
+                'child_age' => 1,
             ]))
             ->assertSessionHasErrors('child_age');
+
+        $this->from(route('stories.show', $story->slug))
+            ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
+                'child_age' => 2,
+            ]))
+            ->assertRedirect(route('cart.index'))
+            ->assertSessionDoesntHaveErrors();
 
         $this->from(route('stories.show', $story->slug))
             ->post(route('cart.store', $story->slug), array_merge($this->cartPayload('رينا', 'الرسم'), [
@@ -322,11 +329,12 @@ class CartCheckoutTest extends TestCase
 
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
+            ->assertSee('<option value="2"', false)
             ->assertSee('<option value="3"', false)
             ->assertSee('<option value="9"', false)
-            ->assertSee('<option value="12"', false)
-            ->assertDontSee('<option value="2"', false)
-            ->assertDontSee('<option value="13"', false);
+            ->assertSee('<option value="16"', false)
+            ->assertDontSee('<option value="1"', false)
+            ->assertDontSee('<option value="17"', false);
     }
 
     public function test_story_page_renders_wildcard_photo_validation_errors(): void

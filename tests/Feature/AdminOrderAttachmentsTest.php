@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderAttachment;
 use App\Models\User;
 use App\Services\Orders\OrderAttachmentService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -108,6 +109,20 @@ class AdminOrderAttachmentsTest extends TestCase
             ->assertSessionHasErrors('attachments.0');
 
         $this->assertDatabaseCount('order_attachments', 0);
+    }
+
+    public function test_attachment_expiry_is_displayed_in_cairo_time(): void
+    {
+        Storage::fake('local');
+        config(['display.timezone' => 'Africa/Cairo']);
+        $order = $this->productOrder();
+        $this->attachment($order, CarbonImmutable::parse('2026-08-31 12:00:00', 'UTC'));
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('31/08/2026 03:00 PM')
+            ->assertDontSee('31/08/2026 12:00 PM');
     }
 
     public function test_attachment_size_limit_is_fifty_megabytes_per_file(): void

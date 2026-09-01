@@ -43,7 +43,7 @@
                         @forelse($proofs as $proof)
                             <tr>
                                 <td class="px-4 py-3 font-bold" dir="ltr">{{ $proof->checkout_group_key }}</td>
-                                <td class="px-4 py-3">{{ $proof->created_at?->format('d/m/Y H:i') }}</td>
+                                <td class="px-4 py-3">{{ app_datetime($proof->created_at, 'd/m/Y H:i') }}</td>
                                 <td class="px-4 py-3">{{ ['pending' => 'قيد المراجعة', 'approved' => 'معتمد', 'rejected' => 'مرفوض'][$proof->status] ?? $proof->status }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-2">

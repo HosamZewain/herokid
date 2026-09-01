@@ -2,6 +2,7 @@
 
 namespace App\Services\Sales;
 
+use App\Support\AppDateTime;
 use App\Support\OrderStatusRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -31,7 +32,7 @@ class SalesReportFilters
 
     public static function fromRequest(Request $request): self
     {
-        $timezone = (string) config('app.timezone', 'Africa/Cairo');
+        $timezone = AppDateTime::timezone();
         $today = CarbonImmutable::now($timezone)->startOfDay();
         $range = in_array($request->query('range'), [
             'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'custom',
@@ -91,18 +92,28 @@ class SalesReportFilters
 
     public function start(): CarbonImmutable
     {
-        return CarbonImmutable::parse($this->startDate, (string) config('app.timezone', 'Africa/Cairo'))->startOfDay();
+        return AppDateTime::utcStartOfDay($this->startDate);
     }
 
     public function end(): CarbonImmutable
     {
-        return CarbonImmutable::parse($this->endDate, (string) config('app.timezone', 'Africa/Cairo'))->endOfDay();
+        return AppDateTime::utcEndOfDay($this->endDate);
+    }
+
+    public function localStart(): CarbonImmutable
+    {
+        return CarbonImmutable::parse($this->startDate, AppDateTime::timezone())->startOfDay();
+    }
+
+    public function localEnd(): CarbonImmutable
+    {
+        return CarbonImmutable::parse($this->endDate, AppDateTime::timezone())->endOfDay();
     }
 
     public function previousPeriod(): self
     {
-        $days = $this->start()->startOfDay()->diffInDays($this->end()->startOfDay()) + 1;
-        $end = $this->start()->subDay()->endOfDay();
+        $days = $this->localStart()->diffInDays($this->localEnd()->startOfDay()) + 1;
+        $end = $this->localStart()->subDay()->endOfDay();
         $start = $end->subDays($days - 1)->startOfDay();
 
         return new self(
@@ -132,7 +143,7 @@ class SalesReportFilters
             return $this->groupBy;
         }
 
-        $days = $this->start()->startOfDay()->diffInDays($this->end()->startOfDay()) + 1;
+        $days = $this->localStart()->diffInDays($this->localEnd()->startOfDay()) + 1;
 
         return match (true) {
             $days <= 45 => 'day',
@@ -180,7 +191,7 @@ class SalesReportFilters
     private static function safeDate(string $value, CarbonImmutable $fallback): CarbonImmutable
     {
         try {
-            return $value === '' ? $fallback : CarbonImmutable::parse($value, (string) config('app.timezone', 'Africa/Cairo'))->startOfDay();
+            return $value === '' ? $fallback : CarbonImmutable::parse($value, AppDateTime::timezone())->startOfDay();
         } catch (\Throwable) {
             return $fallback;
         }

@@ -110,7 +110,7 @@
                     @endif
 
                     <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200/70 pt-3">
-                        <p class="text-[11px] font-bold text-gray-400">يُحذف {{ $attachment->expires_at?->format('d/m/Y h:i A') }}</p>
+                        <p class="text-[11px] font-bold text-gray-400">يُحذف {{ app_datetime($attachment->expires_at) }}</p>
                         <div class="flex flex-wrap gap-2">
                             @unless($expired)
                                 <a href="{{ route('admin.orders.attachments.show', $attachment) }}" target="_blank" rel="noopener" class="rounded-lg bg-white px-3 py-2 text-xs font-black text-sky-700 shadow-sm hover:bg-sky-50">فتح</a>

@@ -4,7 +4,8 @@ namespace App\Services\Analytics;
 
 use App\Models\Order;
 use App\Models\VisitorCart;
-use Illuminate\Support\Carbon;
+use App\Support\AppDateTime;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -12,35 +13,39 @@ class LocalCartAnalyticsRepository
 {
     public function todaySummary(): array
     {
-        $timezone = (string) config('app.timezone', 'Africa/Cairo');
+        $timezone = AppDateTime::timezone();
         $today = now($timezone)->startOfDay();
         $yesterday = now($timezone)->subDay()->startOfDay();
+        $todayStart = $today->copy()->utc();
+        $todayEnd = $today->copy()->endOfDay()->utc();
+        $yesterdayStart = $yesterday->copy()->utc();
+        $yesterdayEnd = $yesterday->copy()->endOfDay()->utc();
 
         return [
             'purchases_today' => $this->metricCard(
                 'مشتريات مكتملة اليوم',
-                $this->completedOrdersBetween($today, $today->copy()->endOfDay()),
-                $this->completedOrdersBetween($yesterday, $yesterday->copy()->endOfDay()),
+                $this->completedOrdersBetween($todayStart, $todayEnd),
+                $this->completedOrdersBetween($yesterdayStart, $yesterdayEnd),
             ),
             'revenue_today' => $this->metricCard(
                 'إيراد اليوم',
-                $this->revenueBetween($today, $today->copy()->endOfDay()),
-                $this->revenueBetween($yesterday, $yesterday->copy()->endOfDay()),
+                $this->revenueBetween($todayStart, $todayEnd),
+                $this->revenueBetween($yesterdayStart, $yesterdayEnd),
             ),
             'conversion_rate_today' => [
                 'label' => 'معدل تحويل السلات اليوم',
                 'value' => AnalyticsMetricNormalizer::ratio(
-                    $this->convertedCartsBetween($today, $today->copy()->endOfDay()),
-                    $this->cartsStartedBetween($today, $today->copy()->endOfDay()),
+                    $this->convertedCartsBetween($todayStart, $todayEnd),
+                    $this->cartsStartedBetween($todayStart, $todayEnd),
                 ),
                 'change' => AnalyticsMetricNormalizer::percentage(
                     AnalyticsMetricNormalizer::ratio(
-                        $this->convertedCartsBetween($today, $today->copy()->endOfDay()),
-                        $this->cartsStartedBetween($today, $today->copy()->endOfDay()),
+                        $this->convertedCartsBetween($todayStart, $todayEnd),
+                        $this->cartsStartedBetween($todayStart, $todayEnd),
                     ),
                     AnalyticsMetricNormalizer::ratio(
-                        $this->convertedCartsBetween($yesterday, $yesterday->copy()->endOfDay()),
-                        $this->cartsStartedBetween($yesterday, $yesterday->copy()->endOfDay()),
+                        $this->convertedCartsBetween($yesterdayStart, $yesterdayEnd),
+                        $this->cartsStartedBetween($yesterdayStart, $yesterdayEnd),
                     ),
                 ),
             ],
@@ -64,8 +69,8 @@ class LocalCartAnalyticsRepository
     public function funnel(AnalyticsDateRange $range): array
     {
         return $this->remember('funnel:'.$range->cacheSuffix(), 900, function () use ($range): array {
-            $start = Carbon::parse($range->startDate, config('app.timezone'))->startOfDay();
-            $end = Carbon::parse($range->endDate, config('app.timezone'))->endOfDay();
+            $start = AppDateTime::utcStartOfDay($range->startDate);
+            $end = AppDateTime::utcEndOfDay($range->endDate);
             $steps = [
                 ['key' => 'cart_created', 'label' => 'سلات تم إنشاؤها', 'value' => $this->cartsStartedBetween($start, $end)],
                 ['key' => 'local_item_added', 'label' => 'عناصر أضيفت للسلة', 'value' => $this->itemsAddedBetween($start, $end)],
@@ -93,8 +98,8 @@ class LocalCartAnalyticsRepository
     public function sourceConversions(AnalyticsDateRange $range): array
     {
         return $this->remember('source-conversions:'.$range->cacheSuffix(), 900, function () use ($range): array {
-            $start = Carbon::parse($range->startDate, config('app.timezone'))->startOfDay();
-            $end = Carbon::parse($range->endDate, config('app.timezone'))->endOfDay();
+            $start = AppDateTime::utcStartOfDay($range->startDate);
+            $end = AppDateTime::utcEndOfDay($range->endDate);
 
             return VisitorCart::query()
                 ->where('status', 'converted')
@@ -118,12 +123,12 @@ class LocalCartAnalyticsRepository
         Cache::forget($registryKey);
     }
 
-    private function completedOrdersBetween(Carbon $start, Carbon $end): int
+    private function completedOrdersBetween(CarbonInterface $start, CarbonInterface $end): int
     {
         return Order::whereBetween('created_at', [$start, $end])->count();
     }
 
-    private function revenueBetween(Carbon $start, Carbon $end): float
+    private function revenueBetween(CarbonInterface $start, CarbonInterface $end): float
     {
         $orders = Order::with('items:id,order_id,total_price_cents')
             ->whereBetween('created_at', [$start, $end])
@@ -140,17 +145,17 @@ class LocalCartAnalyticsRepository
         return round(max(0, $itemsTotal + $deliveryTotal - $discountTotal), 2);
     }
 
-    private function cartsStartedBetween(Carbon $start, Carbon $end): int
+    private function cartsStartedBetween(CarbonInterface $start, CarbonInterface $end): int
     {
         return VisitorCart::whereBetween('first_added_at', [$start, $end])->count();
     }
 
-    private function convertedCartsBetween(Carbon $start, Carbon $end): int
+    private function convertedCartsBetween(CarbonInterface $start, CarbonInterface $end): int
     {
         return VisitorCart::where('status', 'converted')->whereBetween('converted_at', [$start, $end])->count();
     }
 
-    private function itemsAddedBetween(Carbon $start, Carbon $end): int
+    private function itemsAddedBetween(CarbonInterface $start, CarbonInterface $end): int
     {
         return VisitorCart::query()
             ->whereHas('activities', fn ($query) => $query->where('type', 'item_added')->whereBetween('created_at', [$start, $end]))
@@ -159,7 +164,7 @@ class LocalCartAnalyticsRepository
             ->sum('added_count');
     }
 
-    private function checkoutStartedBetween(Carbon $start, Carbon $end): int
+    private function checkoutStartedBetween(CarbonInterface $start, CarbonInterface $end): int
     {
         return VisitorCart::whereBetween('checkout_started_at', [$start, $end])->count();
     }
