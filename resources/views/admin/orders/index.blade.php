@@ -135,6 +135,15 @@
                             <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
                             <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
                             <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>
+                            @if($assignmentUsers->isNotEmpty())
+                                <optgroup label="حسب المستخدم">
+                                    @foreach($assignmentUsers as $assignmentUser)
+                                        <option value="user:{{ $assignmentUser->id }}" @selected(request('assignment') === 'user:'.$assignmentUser->id)>
+                                            {{ $assignmentUser->name }}{{ $assignmentUser->is_active ? '' : ' (غير نشط)' }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
                         </select>
                     </div>
                     <div>

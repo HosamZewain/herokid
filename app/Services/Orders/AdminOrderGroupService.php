@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderPaymentEvent;
+use App\Models\User;
 use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
@@ -98,6 +99,15 @@ class AdminOrderGroupService
             'trash' => $request->query('view') === 'trash',
             'catalogType' => $catalogType,
             'lifecycle' => $lifecycle,
+            'assignmentUsers' => User::query()
+                ->where('role', 'admin')
+                ->where(function (Builder $query): void {
+                    $query
+                        ->where('is_active', true)
+                        ->orWhereHas('assignedOrderGroups');
+                })
+                ->orderBy('name')
+                ->get(['id', 'name', 'is_active']),
         ];
     }
 
@@ -611,6 +621,12 @@ class AdminOrderGroupService
                 ->selectRaw('1')
                 ->from('order_group_assignments')
                 ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
+        } elseif (preg_match('/\Auser:(\d+)\z/', $assignment, $matches) === 1) {
+            $query->whereExists(fn ($assigned) => $assigned
+                ->selectRaw('1')
+                ->from('order_group_assignments')
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key')
+                ->where('order_group_assignments.assigned_to_user_id', (int) $matches[1]));
         }
 
         return $query;

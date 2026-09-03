@@ -98,6 +98,39 @@ class AdminOrderAssignmentTest extends TestCase
         $this->assertSame(['ASSIGN-GROUP'], collect($assignedGroups->items())->pluck('key')->all());
     }
 
+    public function test_assignment_filter_can_select_a_specific_admin_and_filters_statistics(): void
+    {
+        $viewer = User::factory()->create(['role' => 'admin', 'name' => 'المشاهد']);
+        $firstAdmin = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول أول']);
+        $secondAdmin = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول ثان']);
+        [$firstOrder] = $this->group();
+        $secondOrder = $this->order('SECOND-GROUP', 'SECOND-ORDER');
+
+        $this->actingAs($firstAdmin)->post(route('admin.orders.groups.assignment.acquire', $firstOrder));
+        $this->actingAs($secondAdmin)->post(route('admin.orders.groups.assignment.acquire', $secondOrder));
+
+        $response = $this->actingAs($viewer)->get(route('admin.orders.index', [
+            'assignment' => 'user:'.$secondAdmin->id,
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertSee('حسب المستخدم')
+            ->assertSee('مسؤول أول')
+            ->assertSee('مسؤول ثان');
+
+        $groups = $response->viewData('groups');
+        $this->assertSame(['SECOND-GROUP'], collect($groups->items())->pluck('key')->all());
+        $this->assertSame(1, $response->viewData('stats')['checkouts']);
+
+        $csv = $this->actingAs($viewer)->get(route('admin.orders.export', [
+            'assignment' => 'user:'.$secondAdmin->id,
+        ]))->streamedContent();
+
+        $this->assertStringContainsString('SECOND-ORDER', $csv);
+        $this->assertStringNotContainsString('ASSIGN-1', $csv);
+    }
+
     public function test_assignment_routes_require_their_permissions(): void
     {
         $limited = User::factory()->create(['role' => 'admin']);
