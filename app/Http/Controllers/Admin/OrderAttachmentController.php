@@ -5,15 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderAttachment;
+use App\Services\Orders\OrderAttachmentService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class OrderAttachmentController extends Controller
 {
-    private const VALIDITY_DAYS = 30;
-
-    public function store(Request $request, Order $order)
+    public function store(Request $request, Order $order, OrderAttachmentService $attachments)
     {
         $validated = $request->validate([
             'attachments' => ['required', 'array', 'min:1', 'max:10'],
@@ -25,49 +23,19 @@ class OrderAttachmentController extends Controller
             'attachments.*.max' => 'حد حجم الملف الواحد 50 ميجا.',
         ]);
 
-        $created = collect();
-        $validityDays = self::VALIDITY_DAYS;
+        $attachments->upload($order, $request->file('attachments', []), $validated['note'] ?? null, $request->user(), $request);
 
-        foreach ($request->file('attachments', []) as $file) {
-            $path = $file->store("order-attachments/{$order->id}", 'local');
-
-            $created->push($order->attachments()->create([
-                'uploaded_by_user_id' => $request->user()?->id,
-                'disk' => 'local',
-                'path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-                'mime_type' => (string) $file->getMimeType(),
-                'size' => (int) $file->getSize(),
-                'note' => $validated['note'] ?? null,
-                'validity_days' => $validityDays,
-                'expires_at' => now()->addDays($validityDays),
-            ]));
-        }
-
-        AdminActivityLogger::log(
-            action: 'order.attachments_uploaded',
-            description: 'تم رفع مرفقات خاصة للطلب '.$order->order_number,
-            subject: $order,
-            properties: [
-                'attachment_ids' => $created->pluck('id')->all(),
-                'file_names' => $created->pluck('original_name')->all(),
-                'validity_days' => $validityDays,
-                'expires_at' => $created->first()?->expires_at?->toIso8601String(),
-            ],
-            request: $request,
-        );
-
-        return back()->with('success', 'تم رفع '.count($request->file('attachments', []))." مرفق بنجاح. سيتم حذفه تلقائيًا بعد {$validityDays} يومًا.");
+        return back()->with('success', 'تم رفع '.count($request->file('attachments', [])).' مرفق بنجاح. سيتم حذفه تلقائيًا بعد '.OrderAttachmentService::VALIDITY_DAYS.' يومًا.');
     }
 
-    public function show(OrderAttachment $attachment)
+    public function show(OrderAttachment $attachment, OrderAttachmentService $attachments)
     {
-        return $this->fileResponse($attachment, 'inline');
+        return $attachments->response($attachment);
     }
 
-    public function download(OrderAttachment $attachment)
+    public function download(OrderAttachment $attachment, OrderAttachmentService $attachments)
     {
-        return $this->fileResponse($attachment, 'attachment');
+        return $attachments->response($attachment, 'attachment');
     }
 
     public function destroy(Request $request, OrderAttachment $attachment)
@@ -90,29 +58,5 @@ class OrderAttachmentController extends Controller
         );
 
         return back()->with('success', 'تم حذف المرفق نهائيًا.');
-    }
-
-    private function fileResponse(OrderAttachment $attachment, string $disposition)
-    {
-        if ($attachment->isExpired()) {
-            abort(410, 'انتهت صلاحية المرفق.');
-        }
-
-        $disk = Storage::disk($attachment->disk ?: 'local');
-
-        if (! $disk->exists($attachment->path)) {
-            abort(404);
-        }
-
-        return $disk->response(
-            $attachment->path,
-            $attachment->original_name,
-            [
-                'Content-Type' => $attachment->mime_type,
-                'Cache-Control' => 'private, no-store, max-age=0',
-                'X-Content-Type-Options' => 'nosniff',
-            ],
-            $disposition,
-        );
     }
 }

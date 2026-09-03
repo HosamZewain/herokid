@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\BookletPreviewController as AdminBookletPreviewController;
@@ -389,6 +390,16 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')
         ->name('analytics.index');
+    Route::get('agent-api-tokens', [AgentApiTokenController::class, 'index'])
+        ->middleware('permission:agent_api.tokens.manage')
+        ->name('agent-api-tokens.index');
+    Route::post('agent-api-tokens', [AgentApiTokenController::class, 'store'])
+        ->middleware(['permission:agent_api.tokens.manage', 'throttle:10,1'])
+        ->name('agent-api-tokens.store');
+    Route::delete('agent-api-tokens/{token}', [AgentApiTokenController::class, 'destroy'])
+        ->whereNumber('token')
+        ->middleware(['permission:agent_api.tokens.manage', 'throttle:20,1'])
+        ->name('agent-api-tokens.destroy');
     Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])
         ->middleware(['permission:analytics.view', 'throttle:6,1'])
         ->name('analytics.refresh');

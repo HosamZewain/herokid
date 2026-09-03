@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Agent\AgentCheckoutController;
+use App\Http\Controllers\Api\Agent\AgentOrderController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BootstrapController;
 use App\Http\Controllers\Api\V1\CatalogController;
@@ -23,6 +25,29 @@ use App\Http\Controllers\Api\V1\MobileUploadController;
 use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use Illuminate\Support\Facades\Route;
+
+Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
+    Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])
+        ->middleware('agent_api:ability:orders.acquire,permission:orders.assign');
+    Route::get('checkouts/{reference}/production-context', [AgentCheckoutController::class, 'context'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.view');
+    Route::post('checkouts/{reference}/complete-production', [AgentCheckoutController::class, 'complete'])
+        ->middleware('agent_api:ability:orders.update-status,permission:orders.update');
+
+    Route::post('orders/{order}/attachments', [AgentOrderController::class, 'attachments'])
+        ->middleware('agent_api:ability:orders.upload-attachment,permission:orders.update');
+    Route::post('orders/{order}/previews', [AgentOrderController::class, 'previews'])
+        ->middleware('agent_api:ability:orders.upload-preview,permission:orders.preview.upload');
+    Route::get('orders/{order}/references/child-photos/{index}', [AgentOrderController::class, 'childPhoto'])
+        ->whereNumber('index')->middleware('agent_api:ability:orders.read,permission:orders.photos.view')
+        ->name('agent.orders.references.child-photo');
+    Route::get('orders/{order}/references/approved-identity', [AgentOrderController::class, 'approvedIdentity'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.photos.view')
+        ->name('agent.orders.references.approved-identity');
+    Route::get('orders/{order}/attachments/{attachment}', [AgentOrderController::class, 'attachment'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.view')
+        ->name('agent.orders.attachments.download');
+});
 
 Route::prefix('v1')->group(function (): void {
     Route::get('bootstrap', BootstrapController::class)->middleware('throttle:120,1');

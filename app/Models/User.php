@@ -55,6 +55,7 @@ class User extends Authenticatable
             'deletion_requested_at' => 'datetime',
             'deletion_scheduled_for' => 'datetime',
             'is_active' => 'boolean',
+            'agent_api_enabled' => 'boolean',
             'password' => 'hashed',
         ];
     }

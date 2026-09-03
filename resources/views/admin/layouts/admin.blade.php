@@ -81,7 +81,7 @@
                     'settings.order_statuses.manage',
                     'child_identities.settings',
                 ]);
-                $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage']);
+                $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage', 'agent_api.tokens.manage']);
                 $canAdministration = auth()->user()->hasAnyPermission([
                     'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'activity_logs.view',
                 ]);
@@ -221,6 +221,9 @@
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التكاملات</p>
                         @can('robodesk.view')
                             <a href="{{ route('admin.robodesk.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.*') ? $activeLink : $idleLink }}">RoboDesk وواتساب</a>
+                        @endcan
+                        @can('agent_api.tokens.manage')
+                            <a href="{{ route('admin.agent-api-tokens.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agent-api-tokens.*') ? $activeLink : $idleLink }}">Agent API Tokens</a>
                         @endcan
                     </div>
                 @endif
