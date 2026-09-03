@@ -16,6 +16,8 @@ use Throwable;
 
 class OrderProductPreviewService
 {
+    public function __construct(private readonly OrderProductPreviewImageService $imageService) {}
+
     /** @param array<int, UploadedFile> $files */
     public function upload(Order $order, array $files, ?string $note, ?User $actor): OrderProductPreviewGallery
     {
@@ -51,7 +53,7 @@ class OrderProductPreviewService
                     abort_unless($path, 422, 'تعذر حفظ إحدى صور المعاينة.');
                     $storedPaths[] = $path;
 
-                    $created->push(OrderPreview::create([
+                    $preview = OrderPreview::create([
                         'order_id' => $order->id,
                         'product_gallery_id' => $gallery->id,
                         'file_path' => $path,
@@ -62,7 +64,9 @@ class OrderProductPreviewService
                         'checksum' => hash_file('sha256', $file->getRealPath()),
                         'note' => $note,
                         'uploaded_by' => $actor?->id,
-                    ]));
+                    ]);
+
+                    $created->push($preview);
                 }
 
                 AdminActivityLogger::log(
@@ -91,6 +95,7 @@ class OrderProductPreviewService
 
         DB::transaction(function () use ($preview, $order, $actor): void {
             $fileName = $preview->original_name ?: basename($preview->file_path);
+            $this->imageService->deleteCustomerImage($preview);
             Storage::disk($preview->disk ?: 'local')->delete($preview->file_path);
             $preview->delete();
 

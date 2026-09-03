@@ -7,6 +7,7 @@ use App\Models\OrderProductPreviewGallery;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\OrderProductPreviewImageService;
 use App\Services\Orders\OrderWhatsAppMessageService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -98,17 +99,49 @@ class OrderProductPreviewTest extends TestCase
         $page = $this->get($gallery->publicUrl());
         $page->assertOk()
             ->assertSee('معاينة طلبك من HeroKid')
+            ->assertSee('protected-preview', false)
             ->assertSee('noindex,nofollow,noarchive', false)
-            ->assertDontSee($preview->file_path);
+            ->assertDontSee($preview->file_path)
+            ->assertDontSee('<a href="'.route('order-product-previews.image', compact('token', 'preview')), false);
         $this->assertStringContainsString('no-store', (string) $page->headers->get('Cache-Control'));
 
-        $image = $this->get(route('order-product-previews.image', compact('token', 'preview')));
+        $imageUrl = route('order-product-previews.image', compact('token', 'preview'));
+        $this->withHeader('Sec-Fetch-Dest', 'document')->get($imageUrl)->assertNotFound();
+
+        $image = $this->withHeader('Sec-Fetch-Dest', 'image')->get($imageUrl);
         $image->assertOk();
-        $this->assertStringStartsWith('image/', (string) $image->headers->get('Content-Type'));
+        $this->assertSame('image/jpeg', $image->headers->get('Content-Type'));
         $this->assertStringContainsString('no-store', (string) $image->headers->get('Cache-Control'));
+        $this->assertSame('same-origin', $image->headers->get('Cross-Origin-Resource-Policy'));
+        $this->assertNotSame(Storage::disk('local')->get($preview->file_path), $image->getContent());
 
         $order->delete();
         $this->get($gallery->publicUrl())->assertGone();
+    }
+
+    public function test_existing_preview_is_protected_lazily_and_downscaled_for_customer_access(): void
+    {
+        $order = $this->productOrder();
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $order), [
+            'preview_images' => [UploadedFile::fake()->image('legacy.jpg', 2400, 1800)],
+        ])->assertRedirect();
+
+        $gallery = OrderProductPreviewGallery::with('previews')->firstOrFail();
+        $preview = $gallery->previews->first();
+        $service = app(OrderProductPreviewImageService::class);
+        $protectedPath = $service->protectedPath($preview);
+        Storage::disk('local')->delete($protectedPath);
+
+        $this->get(route('order-product-previews.image', [
+            'token' => $gallery->plainPublicToken(),
+            'preview' => $preview,
+        ]))->assertOk();
+
+        Storage::disk('local')->assertExists($protectedPath);
+        $image = new \Imagick(Storage::disk('local')->path($protectedPath));
+        $this->assertLessThanOrEqual(1400, $image->getImageWidth());
+        $this->assertLessThanOrEqual(1400, $image->getImageHeight());
+        $image->clear();
     }
 
     public function test_preview_message_appends_gallery_link_when_saved_template_omits_variable(): void

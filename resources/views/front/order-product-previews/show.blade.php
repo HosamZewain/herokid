@@ -6,8 +6,28 @@
     <meta name="robots" content="noindex,nofollow,noarchive">
     <title>معاينة طلب HeroKid</title>
     @vite(['resources/css/app.css'])
+    <style>
+        .protected-preview {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        @media print {
+            body > * { display: none !important; }
+            body::after {
+                content: 'هذه المعاينة غير متاحة للطباعة.';
+                display: grid;
+                min-height: 100vh;
+                place-items: center;
+                color: #0f172a;
+                background: white;
+                font: 700 24px sans-serif;
+            }
+        }
+    </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-white">
+<body class="min-h-screen bg-slate-950 text-white" oncontextmenu="return false" ondragstart="return false">
     <header class="border-b border-white/10 bg-slate-950/95 px-4 py-3">
         <div class="mx-auto flex max-w-6xl items-center justify-between gap-4">
             <div class="text-right">
@@ -26,19 +46,29 @@
 
         <div class="grid gap-4 sm:grid-cols-2">
             @foreach($gallery->previews as $preview)
-                <figure class="overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl">
-                    <a href="{{ route('order-product-previews.image', ['token' => $token, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block bg-black/30">
+                <figure class="protected-preview overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-xl">
+                    <div class="relative bg-black/30">
                         <img
                             src="{{ route('order-product-previews.image', ['token' => $token, 'preview' => $preview]) }}"
                             alt="صورة معاينة {{ $loop->iteration }}"
-                            class="mx-auto max-h-[80vh] w-full object-contain"
+                            class="pointer-events-none mx-auto max-h-[80vh] w-full object-contain"
+                            draggable="false"
                             @if(!$loop->first) loading="lazy" @endif
                         >
-                    </a>
+                        <span class="absolute inset-0" aria-hidden="true"></span>
+                    </div>
                     <figcaption class="px-4 py-3 text-center text-xs font-bold text-slate-400">المعاينة {{ $loop->iteration }}</figcaption>
                 </figure>
             @endforeach
         </div>
     </main>
+    <script>
+        document.addEventListener('copy', (event) => event.preventDefault());
+        document.addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && ['c', 'p', 's', 'u'].includes(event.key.toLowerCase())) {
+                event.preventDefault();
+            }
+        });
+    </script>
 </body>
 </html>

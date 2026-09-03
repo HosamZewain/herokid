@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\OrderPreview;
 use App\Models\OrderProductPreviewGallery;
+use App\Services\Orders\OrderProductPreviewImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class OrderProductPreviewController extends Controller
 {
+    public function __construct(private readonly OrderProductPreviewImageService $imageService) {}
+
     public function show(Request $request, string $token)
     {
         $gallery = $this->findAvailableGallery($token);
@@ -28,21 +31,23 @@ class OrderProductPreviewController extends Controller
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }
 
-    public function image(string $token, OrderPreview $preview)
+    public function image(Request $request, string $token, OrderPreview $preview)
     {
         $gallery = $this->findAvailableGallery($token);
         abort_unless((int) $preview->product_gallery_id === (int) $gallery->id, 404);
+        abort_if($request->header('Sec-Fetch-Dest') === 'document', 404);
 
-        $disk = $preview->disk ?: 'local';
-        abort_unless(Storage::disk($disk)->exists($preview->file_path), 404);
+        $customerImage = $this->imageService->customerImage($preview);
+        $disk = Storage::disk($customerImage['disk']);
 
-        return response()->file(Storage::disk($disk)->path($preview->file_path), [
-            'Content-Type' => $preview->mime_type ?: 'image/jpeg',
-            'Content-Disposition' => 'inline; filename="herokid-preview-'.$preview->id.'.'.pathinfo($preview->file_path, PATHINFO_EXTENSION).'"',
+        return response()->file($disk->path($customerImage['path']), [
+            'Content-Type' => $customerImage['mime_type'],
+            'Content-Disposition' => 'inline; filename="herokid-protected-preview-'.$preview->id.'.jpg"',
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Cross-Origin-Resource-Policy' => 'same-origin',
         ]);
     }
 
