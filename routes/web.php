@@ -29,6 +29,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
+use App\Http\Controllers\Admin\OrderProductPreviewController as AdminOrderProductPreviewController;
 use App\Http\Controllers\Admin\OrderProductProductionController;
 use App\Http\Controllers\Admin\OrderReportController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
@@ -55,6 +56,7 @@ use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
 use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\FootballStoriesController;
+use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
 use App\Http\Controllers\Front\PageController;
@@ -150,6 +152,16 @@ Route::get('/preview/{token}/scenes', [PublicBookletPreviewController::class, 's
 Route::get('/preview-media/{bookletPreview}', [PublicBookletPreviewController::class, 'document'])
     ->middleware('throttle:300,1')
     ->name('booklet-previews.document');
+
+Route::get('/order-preview/{token}', [PublicOrderProductPreviewController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:120,1')
+    ->name('order-product-previews.show');
+Route::get('/order-preview/{token}/images/{preview}', [PublicOrderProductPreviewController::class, 'image'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->whereNumber('preview')
+    ->middleware('throttle:300,1')
+    ->name('order-product-previews.image');
 
 // Public Store Routes
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
@@ -609,6 +621,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
     Route::post('orders/groups/{representative}/merge', [OrderGroupController::class, 'merge'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.merge');
+    Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');
+    Route::delete('orders/{order}/product-previews/{preview}', [AdminOrderProductPreviewController::class, 'destroy'])->whereNumber(['order', 'preview'])->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy');
     Route::post('orders/groups/{representative}/assignment/acquire', [OrderAssignmentController::class, 'acquire'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.acquire');
     Route::post('orders/groups/{representative}/assignment/takeover', [OrderAssignmentController::class, 'takeover'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.takeover');
     Route::delete('orders/groups/{representative}/assignment', [OrderAssignmentController::class, 'release'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.release');

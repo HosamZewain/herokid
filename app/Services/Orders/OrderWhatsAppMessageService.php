@@ -27,8 +27,10 @@ class OrderWhatsAppMessageService
         'remaining_amount' => 'المبلغ المتبقي',
         'payment_status' => 'حالة الدفع',
         'order_status' => 'حالة الطلب',
-        'preview_url' => 'رابط معاينة الكتاب',
+        'preview_url' => 'رابط معاينة الطلب (كتاب أو منتجات)',
         'preview_scenes_url' => 'رابط معاينة المشاهد',
+        'product_preview_url' => 'رابط معرض معاينة المنتجات',
+        'customer_preview_url' => 'رابط المعاينة المناسب للعميل',
         'payment_url' => 'رابط الدفع المجهز في إعداد RoboDesk',
         'shipping_address' => 'عنوان التوصيل',
     ];
@@ -67,6 +69,14 @@ class OrderWhatsAppMessageService
             ->map(function (array $template) use ($phone, $variables): array {
                 $body = $this->render($template['message'], $variables);
 
+                if (
+                    $template['id'] === 'preview'
+                    && $variables['customer_preview_url'] !== ''
+                    && ! Str::contains($template['message'], ['{{preview_url}}', '{{customer_preview_url}}', '{{product_preview_url}}'])
+                ) {
+                    $body .= "\n\nرابط المعاينة:\n".$variables['customer_preview_url'];
+                }
+
                 return [
                     'id' => $template['id'],
                     'title' => $template['title'],
@@ -86,6 +96,14 @@ class OrderWhatsAppMessageService
             ->pluck('bookletPreview')
             ->filter(fn ($item): bool => $item && $item->status === 'active' && $item->current_version_id)
             ->first();
+        $productPreviewGallery = $orders
+            ->pluck('productPreviewGallery')
+            ->filter(fn ($item): bool => $item && $item->status === 'active')
+            ->first();
+        $productPreviewUrl = $productPreviewGallery?->previews->isNotEmpty()
+            ? $productPreviewGallery->publicUrl()
+            : null;
+        $customerPreviewUrl = $preview?->publicUrl() ?: $productPreviewUrl;
         $delivery = $group['delivery'] ?? [];
         $address = collect([
             data_get($delivery, 'country'),
@@ -112,8 +130,10 @@ class OrderWhatsAppMessageService
             'remaining_amount' => format_money(((int) ($group['remaining_amount_cents'] ?? 0)) / 100),
             'payment_status' => (string) ($group['payment_status_label'] ?? ''),
             'order_status' => (string) ($group['status_label'] ?? ''),
-            'preview_url' => (string) ($preview?->publicUrl() ?? ''),
+            'preview_url' => (string) ($customerPreviewUrl ?? ''),
             'preview_scenes_url' => (string) ($preview?->publicScenesUrl() ?? ''),
+            'product_preview_url' => (string) ($productPreviewUrl ?? ''),
+            'customer_preview_url' => (string) ($customerPreviewUrl ?? ''),
             'payment_url' => (string) config('robodesk.instapay_url', ''),
             'shipping_address' => $address,
         ];

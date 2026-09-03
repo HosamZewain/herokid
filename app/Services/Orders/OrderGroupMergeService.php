@@ -9,6 +9,7 @@ use App\Models\OrderCheckoutReference;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderPaymentProof;
+use App\Models\OrderProductPreviewGallery;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
@@ -111,6 +112,7 @@ class OrderGroupMergeService
             OrderAdminNote::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
             OrderPaymentProof::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
             RoboDeskIntegrationEvent::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
+            $this->mergeProductPreviewGallery($targetKey, $sourceKey);
             $this->mergeCustomerWorkflow($targetKey, $sourceKey);
 
             OrderGroupMergeAlias::query()->create([
@@ -187,6 +189,30 @@ class OrderGroupMergeService
 
             return $this->groups->findByRepresentative($representative->id);
         });
+    }
+
+    private function mergeProductPreviewGallery(string $targetKey, string $sourceKey): void
+    {
+        $galleries = OrderProductPreviewGallery::query()
+            ->whereIn('checkout_group_key', [$targetKey, $sourceKey])
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('checkout_group_key');
+        $target = $galleries->get($targetKey);
+        $source = $galleries->get($sourceKey);
+
+        if (! $source) {
+            return;
+        }
+
+        if (! $target) {
+            $source->update(['checkout_group_key' => $targetKey]);
+
+            return;
+        }
+
+        $source->previews()->update(['product_gallery_id' => $target->id]);
+        $source->delete();
     }
 
     private function resolveGroupKey(string $reference): string

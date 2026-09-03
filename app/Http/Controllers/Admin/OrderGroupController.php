@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderProductPreviewGallery;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
@@ -68,6 +69,10 @@ class OrderGroupController extends Controller
         $attachmentOrders = $group['active_orders']->isNotEmpty()
             ? $group['active_orders']
             : $group['orders'];
+        $productPreviewGallery = OrderProductPreviewGallery::query()
+            ->with(['previews.order:id,order_number'])
+            ->where('checkout_group_key', $group['key'])
+            ->first();
 
         return view('admin.orders.group-show', [
             'group' => $group,
@@ -83,6 +88,7 @@ class OrderGroupController extends Controller
             'orderAdminNotes' => $adminNotes->notesFor($attachmentTarget),
             'orderActivity' => $activityTimeline->forGroup($group),
             'paymentEvents' => $paymentLedger->forCheckout($group['key']),
+            'productPreviewGallery' => $productPreviewGallery,
         ]);
     }
 

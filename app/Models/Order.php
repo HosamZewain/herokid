@@ -92,6 +92,11 @@ class Order extends Model
         return $this->hasOne(BookletPreview::class);
     }
 
+    public function productPreviewGallery()
+    {
+        return $this->hasOne(OrderProductPreviewGallery::class, 'checkout_group_key', 'checkout_group_key');
+    }
+
     public function approvedBookletPreviewVersion()
     {
         return $this->belongsTo(BookletPreviewVersion::class, 'approved_booklet_preview_version_id');

@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
+use App\Models\OrderProductPreviewGallery;
 use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminOrderGroupMergeTest extends TestCase
@@ -141,6 +144,38 @@ class AdminOrderGroupMergeTest extends TestCase
                 'confirm_primary_delivery' => '1',
             ])
             ->assertForbidden();
+    }
+
+    public function test_merge_preserves_a_source_product_preview_gallery_under_the_target_checkout(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-PREVIEW-TARGET', 'PREVIEW-TARGET', '01012345678', 10_000, 0);
+        $source = $this->order('CHECKOUT-PREVIEW-SOURCE', 'PREVIEW-SOURCE', '01012345678', 10_000, 0);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.product-previews.store', $source), [
+                'preview_images' => [UploadedFile::fake()->image('merged-preview.jpg', 800, 800)],
+            ])
+            ->assertRedirect();
+
+        $gallery = OrderProductPreviewGallery::with('previews')->firstOrFail();
+        $publicUrl = $gallery->publicUrl();
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $source->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'الحفاظ على معاينة المنتج بعد الدمج',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $target));
+
+        $this->assertSame('CHECKOUT-PREVIEW-TARGET', $gallery->refresh()->checkout_group_key);
+        $this->get($publicUrl)->assertOk()->assertSee('معاينة طلبك من HeroKid');
+        $this->actingAs($admin)
+            ->get(route('admin.orders.groups.show', $target))
+            ->assertOk()
+            ->assertSee('merged-preview.jpg');
     }
 
     private function order(

@@ -305,6 +305,73 @@
                 </section>
             @endif
 
+            @if($group['story_orders']->isEmpty() && $group['direct_products']->isNotEmpty() && $attachmentTarget)
+                <section id="product-customer-preview" class="rounded-3xl border border-fuchsia-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="product-preview">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="text-right">
+                            <h3 class="text-lg font-black text-gray-900">معاينة المنتجات للعميل</h3>
+                            <p class="mt-1 text-xs font-bold text-gray-500">ارفع صورة واحدة أو أكثر. سيُستخدم رابط المعرض تلقائيًا في رسالة «إرسال معاينة للعميل».</p>
+                        </div>
+                        @if($productPreviewGallery?->publicUrl())
+                            <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{{ $productPreviewGallery->previews->count() }} صورة جاهزة</span>
+                        @endif
+                    </div>
+
+                    @can('orders.preview.upload')
+                        @if(!$group['trashed'])
+                            <form method="POST" action="{{ route('admin.orders.product-previews.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-4 grid gap-3 rounded-2xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                                @csrf
+                                <label class="block text-xs font-black text-gray-700">
+                                    صور المعاينة
+                                    <input type="file" name="preview_images[]" accept="image/jpeg,image/png,image/webp" multiple required class="mt-2 block w-full rounded-xl border border-gray-200 bg-white text-sm file:ml-3 file:border-0 file:bg-fuchsia-600 file:px-4 file:py-3 file:font-black file:text-white">
+                                </label>
+                                <label class="block text-xs font-black text-gray-700">
+                                    ملاحظة داخلية اختيارية
+                                    <input type="text" name="preview_note" maxlength="1000" class="mt-2 w-full rounded-xl border-gray-200 text-sm" placeholder="مثال: النسخة المعدلة بعد ملاحظات العميل">
+                                </label>
+                                <button class="min-h-11 rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white hover:bg-fuchsia-700">رفع المعاينات</button>
+                            </form>
+                        @endif
+                    @endcan
+
+                    @if($productPreviewGallery?->previews->isNotEmpty())
+                        @php($productPreviewToken = $productPreviewGallery->plainPublicToken())
+                        <div class="mt-5" x-data="{ copied: false }">
+                            <div class="flex flex-col gap-2 rounded-2xl bg-slate-50 p-3 sm:flex-row sm:items-center">
+                                <a href="{{ $productPreviewGallery->publicUrl() }}" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white">فتح معاينة العميل</a>
+                                <button type="button" @click="navigator.clipboard.writeText($refs.url.value); copied = true; setTimeout(() => copied = false, 1800)" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700" x-text="copied ? 'تم نسخ الرابط' : 'نسخ الرابط'"></button>
+                                <input x-ref="url" value="{{ $productPreviewGallery->publicUrl() }}" readonly dir="ltr" class="min-w-0 flex-1 rounded-xl border-gray-200 bg-white text-left text-xs text-gray-500">
+                            </div>
+
+                            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                                @foreach($productPreviewGallery->previews as $preview)
+                                    <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                                        <a href="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block aspect-square bg-slate-100">
+                                            <img src="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
+                                        </a>
+                                        <div class="p-2.5">
+                                            <p class="truncate text-[11px] font-black text-gray-700" title="{{ $preview->original_name }}">{{ $preview->original_name ?: 'معاينة '.$loop->iteration }}</p>
+                                            @if($preview->note)<p class="mt-1 line-clamp-2 text-[10px] font-bold text-gray-400">{{ $preview->note }}</p>@endif
+                                            @can('orders.preview.upload')
+                                                @if(!$group['trashed'])
+                                                    <form method="POST" action="{{ route('admin.orders.product-previews.destroy', [$preview->order, $preview]) }}" class="mt-2" onsubmit="return confirm('حذف صورة المعاينة؟')">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button class="w-full rounded-lg bg-red-50 px-2 py-1.5 text-[10px] font-black text-red-700">حذف الصورة</button>
+                                                    </form>
+                                                @endif
+                                            @endcan
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </div>
+                    @else
+                        <div class="mt-4 rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-bold text-gray-400">لم يتم رفع صور معاينة لهذا الطلب بعد.</div>
+                    @endif
+                </section>
+            @endif
+
             @can('orders.production_prompt.manage')
                 @include('admin.orders._product-production-prompts', ['collapsed' => true])
             @endcan
