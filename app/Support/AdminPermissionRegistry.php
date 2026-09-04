@@ -72,6 +72,7 @@ class AdminPermissionRegistry
             'booklet_previews.view' => 'admin.booklet-previews.index',
             'robodesk.view' => 'admin.robodesk.index',
             'agent_api.tokens.manage' => 'admin.agent-api-tokens.index',
+            'bosta.view' => 'admin.bosta.index',
             'child_identities.view' => 'admin.child-identities.index',
             'stories.view' => 'admin.stories.index',
             'store.products.view' => 'admin.products.index',

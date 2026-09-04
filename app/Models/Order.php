@@ -87,6 +87,11 @@ class Order extends Model
         return $this->hasMany(OrderAttachment::class)->latest();
     }
 
+    public function bostaShipments()
+    {
+        return $this->hasMany(BostaShipment::class);
+    }
+
     public function bookletPreview()
     {
         return $this->hasOne(BookletPreview::class);

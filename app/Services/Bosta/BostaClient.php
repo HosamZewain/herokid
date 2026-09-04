@@ -1,0 +1,50 @@
+<?php
+
+namespace App\Services\Bosta;
+
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+
+class BostaClient
+{
+    public function createDelivery(array $payload): array
+    {
+        return $this->request()->post('/deliveries?apiVersion=1', $payload)->throw()->json();
+    }
+
+    public function createPickup(array $payload): array
+    {
+        return $this->request()->post('/pickups', $payload)->throw()->json();
+    }
+
+    public function createAwb(array $trackingNumbers, string $language = 'ar'): array
+    {
+        return $this->request()->post('/deliveries/mass-awb', [
+            'trackingNumbers' => implode(',', $trackingNumbers),
+            'requestedAwbType' => 'A4',
+            'lang' => $language,
+        ])->throw()->json();
+    }
+
+    public function cities(): array
+    {
+        return $this->request()->get('/cities', [
+            'countryId' => (string) config('bosta.country_id'),
+        ])->throw()->json();
+    }
+
+    private function request(): PendingRequest
+    {
+        if (! config('bosta.enabled') || blank(config('bosta.api_key'))) {
+            throw new RuntimeException('Bosta integration is not configured.');
+        }
+
+        return Http::baseUrl(rtrim((string) config('bosta.base_url'), '/'))
+            ->acceptJson()
+            ->withHeaders(['Authorization' => (string) config('bosta.api_key')])
+            ->connectTimeout((int) config('bosta.connect_timeout'))
+            ->timeout((int) config('bosta.timeout'))
+            ->retry((int) config('bosta.retries'), 300, throw: false);
+    }
+}

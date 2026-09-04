@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Agent\AgentCheckoutController;
 use App\Http\Controllers\Api\Agent\AgentOrderController;
+use App\Http\Controllers\Api\BostaWebhookController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BootstrapController;
 use App\Http\Controllers\Api\V1\CatalogController;
@@ -25,6 +26,10 @@ use App\Http\Controllers\Api\V1\MobileUploadController;
 use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('integrations/bosta/webhook', BostaWebhookController::class)
+    ->middleware('throttle:120,1')
+    ->name('integrations.bosta.webhook');
 
 Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
     Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])

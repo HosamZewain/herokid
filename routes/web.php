@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\BookletPreviewController as AdminBookletPreviewController;
+use App\Http\Controllers\Admin\BostaController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\ChildIdentityController as AdminChildIdentityController;
 use App\Http\Controllers\Admin\ChildIdentityMediaController as AdminChildIdentityMediaController;
@@ -622,6 +623,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('attachments/{attachment}', [StoryAttachmentController::class, 'destroy'])->middleware('permission:story_attachments.delete')->name('attachments.destroy');
 
     Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
+    Route::get('bosta', [BostaController::class, 'index'])->middleware('permission:bosta.view')->name('bosta.index');
+    Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
+    Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');
+    Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');
     Route::get('orders/create', [OrderController::class, 'create'])->middleware('permission:orders.create')->name('orders.create');
     Route::post('orders', [OrderController::class, 'store'])->middleware('permission:orders.create')->name('orders.store');
