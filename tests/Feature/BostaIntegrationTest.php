@@ -241,6 +241,12 @@ class BostaIntegrationTest extends TestCase
 
     public function test_bosta_page_and_actions_are_permission_protected(): void
     {
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSee('Bosta للشحن')
+            ->assertSee('COD معلومة تشغيلية للشحن فقط');
+
         $limited = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $limited->permissions()->sync(Permission::query()->where('key', 'orders.view')->pluck('id'));
         $limited->unsetRelation('permissions');

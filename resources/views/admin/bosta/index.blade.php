@@ -1,7 +1,10 @@
-@extends('admin.layouts.admin')
-@section('title', 'Bosta للشحن')
-@section('page-title', 'Bosta للشحن')
-@section('content')
+<x-admin-layout>
+<x-slot name="header">
+    <div class="text-right">
+        <h1 class="text-2xl font-black text-slate-900">Bosta للشحن</h1>
+        <p class="mt-1 text-sm text-slate-500">إنشاء الشحنات وطلبات الاستلام ومتابعة حالة التوصيل.</p>
+    </div>
+</x-slot>
 <div class="space-y-6" dir="rtl">
  @if(session('success'))<div class="rounded-2xl bg-emerald-50 p-4 font-bold text-emerald-800">{{ session('success') }}</div>@endif
  @if($errors->any())<div class="rounded-2xl bg-red-50 p-4 text-red-800"><ul class="list-disc pr-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
@@ -16,4 +19,4 @@
 </div></form>@else<p class="mt-4 text-gray-500">لم يتم إنشاء شحنات بعد.</p>@endif<div class="mt-4">{{ $shipments->links() }}</div></section>
  @if($pickups->isNotEmpty())<section class="rounded-3xl border bg-white p-6 shadow-sm"><h2 class="text-xl font-black">آخر طلبات الاستلام</h2><div class="mt-4 grid gap-3 md:grid-cols-2">@foreach($pickups as $pickup)<div class="rounded-2xl bg-gray-50 p-4"><b>{{ $pickup->scheduled_date->format('d/m/Y') }}</b> · {{ $pickup->number_of_parcels }} شحنة<br><span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }}</span></div>@endforeach</div></section>@endif
 </div>
-@endsection
+</x-admin-layout>
