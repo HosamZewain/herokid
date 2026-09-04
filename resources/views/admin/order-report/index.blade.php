@@ -207,7 +207,7 @@
                         <tbody class="divide-y divide-gray-100">
                             @forelse($rows as $row)
                                 @php
-                                    $detailsUrl = $row['direct_order_id'] ? route('admin.orders.show', $row['direct_order_id']) : route('admin.orders.groups.show', $row['representative_id']);
+                                    $detailsUrl = route('admin.orders.groups.show', $row['representative_id']);
                                     $titles = array_merge($row['story_titles'], $row['product_titles'], $row['add_on_titles']);
                                 @endphp
                                 <tr class="align-top">

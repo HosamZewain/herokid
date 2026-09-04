@@ -307,7 +307,7 @@
                 </section>
             @endif
 
-            @if($group['story_orders']->isEmpty() && $group['direct_products']->isNotEmpty() && $attachmentTarget)
+            @if($group['direct_products']->isNotEmpty() && $attachmentTarget)
                 <section id="product-customer-preview" class="rounded-3xl border border-fuchsia-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="product-preview">
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div class="text-right">

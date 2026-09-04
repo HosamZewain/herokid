@@ -303,9 +303,9 @@ class BostaIntegrationTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.bosta.index'))
             ->assertOk()
-            ->assertSee(route('admin.orders.show', $ready->first()), false)
-            ->assertDontSee(route('admin.orders.show', $notReady->first()), false)
-            ->assertDontSee(route('admin.orders.show', $mixed->first()), false)
+            ->assertSee(route('admin.orders.groups.show', $ready->first()), false)
+            ->assertDontSee(route('admin.orders.groups.show', $notReady->first()), false)
+            ->assertDontSee(route('admin.orders.groups.show', $mixed->first()), false)
             ->assertSee('تظهر هنا للمراجعة فقط. افتح الطلب لمراجعة بيانات المستلم والعنوان وCOD ثم إنشاء الشحنة.');
     }
 

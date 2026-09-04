@@ -46,7 +46,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('data-order-row-actions', false)
             ->assertDontSee('>إجراءات</th>', false)
             ->assertSee('GROUP-MULTI')
-            ->assertSee(route('admin.orders.show', $first), false)
+            ->assertSee(route('admin.orders.groups.show', $first), false)
             ->assertSee($first->order_number)
             ->assertSee($second->order_number)
             ->assertSee('رنا')
@@ -502,14 +502,22 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(0, $cancelledStats['shipped_checkouts']);
     }
 
-    public function test_multi_story_checkout_opens_first_production_order_and_keeps_sibling_navigation(): void
+    public function test_multi_story_checkout_opens_unified_checkout_and_keeps_story_production_navigation(): void
     {
         [$first, $second] = $this->checkoutFixture();
         $shortReference = $first->checkoutReference()->value('short_reference');
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $first->id))
-            ->assertRedirect(route('admin.orders.show', $first));
+            ->assertOk()
+            ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
+            ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('القصص والأطفال')
+            ->assertSee('المنتجات المباشرة')
+            ->assertSee('مغامرة رنا')
+            ->assertSee('كتاب تلوين مباشر')
+            ->assertSee(route('admin.orders.show', $first), false)
+            ->assertSee(route('admin.orders.show', $second), false);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $first))
@@ -540,26 +548,31 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('GROUP-MULTI');
     }
 
-    public function test_single_order_opens_production_details_without_the_group_intermediate_page(): void
+    public function test_single_story_order_opens_unified_checkout_and_story_production_remains_available(): void
     {
         [$order] = $this->checkoutFixture(singleStory: true);
 
         $index = $this->actingAs($this->admin)
             ->get(route('admin.orders.index'))
             ->assertOk()
-            ->assertSee(route('admin.orders.show', $order), false);
+            ->assertSee(route('admin.orders.groups.show', $order), false);
 
         $group = $index->viewData('groups')->items()[0];
         $this->assertSame($order->id, $group['direct_order_id']);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order->id))
-            ->assertRedirect(route('admin.orders.show', $order));
+            ->assertOk()
+            ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('فتح تفاصيل الإنتاج')
+            ->assertSee(route('admin.orders.show', $order), false);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $order))
             ->assertOk()
-            ->assertDontSee('العودة لعملية الشراء');
+            ->assertSee('العودة لعملية الشراء كاملة')
+            ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('المنتجات الموجودة في عملية الشراء');
     }
 
     public function test_bulk_status_update_updates_each_story_with_logs_activity_and_prompt_snapshots(): void
@@ -649,14 +662,16 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame('201111822277', Phone::forWhatsApp('201111822277'));
     }
 
-    public function test_order_details_show_the_unified_status_panel_without_group_page(): void
+    public function test_unified_checkout_and_story_production_details_show_the_status_workflow(): void
     {
         [$first] = $this->checkoutFixture();
         $route = route('admin.orders.groups.workflow-statuses', $first->id);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $first->id))
-            ->assertRedirect(route('admin.orders.show', $first));
+            ->assertOk()
+            ->assertSee('حالات عملية الشراء')
+            ->assertSee($route, false);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $first))
@@ -758,7 +773,8 @@ class AdminOrderGroupManagementTest extends TestCase
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $first->id))
-            ->assertRedirect(route('admin.orders.show', $second));
+            ->assertOk()
+            ->assertSee(route('admin.orders.show', $second), false);
 
         $this->actingAs($this->admin)
             ->post(route('admin.orders.restore', $first->id))

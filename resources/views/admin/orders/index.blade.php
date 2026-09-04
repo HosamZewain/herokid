@@ -207,9 +207,7 @@
                 <div class="divide-y divide-gray-100 md:hidden">
                     @forelse($groups as $group)
                         @php
-                            $detailsUrl = $group['direct_order_id']
-                                ? route('admin.orders.show', $group['direct_order_id'])
-                                : route('admin.orders.groups.show', $group['representative_id']);
+                            $detailsUrl = route('admin.orders.groups.show', $group['representative_id']);
                         @endphp
                         <article class="space-y-4 p-5">
                             <div class="flex items-start justify-between gap-3">
@@ -299,9 +297,7 @@
                         <tbody class="divide-y divide-gray-100">
                             @forelse($groups as $group)
                                 @php
-                                    $detailsUrl = $group['direct_order_id']
-                                        ? route('admin.orders.show', $group['direct_order_id'])
-                                        : route('admin.orders.groups.show', $group['representative_id']);
+                                    $detailsUrl = route('admin.orders.groups.show', $group['representative_id']);
                                 @endphp
                                 <tr class="align-top transition hover:bg-slate-50">
                                     <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>

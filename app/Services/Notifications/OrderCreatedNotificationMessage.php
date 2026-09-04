@@ -131,9 +131,7 @@ class OrderCreatedNotificationMessage
             'payment_method' => $paymentMethod,
             'status' => (string) ($group['status_label'] ?? 'غير محدد'),
             'source' => OrderSource::label($group['order_source'] ?? null),
-            'admin_url' => filled($group['direct_order_id'] ?? null)
-                ? route('admin.orders.show', (int) $group['direct_order_id'])
-                : route('admin.orders.groups.show', $representativeId),
+            'admin_url' => route('admin.orders.groups.show', $representativeId),
         ];
 
         return collect($values)

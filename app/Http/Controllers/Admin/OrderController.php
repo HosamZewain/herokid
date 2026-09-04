@@ -382,13 +382,16 @@ class OrderController extends Controller
         $productionPromptTemplateSetting = null;
         $childIdentityPrompt = null;
         $productProductionPrompts = collect();
+        $checkoutGroup = $groups->findByRepresentative($order->id);
 
         if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
             $storyProductionPrompt = StoryProductionPrompt::forOrder($order);
             $globalStoryProductionPrompt = StoryProductionPrompt::forOrder($order, useOverride: false);
             $productionPromptTemplateSetting = StoryProductionPrompt::templateSetting();
             $childIdentityPrompt = $identityPrompts->forOrder($order);
-            $productProductionPrompts = ProductProductionPrompt::forOrder($order);
+            $productProductionPrompts = $checkoutGroup['active_orders']
+                ->flatMap(fn (Order $checkoutOrder) => ProductProductionPrompt::forOrder($checkoutOrder))
+                ->values();
         }
 
         AdminActivityLogger::log(
@@ -403,7 +406,6 @@ class OrderController extends Controller
             request: request(),
         );
 
-        $checkoutGroup = $groups->findByRepresentative($order->id);
         $whatsappMessages = $whatsapp->messagesForGroup($checkoutGroup);
         $orderAdminNotes = $adminNotes->notesFor($order);
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;

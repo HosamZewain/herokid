@@ -74,7 +74,7 @@ class AdminNotificationCenterTest extends TestCase
 
         Queue::assertPushed(SendNotificationJob::class);
         $this->assertStringContainsString($order->checkoutReference()->firstOrFail()->short_reference, $delivery->payload_json['body']);
-        $this->assertStringContainsString(route('admin.orders.show', $order), $delivery->payload_json['body']);
+        $this->assertStringContainsString(route('admin.orders.groups.show', $order), $delivery->payload_json['body']);
         $this->assertStringNotContainsString('private-child-photo.png', $delivery->payload_json['body']);
     }
 
@@ -326,7 +326,7 @@ class AdminNotificationCenterTest extends TestCase
 
         $delivery = NotificationDelivery::firstOrFail();
         $this->assertStringContainsString($order->checkoutReference()->firstOrFail()->short_reference, $delivery->payload_json['body']);
-        $this->assertStringContainsString(route('admin.orders.show', $order), $delivery->payload_json['body']);
+        $this->assertStringContainsString(route('admin.orders.groups.show', $order), $delivery->payload_json['body']);
         $this->assertStringNotContainsString('orders/photos/private-child.png', $delivery->payload_json['body']);
     }
 

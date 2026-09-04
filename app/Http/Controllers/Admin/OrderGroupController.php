@@ -35,10 +35,6 @@ class OrderGroupController extends Controller
     ) {
         $group = $groups->findByRepresentative($representative);
 
-        if ($group['direct_order_id']) {
-            return redirect()->route('admin.orders.show', $group['direct_order_id']);
-        }
-
         $statuses = OrderStatusService::statuses();
         foreach ($group['statuses'] as $currentStatus) {
             if (! in_array($currentStatus, $statuses, true)) {

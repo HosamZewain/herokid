@@ -101,9 +101,14 @@
             <!-- Top Bar -->
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">
-                    <a href="{{ route('admin.orders.index') }}" class="text-indigo-600 border border-indigo-100 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition text-sm font-bold">
-                        كل الطلبات
+                    <a href="{{ route('admin.orders.groups.show', $checkoutGroup['representative_id']) }}" class="text-indigo-600 border border-indigo-100 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition text-sm font-bold">
+                        العودة لعملية الشراء كاملة
                     </a>
+                    @can('orders.update')
+                        <a href="{{ route('admin.orders.groups.edit', $checkoutGroup['representative_id']) }}" class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-black text-white transition hover:bg-violet-700">
+                            تعديل الطلب بالكامل
+                        </a>
+                    @endcan
                 </div>
                 @php
                     $statusColor = \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $order->status);
@@ -126,6 +131,8 @@
                     </div>
                 </div>
             @endif
+
+            @include('admin.orders._checkout-products-summary', ['group' => $checkoutGroup])
 
             @include('admin.orders._payment-summary')
 

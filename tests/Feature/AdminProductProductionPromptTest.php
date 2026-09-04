@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Story;
 use App\Models\User;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -193,6 +194,77 @@ PROMPT);
             ->assertSee('عرض نصوص البرومبتات')
             ->assertSee('Sticker prompt for سليم محمد at مدرسة النور')
             ->assertSee('نسخ برومبت المنتج');
+    }
+
+    public function test_story_checkout_shows_companion_product_details_and_prompts_on_both_views(): void
+    {
+        $story = Story::create([
+            'title' => 'قصة سليم',
+            'slug' => 'salim-story-'.uniqid(),
+            'language' => 'ar',
+            'gender' => 'both',
+            'price' => 299,
+            'active' => true,
+        ]);
+        $product = $this->product('mixed-school-sticker', 'Mixed sticker for {{child_full_name}} at {{school_name}}');
+        $product->update(['name_ar' => 'ستيكر المدرسة المختلط']);
+        $storyOrder = Order::create([
+            'order_number' => 'HK-MIXED-STORY',
+            'checkout_group_key' => 'GROUP-MIXED-PROMPT',
+            'parent_name' => 'Parent',
+            'story_id' => $story->id,
+            'child_name' => 'سليم',
+            'child_age' => 8,
+            'child_gender' => 'boy',
+            'language' => 'ar',
+            'status' => 'new',
+        ]);
+        $storyOrder->items()->create([
+            'item_type' => 'story',
+            'story_id' => $story->id,
+            'title' => $story->title,
+            'quantity' => 1,
+            'unit_price_cents' => 29900,
+            'total_price_cents' => 29900,
+        ]);
+        $productOrder = Order::create([
+            'order_number' => 'HK-MIXED-PRODUCT',
+            'checkout_group_key' => 'GROUP-MIXED-PROMPT',
+            'parent_name' => 'Parent',
+            'status' => 'new',
+        ]);
+        $productOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_snapshot' => [
+                'child_name' => 'سليم محمد',
+                'school_name' => 'مدرسة النور',
+            ],
+        ]);
+
+        $groupUrl = route('admin.orders.groups.show', $storyOrder);
+
+        $this->actingAs($this->admin())
+            ->get($groupUrl)
+            ->assertOk()
+            ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('القصص والأطفال')
+            ->assertSee('المنتجات المباشرة')
+            ->assertSee('ستيكر المدرسة المختلط')
+            ->assertSee('Mixed sticker for سليم محمد at مدرسة النور');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.orders.show', $storyOrder))
+            ->assertOk()
+            ->assertSee('العودة لعملية الشراء كاملة')
+            ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('المنتجات الموجودة في عملية الشراء')
+            ->assertSee('Mixed sticker for سليم محمد at مدرسة النور');
     }
 
     public function test_product_only_group_card_links_to_a_dedicated_product_production_page(): void
