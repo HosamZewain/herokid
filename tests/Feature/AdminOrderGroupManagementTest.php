@@ -354,6 +354,156 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertDontSee('GROUP-MULTI');
     }
 
+    public function test_orders_filter_by_product_and_recorded_status_event_and_sort_by_last_update(): void
+    {
+        $older = $this->createStoryOrder('HK-FILTER-OLD', 'GROUP-FILTER-OLD', 'سلمى', 'new');
+        $newer = $this->createStoryOrder('HK-FILTER-NEW', 'GROUP-FILTER-NEW', 'ليلى', 'new');
+        $matchingProduct = Product::create([
+            'name_ar' => 'استيكر المدرسة',
+            'slug' => 'event-filter-product-'.uniqid(),
+            'price_cents' => 19_500,
+            'inventory_mode' => 'no_tracking',
+            'is_active' => true,
+        ]);
+        $otherProduct = Product::create([
+            'name_ar' => 'منتج آخر',
+            'slug' => 'other-filter-product-'.uniqid(),
+            'price_cents' => 10_000,
+            'inventory_mode' => 'no_tracking',
+            'is_active' => true,
+        ]);
+
+        $older->items()->create([
+            'item_type' => 'product',
+            'product_id' => $matchingProduct->id,
+            'title' => $matchingProduct->name_ar,
+            'unit_price_cents' => 19_500,
+            'quantity' => 1,
+            'total_price_cents' => 19_500,
+        ]);
+        $newer->items()->create([
+            'item_type' => 'product',
+            'product_id' => $otherProduct->id,
+            'title' => $otherProduct->name_ar,
+            'unit_price_cents' => 10_000,
+            'quantity' => 1,
+            'total_price_cents' => 10_000,
+        ]);
+
+        $older->statusLogs()->create([
+            'status_type' => 'order',
+            'status' => 'ready_preview',
+            'created_at' => CarbonImmutable::parse('2026-09-04 21:30:00', 'UTC'),
+            'updated_at' => CarbonImmutable::parse('2026-09-04 21:30:00', 'UTC'),
+        ]);
+        $newer->statusLogs()->create([
+            'status_type' => 'order',
+            'status' => 'ready_preview',
+            'created_at' => CarbonImmutable::parse('2026-09-03 21:30:00', 'UTC'),
+            'updated_at' => CarbonImmutable::parse('2026-09-03 21:30:00', 'UTC'),
+        ]);
+
+        DB::table('orders')->where('id', $older->id)->update(['updated_at' => now()->subHours(2)]);
+        DB::table('orders')->where('id', $newer->id)->update(['updated_at' => now()->subHour()]);
+
+        $productGroups = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', ['product_id' => $matchingProduct->id]))
+            ->assertOk()
+            ->assertSee('المنتج الموجود بالطلب')
+            ->viewData('groups');
+
+        $this->assertSame(1, $productGroups->total());
+        $this->assertSame('GROUP-FILTER-OLD', $productGroups->items()[0]['key']);
+
+        $eventGroups = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', [
+                'event' => 'order:ready_preview',
+                'event_from' => '2026-09-05',
+                'event_to' => '2026-09-05',
+            ]))
+            ->assertOk()
+            ->assertSee('حدث وقع على الطلب')
+            ->viewData('groups');
+
+        $this->assertSame(1, $eventGroups->total());
+        $this->assertSame('GROUP-FILTER-OLD', $eventGroups->items()[0]['key']);
+
+        $sorted = $this->actingAs($this->admin)
+            ->get(route('admin.orders.index', ['sort' => 'updated_at', 'direction' => 'asc']))
+            ->assertOk()
+            ->assertSee('آخر تحديث')
+            ->viewData('groups');
+
+        $this->assertSame(['GROUP-FILTER-OLD', 'GROUP-FILTER-NEW'], collect($sorted->items())->pluck('key')->all());
+    }
+
+    public function test_orders_filter_payment_events_by_their_actual_cairo_day(): void
+    {
+        $matching = $this->createStoryOrder('HK-PAID-MATCH', 'GROUP-PAID-MATCH', 'نور', 'new');
+        $outside = $this->createStoryOrder('HK-PAID-OUTSIDE', 'GROUP-PAID-OUTSIDE', 'هنا', 'new');
+
+        foreach ([
+            [$matching, '2026-09-04 21:05:00'],
+            [$outside, '2026-09-04 20:55:00'],
+        ] as [$order, $occurredAt]) {
+            OrderPaymentEvent::query()->create([
+                'event_uuid' => (string) Str::uuid(),
+                'checkout_group_key' => $order->checkoutGroupKey(),
+                'order_id' => $order->id,
+                'actor_user_id' => $this->admin->id,
+                'event_type' => 'payment_received',
+                'source' => 'admin_payment_update',
+                'previous_status' => 'partially_paid',
+                'new_status' => 'paid_in_full',
+                'previous_paid_amount_cents' => 10_000,
+                'new_paid_amount_cents' => 29_900,
+                'amount_delta_cents' => 19_900,
+                'affects_collection_stats' => true,
+                'payment_method' => 'انستاباي',
+                'occurred_at' => CarbonImmutable::parse($occurredAt, 'UTC'),
+            ]);
+        }
+
+        foreach (['payment:paid_in_full', 'payment_event:received'] as $event) {
+            $groups = $this->actingAs($this->admin)
+                ->get(route('admin.orders.index', [
+                    'event' => $event,
+                    'event_from' => '2026-09-05',
+                    'event_to' => '2026-09-05',
+                ]))
+                ->assertOk()
+                ->viewData('groups');
+
+            $this->assertSame(1, $groups->total());
+            $this->assertSame('GROUP-PAID-MATCH', $groups->items()[0]['key']);
+        }
+    }
+
+    public function test_global_admin_header_search_finds_all_catalogs_by_order_reference_or_equivalent_phone(): void
+    {
+        $order = $this->createStoryOrder('CHK-QUICK-SEARCH', 'GROUP-QUICK-SEARCH', 'ريم', 'new');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('data-admin-order-quick-search', false)
+            ->assertSee('رقم الطلب أو موبايل العميل');
+
+        foreach (['CHK-QUICK-SEARCH', '+201000000000'] as $term) {
+            $groups = $this->actingAs($this->admin)
+                ->get(route('admin.orders.index', [
+                    'catalog_type' => 'all',
+                    'lifecycle' => 'all',
+                    'q' => $term,
+                ]))
+                ->assertOk()
+                ->viewData('groups');
+
+            $this->assertSame(1, $groups->total());
+            $this->assertSame($order->checkoutGroupKey(), $groups->items()[0]['key']);
+        }
+    }
+
     public function test_orders_index_defaults_to_twenty_five_checkouts_per_page(): void
     {
         foreach (range(1, 26) as $index) {

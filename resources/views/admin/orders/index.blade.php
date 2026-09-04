@@ -30,6 +30,11 @@
         $shippingStatusLabels = ['' => 'كل حالات الشحن'] + \App\Support\OrderWorkflowStatus::shippingLabels(false);
         $printingStatusColors = \App\Support\OrderWorkflowStatus::printingColors();
         $shippingStatusColors = \App\Support\OrderWorkflowStatus::shippingColors();
+        $eventOrderStatuses = \App\Services\Orders\OrderStatusService::labels(false);
+        $eventPaymentStatuses = \App\Support\OrderPaymentStatus::labels(false);
+        $eventPrintingStatuses = \App\Support\OrderWorkflowStatus::printingLabels(false);
+        $eventShippingStatuses = \App\Support\OrderWorkflowStatus::shippingLabels(false);
+        $nextUpdatedDirection = request('sort') === 'updated_at' && request('direction', 'desc') === 'desc' ? 'asc' : 'desc';
         $tabQuery = request()->except(['view', 'page', 'catalog_type', 'lifecycle']);
         $emptyState = match($lifecycle) {
             'finished' => 'لا توجد طلبات منتهية تطابق الفلاتر.',
@@ -84,8 +89,8 @@
                     </div>
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-11">
-                    <input type="hidden" name="catalog_type" value="{{ $catalogType === 'all' ? 'stories' : $catalogType }}">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+                    <input type="hidden" name="catalog_type" value="{{ $catalogType }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
                     <div class="xl:col-span-2">
                         <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
@@ -120,6 +125,15 @@
                             @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
                         </select>
                     </div>
+                    <div class="xl:col-span-2">
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">المنتج الموجود بالطلب</label>
+                        <select name="product_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="">كل المنتجات</option>
+                            @foreach($filterProducts as $filterProduct)
+                                <option value="{{ $filterProduct->id }}" @selected((string) request('product_id') === (string) $filterProduct->id)>{{ $filterProduct->name_ar }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">من تاريخ</label>
                         <input name="from" type="date" value="{{ request('from') }}" class="w-full rounded-xl border-gray-200 text-sm">
@@ -127,6 +141,34 @@
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">إلى تاريخ</label>
                         <input name="to" type="date" value="{{ request('to') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                    </div>
+                    <div class="xl:col-span-2">
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">حدث وقع على الطلب</label>
+                        <select name="event" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="">كل الأحداث</option>
+                            <optgroup label="تغيير حالة الطلب">
+                                @foreach($eventOrderStatuses as $value => $label)<option value="order:{{ $value }}" @selected(request('event') === 'order:'.$value)>أصبح: {{ $label }}</option>@endforeach
+                            </optgroup>
+                            <optgroup label="تغيير حالة الدفع">
+                                @foreach($eventPaymentStatuses as $value => $label)<option value="payment:{{ $value }}" @selected(request('event') === 'payment:'.$value)>أصبح: {{ $label }}</option>@endforeach
+                                <option value="payment_event:received" @selected(request('event') === 'payment_event:received')>تم تسجيل دفعة فعلية</option>
+                                <option value="payment_event:reversed" @selected(request('event') === 'payment_event:reversed')>تم عكس / تخفيض دفعة</option>
+                            </optgroup>
+                            <optgroup label="تغيير حالة الطباعة">
+                                @foreach($eventPrintingStatuses as $value => $label)<option value="printing:{{ $value }}" @selected(request('event') === 'printing:'.$value)>أصبحت: {{ $label }}</option>@endforeach
+                            </optgroup>
+                            <optgroup label="تغيير حالة الشحن">
+                                @foreach($eventShippingStatuses as $value => $label)<option value="shipping:{{ $value }}" @selected(request('event') === 'shipping:'.$value)>أصبحت: {{ $label }}</option>@endforeach
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث من يوم</label>
+                        <input name="event_from" type="date" value="{{ request('event_from') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث إلى يوم</label>
+                        <input name="event_to" type="date" value="{{ request('event_to') }}" class="w-full rounded-xl border-gray-200 text-sm">
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
@@ -152,6 +194,17 @@
                             @foreach([25, 50, 100] as $size)
                                 <option value="{{ $size }}" @selected($groups->perPage() === $size)>{{ $size }} طلب</option>
                             @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-black text-gray-600">الترتيب</label>
+                        <select name="sort" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="created_at" @selected(request('sort', 'created_at') === 'created_at')>تاريخ الإنشاء</option>
+                            <option value="updated_at" @selected(request('sort') === 'updated_at')>آخر تحديث</option>
+                        </select>
+                        <select name="direction" aria-label="اتجاه الترتيب" class="mt-2 w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="desc" @selected(request('direction', 'desc') === 'desc')>الأحدث أولاً</option>
+                            <option value="asc" @selected(request('direction') === 'asc')>الأقدم أولاً</option>
                         </select>
                     </div>
                     <div class="flex items-end gap-2">
@@ -244,6 +297,12 @@
                                 </div>
                                 @if($group['child_names'])<p class="mt-3 text-xs font-bold text-gray-600">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
+                                @php
+                                    $mobileUpdatedAt = \App\Support\OrderDateTime::display($group['updated_at']);
+                                    $mobileCreatedAt = \App\Support\OrderDateTime::display($group['created_at']);
+                                @endphp
+                                <p class="mt-3 text-[10px] font-bold text-gray-500" dir="ltr">آخر تحديث: {{ $mobileUpdatedAt?->format('d/m/Y h:i A') }}</p>
+                                <p class="mt-1 text-[10px] text-gray-400" dir="ltr">الإنشاء: {{ $mobileCreatedAt?->format('d/m/Y h:i A') }}</p>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
@@ -291,7 +350,12 @@
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الدفع</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">التاريخ</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">
+                                    <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['sort' => 'updated_at', 'direction' => $nextUpdatedDirection])) }}" class="inline-flex items-center gap-1 hover:text-indigo-700">
+                                        آخر تحديث
+                                        <span aria-hidden="true">{{ request('sort') === 'updated_at' ? (request('direction', 'desc') === 'desc' ? '↓' : '↑') : '↕' }}</span>
+                                    </a>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -379,10 +443,12 @@
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">
                                         @php
-                                            $displayOrderDate = \App\Support\OrderDateTime::display($group['latest_at']);
+                                            $displayUpdatedAt = \App\Support\OrderDateTime::display($group['updated_at']);
+                                            $displayCreatedAt = \App\Support\OrderDateTime::display($group['created_at']);
                                         @endphp
-                                        <p>{{ $displayOrderDate?->format('d/m/Y') }}</p>
-                                        <p class="mt-1 text-xs text-gray-400">{{ $displayOrderDate?->format('h:i A') }}</p>
+                                        <p class="font-bold text-gray-700">{{ $displayUpdatedAt?->format('d/m/Y') }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ $displayUpdatedAt?->format('h:i A') }}</p>
+                                        <p class="mt-2 text-[9px] text-gray-400">إنشاء {{ $displayCreatedAt?->format('d/m/Y h:i A') }}</p>
                                     </td>
                                 </tr>
                                 @can('orders.update')

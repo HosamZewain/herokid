@@ -5,12 +5,14 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderPaymentEvent;
+use App\Models\Product;
 use App\Models\User;
 use App\Support\OrderDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
+use App\Support\Phone;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -61,10 +63,12 @@ class AdminOrderGroupService
             : 25;
 
         $groups = (clone $query)
-            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MIN(id) as representative_id')
-            ->groupBy('checkout_group_key')
-            ->orderByDesc('latest_at')
-            ->paginate($perPage)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at, MIN(id) as representative_id')
+            ->groupBy('checkout_group_key');
+
+        $this->applyGroupOrdering($groups, $request);
+
+        $groups = $groups->paginate($perPage)
             ->withQueryString();
 
         $keys = $groups->getCollection()->pluck('checkout_group_key');
@@ -108,6 +112,13 @@ class AdminOrderGroupService
                 })
                 ->orderBy('name')
                 ->get(['id', 'name', 'is_active']),
+            'filterProducts' => Product::query()
+                ->whereExists(fn ($items) => $items
+                    ->selectRaw('1')
+                    ->from('order_items')
+                    ->whereColumn('order_items.product_id', 'products.id'))
+                ->orderBy('name_ar')
+                ->get(['id', 'name_ar', 'slug']),
         ];
     }
 
@@ -117,11 +128,11 @@ class AdminOrderGroupService
         $lifecycle = $this->lifecycle($request);
         $includeDeleted = $this->includeDeleted($request, $lifecycle);
         $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
-        $keys = (clone $query)
-            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at')
-            ->groupBy('checkout_group_key')
-            ->orderByDesc('latest_at')
-            ->pluck('checkout_group_key');
+        $grouped = (clone $query)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at')
+            ->groupBy('checkout_group_key');
+        $this->applyGroupOrdering($grouped, $request);
+        $keys = $grouped->pluck('checkout_group_key');
         $orders = $this->ordersForKeys($keys, $includeDeleted)
             ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
@@ -472,6 +483,7 @@ class AdminOrderGroupService
                 : null,
             'created_at' => $orders->min('created_at'),
             'latest_at' => $orders->max('created_at'),
+            'updated_at' => $orders->max('updated_at'),
             'orders' => $orders,
             'active_orders' => $activeOrders,
             'deleted_orders' => $orders->filter->trashed()->values(),
@@ -579,13 +591,37 @@ class AdminOrderGroupService
             }
         }
 
+        if ($request->filled('product_id')) {
+            $productId = $request->integer('product_id');
+
+            if ($productId > 0) {
+                $query->whereExists(function ($items) use ($productId, $includeDeleted): void {
+                    $items
+                        ->selectRaw('1')
+                        ->from('order_items as filtered_product_items')
+                        ->join('orders as filtered_product_orders', 'filtered_product_orders.id', '=', 'filtered_product_items.order_id')
+                        ->whereColumn('filtered_product_orders.checkout_group_key', 'orders.checkout_group_key')
+                        ->where('filtered_product_items.product_id', $productId);
+
+                    if (! $includeDeleted) {
+                        $items->whereNull('filtered_product_orders.deleted_at');
+                    }
+                });
+            }
+        }
+
+        $this->applyEventFilter($query, $request);
+
         if ($request->filled('q')) {
             $term = trim((string) $request->query('q'));
+            $phoneValues = preg_match('/\A[\d\s()+-]{7,}\z/', $term) === 1
+                ? Phone::equivalentValues($term)
+                : [];
             $mergedTargetKeys = OrderGroupMergeAlias::query()
                 ->where('source_short_reference', 'like', '%'.$term.'%')
                 ->orWhere('source_checkout_group_key', 'like', '%'.$term.'%')
                 ->pluck('target_checkout_group_key');
-            $query->where(function (Builder $builder) use ($term, $mergedTargetKeys): void {
+            $query->where(function (Builder $builder) use ($term, $phoneValues, $mergedTargetKeys): void {
                 $builder
                     ->where('checkout_group_key', 'like', '%'.$term.'%')
                     ->orWhereHas('checkoutReference', fn (Builder $reference): Builder => $reference
@@ -598,6 +634,9 @@ class AdminOrderGroupService
                     ->orWhereHas('items', fn (Builder $items): Builder => $items
                         ->where('title', 'like', '%'.$term.'%')
                         ->orWhere('sku', 'like', '%'.$term.'%'));
+                if ($phoneValues !== []) {
+                    $builder->orWhereIn('delivery_details->phone', $phoneValues);
+                }
                 if ($mergedTargetKeys->isNotEmpty()) {
                     $builder->orWhereIn('checkout_group_key', $mergedTargetKeys);
                 }
@@ -630,6 +669,103 @@ class AdminOrderGroupService
         }
 
         return $query;
+    }
+
+    private function applyEventFilter(Builder $query, Request $request): void
+    {
+        $event = trim((string) $request->query('event', ''));
+
+        if ($event === '') {
+            return;
+        }
+
+        [$type, $value] = array_pad(explode(':', $event, 2), 2, '');
+        $from = $this->eventBoundary($request, 'event_from', false);
+        $to = $this->eventBoundary($request, 'event_to', true);
+
+        if (in_array($type, [
+            OrderStatusRegistry::TYPE_ORDER,
+            OrderStatusRegistry::TYPE_PRINTING,
+            OrderStatusRegistry::TYPE_SHIPPING,
+        ], true) && OrderStatusRegistry::isValid($type, $value, false)) {
+            $query->whereExists(function ($events) use ($type, $value, $from, $to): void {
+                $events
+                    ->selectRaw('1')
+                    ->from('order_status_logs as filtered_status_events')
+                    ->join('orders as filtered_status_orders', 'filtered_status_orders.id', '=', 'filtered_status_events.order_id')
+                    ->whereColumn('filtered_status_orders.checkout_group_key', 'orders.checkout_group_key')
+                    ->where('filtered_status_events.status_type', $type)
+                    ->where('filtered_status_events.status', $value);
+
+                if ($from) {
+                    $events->where('filtered_status_events.created_at', '>=', $from);
+                }
+
+                if ($to) {
+                    $events->where('filtered_status_events.created_at', '<=', $to);
+                }
+            });
+
+            return;
+        }
+
+        $validPaymentStatus = $type === OrderStatusRegistry::TYPE_PAYMENT
+            && OrderStatusRegistry::isValid(OrderStatusRegistry::TYPE_PAYMENT, $value, false);
+        $validPaymentEvent = $type === 'payment_event' && in_array($value, ['received', 'reversed'], true);
+
+        if (! $validPaymentStatus && ! $validPaymentEvent) {
+            return;
+        }
+
+        $query->whereExists(function ($events) use ($validPaymentStatus, $value, $from, $to): void {
+            $events
+                ->selectRaw('1')
+                ->from('order_payment_events as filtered_payment_events')
+                ->whereColumn('filtered_payment_events.checkout_group_key', 'orders.checkout_group_key');
+
+            if ($validPaymentStatus) {
+                $events->where('filtered_payment_events.new_status', $value);
+            } elseif ($value === 'received') {
+                $events
+                    ->where('filtered_payment_events.event_type', 'payment_received')
+                    ->where('filtered_payment_events.amount_delta_cents', '>', 0)
+                    ->where('filtered_payment_events.affects_collection_stats', true);
+            } else {
+                $events->where('filtered_payment_events.event_type', 'payment_reversed');
+            }
+
+            if ($from) {
+                $events->where('filtered_payment_events.occurred_at', '>=', $from);
+            }
+
+            if ($to) {
+                $events->where('filtered_payment_events.occurred_at', '<=', $to);
+            }
+        });
+    }
+
+    private function eventBoundary(Request $request, string $field, bool $endOfDay): ?CarbonImmutable
+    {
+        if (! $request->filled($field)) {
+            return null;
+        }
+
+        try {
+            return $endOfDay
+                ? OrderDateTime::utcEndOfDay((string) $request->query($field))
+                : OrderDateTime::utcStartOfDay((string) $request->query($field));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function applyGroupOrdering(Builder $query, Request $request): void
+    {
+        $sort = (string) $request->query('sort', 'created_at');
+        $direction = $request->query('direction') === 'asc' ? 'asc' : 'desc';
+        $column = $sort === 'updated_at' ? 'latest_updated_at' : 'latest_at';
+
+        $query->orderBy($column, $direction)->orderByRaw('MIN(id) '.$direction);
     }
 
     private function groupedFilteredQuery(

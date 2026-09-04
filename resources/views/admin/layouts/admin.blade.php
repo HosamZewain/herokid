@@ -276,7 +276,7 @@
 
             {{-- Top bar --}}
             <header
-                class="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+                class="sticky top-0 z-20 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 lg:flex-nowrap">
                 <div class="flex min-w-0 items-center gap-3">
                     <button type="button"
                         class="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:hidden"
@@ -294,6 +294,25 @@
                     @endisset
                     </div>
                 </div>
+                @can('orders.view')
+                    <form method="GET" action="{{ route('admin.orders.index') }}" class="order-3 w-full sm:order-none sm:mx-auto sm:w-72 lg:w-80" role="search" data-admin-order-quick-search>
+                        <input type="hidden" name="catalog_type" value="all">
+                        <input type="hidden" name="lifecycle" value="all">
+                        <label for="admin-order-quick-search" class="sr-only">بحث سريع عن طلب</label>
+                        <div class="relative">
+                            <input id="admin-order-quick-search" name="q" type="search"
+                                value="{{ request()->routeIs('admin.orders.index') ? request('q') : '' }}"
+                                placeholder="رقم الطلب أو موبايل العميل"
+                                class="w-full rounded-xl border-gray-200 bg-gray-50 py-2.5 pe-3 ps-11 text-right text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500">
+                            <button type="submit" title="بحث في كل الطلبات" aria-label="بحث في كل الطلبات"
+                                class="absolute inset-y-1 start-1 grid w-9 place-items-center rounded-lg bg-indigo-600 text-white transition hover:bg-indigo-700">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                @endcan
                 <div class="flex flex-shrink-0 items-center gap-2 sm:gap-4">
                     @isset($headerActions)
                         {{ $headerActions }}

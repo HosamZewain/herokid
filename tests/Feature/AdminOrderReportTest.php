@@ -7,6 +7,7 @@ use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
+use App\Support\OrderDateTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -115,8 +116,8 @@ class AdminOrderReportTest extends TestCase
             'payment_status' => 'partially_paid',
             'order_source' => 'whatsapp',
             'payment_method' => 'انستاباي',
-            'from' => now()->toDateString(),
-            'to' => now()->toDateString(),
+            'from' => OrderDateTime::display(now())->toDateString(),
+            'to' => OrderDateTime::display(now())->toDateString(),
             'q' => 'FILTER-IN',
         ]))->assertOk()->viewData('report');
 
