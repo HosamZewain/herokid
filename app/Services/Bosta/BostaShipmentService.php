@@ -20,6 +20,7 @@ class BostaShipmentService
         private AdminOrderGroupService $groups,
         private BostaShipmentEligibilityService $eligibility,
         private BostaShippingStatusService $shippingStatuses,
+        private BostaShipmentDescriptionBuilder $descriptions,
     ) {}
 
     /** @param array<string, mixed> $overrides */
@@ -45,6 +46,8 @@ class BostaShipmentService
             }
 
             $delivery = array_replace($group['delivery'], array_filter([
+                'bosta_city_id' => $overrides['bosta_city_id'] ?? null,
+                'bosta_district_id' => $overrides['bosta_district_id'] ?? null,
                 'governorate' => $overrides['governorate'] ?? null,
                 'city' => $overrides['district_name'] ?? null,
                 'street' => $overrides['first_line'] ?? null,
@@ -93,7 +96,7 @@ class BostaShipmentService
                     'packageType' => $shipment->package_type,
                     'packageDetails' => [
                         'itemsCount' => max(1, $group['story_count'] + $group['product_quantity'] + $group['add_on_quantity']),
-                        'description' => implode('، ', array_filter([...$group['story_titles'], ...$group['product_titles'], ...$group['add_on_titles']])),
+                        'description' => $this->descriptions->build($group, $receiverName, $phone),
                     ],
                 ],
             ];

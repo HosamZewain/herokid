@@ -6,16 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Models\BostaPickup;
 use App\Models\BostaShipment;
 use App\Models\Order;
+use App\Services\Bosta\BostaAddressCatalogService;
 use App\Services\Bosta\BostaClient;
 use App\Services\Bosta\BostaPickupService;
 use App\Services\Bosta\BostaShipmentEligibilityService;
 use App\Services\Bosta\BostaShipmentService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class BostaController extends Controller
 {
+    public function districts(Request $request, BostaAddressCatalogService $catalog): JsonResponse
+    {
+        $values = $request->validate(['city_id' => ['required', 'string', 'max:100']]);
+        abort_unless($catalog->findCityById($values['city_id']), 422, 'محافظة Bosta غير صالحة.');
+
+        return response()->json(['districts' => $catalog->districts($values['city_id'])]);
+    }
+
     public function index(BostaShipmentEligibilityService $eligibility)
     {
         return view('admin.bosta.index', [
@@ -37,6 +48,8 @@ class BostaController extends Controller
         $overrides = $request->validate([
             'receiver_name' => ['nullable', 'string', 'max:120'],
             'receiver_phone' => ['nullable', 'string', 'max:30'],
+            'bosta_city_id' => ['nullable', 'string', 'max:100', 'required_with:bosta_district_id'],
+            'bosta_district_id' => ['nullable', 'string', 'max:100', 'required_with:bosta_city_id'],
             'governorate' => ['nullable', 'string', 'max:120'],
             'district_name' => ['nullable', 'string', 'max:160'],
             'first_line' => ['nullable', 'string', 'max:500'],
@@ -82,10 +95,14 @@ class BostaController extends Controller
 
     public function awb(Request $request, BostaClient $client)
     {
-        $values = $request->validate(['shipments' => ['required', 'array', 'min:1'], 'shipments.*' => ['integer', 'distinct', 'exists:bosta_shipments,id']]);
+        $values = $request->validate([
+            'shipments' => ['required', 'array', 'min:1'],
+            'shipments.*' => ['integer', 'distinct', 'exists:bosta_shipments,id'],
+            'awb_type' => ['nullable', Rule::in(['A4', 'A6'])],
+        ]);
         $tracking = BostaShipment::query()->whereIn('id', $values['shipments'])->pluck('tracking_number')->filter()->values()->all();
         abort_if($tracking === [], 422, 'لا توجد أرقام تتبع صالحة.');
-        $response = $client->createAwb($tracking);
+        $response = $client->createAwb($tracking, 'ar', $values['awb_type'] ?? 'A6');
         $content = data_get($response, 'data.file')
             ?: data_get($response, 'data.base64')
             ?: (is_string(data_get($response, 'data')) ? data_get($response, 'data') : null)

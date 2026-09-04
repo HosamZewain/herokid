@@ -15,7 +15,10 @@
 @can('bosta.create_pickup')<div class="mt-5 grid gap-3 md:grid-cols-4"><label class="text-sm font-bold">تاريخ الاستلام<input type="date" name="scheduled_date" value="{{ now()->addDay()->toDateString() }}" class="mt-1 w-full rounded-xl border-gray-300" required></label><label class="text-sm font-bold">مسؤول التسليم<input name="contact_name" class="mt-1 w-full rounded-xl border-gray-300" required></label><label class="text-sm font-bold">الهاتف<input name="contact_phone" inputmode="tel" class="mt-1 w-full rounded-xl border-gray-300" required></label><label class="text-sm font-bold">ملاحظة<input name="notes" class="mt-1 w-full rounded-xl border-gray-300"></label></div>@endcan
 <div class="mt-4 flex flex-wrap gap-3">
     @can('bosta.create_pickup')<button class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">إنشاء Pickup للشحنات المختارة</button>@endcan
-    @can('bosta.print_awb')<button type="submit" formaction="{{ route('admin.bosta.awb') }}" formtarget="_blank" formnovalidate class="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white">فتح بوليصة الشحن AWB</button>@endcan
+    @can('bosta.print_awb')
+        <select name="awb_type" class="rounded-xl border-gray-300 text-sm font-bold"><option value="A6" selected>A6 — طابعة حرارية</option><option value="A4">A4 — طابعة عادية</option></select>
+        <button type="submit" formaction="{{ route('admin.bosta.awb') }}" formtarget="_blank" formnovalidate class="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white">فتح بوليصة الشحن</button>
+    @endcan
 </div></form>@else<p class="mt-4 text-gray-500">لم يتم إنشاء شحنات بعد.</p>@endif<div class="mt-4">{{ $shipments->links() }}</div></section>
  @if($pickups->isNotEmpty())<section class="rounded-3xl border bg-white p-6 shadow-sm"><h2 class="text-xl font-black">آخر طلبات الاستلام</h2><div class="mt-4 grid gap-3 md:grid-cols-2">@foreach($pickups as $pickup)<div class="rounded-2xl bg-gray-50 p-4"><b>{{ $pickup->scheduled_date->format('d/m/Y') }}</b> · {{ $pickup->number_of_parcels }} شحنة<br><span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }}</span></div>@endforeach</div></section>@endif
 </div>

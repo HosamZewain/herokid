@@ -91,6 +91,12 @@ class BostaIntegrationTest extends TestCase
     {
         $order = $this->checkout('BOSTA-RETRY', 20_000)->first();
         Http::fake([
+            '*/cities/*/districts' => Http::response(['data' => [[
+                'districtId' => 'district-nasr-city',
+                'districtName' => 'Nasr City',
+                'districtOtherName' => 'مدينة نصر',
+                'dropOffAvailability' => true,
+            ]]]),
             '*/cities*' => Http::response(['data' => [[
                 '_id' => 'city-cairo',
                 'name' => 'Cairo',
@@ -117,8 +123,9 @@ class BostaIntegrationTest extends TestCase
             ->assertOk()
             ->assertSee('مراجعة البيانات وإعادة محاولة إنشاء الشحنة')
             ->assertSee('حفظ التعديلات وإعادة المحاولة')
-            ->assertSee('name="district_name"', false)
-            ->assertSee('value="مدينة نصر"', false);
+            ->assertSee('name="bosta_city_id"', false)
+            ->assertSee('name="bosta_district_id"', false)
+            ->assertSee('عنوان العميل الأصلي للمطابقة اليدوية');
 
         $this->actingAs($this->admin)
             ->post(route('admin.bosta.shipments.store', $order->id), [
@@ -320,6 +327,12 @@ class BostaIntegrationTest extends TestCase
     public function test_checkout_order_page_shows_bosta_readiness_and_existing_shipment_details(): void
     {
         $orders = $this->checkout('BOSTA-ORDER-PAGE', 20_000);
+        Http::fake([
+            '*/cities/*/districts' => Http::response(['data' => []]),
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo', 'name' => 'Cairo', 'otherName' => 'القاهرة',
+            ]]]]),
+        ]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $orders->first()->id))
@@ -347,6 +360,109 @@ class BostaIntegrationTest extends TestCase
             ->assertSee('TRACK-ORDER-PAGE')
             ->assertSee('picked_up')
             ->assertSee('تم إنشاء الشحنة');
+    }
+
+    public function test_admin_selects_official_bosta_city_and_district_and_sends_rich_description(): void
+    {
+        $orders = $this->checkout('BOSTA-OFFICIAL-ADDRESS', 40_000);
+        $item = $orders->first()->items()->firstOrFail();
+        $item->update([
+            'title' => 'ستيكر مخصص',
+            'quantity' => 2,
+            'personalization_snapshot' => ['children' => [
+                ['child_name' => 'Laila'],
+                ['child_name' => 'Omar'],
+            ]],
+        ]);
+        Http::fake([
+            '*/cities/city-cairo/districts' => Http::response(['data' => [[
+                'districtId' => 'district-maadi',
+                'districtName' => 'ElMaadi',
+                'districtOtherName' => 'المعادي',
+                'zoneId' => 'zone-maadi',
+                'dropOffAvailability' => true,
+            ]]]),
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+            '*/deliveries?apiVersion=1' => Http::response(['data' => [
+                '_id' => 'delivery-official',
+                'trackingNumber' => 'TRACK-OFFICIAL',
+            ]]),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $orders->first()->id))
+            ->assertOk()
+            ->assertSee('محافظة Bosta')
+            ->assertSee('المعادي — ElMaadi')
+            ->assertSee('عنوان العميل الأصلي للمطابقة اليدوية');
+
+        $this->actingAs($this->admin)
+            ->getJson(route('admin.bosta.districts', ['city_id' => 'city-cairo']))
+            ->assertOk()
+            ->assertJsonPath('districts.0.id', 'district-maadi');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.shipments.store', $orders->first()->id), [
+                'receiver_name' => 'عميل Bosta',
+                'receiver_phone' => '01001234567',
+                'bosta_city_id' => 'city-cairo',
+                'bosta_district_id' => 'district-maadi',
+                'first_line' => '٧٢ شارع النهضة المعادي',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(function (HttpRequest $request) use ($orders): bool {
+            if (! str_contains($request->url(), '/deliveries?apiVersion=1')) {
+                return false;
+            }
+
+            $description = (string) $request['specs']['packageDetails']['description'];
+            $reference = $orders->first()->refresh()->checkoutReference?->short_reference ?: $orders->first()->order_number;
+
+            return $request['dropOffAddress']['cityId'] === 'city-cairo'
+                && $request['dropOffAddress']['districtId'] === 'district-maadi'
+                && ! isset($request['dropOffAddress']['districtName'])
+                && str_contains($description, 'ولي الأمر: عميل Bosta')
+                && str_contains($description, 'الهاتف: 01001234567')
+                && str_contains($description, 'الطلب: '.$reference)
+                && str_contains($description, 'ستيكر مخصص × 2')
+                && str_contains($description, 'Laila')
+                && str_contains($description, 'Omar');
+        });
+    }
+
+    public function test_awb_defaults_to_a6_and_accepts_a4(): void
+    {
+        $orders = $this->checkout('BOSTA-AWB', 20_000);
+        $shipment = BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-AWB',
+            'order_id' => $orders->first()->id,
+            'bosta_delivery_id' => 'delivery-awb',
+            'tracking_number' => 'TRACK-AWB',
+            'business_reference' => 'HK09-500',
+            'creation_status' => 'created',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+        Http::fake(['*/deliveries/mass-awb' => Http::response(['data' => ['file' => base64_encode('%PDF-test')]])]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.awb'), ['shipments' => [$shipment->id]])
+            ->assertOk();
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/deliveries/mass-awb')
+            && $request['requestedAwbType'] === 'A6');
+
+        Http::fake(['*/deliveries/mass-awb' => Http::response(['data' => ['file' => base64_encode('%PDF-test')]])]);
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.awb'), ['shipments' => [$shipment->id], 'awb_type' => 'A4'])
+            ->assertOk();
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/deliveries/mass-awb')
+            && $request['requestedAwbType'] === 'A4');
     }
 
     public function test_admin_can_review_and_override_shipment_data_without_recording_a_payment(): void

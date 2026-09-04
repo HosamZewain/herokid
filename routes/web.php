@@ -624,6 +624,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
 
     Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
     Route::get('bosta', [BostaController::class, 'index'])->middleware('permission:bosta.view')->name('bosta.index');
+    Route::get('bosta/districts', [BostaController::class, 'districts'])->middleware('permission:bosta.view')->name('bosta.districts');
     Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
     Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');
     Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');

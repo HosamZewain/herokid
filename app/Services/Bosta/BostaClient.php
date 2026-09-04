@@ -18,11 +18,11 @@ class BostaClient
         return $this->request()->post('/pickups', $payload)->throw()->json();
     }
 
-    public function createAwb(array $trackingNumbers, string $language = 'ar'): array
+    public function createAwb(array $trackingNumbers, string $language = 'ar', string $type = 'A6'): array
     {
         return $this->request()->post('/deliveries/mass-awb', [
             'trackingNumbers' => implode(',', $trackingNumbers),
-            'requestedAwbType' => 'A4',
+            'requestedAwbType' => $type,
             'lang' => $language,
         ])->throw()->json();
     }
@@ -32,6 +32,11 @@ class BostaClient
         return $this->request()->get('/cities', [
             'countryId' => (string) config('bosta.country_id'),
         ])->throw()->json();
+    }
+
+    public function districts(string $cityId): array
+    {
+        return $this->request()->get('/cities/'.rawurlencode($cityId).'/districts')->throw()->json();
     }
 
     private function request(): PendingRequest

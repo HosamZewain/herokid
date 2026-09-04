@@ -56,7 +56,8 @@
                         <form method="POST" action="{{ route('admin.bosta.awb') }}" target="_blank">
                             @csrf
                             <input type="hidden" name="shipments[]" value="{{ $bostaShipment->id }}">
-                            <button class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-black">فتح بوليصة AWB</button>
+                            <input type="hidden" name="awb_type" value="A6">
+                            <button class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-black">فتح بوليصة A6</button>
                         </form>
                     @endif
                 @endcan
