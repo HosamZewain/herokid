@@ -113,7 +113,17 @@ class BostaIntegrationTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->post(route('admin.bosta.shipments.store', $order->id))
+            ->get(route('admin.orders.groups.show', $order->id))
+            ->assertOk()
+            ->assertSee('مراجعة البيانات وإعادة محاولة إنشاء الشحنة')
+            ->assertSee('حفظ التعديلات وإعادة المحاولة')
+            ->assertSee('name="district_name"', false)
+            ->assertSee('value="مدينة نصر"', false);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.shipments.store', $order->id), [
+                'district_name' => 'ElMaadi',
+            ])
             ->assertRedirect();
 
         $this->assertDatabaseCount('bosta_shipments', 1);
@@ -122,6 +132,9 @@ class BostaIntegrationTest extends TestCase
             'creation_status' => 'created',
             'tracking_number' => 'TRACK-RETRY',
         ]);
+
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/deliveries?apiVersion=1')
+            && $request['dropOffAddress']['districtName'] === 'ElMaadi');
     }
 
     public function test_recent_pending_delivery_prevents_a_concurrent_duplicate_provider_request(): void
