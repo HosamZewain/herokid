@@ -16,6 +16,51 @@
         body {
             font-family: 'Cairo', sans-serif;
         }
+
+        .admin-topbar {
+            flex-wrap: nowrap;
+        }
+
+        .admin-order-quick-search {
+            flex: 0 1 20rem;
+            width: 20rem;
+            min-width: 13rem;
+            max-width: 20rem;
+        }
+
+        .admin-order-quick-search__field {
+            width: 100%;
+            padding-left: 3rem !important;
+        }
+
+        .admin-order-quick-search__control {
+            position: relative;
+        }
+
+        .admin-order-quick-search__submit {
+            position: absolute;
+            top: .25rem;
+            bottom: .25rem;
+            left: .25rem;
+            display: grid;
+            width: 2.25rem;
+            place-items: center;
+            border-radius: .5rem;
+        }
+
+        @media (max-width: 767px) {
+            .admin-topbar {
+                flex-wrap: wrap;
+            }
+
+            .admin-order-quick-search {
+                order: 3;
+                flex-basis: 100%;
+                width: 100%;
+                min-width: 100%;
+                max-width: none;
+            }
+        }
     </style>
 </head>
 
@@ -276,7 +321,7 @@
 
             {{-- Top bar --}}
             <header
-                class="sticky top-0 z-20 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 lg:flex-nowrap">
+                class="admin-topbar sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
                 <div class="flex min-w-0 items-center gap-3">
                     <button type="button"
                         class="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:hidden"
@@ -295,17 +340,17 @@
                     </div>
                 </div>
                 @can('orders.view')
-                    <form method="GET" action="{{ route('admin.orders.index') }}" class="order-3 w-full sm:order-none sm:mx-auto sm:w-72 lg:w-80" role="search" data-admin-order-quick-search>
+                    <form method="GET" action="{{ route('admin.orders.index') }}" class="admin-order-quick-search mx-auto" role="search" data-admin-order-quick-search>
                         <input type="hidden" name="catalog_type" value="all">
                         <input type="hidden" name="lifecycle" value="all">
                         <label for="admin-order-quick-search" class="sr-only">بحث سريع عن طلب</label>
-                        <div class="relative">
+                        <div class="admin-order-quick-search__control">
                             <input id="admin-order-quick-search" name="q" type="search"
                                 value="{{ request()->routeIs('admin.orders.index') ? request('q') : '' }}"
                                 placeholder="رقم الطلب أو موبايل العميل"
-                                class="w-full rounded-xl border-gray-200 bg-gray-50 py-2.5 pe-3 ps-11 text-right text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500">
+                                class="admin-order-quick-search__field w-full rounded-xl border-gray-200 bg-gray-50 py-2.5 pe-3 text-right text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500">
                             <button type="submit" title="بحث في كل الطلبات" aria-label="بحث في كل الطلبات"
-                                class="absolute inset-y-1 start-1 grid w-9 place-items-center rounded-lg bg-indigo-600 text-white transition hover:bg-indigo-700">
+                                class="admin-order-quick-search__submit bg-indigo-600 text-white transition hover:bg-indigo-700">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
                                 </svg>
