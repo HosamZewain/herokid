@@ -244,6 +244,68 @@
                         @endif
 
                         @can('orders.production_prompt.manage')
+                            @php
+                                $childIdentityPrompt = app(\App\Services\Orders\OrderChildIdentityPromptService::class)->forOrder($order);
+                                $approvedIdentityAttempt = $order->childIdentityApprovedAttempt;
+                                $approvedIdentityReady = $approvedIdentityAttempt
+                                    && $approvedIdentityAttempt->status === 'succeeded'
+                                    && filled($approvedIdentityAttempt->output_storage_path);
+                                $approvedIdentityUrl = $approvedIdentityReady
+                                    ? \Illuminate\Support\Facades\URL::signedRoute('orders.approved-child-identity', ['order' => $order])
+                                    : null;
+                            @endphp
+                            <div id="story-identity-{{ $order->id }}" class="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div class="text-right">
+                                        <p class="text-sm font-black text-violet-950">هوية الطفل المعتمدة</p>
+                                        <p class="mt-1 text-xs font-bold leading-5 text-violet-700">أنشئ الهوية أولًا، ثم ارفع النسخة التي تم اعتمادها لتصبح المرجع البصري داخل برومبت القصة.</p>
+                                    </div>
+                                    <span class="w-fit rounded-full px-3 py-1.5 text-xs font-black {{ $approvedIdentityReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+                                        {{ $approvedIdentityReady ? 'هوية معتمدة ومربوطة' : 'لم تُرفع هوية معتمدة' }}
+                                    </span>
+                                </div>
+
+                                @if($approvedIdentityReady)
+                                    <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-white p-3 sm:flex-row sm:items-center">
+                                        @can('orders.photos.view')
+                                            <a href="{{ $approvedIdentityUrl }}" target="_blank" rel="noopener" class="block h-24 w-32 shrink-0 overflow-hidden rounded-xl border border-emerald-100 bg-slate-50">
+                                                <img src="{{ $approvedIdentityUrl }}" alt="الهوية المعتمدة للطفل {{ $order->child_name }}" class="h-full w-full object-contain" loading="lazy">
+                                            </a>
+                                        @endcan
+                                        <div class="min-w-0 text-right">
+                                            <p class="text-xs font-black text-emerald-800">الهوية الحالية جاهزة للاستخدام</p>
+                                            <p class="mt-1 text-[11px] font-bold text-gray-500">المحاولة {{ $approvedIdentityAttempt->attempt_number }} · {{ app_datetime($approvedIdentityAttempt->completed_at, 'd/m/Y h:i A') }}</p>
+                                            @can('orders.photos.view')
+                                                <a href="{{ $approvedIdentityUrl }}" target="_blank" rel="noopener" class="mt-2 inline-flex rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">فتح الهوية المعتمدة</a>
+                                            @endcan
+                                        </div>
+                                    </div>
+                                @endif
+
+                                @can('orders.update')
+                                    @can('orders.photos.view')
+                                        @if(!$group['trashed'])
+                                            <form method="POST" action="{{ route('admin.orders.approved-child-identity.store', $order) }}" enctype="multipart/form-data" class="mt-4 grid gap-3 rounded-2xl border border-dashed border-violet-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                                                @csrf
+                                                <label class="block text-xs font-black text-gray-700">
+                                                    {{ $approvedIdentityReady ? 'استبدال الهوية المعتمدة' : 'رفع الهوية المعتمدة' }}
+                                                    <input type="file" name="approved_identity" accept="image/jpeg,image/png,image/webp" required class="mt-2 block w-full rounded-xl border border-gray-200 bg-slate-50 text-sm file:ml-3 file:border-0 file:bg-violet-100 file:px-4 file:py-3 file:font-black file:text-violet-800">
+                                                    <span class="mt-1 block text-[10px] font-bold text-gray-400">JPG أو PNG أو WebP — بحد أقصى 15 ميجا.</span>
+                                                </label>
+                                                <button class="min-h-11 rounded-xl bg-violet-700 px-5 py-3 text-xs font-black text-white hover:bg-violet-800">رفع وربط الهوية</button>
+                                            </form>
+                                        @endif
+                                    @endcan
+                                @endcan
+                            </div>
+
+                            @include('admin.orders._inline-production-prompt', [
+                                'promptDomId' => 'child-identity-prompt-'.$order->id,
+                                'promptTitle' => 'برومبت إنشاء هوية الطفل '.$order->child_name,
+                                'promptText' => $childIdentityPrompt,
+                                'promptType' => 'child_identity',
+                            ])
+
                             @if($storyPrompt)
                                 @include('admin.orders._inline-production-prompt', [
                                     'promptDomId' => 'story-production-prompt-'.$order->id,

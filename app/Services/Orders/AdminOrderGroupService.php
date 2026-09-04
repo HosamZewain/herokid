@@ -37,7 +37,7 @@ class AdminOrderGroupService
         'bookletPreview:id,order_id,uuid,status,current_version_id,public_token_encrypted',
         'productPreviewGallery:id,checkout_group_key,status,public_token_encrypted',
         'productPreviewGallery.previews:id,product_gallery_id',
-        'story:id,title,price',
+        'story:id,title,price,short_desc,full_desc,full_story,age_range,gender,language,lesson_value',
         'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
     ];
@@ -49,6 +49,10 @@ class AdminOrderGroupService
         'previews',
         'attachments.uploader:id,name',
         'productionProject.assignedTo:id,name',
+        'story.sceneTemplates',
+        'sceneTextSnapshots',
+        'childIdentityPromptOverride',
+        'childIdentityApprovedAttempt',
     ];
 
     public function paginate(Request $request, bool $includeStatistics = true): array

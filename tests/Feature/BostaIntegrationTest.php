@@ -398,6 +398,9 @@ class BostaIntegrationTest extends TestCase
             ->assertOk()
             ->assertSee('محافظة Bosta')
             ->assertSee('المعادي — ElMaadi')
+            ->assertSee('ابحث باسم المحافظة…')
+            ->assertSee('ابحث باسم المنطقة…')
+            ->assertSee('data-bosta-select-search', false)
             ->assertSee('عنوان العميل الأصلي للمطابقة اليدوية');
 
         $this->actingAs($this->admin)

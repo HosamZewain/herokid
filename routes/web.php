@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
 use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderActivityController;
+use App\Http\Controllers\Admin\OrderApprovedChildIdentityController;
 use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
@@ -665,6 +666,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');
+    Route::post('orders/{order}/approved-child-identity', OrderApprovedChildIdentityController::class)->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.approved-child-identity.store');
     Route::post('orders/{order}/attachments', [OrderAttachmentController::class, 'store'])->middleware('permission:orders.update')->name('orders.attachments.store');
     Route::get('order-attachments/{attachment}', [OrderAttachmentController::class, 'show'])->middleware('permission:orders.view')->name('orders.attachments.show');
     Route::get('order-attachments/{attachment}/download', [OrderAttachmentController::class, 'download'])->middleware('permission:orders.view')->name('orders.attachments.download');

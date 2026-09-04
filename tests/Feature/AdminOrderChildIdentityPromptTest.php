@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\StorySceneTemplate;
 use App\Models\User;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -56,6 +58,54 @@ class AdminOrderChildIdentityPromptTest extends TestCase
         $this->assertStringContainsString('/orders/'.$order->id.'/production-photos/0', $prompt);
         $this->assertStringContainsString('Do not generate any story scenes yet.', $prompt);
         $this->assertStringNotContainsString($photoPath, $prompt);
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('برومبت إنشاء هوية الطفل كريم')
+            ->assertSee('رفع الهوية المعتمدة')
+            ->assertSee('data-copy-inline-production-prompt="child-identity-prompt-'.$order->id.'"', false);
+    }
+
+    public function test_admin_can_upload_an_approved_identity_without_changing_the_story_prompt_template(): void
+    {
+        Storage::fake('local');
+        $admin = $this->adminUser();
+        $order = $this->orderWithStory();
+        Setting::query()->updateOrCreate(
+            ['key' => StoryProductionPrompt::SETTING_KEY],
+            ['value' => 'Current production template {{approved_child_identity_reference}}'],
+        );
+        $templateBefore = StoryProductionPrompt::activeTemplate();
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.approved-child-identity.store', $order), [
+                'approved_identity' => UploadedFile::fake()->image('approved-identity.png', 1200, 800),
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $order).'#story-identity-'.$order->id)
+            ->assertSessionHas('success');
+
+        $order->refresh()->load('childIdentityRequest', 'childIdentityApprovedAttempt');
+        $attempt = $order->childIdentityApprovedAttempt;
+
+        $this->assertNotNull($order->childIdentityRequest);
+        $this->assertNotNull($attempt);
+        $this->assertSame('manual-upload', $attempt->provider);
+        $this->assertSame('succeeded', $attempt->status);
+        $this->assertSame($attempt->id, $order->childIdentityRequest->approved_attempt_id);
+        Storage::disk('local')->assertExists($attempt->output_storage_path);
+        $this->assertSame($templateBefore, StoryProductionPrompt::activeTemplate());
+        $this->assertStringContainsString(
+            route('orders.approved-child-identity', $order),
+            urldecode(StoryProductionPrompt::forOrder($order)),
+        );
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('هوية معتمدة ومربوطة')
+            ->assertSee('استبدال الهوية المعتمدة')
+            ->assertSee('فتح الهوية المعتمدة');
     }
 
     public function test_identity_prompt_override_keeps_managed_order_context_current(): void

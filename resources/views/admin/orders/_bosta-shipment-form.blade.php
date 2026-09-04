@@ -33,6 +33,7 @@
                     </label>
                     @if($bostaAddressCatalogAvailable)
                         <label class="text-xs font-black text-gray-700">محافظة Bosta
+                            <input type="search" data-bosta-select-search data-bosta-search-target="[data-bosta-city]" placeholder="ابحث باسم المحافظة…" autocomplete="off" class="mt-1 w-full rounded-xl border-sky-200 bg-sky-50 text-sm font-normal">
                             <select name="bosta_city_id" required data-bosta-city data-districts-url="{{ route('admin.bosta.districts') }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                                 <option value="">اختر المحافظة المعتمدة</option>
                                 @foreach($bostaCities as $city)
@@ -41,6 +42,7 @@
                             </select>
                         </label>
                         <label class="text-xs font-black text-gray-700">منطقة Bosta
+                            <input type="search" data-bosta-select-search data-bosta-search-target="[data-bosta-district]" placeholder="ابحث باسم المنطقة…" autocomplete="off" class="mt-1 w-full rounded-xl border-sky-200 bg-sky-50 text-sm font-normal">
                             <select name="bosta_district_id" required data-bosta-district data-selected="{{ old('bosta_district_id', $bostaSelectedDistrictId) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                                 <option value="">اختر المنطقة المعتمدة</option>
                                 @foreach($bostaDistricts as $district)
@@ -80,13 +82,29 @@
 
 @once
     <script>
+        function filterBostaAddressSelect(searchInput) {
+            const select = searchInput.closest('label')?.querySelector(searchInput.dataset.bostaSearchTarget);
+            if (!select) return;
+            const term = searchInput.value.trim().toLocaleLowerCase('ar');
+            Array.from(select.options).forEach((option, index) => {
+                option.hidden = index > 0 && term !== '' && !option.text.toLocaleLowerCase('ar').includes(term);
+            });
+        }
+
+        document.addEventListener('input', (event) => {
+            const searchInput = event.target.closest('[data-bosta-select-search]');
+            if (searchInput) filterBostaAddressSelect(searchInput);
+        });
+
         document.addEventListener('change', async (event) => {
             const city = event.target.closest('[data-bosta-city]');
             if (!city) return;
             const form = city.closest('form');
             const district = form?.querySelector('[data-bosta-district]');
+            const districtSearch = district?.closest('label')?.querySelector('[data-bosta-select-search]');
             if (!district) return;
 
+            if (districtSearch) districtSearch.value = '';
             district.disabled = true;
             district.innerHTML = '<option value="">جارٍ تحميل المناطق…</option>';
             try {
@@ -101,6 +119,7 @@
                 district.innerHTML = '<option value="">تعذر تحميل المناطق — أعد المحاولة</option>';
             } finally {
                 district.disabled = false;
+                if (districtSearch) filterBostaAddressSelect(districtSearch);
             }
         });
     </script>
