@@ -402,7 +402,7 @@
                                         <p class="font-black text-gray-900" dir="ltr">{{ $row['date'] }}</p>
                                         <div class="mt-2 flex max-w-56 flex-wrap gap-1">
                                             @foreach($row['order_numbers'] as $index => $number)
-                                                <a href="{{ route('admin.orders.show', $row['order_ids'][$index]) }}" class="rounded-md bg-indigo-50 px-2 py-1 text-xs font-black text-indigo-700 hover:bg-indigo-100">#{{ $number }}</a>
+                                                <a href="{{ route('admin.orders.groups.show', $row['order_ids'][$index]) }}" class="rounded-md bg-indigo-50 px-2 py-1 text-xs font-black text-indigo-700 hover:bg-indigo-100">#{{ $number }}</a>
                                             @endforeach
                                         </div>
                                         <p class="mt-2 text-[10px] text-gray-400" dir="ltr">{{ $row['key'] }}</p>

@@ -502,7 +502,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(0, $cancelledStats['shipped_checkouts']);
     }
 
-    public function test_multi_story_checkout_opens_unified_checkout_and_keeps_story_production_navigation(): void
+    public function test_multi_story_checkout_uses_one_unified_workspace_without_internal_order_navigation(): void
     {
         [$first, $second] = $this->checkoutFixture();
         $shortReference = $first->checkoutReference()->value('short_reference');
@@ -516,9 +516,15 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('المنتجات المباشرة')
             ->assertSee('مغامرة رنا')
             ->assertSee('كتاب تلوين مباشر')
-            ->assertSee(route('admin.orders.show', $first), false)
-            ->assertSee(route('admin.orders.show', $second), false);
+            ->assertSee('data-inline-production-prompt', false)
+            ->assertSee('برومبت إنتاج قصة رنا')
+            ->assertSee('معاينات القصص للعميل')
+            ->assertSee('data-order-shipping-disclosure', false)
+            ->assertDontSee('href="'.route('admin.orders.show', $first).'"', false)
+            ->assertDontSee('href="'.route('admin.orders.show', $second).'"', false);
 
+        // The old per-story URL remains available for backward compatibility,
+        // but the primary workspace no longer sends staff into it.
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $first))
             ->assertOk()
@@ -528,6 +534,73 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('مغامرة رنا')
             ->assertSee('ملصق باسم الطفل')
             ->assertSee(route('admin.orders.show', $second), false);
+    }
+
+    public function test_order_pages_show_creation_time_and_other_checkouts_for_the_same_customer_only(): void
+    {
+        config(['app.display_timezone' => 'Africa/Cairo']);
+
+        $current = $this->createStoryOrder('HK-DUP-CURRENT', 'GROUP-DUP-CURRENT', 'رنا', 'new');
+        $current->items()->create([
+            'item_type' => 'story',
+            'story_id' => $current->story_id,
+            'title' => 'قصة رنا',
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+        $current->forceFill([
+            'created_at' => CarbonImmutable::parse('2026-09-04 18:30:00', 'UTC'),
+            'updated_at' => CarbonImmutable::parse('2026-09-04 18:30:00', 'UTC'),
+        ])->saveQuietly();
+
+        $sameCheckoutSibling = $this->createStoryOrder('HK-DUP-SIBLING', 'GROUP-DUP-CURRENT', 'سليم', 'new');
+        $sameCheckoutSibling->items()->create([
+            'item_type' => 'story',
+            'story_id' => $sameCheckoutSibling->story_id,
+            'title' => 'قصة سليم',
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $related = $this->createStoryOrder('HK-DUP-RELATED', 'GROUP-DUP-RELATED', 'ليلى', 'under_review');
+        $related->forceFill([
+            'delivery_details' => array_replace($related->delivery_details, ['phone' => '+201000000000']),
+        ])->saveQuietly();
+        $related->items()->create([
+            'item_type' => 'story',
+            'story_id' => $related->story_id,
+            'title' => 'قصة ليلى المرتبطة',
+            'unit_price_cents' => 29_900,
+            'quantity' => 1,
+            'total_price_cents' => 29_900,
+        ]);
+
+        $unrelated = $this->createStoryOrder('HK-DUP-OTHER', 'GROUP-DUP-OTHER', 'آدم', 'new');
+        $unrelated->forceFill([
+            'delivery_details' => array_replace($unrelated->delivery_details, ['phone' => '01222222222']),
+        ])->saveQuietly();
+
+        $relatedReference = $related->checkoutReference->short_reference;
+        $unrelatedReference = $unrelated->checkoutReference->short_reference;
+
+        foreach ([
+            route('admin.orders.groups.show', $current->id),
+            route('admin.orders.show', $current),
+        ] as $url) {
+            $this->actingAs($this->admin)
+                ->get($url)
+                ->assertOk()
+                ->assertSee('تاريخ إنشاء الطلب')
+                ->assertSee('04/09/2026 09:30 PM')
+                ->assertSee('data-related-customer-checkouts', false)
+                ->assertSee('توجد طلبات أخرى لنفس رقم الهاتف')
+                ->assertSee('1 طلب مرتبط')
+                ->assertSee($relatedReference)
+                ->assertSee(route('admin.orders.groups.show', $related->id), false)
+                ->assertDontSee($unrelatedReference);
+        }
     }
 
     public function test_order_details_show_a_downloadable_checkout_payment_summary_with_all_items(): void
@@ -564,8 +637,9 @@ class AdminOrderGroupManagementTest extends TestCase
             ->get(route('admin.orders.groups.show', $order->id))
             ->assertOk()
             ->assertSee('تعديل الطلب بالكامل')
-            ->assertSee('فتح تفاصيل الإنتاج')
-            ->assertSee(route('admin.orders.show', $order), false);
+            ->assertSee('data-inline-production-prompt', false)
+            ->assertSee('برومبت إنتاج قصة')
+            ->assertDontSee('href="'.route('admin.orders.show', $order).'"', false);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.show', $order))

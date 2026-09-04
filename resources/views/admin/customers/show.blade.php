@@ -178,7 +178,7 @@
                                     {{ app_datetime($order->created_at, 'Y-m-d H:i') }}
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-left">
-                                    <a href="{{ route('admin.orders.show', $order) }}"
+                                    <a href="{{ route('admin.orders.groups.show', $order) }}"
                                         class="text-indigo-600 hover:text-indigo-800 font-bold text-sm">
                                         عرض الطلب
                                     </a>

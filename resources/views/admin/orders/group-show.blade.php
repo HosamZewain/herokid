@@ -6,6 +6,7 @@
                 <p class="text-xs font-black text-indigo-500">تفاصيل عملية الشراء</p>
                 <h2 class="mt-1 text-2xl font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</h2>
                 @if($group['short_reference'])<p class="mt-1 text-[10px] font-mono text-gray-400" dir="ltr">{{ $group['key'] }}</p>@endif
+                <p class="mt-1 text-xs font-bold text-gray-500">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></p>
             </div>
             <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
                 <span data-workflow-badge="status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
@@ -45,6 +46,8 @@
 
             @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
+            @include('admin.orders._related-customer-checkouts')
+
             <section class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm" aria-label="إجراءات الطلب الأساسية">
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div class="flex flex-wrap items-center gap-2">
@@ -76,10 +79,26 @@
                 </div>
             </section>
 
+            <nav class="flex flex-wrap gap-2 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-3" aria-label="أقسام صفحة الطلب">
+                <a href="#order-statuses" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white">الحالات</a>
+                <a href="#order-overview" class="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700">بيانات العميل</a>
+                <a href="#order-items" class="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700">المنتجات والأطفال</a>
+                <a href="#order-previews" class="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700">المعاينات</a>
+                <a href="#order-follow-up" class="rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700">الملاحظات والمرفقات</a>
+            </nav>
+
             @if($group['trashed'])
                 <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800">
                     هذه العملية موجودة في سلة المحذوفات. الملفات وسجل الإنتاج محفوظان ولم يتم حذفهما نهائياً.
                 </div>
+            @endif
+
+            @if(!$group['trashed'] && $group['active_orders']->isNotEmpty())
+                @can('orders.update')
+                    <div id="order-statuses">
+                        @include('admin.orders._workflow-status-panel', ['group' => $group])
+                    </div>
+                @endcan
             @endif
 
             <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
@@ -121,16 +140,22 @@
                 </aside>
             </section>
 
-            @if(!$group['trashed'] && $group['active_orders']->isNotEmpty())
-                @can('orders.update')
-                    @include('admin.orders._workflow-status-panel', ['group' => $group])
-                @endcan
-            @endif
+            @can('bosta.view')
+                <details class="rounded-2xl border border-sky-200 bg-sky-50/60" data-order-shipping-disclosure>
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-black text-sky-900 [&::-webkit-details-marker]:hidden">
+                        <span class="rounded-xl bg-sky-600 px-4 py-2 text-xs text-white">إنشاء / إدارة الشحنة</span>
+                        <span>قسم الشحن عبر Bosta</span>
+                    </summary>
+                    <div class="border-t border-sky-100 p-3 sm:p-4">
+                        @include('admin.orders._bosta-shipping-panel', ['group' => $group])
+                    </div>
+                </details>
+            @endcan
 
-            @include('admin.orders._bosta-shipping-panel', ['group' => $group])
 
             @include('admin.orders._payment-history', ['paymentEvents' => $paymentEvents ?? collect()])
 
+            <div id="order-items" class="space-y-6">
             @if($visibleStoryOrders->isNotEmpty())
             <section id="order-stories" class="space-y-4" data-order-page-section="items">
                 <div class="flex items-center justify-between gap-3">
@@ -138,17 +163,20 @@
                     <h3 class="text-xl font-black text-gray-900">القصص والأطفال</h3>
                 </div>
 
+                <div class="grid gap-4 xl:grid-cols-2">
                 @foreach($visibleStoryOrders as $order)
                     @php
                         $storyItem = $order->items->firstWhere('item_type', 'story');
                         $linkedAddOns = $order->items->where('item_type', 'product_add_on');
+                        $storyPrompt = ($storyProductionPrompts ?? collect())->firstWhere('order_id', $order->id);
+                        $linkedProductPrompts = ($productProductionPrompts ?? collect())->filter(fn ($prompt) => (int) $prompt['item']->order_id === (int) $order->id);
                     @endphp
-                    <article class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                    <article class="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
                         <div class="flex flex-col gap-4 border-b border-gray-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
                             <div class="text-right">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="rounded-full px-3 py-1 text-xs font-black {{ $statusColors[$order->status] ?? 'bg-gray-100 text-gray-700' }}">{{ $statusLabels[$order->status] ?? $order->status }}</span>
-                                    <a href="{{ route('admin.orders.show', $order) }}" class="font-mono text-xs font-black text-indigo-600 hover:underline" dir="ltr">#{{ $order->order_number }}</a>
+                                    <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">قصة {{ $loop->iteration }}</span>
                                 </div>
                                 <h4 class="mt-3 text-lg font-black text-gray-950">{{ $storyItem?->title ?: $order->story?->title ?: 'قصة مخصصة' }}</h4>
                                 @if(data_get($storyItem?->item_snapshot, 'package.name'))
@@ -159,7 +187,6 @@
                             <div class="flex flex-wrap gap-2">
                                 <span class="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">{{ count($order->uploaded_photos ?? []) }} صور</span>
                                 <span class="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">{{ $order->previews->count() }} معاينات</span>
-                                <a href="{{ route('admin.orders.show', $order) }}" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700">فتح تفاصيل الإنتاج</a>
                                 @if($order->productionProject && auth()->user()->hasPermission('production_studio.view'))
                                     <a href="{{ route('admin.production-studio.show', $order->productionProject) }}" class="rounded-xl bg-violet-50 px-4 py-2 text-xs font-black text-violet-700 hover:bg-violet-100">استوديو الإنتاج</a>
                                 @endif
@@ -179,7 +206,7 @@
                                                     </a>
                                                 @endforeach
                                                 @if(count($order->uploaded_photos ?? []) > 5)
-                                                    <a href="{{ route('admin.orders.show', $order) }}" class="flex h-16 w-16 items-center justify-center rounded-xl bg-white text-xs font-black text-sky-700">+{{ count($order->uploaded_photos) - 5 }}</a>
+                                                    <span class="flex h-16 w-16 items-center justify-center rounded-xl bg-white text-xs font-black text-sky-700">+{{ count($order->uploaded_photos) - 5 }}</span>
                                                 @endif
                                             </div>
                                         </div>
@@ -191,10 +218,10 @@
                                         <p class="mb-3 text-xs font-black text-fuchsia-800">معاينات التصميم</p>
                                         <div class="space-y-2">
                                             @foreach($order->previews->take(3) as $preview)
-                                                <a href="{{ route('admin.orders.show', $order) }}" class="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs hover:bg-fuchsia-100">
+                                                <div class="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs">
                                                     <span class="font-black text-gray-800">تصميم #{{ $loop->iteration }}@if($preview->note) — {{ $preview->note }}@endif</span>
                                                     <span class="shrink-0 text-gray-400" dir="ltr">{{ app_datetime($preview->created_at, 'd/m/Y') }}</span>
-                                                </a>
+                                                </div>
                                             @endforeach
                                         </div>
                                     </div>
@@ -216,21 +243,30 @@
                             </div>
                         @endif
 
-                        <div class="mt-5 grid gap-4 border-t border-gray-100 pt-5 lg:grid-cols-2">
-                            @can('orders.update')
-                                <form method="POST" action="{{ route('admin.orders.update', $order) }}" class="flex flex-col gap-2 sm:flex-row">
-                                    @csrf
-                                    @method('PATCH')
-                                    <select name="status" class="flex-1 rounded-xl border-gray-200 text-right text-sm">
-                                        @foreach($statuses as $status)<option value="{{ $status }}" @selected($order->status === $status)>{{ $statusLabels[$status] }}</option>@endforeach
-                                    </select>
-                                    <input name="admin_notes" class="flex-1 rounded-xl border-gray-200 text-right text-sm" placeholder="ملاحظة اختيارية">
-                                    <button class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-black text-indigo-700 hover:bg-indigo-100">تحديث القصة</button>
-                                </form>
-                            @endcan
+                        @can('orders.production_prompt.manage')
+                            @if($storyPrompt)
+                                @include('admin.orders._inline-production-prompt', [
+                                    'promptDomId' => 'story-production-prompt-'.$order->id,
+                                    'promptTitle' => 'برومبت إنتاج قصة '.$order->child_name,
+                                    'promptText' => $storyPrompt['prompt'],
+                                    'promptType' => 'story_production',
+                                ])
+                            @endif
+                            @foreach($linkedProductPrompts as $linkedPrompt)
+                                @include('admin.orders._inline-production-prompt', [
+                                    'promptDomId' => 'linked-product-production-prompt-'.$linkedPrompt['item']->id,
+                                    'promptTitle' => 'برومبت إنتاج '.$linkedPrompt['item']->title,
+                                    'promptText' => $linkedPrompt['prompt'],
+                                    'promptType' => 'product_production',
+                                    'orderItemId' => $linkedPrompt['item']->id,
+                                ])
+                            @endforeach
+                        @endcan
+
+                        <div class="mt-4 border-t border-gray-100 pt-4">
                             @can('orders.delete')
-                                <details class="rounded-xl border border-red-100 bg-red-50 p-3">
-                                    <summary class="cursor-pointer text-sm font-black text-red-700">حذف هذه القصة فقط</summary>
+                                <details class="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <summary class="cursor-pointer text-xs font-black text-gray-600">إجراءات متقدمة للقصة</summary>
                                     <form method="POST" action="{{ route('admin.orders.destroy', $order) }}" class="mt-3 grid gap-2 sm:grid-cols-3">
                                         @csrf
                                         @method('DELETE')
@@ -243,6 +279,7 @@
                         </div>
                     </article>
                 @endforeach
+                </div>
             </section>
             @endif
 
@@ -260,6 +297,7 @@
                             @php
                                 $productOrder = $group['active_orders']->firstWhere('id', (int) $product->order_id);
                                 $productPhotos = $productOrder?->uploaded_photos ?? [];
+                                $productPrompt = ($productProductionPrompts ?? collect())->first(fn ($prompt) => (int) $prompt['item']->id === (int) $product->id);
                             @endphp
                             <div class="flex h-full flex-col rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
                                 @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-1.5 text-[10px] font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
@@ -291,14 +329,14 @@
                                     @endcan
                                 @endif
                                 @can('orders.production_prompt.manage')
-                                    @if($productOrder && \App\Support\ProductProductionPrompt::templateForItem($product) !== null)
-                                        <a
-                                            href="{{ route('admin.orders.products.production', [$productOrder, $product]) }}"
-                                            class="mt-auto inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-fuchsia-600 px-3 py-2 text-xs font-black text-white transition hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:ring-offset-2"
-                                        >
-                                            <span aria-hidden="true">✨</span>
-                                            فتح صفحة إنتاج الاستيكر
-                                        </a>
+                                    @if($productPrompt)
+                                        @include('admin.orders._inline-production-prompt', [
+                                            'promptDomId' => 'product-production-prompt-'.$product->id,
+                                            'promptTitle' => 'برومبت إنتاج '.$product->title,
+                                            'promptText' => $productPrompt['prompt'],
+                                            'promptType' => 'product_production',
+                                            'orderItemId' => $product->id,
+                                        ])
                                     @endif
                                 @endcan
                             </div>
@@ -306,6 +344,7 @@
                     </div>
                 </section>
             @endif
+            </div>
 
             @if($group['direct_products']->isNotEmpty() && $attachmentTarget)
                 <section id="product-customer-preview" class="rounded-3xl border border-fuchsia-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="product-preview">
@@ -374,9 +413,7 @@
                 </section>
             @endif
 
-            @can('orders.production_prompt.manage')
-                @include('admin.orders._product-production-prompts', ['collapsed' => true])
-            @endcan
+            @include('admin.orders._story-booklet-previews', ['storyOrders' => $visibleStoryOrders])
 
             <section id="order-follow-up" class="space-y-4" data-order-page-section="follow-up">
                 <div class="flex flex-wrap items-center justify-between gap-3 px-1">

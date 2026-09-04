@@ -53,6 +53,12 @@
             <p class="text-xl text-gray-600 mb-8">
                 شكراً لك! استلمنا طلبك وسيبدأ فريق HeroKid في المراجعة.
             </p>
+
+            <div class="mb-8 rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-5 py-4">
+                <p class="text-sm font-bold text-indigo-700">رقم طلبك</p>
+                <p class="mt-2 font-mono text-3xl font-black text-indigo-950" dir="ltr">{{ $checkoutReference }}</p>
+                <p class="mt-2 text-xs font-bold text-indigo-600">احتفظ بهذا الرقم للاستفسار عن الطلب أو تتبعه.</p>
+            </div>
             
             <div class="bg-indigo-50 rounded-xl p-6 mb-8 text-right">
                 <h2 class="font-bold text-indigo-900 mb-4 text-lg border-b border-indigo-100 pb-2">تفاصيل الطلب:</h2>
@@ -60,7 +66,7 @@
                     @foreach($orders as $createdOrder)
                         <div class="bg-white rounded-xl border border-indigo-100 p-4">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <span class="bg-indigo-50 px-2 py-1 rounded border dir-ltr font-mono text-indigo-900 font-bold">#{{ $createdOrder->order_number }}</span>
+                                <span class="rounded border bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-700">{{ $createdOrder->story ? 'قصة' : 'منتج' }}</span>
                                 <div class="text-right">
                                     <p class="font-bold text-indigo-900">{{ $createdOrder->story->title ?? ($createdOrder->items->first()?->title ?? 'طلب متجر') }}</p>
                                     <p class="text-sm text-indigo-700">

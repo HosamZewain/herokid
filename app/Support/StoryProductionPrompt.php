@@ -125,7 +125,7 @@ class StoryProductionPrompt
 
         return [
             'order_number' => self::value($order->order_number),
-            'order_url' => route('admin.orders.show', $order),
+            'order_url' => route('admin.orders.groups.show', $order),
             'child_name' => self::value($order->child_name),
             'child_age' => self::value($order->child_age ?? $order->childIdentityRequest?->age_range),
             'child_gender' => self::gender($order->child_gender),

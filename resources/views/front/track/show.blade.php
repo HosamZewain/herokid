@@ -12,8 +12,12 @@
             <div class="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
                 <div class="bg-indigo-600 text-white p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center">
                     <div>
-                        <h1 class="text-2xl font-bold mb-2">طلب رقم {{ $order->order_number }}</h1>
-                        <p class="text-indigo-200">الطفل البطل: {{ $order->child_name }} | القصة: {{ $order->story->title }}</p>
+                        <h1 class="text-2xl font-bold mb-2">طلب رقم {{ $order->checkoutReference?->short_reference ?: $order->order_number }}</h1>
+                        @if($order->story)
+                            <p class="text-indigo-200">الطفل البطل: {{ $order->child_name }} | القصة: {{ $order->story->title }}</p>
+                        @else
+                            <p class="text-indigo-200">طلب منتجات من متجر HeroKid</p>
+                        @endif
                     </div>
                     <div class="mt-4 md:mt-0 bg-white/20 px-4 py-2 rounded-full font-bold">
                         تاريخ الطلب: {{ app_datetime($order->created_at, 'Y/m/d') }}

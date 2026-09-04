@@ -61,6 +61,27 @@ class OrderShortReferenceTest extends TestCase
         $this->assertSoftDeleted('orders', ['id' => $order->id]);
     }
 
+    public function test_customer_can_track_with_short_or_legacy_reference_and_equivalent_phone_formats(): void
+    {
+        $order = $this->createOrder('ORDER-TRACKABLE', 'CHK-TRACKABLE-GROUP', '2026-09-04 10:00:00');
+        $shortReference = $order->checkoutReference->short_reference;
+
+        $this->post(route('track.search'), [
+            'order_number' => $shortReference,
+            'phone' => '+201111111111',
+        ])
+            ->assertOk()
+            ->assertSee($shortReference)
+            ->assertDontSee('طلب رقم '.$order->order_number);
+
+        $this->post(route('track.search'), [
+            'order_number' => $order->order_number,
+            'phone' => '01111111111',
+        ])
+            ->assertOk()
+            ->assertSee($shortReference);
+    }
+
     private function createOrder(string $orderNumber, string $checkoutGroup, string $createdAt): Order
     {
         $story = Story::create([

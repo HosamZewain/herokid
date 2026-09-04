@@ -20,6 +20,7 @@ use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
+use App\Services\Orders\RelatedCustomerCheckoutService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -354,6 +355,7 @@ class OrderController extends Controller
         OrderAdminNoteService $adminNotes,
         OrderActivityTimelineService $activityTimeline,
         OrderPaymentLedgerService $paymentLedger,
+        RelatedCustomerCheckoutService $relatedCheckouts,
     ) {
         $order->load([
             'user',
@@ -411,6 +413,7 @@ class OrderController extends Controller
         $sceneTextHandoff = $order->story ? $sceneTexts->present($order) : null;
         $orderActivity = $activityTimeline->forGroup($checkoutGroup);
         $paymentEvents = $paymentLedger->forCheckout($checkoutGroup['key']);
+        $relatedCustomerCheckouts = $relatedCheckouts->forGroup($checkoutGroup);
 
         return view('admin.orders.show', compact(
             'order',
@@ -425,6 +428,7 @@ class OrderController extends Controller
             'orderAdminNotes',
             'orderActivity',
             'paymentEvents',
+            'relatedCustomerCheckouts',
         ));
     }
 

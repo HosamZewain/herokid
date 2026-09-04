@@ -140,7 +140,7 @@
                             <td class="px-4 py-4 text-xs text-gray-500">{{ trim(($cart->utm_source ?: '').' / '.($cart->utm_medium ?: ''), ' /') ?: 'Direct' }}</td>
                             <td class="px-4 py-4">
                                 @if($cart->relatedOrder)
-                                    <a href="{{ route('admin.orders.show', $cart->relatedOrder) }}" class="font-black text-indigo-600 hover:underline">{{ $cart->relatedOrder->order_number }}</a>
+                                    <a href="{{ route('admin.orders.groups.show', $cart->relatedOrder) }}" class="font-black text-indigo-600 hover:underline">{{ $cart->relatedOrder->checkoutReference?->short_reference ?: $cart->relatedOrder->order_number }}</a>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif

@@ -15,7 +15,7 @@
                 <div class="flex flex-wrap gap-2">
                     <a href="{{ $identity->trashed() ? route('admin.child-identities.trash') : route('admin.child-identities.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600">العودة للقائمة</a>
                     @if($identity->convertedOrder)
-                        <a href="{{ route('admin.orders.show', $identity->convertedOrder) }}" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white">فتح الطلب #{{ $identity->convertedOrder->order_number }}</a>
+                        <a href="{{ route('admin.orders.groups.show', $identity->convertedOrder) }}" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white">فتح عملية الشراء</a>
                     @endif
                 </div>
                 <span class="rounded-full bg-violet-100 px-4 py-2 text-sm font-black text-violet-700">{{ $identity->statusLabel() }}{{ $identity->trashed() ? ' • محذوف مؤقتًا' : '' }}</span>

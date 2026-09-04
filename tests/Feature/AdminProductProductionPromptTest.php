@@ -189,11 +189,11 @@ PROMPT);
         $this->actingAs($this->admin())
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
-            ->assertSee('برومبت إنتاج المنتج')
-            ->assertSee('data-copy-product-production-prompt-target', false)
-            ->assertSee('عرض نصوص البرومبتات')
+            ->assertSee('برومبت إنتاج')
+            ->assertSee('data-copy-inline-production-prompt', false)
+            ->assertSee('عرض نص البرومبت')
             ->assertSee('Sticker prompt for سليم محمد at مدرسة النور')
-            ->assertSee('نسخ برومبت المنتج');
+            ->assertSee('نسخ البرومبت');
     }
 
     public function test_story_checkout_shows_companion_product_details_and_prompts_on_both_views(): void
@@ -267,7 +267,7 @@ PROMPT);
             ->assertSee('Mixed sticker for سليم محمد at مدرسة النور');
     }
 
-    public function test_product_only_group_card_links_to_a_dedicated_product_production_page(): void
+    public function test_dedicated_product_production_page_remains_available_without_fragmenting_the_unified_workspace(): void
     {
         Storage::fake('local');
         $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}} at {{school_name}}');
@@ -299,8 +299,8 @@ PROMPT);
         $this->actingAs($this->admin())
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
-            ->assertSee('فتح صفحة إنتاج الاستيكر')
-            ->assertSee($productionUrl, false);
+            ->assertSee('data-inline-production-prompt', false)
+            ->assertDontSee('href="'.$productionUrl.'"', false);
 
         $this->actingAs($this->admin())
             ->get($productionUrl)

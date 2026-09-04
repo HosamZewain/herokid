@@ -125,7 +125,7 @@ class AdminOrderActivityTimelineTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.orders.groups.show', $productOrder))
             ->assertOk()
-            ->assertSee("recordPromptCopy('product_production'", false)
+            ->assertSee('data-prompt-type="product_production"', false)
             ->assertSee('data-order-item-id', false);
     }
 

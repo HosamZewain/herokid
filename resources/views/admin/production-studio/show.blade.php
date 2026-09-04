@@ -212,7 +212,7 @@
                     <p class="mt-2 text-sm leading-7 text-indigo-900">مساحة داخلية اختيارية. لا تغيّر حالة الطلب الأصلي أو برومبت الإنتاج الحالي.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <a href="{{ route('admin.orders.show', $order) }}" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-50">فتح الطلب الأصلي</a>
+                    <a href="{{ route('admin.orders.groups.show', $order) }}" class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-50">فتح عملية الشراء</a>
                     <a href="{{ route('admin.production-studio.index') }}" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">كل مشاريع الاستوديو</a>
                 </div>
             </div>
@@ -235,7 +235,7 @@
             <div class="grid grid-cols-1 gap-4 text-right md:grid-cols-3 xl:grid-cols-6">
                 <div class="rounded-xl bg-gray-50 p-4 md:col-span-2">
                     <p class="text-xs font-bold text-gray-400">رقم الطلب</p>
-                    <a href="{{ route('admin.orders.show', $order) }}" class="mt-1 block font-black text-indigo-700 hover:underline">{{ $order->order_number }}</a>
+                    <a href="{{ route('admin.orders.groups.show', $order) }}" class="mt-1 block font-black text-indigo-700 hover:underline">{{ $order->checkoutReference?->short_reference ?: $order->order_number }}</a>
                 </div>
                 <div class="rounded-xl bg-gray-50 p-4">
                     <p class="text-xs font-bold text-gray-400">الطفل</p>

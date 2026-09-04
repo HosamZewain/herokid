@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Support\Phone;
 use Illuminate\Http\Request;
 
 class TrackOrderController extends Controller
@@ -12,19 +14,28 @@ class TrackOrderController extends Controller
         return view('front.track.index');
     }
 
-    public function track(\Illuminate\Http\Request $request)
+    public function track(Request $request)
     {
         $validated = $request->validate([
             'order_number' => 'required|string',
             'phone' => 'required|string|max:20',
         ]);
 
-        $order = \App\Models\Order::with(['story', 'statusLogs'])
-            ->where('order_number', $validated['order_number'])
-            ->where('delivery_details->phone', $validated['phone'])
+        $reference = strtoupper(trim($validated['order_number']));
+        $phone = Phone::forWhatsApp($validated['phone']);
+
+        $order = Order::with(['checkoutReference', 'story', 'statusLogs'])
+            ->where(function ($query) use ($reference): void {
+                $query
+                    ->where('order_number', $reference)
+                    ->orWhereHas('checkoutReference', fn ($referenceQuery) => $referenceQuery
+                        ->where('short_reference', $reference));
+            })
+            ->whereIn('delivery_details->phone', Phone::equivalentValues($validated['phone']))
+            ->orderBy('id')
             ->first();
 
-        if (!$order) {
+        if (! $order || Phone::forWhatsApp(data_get($order->delivery_details, 'phone')) !== $phone) {
             return back()->with('error', 'البيانات غير صحيحة. يرجى التأكد من رقم الطلب ورقم الموبايل.');
         }
 

@@ -486,7 +486,7 @@ class ProductionStudioTest extends TestCase
             ->assertSee(route('admin.production-studio.ai.jobs.log', $project), false)
             ->assertSee('production-studio:${root.dataset.studioProject}:open-section', false)
             ->assertSee('عرض برومبت الطلب الأصلي')
-            ->assertSee(route('admin.orders.show', $order), false)
+            ->assertSee(route('admin.orders.groups.show', $order), false)
             ->assertSee(route('admin.production-studio.character-profile.update', $project), false)
             ->assertSee(route('admin.production-studio.ai.character-sheet', $project), false)
             ->assertSee('data-scene-filters', false)

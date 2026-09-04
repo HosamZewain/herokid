@@ -15,10 +15,12 @@ use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
 use App\Services\Orders\OrderWorkflowStatusService;
+use App\Services\Orders\RelatedCustomerCheckoutService;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use App\Support\ProductProductionPrompt;
+use App\Support\StoryProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +34,7 @@ class OrderGroupController extends Controller
         OrderAdminNoteService $adminNotes,
         OrderActivityTimelineService $activityTimeline,
         OrderPaymentLedgerService $paymentLedger,
+        RelatedCustomerCheckoutService $relatedCheckouts,
     ) {
         $group = $groups->findByRepresentative($representative);
 
@@ -55,9 +58,17 @@ class OrderGroupController extends Controller
         }
 
         $productProductionPrompts = collect();
+        $storyProductionPrompts = collect();
         if (auth()->user()->hasPermission('orders.production_prompt.manage')) {
             $productProductionPrompts = $group['active_orders']
                 ->flatMap(fn (Order $order) => ProductProductionPrompt::forOrder($order))
+                ->values();
+            $storyProductionPrompts = $group['story_orders']
+                ->map(fn (Order $order): array => [
+                    'order_id' => $order->id,
+                    'prompt' => StoryProductionPrompt::forOrder($order),
+                    'uses_override' => $order->productionPromptOverride !== null,
+                ])
                 ->values();
         }
 
@@ -78,6 +89,7 @@ class OrderGroupController extends Controller
             'printingStatuses' => $printingStatuses,
             'shippingStatuses' => $shippingStatuses,
             'productProductionPrompts' => $productProductionPrompts,
+            'storyProductionPrompts' => $storyProductionPrompts,
             'attachmentTarget' => $attachmentTarget,
             'attachmentOrders' => $attachmentOrders,
             'whatsappMessages' => $whatsapp->messagesForGroup($group),
@@ -85,6 +97,7 @@ class OrderGroupController extends Controller
             'orderActivity' => $activityTimeline->forGroup($group),
             'paymentEvents' => $paymentLedger->forCheckout($group['key']),
             'productPreviewGallery' => $productPreviewGallery,
+            'relatedCustomerCheckouts' => $relatedCheckouts->forGroup($group),
         ]);
     }
 

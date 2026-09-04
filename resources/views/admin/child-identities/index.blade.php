@@ -102,7 +102,7 @@
                                     <td class="px-5 py-4">
                                         <p>{{ $identity->selectedStory?->title ?: 'لم تُحدد قصة' }}</p>
                                         @if($identity->convertedOrder)
-                                            <a href="{{ route('admin.orders.show', $identity->convertedOrder) }}" class="mt-1 block text-xs font-black text-indigo-600">#{{ $identity->convertedOrder->order_number }}</a>
+                                            <a href="{{ route('admin.orders.groups.show', $identity->convertedOrder) }}" class="mt-1 block text-xs font-black text-indigo-600">فتح عملية الشراء</a>
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-slate-500">{{ app_datetime($identity->created_at, 'd/m/Y H:i') }}</td>

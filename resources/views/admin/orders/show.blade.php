@@ -69,6 +69,7 @@
                dir="ltr">
                 {{ $orderPageReference }}
             </a>
+            <p class="mt-1 text-xs font-bold text-gray-500">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($checkoutGroup['created_at'], 'd/m/Y h:i A') }}</span></p>
         </div>
     </x-slot>
     <x-slot name="headerActions">
@@ -87,6 +88,8 @@
             @endif
 
             @include('admin.orders._merge-checkout', ['mergeGroup' => $checkoutGroup])
+
+            @include('admin.orders._related-customer-checkouts')
 
             <div class="rounded-2xl border border-sky-100 bg-white px-5 py-4 shadow-sm">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -39,4 +39,27 @@ class Phone
 
         return $defaultCountryCode.$digits;
     }
+
+    /** @return array<int, string> */
+    public static function equivalentValues(?string $phone, string $defaultCountryCode = '20'): array
+    {
+        $normalized = self::normalize($phone);
+        $international = self::forWhatsApp($phone, $defaultCountryCode);
+
+        if ($international === null) {
+            return array_values(array_filter([$normalized]));
+        }
+
+        $local = str_starts_with($international, $defaultCountryCode)
+            ? '0'.substr($international, strlen($defaultCountryCode))
+            : null;
+
+        return array_values(array_unique(array_filter([
+            $normalized,
+            $international,
+            '+'.$international,
+            '00'.$international,
+            $local,
+        ])));
+    }
 }

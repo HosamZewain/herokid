@@ -24,7 +24,7 @@
                     <div class="space-y-5">
                         <div>
                             <label for="order_number" class="block text-sm font-medium text-gray-700 mb-1">رقم الطلب</label>
-                            <input type="text" name="order_number" id="order_number" value="{{ old('order_number') }}" placeholder="HK-202X-XXXX" required class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dir-ltr text-center font-mono">
+                            <input type="text" name="order_number" id="order_number" value="{{ old('order_number') }}" placeholder="HK09-236" required class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dir-ltr text-center font-mono">
                             <x-input-error :messages="$errors->get('order_number')" class="mt-2" />
                         </div>
 

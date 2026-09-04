@@ -472,7 +472,7 @@ class CheckoutController extends Controller
     public function success()
     {
         $orderIds = session('checkout.last_order_ids', []);
-        $orders = Order::with(['story', 'items.product', 'items.variant'])->whereIn('id', $orderIds)->get();
+        $orders = Order::with(['checkoutReference', 'story', 'items.product', 'items.variant'])->whereIn('id', $orderIds)->get();
 
         if ($orders->isEmpty()) {
             return redirect()->route('stories.index');
@@ -481,6 +481,8 @@ class CheckoutController extends Controller
         return view('front.checkout.success', [
             'orders' => $orders,
             'order' => $orders->first(),
+            'checkoutReference' => $orders->first()?->checkoutReference?->short_reference
+                ?: $orders->first()?->order_number,
             'metaPurchaseEvent' => session()->pull('meta.purchase_event'),
             'googleAdsPurchaseEvent' => session()->pull('google_ads.purchase_event'),
         ]);

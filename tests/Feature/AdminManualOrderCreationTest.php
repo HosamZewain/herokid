@@ -432,7 +432,8 @@ class AdminManualOrderCreationTest extends TestCase
             $item = $order->items->sole();
             $groupPage
                 ->assertSee($order->child_name)
-                ->assertSee(route('admin.orders.products.production', [$order, $item]), false);
+                ->assertSee('product-production-prompt-'.$item->id, false)
+                ->assertDontSee('href="'.route('admin.orders.products.production', [$order, $item]).'"', false);
         }
     }
 

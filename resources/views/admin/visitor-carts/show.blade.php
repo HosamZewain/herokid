@@ -60,7 +60,7 @@
             <div class="rounded-2xl border border-gray-100 bg-white p-5 text-right shadow-sm">
                 <p class="text-xs font-bold text-gray-400">الطلب المرتبط</p>
                 @if($cart->relatedOrder)
-                    <a href="{{ route('admin.orders.show', $cart->relatedOrder) }}" class="mt-2 block text-lg font-black text-indigo-600 hover:underline">{{ $cart->relatedOrder->order_number }}</a>
+                    <a href="{{ route('admin.orders.groups.show', $cart->relatedOrder) }}" class="mt-2 block text-lg font-black text-indigo-600 hover:underline">{{ $cart->relatedOrder->checkoutReference?->short_reference ?: $cart->relatedOrder->order_number }}</a>
                 @else
                     <p class="mt-2 text-lg font-black text-gray-400">-</p>
                 @endif

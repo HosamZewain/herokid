@@ -82,7 +82,7 @@
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-4 py-3 font-mono">#{{ $project->id }}</td>
                                     <td class="px-4 py-3">
-                                        <a href="{{ route('admin.orders.show', $project->order) }}" class="font-black text-indigo-600 hover:underline">{{ $project->order->order_number }}</a>
+                                        <a href="{{ route('admin.orders.groups.show', $project->order) }}" class="font-black text-indigo-600 hover:underline">{{ $project->order->checkoutReference?->short_reference ?: $project->order->order_number }}</a>
                                     </td>
                                     <td class="px-4 py-3 font-bold">{{ $project->order->child_name ?? '-' }}</td>
                                     <td class="px-4 py-3">{{ $project->order->story?->title ?? '-' }}</td>

@@ -621,9 +621,11 @@ class AdminOrderFullEditTest extends TestCase
 
         $groupPage = $this->actingAs($this->admin)->get(route('admin.orders.groups.show', $orders->first()));
         foreach ($orders as $childOrder) {
+            $item = $childOrder->items->sole();
             $groupPage
                 ->assertSee($childOrder->child_name)
-                ->assertSee(route('admin.orders.products.production', [$childOrder, $childOrder->items->sole()]), false);
+                ->assertSee('product-production-prompt-'.$item->id, false)
+                ->assertDontSee('href="'.route('admin.orders.products.production', [$childOrder, $item]).'"', false);
         }
     }
 

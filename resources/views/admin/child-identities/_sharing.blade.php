@@ -120,7 +120,7 @@
                 <h4 class="font-black text-slate-800">الطلبات المحالة</h4>
                 <div class="mt-2 space-y-2">
                     @forelse($referredOrders as $referredOrder)
-                        <a href="{{ route('admin.orders.show', $referredOrder) }}" class="block rounded-xl bg-slate-50 p-3 text-sm font-bold text-indigo-700">
+                        <a href="{{ route('admin.orders.groups.show', $referredOrder) }}" class="block rounded-xl bg-slate-50 p-3 text-sm font-bold text-indigo-700">
                             {{ $referredOrder->order_number ?: '#'.$referredOrder->id }}
                         </a>
                     @empty

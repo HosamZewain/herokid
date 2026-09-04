@@ -18,7 +18,7 @@
         ];
         $deliveryLink = function ($delivery) {
             if ($delivery->notifiable_type === \App\Models\Order::class && $delivery->notifiable_id) {
-                return route('admin.orders.show', $delivery->notifiable_id);
+                return route('admin.orders.groups.show', $delivery->notifiable_id);
             }
 
             if ($delivery->notifiable_type === \App\Models\ProductionProject::class && $delivery->notifiable_id) {

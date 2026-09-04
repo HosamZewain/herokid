@@ -456,7 +456,8 @@ class CartCheckoutTest extends TestCase
         $this->assertDatabaseCount('orders', 2);
         $this->assertSame([], session('cart.items', []));
 
-        $orders = Order::with('story')->orderBy('id')->get();
+        $orders = Order::with(['checkoutReference', 'story'])->orderBy('id')->get();
+        $shortReference = $orders[0]->checkoutReference->short_reference;
         $this->assertSame(['رينا', 'سليم'], $orders->pluck('child_name')->all());
         $this->assertSame('Parent Name', $orders[0]->parent_name);
         $this->assertArrayNotHasKey('email', $orders[0]->delivery_details);
@@ -475,12 +476,27 @@ class CartCheckoutTest extends TestCase
         $this->assertSame($orders[0]->delivery_details['checkout_group'], $orders[1]->delivery_details['checkout_group']);
         $this->assertCount(2, $orders[0]->uploaded_photos);
 
+        $this->get(route('checkout.success'))
+            ->assertOk()
+            ->assertSee('رقم طلبك')
+            ->assertSee($shortReference)
+            ->assertDontSee('#'.$orders[0]->order_number)
+            ->assertDontSee('#'.$orders[1]->order_number);
+
         $this->post(route('track.search'), [
             'order_number' => $orders[0]->order_number,
             'phone' => '201000000000',
         ])
             ->assertOk()
-            ->assertSee($orders[0]->order_number);
+            ->assertSee($shortReference)
+            ->assertDontSee('طلب رقم '.$orders[0]->order_number);
+
+        $this->post(route('track.search'), [
+            'order_number' => $shortReference,
+            'phone' => '01000000000',
+        ])
+            ->assertOk()
+            ->assertSee($shortReference);
     }
 
     public function test_admin_can_control_delivery_fee_setting(): void
