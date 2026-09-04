@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
@@ -198,13 +199,51 @@ class AgentApiTest extends TestCase
         }
 
         $completed = $this->withToken($token)->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'complete-after-files'])
-            ->assertOk()->assertJsonPath('status', 'preview_uploaded');
+            ->assertOk()->assertJsonPath('status', 'ready_preview');
         $this->assertFalse((bool) $completed->json('already_completed'));
-        $this->assertSame('preview_uploaded', $first->refresh()->status);
-        $this->assertSame('preview_uploaded', $second->refresh()->status);
+        $this->assertSame('ready_preview', $first->refresh()->status);
+        $this->assertSame('ready_preview', $second->refresh()->status);
 
         $this->withToken($token)->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'complete-repeat'])
             ->assertOk()->assertJsonPath('already_completed', true);
+    }
+
+    public function test_repair_command_only_moves_direct_agent_completions_to_ready_preview(): void
+    {
+        $agent = $this->agent();
+        $incorrect = $this->storyOrder('AGENT-REPAIR', 'HK-REPAIR', true);
+        $incorrect->update(['status' => 'preview_uploaded']);
+        $incorrect->statusLogs()->create([
+            'status_type' => 'order',
+            'status' => 'preview_uploaded',
+            'notes' => 'اكتمل الإنتاج بواسطة Agent API.',
+        ]);
+        AdminActivityLog::query()->create([
+            'user_id' => $agent->id,
+            'action' => 'agent.checkout_production_completed',
+            'properties' => [
+                'checkout_group_key' => 'AGENT-REPAIR',
+                'new_status' => 'preview_uploaded',
+            ],
+        ]);
+
+        $manual = $this->storyOrder('MANUAL-PREVIEW', 'HK-MANUAL-PREVIEW', true);
+        $manual->update(['status' => 'preview_uploaded']);
+        $manual->statusLogs()->create([
+            'status_type' => 'order',
+            'status' => 'preview_uploaded',
+            'notes' => 'تم إرسال المعاينة للعميل يدويًا.',
+        ]);
+
+        $this->artisan('agent:repair-ready-preview', ['--apply' => true])
+            ->expectsOutput('Eligible Agent checkouts: 1')
+            ->expectsOutput('Eligible order records: 1')
+            ->expectsOutput('Updated Agent checkouts: 1')
+            ->expectsOutput('Updated order records: 1')
+            ->assertSuccessful();
+
+        $this->assertSame('ready_preview', $incorrect->refresh()->status);
+        $this->assertSame('preview_uploaded', $manual->refresh()->status);
     }
 
     public function test_prompt_product_without_story_is_eligible_and_ready_product_is_not(): void

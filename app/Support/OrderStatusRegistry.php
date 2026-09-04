@@ -172,6 +172,7 @@ class OrderStatusRegistry
             [self::TYPE_ORDER, 'new', 'طلب جديد', 'blue', 'standard'],
             [self::TYPE_ORDER, 'under_review', 'قيد المراجعة', 'amber', 'standard'],
             [self::TYPE_ORDER, 'generating', 'جاري التوليد', 'violet', 'standard'],
+            [self::TYPE_ORDER, 'ready_preview', 'جاهز للمعاينة', 'purple', 'standard'],
             [self::TYPE_ORDER, 'preview_uploaded', 'انتظار الموافقة', 'orange', 'standard'],
             [self::TYPE_ORDER, 'revision_requested', 'طلب تعديلات', 'rose', 'standard'],
             [self::TYPE_ORDER, 'approved_for_print', 'موافق للطباعة', 'teal', 'standard'],

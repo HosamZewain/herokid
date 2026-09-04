@@ -124,7 +124,25 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK08-151/complete-producti
   -H 'Idempotency-Key: run-123-complete'
 ```
 
-Every production unit must have at least one production attachment. The existing status service moves all production orders to `preview_uploaded`. A repeated successful completion is safe.
+Every production unit must have at least one production attachment. The existing status service moves all production orders to `ready_preview` (جاهز للمعاينة). A staff member sends the preview to the customer and then moves the checkout to `preview_uploaded` (انتظار الموافقة). A repeated successful Agent completion is safe.
+
+The Agent API deliberately does not expose a free-form status-change endpoint. Production completion can only perform the controlled `generating` → `ready_preview` transition.
+
+### Repairing completions created before `ready_preview`
+
+First preview the exact checkout and order-record counts:
+
+```bash
+php artisan agent:repair-ready-preview
+```
+
+Then apply the correction:
+
+```bash
+php artisan agent:repair-ready-preview --apply
+```
+
+The command only selects checkouts recorded by `agent.checkout_production_completed` whose latest order-status log is the original Agent completion into `preview_uploaded`. It skips manually updated or subsequently changed orders and is safe to run again.
 
 ## Errors
 

@@ -23,6 +23,8 @@ use Illuminate\Validation\ValidationException;
 
 class AgentCheckoutProductionService
 {
+    public const COMPLETED_STATUS = 'ready_preview';
+
     public function __construct(
         private readonly OrderAssignmentService $assignments,
         private readonly OrderStatusService $statuses,
@@ -148,7 +150,7 @@ class AgentCheckoutProductionService
     public function complete(string $reference, User $agent, Request $request): array
     {
         $this->assertStatusAvailable('generating');
-        $this->assertStatusAvailable('preview_uploaded');
+        $this->assertStatusAvailable(self::COMPLETED_STATUS);
 
         return DB::transaction(function () use ($reference, $agent, $request): array {
             $orders = $this->authorizedOrders($reference, $agent, true);
@@ -160,11 +162,11 @@ class AgentCheckoutProductionService
                 throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This checkout has no production units.', 422);
             }
 
-            if ($targets->every(fn (Order $order): bool => $order->status === 'preview_uploaded')) {
+            if ($targets->every(fn (Order $order): bool => $order->status === self::COMPLETED_STATUS)) {
                 return [
                     'success' => true,
                     'checkout_reference' => $reference,
-                    'status' => 'preview_uploaded',
+                    'status' => self::COMPLETED_STATUS,
                     'already_completed' => true,
                 ];
             }
@@ -185,7 +187,7 @@ class AgentCheckoutProductionService
             }
 
             $before = $targets->mapWithKeys(fn (Order $order): array => [$order->id => $order->status])->all();
-            $this->statuses->updateGroup($targets, 'preview_uploaded', 'اكتمل الإنتاج بواسطة Agent API.', $request);
+            $this->statuses->updateGroup($targets, self::COMPLETED_STATUS, 'اكتمل الإنتاج بواسطة Agent API وأصبح جاهزًا لإرسال المعاينة.', $request);
 
             AdminActivityLogger::log(
                 action: 'agent.checkout_production_completed',
@@ -195,7 +197,7 @@ class AgentCheckoutProductionService
                     'checkout_group_key' => $orders->first()->checkoutGroupKey(),
                     'agent_user_id' => $agent->id,
                     'previous_statuses' => $before,
-                    'new_status' => 'preview_uploaded',
+                    'new_status' => self::COMPLETED_STATUS,
                     'production_unit_keys' => $units->pluck('unit_key')->all(),
                     'request_identifier' => $this->requestIdentifier($request),
                 ],
@@ -207,7 +209,7 @@ class AgentCheckoutProductionService
                 'success' => true,
                 'checkout_reference' => $reference,
                 'checkout_group_key' => $orders->first()->checkoutGroupKey(),
-                'status' => 'preview_uploaded',
+                'status' => self::COMPLETED_STATUS,
                 'already_completed' => false,
             ];
         }, 3);
