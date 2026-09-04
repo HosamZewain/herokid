@@ -410,6 +410,8 @@ class AdminOrderGroupManagementTest extends TestCase
             ->get(route('admin.orders.index', ['product_id' => $matchingProduct->id]))
             ->assertOk()
             ->assertSee('المنتج الموجود بالطلب')
+            ->assertSee('data-advanced-order-filters', false)
+            ->assertSee('مفعّل')
             ->viewData('groups');
 
         $this->assertSame(1, $productGroups->total());
@@ -488,6 +490,14 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertOk()
             ->assertSee('data-admin-order-quick-search', false)
             ->assertSee('رقم الطلب أو موبايل العميل');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.index'))
+            ->assertOk()
+            ->assertSee('data-advanced-order-filters', false)
+            ->assertDontSee('مفعّل')
+            ->assertSee('حالة الطلب')
+            ->assertSee('فلتر متقدم');
 
         foreach (['CHK-QUICK-SEARCH', '+201000000000'] as $term) {
             $groups = $this->actingAs($this->admin)

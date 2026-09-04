@@ -35,6 +35,11 @@
         $eventPrintingStatuses = \App\Support\OrderWorkflowStatus::printingLabels(false);
         $eventShippingStatuses = \App\Support\OrderWorkflowStatus::shippingLabels(false);
         $nextUpdatedDirection = request('sort') === 'updated_at' && request('direction', 'desc') === 'desc' ? 'asc' : 'desc';
+        $advancedFiltersActive = collect(['product_id', 'from', 'to', 'event', 'event_from', 'event_to', 'assignment'])
+            ->contains(fn (string $field): bool => request()->filled($field))
+            || request('per_page', '25') !== '25'
+            || request('sort', 'created_at') !== 'created_at'
+            || request('direction', 'desc') !== 'desc';
         $tabQuery = request()->except(['view', 'page', 'catalog_type', 'lifecycle']);
         $emptyState = match($lifecycle) {
             'finished' => 'لا توجد طلبات منتهية تطابق الفلاتر.',
@@ -89,128 +94,145 @@
                     </div>
                 </div>
 
-                <form method="GET" action="{{ route('admin.orders.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+                <form method="GET" action="{{ route('admin.orders.index') }}" class="space-y-3">
                     <input type="hidden" name="catalog_type" value="{{ $catalogType }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
-                    <div class="xl:col-span-2">
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
-                        <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة أو منتج"
-                               class="w-full rounded-xl border-gray-200 text-right text-sm">
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
+                        <div class="xl:col-span-2">
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
+                            <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة أو منتج"
+                                   class="w-full rounded-xl border-gray-200 text-right text-sm">
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطلب</label>
+                            <select name="status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                @foreach($statusLabels as $value => $label)
+                                    <option value="{{ $value }}" @selected(request('status', '') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الشحن</label>
+                            <select name="shipping_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطباعة</label>
+                            <select name="printing_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                @foreach($printingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('printing_status', '') === $value)>{{ $label }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الدفع</label>
+                            <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                @foreach($paymentStatusLabels as $value => $label)
+                                    <option value="{{ $value }}" @selected(request('payment_status', '') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="flex items-end gap-2 xl:col-span-2">
+                            <button class="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
+                            <a href="{{ route('admin.orders.index', ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => $lifecycle]) }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-black text-gray-500 hover:bg-gray-50">مسح</a>
+                        </div>
                     </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة</label>
-                        <select name="status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            @foreach($statusLabels as $value => $label)
-                                <option value="{{ $value }}" @selected(request('status', '') === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الدفع</label>
-                        <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            @foreach($paymentStatusLabels as $value => $label)
-                                <option value="{{ $value }}" @selected(request('payment_status', '') === $value)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطباعة</label>
-                        <select name="printing_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            @foreach($printingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('printing_status', '') === $value)>{{ $label }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الشحن</label>
-                        <select name="shipping_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div class="xl:col-span-2">
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">المنتج الموجود بالطلب</label>
-                        <select name="product_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            <option value="">كل المنتجات</option>
-                            @foreach($filterProducts as $filterProduct)
-                                <option value="{{ $filterProduct->id }}" @selected((string) request('product_id') === (string) $filterProduct->id)>{{ $filterProduct->name_ar }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">من تاريخ</label>
-                        <input name="from" type="date" value="{{ request('from') }}" class="w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">إلى تاريخ</label>
-                        <input name="to" type="date" value="{{ request('to') }}" class="w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div class="xl:col-span-2">
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">حدث وقع على الطلب</label>
-                        <select name="event" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            <option value="">كل الأحداث</option>
-                            <optgroup label="تغيير حالة الطلب">
-                                @foreach($eventOrderStatuses as $value => $label)<option value="order:{{ $value }}" @selected(request('event') === 'order:'.$value)>أصبح: {{ $label }}</option>@endforeach
-                            </optgroup>
-                            <optgroup label="تغيير حالة الدفع">
-                                @foreach($eventPaymentStatuses as $value => $label)<option value="payment:{{ $value }}" @selected(request('event') === 'payment:'.$value)>أصبح: {{ $label }}</option>@endforeach
-                                <option value="payment_event:received" @selected(request('event') === 'payment_event:received')>تم تسجيل دفعة فعلية</option>
-                                <option value="payment_event:reversed" @selected(request('event') === 'payment_event:reversed')>تم عكس / تخفيض دفعة</option>
-                            </optgroup>
-                            <optgroup label="تغيير حالة الطباعة">
-                                @foreach($eventPrintingStatuses as $value => $label)<option value="printing:{{ $value }}" @selected(request('event') === 'printing:'.$value)>أصبحت: {{ $label }}</option>@endforeach
-                            </optgroup>
-                            <optgroup label="تغيير حالة الشحن">
-                                @foreach($eventShippingStatuses as $value => $label)<option value="shipping:{{ $value }}" @selected(request('event') === 'shipping:'.$value)>أصبحت: {{ $label }}</option>@endforeach
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث من يوم</label>
-                        <input name="event_from" type="date" value="{{ request('event_from') }}" class="w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث إلى يوم</label>
-                        <input name="event_to" type="date" value="{{ request('event_to') }}" class="w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
-                        <select name="assignment" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            <option value="">كل الطلبات</option>
-                            <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
-                            <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
-                            <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>
-                            @if($assignmentUsers->isNotEmpty())
-                                <optgroup label="حسب المستخدم">
-                                    @foreach($assignmentUsers as $assignmentUser)
-                                        <option value="user:{{ $assignmentUser->id }}" @selected(request('assignment') === 'user:'.$assignmentUser->id)>
-                                            {{ $assignmentUser->name }}{{ $assignmentUser->is_active ? '' : ' (غير نشط)' }}
-                                        </option>
+
+                    <details class="rounded-2xl border border-gray-100 bg-gray-50/70" data-advanced-order-filters @if($advancedFiltersActive) open @endif>
+                        <summary class="cursor-pointer list-none px-4 py-3 text-sm font-black text-indigo-700 marker:hidden">
+                            <span class="inline-flex items-center gap-2">
+                                <span class="grid h-7 w-7 place-items-center rounded-lg bg-indigo-100">⚙</span>
+                                فلتر متقدم
+                                @if($advancedFiltersActive)<span class="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] text-white">مفعّل</span>@endif
+                            </span>
+                        </summary>
+                        <div class="grid gap-3 border-t border-gray-100 p-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div class="xl:col-span-2">
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">المنتج الموجود بالطلب</label>
+                                <select name="product_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="">كل المنتجات</option>
+                                    @foreach($filterProducts as $filterProduct)
+                                        <option value="{{ $filterProduct->id }}" @selected((string) request('product_id') === (string) $filterProduct->id)>{{ $filterProduct->name_ar }}</option>
                                     @endforeach
-                                </optgroup>
-                            @endif
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">عدد الطلبات</label>
-                        <select name="per_page" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            @foreach([25, 50, 100] as $size)
-                                <option value="{{ $size }}" @selected($groups->perPage() === $size)>{{ $size }} طلب</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-black text-gray-600">الترتيب</label>
-                        <select name="sort" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                            <option value="created_at" @selected(request('sort', 'created_at') === 'created_at')>تاريخ الإنشاء</option>
-                            <option value="updated_at" @selected(request('sort') === 'updated_at')>آخر تحديث</option>
-                        </select>
-                        <select name="direction" aria-label="اتجاه الترتيب" class="mt-2 w-full rounded-xl border-gray-200 text-right text-sm">
-                            <option value="desc" @selected(request('direction', 'desc') === 'desc')>الأحدث أولاً</option>
-                            <option value="asc" @selected(request('direction') === 'asc')>الأقدم أولاً</option>
-                        </select>
-                    </div>
-                    <div class="flex items-end gap-2">
-                        <button class="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
-                        <a href="{{ route('admin.orders.index', ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => $lifecycle]) }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-black text-gray-500 hover:bg-gray-50">مسح</a>
-                    </div>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">إنشاء الطلب من تاريخ</label>
+                                <input name="from" type="date" value="{{ request('from') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">إنشاء الطلب إلى تاريخ</label>
+                                <input name="to" type="date" value="{{ request('to') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                            </div>
+                            <div class="xl:col-span-2">
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">حدث وقع على الطلب</label>
+                                <select name="event" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="">كل الأحداث</option>
+                                    <optgroup label="تغيير حالة الطلب">
+                                        @foreach($eventOrderStatuses as $value => $label)<option value="order:{{ $value }}" @selected(request('event') === 'order:'.$value)>أصبح: {{ $label }}</option>@endforeach
+                                    </optgroup>
+                                    <optgroup label="تغيير حالة الدفع">
+                                        @foreach($eventPaymentStatuses as $value => $label)<option value="payment:{{ $value }}" @selected(request('event') === 'payment:'.$value)>أصبح: {{ $label }}</option>@endforeach
+                                        <option value="payment_event:received" @selected(request('event') === 'payment_event:received')>تم تسجيل دفعة فعلية</option>
+                                        <option value="payment_event:reversed" @selected(request('event') === 'payment_event:reversed')>تم عكس / تخفيض دفعة</option>
+                                    </optgroup>
+                                    <optgroup label="تغيير حالة الطباعة">
+                                        @foreach($eventPrintingStatuses as $value => $label)<option value="printing:{{ $value }}" @selected(request('event') === 'printing:'.$value)>أصبحت: {{ $label }}</option>@endforeach
+                                    </optgroup>
+                                    <optgroup label="تغيير حالة الشحن">
+                                        @foreach($eventShippingStatuses as $value => $label)<option value="shipping:{{ $value }}" @selected(request('event') === 'shipping:'.$value)>أصبحت: {{ $label }}</option>@endforeach
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث من يوم</label>
+                                <input name="event_from" type="date" value="{{ request('event_from') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">الحدث إلى يوم</label>
+                                <input name="event_to" type="date" value="{{ request('event_to') }}" class="w-full rounded-xl border-gray-200 text-sm">
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
+                                <select name="assignment" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="">كل الطلبات</option>
+                                    <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
+                                    <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
+                                    <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>
+                                    @if($assignmentUsers->isNotEmpty())
+                                        <optgroup label="حسب المستخدم">
+                                            @foreach($assignmentUsers as $assignmentUser)
+                                                <option value="user:{{ $assignmentUser->id }}" @selected(request('assignment') === 'user:'.$assignmentUser->id)>
+                                                    {{ $assignmentUser->name }}{{ $assignmentUser->is_active ? '' : ' (غير نشط)' }}
+                                                </option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endif
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">عدد الطلبات</label>
+                                <select name="per_page" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    @foreach([25, 50, 100] as $size)
+                                        <option value="{{ $size }}" @selected($groups->perPage() === $size)>{{ $size }} طلب</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">الترتيب</label>
+                                <select name="sort" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="created_at" @selected(request('sort', 'created_at') === 'created_at')>تاريخ الإنشاء</option>
+                                    <option value="updated_at" @selected(request('sort') === 'updated_at')>آخر تحديث</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">اتجاه الترتيب</label>
+                                <select name="direction" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="desc" @selected(request('direction', 'desc') === 'desc')>الأحدث أولاً</option>
+                                    <option value="asc" @selected(request('direction') === 'asc')>الأقدم أولاً</option>
+                                </select>
+                            </div>
+                        </div>
+                    </details>
                 </form>
             </div>
 
