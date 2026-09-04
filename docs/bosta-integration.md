@@ -35,12 +35,17 @@ Never commit the API key or webhook secret. After changing `.env`, rebuild Larav
 
 ## Admin workflow
 
-Administrators with the relevant permissions can open `/admin/bosta`.
+Administrators with the relevant permissions use the following workflow:
 
-1. Create a Bosta delivery for an eligible checkout group. HeroKid sends its remaining amount as operational COD, the configured business location, a `Small` parcel, and `allowToOpenPackage=false`.
-2. Select created deliveries and request a pickup manually for a chosen date.
-3. Select created deliveries and open the generated A4 AWB PDF.
-4. Follow the current Bosta state and tracking number from the same page.
+1. Set the shipping status of every row in the checkout group to `ready` (جاهز للشحن) from the order page.
+2. Open the Bosta panel on that order, review and optionally edit the receiver, phone, address, and operational COD.
+3. Confirm delivery creation. HeroKid sends the reviewed data, the configured business location, a `Small` parcel, and `allowToOpenPackage=false`.
+4. After Bosta confirms creation, HeroKid moves the checkout shipping status to `shipment_created` (تم إنشاء شحنة).
+5. Open `/admin/bosta`; its pickup table contains only created deliveries that have not been attached to a pickup.
+6. Select deliveries and request a pickup manually for a chosen date, or open their generated A4 AWB PDF.
+7. Follow the current Bosta state and tracking number from the order page.
+
+The Bosta page may show ready checkouts as shortcuts, but delivery creation always takes place after reviewing the editable data on the order page.
 
 Failed delivery creation is kept as a failed local attempt and can be retried. A unique database constraint and a pending-request guard prevent duplicate local or concurrent delivery creation for the same checkout group.
 

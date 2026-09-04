@@ -8,54 +8,44 @@ use App\Models\BostaShipment;
 use App\Models\Order;
 use App\Services\Bosta\BostaClient;
 use App\Services\Bosta\BostaPickupService;
+use App\Services\Bosta\BostaShipmentEligibilityService;
 use App\Services\Bosta\BostaShipmentService;
-use App\Support\OrderStatusRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class BostaController extends Controller
 {
-    public function index()
+    public function index(BostaShipmentEligibilityService $eligibility)
     {
-        $shippedGroups = BostaShipment::query()->whereNotNull('bosta_delivery_id')->pluck('checkout_group_key')->all();
-        $cancelledStatuses = collect(OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'))
-            ->push('cancelled')
-            ->unique()
-            ->values()
-            ->all();
-        $blockedShippingStatuses = collect(['delivered', 'cancelled', 'returned', 'not_required'])
-            ->flatMap(fn (string $behavior): array => OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, $behavior))
-            ->merge(['delivered', 'cancelled', 'returned', 'not_required'])
-            ->unique()
-            ->values()
-            ->all();
-        $eligibleOrders = Order::query()
-            ->with('checkoutReference')
-            ->whereNotIn('checkout_group_key', $shippedGroups)
-            ->where(function ($query) use ($blockedShippingStatuses): void {
-                $query->whereNull('shipping_status')
-                    ->orWhereNotIn('shipping_status', $blockedShippingStatuses);
-            })
-            ->whereNotIn('status', $cancelledStatuses)
-            ->latest()
-            ->get()
-            ->unique('checkout_group_key')
-            ->take(50)
-            ->values();
-
         return view('admin.bosta.index', [
             'configured' => config('bosta.enabled') && filled(config('bosta.api_key')) && filled(config('bosta.business_location_id')),
-            'shipments' => BostaShipment::query()->with(['order.checkoutReference', 'createdBy:id,name'])->withCount('pickups')->latest()->paginate(25),
+            'shipments' => BostaShipment::query()
+                ->with(['order.checkoutReference', 'createdBy:id,name'])
+                ->where('creation_status', 'created')
+                ->whereNotNull('tracking_number')
+                ->whereDoesntHave('pickups')
+                ->latest()
+                ->paginate(25),
             'pickups' => BostaPickup::query()->with('createdBy:id,name')->latest()->take(10)->get(),
-            'eligibleOrders' => $eligibleOrders,
+            'eligibleOrders' => $eligibility->eligibleRepresentatives(),
         ]);
     }
 
     public function createShipment(Request $request, int $representative, BostaShipmentService $service)
     {
+        $overrides = $request->validate([
+            'receiver_name' => ['nullable', 'string', 'max:120'],
+            'receiver_phone' => ['nullable', 'string', 'max:30'],
+            'governorate' => ['nullable', 'string', 'max:120'],
+            'district_name' => ['nullable', 'string', 'max:160'],
+            'first_line' => ['nullable', 'string', 'max:500'],
+            'second_line' => ['nullable', 'string', 'max:500'],
+            'cod_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
+        ]);
+
         try {
-            $shipment = $service->create(Order::query()->findOrFail($representative), $request->user(), $request);
+            $shipment = $service->create(Order::query()->findOrFail($representative), $request->user(), $request, $overrides);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {

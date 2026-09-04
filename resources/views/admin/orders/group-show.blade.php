@@ -127,6 +127,8 @@
                 @endcan
             @endif
 
+            @include('admin.orders._bosta-shipping-panel', ['group' => $group])
+
             @include('admin.orders._payment-history', ['paymentEvents' => $paymentEvents ?? collect()])
 
             @if($visibleStoryOrders->isNotEmpty())

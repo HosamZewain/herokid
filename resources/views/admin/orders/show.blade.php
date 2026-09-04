@@ -845,6 +845,8 @@
                     @endif
                     @endcan
 
+                    @include('admin.orders._bosta-shipping-panel', ['group' => $checkoutGroup])
+
                     <!-- Booklet Preview -->
                     @if($order->story_id)
                     @can('orders.preview.upload')

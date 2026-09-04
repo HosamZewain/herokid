@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Services\Mobile\ProviderTokenVerifier;
 use App\Support\AdminPermissionRegistry;
 use App\Support\Seo;
+use App\View\Composers\BostaOrderViewComposer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
@@ -22,6 +23,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        View::composer(['admin.orders.show', 'admin.orders.group-show'], BostaOrderViewComposer::class);
+
         Gate::before(function ($user, string $ability): ?bool {
             if (AdminPermissionRegistry::has($ability)) {
                 return $user->hasPermission($ability);

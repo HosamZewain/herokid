@@ -44,6 +44,7 @@ class BostaShippingStatusService
 
         return match ($behavior) {
             'ready' => OrderWorkflowStatus::SHIPPING_READY,
+            'shipment_created' => OrderWorkflowStatus::SHIPPING_SHIPMENT_CREATED,
             'shipped' => OrderWorkflowStatus::SHIPPING_SHIPPED,
             'delivered' => OrderWorkflowStatus::SHIPPING_DELIVERED,
             'returned' => OrderWorkflowStatus::SHIPPING_RETURNED,

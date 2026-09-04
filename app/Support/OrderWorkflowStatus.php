@@ -22,6 +22,8 @@ class OrderWorkflowStatus
 
     public const SHIPPING_READY = 'ready';
 
+    public const SHIPPING_SHIPMENT_CREATED = 'shipment_created';
+
     public const SHIPPING_SHIPPED = 'shipped';
 
     public const SHIPPING_DELIVERED = 'delivered';
@@ -43,6 +45,7 @@ class OrderWorkflowStatus
         self::SHIPPING_NOT_REQUIRED,
         self::SHIPPING_NOT_READY,
         self::SHIPPING_READY,
+        self::SHIPPING_SHIPMENT_CREATED,
         self::SHIPPING_SHIPPED,
         self::SHIPPING_DELIVERED,
         self::SHIPPING_RETURNED,

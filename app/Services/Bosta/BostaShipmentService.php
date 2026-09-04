@@ -7,7 +7,6 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Support\AdminActivityLogger;
-use App\Support\OrderStatusRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,11 +18,14 @@ class BostaShipmentService
         private BostaClient $client,
         private BostaAddressResolver $addresses,
         private AdminOrderGroupService $groups,
+        private BostaShipmentEligibilityService $eligibility,
+        private BostaShippingStatusService $shippingStatuses,
     ) {}
 
-    public function create(Order $representative, User $admin, Request $request): BostaShipment
+    /** @param array<string, mixed> $overrides */
+    public function create(Order $representative, User $admin, Request $request, array $overrides = []): BostaShipment
     {
-        [$shipment, $payload] = DB::transaction(function () use ($representative, $admin): array {
+        [$shipment, $payload] = DB::transaction(function () use ($representative, $admin, $overrides): array {
             $orders = Order::query()->where('checkout_group_key', $representative->checkoutGroupKey())
                 ->lockForUpdate()->with(['items', 'story', 'checkoutReference'])->get();
             if ($orders->isEmpty()) {
@@ -32,19 +34,7 @@ class BostaShipmentService
 
             $group = $this->groups->present($orders);
 
-            $cancelledStatuses = collect(OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'))
-                ->push('cancelled')
-                ->unique()
-                ->values()
-                ->all();
-            $blockedShippingStatuses = collect(['delivered', 'cancelled', 'returned', 'not_required'])
-                ->flatMap(fn (string $behavior): array => OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, $behavior))
-                ->merge(['delivered', 'cancelled', 'returned', 'not_required'])
-                ->unique();
-            if ($orders->contains(fn (Order $order): bool => in_array($order->status, $cancelledStatuses, true))
-                || $orders->contains(fn (Order $order): bool => $blockedShippingStatuses->contains($order->shipping_status))) {
-                throw ValidationException::withMessages(['order' => 'عملية الشراء ملغاة أو لا تحتاج إلى شحن عبر Bosta.']);
-            }
+            $this->eligibility->ensureEligible($orders);
 
             $existing = BostaShipment::query()->where('checkout_group_key', $group['key'])->lockForUpdate()->first();
             if ($existing?->bosta_delivery_id) {
@@ -54,12 +44,24 @@ class BostaShipmentService
                 throw ValidationException::withMessages(['order' => 'إنشاء شحنة Bosta لهذه العملية جارٍ بالفعل. انتظر قليلًا قبل إعادة المحاولة.']);
             }
 
-            $delivery = $group['delivery'];
-            $phone = $this->egyptianPhone($group['phone']);
+            $delivery = array_replace($group['delivery'], array_filter([
+                'governorate' => $overrides['governorate'] ?? null,
+                'city' => $overrides['district_name'] ?? null,
+                'street' => $overrides['first_line'] ?? null,
+                'address_details' => $overrides['second_line'] ?? null,
+            ], fn (mixed $value): bool => filled($value)));
+            $phone = $this->egyptianPhone($overrides['receiver_phone'] ?? $group['phone']);
+            $receiverName = trim((string) ($overrides['receiver_name'] ?? $group['customer_name']));
             if (! $phone) {
                 throw ValidationException::withMessages(['order' => 'بيانات الهاتف أو عنوان التوصيل غير مكتملة.']);
             }
+            if ($receiverName === '') {
+                throw ValidationException::withMessages(['order' => 'اسم مستلم الشحنة مطلوب.']);
+            }
             $dropOffAddress = $this->addresses->resolve($delivery);
+            $codAmountCents = array_key_exists('cod_amount', $overrides) && $overrides['cod_amount'] !== null
+                ? (int) round(((float) $overrides['cod_amount']) * 100)
+                : $group['remaining_amount_cents'];
 
             if (blank(config('bosta.business_location_id'))) {
                 throw ValidationException::withMessages(['order' => 'معرّف مكان الاستلام في Bosta غير مضبوط.']);
@@ -71,7 +73,7 @@ class BostaShipmentService
                 'order_id' => $group['representative_id'],
                 'business_reference' => $group['short_reference'] ?: $orders->first()->order_number,
                 'created_by_user_id' => $admin->id,
-                'cod_amount_cents' => $group['remaining_amount_cents'],
+                'cod_amount_cents' => $codAmountCents,
                 'package_type' => config('bosta.default_package_type'),
                 'allow_open_package' => (bool) config('bosta.allow_open_package'),
                 'business_location_id' => (string) config('bosta.business_location_id'),
@@ -85,7 +87,7 @@ class BostaShipmentService
                 'businessLocationId' => $shipment->business_location_id,
                 'cod' => $shipment->cod_amount_cents / 100,
                 'allowToOpenPackage' => $shipment->allow_open_package,
-                'receiver' => ['fullName' => $group['customer_name'], 'phone' => $phone],
+                'receiver' => ['fullName' => $receiverName, 'phone' => $phone],
                 'dropOffAddress' => $dropOffAddress,
                 'specs' => [
                     'packageType' => $shipment->package_type,
@@ -134,6 +136,12 @@ class BostaShipmentService
             'cod_amount_cents' => $shipment->cod_amount_cents,
             'cod_is_financial_collection' => false,
         ], $admin, $request);
+
+        $this->shippingStatuses->updateCheckout(
+            $shipment->checkout_group_key,
+            'shipment_created',
+            'تم إنشاء شحنة Bosta بنجاح. رقم التتبع: '.($shipment->tracking_number ?: 'قيد التجهيز'),
+        );
 
         return $shipment->refresh();
     }

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderPaymentEvent;
 use App\Models\Permission;
 use App\Models\User;
+use App\Services\Bosta\BostaShipmentEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Collection;
@@ -82,6 +83,8 @@ class BostaIntegrationTest extends TestCase
         $this->assertSame($paymentEventsBefore, OrderPaymentEvent::query()->count());
         $this->assertSame([15_000], $orders->map->refresh()->pluck('paid_amount_cents')->unique()->values()->all());
         $this->assertSame(['partially_paid'], $orders->map->refresh()->pluck('payment_status')->unique()->values()->all());
+        $this->assertSame(['shipment_created'], $orders->map->refresh()->pluck('shipping_status')->unique()->values()->all());
+        $this->assertDatabaseCount('order_status_logs', 2);
     }
 
     public function test_failed_delivery_creation_is_preserved_and_can_be_retried_without_duplicate_local_shipments(): void
@@ -224,6 +227,11 @@ class BostaIntegrationTest extends TestCase
         $this->assertTrue($pickup->shipments()->whereKey($shipment->id)->exists());
         $this->assertSame($paymentEventsBefore, OrderPaymentEvent::query()->count());
         $this->assertSame([5_000], $orders->map->refresh()->pluck('paid_amount_cents')->unique()->values()->all());
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertDontSee('TRACK-PICKUP');
     }
 
     public function test_webhook_rejects_invalid_secret_and_unknown_shipment(): void
@@ -257,6 +265,130 @@ class BostaIntegrationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_bosta_queue_only_lists_checkouts_whose_entire_shipping_status_is_ready(): void
+    {
+        $ready = $this->checkout('BOSTA-READY-QUEUE', 20_000);
+        $notReady = $this->checkout('BOSTA-NOT-READY-QUEUE', 20_000);
+        $notReady->each->update(['shipping_status' => 'not_ready']);
+        $mixed = $this->checkout('BOSTA-MIXED-QUEUE', 20_000);
+        $mixed->last()->update(['shipping_status' => 'not_ready']);
+
+        $eligibleGroups = app(BostaShipmentEligibilityService::class)
+            ->eligibleRepresentatives()
+            ->map->checkoutGroupKey();
+        $this->assertTrue($eligibleGroups->contains('BOSTA-READY-QUEUE'));
+        $this->assertFalse($eligibleGroups->contains('BOSTA-NOT-READY-QUEUE'));
+        $this->assertFalse($eligibleGroups->contains('BOSTA-MIXED-QUEUE'));
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSee(route('admin.orders.show', $ready->first()), false)
+            ->assertDontSee(route('admin.orders.show', $notReady->first()), false)
+            ->assertDontSee(route('admin.orders.show', $mixed->first()), false)
+            ->assertSee('تظهر هنا للمراجعة فقط. افتح الطلب لمراجعة بيانات المستلم والعنوان وCOD ثم إنشاء الشحنة.');
+    }
+
+    public function test_direct_shipment_creation_rejects_checkout_until_every_order_is_ready_for_shipping(): void
+    {
+        $orders = $this->checkout('BOSTA-NOT-READY-CREATE', 20_000);
+        $orders->last()->update(['shipping_status' => 'not_ready']);
+        Http::fake();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.shipments.store', $orders->first()->id))
+            ->assertRedirect()
+            ->assertSessionHasErrors('order');
+
+        $this->assertDatabaseCount('bosta_shipments', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_checkout_order_page_shows_bosta_readiness_and_existing_shipment_details(): void
+    {
+        $orders = $this->checkout('BOSTA-ORDER-PAGE', 20_000);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $orders->first()->id))
+            ->assertOk()
+            ->assertSee('شحن Bosta')
+            ->assertSee('جاهز لإنشاء الشحنة')
+            ->assertSee('مراجعة بيانات الشحنة وإنشاؤها')
+            ->assertSee('COD لدى Bosta');
+
+        BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-ORDER-PAGE',
+            'order_id' => $orders->first()->id,
+            'bosta_delivery_id' => 'delivery-order-page',
+            'tracking_number' => 'TRACK-ORDER-PAGE',
+            'business_reference' => 'HK09-99',
+            'creation_status' => 'created',
+            'shipping_status' => 'picked_up',
+            'cod_amount_cents' => 25_000,
+            'business_location_id' => 'location-123',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $orders->first()->id))
+            ->assertOk()
+            ->assertSee('TRACK-ORDER-PAGE')
+            ->assertSee('picked_up')
+            ->assertSee('تم إنشاء الشحنة');
+    }
+
+    public function test_admin_can_review_and_override_shipment_data_without_recording_a_payment(): void
+    {
+        $orders = $this->checkout('BOSTA-EDITABLE-DATA', 40_000, 10_000);
+        $paymentEventsBefore = OrderPaymentEvent::query()->count();
+        Http::fake([
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-giza',
+                'name' => 'Giza',
+                'otherName' => 'الجيزة',
+            ]]]]),
+            '*/deliveries?apiVersion=1' => Http::response(['data' => [
+                '_id' => 'delivery-edited',
+                'trackingNumber' => 'TRACK-EDITED',
+            ]]),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.shipments.store', $orders->first()->id), [
+                'receiver_name' => 'مستلم معدل',
+                'receiver_phone' => '01111111111',
+                'governorate' => 'الجيزة',
+                'district_name' => 'الدقي',
+                'first_line' => '١٥ شارع التحرير الرئيسي',
+                'second_line' => 'الدور الثالث',
+                'cod_amount' => '175.50',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(function (HttpRequest $request): bool {
+            if (! str_contains($request->url(), '/deliveries?apiVersion=1')) {
+                return false;
+            }
+
+            return $request['receiver']['fullName'] === 'مستلم معدل'
+                && $request['receiver']['phone'] === '01111111111'
+                && $request['dropOffAddress']['cityId'] === 'city-giza'
+                && $request['dropOffAddress']['districtName'] === 'الدقي'
+                && $request['dropOffAddress']['firstLine'] === '١٥ شارع التحرير الرئيسي'
+                && $request['dropOffAddress']['secondLine'] === 'الدور الثالث'
+                && $request['cod'] === 175.5;
+        });
+
+        $this->assertDatabaseHas('bosta_shipments', [
+            'checkout_group_key' => 'BOSTA-EDITABLE-DATA',
+            'cod_amount_cents' => 17_550,
+            'tracking_number' => 'TRACK-EDITED',
+        ]);
+        $this->assertSame($paymentEventsBefore, OrderPaymentEvent::query()->count());
+        $this->assertSame([10_000], $orders->map->refresh()->pluck('paid_amount_cents')->unique()->values()->all());
+        $this->assertSame(['shipment_created'], $orders->map->refresh()->pluck('shipping_status')->unique()->values()->all());
+    }
+
     /** @return Collection<int, Order> */
     private function checkout(string $group, int $itemsCents, int $paidCents = 0, int $deliveryCents = 5_000)
     {
@@ -281,7 +413,7 @@ class BostaIntegrationTest extends TestCase
                 'uploaded_photos' => [],
                 'status' => 'new',
                 'printing_status' => 'not_started',
-                'shipping_status' => 'not_ready',
+                'shipping_status' => 'ready',
                 'payment_status' => $paidCents > 0 ? 'partially_paid' : 'unpaid',
                 'paid_amount_cents' => $paidCents,
                 'order_source' => 'website',
