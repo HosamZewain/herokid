@@ -59,6 +59,24 @@ class AdminPermissionsTest extends TestCase
             ->assertDontSee('class="flex-1 flex flex-col min-w-0 mr-64"', false);
     }
 
+    public function test_admin_browser_title_uses_the_current_page_heading(): void
+    {
+        $admin = $this->adminWithPermissions([
+            'dashboard.view',
+            'content.faqs.view',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk()
+            ->assertSee('<title>لوحة تحكم HeroKid — '.config('app.name').'</title>', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.faqs.index'))
+            ->assertOk()
+            ->assertSee('<title>إدارة الأسئلة الشائعة — '.config('app.name').'</title>', false);
+    }
+
     public function test_dashboard_statistics_require_the_separate_owner_permission(): void
     {
         $viewer = $this->adminWithPermissions([

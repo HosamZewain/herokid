@@ -2,10 +2,37 @@
 <html lang="ar" dir="rtl">
 
 <head>
+    @php
+        $browserPageTitle = isset($title) ? trim((string) $title) : '';
+
+        if ($browserPageTitle === '') {
+            foreach ([$header ?? null, $slot ?? null] as $pageContent) {
+                if ($pageContent === null) {
+                    continue;
+                }
+
+                if (preg_match('/<h[12]\b[^>]*>(.*?)<\/h[12]>/isu', (string) $pageContent, $headingMatch) !== 1) {
+                    continue;
+                }
+
+                $browserPageTitle = trim((string) preg_replace(
+                    '/\s+/u',
+                    ' ',
+                    html_entity_decode(strip_tags($headingMatch[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8')
+                ));
+
+                if ($browserPageTitle !== '') {
+                    break;
+                }
+            }
+        }
+
+        $browserPageTitle = $browserPageTitle !== '' ? $browserPageTitle : 'لوحة الإدارة';
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ isset($title) && trim((string) $title) !== '' ? trim((string) $title).' — '.config('app.name') : config('app.name').' — لوحة الإدارة' }}</title>
+    <title>{{ $browserPageTitle }} — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800&display=swap" rel="stylesheet" />
     <!-- Favicon -->
