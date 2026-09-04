@@ -151,6 +151,7 @@ class AdminPermissionsTest extends TestCase
                 'المصروفات',
                 'الطلبات والإنتاج',
                 'الطلبات',
+                'Bosta للشحن',
                 'معاينات الكتب',
                 'هويات الأطفال',
                 'الكتالوج والعملاء',
@@ -182,6 +183,17 @@ class AdminPermissionsTest extends TestCase
             ->assertDontSee('المالية')
             ->assertDontSee('الكتالوج والعملاء')
             ->assertDontSee('الإدارة والأمان');
+    }
+
+    public function test_bosta_navigation_is_grouped_with_fulfillment_and_does_not_create_an_integrations_section(): void
+    {
+        $admin = $this->adminWithPermissions(['bosta.view']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSeeInOrder(['الطلبات والإنتاج', 'Bosta للشحن'])
+            ->assertDontSee('التكاملات');
     }
 
     public function test_order_sensitive_actions_require_separate_permissions(): void

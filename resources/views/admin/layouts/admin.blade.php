@@ -65,7 +65,7 @@
                 ]);
                 $canFinance = auth()->user()->hasAnyPermission(['expenses.view']);
                 $canFulfillment = auth()->user()->hasAnyPermission([
-                    'orders.view', 'orders.create', 'booklet_previews.view', 'production_studio.view', 'child_identities.view',
+                    'orders.view', 'orders.create', 'booklet_previews.view', 'production_studio.view', 'child_identities.view', 'bosta.view',
                 ]);
                 $canCatalog = auth()->user()->hasAnyPermission([
                     'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
@@ -81,7 +81,7 @@
                     'settings.order_statuses.manage',
                     'child_identities.settings',
                 ]);
-                $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage', 'agent_api.tokens.manage', 'bosta.view']);
+                $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage', 'agent_api.tokens.manage']);
                 $canAdministration = auth()->user()->hasAnyPermission([
                     'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'activity_logs.view',
                 ]);
@@ -111,6 +111,9 @@
                         @endcan
                         @can('orders.create')
                             <a href="{{ route('admin.orders.create') }}" class="{{ $navLink }} {{ request()->routeIs('admin.orders.create') ? $activeLink : $idleLink }}">إضافة طلب</a>
+                        @endcan
+                        @can('bosta.view')
+                            <a href="{{ route('admin.bosta.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.bosta.*') ? $activeLink : $idleLink }}">Bosta للشحن</a>
                         @endcan
                         @can('booklet_previews.view')
                             <a href="{{ route('admin.booklet-previews.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.booklet-previews.*') ? $activeLink : $idleLink }}">معاينات الكتب</a>
@@ -224,9 +227,6 @@
                         @endcan
                         @can('agent_api.tokens.manage')
                             <a href="{{ route('admin.agent-api-tokens.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agent-api-tokens.*') ? $activeLink : $idleLink }}">Agent API Tokens</a>
-                        @endcan
-                        @can('bosta.view')
-                            <a href="{{ route('admin.bosta.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.bosta.*') ? $activeLink : $idleLink }}">Bosta للشحن</a>
                         @endcan
                     </div>
                 @endif
