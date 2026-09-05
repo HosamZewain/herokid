@@ -629,6 +629,68 @@ class AdminOrderFullEditTest extends TestCase
         }
     }
 
+    public function test_admin_can_remove_one_specific_child_from_a_multi_child_sticker_order(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'ستيكر أطفال متعدد',
+            'slug' => 'remove-one-sticker-child',
+            'price_cents' => 20_000,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل'],
+                'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
+            ],
+            'inventory_mode' => 'track_stock',
+            'stock_quantity' => 10,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin)->post(route('admin.orders.store'), [
+            'parent_name' => 'ولي أمر الأطفال', 'phone' => '01012345678', 'order_source' => 'whatsapp',
+            'delivery_country_id' => $this->country->id, 'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'القاهرة', 'street' => 'شارع الأطفال', 'address_details' => 'الدور الأول',
+            'stories' => [],
+            'products' => [$product->id => [
+                'quantity' => 3,
+                'units' => [
+                    ['personalization' => ['child_name' => 'الطفل الأول', 'photos' => $this->photos('child-one')]],
+                    ['personalization' => ['child_name' => 'الطفل المحذوف', 'photos' => $this->photos('child-two')]],
+                    ['personalization' => ['child_name' => 'الطفل الثالث', 'photos' => $this->photos('child-three')]],
+                ],
+            ]],
+            'payment_status' => 'unpaid',
+        ])->assertRedirect();
+
+        $orders = Order::query()->with('items')->where('checkout_group_key', 'like', 'CHK-%')->orderBy('id')->get();
+        $this->assertCount(3, $orders);
+        [$first, $removed, $third] = $orders->all();
+
+        $editPage = $this->actingAs($this->admin)->get(route('admin.orders.groups.edit', $first));
+        $editPage->assertOk()->assertSee('حذف الطفل')->assertSee('data-delete-order-photo', false);
+
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $first), [
+            'parent_name' => 'ولي أمر الأطفال', 'phone' => '01012345678', 'order_source' => 'whatsapp',
+            'delivery_country_id' => $this->country->id, 'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'القاهرة', 'street' => 'شارع الأطفال', 'address_details' => 'الدور الأول',
+            'stories' => [],
+            'products' => [$product->id => [
+                'quantity' => 2,
+                'units' => [
+                    0 => ['existing_order_id' => $first->id, 'personalization' => ['child_name' => 'الطفل الأول']],
+                    2 => ['existing_order_id' => $third->id, 'personalization' => ['child_name' => 'الطفل الثالث']],
+                ],
+            ]],
+            'payment_status' => 'unpaid',
+            'change_reason' => 'حذف الطفل الذي أضيف بالخطأ من طلب الاستيكر.',
+        ])->assertRedirect();
+
+        $active = Order::query()->where('checkout_group_key', $first->checkout_group_key)->orderBy('id')->get();
+        $this->assertSame([$first->id, $third->id], $active->pluck('id')->all());
+        $this->assertSame(['الطفل الأول', 'الطفل الثالث'], $active->pluck('child_name')->all());
+        $this->assertSoftDeleted('orders', ['id' => $removed->id]);
+        $this->assertSame(8, $product->fresh()->stock_quantity);
+    }
+
     private function createCheckout(): array
     {
         $firstStory = $this->story('القصة الأولى', 400);

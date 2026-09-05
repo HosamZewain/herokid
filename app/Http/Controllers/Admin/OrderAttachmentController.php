@@ -17,7 +17,7 @@ class OrderAttachmentController extends Controller
     {
         $validated = $request->validate([
             'attachments' => ['required', 'array', 'min:1', 'max:10'],
-            'attachments.*' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp,heic,heif', 'max:51200'],
+            'attachments.*' => OrderAttachmentService::fileRules(),
             'note' => ['nullable', 'string', 'max:1000'],
         ], [
             'attachments.required' => 'اختر ملف PDF أو صورة واحدة على الأقل.',

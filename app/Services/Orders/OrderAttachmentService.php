@@ -15,6 +15,21 @@ class OrderAttachmentService
 {
     public const VALIDITY_DAYS = 30;
 
+    public const MAX_FILE_KILOBYTES = 51_200;
+
+    public const ALLOWED_EXTENSIONS = 'pdf,jpg,jpeg,png,webp,heic,heif';
+
+    /** @return array<int, string> */
+    public static function fileRules(bool $required = true): array
+    {
+        return [
+            $required ? 'required' : 'nullable',
+            'file',
+            'mimes:'.self::ALLOWED_EXTENSIONS,
+            'max:'.self::MAX_FILE_KILOBYTES,
+        ];
+    }
+
     /** @param array<int, UploadedFile> $files */
     public function upload(
         Order $order,

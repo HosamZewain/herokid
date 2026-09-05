@@ -30,7 +30,12 @@
                     }
 
                     const scope = form.closest('[data-ajax-delete-scope]');
-                    form.closest('[data-ajax-delete-item]')?.remove();
+                    const deletedItem = form.closest('[data-ajax-delete-item]');
+                    if (payload.deleted_attachment_id) {
+                        document.querySelectorAll(`[data-order-attachment-id="${payload.deleted_attachment_id}"]`).forEach((element) => element.remove());
+                    } else {
+                        deletedItem?.remove();
+                    }
 
                     if (scope) {
                         const count = scope.querySelectorAll('[data-ajax-delete-item]').length;

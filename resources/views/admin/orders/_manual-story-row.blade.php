@@ -65,9 +65,21 @@
                 {{ $existingOrderId ? 'إضافة صور جديدة للطفل (اختياري — حتى 3 صور)' : 'صور الطفل — صورتان أو 3 صور *' }}
             </label>
             <input id="child-photos-{{ $index }}" name="stories[{{ $index }}][photos][]" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple @required(! $existingOrderId) class="block w-full rounded-xl border border-dashed border-violet-300 bg-white p-3 text-sm file:ml-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-2 file:font-black file:text-white" data-photo-input>
+            @if($existingOrderId && ! empty($row['photos']))
+                <div class="mt-3 flex flex-wrap gap-3" data-existing-photos>
+                    @foreach($row['photos'] as $photoIndex => $photo)
+                        <div class="relative" data-existing-photo data-photo-index="{{ $photoIndex }}">
+                            <a href="{{ route('admin.orders.photo', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" target="_blank" class="block">
+                                <img src="{{ route('admin.orders.photo', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" alt="صورة الطفل {{ $photoIndex + 1 }}" class="h-20 w-20 rounded-xl object-cover ring-1 ring-violet-200">
+                            </a>
+                            <button type="button" data-delete-order-photo data-delete-url="{{ route('admin.orders.photos.destroy', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" class="absolute -left-2 -top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white shadow" aria-label="حذف الصورة">حذف</button>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
             <p class="mt-2 text-xs font-bold text-gray-500" data-photo-names>
                 @if($existingOrderId)
-                    الصور المحفوظة حاليًا: {{ (int) ($row['photo_count'] ?? 0) }}. لن تُحذف عند الحفظ، ويمكنك إرفاق صور إضافية.
+                    الصور المحفوظة حاليًا: <span data-existing-photo-count>{{ (int) ($row['photo_count'] ?? 0) }}</span>. لن تُحذف عند الحفظ؛ استخدم زر حذف للصورة الخاطئة، أو أرفق صورًا إضافية.
                 @else
                     لم يتم اختيار صور.
                 @endif

@@ -88,7 +88,7 @@
                     $expired = $attachment->isExpired();
                     $remainingDays = $expired ? 0 : max(1, (int) ceil(now()->diffInHours($attachment->expires_at) / 24));
                 @endphp
-                <article class="rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item>
+                <article class="rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
                     <div class="flex items-start gap-3">
                         <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm" aria-hidden="true">{{ $attachment->icon }}</span>
                         <div class="min-w-0 flex-1">

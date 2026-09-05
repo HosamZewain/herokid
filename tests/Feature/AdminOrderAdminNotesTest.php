@@ -8,11 +8,10 @@ use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
-use App\Services\Orders\OrderAdminNoteService;
 use App\Support\AppDateTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Route;
-use LogicException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AdminOrderAdminNotesTest extends TestCase
@@ -106,43 +105,147 @@ class AdminOrderAdminNotesTest extends TestCase
             ->assertSee('تم استلام صور الملصق من العميل.');
     }
 
-    public function test_notes_are_append_only_and_have_no_edit_or_delete_routes(): void
+    public function test_note_can_include_a_private_attachment_with_the_existing_retention_rules(): void
     {
+        Storage::fake('local');
         $admin = User::factory()->create(['role' => 'admin']);
         [$order] = $this->ordersInSameCheckout();
 
-        $this->actingAs($admin)->post(route('admin.orders.notes.store', $order), [
-            'body' => 'الملاحظة الأولى',
-        ]);
-        $this->actingAs($admin)->post(route('admin.orders.notes.store', $order), [
-            'body' => 'الملاحظة الثانية',
-        ]);
+        $this->actingAs($admin)
+            ->post(route('admin.orders.notes.store', $order), [
+                'body' => 'راجع ملف المقاسات المرفق.',
+                'attachment' => UploadedFile::fake()->create('sizes.pdf', 700, 'application/pdf'),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame(
-            ['الملاحظة الثانية', 'الملاحظة الأولى'],
-            app(OrderAdminNoteService::class)
-                ->notesFor($order)
-                ->pluck('body')
-                ->all(),
-        );
-        $this->assertFalse(Route::has('admin.orders.notes.update'));
-        $this->assertFalse(Route::has('admin.orders.notes.destroy'));
+        $note = OrderAdminNote::with('attachment')->sole();
+        $this->assertNotNull($note->attachment);
+        $this->assertSame('sizes.pdf', $note->attachment->original_name);
+        $this->assertSame(30, $note->attachment->validity_days);
+        Storage::disk('local')->assertExists($note->attachment->path);
 
-        $this->expectException(LogicException::class);
-        OrderAdminNote::query()->firstOrFail()->update(['body' => 'نص معدل']);
+        $this->actingAs($admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('راجع ملف المقاسات المرفق.')
+            ->assertSee('sizes.pdf')
+            ->assertSee('فتح')
+            ->assertSee('تحميل');
     }
 
-    public function test_note_model_prevents_deletion(): void
+    public function test_edit_permission_controls_note_text_and_attachment_replacement(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
+        Storage::fake('local');
+        $author = User::factory()->create(['name' => 'كاتب الملاحظة', 'role' => 'admin']);
+        $editor = User::factory()->create(['name' => 'معدل الملاحظة', 'role' => 'admin']);
+        $withoutPermission = User::factory()->create(['role' => 'admin']);
+        $withoutPermission->permissions()->sync(
+            Permission::query()->whereIn('key', ['orders.view', 'orders.update'])->pluck('id'),
+        );
         [$order] = $this->ordersInSameCheckout();
 
-        $this->actingAs($admin)->post(route('admin.orders.notes.store', $order), [
-            'body' => 'ملاحظة دائمة',
+        $this->actingAs($author)->post(route('admin.orders.notes.store', $order), [
+            'body' => 'النص قبل التعديل',
+            'attachment' => UploadedFile::fake()->create('old.pdf', 100, 'application/pdf'),
+        ]);
+        $note = OrderAdminNote::with('attachment')->sole();
+        $oldPath = $note->attachment->path;
+
+        $this->actingAs($withoutPermission)
+            ->put(route('admin.orders.notes.update', [$order, $note]), ['body' => 'غير مسموح'])
+            ->assertForbidden();
+
+        $this->actingAs($editor)
+            ->put(route('admin.orders.notes.update', [$order, $note]), [
+                'body' => 'النص بعد التعديل',
+                'attachment' => UploadedFile::fake()->image('new.jpg'),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $note->refresh()->load('attachment');
+        $this->assertSame('النص بعد التعديل', $note->body);
+        $this->assertSame($author->id, $note->author_user_id);
+        $this->assertSame($editor->id, $note->last_edited_by_user_id);
+        $this->assertSame('new.jpg', $note->attachment->original_name);
+        Storage::disk('local')->assertMissing($oldPath);
+        Storage::disk('local')->assertExists($note->attachment->path);
+
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'user_id' => $editor->id,
+            'action' => 'order.note_updated',
+            'subject_id' => $order->id,
+        ]);
+    }
+
+    public function test_delete_permission_soft_deletes_note_and_removes_its_attachment(): void
+    {
+        Storage::fake('local');
+        $author = User::factory()->create(['role' => 'admin']);
+        $deleter = User::factory()->create(['role' => 'admin']);
+        $withoutPermission = User::factory()->create(['role' => 'admin']);
+        $withoutPermission->permissions()->sync(
+            Permission::query()->whereIn('key', ['orders.view', 'orders.update'])->pluck('id'),
+        );
+        [$order] = $this->ordersInSameCheckout();
+
+        $this->actingAs($author)->post(route('admin.orders.notes.store', $order), [
+            'body' => 'ملاحظة قابلة للحذف بصلاحية',
+            'attachment' => UploadedFile::fake()->create('delete-me.pdf', 100, 'application/pdf'),
+        ]);
+        $note = OrderAdminNote::with('attachment')->sole();
+        $attachmentId = $note->attachment->id;
+        $attachmentPath = $note->attachment->path;
+
+        $this->actingAs($withoutPermission)
+            ->delete(route('admin.orders.notes.destroy', [$order, $note]))
+            ->assertForbidden();
+
+        $this->actingAs($deleter)
+            ->delete(route('admin.orders.notes.destroy', [$order, $note]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSoftDeleted('order_admin_notes', [
+            'id' => $note->id,
+            'deleted_by_user_id' => $deleter->id,
+        ]);
+        $this->assertDatabaseMissing('order_attachments', ['id' => $attachmentId]);
+        Storage::disk('local')->assertMissing($attachmentPath);
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'user_id' => $deleter->id,
+            'action' => 'order.note_deleted',
+            'subject_id' => $order->id,
+        ]);
+    }
+
+    public function test_note_management_rejects_a_note_from_another_checkout(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$firstOrder] = $this->ordersInSameCheckout();
+        $otherOrder = Order::query()->create([
+            'order_number' => 'HK-NOTE-OTHER',
+            'checkout_group_key' => 'CHECKOUT-NOTES-OTHER',
+            'parent_name' => 'ولي أمر آخر',
+            'status' => 'new',
+            'delivery_details' => ['phone' => '201000000002'],
         ]);
 
-        $this->expectException(LogicException::class);
-        OrderAdminNote::query()->firstOrFail()->delete();
+        $this->actingAs($admin)->post(route('admin.orders.notes.store', $firstOrder), [
+            'body' => 'ملاحظة الطلب الأول',
+        ]);
+        $note = OrderAdminNote::query()->sole();
+
+        $this->actingAs($admin)
+            ->put(route('admin.orders.notes.update', [$otherOrder, $note]), ['body' => 'محاولة نقل'])
+            ->assertNotFound();
+        $this->actingAs($admin)
+            ->delete(route('admin.orders.notes.destroy', [$otherOrder, $note]))
+            ->assertNotFound();
+
+        $this->assertSame('ملاحظة الطلب الأول', $note->fresh()->body);
+        $this->assertNull($note->fresh()->deleted_at);
     }
 
     public function test_note_creation_requires_update_permission_and_valid_body(): void

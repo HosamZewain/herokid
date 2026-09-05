@@ -22,7 +22,10 @@
         @endphp
         <section class="rounded-2xl border border-slate-200 bg-white p-4" data-product-personalization-unit="{{ $unitIndex }}" @if($unitIndex >= $quantity) hidden @endif>
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm font-black text-slate-900">الطفل {{ arabic_number($unitIndex + 1) }}</p>
+                <div class="flex items-center gap-2">
+                    <button type="button" class="rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-black text-red-600 hover:bg-red-100" data-remove-product-child>حذف الطفل</button>
+                    <p class="text-sm font-black text-slate-900">الطفل {{ arabic_number($unitIndex + 1) }}</p>
+                </div>
                 @if($unitIndex > 0)
                     <label class="flex items-center gap-2 text-xs font-black text-indigo-700">
                         <input type="checkbox" name="products[{{ $product->id }}][units][{{ $unitIndex }}][reuse_first]" value="1" class="rounded border-indigo-300" data-admin-reuse-first @checked(! empty($unit['reuse_first']))>
@@ -39,7 +42,7 @@
                             @if($existingPhotoCount > 0)
                                 <div class="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-xs font-black text-emerald-800">
                                     محفوظ: {{ arabic_number($existingPhotoCount) }} صورة
-                                    @can('orders.photos.view')<div class="mt-2 flex gap-2">@for($photoIndex=0;$photoIndex<$existingPhotoCount;$photoIndex++)<a href="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" target="_blank"><img src="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" alt="" class="h-14 w-14 rounded-lg object-cover"></a>@endfor</div>@endcan
+                                    @can('orders.photos.view')<div class="mt-2 flex flex-wrap gap-2" data-existing-photos>@for($photoIndex=0;$photoIndex<$existingPhotoCount;$photoIndex++)<div class="relative" data-existing-photo data-photo-index="{{ $photoIndex }}"><a href="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" target="_blank"><img src="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" alt="" class="h-14 w-14 rounded-lg object-cover"></a><button type="button" data-delete-order-photo data-delete-url="{{ route('admin.orders.photos.destroy', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" class="absolute -left-1 -top-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-black text-white">حذف</button></div>@endfor</div>@endcan
                                 </div>
                             @endif
                             <input type="file" name="products[{{ $product->id }}][units][{{ $unitIndex }}][personalization][photos][]" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="block w-full rounded-xl border border-dashed border-indigo-200 p-3 text-xs" data-product-personalization-input data-admin-unit-field data-product-photo-input data-required="{{ $field['required'] && $existingPhotoCount < $field['min_files'] ? '1' : '0' }}" data-max-files="{{ max(0,$field['max_files']-$existingPhotoCount) }}" @required($quantity>$unitIndex && $field['required'] && $existingPhotoCount<$field['min_files']) @disabled($unitIndex >= $quantity)>

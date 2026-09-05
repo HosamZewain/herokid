@@ -190,6 +190,70 @@ class AdminOrderPhotoTest extends TestCase
         $this->assertSame([], $order->fresh()->uploaded_photos);
     }
 
+    public function test_admin_can_delete_one_incorrect_photo_without_removing_the_others(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->admin();
+        $paths = [
+            'orders/photos/first.png',
+            'orders/photos/wrong.png',
+            'orders/photos/third.png',
+        ];
+        foreach ($paths as $path) {
+            Storage::disk('local')->put($path, $this->validPngBytes());
+        }
+        $order = $this->orderWithPhotos($paths);
+        $item = $order->items()->create([
+            'item_type' => 'story',
+            'title' => 'Story',
+            'unit_price_cents' => 10_000,
+            'quantity' => 1,
+            'total_price_cents' => 10_000,
+            'personalization_snapshot' => [
+                'uploaded_photos_count' => 3,
+                'fields' => ['photos' => ['type' => 'photos', 'value' => 3]],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.orders.photos.destroy', [$order, 1]))
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('remaining_count', 2);
+
+        $this->assertSame([$paths[0], $paths[2]], $order->fresh()->uploaded_photos);
+        Storage::disk('local')->assertMissing($paths[1]);
+        Storage::disk('local')->assertExists($paths[0]);
+        Storage::disk('local')->assertExists($paths[2]);
+        $this->assertSame(2, $item->fresh()->personalization_snapshot['uploaded_photos_count']);
+        $this->assertSame(2, data_get($item->fresh()->personalization_snapshot, 'fields.photos.value'));
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'user_id' => $admin->id,
+            'action' => 'order.child_photo_deleted',
+            'subject_id' => $order->id,
+        ]);
+    }
+
+    public function test_deleting_an_order_photo_requires_update_and_sensitive_photo_permissions(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->admin();
+        $admin->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update'])->pluck('id'));
+        $admin->unsetRelation('permissions');
+        $path = 'orders/photos/private.png';
+        Storage::disk('local')->put($path, $this->validPngBytes());
+        $order = $this->orderWithPhotos([$path]);
+
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.orders.photos.destroy', [$order, 0]))
+            ->assertForbidden();
+
+        $this->assertSame([$path], $order->fresh()->uploaded_photos);
+        Storage::disk('local')->assertExists($path);
+    }
+
     private function admin(): User
     {
         return User::create([

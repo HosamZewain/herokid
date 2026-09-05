@@ -462,18 +462,40 @@
                         const count = Math.max(0, Math.min(10, Number(quantity?.value || 0)));
                         const selected = count > 0;
                         personalization.hidden = !selected;
-                        personalization.querySelectorAll('[data-product-personalization-unit]').forEach((unit, index) => {
-                            const active = index < count;
-                            const reuse = unit.querySelector('[data-admin-reuse-first]')?.checked;
+                        let activeIndex = 0;
+                        personalization.querySelectorAll('[data-product-personalization-unit]').forEach(unit => {
+                            const removed = unit.dataset.removed === '1';
+                            const active = !removed && activeIndex < count;
+                            const position = activeIndex;
+                            if (!removed) activeIndex++;
+                            const reuseInput = unit.querySelector('[data-admin-reuse-first]');
+                            if (active && position === 0 && reuseInput) reuseInput.checked = false;
+                            const reuse = position > 0 && reuseInput?.checked;
                             unit.hidden = !active;
                             unit.querySelectorAll('[data-admin-unit-field]').forEach(input => {
                                 input.disabled = !active || reuse;
                                 input.required = active && !reuse && input.dataset.required === '1';
                             });
-                            const reuseInput = unit.querySelector('[data-admin-reuse-first]');
-                            if (reuseInput) reuseInput.disabled = !active;
+                            if (reuseInput) {
+                                reuseInput.disabled = !active || position === 0;
+                                reuseInput.closest('label')?.classList.toggle('hidden', active && position === 0);
+                            }
                         });
                     };
+
+                    row.querySelectorAll('[data-remove-product-child]').forEach(button => button.addEventListener('click', () => {
+                        const unit = button.closest('[data-product-personalization-unit]');
+                        if (!unit || unit.hidden || !confirm('هل تريد حذف هذا الطفل من الطلب؟')) return;
+                        unit.dataset.removed = '1';
+                        unit.hidden = true;
+                        unit.querySelectorAll('input, select, textarea').forEach(input => {
+                            input.disabled = true;
+                            input.required = false;
+                        });
+                        quantity.value = String(Math.max(0, Number(quantity.value || 0) - 1));
+                        refreshPersonalization();
+                        calculate();
+                    }));
 
                     quantity?.addEventListener('input', refreshPersonalization);
                     row.querySelectorAll('[data-admin-reuse-first]').forEach(input => input.addEventListener('change', refreshPersonalization));
@@ -571,6 +593,39 @@
 
                 rows.querySelectorAll('[data-story-row]').forEach(bindRow);
                 root.querySelectorAll('[data-product-row]').forEach(bindProductRow);
+
+                root.querySelectorAll('[data-delete-order-photo]').forEach(button => button.addEventListener('click', async () => {
+                    if (!confirm('هل تريد حذف هذه الصورة نهائيًا من الطلب؟')) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(button.dataset.deleteUrl, {
+                            method: 'DELETE',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            },
+                        });
+                        const payload = await response.json();
+                        if (!response.ok || !payload.success) throw new Error(payload.message || 'تعذر حذف الصورة.');
+                        const container = button.closest('[data-existing-photos]');
+                        button.closest('[data-existing-photo]')?.remove();
+                        container?.querySelectorAll('[data-existing-photo]').forEach((photo, newIndex) => {
+                            photo.dataset.photoIndex = String(newIndex);
+                            const deleteButton = photo.querySelector('[data-delete-order-photo]');
+                            if (deleteButton) deleteButton.dataset.deleteUrl = deleteButton.dataset.deleteUrl.replace(/\/\d+$/, `/${newIndex}`);
+                        });
+                        const unit = container?.closest('[data-product-personalization-unit]');
+                        if (unit) {
+                            const photoInput = unit.querySelector('[data-product-photo-input]');
+                            if (photoInput) photoInput.dataset.maxFiles = String(Number(photoInput.dataset.maxFiles || 0) + 1);
+                        }
+                        const count = button.closest('[data-story-row]')?.querySelector('[data-existing-photo-count]');
+                        if (count) count.textContent = String(payload.remaining_count);
+                    } catch (error) {
+                        alert(error.message || 'تعذر حذف الصورة.');
+                        button.disabled = false;
+                    }
+                }));
                 addButton.addEventListener('click', () => appendStoryRow({ scroll: true }));
                 packageSelect?.addEventListener('change', applyPackage);
 

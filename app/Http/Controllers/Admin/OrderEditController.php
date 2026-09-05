@@ -80,6 +80,7 @@ class OrderEditController extends Controller
                 'gift_note' => $order->gift_note,
                 'parent_notes' => $order->parent_notes,
                 'photo_count' => count($order->uploaded_photos ?? []),
+                'photos' => array_values($order->uploaded_photos ?? []),
             ];
         })->all();
         $initialProducts = [];
@@ -110,6 +111,7 @@ class OrderEditController extends Controller
                 $existing['units'][] = [
                     'existing_order_id' => (int) $item->order_id,
                     'existing_photo_count' => count($item->order->uploaded_photos ?? []),
+                    'existing_photos' => array_values($item->order->uploaded_photos ?? []),
                     'personalization' => array_replace(
                         $orderPersonalization,
                         ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
@@ -282,13 +284,16 @@ class OrderEditController extends Controller
             if (is_array($productInput['units'] ?? null)) {
                 $units = $productInput['units'];
                 ksort($units, SORT_NUMERIC);
+                $unitSourceIndexes = array_keys($units);
                 $units = array_values($units);
             } elseif ($usesLegacyPersonalizationInput) {
+                $unitSourceIndexes = [0];
                 $units = [[
                     'existing_order_id' => $productExistingItems->first()?->order_id,
                     'personalization' => $productInput['personalization'],
                 ]];
             } else {
+                $unitSourceIndexes = range(0, max(0, $productExistingItems->count() - 1));
                 $units = $productExistingItems->map(fn ($item): array => [
                     'existing_order_id' => $item->order_id,
                     'personalization' => [],
@@ -298,8 +303,9 @@ class OrderEditController extends Controller
 
             for ($unitIndex = 0; $unitIndex < $quantity; $unitIndex++) {
                 $unit = (array) ($units[$unitIndex] ?? []);
+                $unitSourceIndex = (int) ($unitSourceIndexes[$unitIndex] ?? $unitIndex);
                 $reuseFirst = filter_var($unit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL)
-                    || $request->boolean("products.$productId.units.$unitIndex.reuse_first");
+                    || $request->boolean("products.$productId.units.$unitSourceIndex.reuse_first");
                 if ($unitIndex > 0 && $reuseFirst) {
                     $validatedUnits[] = [
                         'personalization' => $validatedUnits[0]['personalization'],
@@ -322,7 +328,7 @@ class OrderEditController extends Controller
                 );
                 $photoInputPath = $usesLegacyPersonalizationInput
                     ? "products.$productId.personalization.photos"
-                    : "products.$productId.units.$unitIndex.personalization.photos";
+                    : "products.$productId.units.$unitSourceIndex.personalization.photos";
                 $newPhotos = array_values($request->file($photoInputPath, []));
                 $existingPhotoCount = count($existingItem?->order?->uploaded_photos ?? []);
                 $rules = ProductPersonalizationSchema::adminOrderValidationRules($schema);
@@ -339,7 +345,7 @@ class OrderEditController extends Controller
                     $errors = [];
                     $errorPrefix = $usesLegacyPersonalizationInput
                         ? "products.$productId.personalization"
-                        : "products.$productId.units.$unitIndex.personalization";
+                        : "products.$productId.units.$unitSourceIndex.personalization";
                     foreach ($exception->errors() as $field => $messages) {
                         $errors["$errorPrefix.$field"] = $messages;
                     }

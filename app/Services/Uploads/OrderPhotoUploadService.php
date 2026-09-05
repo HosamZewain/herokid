@@ -12,6 +12,52 @@ use Illuminate\Validation\ValidationException;
 class OrderPhotoUploadService
 {
     /**
+     * Remove one photo by its current order-local index.
+     *
+     * @return array{removed_path: string, total_count: int}
+     */
+    public function removeAt(Order $order, int $index): array
+    {
+        $removedPath = DB::transaction(function () use ($order, $index): string {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $photos = is_array($lockedOrder->uploaded_photos)
+                ? array_values($lockedOrder->uploaded_photos)
+                : [];
+
+            if (! isset($photos[$index]) || ! is_string($photos[$index])) {
+                abort(404);
+            }
+
+            $removedPath = $photos[$index];
+            array_splice($photos, $index, 1);
+            $lockedOrder->forceFill(['uploaded_photos' => $photos])->save();
+
+            foreach ($lockedOrder->items()->whereNotNull('personalization_snapshot')->get() as $item) {
+                $snapshot = $item->personalization_snapshot ?? [];
+                $snapshot['uploaded_photos_count'] = count($photos);
+                if (isset($snapshot['fields']['photos']) && is_array($snapshot['fields']['photos'])) {
+                    $snapshot['fields']['photos']['value'] = count($photos);
+                }
+                $item->forceFill(['personalization_snapshot' => $snapshot])->save();
+            }
+
+            return $removedPath;
+        });
+
+        $stillReferenced = Order::withTrashed()
+            ->whereJsonContains('uploaded_photos', $removedPath)
+            ->exists();
+        if (! $stillReferenced && ! str_contains($removedPath, '..')) {
+            Storage::disk((string) config('photo_uploads.disk', 'local'))->delete($removedPath);
+        }
+
+        return [
+            'removed_path' => $removedPath,
+            'total_count' => count($order->fresh()->uploaded_photos ?? []),
+        ];
+    }
+
+    /**
      * Append supplemental child photos without changing the existing photo indexes.
      *
      * @param  array<int, UploadedFile>  $files
