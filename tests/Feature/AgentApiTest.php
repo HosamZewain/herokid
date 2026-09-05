@@ -113,6 +113,24 @@ class AgentApiTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->id]);
     }
 
+    public function test_admin_can_explicitly_enable_existing_order_rework_on_a_new_token(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+
+        $this->actingAs($manager)->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'rework-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::PRODUCTS,
+            'allow_rework' => true,
+        ])->assertRedirect(route('admin.agent-api-tokens.index'));
+
+        $token = PersonalAccessToken::query()->where('name', 'rework-worker')->firstOrFail();
+        $this->assertContains('agent:orders.rework', $token->abilities);
+        $this->assertContains('agent:orders.edit-personalization', $token->abilities);
+    }
+
     public function test_agent_token_management_page_requires_its_sensitive_permission(): void
     {
         $admin = $this->agent();
@@ -371,6 +389,198 @@ class AgentApiTest extends TestCase
         $this->assertDatabaseCount('order_group_assignments', 1);
     }
 
+    public function test_agent_can_select_correct_and_rework_a_specific_existing_product_checkout(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::PRODUCTS);
+        $order = $this->productOrder(
+            'PRODUCT-REWORK',
+            'HK-PRODUCT-REWORK',
+            'Sticker for {{child_full_name}} at {{school_name}} in {{class_name}} ({{name_language}}).',
+        );
+        $order->update(['status' => 'ready_preview']);
+        $reference = $order->checkoutReference->short_reference;
+        $item = $order->items()->firstOrFail();
+        $queueOrder = $this->productOrder('OTHER-ACTIVE-WORK', 'HK-OTHER-ACTIVE-WORK', 'Create {{product_name}}.');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'other-active-acquire'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $queueOrder->checkoutReference->short_reference);
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'specific-rework-acquire'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $reference)
+            ->assertJsonPath('already_acquired', false);
+        $this->assertDatabaseCount('order_group_assignments', 2);
+
+        $this->withToken($token)
+            ->patchJson("/api/agent/orders/{$order->id}/personalization", [
+                'production_unit_key' => 'product:'.$item->id,
+                'personalization' => [
+                    'child_name' => 'Adam Ahmed Mohamed',
+                    'school_name' => 'School sky light',
+                    'class_name' => 'kg2',
+                    'language' => 'en',
+                ],
+                'change_reason' => 'Customer requested corrected sticker data.',
+            ], ['Idempotency-Key' => 'specific-rework-edit'])
+            ->assertOk()
+            ->assertJsonPath('production_unit_key', 'product:'.$item->id)
+            ->assertJsonPath('production_unit.language', 'en')
+            ->assertJsonPath('production_unit.personalization.0.value', 'Adam Ahmed Mohamed');
+
+        $snapshot = $item->fresh()->personalization_snapshot;
+        $this->assertSame('Adam Ahmed Mohamed', $snapshot['child_name']);
+        $this->assertSame('School sky light', $snapshot['school_name']);
+        $this->assertSame('kg2', $snapshot['class_name']);
+        $this->assertSame('en', $order->fresh()->language);
+
+        $context = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk();
+        $prompt = $context->json('production_units.0.production_prompt');
+        $this->assertStringContainsString('Adam Ahmed Mohamed', $prompt);
+        $this->assertStringContainsString('School sky light', $prompt);
+        $this->assertStringContainsString('kg2', $prompt);
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => 'product:'.$item->id,
+            'attachments' => [UploadedFile::fake()->create('old-production.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'old-production-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/start-rework", [], ['Idempotency-Key' => 'specific-rework-start'])
+            ->assertOk()
+            ->assertJsonPath('status', 'generating')
+            ->assertJsonPath('already_started', false);
+        $this->assertSame('generating', $order->fresh()->status);
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'rework-complete-before-new-file'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'PRODUCTION_FILES_MISSING');
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => 'product:'.$item->id,
+            'attachments' => [UploadedFile::fake()->create('replacement-production.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'replacement-production-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'rework-complete-after-new-file'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview');
+        $this->assertDatabaseCount('order_attachments', 2);
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'action' => 'agent.order_personalization_updated',
+            'subject_id' => $order->id,
+        ]);
+    }
+
+    public function test_specific_rework_requires_new_token_ability_and_respects_existing_assignment(): void
+    {
+        $owner = $this->agent();
+        $other = $this->agent();
+        $order = $this->productOrder('LOCKED-REWORK', 'HK-LOCKED-REWORK', 'Create {{product_name}}.');
+        $reference = $order->checkoutReference->short_reference;
+
+        $this->withToken($this->token($owner))
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'missing-rework-ability'])
+            ->assertForbidden()
+            ->assertJsonPath('error', 'FORBIDDEN');
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($this->reworkToken($owner))
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'owner-specific-acquire'])
+            ->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($this->reworkToken($other))
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'other-specific-acquire'])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'ORDER_ALREADY_ACQUIRED');
+    }
+
+    public function test_specific_rework_updates_every_production_order_in_a_mixed_checkout(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::ALL);
+        $story = $this->storyOrder('MIXED-REWORK', 'HK-MIXED-REWORK-STORY', true);
+        $product = $this->productOrder('MIXED-REWORK', 'HK-MIXED-REWORK-PRODUCT', 'Create {{product_name}}.');
+        $story->update(['status' => 'ready_preview']);
+        $product->update(['status' => 'preview_uploaded']);
+        $reference = $story->checkoutReference->short_reference;
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'mixed-rework-acquire'])
+            ->assertOk()
+            ->assertJsonCount(2, 'checkout.orders');
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/start-rework", [], ['Idempotency-Key' => 'mixed-rework-start'])
+            ->assertOk();
+
+        $this->assertSame('generating', $story->fresh()->status);
+        $this->assertSame('generating', $product->fresh()->status);
+    }
+
+    public function test_agent_can_correct_story_personalization_before_starting_rework(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::STORIES);
+        $order = $this->storyOrder('STORY-REWORK', 'HK-STORY-REWORK', true);
+        $order->update(['status' => 'revision_requested']);
+        $reference = $order->checkoutReference->short_reference;
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'story-rework-acquire'])
+            ->assertOk();
+
+        $this->withToken($token)
+            ->patchJson("/api/agent/orders/{$order->id}/personalization", [
+                'production_unit_key' => 'story:'.$order->id,
+                'personalization' => [
+                    'child_name' => 'Mariam Ahmed',
+                    'child_age' => 9,
+                    'language' => 'en',
+                ],
+                'change_reason' => 'Customer corrected the story personalization.',
+            ], ['Idempotency-Key' => 'story-rework-edit'])
+            ->assertOk()
+            ->assertJsonPath('production_unit.child.name', 'Mariam Ahmed')
+            ->assertJsonPath('production_unit.child.age', 9)
+            ->assertJsonPath('production_unit.language', 'en');
+
+        $this->assertSame('Mariam Ahmed', $order->fresh()->child_name);
+        $this->assertSame(9, (int) $order->fresh()->child_age);
+        $this->assertSame('en', $order->fresh()->language);
+    }
+
+    public function test_agent_rework_rejects_cancelled_or_shipment_created_checkout(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent);
+        $cancelled = $this->productOrder('CANCELLED-REWORK', 'HK-CANCELLED-REWORK', 'Create {{product_name}}.');
+        $cancelled->update(['status' => 'cancelled']);
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/'.$cancelled->checkoutReference->short_reference.'/acquire', [], ['Idempotency-Key' => 'cancelled-rework'])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'CHECKOUT_NOT_REWORKABLE');
+
+        $shipment = $this->productOrder('SHIPPED-REWORK', 'HK-SHIPPED-REWORK', 'Create {{product_name}}.');
+        $shipment->update(['shipping_status' => 'shipment_created']);
+        $this->app['auth']->forgetGuards();
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/'.$shipment->checkoutReference->short_reference.'/acquire', [], ['Idempotency-Key' => 'shipment-rework'])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'CHECKOUT_NOT_REWORKABLE');
+    }
+
     public function test_another_agent_cannot_read_or_upload_to_acquired_checkout(): void
     {
         $owner = $this->agent();
@@ -409,6 +619,14 @@ class AgentApiTest extends TestCase
         return $user->createToken(
             'scoped-agent-test',
             [...$this->abilities(), ...AgentCatalogScope::abilities($scope)],
+        )->plainTextToken;
+    }
+
+    private function reworkToken(User $user, string $scope = AgentCatalogScope::ALL): string
+    {
+        return $user->createToken(
+            'rework-agent-test',
+            [...$this->abilities(), ...AgentCatalogScope::abilities($scope), 'agent:orders.edit-personalization', 'agent:orders.rework'],
         )->plainTextToken;
     }
 

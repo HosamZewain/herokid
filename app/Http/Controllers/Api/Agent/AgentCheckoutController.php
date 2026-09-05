@@ -36,6 +36,25 @@ class AgentCheckoutController extends Controller
         return response()->json($production->context($reference, $request->user()));
     }
 
+    public function acquire(
+        Request $request,
+        string $reference,
+        AgentCheckoutProductionService $production,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $result = $idempotency->execute($request->user(), 'checkouts.acquire-specific:'.$reference, $request, function () use ($request, $reference, $production): array {
+            $body = $production->acquireSpecific($reference, $request->user(), $request);
+
+            return [
+                'status' => 200,
+                'body' => $body,
+                'checkout_group_key' => data_get($body, 'checkout.checkout_group'),
+            ];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
     public function complete(
         Request $request,
         string $reference,
@@ -46,6 +65,25 @@ class AgentCheckoutController extends Controller
             $body = $production->complete($reference, $request->user(), $request);
 
             return ['status' => 200, 'body' => $body, 'checkout_group_key' => $body['checkout_group_key'] ?? null];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
+    public function startRework(
+        Request $request,
+        string $reference,
+        AgentCheckoutProductionService $production,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $result = $idempotency->execute($request->user(), 'checkouts.start-rework:'.$reference, $request, function () use ($request, $reference, $production): array {
+            $body = $production->startRework($reference, $request->user(), $request);
+
+            return [
+                'status' => 200,
+                'body' => $body,
+                'checkout_group_key' => $body['checkout_group_key'] ?? null,
+            ];
         });
 
         return response()->json($result['body'], $result['status']);

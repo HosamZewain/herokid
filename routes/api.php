@@ -34,13 +34,19 @@ Route::post('integrations/bosta/webhook', BostaWebhookController::class)
 Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
     Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])
         ->middleware('agent_api:ability:orders.acquire,permission:orders.assign');
+    Route::post('checkouts/{reference}/acquire', [AgentCheckoutController::class, 'acquire'])
+        ->middleware('agent_api:ability:orders.rework,permission:orders.assign');
     Route::get('checkouts/{reference}/production-context', [AgentCheckoutController::class, 'context'])
         ->middleware('agent_api:ability:orders.read,permission:orders.view');
+    Route::post('checkouts/{reference}/start-rework', [AgentCheckoutController::class, 'startRework'])
+        ->middleware('agent_api:ability:orders.rework,permission:orders.update');
     Route::post('checkouts/{reference}/complete-production', [AgentCheckoutController::class, 'complete'])
         ->middleware('agent_api:ability:orders.update-status,permission:orders.update');
 
     Route::post('orders/{order}/attachments', [AgentOrderController::class, 'attachments'])
         ->middleware('agent_api:ability:orders.upload-attachment,permission:orders.update');
+    Route::patch('orders/{order}/personalization', [AgentOrderController::class, 'updatePersonalization'])
+        ->middleware('agent_api:ability:orders.edit-personalization,permission:orders.update');
     Route::post('orders/{order}/previews', [AgentOrderController::class, 'previews'])
         ->middleware('agent_api:ability:orders.upload-preview,permission:orders.preview.upload');
     Route::get('orders/{order}/references/child-photos/{index}', [AgentOrderController::class, 'childPhoto'])

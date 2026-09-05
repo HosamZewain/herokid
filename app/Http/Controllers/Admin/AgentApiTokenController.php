@@ -30,6 +30,8 @@ class AgentApiTokenController extends Controller
                 'name' => $token->name,
                 'agent' => $agent,
                 'scope' => AgentCatalogScope::fromAbilities($token->abilities ?? []),
+                'can_rework' => in_array('agent:orders.rework', $token->abilities ?? [], true)
+                    && in_array('agent:orders.edit-personalization', $token->abilities ?? [], true),
                 'last_used_at' => $token->last_used_at,
                 'expires_at' => $token->expires_at,
                 'created_at' => $token->created_at,
@@ -47,6 +49,7 @@ class AgentApiTokenController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'expires_in_days' => ['required', 'integer', 'min:1', 'max:365'],
             'catalog_scope' => ['required', 'in:all,stories,products'],
+            'allow_rework' => ['nullable', 'boolean'],
         ]);
 
         $agent = User::query()->findOrFail($validated['agent_user_id']);
@@ -55,6 +58,7 @@ class AgentApiTokenController extends Controller
             trim($validated['name']),
             (int) $validated['expires_in_days'],
             $validated['catalog_scope'],
+            (bool) ($validated['allow_rework'] ?? false),
         );
 
         AdminActivityLogger::log(
@@ -66,6 +70,7 @@ class AgentApiTokenController extends Controller
                 'token_id' => $token->accessToken->id,
                 'token_name' => $token->accessToken->name,
                 'catalog_scope' => $validated['catalog_scope'],
+                'allow_rework' => (bool) ($validated['allow_rework'] ?? false),
                 'expires_at' => $token->accessToken->expires_at?->toIso8601String(),
             ],
             request: $request,
@@ -86,6 +91,7 @@ class AgentApiTokenController extends Controller
             'token_id' => $token->id,
             'token_name' => $token->name,
             'catalog_scope' => AgentCatalogScope::fromAbilities($token->abilities ?? []),
+            'allow_rework' => in_array('agent:orders.rework', $token->abilities ?? [], true),
         ];
 
         $tokens->revoke($agent, $token);

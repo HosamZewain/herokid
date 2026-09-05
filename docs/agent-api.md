@@ -12,12 +12,22 @@ From the Admin Panel, open **التكاملات → Agent API Tokens** (`/admin/
 - `stories`: story production only.
 - `products`: product production only.
 
+Enable **السماح بتعديل وإعادة إنتاج الطلبات السابقة** only for an Agent that must correct existing orders. This adds two narrowly scoped abilities:
+
+- `agent:orders.edit-personalization`
+- `agent:orders.rework`
+
+Existing tokens do not receive these abilities automatically. Reissue the token when rework access is required.
+
 A limited Agent skips a complete checkout when that checkout contains any production unit outside its scope. HeroKid never partially acquires a checkout. Ready products that do not require production do not affect this decision.
 
 The same operation is available from Artisan:
 
 ```bash
 php artisan agent:token issue agent@example.com --name=production-agent --expires=90 --scope=stories
+
+# Add --rework only when this Agent may correct existing orders
+php artisan agent:token issue agent@example.com --name=production-rework-agent --expires=90 --scope=products --rework
 ```
 
 The plaintext token is displayed once. Store it in a secret manager and send it as:
@@ -128,6 +138,76 @@ Every production unit must have at least one production attachment. The existing
 
 The Agent API deliberately does not expose a free-form status-change endpoint. Production completion can only perform the controlled `generating` → `ready_preview` transition.
 
+## Correcting and reworking an existing checkout
+
+This workflow is separate from `acquire-next`. It selects the exact short checkout reference and never takes an arbitrary queue item.
+
+```text
+POST /checkouts/{reference}/acquire
+       ↓
+GET /checkouts/{reference}/production-context
+       ↓
+PATCH /orders/{order}/personalization
+       ↓
+POST /checkouts/{reference}/start-rework
+       ↓
+generate and upload replacement files/previews
+       ↓
+POST /checkouts/{reference}/complete-production
+```
+
+Selecting a specific checkout does not release or modify another checkout already assigned to the same Agent. It is rejected when another user owns the requested checkout, when the token catalog scope does not cover every production unit, or when the checkout is cancelled or has reached shipment creation/shipping/delivery/return.
+
+### Acquire the exact existing checkout
+
+```bash
+curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-82/acquire \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer REWORK_TOKEN' \
+  -H 'Idempotency-Key: hk09-82-acquire-v1'
+```
+
+This operation assigns the whole `checkout_group` but does not change its status. Repeating it for an assignment already owned by the same Agent is safe.
+
+### Correct one production unit
+
+Use the exact `order_id` and `unit_key` returned by `production-context`.
+
+```bash
+curl -X PATCH https://hero-kid.com/api/agent/orders/123/personalization \
+  -H 'Accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer REWORK_TOKEN' \
+  -H 'Idempotency-Key: hk09-82-data-v1' \
+  -d '{
+    "production_unit_key": "product:456",
+    "personalization": {
+      "child_name": "Adam Ahmed Mohamed",
+      "school_name": "School sky light",
+      "class_name": "kg2",
+      "language": "en"
+    },
+    "change_reason": "Customer requested corrected sticker data."
+  }'
+```
+
+Product fields are limited to child name, school, class, age, gender, interests, parent notes, and language. Story fields are limited to child name, age, gender, language, interests, gift note, and parent notes. Prices, quantities, products, customer contact, payment, printing, and shipping cannot be changed through this endpoint.
+
+The existing product personalization snapshot and the mirrored order fields are updated in place. Story corrections reuse the Admin order-detail service, including scene text, prompt, linked identity, and Production Studio synchronization. Every change is audited with its old/new values and reason.
+
+### Start the replacement production run
+
+```bash
+curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-82/start-rework \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer REWORK_TOKEN' \
+  -H 'Idempotency-Key: hk09-82-start-v1'
+```
+
+All production orders in the checkout move to `generating`. Existing attachments, previews, and audit history are preserved, but files uploaded before this rework run do not satisfy `complete-production`; every production unit must receive a new attachment after `start-rework`.
+
+Retry the same request with the same `Idempotency-Key` to receive the cached result safely. Sending a different key starts a new rework run boundary—even if the checkout is already `generating`—and returns `already_started: true`; files uploaded before that new boundary will no longer count toward completion.
+
 ### Repairing completions created before `ready_preview`
 
 First preview the exact checkout and order-record counts:
@@ -152,6 +232,6 @@ Errors use a stable JSON shape:
 {"success":false,"error":"PRODUCTION_FILES_MISSING","message":"Required production files have not been uploaded for every production unit.","details":{}}
 ```
 
-Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_ACQUIRED`, `INVALID_ORDER_STATUS`, `ORDER_NOT_ACQUIRED_BY_AGENT`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
+Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_ACQUIRED`, `CHECKOUT_NOT_REWORKABLE`, `INVALID_ORDER_STATUS`, `ORDER_NOT_ACQUIRED_BY_AGENT`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_PERSONALIZATION`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
 
 Reference and attachment URLs require the same Bearer token and only work for the Agent currently assigned to that checkout. They never expose private storage paths.

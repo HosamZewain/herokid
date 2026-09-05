@@ -14,7 +14,8 @@ class ManageAgentApiToken extends Command
         {email : Email of the dedicated Agent admin account}
         {--name=production-agent : Token name}
         {--expires=90 : Expiry in days for newly issued tokens}
-        {--scope=all : Catalog scope: all, stories, or products}';
+        {--scope=all : Catalog scope: all, stories, or products}
+        {--rework : Allow selecting and correcting existing checkouts}';
 
     protected $description = 'Issue or revoke a scoped HeroKid Agent API token';
 
@@ -59,13 +60,14 @@ class ManageAgentApiToken extends Command
             return self::INVALID;
         }
 
-        $token = $tokens->issue($user, $name, $days, $scope);
+        $token = $tokens->issue($user, $name, $days, $scope, (bool) $this->option('rework'));
 
         $this->warn('Copy this token now. It will not be shown again:');
         $this->line($token->plainTextToken);
         $this->newLine();
         $this->info('Expires: '.$token->accessToken->expires_at?->toIso8601String());
         $this->info('Catalog scope: '.AgentCatalogScope::label($scope));
+        $this->info('Existing-order rework: '.($this->option('rework') ? 'enabled' : 'disabled'));
 
         return self::SUCCESS;
     }

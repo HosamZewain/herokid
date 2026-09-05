@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderAttachment;
 use App\Services\AgentApi\AgentCheckoutProductionService;
 use App\Services\AgentApi\AgentIdempotencyService;
+use App\Services\AgentApi\AgentOrderPersonalizationService;
 use App\Services\BookletPreviews\BookletPreviewManager;
 use App\Services\Orders\OrderAttachmentService;
 use App\Services\Orders\OrderProductPreviewService;
@@ -20,6 +21,39 @@ use Illuminate\Validation\ValidationException;
 
 class AgentOrderController extends Controller
 {
+    public function updatePersonalization(
+        Request $request,
+        Order $order,
+        AgentOrderPersonalizationService $personalization,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $validated = $this->validate($request, [
+            'production_unit_key' => ['required', 'string', 'max:120'],
+            'personalization' => ['required', 'array', 'min:1'],
+            'change_reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], 'INVALID_PERSONALIZATION');
+
+        $result = $idempotency->execute($request->user(), 'orders.personalization:'.$order->id, $request, function () use ($request, $order, $personalization, $validated): array {
+            $body = $personalization->update(
+                $order,
+                $validated['production_unit_key'],
+                $validated['personalization'],
+                $validated['change_reason'],
+                $request->user(),
+                $request,
+            );
+
+            return [
+                'status' => 200,
+                'body' => $body,
+                'order_id' => $order->id,
+                'checkout_group_key' => $order->checkoutGroupKey(),
+            ];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
     public function attachments(
         Request $request,
         Order $order,

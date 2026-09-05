@@ -20,6 +20,11 @@ class AgentTokenService
         'agent:orders.upload-preview',
     ];
 
+    public const REWORK_ABILITIES = [
+        'agent:orders.edit-personalization',
+        'agent:orders.rework',
+    ];
+
     public const REQUIRED_PERMISSIONS = [
         'orders.view',
         'orders.assign',
@@ -28,7 +33,7 @@ class AgentTokenService
         'orders.preview.upload',
     ];
 
-    public function issue(User $agent, string $name, int $expiresInDays, string $catalogScope): NewAccessToken
+    public function issue(User $agent, string $name, int $expiresInDays, string $catalogScope, bool $allowRework = false): NewAccessToken
     {
         if (! $agent->isAdmin()) {
             throw ValidationException::withMessages(['agent_user_id' => 'يجب اختيار حساب مشرف نشط ومخصص للـAgent.']);
@@ -43,13 +48,17 @@ class AgentTokenService
             throw ValidationException::withMessages(['agent_user_id' => 'صلاحيات الطلبات المطلوبة غير مكتملة. شغّل migrations أولًا.']);
         }
 
-        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $permissionIds): NewAccessToken {
+        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $allowRework, $permissionIds): NewAccessToken {
             $agent->permissions()->syncWithoutDetaching($permissionIds);
             $agent->forceFill(['agent_api_enabled' => true])->save();
 
             return $agent->createToken(
                 $name,
-                [...self::OPERATION_ABILITIES, ...AgentCatalogScope::abilities($catalogScope)],
+                [
+                    ...self::OPERATION_ABILITIES,
+                    ...AgentCatalogScope::abilities($catalogScope),
+                    ...($allowRework ? self::REWORK_ABILITIES : []),
+                ],
                 now()->addDays($expiresInDays),
             );
         });
