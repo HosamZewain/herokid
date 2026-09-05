@@ -48,18 +48,8 @@ class CartController extends Controller
         $cart = $this->cart();
         $cartCollection = collect($cart);
         $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
-        $cartProductIds = $cartCollection
-            ->pluck('product_id')
-            ->filter()
-            ->map(fn ($id): int => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
         $upsellStoryKey = session('upsell_story_key');
-        $upsellStoryItem = $upsellStoryKey && isset($cart[$upsellStoryKey]) ? $cart[$upsellStoryKey] : $storyItems->first();
-        $recommendedProducts = $upsellStoryItem
-            ? app(ProductRecommendations::class)->forStoryCartItem($upsellStoryItem, 6, $cartProductIds)
-            : collect();
+        $recommendedProducts = app(ProductRecommendations::class)->forCartItems($cart, 6);
 
         return view('front.cart.index', [
             'cartItems' => $cart,

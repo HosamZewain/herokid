@@ -13,7 +13,7 @@ class ProductUpsellRuleController extends Controller
 {
     public function index()
     {
-        $rules = ProductUpsellRule::with(['targetProduct', 'sourceStory', 'sourceStoryCategory'])
+        $rules = ProductUpsellRule::with(['targetProduct', 'sourceProduct', 'sourceStory', 'sourceStoryCategory'])
             ->orderByDesc('priority')
             ->paginate(30);
 
@@ -65,6 +65,7 @@ class ProductUpsellRuleController extends Controller
     {
         $validated = $request->validate([
             'target_product_id' => 'required|exists:products,id',
+            'source_product_id' => 'nullable|different:target_product_id|exists:products,id',
             'source_story_id' => 'nullable|exists:stories,id',
             'source_story_category_id' => 'nullable|exists:story_categories,id',
             'age_group' => 'nullable|string|max:50',
@@ -76,6 +77,15 @@ class ProductUpsellRuleController extends Controller
 
         $validated['priority'] = (int) ($validated['priority'] ?? 0);
         $validated['is_active'] = $request->boolean('is_active');
+        if (! empty($validated['source_product_id'])) {
+            $validated['source_story_id'] = null;
+            $validated['source_story_category_id'] = null;
+            $validated['age_group'] = null;
+            $validated['gender'] = null;
+            $validated['trigger_scope'] = 'product_added';
+        } else {
+            $validated['trigger_scope'] = 'story_added';
+        }
 
         return $validated;
     }

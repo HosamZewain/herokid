@@ -391,17 +391,20 @@
                         </div>
                     </section>
 
-                    @if(isset($recommendedProducts) && $recommendedProducts->isNotEmpty() && $storyLineItems->isNotEmpty())
+                    @if(isset($recommendedProducts) && $recommendedProducts->isNotEmpty())
                         @php $targetStory = $storyLineItems->first(); @endphp
                         <section data-cart-upsells class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-3 shadow-sm sm:rounded-3xl sm:p-6">
                             <div class="mb-3 text-right sm:mb-5">
-                                <p class="text-xs font-black text-indigo-600 sm:text-sm">أضف نشاطًا مع القصة</p>
+                                <p class="text-xs font-black text-indigo-600 sm:text-sm">{{ $storyLineItems->isNotEmpty() ? 'أضف نشاطًا مع القصة' : 'منتجات مختارة تناسب طلبك' }}</p>
                                 <h2 class="mt-1 text-lg font-black text-slate-950 sm:text-xl">قد يعجب طفلك أيضًا</h2>
                             </div>
                             <div class="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-2 lg:mx-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:overflow-visible lg:px-0 xl:grid-cols-3">
                                 @foreach($recommendedProducts as $product)
                                     @php
                                         $isPersonalizedAddon = $product->isPersonalizedAddon();
+                                        $requiresProductPage = $product->personalization_mode === 'collect_child_details'
+                                            || $product->activeVariants->isNotEmpty()
+                                            || ($isPersonalizedAddon && $storyLineItems->isEmpty());
                                     @endphp
                                     <article data-upsell-card class="w-[calc(50%_-_0.25rem)] min-w-[calc(50%_-_0.25rem)] snap-start overflow-hidden rounded-2xl border border-white bg-white text-right shadow-sm lg:w-auto lg:min-w-0">
                                         <div class="relative aspect-[4/3] overflow-hidden bg-slate-50">
@@ -418,6 +421,11 @@
                                             <h3 class="line-clamp-2 min-h-10 text-xs font-black leading-5 text-slate-950 sm:text-sm">{{ $product->name_ar }}</h3>
                                             <p class="mt-1 text-sm font-black text-indigo-700">{{ format_money($product->effectivePrice()) }}</p>
                                         </div>
+                                        @if($requiresProductPage)
+                                            <div class="border-t border-slate-100 p-2.5">
+                                                <a href="{{ route('shop.product.show', $product) }}" class="flex min-h-11 w-full items-center justify-center rounded-xl bg-indigo-600 px-3 py-2 text-xs font-black text-white hover:bg-indigo-700">عرض المنتج واختيار التفاصيل</a>
+                                            </div>
+                                        @else
                                         <form action="{{ route('cart.products.store', $product) }}" method="POST"
                                             data-cart-upsell-form data-product-name="{{ $product->name_ar }}"
                                             class="space-y-2 border-t border-slate-100 p-2.5">
@@ -443,6 +451,7 @@
                                             </button>
                                             <p data-upsell-status class="hidden text-center text-[10px] font-bold leading-4" role="status" aria-live="polite"></p>
                                         </form>
+                                        @endif
                                     </article>
                                 @endforeach
                             </div>

@@ -8,6 +8,7 @@ use App\Models\HomepageStoreSection;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductUpsellRule;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\TemporaryPhotoUpload;
@@ -748,6 +749,87 @@ class StoreCatalogTest extends TestCase
             ->assertSee('data-upsell-submit', false)
             ->assertSee('Accept: \'application/json\'', false)
             ->assertSee('إضافة');
+    }
+
+    public function test_admin_can_link_a_source_product_to_a_specific_recommended_product(): void
+    {
+        $admin = $this->admin();
+        $sticker = $this->product('upsell-source-sticker', 245, ['name_ar' => 'ستيكر المدرسة']);
+        $poster = $this->product('upsell-target-poster', 150, ['name_ar' => 'بوستر الطفل']);
+
+        $this->actingAs($admin)->post(route('admin.upsell-rules.store'), [
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $poster->id,
+            'priority' => 90,
+            'is_active' => 1,
+            'trigger_scope' => 'story_added',
+        ])->assertRedirect(route('admin.upsell-rules.index'));
+
+        $this->assertDatabaseHas('product_upsell_rules', [
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $poster->id,
+            'trigger_scope' => 'product_added',
+            'priority' => 90,
+            'is_active' => true,
+            'source_story_id' => null,
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.upsell-rules.store'), [
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $sticker->id,
+            'priority' => 10,
+            'is_active' => 1,
+            'trigger_scope' => 'product_added',
+        ])->assertSessionHasErrors('source_product_id');
+    }
+
+    public function test_configured_product_recommendations_appear_on_product_page_and_product_only_cart(): void
+    {
+        $sourceCategory = ProductCategory::create(['name_ar' => 'ستيكر', 'slug' => 'upsell-source-category', 'is_active' => true, 'show_in_store' => true]);
+        $targetCategory = ProductCategory::create(['name_ar' => 'بوسترات', 'slug' => 'upsell-target-category', 'is_active' => true, 'show_in_store' => true]);
+        $sticker = $this->product('configured-source-sticker', 245, [
+            'name_ar' => 'ستيكر مخصص',
+            'product_category_id' => $sourceCategory->id,
+        ]);
+        $poster = $this->product('configured-target-poster', 150, [
+            'name_ar' => 'بوستر مقترح يدويًا',
+            'product_category_id' => $targetCategory->id,
+        ]);
+        $identityCard = $this->product('configured-target-card', 100, [
+            'name_ar' => 'بطاقة هوية مخصصة',
+            'product_category_id' => $targetCategory->id,
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'child_name' => ['enabled' => true, 'required' => true],
+            ],
+        ]);
+        ProductUpsellRule::create(['source_product_id' => $sticker->id, 'target_product_id' => $poster->id, 'trigger_scope' => 'product_added', 'priority' => 50, 'is_active' => true]);
+        ProductUpsellRule::create(['source_product_id' => $sticker->id, 'target_product_id' => $identityCard->id, 'trigger_scope' => 'product_added', 'priority' => 40, 'is_active' => true]);
+
+        $this->get(route('shop.product.show', $sticker))
+            ->assertOk()
+            ->assertSee('بوستر مقترح يدويًا')
+            ->assertSee('بطاقة هوية مخصصة');
+
+        $response = $this->withSession(['cart.items' => [
+            'sticker-key' => [
+                'key' => 'sticker-key',
+                'item_type' => 'product',
+                'product_id' => $sticker->id,
+                'product_title' => $sticker->name_ar,
+                'product_slug' => $sticker->slug,
+                'line_total_cents' => 24_500,
+                'quantity' => 1,
+            ],
+        ]])->get(route('cart.index'))->assertOk();
+
+        $this->assertSame([$poster->id, $identityCard->id], $response->viewData('recommendedProducts')->pluck('id')->all());
+        $response
+            ->assertSee('منتجات مختارة تناسب طلبك')
+            ->assertSee('بوستر مقترح يدويًا')
+            ->assertSee('بطاقة هوية مخصصة')
+            ->assertSee(route('shop.product.show', $identityCard), false)
+            ->assertSee('عرض المنتج واختيار التفاصيل');
     }
 
     public function test_cart_recommends_multiple_small_activity_products_and_excludes_products_already_added(): void

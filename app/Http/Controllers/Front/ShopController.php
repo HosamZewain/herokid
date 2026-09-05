@@ -10,6 +10,7 @@ use App\Models\ProductCategory;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\ProductRecommendations;
 use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -47,15 +48,19 @@ class ShopController extends Controller
         $storyItems = collect(session('cart.items', []))
             ->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story')
             ->values();
-        $relatedProducts = Product::query()
+        $configuredProducts = app(ProductRecommendations::class)->forProduct($product, 4, [$product->id]);
+        $relatedProducts = $configuredProducts->merge(Product::query()
             ->with('category')
             ->publiclyVisible()
             ->where('id', '!=', $product->id)
+            ->when($configuredProducts->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $configuredProducts->pluck('id')))
             ->where('product_category_id', $product->product_category_id)
             ->orderByDesc('is_featured')
             ->orderBy('sort_order')
             ->take(4)
-            ->get();
+            ->get())
+            ->take(4)
+            ->values();
 
         $personalizationSchema = ProductPersonalizationSchema::forProduct($product);
         $personalizationFields = ProductPersonalizationSchema::enabledFields($personalizationSchema);

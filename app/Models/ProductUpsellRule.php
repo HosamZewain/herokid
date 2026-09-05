@@ -17,6 +17,11 @@ class ProductUpsellRule extends Model
         return $this->belongsTo(Product::class, 'target_product_id');
     }
 
+    public function sourceProduct()
+    {
+        return $this->belongsTo(Product::class, 'source_product_id');
+    }
+
     public function sourceStory()
     {
         return $this->belongsTo(Story::class, 'source_story_id');
