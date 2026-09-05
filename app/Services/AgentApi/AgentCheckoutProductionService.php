@@ -5,6 +5,7 @@ namespace App\Services\AgentApi;
 use App\Exceptions\AgentApiException;
 use App\Models\AgentApiIdempotencyKey;
 use App\Models\Order;
+use App\Models\OrderAdminNote;
 use App\Models\OrderCheckoutReference;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderStatusService;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use App\Support\ProductProductionPrompt;
@@ -106,6 +108,97 @@ class AgentCheckoutProductionService
                 }
             } catch (ValidationException) {
                 // A concurrent agent won this group. Continue to the next candidate.
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function acquireNextRevision(User $agent, Request $request): ?array
+    {
+        $this->assertStatusAvailable('revision_requested');
+
+        $candidates = Order::query()
+            ->selectRaw('checkout_group_key, MIN(updated_at) as revision_requested_at, MIN(id) as first_order_id')
+            ->where('status', 'revision_requested')
+            ->whereNotNull('checkout_group_key')
+            ->groupBy('checkout_group_key')
+            ->orderBy('revision_requested_at')
+            ->orderBy('first_order_id')
+            ->limit(50)
+            ->pluck('checkout_group_key');
+
+        foreach ($candidates as $groupKey) {
+            try {
+                $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
+                    $orders = $this->lockedOrdersForKey((string) $groupKey);
+                    if ($orders->isEmpty()) {
+                        return null;
+                    }
+
+                    $units = $this->units($orders);
+                    if ($units->isEmpty() || ! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                        return null;
+                    }
+
+                    $targets = $this->targetOrders($orders, $units);
+                    if ($targets->contains(fn (Order $order): bool => $order->status !== 'revision_requested')) {
+                        return null;
+                    }
+
+                    $assignment = OrderGroupAssignment::query()
+                        ->where('checkout_group_key', $groupKey)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($assignment && (int) $assignment->assigned_to_user_id !== (int) $agent->id) {
+                        return null;
+                    }
+
+                    $alreadyAcquired = $assignment !== null;
+                    if (! $assignment) {
+                        try {
+                            $this->assignments->acquire($orders->first(), $agent, $request);
+                        } catch (ValidationException) {
+                            $winner = OrderGroupAssignment::query()
+                                ->where('checkout_group_key', $groupKey)
+                                ->first();
+
+                            if (! $winner || (int) $winner->assigned_to_user_id !== (int) $agent->id) {
+                                return null;
+                            }
+
+                            $alreadyAcquired = true;
+                        }
+                    }
+
+                    AdminActivityLogger::log(
+                        action: 'agent.revision_checkout_acquired',
+                        description: 'استحوذ Agent API على عملية شراء من قائمة طلبات التعديل.',
+                        subject: $orders->first(),
+                        properties: [
+                            'checkout_group_key' => $groupKey,
+                            'agent_user_id' => $agent->id,
+                            'already_acquired' => $alreadyAcquired,
+                            'target_order_ids' => $targets->pluck('id')->all(),
+                            'status' => 'revision_requested',
+                            'request_identifier' => $this->requestIdentifier($request),
+                        ],
+                        admin: $agent,
+                        request: $request,
+                    );
+
+                    return [
+                        ...$this->summary($orders->map(fn (Order $order): Order => $order->fresh())),
+                        'already_acquired' => $alreadyAcquired,
+                    ];
+                }, 3);
+
+                if ($result !== null) {
+                    return $result;
+                }
+            } catch (ValidationException) {
+                // A concurrent agent won this checkout. Continue to the next candidate.
             }
         }
 
@@ -217,6 +310,7 @@ class AgentCheckoutProductionService
         return [
             'success' => true,
             'checkout' => $this->summary($orders),
+            'team_notes' => $this->teamNotes($orders->first()->checkoutGroupKey()),
             'production_units' => $units->values()->all(),
         ];
     }
@@ -590,6 +684,24 @@ class AgentCheckoutProductionService
                 'expires_at' => $attachment->expires_at?->toIso8601String(),
                 'url' => route('agent.orders.attachments.download', ['order' => $order, 'attachment' => $attachment]),
             ])->values()->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function teamNotes(string $groupKey): array
+    {
+        return OrderAdminNote::query()
+            ->where('checkout_group_key', $groupKey)
+            ->latest('created_at')
+            ->latest('id')
+            ->get()
+            ->map(fn (OrderAdminNote $note): array => [
+                'id' => $note->id,
+                'body' => $note->body,
+                'author' => $note->author_name,
+                'created_at' => AppDateTime::display($note->created_at)?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 
     private function preview(Order $order, string $type): array

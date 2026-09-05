@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminActivityLog;
 use App\Models\Order;
+use App\Models\OrderAdminNote;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
 use App\Models\Permission;
@@ -181,6 +182,77 @@ class AgentApiTest extends TestCase
 
         $this->withToken($token)->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'acquire-run-1'])
             ->assertStatus(409)->assertJsonPath('error', 'IDEMPOTENCY_KEY_REUSED');
+    }
+
+    public function test_agent_can_process_revision_queue_in_order_and_read_permanent_team_notes(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::PRODUCTS);
+        $first = $this->productOrder('REVISION-FIRST', 'HK-REVISION-FIRST', 'Create {{product_name}}.');
+        $first->update(['status' => 'revision_requested']);
+        OrderAdminNote::query()->create([
+            'checkout_group_key' => $first->checkoutGroupKey(),
+            'representative_order_id' => $first->id,
+            'author_user_id' => $agent->id,
+            'author_name' => 'Production Manager',
+            'body' => 'Change the school name and regenerate the large sheet.',
+        ]);
+
+        $this->travel(1)->minute();
+        $second = $this->productOrder('REVISION-SECOND', 'HK-REVISION-SECOND', 'Create {{product_name}}.');
+        $second->update(['status' => 'revision_requested']);
+        $this->productOrder('NEW-NOT-REVISION', 'HK-NEW-NOT-REVISION', 'Create {{product_name}}.');
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-queue-first'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $first->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.already_acquired', false);
+        $this->assertSame('revision_requested', $first->fresh()->status);
+
+        $context = $this->withToken($token)
+            ->getJson('/api/agent/checkouts/'.$acquired->json('checkout.reference').'/production-context')
+            ->assertOk()
+            ->assertJsonPath('team_notes.0.body', 'Change the school name and regenerate the large sheet.')
+            ->assertJsonPath('team_notes.0.author', 'Production Manager');
+        $this->assertStringContainsString('+03:00', $context->json('team_notes.0.created_at'));
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-queue-first'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $first->checkoutReference->short_reference);
+        $this->assertDatabaseCount('order_group_assignments', 1);
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/'.$first->checkoutReference->short_reference.'/start-rework', [], ['Idempotency-Key' => 'revision-first-start'])
+            ->assertOk();
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-queue-second'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $second->checkoutReference->short_reference);
+    }
+
+    public function test_revision_queue_skips_another_users_assignment_and_returns_empty_cleanly(): void
+    {
+        $agent = $this->agent();
+        $other = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::PRODUCTS);
+        $blocked = $this->productOrder('REVISION-BLOCKED', 'HK-REVISION-BLOCKED', 'Create {{product_name}}.');
+        $blocked->update(['status' => 'revision_requested']);
+        OrderGroupAssignment::query()->create([
+            'checkout_group_key' => $blocked->checkoutGroupKey(),
+            'assigned_to_user_id' => $other->id,
+            'assigned_by_user_id' => $other->id,
+            'assigned_at' => now(),
+        ]);
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-empty'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('checkout', null)
+            ->assertJsonPath('reason', 'NO_AVAILABLE_REVISIONS');
     }
 
     public function test_context_upload_and_checkout_completion_cover_every_production_unit(): void

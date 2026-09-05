@@ -34,6 +34,8 @@ Route::post('integrations/bosta/webhook', BostaWebhookController::class)
 Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
     Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])
         ->middleware('agent_api:ability:orders.acquire,permission:orders.assign');
+    Route::post('checkouts/acquire-next-revision', [AgentCheckoutController::class, 'acquireNextRevision'])
+        ->middleware('agent_api:ability:orders.rework,permission:orders.assign');
     Route::post('checkouts/{reference}/acquire', [AgentCheckoutController::class, 'acquire'])
         ->middleware('agent_api:ability:orders.rework,permission:orders.assign');
     Route::get('checkouts/{reference}/production-context', [AgentCheckoutController::class, 'context'])

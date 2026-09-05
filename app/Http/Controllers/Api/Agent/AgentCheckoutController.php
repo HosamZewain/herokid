@@ -31,6 +31,27 @@ class AgentCheckoutController extends Controller
         return response()->json($result['body'], $result['status']);
     }
 
+    public function acquireNextRevision(
+        Request $request,
+        AgentCheckoutProductionService $production,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $result = $idempotency->execute($request->user(), 'checkouts.acquire-next-revision', $request, function () use ($request, $production): array {
+            $checkout = $production->acquireNextRevision($request->user(), $request);
+            $body = $checkout
+                ? ['success' => true, 'checkout' => $checkout]
+                : ['success' => true, 'checkout' => null, 'reason' => 'NO_AVAILABLE_REVISIONS'];
+
+            return [
+                'status' => 200,
+                'body' => $body,
+                'checkout_group_key' => $checkout['checkout_group'] ?? null,
+            ];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
     public function context(Request $request, string $reference, AgentCheckoutProductionService $production): JsonResponse
     {
         return response()->json($production->context($reference, $request->user()));

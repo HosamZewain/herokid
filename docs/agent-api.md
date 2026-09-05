@@ -92,7 +92,7 @@ curl https://hero-kid.com/api/agent/checkouts/HK08-151/production-context \
   -H 'Authorization: Bearer TOKEN'
 ```
 
-The response contains a compact `production_units` list. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. Customer address and payment data are not returned.
+The response contains a compact `production_units` list. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. The top-level `team_notes` list contains the checkout's permanent staff notes in newest-first order, including writer and Cairo timestamp. Customer address and payment data are not returned.
 
 ### Upload production attachments
 
@@ -207,6 +207,27 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-82/start-rework \
 All production orders in the checkout move to `generating`. Existing attachments, previews, and audit history are preserved, but files uploaded before this rework run do not satisfy `complete-production`; every production unit must receive a new attachment after `start-rework`.
 
 Retry the same request with the same `Idempotency-Key` to receive the cached result safely. Sending a different key starts a new rework run boundary—even if the checkout is already `generating`—and returns `already_started: true`; files uploaded before that new boundary will no longer count toward completion.
+
+### Process the revision-request queue automatically
+
+Use the dedicated queue endpoint instead of `acquire-next`:
+
+```bash
+curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next-revision \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer REWORK_TOKEN' \
+  -H 'Idempotency-Key: revision-queue-20260905-001'
+```
+
+It selects the oldest eligible checkout whose complete production set is still in `revision_requested` (طلب تعديلات). The checkout is assigned atomically but remains in `revision_requested` so the Agent can read `team_notes` before starting the replacement run. A checkout owned by another user is skipped; an existing assignment to the requesting Agent is reused safely. Catalog scope still applies to the complete checkout.
+
+Empty queue:
+
+```json
+{"success":true,"checkout":null,"reason":"NO_AVAILABLE_REVISIONS"}
+```
+
+For every returned checkout: get `production-context`, read the newest `team_notes`, apply only the requested personalization corrections when needed, call `start-rework`, generate and upload replacement attachments/previews, call `complete-production`, then call `acquire-next-revision` again with a fresh idempotency key. The same Agent may hold multiple checkout assignments; an unfinished assignment does not prevent this explicit revision queue from selecting another eligible checkout.
 
 ### Repairing completions created before `ready_preview`
 
