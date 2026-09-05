@@ -199,6 +199,44 @@ class AdminOrderGroupMergeTest extends TestCase
         $this->assertDatabaseCount('order_group_merge_aliases', 0);
     }
 
+    public function test_merge_accepts_a_legacy_checkout_with_a_stale_cancelled_shipping_record(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-SHIPPING-TARGET', 'SHIPPING-TARGET', '01012345678', 10_000, 0);
+        $sourceStory = $this->storyOrder('CHECKOUT-SHIPPING-SOURCE', 'SHIPPING-STORY', '01012345678', 'ready_preview');
+        $sourceProduct = $this->order('CHECKOUT-SHIPPING-SOURCE', 'SHIPPING-PRODUCT', '01012345678', 5_000, 0);
+        $sourceProduct->update(['shipping_status' => 'cancelled']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $sourceStory->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'دمج طلب أعيد تفعيله مع سجل شحن قديم',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $target));
+
+        $this->assertSame($target->checkoutGroupKey(), $sourceStory->refresh()->checkoutGroupKey());
+        $this->assertSame($target->checkoutGroupKey(), $sourceProduct->refresh()->checkoutGroupKey());
+    }
+
+    public function test_merge_still_rejects_a_checkout_cancelled_entirely_from_shipping(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-SHIPPING-ACTIVE', 'SHIPPING-ACTIVE', '01012345678', 10_000, 0);
+        $cancelled = $this->order('CHECKOUT-SHIPPING-CANCELLED', 'SHIPPING-CANCELLED', '01012345678', 5_000, 0);
+        $cancelled->update(['shipping_status' => 'cancelled']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $cancelled->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'يجب رفض الشحن الملغي بالكامل',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertSessionHasErrors('source_reference');
+
+        $this->assertSame('CHECKOUT-SHIPPING-CANCELLED', $cancelled->refresh()->checkoutGroupKey());
+    }
+
     public function test_merge_route_requires_orders_update_permission(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

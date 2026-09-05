@@ -261,6 +261,8 @@ class OrderGroupMergeService
         foreach ([$targetOrders, $sourceOrders] as $checkoutOrders) {
             $orderBehaviors = $checkoutOrders
                 ->map(fn (Order $order): string => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status));
+            $shippingBehaviors = $checkoutOrders
+                ->map(fn (Order $order): string => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status));
 
             // A checkout is cancelled only when every live record is cancelled. Older mixed
             // story/product checkouts may retain a cancelled product shell after reactivation.
@@ -268,12 +270,22 @@ class OrderGroupMergeService
                 throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب ملغي بالكامل. أعد تفعيله أولًا.']);
             }
 
+            // Apply the same checkout-level rule to legacy shipping data. A stale cancelled
+            // product record must not override the active not-ready status shown for the checkout.
+            if ($shippingBehaviors->isNotEmpty() && $shippingBehaviors->every(fn (string $behavior): bool => $behavior === 'cancelled')) {
+                throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب أُلغي بالكامل من الشحن. غيّر حالة الشحن أولًا.']);
+            }
+
             foreach ($checkoutOrders as $order) {
                 $orderBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status);
                 $shippingBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
                 if (in_array($orderBehavior, ['shipped', 'delivered'], true)
-                    || in_array($shippingBehavior, ['shipped', 'delivered', 'returned', 'cancelled'], true)) {
-                    throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب بدأ شحنه أو تم تسليمه/إلغاؤه من الشحن.']);
+                    || in_array($shippingBehavior, ['shipped', 'delivered', 'returned'], true)) {
+                    $orderLabel = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $order->status);
+                    $shippingLabel = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
+                    throw ValidationException::withMessages([
+                        'source_reference' => 'تعذر الدمج بسبب السجل '.$order->order_number.' (حالة الطلب: '.$orderLabel.'، حالة الشحن: '.$shippingLabel.').',
+                    ]);
                 }
             }
         }
