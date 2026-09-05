@@ -100,6 +100,7 @@ class AdminOrderAttachmentsTest extends TestCase
             ->assertSee('data-order-attachments', false)
             ->assertSee('رفع المرفقات الآن')
             ->assertSee('data-order-attachment-form', false)
+            ->assertSee('data-order-ajax-delete', false)
             ->assertSee('تُحذف بعد 30 يومًا');
 
         $this->actingAs($this->admin)
@@ -156,6 +157,25 @@ class AdminOrderAttachmentsTest extends TestCase
         $this->actingAs($this->admin)
             ->delete(route('admin.orders.attachments.destroy', $attachment))
             ->assertRedirect();
+
+        $this->assertDatabaseMissing('order_attachments', ['id' => $attachment->id]);
+        Storage::disk('local')->assertMissing($attachment->path);
+    }
+
+    public function test_admin_can_delete_attachment_with_ajax_without_a_redirect(): void
+    {
+        Storage::fake('local');
+        $order = $this->productOrder();
+        $attachment = $this->attachment($order, now()->addDays(30));
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.attachments.destroy', $attachment))
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'message' => 'تم حذف المرفق نهائيًا.',
+                'deleted_attachment_id' => $attachment->id,
+            ]);
 
         $this->assertDatabaseMissing('order_attachments', ['id' => $attachment->id]);
         Storage::disk('local')->assertMissing($attachment->path);

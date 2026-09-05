@@ -57,6 +57,7 @@ class OrderProductPreviewTest extends TestCase
             ->assertSee('معاينة المنتجات للعميل')
             ->assertSee('front.jpg')
             ->assertSee('back.png')
+            ->assertSee('data-order-ajax-delete', false)
             ->assertDontSee($gallery->previews->first()->file_path);
 
         $this->assertDatabaseHas('admin_activity_logs', [
@@ -178,6 +179,33 @@ class OrderProductPreviewTest extends TestCase
             ->assertSessionHasErrors('preview_images.0');
 
         $this->assertDatabaseCount('order_product_preview_galleries', 0);
+    }
+
+    public function test_admin_can_delete_product_preview_with_ajax_without_a_redirect(): void
+    {
+        $order = $this->productOrder();
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $order), [
+            'preview_images' => [
+                UploadedFile::fake()->image('first.jpg', 800, 800),
+                UploadedFile::fake()->image('second.jpg', 800, 800),
+            ],
+        ])->assertRedirect();
+
+        $gallery = OrderProductPreviewGallery::with('previews')->firstOrFail();
+        $preview = $gallery->previews->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.product-previews.destroy', [$order, $preview]))
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'message' => 'تم حذف صورة المعاينة.',
+                'deleted_preview_id' => $preview->id,
+            ]);
+
+        $this->assertDatabaseMissing('order_previews', ['id' => $preview->id]);
+        $this->assertDatabaseCount('order_previews', 1);
+        Storage::disk('local')->assertMissing($preview->file_path);
     }
 
     private function productOrder(): Order

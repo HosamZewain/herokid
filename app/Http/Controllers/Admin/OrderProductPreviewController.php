@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Services\Orders\OrderProductPreviewService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class OrderProductPreviewController extends Controller
@@ -42,9 +44,18 @@ class OrderProductPreviewController extends Controller
         Order $order,
         OrderPreview $preview,
         OrderProductPreviewService $previews,
-    ) {
+    ): JsonResponse|RedirectResponse {
         abort_unless($preview->product_gallery_id && $preview->order_id === $order->id, 404);
+        $previewId = $preview->id;
         $previews->delete($preview, $request->user());
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'تم حذف صورة المعاينة.',
+                'deleted_preview_id' => $previewId,
+            ]);
+        }
 
         return back()->with('success', 'تم حذف صورة المعاينة.');
     }

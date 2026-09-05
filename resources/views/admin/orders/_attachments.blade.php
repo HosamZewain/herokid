@@ -14,9 +14,9 @@
 
 @if($attachmentTarget)
     @if($collapsible)
-        <details class="group rounded-2xl border border-sky-100 bg-white shadow-sm" @if($openByDefault || $errors->hasAny(['attachments', 'attachments.*', 'note'])) open @endif data-order-attachments>
+        <details class="group rounded-2xl border border-sky-100 bg-white shadow-sm" @if($openByDefault || $errors->hasAny(['attachments', 'attachments.*', 'note'])) open @endif data-order-attachments data-ajax-delete-scope>
             <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-right [&::-webkit-details-marker]:hidden">
-                <span class="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $orderAttachments->count() }} مرفق</span>
+                <span class="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700" data-ajax-delete-count data-count-label="مرفق">{{ $orderAttachments->count() }} مرفق</span>
                 <span>
                     <span class="block text-base font-black text-gray-950">مرفقات الطلب</span>
                     <span class="mt-1 block text-xs font-bold text-gray-500">صور وملفات PDF خاصة مرتبطة بالطلب.</span>
@@ -24,16 +24,14 @@
             </summary>
     @endif
 
-    <section class="{{ $collapsible ? 'border-t border-sky-100 p-5 text-right sm:p-6' : 'rounded-3xl border border-sky-100 bg-white p-5 text-right shadow-sm sm:p-6' }}" aria-labelledby="order-attachments-heading">
+    <section class="{{ $collapsible ? 'border-t border-sky-100 p-5 text-right sm:p-6' : 'rounded-3xl border border-sky-100 bg-white p-5 text-right shadow-sm sm:p-6' }}" aria-labelledby="order-attachments-heading" @unless($collapsible) data-ajax-delete-scope @endunless>
         @unless($collapsible)
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h3 id="order-attachments-heading" class="text-lg font-black text-gray-900">📎 مرفقات الطلب</h3>
                 <p class="mt-1 text-xs font-bold leading-6 text-gray-500">ارفع صورًا أو PDF بشكل خاص. الصلاحية الافتراضية 30 يومًا، ثم يُحذف الملف تلقائيًا.</p>
             </div>
-            @if($orderAttachments->isNotEmpty())
-                <span class="w-fit rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700">{{ $orderAttachments->count() }} مرفق</span>
-            @endif
+            <span class="w-fit rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700" data-ajax-delete-count data-count-label="مرفق">{{ $orderAttachments->count() }} مرفق</span>
         </div>
         @endunless
 
@@ -76,20 +74,21 @@
                                     : '';
                             selection.classList.toggle('hidden', count === 0);
                         });
+
                     </script>
                 @endpush
             @endonce
         @endcan
 
-        <div class="mt-5 grid gap-3 md:grid-cols-2">
-            @forelse($orderAttachments as $entry)
+        <div class="mt-5 grid gap-3 md:grid-cols-2" data-ajax-delete-list>
+            @foreach($orderAttachments as $entry)
                 @php
                     $attachment = $entry['attachment'];
                     $attachmentOrder = $entry['order'];
                     $expired = $attachment->isExpired();
                     $remainingDays = $expired ? 0 : max(1, (int) ceil(now()->diffInHours($attachment->expires_at) / 24));
                 @endphp
-                <article class="rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}">
+                <article class="rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item>
                     <div class="flex items-start gap-3">
                         <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm" aria-hidden="true">{{ $attachment->icon }}</span>
                         <div class="min-w-0 flex-1">
@@ -117,7 +116,7 @@
                                 <a href="{{ route('admin.orders.attachments.download', $attachment) }}" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-white hover:bg-sky-700">تحميل</a>
                             @endunless
                             @can('orders.update')
-                                <form method="POST" action="{{ route('admin.orders.attachments.destroy', $attachment) }}" onsubmit="return confirm('سيتم حذف المرفق نهائيًا. هل تريد المتابعة؟')">
+                                <form method="POST" action="{{ route('admin.orders.attachments.destroy', $attachment) }}" data-order-ajax-delete data-delete-confirm="سيتم حذف المرفق نهائيًا. هل تريد المتابعة؟">
                                     @csrf
                                     @method('DELETE')
                                     <button class="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100">حذف</button>
@@ -126,9 +125,8 @@
                         </div>
                     </div>
                 </article>
-            @empty
-                <div class="md:col-span-2 rounded-2xl border border-dashed border-gray-200 p-7 text-center text-sm font-bold text-gray-400">لا توجد مرفقات لهذا الطلب بعد.</div>
-            @endforelse
+            @endforeach
+            <div class="md:col-span-2 rounded-2xl border border-dashed border-gray-200 p-7 text-center text-sm font-bold text-gray-400 {{ $orderAttachments->isNotEmpty() ? 'hidden' : '' }}" data-ajax-delete-empty>لا توجد مرفقات لهذا الطلب بعد.</div>
         </div>
     </section>
 
@@ -136,3 +134,5 @@
         </details>
     @endif
 @endif
+
+@include('admin.orders._ajax-delete-script')

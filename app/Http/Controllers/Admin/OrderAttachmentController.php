@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\OrderAttachment;
 use App\Services\Orders\OrderAttachmentService;
 use App\Support\AdminActivityLogger;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class OrderAttachmentController extends Controller
@@ -38,7 +40,7 @@ class OrderAttachmentController extends Controller
         return $attachments->response($attachment, 'attachment');
     }
 
-    public function destroy(Request $request, OrderAttachment $attachment)
+    public function destroy(Request $request, OrderAttachment $attachment): JsonResponse|RedirectResponse
     {
         $order = $attachment->order;
         $properties = [
@@ -56,6 +58,14 @@ class OrderAttachmentController extends Controller
             properties: $properties,
             request: $request,
         );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'تم حذف المرفق نهائيًا.',
+                'deleted_attachment_id' => $properties['attachment_id'],
+            ]);
+        }
 
         return back()->with('success', 'تم حذف المرفق نهائيًا.');
     }

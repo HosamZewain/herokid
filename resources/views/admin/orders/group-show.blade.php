@@ -409,15 +409,13 @@
             </div>
 
             @if($group['direct_products']->isNotEmpty() && $attachmentTarget)
-                <section id="product-customer-preview" class="rounded-3xl border border-fuchsia-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="product-preview">
+                <section id="product-customer-preview" class="rounded-3xl border border-fuchsia-100 bg-white p-5 shadow-sm sm:p-6" data-order-page-section="product-preview" data-ajax-delete-scope>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div class="text-right">
                             <h3 class="text-lg font-black text-gray-900">معاينة المنتجات للعميل</h3>
                             <p class="mt-1 text-xs font-bold text-gray-500">ارفع صورة واحدة أو أكثر. سيُستخدم رابط المعرض تلقائيًا في رسالة «إرسال معاينة للعميل».</p>
                         </div>
-                        @if($productPreviewGallery?->publicUrl())
-                            <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{{ $productPreviewGallery->previews->count() }} صورة جاهزة</span>
-                        @endif
+                        <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700" data-ajax-delete-count data-count-label="صورة جاهزة">{{ $productPreviewGallery?->previews->count() ?? 0 }} صورة جاهزة</span>
                     </div>
 
                     @can('orders.preview.upload')
@@ -439,7 +437,7 @@
 
                     @if($productPreviewGallery?->previews->isNotEmpty())
                         @php($productPreviewToken = $productPreviewGallery->plainPublicToken())
-                        <div class="mt-5" x-data="{ copied: false }">
+                        <div class="mt-5" x-data="{ copied: false }" data-ajax-hide-when-empty>
                             <div class="flex flex-col gap-2 rounded-2xl bg-slate-50 p-3 sm:flex-row sm:items-center">
                                 <a href="{{ $productPreviewGallery->publicUrl() }}" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white">فتح معاينة العميل</a>
                                 <button type="button" @click="navigator.clipboard.writeText($refs.url.value); copied = true; setTimeout(() => copied = false, 1800)" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700" x-text="copied ? 'تم نسخ الرابط' : 'نسخ الرابط'"></button>
@@ -448,7 +446,7 @@
 
                             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 @foreach($productPreviewGallery->previews as $preview)
-                                    <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                                    <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item>
                                         <a href="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block aspect-square bg-slate-100">
                                             <img src="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
                                         </a>
@@ -457,7 +455,7 @@
                                             @if($preview->note)<p class="mt-1 line-clamp-2 text-[10px] font-bold text-gray-400">{{ $preview->note }}</p>@endif
                                             @can('orders.preview.upload')
                                                 @if(!$group['trashed'])
-                                                    <form method="POST" action="{{ route('admin.orders.product-previews.destroy', [$preview->order, $preview]) }}" class="mt-2" onsubmit="return confirm('حذف صورة المعاينة؟')">
+                                                    <form method="POST" action="{{ route('admin.orders.product-previews.destroy', [$preview->order, $preview]) }}" class="mt-2" data-order-ajax-delete data-delete-confirm="حذف صورة المعاينة؟">
                                                         @csrf
                                                         @method('DELETE')
                                                         <button class="w-full rounded-lg bg-red-50 px-2 py-1.5 text-[10px] font-black text-red-700">حذف الصورة</button>
@@ -469,9 +467,8 @@
                                 @endforeach
                             </div>
                         </div>
-                    @else
-                        <div class="mt-4 rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-bold text-gray-400">لم يتم رفع صور معاينة لهذا الطلب بعد.</div>
                     @endif
+                    <div class="mt-4 rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm font-bold text-gray-400 {{ $productPreviewGallery?->previews->isNotEmpty() ? 'hidden' : '' }}" data-ajax-delete-empty>لم يتم رفع صور معاينة لهذا الطلب بعد.</div>
                 </section>
             @endif
 
