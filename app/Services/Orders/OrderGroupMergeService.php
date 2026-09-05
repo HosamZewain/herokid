@@ -277,10 +277,8 @@ class OrderGroupMergeService
             }
 
             foreach ($checkoutOrders as $order) {
-                $orderBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status);
                 $shippingBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
-                if (in_array($orderBehavior, ['shipped', 'delivered'], true)
-                    || in_array($shippingBehavior, ['shipped', 'delivered', 'returned'], true)) {
+                if (in_array($shippingBehavior, ['shipped', 'delivered', 'returned'], true)) {
                     $orderLabel = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $order->status);
                     $shippingLabel = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
                     throw ValidationException::withMessages([

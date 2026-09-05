@@ -237,6 +237,27 @@ class AdminOrderGroupMergeTest extends TestCase
         $this->assertSame('CHECKOUT-SHIPPING-CANCELLED', $cancelled->refresh()->checkoutGroupKey());
     }
 
+    public function test_shipping_axis_is_the_source_of_truth_when_order_behavior_is_misclassified_as_shipped(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-STATUS-TARGET', 'STATUS-TARGET', '01012345678', 10_000, 0);
+        $source = $this->order('CHECKOUT-STATUS-SOURCE', 'STATUS-SOURCE', '01012345678', 5_000, 0);
+        $source->update([
+            'status' => 'shipped',
+            'shipping_status' => 'not_ready',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $source->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'حالة الشحن المنفصلة تؤكد أن الشحن لم يبدأ',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $target));
+
+        $this->assertSame($target->checkoutGroupKey(), $source->refresh()->checkoutGroupKey());
+    }
+
     public function test_merge_route_requires_orders_update_permission(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
