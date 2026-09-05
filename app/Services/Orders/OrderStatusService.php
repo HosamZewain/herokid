@@ -76,7 +76,8 @@ class OrderStatusService
                     'notes' => $notes ?: 'تم تحديث الحالة من لوحة الإدارة.',
                 ]);
 
-                if (in_array($status, ['generating', 'approved_for_print', 'printing'], true)
+                if ($locked->story_id
+                    && in_array($status, ['generating', 'approved_for_print', 'printing'], true)
                     && ! $locked->productionPromptSnapshots()->exists()) {
                     $locked->productionPromptSnapshots()->create([
                         'prompt_text' => StoryProductionPrompt::forOrder($locked->fresh(['story', 'productionPromptOverride'])),

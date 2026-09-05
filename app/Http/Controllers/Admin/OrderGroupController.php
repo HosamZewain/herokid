@@ -152,10 +152,9 @@ class OrderGroupController extends Controller
         ]);
         $order = Order::query()->findOrFail($representative);
         $groupOrders = $groups->ordersForGroup($order);
-        $storyOrders = $groupOrders->whereNotNull('story_id')->values();
-        $statuses->updateGroup($storyOrders->isNotEmpty() ? $storyOrders : $groupOrders, $validated['status'], $validated['admin_notes'] ?? null, $request);
+        $statuses->updateGroup($groupOrders, $validated['status'], $validated['admin_notes'] ?? null, $request);
 
-        return back()->with('success', 'تم تحديث حالة جميع قصص عملية الشراء بنجاح.');
+        return back()->with('success', 'تم تحديث حالة عملية الشراء بالكامل بنجاح.');
     }
 
     public function updatePayment(Request $request, int $representative, OrderPaymentService $payments)

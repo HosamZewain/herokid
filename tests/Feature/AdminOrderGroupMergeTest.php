@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderProductPreviewGallery;
 use App\Models\Permission;
+use App\Models\Story;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -129,6 +130,75 @@ class AdminOrderGroupMergeTest extends TestCase
         $this->assertDatabaseCount('order_group_merge_aliases', 0);
     }
 
+    public function test_reactivating_a_mixed_checkout_updates_every_record_and_allows_merge(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-REACTIVATION-TARGET', 'REACTIVATION-TARGET', '01012345678', 10_000, 0);
+        $sourceStory = $this->storyOrder('CHECKOUT-REACTIVATION-SOURCE', 'REACTIVATION-STORY', '01012345678', 'cancelled');
+        $sourceProduct = $this->order('CHECKOUT-REACTIVATION-SOURCE', 'REACTIVATION-PRODUCT', '01012345678', 5_000, 0);
+        $sourceProduct->update(['status' => 'cancelled']);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.orders.groups.status', $sourceStory), [
+                'status' => 'new',
+                'admin_notes' => 'العميل تراجع عن الإلغاء',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('new', $sourceStory->refresh()->status);
+        $this->assertSame('new', $sourceProduct->refresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $sourceStory->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'دمج الطلب بعد تراجع العميل عن الإلغاء',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $target));
+
+        $this->assertSame($target->checkoutGroupKey(), $sourceStory->refresh()->checkoutGroupKey());
+        $this->assertSame($target->checkoutGroupKey(), $sourceProduct->refresh()->checkoutGroupKey());
+    }
+
+    public function test_merge_accepts_a_legacy_checkout_with_a_stale_cancelled_product_record(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-LEGACY-TARGET', 'LEGACY-TARGET', '01012345678', 10_000, 0);
+        $sourceStory = $this->storyOrder('CHECKOUT-LEGACY-SOURCE', 'LEGACY-STORY', '01012345678', 'new');
+        $sourceProduct = $this->order('CHECKOUT-LEGACY-SOURCE', 'LEGACY-PRODUCT', '01012345678', 5_000, 0);
+        $sourceProduct->update(['status' => 'cancelled']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $sourceStory->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'دمج طلب قديم بعد تصحيح حالة الإلغاء',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertRedirect(route('admin.orders.groups.show', $target));
+
+        $this->assertSame($target->checkoutGroupKey(), $sourceStory->refresh()->checkoutGroupKey());
+        $this->assertSame($target->checkoutGroupKey(), $sourceProduct->refresh()->checkoutGroupKey());
+    }
+
+    public function test_merge_still_rejects_a_fully_cancelled_checkout(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = $this->order('CHECKOUT-ACTIVE-TARGET', 'ACTIVE-TARGET', '01012345678', 10_000, 0);
+        $cancelled = $this->order('CHECKOUT-FULLY-CANCELLED', 'FULLY-CANCELLED', '01012345678', 5_000, 0);
+        $cancelled->update(['status' => 'cancelled']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.orders.groups.merge', $target), [
+                'source_reference' => $cancelled->checkoutReference()->value('short_reference'),
+                'merge_reason' => 'يجب رفض الطلب الملغي بالكامل',
+                'confirm_primary_delivery' => '1',
+            ])
+            ->assertSessionHasErrors('source_reference');
+
+        $this->assertSame('CHECKOUT-FULLY-CANCELLED', $cancelled->refresh()->checkoutGroupKey());
+        $this->assertDatabaseCount('order_group_merge_aliases', 0);
+    }
+
     public function test_merge_route_requires_orders_update_permission(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
@@ -217,5 +287,25 @@ class AdminOrderGroupMergeTest extends TestCase
         ]);
 
         return $order->load('checkoutReference');
+    }
+
+    private function storyOrder(string $group, string $number, string $phone, string $status): Order
+    {
+        $story = Story::query()->create([
+            'title' => 'قصة اختبار الدمج',
+            'slug' => 'merge-story-'.uniqid(),
+            'language' => 'ar',
+            'gender' => 'both',
+            'price' => 100,
+            'active' => true,
+        ]);
+        $order = $this->order($group, $number, $phone, 10_000, 0);
+        $order->update([
+            'story_id' => $story->id,
+            'child_name' => 'طفل الاختبار',
+            'status' => $status,
+        ]);
+
+        return $order->fresh('checkoutReference');
     }
 }

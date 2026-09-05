@@ -38,9 +38,8 @@ class OrderWorkflowStatusService
             ]));
 
             if (filled($values['status'] ?? null)) {
-                $storyOrders = $orders->whereNotNull('story_id')->values();
                 $this->orderStatuses->updateGroup(
-                    $storyOrders->isNotEmpty() ? $storyOrders : $orders,
+                    $orders,
                     $values['status'],
                     $values['admin_notes'] ?? null,
                     $request,

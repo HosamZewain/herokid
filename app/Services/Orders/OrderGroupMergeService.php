@@ -258,12 +258,23 @@ class OrderGroupMergeService
             throw ValidationException::withMessages(['source_reference' => 'يجب أن يكون رقما الهاتف في الطلبين متطابقين قبل الدمج لحماية طلبات العملاء.']);
         }
 
-        foreach ($targetOrders->concat($sourceOrders) as $order) {
-            $orderBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status);
-            $shippingBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
-            if (in_array($orderBehavior, ['cancelled', 'shipped', 'delivered'], true)
-                || in_array($shippingBehavior, ['shipped', 'delivered', 'returned', 'cancelled'], true)) {
-                throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب ملغي أو طلب بدأ شحنه/تم تسليمه.']);
+        foreach ([$targetOrders, $sourceOrders] as $checkoutOrders) {
+            $orderBehaviors = $checkoutOrders
+                ->map(fn (Order $order): string => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status));
+
+            // A checkout is cancelled only when every live record is cancelled. Older mixed
+            // story/product checkouts may retain a cancelled product shell after reactivation.
+            if ($orderBehaviors->isNotEmpty() && $orderBehaviors->every(fn (string $behavior): bool => $behavior === 'cancelled')) {
+                throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب ملغي بالكامل. أعد تفعيله أولًا.']);
+            }
+
+            foreach ($checkoutOrders as $order) {
+                $orderBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status);
+                $shippingBehavior = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $order->shipping_status);
+                if (in_array($orderBehavior, ['shipped', 'delivered'], true)
+                    || in_array($shippingBehavior, ['shipped', 'delivered', 'returned', 'cancelled'], true)) {
+                    throw ValidationException::withMessages(['source_reference' => 'لا يمكن دمج طلب بدأ شحنه أو تم تسليمه/إلغاؤه من الشحن.']);
+                }
             }
         }
     }
