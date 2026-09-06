@@ -39,11 +39,19 @@ class SecurityAndCacheHeaders
         $response->headers->set('Referrer-Policy', $isBookletPreview ? 'no-referrer' : 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         $response->headers->set('X-Frame-Options', $isBookletPreview ? 'DENY' : 'SAMEORIGIN');
+        // `upgrade-insecure-requests` is right in production, which is HTTPS
+        // only. Over plain HTTP it forces every asset to https://<host> where
+        // nothing is listening, so the page renders with no CSS at all. Send it
+        // only when the request actually arrived over TLS.
+        $upgradeInsecureRequests = $request->isSecure()
+            || strtolower((string) $request->headers->get('X-Forwarded-Proto')) === 'https';
+
         $response->headers->set(
             'Content-Security-Policy',
             $isBookletPreview
                 ? "default-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
-                : "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+                : "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+                    .($upgradeInsecureRequests ? '; upgrade-insecure-requests' : '')
         );
     }
 
