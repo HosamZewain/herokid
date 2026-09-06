@@ -295,7 +295,10 @@
                     <div class="pt-4">
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التكاملات</p>
                         @can('robodesk.view')
-                            <a href="{{ route('admin.robodesk.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.*') ? $activeLink : $idleLink }}">RoboDesk وواتساب</a>
+                            <a href="{{ route('admin.robodesk.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.index') || request()->routeIs('admin.robodesk.events.*') || request()->routeIs('admin.robodesk.payment-proofs.*') ? $activeLink : $idleLink }}">RoboDesk وواتساب</a>
+                        @endcan
+                        @can('robodesk.configure')
+                            <a href="{{ route('admin.robodesk.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.settings.*') ? $activeLink : $idleLink }}">إعدادات RoboDesk</a>
                         @endcan
                         @can('agent_api.tokens.manage')
                             <a href="{{ route('admin.agent-api-tokens.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agent-api-tokens.*') ? $activeLink : $idleLink }}">Agent API Tokens</a>

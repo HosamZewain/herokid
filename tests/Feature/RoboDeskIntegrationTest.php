@@ -6,9 +6,13 @@ use App\Jobs\SendRoboDeskEventJob;
 use App\Models\Order;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
+use App\Services\RoboDesk\Actions\ConfirmOrderAction;
 use App\Services\RoboDesk\PaymentProofService;
+use App\Services\RoboDesk\RoboDeskActionRegistry;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
+use App\Services\RoboDesk\RoboDeskCredentialService;
 use App\Services\RoboDesk\RoboDeskOutbox;
+use App\Services\RoboDesk\RoboDeskSettings;
 use App\Services\RoboDesk\RoboDeskSignature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -25,12 +29,15 @@ class RoboDeskIntegrationTest extends TestCase
     {
         config()->set('robodesk.enabled', false);
         config()->set('robodesk.outbound_secret', '');
+        $this->enableAction(ConfirmOrderAction::KEY);
 
         $order = $this->order('CHK-ROBODESK-HELD');
 
+        // The action is on but the integration is off: the event is parked
+        // rather than dropped, so nothing is lost while setup is in progress.
         $this->assertDatabaseHas('robodesk_integration_events', [
             'direction' => 'outbound',
-            'event_type' => 'order.pending_confirmation',
+            'event_type' => ConfirmOrderAction::KEY,
             'checkout_group_key' => $order->checkout_group_key,
             'status' => 'held',
         ]);
@@ -45,6 +52,9 @@ class RoboDeskIntegrationTest extends TestCase
         config()->set('robodesk.outbound_secret', '');
 
         $order = $this->order('CHK-ROBODESK-CONFIRM');
+        // The gate is what parks an order before production; confirmation
+        // releases it back to `new` so the Agent API can acquire it.
+        $order->forceFill(['status' => 'pending_confirmation'])->save();
         $eventId = (string) Str::uuid();
         $payload = [
             'id' => $eventId,
@@ -61,7 +71,7 @@ class RoboDeskIntegrationTest extends TestCase
         $first = $this->signedJson('/api/integrations/robodesk/v1/events', $payload);
         $first->assertAccepted()->assertJson(['accepted' => true]);
 
-        $this->assertSame('under_review', $order->refresh()->status);
+        $this->assertSame('new', $order->refresh()->status);
         $this->assertDatabaseHas('checkout_customer_workflows', [
             'checkout_group_key' => $order->checkout_group_key,
             'confirmation_status' => 'confirmed',
@@ -70,7 +80,7 @@ class RoboDeskIntegrationTest extends TestCase
         $this->assertDatabaseHas('order_status_logs', [
             'order_id' => $order->id,
             'status_type' => 'order',
-            'status' => 'under_review',
+            'status' => 'new',
         ]);
 
         $this->signedJson('/api/integrations/robodesk/v1/events', $payload)
@@ -78,7 +88,7 @@ class RoboDeskIntegrationTest extends TestCase
             ->assertJson(['accepted' => true, 'duplicate' => true]);
 
         $this->assertSame(1, RoboDeskIntegrationEvent::query()->where('event_id', $eventId)->count());
-        $this->assertSame(1, $order->statusLogs()->where('status', 'under_review')->count());
+        $this->assertSame(1, $order->statusLogs()->where('status', 'new')->count());
     }
 
     public function test_payment_proof_is_private_and_never_marks_the_checkout_paid_automatically(): void
@@ -160,10 +170,11 @@ class RoboDeskIntegrationTest extends TestCase
         config()->set('robodesk.outbound_secret', 'outbound-test-secret');
         config()->set('robodesk.base_url', 'https://herokid.robodesk.ai');
         Http::fake(['https://herokid.robodesk.ai/*' => Http::response(['accepted' => true], 202)]);
+        $this->enableAction(ConfirmOrderAction::KEY);
 
         $order = $this->order('CHK-ROBODESK-OUTBOUND');
         $event = RoboDeskIntegrationEvent::query()
-            ->where('event_type', 'order.pending_confirmation')
+            ->where('event_type', ConfirmOrderAction::KEY)
             ->where('checkout_group_key', $order->checkout_group_key)
             ->firstOrFail();
         $this->assertSame('held', $event->status);
@@ -173,6 +184,9 @@ class RoboDeskIntegrationTest extends TestCase
         (new SendRoboDeskEventJob($event->id))->handle(
             app(RoboDeskSignature::class),
             app(RoboDeskCheckoutPayload::class),
+            app(RoboDeskSettings::class),
+            app(RoboDeskCredentialService::class),
+            app(RoboDeskActionRegistry::class),
         );
 
         $this->assertSame('succeeded', $event->refresh()->status);
@@ -191,6 +205,11 @@ class RoboDeskIntegrationTest extends TestCase
                     'outbound-test-secret',
                 );
         });
+    }
+
+    private function enableAction(string $key, array $params = []): void
+    {
+        app(RoboDeskActionRegistry::class)->save($key, true, $params);
     }
 
     private function order(string $checkout): Order

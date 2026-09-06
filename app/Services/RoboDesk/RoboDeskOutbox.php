@@ -8,13 +8,21 @@ use Illuminate\Support\Str;
 
 class RoboDeskOutbox
 {
+    public function __construct(
+        private readonly RoboDeskSettings $settings,
+        private readonly RoboDeskCredentialService $credentials,
+    ) {}
+
     public function queue(
         string $eventType,
         string $deduplicationKey,
         ?string $checkoutGroupKey = null,
         ?int $orderId = null,
         array $payload = [],
+        int $delayMinutes = 0,
     ): RoboDeskIntegrationEvent {
+        $availableAt = $delayMinutes > 0 ? now()->addMinutes($delayMinutes) : now();
+
         $event = RoboDeskIntegrationEvent::query()->firstOrCreate(
             ['deduplication_key' => $deduplicationKey],
             [
@@ -25,14 +33,18 @@ class RoboDeskOutbox
                 'aggregate_id' => $checkoutGroupKey ?: ($orderId ? (string) $orderId : null),
                 'checkout_group_key' => $checkoutGroupKey,
                 'order_id' => $orderId,
-                'status' => config('robodesk.enabled') && filled(config('robodesk.outbound_secret')) ? 'pending' : 'held',
+                'status' => $this->deliverable() ? 'pending' : 'held',
                 'payload' => $payload,
-                'available_at' => now(),
+                'available_at' => $availableAt,
             ],
         );
 
         if ($event->wasRecentlyCreated && $event->status === 'pending') {
-            SendRoboDeskEventJob::dispatch($event->id)->afterCommit();
+            $job = SendRoboDeskEventJob::dispatch($event->id)->afterCommit();
+
+            if ($delayMinutes > 0) {
+                $job->delay($availableAt);
+            }
         }
 
         return $event;
@@ -43,5 +55,15 @@ class RoboDeskOutbox
         abort_unless($event->direction === 'outbound', 422);
         $event->forceFill(['status' => 'pending', 'last_error' => null, 'available_at' => now()])->save();
         SendRoboDeskEventJob::dispatch($event->id)->afterCommit();
+    }
+
+    /**
+     * An event is only worth dispatching when the integration is on and an
+     * outbound secret exists. Anything else is parked as `held` so nothing is
+     * lost and an admin can release it later.
+     */
+    private function deliverable(): bool
+    {
+        return $this->settings->enabled() && $this->credentials->has('outbound_secret');
     }
 }

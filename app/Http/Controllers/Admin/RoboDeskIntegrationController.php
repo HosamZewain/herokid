@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderPaymentProof;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Services\Orders\OrderPaymentService;
+use App\Services\RoboDesk\RoboDeskDispatcher;
 use App\Services\RoboDesk\RoboDeskOutbox;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
@@ -109,7 +110,7 @@ class RoboDeskIntegrationController extends Controller
         return back()->with('success', 'تم اعتماد الدفع وأصبح الطلب جاهزًا للطباعة.');
     }
 
-    public function rejectProof(Request $request, OrderPaymentProof $proof, RoboDeskOutbox $outbox): RedirectResponse
+    public function rejectProof(Request $request, OrderPaymentProof $proof, RoboDeskDispatcher $dispatcher): RedirectResponse
     {
         abort_if($proof->status !== 'pending', 422, 'تمت مراجعة هذا الإثبات بالفعل.');
         $validated = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
@@ -128,10 +129,7 @@ class RoboDeskIntegrationController extends Controller
             admin: $request->user(),
             request: $request,
         );
-        $outbox->queue('payment.proof_rejected', 'payment.proof_rejected:'.$proof->id, $proof->checkout_group_key, null, [
-            'payment_proof_id' => $proof->uuid,
-            'reason' => $validated['reason'],
-        ]);
+        $dispatcher->paymentProofRejected($proof->refresh(), $validated['reason']);
 
         return back()->with('success', 'تم رفض الإثبات وتسجيل السبب.');
     }

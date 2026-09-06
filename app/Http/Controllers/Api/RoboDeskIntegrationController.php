@@ -7,6 +7,7 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Services\RoboDesk\PaymentProofService;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Services\RoboDesk\RoboDeskInboundEventHandler;
+use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,7 +20,7 @@ class RoboDeskIntegrationController extends Controller
             'status' => 'ready',
             'integration' => 'herokid-robodesk',
             'version' => 'v1',
-            'whatsapp_number' => config('robodesk.whatsapp_number'),
+            'whatsapp_number' => app(RoboDeskSettings::class)->whatsAppNumber(),
         ]);
     }
 
@@ -37,6 +38,7 @@ class RoboDeskIntegrationController extends Controller
                 'order.confirmed', 'order.rejected',
                 'identity.approved', 'identity.changes_requested',
                 'preview.approved', 'preview.changes_requested',
+                'csat.submitted',
             ])],
             'occurred_at' => ['nullable', 'date'],
             'data' => ['required', 'array'],
@@ -83,7 +85,7 @@ class RoboDeskIntegrationController extends Controller
     {
         $validated = $request->validate([
             'checkout_reference' => ['required', 'string', 'max:255'],
-            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.(max(1, (int) config('robodesk.payment_proof_max_mb')) * 1024)],
+            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.(app(RoboDeskSettings::class)->paymentProofMaxMb() * 1024)],
             'message_id' => ['required', 'string', 'max:255'],
             'conversation_id' => ['nullable', 'string', 'max:255'],
             'sender_phone' => ['nullable', 'string', 'max:50'],

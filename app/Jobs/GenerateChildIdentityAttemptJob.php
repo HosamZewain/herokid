@@ -13,6 +13,7 @@ use App\Services\Ai\GptImageClient;
 use App\Services\ChildIdentity\ChildIdentityAggregateService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareDraftService;
+use App\Services\RoboDesk\ConfirmIdentityGate;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -145,7 +146,13 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
                 ])->save();
                 $request = $identity->fresh();
                 $fromStatus = $request->status;
-                $autoApprove = $locked->initiated_by === 'customer' && ! $request->approved_attempt_id;
+                // Auto-approval is the historical behaviour and stays the
+                // default. When the RoboDesk identity gate is on, a customer
+                // attempt instead lands as `generated` and waits for the parent
+                // to approve it over WhatsApp.
+                $autoApprove = $locked->initiated_by === 'customer'
+                    && ! $request->approved_attempt_id
+                    && ! app(ConfirmIdentityGate::class)->isOpen();
                 $targetStatus = $request->statusDuringGeneration($autoApprove ? 'approved' : 'generated');
                 $request->forceFill([
                     'status' => $targetStatus,

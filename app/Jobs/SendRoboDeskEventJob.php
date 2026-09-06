@@ -4,7 +4,10 @@ namespace App\Jobs;
 
 use App\Models\CheckoutCustomerWorkflow;
 use App\Models\RoboDeskIntegrationEvent;
+use App\Services\RoboDesk\RoboDeskActionRegistry;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
+use App\Services\RoboDesk\RoboDeskCredentialService;
+use App\Services\RoboDesk\RoboDeskSettings;
 use App\Services\RoboDesk\RoboDeskSignature;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,14 +30,19 @@ class SendRoboDeskEventJob implements ShouldQueue
         return [30, 120, 600, 1800];
     }
 
-    public function handle(RoboDeskSignature $signatures, RoboDeskCheckoutPayload $checkouts): void
-    {
+    public function handle(
+        RoboDeskSignature $signatures,
+        RoboDeskCheckoutPayload $checkouts,
+        RoboDeskSettings $settings,
+        RoboDeskCredentialService $credentials,
+        RoboDeskActionRegistry $actions,
+    ): void {
         $event = RoboDeskIntegrationEvent::query()->find($this->eventId);
         if (! $event || $event->direction !== 'outbound' || $event->status === 'succeeded') {
             return;
         }
 
-        if (! config('robodesk.enabled') || blank(config('robodesk.outbound_secret'))) {
+        if (! $settings->enabled() || ! $credentials->has('outbound_secret')) {
             $event->update(['status' => 'held', 'last_error' => 'Integration is disabled or missing its outbound secret.']);
 
             return;
@@ -57,16 +65,37 @@ class SendRoboDeskEventJob implements ShouldQueue
         $event->increment('attempts');
         $event->update(['status' => 'processing', 'payload' => $data]);
 
+        // The action that produced this event owns its endpoint and HTTP verb,
+        // so each flow can target a different RoboDesk API without a deploy.
+        $action = $actions->find((string) $event->event_type);
+        $path = $action?->endpointPath() ?: $settings->eventsPath();
+        $method = $action?->httpMethod() ?: 'POST';
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'X-RoboDesk-Timestamp' => $timestamp,
+            'X-RoboDesk-Event-Id' => $event->event_id,
+        ];
+
+        if ($settings->signsOutbound()) {
+            $headers['X-RoboDesk-Signature'] = $signatures->sign(
+                $body,
+                $timestamp,
+                $event->event_id,
+                $credentials->value('outbound_secret'),
+            );
+        }
+
+        if ($credentials->has('auth_token')) {
+            $scheme = $settings->authScheme();
+            $headers[$settings->authHeader()] = trim($scheme.' '.$credentials->value('auth_token'));
+        }
+
         try {
-            $response = Http::timeout(max(5, (int) config('robodesk.timeout_seconds')))
+            $response = Http::timeout($settings->timeoutSeconds())
                 ->acceptJson()
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                    'X-RoboDesk-Timestamp' => $timestamp,
-                    'X-RoboDesk-Event-Id' => $event->event_id,
-                    'X-RoboDesk-Signature' => $signatures->sign($body, $timestamp, $event->event_id, (string) config('robodesk.outbound_secret')),
-                ])
-                ->send('POST', config('robodesk.base_url').config('robodesk.events_path'), ['body' => $body]);
+                ->withHeaders($headers)
+                ->send($method, $settings->baseUrl().$path, ['body' => $body]);
 
             $response->throw();
             $event->update([
