@@ -27,17 +27,86 @@ class BostaController extends Controller
         return response()->json(['districts' => $catalog->districts($values['city_id'])]);
     }
 
-    public function index(BostaShipmentEligibilityService $eligibility)
+    public function index(Request $request, BostaShipmentEligibilityService $eligibility)
     {
+        $filters = $request->validate([
+            'tab' => ['nullable', Rule::in(['active', 'finished'])],
+            'q' => ['nullable', 'string', 'max:120'],
+            'shipment_status' => ['nullable', 'string', 'max:100'],
+            'governorate' => ['nullable', 'string', 'max:120'],
+            'pickup_state' => ['nullable', Rule::in(['all', 'awaiting', 'scheduled'])],
+            'per_page' => ['nullable', Rule::in(['50', '100'])],
+        ]);
+
+        $tab = $filters['tab'] ?? 'active';
+        $perPage = (int) ($filters['per_page'] ?? 50);
+        $baseShipments = BostaShipment::query()
+            ->where('creation_status', 'created')
+            ->whereNotNull('tracking_number');
+
+        $activeCount = (clone $baseShipments)
+            ->where(fn ($query) => $query->whereNull('shipping_status')->orWhere('shipping_status', '!=', 'delivered'))
+            ->count();
+        $finishedCount = (clone $baseShipments)->where('shipping_status', 'delivered')->count();
+
+        $shipmentStatuses = (clone $baseShipments)
+            ->whereNotNull('shipping_status')
+            ->distinct()
+            ->orderBy('shipping_status')
+            ->pluck('shipping_status');
+
+        $governorates = Order::query()
+            ->whereIn('checkout_group_key', (clone $baseShipments)->select('checkout_group_key'))
+            ->get(['delivery_details'])
+            ->map(fn (Order $order): string => trim((string) data_get($order->delivery_details, 'governorate')))
+            ->filter()
+            ->unique()
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        $shipments = (clone $baseShipments)
+            ->with(['order.checkoutReference', 'createdBy:id,name', 'pickups:id'])
+            ->when(
+                $tab === 'finished',
+                fn ($query) => $query->where('shipping_status', 'delivered'),
+                fn ($query) => $query->where(fn ($status) => $status
+                    ->whereNull('shipping_status')
+                    ->orWhere('shipping_status', '!=', 'delivered')),
+            )
+            ->when(filled($filters['q'] ?? null), function ($query) use ($filters): void {
+                $search = trim((string) $filters['q']);
+                $query->where(function ($query) use ($search): void {
+                    $query->where('business_reference', 'like', "%{$search}%")
+                        ->orWhere('tracking_number', 'like', "%{$search}%")
+                        ->orWhereHas('order', function ($order) use ($search): void {
+                            $order->where('parent_name', 'like', "%{$search}%")
+                                ->orWhere('delivery_details->phone', 'like', "%{$search}%")
+                                ->orWhere('delivery_details->mobile', 'like', "%{$search}%")
+                                ->orWhere('delivery_details->governorate', 'like', "%{$search}%");
+                        });
+                });
+            })
+            ->when(filled($filters['shipment_status'] ?? null), fn ($query) => $query->where('shipping_status', $filters['shipment_status']))
+            ->when(filled($filters['governorate'] ?? null), fn ($query) => $query->whereHas(
+                'order',
+                fn ($order) => $order->where('delivery_details->governorate', $filters['governorate']),
+            ))
+            ->when(($filters['pickup_state'] ?? 'all') === 'awaiting', fn ($query) => $query->whereDoesntHave('pickups'))
+            ->when(($filters['pickup_state'] ?? 'all') === 'scheduled', fn ($query) => $query->whereHas('pickups'))
+            ->latest('last_event_at')
+            ->latest('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
         return view('admin.bosta.index', [
             'configured' => config('bosta.enabled') && filled(config('bosta.api_key')) && filled(config('bosta.business_location_id')),
-            'shipments' => BostaShipment::query()
-                ->with(['order.checkoutReference', 'createdBy:id,name'])
-                ->where('creation_status', 'created')
-                ->whereNotNull('tracking_number')
-                ->whereDoesntHave('pickups')
-                ->latest()
-                ->paginate(25),
+            'shipments' => $shipments,
+            'shipmentStatuses' => $shipmentStatuses,
+            'governorates' => $governorates,
+            'filters' => $filters,
+            'tab' => $tab,
+            'activeCount' => $activeCount,
+            'finishedCount' => $finishedCount,
             'pickups' => BostaPickup::query()->with('createdBy:id,name')->latest()->take(10)->get(),
             'eligibleOrders' => $eligibility->eligibleRepresentatives(),
         ]);

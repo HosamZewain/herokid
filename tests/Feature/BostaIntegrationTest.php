@@ -251,7 +251,123 @@ class BostaIntegrationTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.bosta.index'))
             ->assertOk()
+            ->assertSee('TRACK-PICKUP')
+            ->assertSee('تمت الإضافة');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index', ['pickup_state' => 'awaiting']))
+            ->assertOk()
             ->assertDontSee('TRACK-PICKUP');
+    }
+
+    public function test_bosta_page_splits_active_and_finished_shipments_and_shows_customer_details(): void
+    {
+        $activeOrders = $this->checkout('BOSTA-ACTIVE-TAB', 20_000);
+        $activeOrders->each->update([
+            'parent_name' => 'عميل نشط',
+            'delivery_details' => array_merge($activeOrders->first()->delivery_details, [
+                'phone' => '01000000001',
+                'governorate' => 'الجيزة',
+            ]),
+        ]);
+        $finishedOrders = $this->checkout('BOSTA-FINISHED-TAB', 20_000);
+
+        $activeShipment = BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-ACTIVE-TAB',
+            'order_id' => $activeOrders->first()->id,
+            'bosta_delivery_id' => 'delivery-active-tab',
+            'tracking_number' => 'TRACK-ACTIVE-TAB',
+            'business_reference' => 'HK09-ACTIVE',
+            'creation_status' => 'created',
+            'shipping_status' => 'shipped',
+            'cod_amount_cents' => 10_000,
+            'business_location_id' => 'location-123',
+        ]);
+        BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-FINISHED-TAB',
+            'order_id' => $finishedOrders->first()->id,
+            'bosta_delivery_id' => 'delivery-finished-tab',
+            'tracking_number' => 'TRACK-FINISHED-TAB',
+            'business_reference' => 'HK09-FINISHED',
+            'creation_status' => 'created',
+            'shipping_status' => 'delivered',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSee('نشط')
+            ->assertSee('منتهي')
+            ->assertSee('TRACK-ACTIVE-TAB')
+            ->assertSee('عميل نشط')
+            ->assertSee('01000000001')
+            ->assertSee('الجيزة')
+            ->assertSee(route('admin.orders.groups.show', $activeOrders->first()), false)
+            ->assertDontSee('TRACK-FINISHED-TAB')
+            ->assertViewHas('shipments', fn ($shipments): bool => $shipments->perPage() === 50 && $shipments->total() === 1);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index', ['tab' => 'finished']))
+            ->assertOk()
+            ->assertSee('TRACK-FINISHED-TAB')
+            ->assertDontSee('TRACK-ACTIVE-TAB')
+            ->assertViewHas('activeCount', 1)
+            ->assertViewHas('finishedCount', 1);
+
+        $this->assertTrue($activeShipment->refresh()->pickups->isEmpty());
+    }
+
+    public function test_bosta_page_can_search_and_filter_shipments(): void
+    {
+        $cairoOrders = $this->checkout('BOSTA-FILTER-CAIRO', 20_000);
+        $gizaOrders = $this->checkout('BOSTA-FILTER-GIZA', 20_000);
+        $gizaOrders->each->update([
+            'parent_name' => 'سارة للاختبار',
+            'delivery_details' => array_merge($gizaOrders->first()->delivery_details, [
+                'phone' => '01199998888',
+                'governorate' => 'الجيزة',
+            ]),
+        ]);
+
+        BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-FILTER-CAIRO',
+            'order_id' => $cairoOrders->first()->id,
+            'tracking_number' => 'TRACK-CAIRO-FILTER',
+            'business_reference' => 'HK09-CAIRO',
+            'creation_status' => 'created',
+            'shipping_status' => 'shipment_created',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+        BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-FILTER-GIZA',
+            'order_id' => $gizaOrders->first()->id,
+            'tracking_number' => 'TRACK-GIZA-FILTER',
+            'business_reference' => 'HK09-GIZA',
+            'creation_status' => 'created',
+            'shipping_status' => 'shipped',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index', ['q' => '01199998888']))
+            ->assertOk()
+            ->assertSee('TRACK-GIZA-FILTER')
+            ->assertDontSee('TRACK-CAIRO-FILTER');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index', [
+                'governorate' => 'الجيزة',
+                'shipment_status' => 'shipped',
+                'per_page' => '100',
+            ]))
+            ->assertOk()
+            ->assertSee('TRACK-GIZA-FILTER')
+            ->assertDontSee('TRACK-CAIRO-FILTER')
+            ->assertViewHas('shipments', fn ($shipments): bool => $shipments->perPage() === 100 && $shipments->total() === 1);
     }
 
     public function test_webhook_rejects_invalid_secret_and_unknown_shipment(): void
