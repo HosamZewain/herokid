@@ -32,6 +32,21 @@ Route::post('integrations/bosta/webhook', BostaWebhookController::class)
     ->name('integrations.bosta.webhook');
 
 Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
+    Route::post('checkouts/acquire-next-identity', [AgentCheckoutController::class, 'acquireNextIdentity'])
+        ->middleware('agent_api:ability:orders.identity,permission:orders.assign');
+    Route::get('checkouts/{reference}/identity-context', [AgentCheckoutController::class, 'identityContext'])
+        ->middleware('agent_api:ability:orders.identity,permission:orders.view,permission:orders.photos.view');
+    Route::post('checkouts/{reference}/complete-identity', [AgentCheckoutController::class, 'completeIdentity'])
+        ->middleware('agent_api:ability:orders.identity,permission:orders.update');
+    Route::post('orders/{order}/identity-preview', [AgentOrderController::class, 'identityPreview'])
+        ->middleware('agent_api:ability:orders.identity,permission:orders.update,permission:orders.photos.view');
+    Route::get('orders/{order}/identity-references/child-photos/{index}', [AgentOrderController::class, 'identityChildPhoto'])
+        ->whereNumber('index')->middleware('agent_api:ability:orders.identity,permission:orders.photos.view')
+        ->name('agent.orders.identity-references.child-photo');
+    Route::get('orders/{order}/identity-references/image', [AgentOrderController::class, 'identityImage'])
+        ->middleware('agent_api:ability:orders.identity,permission:orders.photos.view')
+        ->name('agent.orders.identity-references.image');
+
     Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])
         ->middleware('agent_api:ability:orders.acquire,permission:orders.assign');
     Route::post('checkouts/acquire-next-revision', [AgentCheckoutController::class, 'acquireNextRevision'])

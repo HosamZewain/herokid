@@ -46,6 +46,15 @@
                 </span>
             </label>
 
+            <label class="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 lg:col-span-2">
+                <input type="hidden" name="identity_only" value="0">
+                <input type="checkbox" name="identity_only" value="1" @checked(old('identity_only')) class="mt-1 rounded border-violet-300 text-violet-600">
+                <span>
+                    <strong class="block text-violet-950">هويات القصص فقط</strong>
+                    <small class="mt-1 block text-violet-800">توكن مقيد لا يستطيع تشغيل إنتاج القصص أو المنتجات. اختر معه نطاق «القصص فقط». يستحوذ على عملية الشراء كاملة، لكنه يعرض برومبتات الهوية فقط ويؤجل أي منتجات موجودة.</small>
+                </span>
+            </label>
+
             <label class="block">
                 <span class="mb-1 block text-sm font-bold text-slate-700">اسم التوكن</span>
                 <input name="name" required maxlength="255" value="{{ old('name', 'production-agent') }}" class="w-full rounded-xl border-slate-300" dir="ltr">
@@ -84,13 +93,14 @@
         @else
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
+                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">نوع العمل</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach($tokens as $token)
                             <tr>
                                 <td class="p-3 font-mono" dir="ltr">{{ $token['name'] }}</td>
                                 <td class="p-3"><strong>{{ $token['agent']->name }}</strong><span class="block text-xs text-slate-500">{{ $token['agent']->email }}</span></td>
                                 <td class="p-3"><span class="rounded-full bg-indigo-50 px-3 py-1 font-bold text-indigo-700">{{ \App\Services\AgentApi\AgentCatalogScope::label($token['scope']) }}</span></td>
+                                <td class="p-3"><span class="rounded-full px-3 py-1 font-bold {{ $token['identity_only'] ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600' }}">{{ $token['identity_only'] ? 'هويات فقط' : 'إنتاج' }}</span></td>
                                 <td class="p-3"><span class="rounded-full px-3 py-1 font-bold {{ $token['can_rework'] ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500' }}">{{ $token['can_rework'] ? 'مسموح' : 'غير مسموح' }}</span></td>
                                 <td class="p-3 text-slate-600">{{ $token['last_used_at'] ? app_datetime($token['last_used_at']) : 'لم يُستخدم' }}</td>
                                 <td class="p-3 text-slate-600">{{ $token['expires_at'] ? app_datetime($token['expires_at']) : 'بدون تاريخ' }}</td>

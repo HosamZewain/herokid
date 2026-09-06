@@ -25,6 +25,11 @@ class AgentTokenService
         'agent:orders.rework',
     ];
 
+    public const IDENTITY_ONLY_ABILITIES = [
+        'agent',
+        'agent:orders.identity',
+    ];
+
     public const REQUIRED_PERMISSIONS = [
         'orders.view',
         'orders.assign',
@@ -33,8 +38,14 @@ class AgentTokenService
         'orders.preview.upload',
     ];
 
-    public function issue(User $agent, string $name, int $expiresInDays, string $catalogScope, bool $allowRework = false): NewAccessToken
-    {
+    public function issue(
+        User $agent,
+        string $name,
+        int $expiresInDays,
+        string $catalogScope,
+        bool $allowRework = false,
+        bool $identityOnly = false,
+    ): NewAccessToken {
         if (! $agent->isAdmin()) {
             throw ValidationException::withMessages(['agent_user_id' => 'يجب اختيار حساب مشرف نشط ومخصص للـAgent.']);
         }
@@ -43,22 +54,32 @@ class AgentTokenService
             throw ValidationException::withMessages(['catalog_scope' => 'نطاق المنتجات المحدد غير صحيح.']);
         }
 
+        if ($identityOnly && $catalogScope !== AgentCatalogScope::STORIES) {
+            throw ValidationException::withMessages(['catalog_scope' => 'توكن هويات القصص فقط يجب أن يكون نطاقه القصص فقط.']);
+        }
+
+        if ($identityOnly && $allowRework) {
+            throw ValidationException::withMessages(['allow_rework' => 'لا يمكن جمع وضع هويات القصص فقط مع صلاحية إعادة الإنتاج.']);
+        }
+
         $permissionIds = Permission::query()->whereIn('key', self::REQUIRED_PERMISSIONS)->pluck('id');
         if ($permissionIds->count() !== count(self::REQUIRED_PERMISSIONS)) {
             throw ValidationException::withMessages(['agent_user_id' => 'صلاحيات الطلبات المطلوبة غير مكتملة. شغّل migrations أولًا.']);
         }
 
-        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $allowRework, $permissionIds): NewAccessToken {
+        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $allowRework, $identityOnly, $permissionIds): NewAccessToken {
             $agent->permissions()->syncWithoutDetaching($permissionIds);
             $agent->forceFill(['agent_api_enabled' => true])->save();
 
             return $agent->createToken(
                 $name,
-                [
-                    ...self::OPERATION_ABILITIES,
-                    ...AgentCatalogScope::abilities($catalogScope),
-                    ...($allowRework ? self::REWORK_ABILITIES : []),
-                ],
+                $identityOnly
+                    ? [...self::IDENTITY_ONLY_ABILITIES, ...AgentCatalogScope::abilities(AgentCatalogScope::STORIES)]
+                    : [
+                        ...self::OPERATION_ABILITIES,
+                        ...AgentCatalogScope::abilities($catalogScope),
+                        ...($allowRework ? self::REWORK_ABILITIES : []),
+                    ],
                 now()->addDays($expiresInDays),
             );
         });

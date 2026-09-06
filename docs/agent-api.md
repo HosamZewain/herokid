@@ -67,6 +67,50 @@ repeat
 
 Acquisition is atomic for the complete `checkout_group`. Every production order in it is assigned to the same Agent and moved from `new` to `generating`. Ready products remain part of the checkout but are not production units and do not block completion.
 
+## Story identity-only workflow
+
+Create a separate token from **Agent API Tokens**, choose **القصص فقط**, and enable **هويات القصص فقط**. This token cannot use the normal story/product production or rework endpoints.
+
+```text
+POST /checkouts/acquire-next-identity
+       ↓
+GET /checkouts/{reference}/identity-context
+       ↓
+Execute every identity_units[].identity_prompt
+       ↓
+POST /orders/{order}/identity-preview for every missing identity
+       ↓
+POST /checkouts/{reference}/complete-identity
+       ↓
+repeat with a fresh Idempotency-Key
+```
+
+Acquisition remains atomic for the complete checkout. A checkout containing multiple stories returns one `identity_units[]` entry per story. Products in a mixed checkout are returned only as `deferred_units[]` with `DEFERRED_DO_NOT_PROCESS_IN_IDENTITY_WORKFLOW`; no product or story-production prompt is exposed. After every story has an uploaded identity, completion moves every row in that checkout from `new` to `waiting_customer` so the checkout cannot split into conflicting statuses.
+
+```bash
+curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next-identity \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-poll-001'
+
+curl https://hero-kid.com/api/agent/checkouts/HK09-236/identity-context \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN'
+
+curl -X POST https://hero-kid.com/api/agent/orders/123/identity-preview \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-upload-123-v1' \
+  -F 'identity=@child-identity.png'
+
+curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-236/complete-identity \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-complete-HK09-236'
+```
+
+`complete-identity` returns `IDENTITY_FILES_MISSING` until every story has an identity. A repeated successful completion is idempotent. Story checkouts missing original child photos are skipped because the Agent cannot safely generate their identity.
+
 ## Endpoints
 
 ### Acquire next checkout

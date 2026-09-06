@@ -5,11 +5,54 @@ namespace App\Http\Controllers\Api\Agent;
 use App\Http\Controllers\Controller;
 use App\Services\AgentApi\AgentCheckoutProductionService;
 use App\Services\AgentApi\AgentIdempotencyService;
+use App\Services\AgentApi\AgentStoryIdentityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AgentCheckoutController extends Controller
 {
+    public function acquireNextIdentity(
+        Request $request,
+        AgentStoryIdentityService $identities,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $result = $idempotency->execute($request->user(), 'checkouts.acquire-next-identity', $request, function () use ($request, $identities): array {
+            $checkout = $identities->acquireNext($request->user(), $request);
+            $body = $checkout
+                ? ['success' => true, 'workflow' => 'story_identity_only', 'checkout' => $checkout]
+                : ['success' => true, 'workflow' => 'story_identity_only', 'checkout' => null, 'reason' => 'NO_AVAILABLE_STORY_IDENTITIES'];
+
+            return [
+                'status' => 200,
+                'body' => $body,
+                'checkout_group_key' => $checkout['checkout_group'] ?? null,
+                'cache' => $checkout !== null,
+            ];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
+    public function identityContext(Request $request, string $reference, AgentStoryIdentityService $identities): JsonResponse
+    {
+        return response()->json($identities->context($reference, $request->user()));
+    }
+
+    public function completeIdentity(
+        Request $request,
+        string $reference,
+        AgentStoryIdentityService $identities,
+        AgentIdempotencyService $idempotency,
+    ): JsonResponse {
+        $result = $idempotency->execute($request->user(), 'checkouts.complete-identity:'.$reference, $request, function () use ($request, $reference, $identities): array {
+            $body = $identities->complete($reference, $request->user(), $request);
+
+            return ['status' => 200, 'body' => $body, 'checkout_group_key' => $body['checkout_group_key'] ?? null];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
     public function acquireNext(
         Request $request,
         AgentCheckoutProductionService $production,
