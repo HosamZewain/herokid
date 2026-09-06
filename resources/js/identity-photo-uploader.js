@@ -168,7 +168,7 @@ function initializeIdentityPhotoUploaderForRoot(root) {
         } else if (failed) {
             submitLabel.textContent = 'راجع الصورة التي فشل رفعها';
         } else if (remainingRequired === 1) {
-            submitLabel.textContent = 'أضف صورة أخرى للمتابعة';
+            submitLabel.textContent = uploaded.length > 0 ? 'أضف صورة أخرى للمتابعة' : 'أضف صورة للمتابعة';
         } else if (remainingRequired > 1) {
             submitLabel.textContent = `أضف ${arabicNumber(remainingRequired)} صور للمتابعة`;
         } else {
@@ -190,10 +190,14 @@ function initializeIdentityPhotoUploaderForRoot(root) {
                 `تم رفع ${arabicNumber(uploaded.length)} حتى الآن. انتظر حتى يكتمل رفع الصور المحددة.`,
             );
         } else if (remainingRequired === 1) {
+            const hasUploadedPhotos = uploaded.length > 0;
+
             setRequirementState(
                 'warning',
-                'أضف صورة أخرى للمتابعة',
-                `تم رفع الصور بنجاح. نحتاج صورة أخرى لاستكمال ${arabicNumber(minimum)} صور مطلوبة.`,
+                hasUploadedPhotos ? 'أضف صورة أخرى للمتابعة' : 'أضف صورة للمتابعة',
+                hasUploadedPhotos
+                    ? `تم رفع ${arabicNumber(uploaded.length)} صورة بنجاح. نحتاج صورة أخرى لاستكمال ${arabicNumber(minimum)} صور مطلوبة.`
+                    : 'لم يتم رفع صورة بعد. اختر صورة واضحة للطفل للمتابعة.',
             );
         } else if (remainingRequired > 1) {
             setRequirementState(
