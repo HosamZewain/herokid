@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\RoboDeskIntegrationController;
 use App\Http\Controllers\Admin\RoboDeskSettingsController;
+use App\Http\Controllers\Admin\RoboDeskSimulatorController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [RoboDeskIntegrationController::class, 'index'])->middleware('permission:robodesk.view')->name('index');
@@ -14,3 +15,7 @@ Route::get('settings', [RoboDeskSettingsController::class, 'index'])->middleware
 Route::post('settings/connection', [RoboDeskSettingsController::class, 'updateConnection'])->middleware('permission:robodesk.configure')->name('settings.connection');
 Route::post('settings/credentials', [RoboDeskSettingsController::class, 'updateCredential'])->middleware('permission:robodesk.manage_credentials')->name('settings.credentials');
 Route::post('settings/actions/{actionKey}', [RoboDeskSettingsController::class, 'updateAction'])->middleware('permission:robodesk.configure')->name('settings.actions.update');
+
+Route::get('simulator', [RoboDeskSimulatorController::class, 'index'])->middleware('permission:robodesk.configure')->name('simulator.index');
+Route::get('simulator/{checkoutReference}', [RoboDeskSimulatorController::class, 'show'])->middleware('permission:robodesk.configure')->name('simulator.show');
+Route::post('simulator/{checkoutReference}/reply', [RoboDeskSimulatorController::class, 'reply'])->middleware('permission:robodesk.configure')->name('simulator.reply');

@@ -91,7 +91,7 @@ class RoboDeskSettings
 
     public function authScheme(): string
     {
-        return $this->string('robodesk_auth_scheme', 'Bearer');
+        return $this->string('robodesk_auth_scheme');
     }
 
     public function defaultChannel(): string
@@ -116,7 +116,37 @@ class RoboDeskSettings
 
     public function signsOutbound(): bool
     {
-        return $this->bool('robodesk_sign_outbound', true);
+        return $this->bool('robodesk_sign_outbound', false);
+    }
+
+    /**
+     * How inbound RoboDesk calls are authenticated.
+     *
+     * `token` compares a static token in a header — the agreed contract.
+     * `signature` is the original HMAC scheme. `none` is for local work only.
+     *
+     * @return 'token'|'signature'|'none'
+     */
+    public function inboundAuthMode(): string
+    {
+        $mode = $this->string('robodesk_inbound_auth_mode', 'token');
+
+        return in_array($mode, ['token', 'signature', 'none'], true) ? $mode : 'token';
+    }
+
+    public function inboundAuthHeader(): string
+    {
+        return $this->string('robodesk_inbound_auth_header', 'X-RoboDesk-Token') ?: 'X-RoboDesk-Token';
+    }
+
+    /**
+     * Simulation mode renders and records every outbound message without
+     * sending it anywhere, so the whole journey can be walked in the admin
+     * panel before RoboDesk is reachable.
+     */
+    public function simulating(): bool
+    {
+        return $this->bool('robodesk_simulation_mode', false);
     }
 
     public function whatsAppNumber(): string

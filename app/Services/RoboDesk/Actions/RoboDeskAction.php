@@ -164,28 +164,32 @@ abstract class RoboDeskAction
     }
 
     /**
-     * Renders the admin-supplied payload template against this action's
-     * variables. With no template saved, the raw variables are sent as-is so the
-     * integration is still testable before RoboDesk hands over its contract.
+     * Builds the body for this action.
+     *
+     * With no template saved, HeroKid sends a descriptive default: an envelope
+     * naming the action, template, channel and language, plus every variable —
+     * enough for RoboDesk to work against before a contract is agreed.
+     *
+     * Once a template is saved it becomes the *entire* body. Nothing is merged
+     * around it, because the whole point of the field is to reproduce exactly
+     * what RoboDesk expects. `_rendered` is an internal marker stripped before
+     * the request leaves.
      */
     public function buildPayload(array $variables): array
     {
         $template = (string) $this->param('payload_template', '');
 
-        $envelope = [
-            'action' => $this->key(),
-            'template_name' => (string) $this->param('template_name', ''),
-            'channel' => $this->channel(),
-            'language' => $this->language(),
-        ];
-
         if (trim($template) === '') {
-            return array_merge($envelope, $variables);
+            return array_merge([
+                'action' => $this->key(),
+                'template_name' => (string) $this->param('template_name', ''),
+                'channel' => $this->channel(),
+                'language' => $this->language(),
+            ], $variables);
         }
 
         return array_merge(
             ['_rendered' => true],
-            $envelope,
             $this->renderer->render($template, $variables),
         );
     }

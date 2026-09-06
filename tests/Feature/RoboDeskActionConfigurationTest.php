@@ -264,6 +264,7 @@ class RoboDeskActionConfigurationTest extends TestCase
             'robodesk_enabled' => '1',
             'robodesk_base_url' => 'https://herokid.robodesk.test',
         ]);
+        app(RoboDeskSettings::class)->save(['robodesk_inbound_auth_mode' => 'signature']);
         app(RoboDeskCredentialService::class)->save('inbound_secret', 'inbound-test-secret');
         app(RoboDeskCredentialService::class)->save('outbound_secret', 'outbound-test-secret');
     }

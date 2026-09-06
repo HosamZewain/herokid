@@ -49,6 +49,7 @@ class RoboDeskIntegrationTest extends TestCase
     {
         config()->set('robodesk.enabled', true);
         config()->set('robodesk.inbound_secret', 'inbound-test-secret');
+        app(RoboDeskSettings::class)->save(['robodesk_inbound_auth_mode' => 'signature', 'robodesk_sign_outbound' => '1']);
         config()->set('robodesk.outbound_secret', '');
 
         $order = $this->order('CHK-ROBODESK-CONFIRM');
@@ -120,6 +121,7 @@ class RoboDeskIntegrationTest extends TestCase
     {
         config()->set('robodesk.enabled', true);
         config()->set('robodesk.inbound_secret', 'inbound-test-secret');
+        app(RoboDeskSettings::class)->save(['robodesk_inbound_auth_mode' => 'signature', 'robodesk_sign_outbound' => '1']);
         config()->set('robodesk.outbound_secret', '');
 
         $story = Story::query()->create([
@@ -169,6 +171,8 @@ class RoboDeskIntegrationTest extends TestCase
         config()->set('robodesk.enabled', false);
         config()->set('robodesk.outbound_secret', 'outbound-test-secret');
         config()->set('robodesk.base_url', 'https://herokid.robodesk.ai');
+        // This test asserts the signed body, so it opts into HMAC signing.
+        app(RoboDeskSettings::class)->save(['robodesk_sign_outbound' => '1']);
         Http::fake(['https://herokid.robodesk.ai/*' => Http::response(['accepted' => true], 202)]);
         $this->enableAction(ConfirmOrderAction::KEY);
 

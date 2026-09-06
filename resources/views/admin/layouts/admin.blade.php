@@ -299,6 +299,7 @@
                         @endcan
                         @can('robodesk.configure')
                             <a href="{{ route('admin.robodesk.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.settings.*') ? $activeLink : $idleLink }}">إعدادات RoboDesk</a>
+                            <a href="{{ route('admin.robodesk.simulator.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.simulator.*') ? $activeLink : $idleLink }}">محاكاة RoboDesk</a>
                         @endcan
                         @can('agent_api.tokens.manage')
                             <a href="{{ route('admin.agent-api-tokens.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agent-api-tokens.*') ? $activeLink : $idleLink }}">Agent API Tokens</a>

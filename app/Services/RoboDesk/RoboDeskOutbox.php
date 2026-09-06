@@ -58,12 +58,17 @@ class RoboDeskOutbox
     }
 
     /**
-     * An event is only worth dispatching when the integration is on and an
-     * outbound secret exists. Anything else is parked as `held` so nothing is
-     * lost and an admin can release it later.
+     * An event is worth dispatching when the integration is on. Signing is
+     * optional now that the contract is token-only, so only a run with signing
+     * explicitly enabled still needs its secret. Anything not deliverable is
+     * parked as `held` rather than dropped, so an admin can release it later.
      */
     private function deliverable(): bool
     {
-        return $this->settings->enabled() && $this->credentials->has('outbound_secret');
+        if (! $this->settings->enabled()) {
+            return false;
+        }
+
+        return ! $this->settings->signsOutbound() || $this->credentials->has('outbound_secret');
     }
 }

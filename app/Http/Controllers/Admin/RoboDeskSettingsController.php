@@ -46,6 +46,9 @@ class RoboDeskSettingsController extends Controller
                 'timeout_seconds' => $this->settings->timeoutSeconds(),
                 'signature_tolerance_seconds' => $this->settings->signatureToleranceSeconds(),
                 'sign_outbound' => $this->settings->signsOutbound(),
+                'inbound_auth_mode' => $this->settings->inboundAuthMode(),
+                'inbound_auth_header' => $this->settings->inboundAuthHeader(),
+                'simulation_mode' => $this->settings->simulating(),
                 'whatsapp_number' => $this->settings->whatsAppNumber(),
                 'instapay_url' => $this->settings->instaPayUrl(),
                 'payment_proof_max_mb' => $this->settings->paymentProofMaxMb(),
@@ -78,6 +81,9 @@ class RoboDeskSettingsController extends Controller
             'timeout_seconds' => ['nullable', 'integer', 'min:5', 'max:120'],
             'signature_tolerance_seconds' => ['nullable', 'integer', 'min:30', 'max:3600'],
             'sign_outbound' => ['nullable', 'boolean'],
+            'inbound_auth_mode' => ['nullable', Rule::in(['token', 'signature', 'none'])],
+            'inbound_auth_header' => ['nullable', 'string', 'max:100'],
+            'simulation_mode' => ['nullable', 'boolean'],
             'whatsapp_number' => ['nullable', 'string', 'max:40'],
             'instapay_url' => ['nullable', 'string', 'max:500'],
             'payment_proof_max_mb' => ['nullable', 'integer', 'min:1', 'max:50'],
@@ -94,6 +100,9 @@ class RoboDeskSettingsController extends Controller
             'robodesk_timeout_seconds' => (string) ($validated['timeout_seconds'] ?? 15),
             'robodesk_signature_tolerance_seconds' => (string) ($validated['signature_tolerance_seconds'] ?? 300),
             'robodesk_sign_outbound' => $request->boolean('sign_outbound') ? '1' : '0',
+            'robodesk_inbound_auth_mode' => (string) ($validated['inbound_auth_mode'] ?? 'token'),
+            'robodesk_inbound_auth_header' => (string) ($validated['inbound_auth_header'] ?? 'X-RoboDesk-Token'),
+            'robodesk_simulation_mode' => $request->boolean('simulation_mode') ? '1' : '0',
             'robodesk_whatsapp_number' => (string) ($validated['whatsapp_number'] ?? ''),
             'robodesk_instapay_url' => (string) ($validated['instapay_url'] ?? ''),
             'robodesk_payment_proof_max_mb' => (string) ($validated['payment_proof_max_mb'] ?? 10),
@@ -200,12 +209,24 @@ class RoboDeskSettingsController extends Controller
     {
         $warnings = [];
 
-        if ($this->settings->enabled() && ! $this->credentials->has('outbound_secret')) {
-            $warnings[] = 'التكامل مفعّل لكن مفتاح توقيع الأحداث الصادرة غير محفوظ — كل الأحداث ستبقى معلّقة.';
+        if ($this->settings->simulating()) {
+            $warnings[] = 'وضع المحاكاة مفعّل — لا تُرسل أي رسالة فعليًا إلى RoboDesk.';
         }
 
-        if ($this->settings->enabled() && ! $this->credentials->has('inbound_secret')) {
-            $warnings[] = 'مفتاح التحقق من الأحداث الواردة غير محفوظ — سيتم رفض كل الطلبات القادمة من RoboDesk.';
+        if ($this->settings->enabled() && $this->settings->signsOutbound() && ! $this->credentials->has('outbound_secret')) {
+            $warnings[] = 'توقيع الأحداث الصادرة مفعّل لكن المفتاح غير محفوظ — كل الأحداث ستبقى معلّقة.';
+        }
+
+        if ($this->settings->enabled() && $this->settings->inboundAuthMode() === 'token' && ! $this->credentials->has('auth_token')) {
+            $warnings[] = 'توكن الوصول غير محفوظ — سيتم رفض كل الطلبات القادمة من RoboDesk.';
+        }
+
+        if ($this->settings->enabled() && $this->settings->inboundAuthMode() === 'signature' && ! $this->credentials->has('inbound_secret')) {
+            $warnings[] = 'وضع التحقق بالتوقيع مختار لكن مفتاح التحقق غير محفوظ.';
+        }
+
+        if ($this->settings->inboundAuthMode() === 'none') {
+            $warnings[] = 'التحقق من الأحداث الواردة معطّل تمامًا — للاستخدام المحلي فقط.';
         }
 
         if ($this->settings->enabled() && $this->settings->baseUrl() === '') {

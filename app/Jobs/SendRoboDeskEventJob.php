@@ -42,14 +42,28 @@ class SendRoboDeskEventJob implements ShouldQueue
             return;
         }
 
-        if (! $settings->enabled() || ! $credentials->has('outbound_secret')) {
-            $event->update(['status' => 'held', 'last_error' => 'Integration is disabled or missing its outbound secret.']);
+        if (! $settings->enabled()) {
+            $event->update(['status' => 'held', 'last_error' => 'RoboDesk integration is disabled.']);
+
+            return;
+        }
+
+        if ($settings->signsOutbound() && ! $credentials->has('outbound_secret')) {
+            $event->update(['status' => 'held', 'last_error' => 'Outbound signing is enabled but no signing secret is saved.']);
 
             return;
         }
 
         $data = $event->payload ?? [];
-        if ($event->checkout_group_key) {
+
+        // When an admin has supplied a payload template, the rendered result is
+        // the whole body — merging the legacy checkout payload into it would
+        // mean RoboDesk receives fields the configured template never asked
+        // for. Only untemplated events get the legacy merge.
+        $rendered = (bool) ($data['_rendered'] ?? false);
+        unset($data['_rendered']);
+
+        if ($event->checkout_group_key && ! $rendered) {
             $data = array_merge($checkouts->build($event->checkout_group_key), $data);
         }
 
@@ -64,6 +78,27 @@ class SendRoboDeskEventJob implements ShouldQueue
 
         $event->increment('attempts');
         $event->update(['status' => 'processing', 'payload' => $data]);
+
+        // Simulation mode stops here. The payload above is exactly what would
+        // have been sent, so the admin simulator shows the real message rather
+        // than a mock-up of one.
+        if ($settings->simulating()) {
+            $event->update([
+                'status' => 'succeeded',
+                'processed_at' => now(),
+                'last_error' => null,
+                'response_payload' => [
+                    'simulated' => true,
+                    'would_have_sent' => [
+                        'method' => $actions->find((string) $event->event_type)?->httpMethod() ?? 'POST',
+                        'url' => $settings->baseUrl().($actions->find((string) $event->event_type)?->endpointPath() ?: $settings->eventsPath()),
+                        'body' => $envelope,
+                    ],
+                ],
+            ]);
+
+            return;
+        }
 
         // The action that produced this event owns its endpoint and HTTP verb,
         // so each flow can target a different RoboDesk API without a deploy.

@@ -106,9 +106,32 @@
                     <input type="number" min="1" max="50" name="payment_proof_max_mb" value="{{ old('payment_proof_max_mb', $connection['payment_proof_max_mb']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                 </div>
 
+                <div>
+                    <label class="text-xs font-bold text-gray-500">التحقق من الأحداث الواردة</label>
+                    <select name="inbound_auth_mode" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                        <option value="token" @selected($connection['inbound_auth_mode'] === 'token')>توكن ثابت في ترويسة</option>
+                        <option value="signature" @selected($connection['inbound_auth_mode'] === 'signature')>توقيع HMAC</option>
+                        <option value="none" @selected($connection['inbound_auth_mode'] === 'none')>بدون تحقق (محلي فقط)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-500">ترويسة التوكن الوارد</label>
+                    <input dir="ltr" name="inbound_auth_header" value="{{ old('inbound_auth_header', $connection['inbound_auth_header']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                </div>
+
                 <label class="flex items-center gap-3 md:col-span-2">
                     <input type="checkbox" name="sign_outbound" value="1" @checked($connection['sign_outbound']) class="h-5 w-5 rounded border-gray-300">
-                    <span class="text-sm font-bold text-gray-800">توقيع الأحداث الصادرة بـ HMAC</span>
+                    <span class="text-sm font-bold text-gray-800">توقيع الأحداث الصادرة بـ HMAC (غير مطلوب مع التوكن الثابت)</span>
+                </label>
+
+                <label class="flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 md:col-span-2">
+                    <input type="checkbox" name="simulation_mode" value="1" @checked($connection['simulation_mode']) class="h-5 w-5 rounded border-gray-300">
+                    <span>
+                        <span class="block text-sm font-black text-violet-900">وضع المحاكاة</span>
+                        <span class="block text-xs text-violet-700">لا تُرسل أي رسالة فعليًا. تُسجَّل كما كانت سترسل وتظهر في
+                            <a class="underline" href="{{ route('admin.robodesk.simulator.index') }}">شاشة المحاكاة</a>.</span>
+                    </span>
                 </label>
 
                 <div class="md:col-span-2">
