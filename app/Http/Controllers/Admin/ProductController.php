@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductUpsellRule;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
@@ -40,20 +42,24 @@ class ProductController extends Controller
 
     public function create()
     {
-        return view('admin.store.products.form', [
-            'product' => new Product([
+        return view('admin.store.products.form', $this->formData(
+            new Product([
                 'fulfillment_type' => 'physical',
                 'purchase_mode' => 'standalone',
                 'personalization_mode' => 'none',
                 'inventory_mode' => 'no_tracking',
-            ]),
-            'categories' => ProductCategory::orderBy('sort_order')->get(),
-        ]);
+            ])
+        ));
     }
 
     public function store(Request $request)
     {
-        $product = Product::create($this->validatedData($request));
+        $product = DB::transaction(function () use ($request): Product {
+            $product = Product::create($this->validatedData($request));
+            $this->syncRecommendedProducts($request, $product);
+
+            return $product;
+        });
 
         return redirect()->route('admin.products.edit', $product)->with('success', 'تم إنشاء المنتج. يمكنك إضافة المتغيرات من نفس الصفحة.');
     }
@@ -62,17 +68,106 @@ class ProductController extends Controller
     {
         $product->load(['variants' => fn ($query) => $query->withSum('orderItems as sold_quantity', 'quantity')]);
 
-        return view('admin.store.products.form', [
-            'product' => $product,
-            'categories' => ProductCategory::orderBy('sort_order')->get(),
-        ]);
+        return view('admin.store.products.form', $this->formData($product));
     }
 
     public function update(Request $request, Product $product)
     {
-        $product->update($this->validatedData($request, $product));
+        DB::transaction(function () use ($request, $product): void {
+            $product->update($this->validatedData($request, $product));
+            $this->syncRecommendedProducts($request, $product);
+        });
 
         return redirect()->route('admin.products.edit', $product)->with('success', 'تم تحديث المنتج.');
+    }
+
+    private function formData(Product $product): array
+    {
+        $selectedRecommendedProductIds = $product->exists
+            ? ProductUpsellRule::query()
+                ->where('source_product_id', $product->id)
+                ->whereNull('source_story_id')
+                ->whereNull('source_story_category_id')
+                ->whereNull('age_group')
+                ->whereNull('gender')
+                ->where('trigger_scope', 'product_added')
+                ->where('is_active', true)
+                ->pluck('target_product_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all()
+            : [];
+
+        return [
+            'product' => $product,
+            'categories' => ProductCategory::orderBy('sort_order')->get(),
+            'recommendationProducts' => Product::query()
+                ->with('category')
+                ->when($product->exists, fn ($query) => $query->whereKeyNot($product->id))
+                ->orderBy('name_ar')
+                ->get(),
+            'selectedRecommendedProductIds' => $selectedRecommendedProductIds,
+        ];
+    }
+
+    private function syncRecommendedProducts(Request $request, Product $product): void
+    {
+        if (! $request->boolean('recommendations_present')) {
+            return;
+        }
+
+        $validated = $request->validate([
+            'recommended_product_ids' => ['nullable', 'array', 'max:50'],
+            'recommended_product_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('products', 'id'),
+                Rule::notIn([$product->id]),
+            ],
+        ]);
+        $targetIds = collect($validated['recommended_product_ids'] ?? [])
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($targetIds->isEmpty()) {
+            ProductUpsellRule::query()
+                ->where('source_product_id', $product->id)
+                ->whereNull('source_story_id')
+                ->whereNull('source_story_category_id')
+                ->whereNull('age_group')
+                ->whereNull('gender')
+                ->where('trigger_scope', 'product_added')
+                ->delete();
+
+            return;
+        }
+
+        ProductUpsellRule::query()
+            ->where('source_product_id', $product->id)
+            ->whereNull('source_story_id')
+            ->whereNull('source_story_category_id')
+            ->whereNull('age_group')
+            ->whereNull('gender')
+            ->where('trigger_scope', 'product_added')
+            ->whereNotIn('target_product_id', $targetIds)
+            ->delete();
+
+        foreach ($targetIds as $targetId) {
+            ProductUpsellRule::query()->updateOrCreate(
+                [
+                    'source_product_id' => $product->id,
+                    'target_product_id' => $targetId,
+                ],
+                [
+                    'source_story_id' => null,
+                    'source_story_category_id' => null,
+                    'age_group' => null,
+                    'gender' => null,
+                    'trigger_scope' => 'product_added',
+                    'is_active' => true,
+                ]
+            );
+        }
     }
 
     public function destroy(Product $product)

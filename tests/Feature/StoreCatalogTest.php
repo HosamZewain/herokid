@@ -808,8 +808,12 @@ class StoreCatalogTest extends TestCase
 
         $this->get(route('shop.product.show', $sticker))
             ->assertOk()
+            ->assertSee('أكمل مجموعة طفلك')
             ->assertSee('بوستر مقترح يدويًا')
-            ->assertSee('بطاقة هوية مخصصة');
+            ->assertSee('بطاقة هوية مخصصة')
+            ->assertSee('property="og:type" content="product"', false)
+            ->assertSee('"@type":"Product"', false)
+            ->assertSee('"priceCurrency":"EGP"', false);
 
         $response = $this->withSession(['cart.items' => [
             'sticker-key' => [
@@ -830,6 +834,84 @@ class StoreCatalogTest extends TestCase
             ->assertSee('بطاقة هوية مخصصة')
             ->assertSee(route('shop.product.show', $identityCard), false)
             ->assertSee('عرض المنتج واختيار التفاصيل');
+    }
+
+    public function test_admin_can_manage_all_related_products_from_the_product_edit_page(): void
+    {
+        $admin = $this->admin();
+        $sticker = $this->product('edit-page-source-sticker', 245, ['name_ar' => 'ستيكر المدرسة']);
+        $poster = $this->product('edit-page-target-poster', 150, ['name_ar' => 'بوستر الطفل']);
+        $identityCard = $this->product('edit-page-target-card', 100, ['name_ar' => 'بطاقة هوية الطفل']);
+        $advancedTarget = $this->product('edit-page-advanced-target', 90, ['name_ar' => 'كتاب أنشطة مشروط']);
+        $advancedRule = ProductUpsellRule::create([
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $advancedTarget->id,
+            'age_group' => '8-10',
+            'trigger_scope' => 'product_added',
+            'priority' => 25,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.products.edit', $sticker))
+            ->assertOk()
+            ->assertSee('المنتجات المقترحة مع هذا المنتج')
+            ->assertSee('بوستر الطفل')
+            ->assertSee('بطاقة هوية الطفل')
+            ->assertDontSee('name="recommended_product_ids[]" value="'.$sticker->id.'"', false);
+
+        $payload = [
+            'product_category_id' => $sticker->product_category_id,
+            'name_ar' => $sticker->name_ar,
+            'slug' => $sticker->slug,
+            'price' => 245,
+            'fulfillment_type' => 'physical',
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'none',
+            'inventory_mode' => 'no_tracking',
+            'is_active' => 1,
+            'recommendations_present' => 1,
+            'recommended_product_ids' => [$poster->id, $identityCard->id],
+        ];
+
+        $this->actingAs($admin)->put(route('admin.products.update', $sticker), $payload)
+            ->assertRedirect(route('admin.products.edit', $sticker));
+
+        $this->assertEqualsCanonicalizing(
+            [$poster->id, $identityCard->id],
+            ProductUpsellRule::query()
+                ->where('source_product_id', $sticker->id)
+                ->whereNull('source_story_id')
+                ->whereNull('source_story_category_id')
+                ->whereNull('age_group')
+                ->whereNull('gender')
+                ->where('is_active', true)
+                ->pluck('target_product_id')
+                ->all()
+        );
+
+        $this->actingAs($admin)->get(route('admin.products.edit', $sticker))
+            ->assertOk()
+            ->assertSee('value="'.$poster->id.'"', false)
+            ->assertSee('value="'.$identityCard->id.'"', false);
+
+        $payload['recommended_product_ids'] = [$poster->id];
+        $this->actingAs($admin)->put(route('admin.products.update', $sticker), $payload)
+            ->assertRedirect(route('admin.products.edit', $sticker));
+
+        $this->assertDatabaseHas('product_upsell_rules', [
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $poster->id,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseMissing('product_upsell_rules', [
+            'source_product_id' => $sticker->id,
+            'target_product_id' => $identityCard->id,
+        ]);
+        $this->assertDatabaseHas('product_upsell_rules', [
+            'id' => $advancedRule->id,
+            'age_group' => '8-10',
+            'is_active' => true,
+        ]);
     }
 
     public function test_cart_recommends_multiple_small_activity_products_and_excludes_products_already_added(): void

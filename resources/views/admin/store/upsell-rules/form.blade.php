@@ -3,6 +3,11 @@
     <div class="py-8" dir="rtl"><div class="mx-auto max-w-3xl sm:px-6 lg:px-8">
         <form action="{{ $rule->exists ? route('admin.upsell-rules.update', $rule) : route('admin.upsell-rules.store') }}" method="POST" class="space-y-4 rounded-2xl bg-white p-6 shadow-sm">
             @csrf @if($rule->exists) @method('PUT') @endif
+            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-right">
+                <p class="font-black text-emerald-950">هل تريد ربط منتج بعدة منتجات مقترحة؟</p>
+                <p class="mt-1 text-sm font-bold leading-6 text-emerald-700">افتح صفحة تعديل المنتج الأساسي واختر كل المنتجات المرتبطة من قسم «المنتجات المقترحة مع هذا المنتج». هذه الصفحة مخصصة أكثر لشروط ترشيح المنتجات حسب القصة والعمر والجنس.</p>
+                <a href="{{ $rule->sourceProduct ? route('admin.products.edit', $rule->sourceProduct) : route('admin.products.index') }}" class="mt-3 inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white">{{ $rule->sourceProduct ? 'فتح المنتج الأساسي' : 'فتح قائمة المنتجات' }}</a>
+            </div>
             <div><label class="mb-1 block font-bold">المنتج المقترح</label><select name="target_product_id" required class="w-full rounded-xl border-gray-300 text-right"><option value="">اختر...</option>@foreach($products as $product)<option value="{{ $product->id }}" @selected(old('target_product_id', $rule->target_product_id) == $product->id)>{{ $product->name_ar }}</option>@endforeach</select></div>
             <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                 <label class="mb-1 block font-bold text-indigo-950">المنتج الأساسي الذي يُظهر الاقتراح</label>

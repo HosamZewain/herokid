@@ -6,6 +6,9 @@
     $personalizationFieldValues = session()->hasOldInput()
         ? old('personalization_fields', [])
         : $savedPersonalization['fields'];
+    $selectedRecommendationIds = collect(old('recommended_product_ids', $selectedRecommendedProductIds ?? []))
+        ->map(fn ($id) => (int) $id)
+        ->all();
 @endphp
 
 <x-admin-layout>
@@ -13,6 +16,11 @@
     <div class="py-8" dir="rtl">
         <div class="mx-auto max-w-5xl space-y-6 sm:px-6 lg:px-8">
             @if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-bold text-green-700">{{ session('success') }}</div>@endif
+            @if($product->exists)
+                <div class="flex justify-end">
+                    <a href="#product-recommendations" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800">المنتجات المقترحة مع هذا المنتج ↓</a>
+                </div>
+            @endif
             @if($errors->any())
                 <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-right text-sm font-bold text-red-700" role="alert" aria-live="assertive">
                     <p class="font-black">لم يتم حفظ المنتج. راجع الحقول التالية:</p>
@@ -169,6 +177,39 @@
                     <label class="inline-flex items-center gap-2 font-bold"><input type="checkbox" name="is_featured" value="1" @checked(old('is_featured', $product->is_featured))> مميز</label>
                 </div>
 
+                <section id="product-recommendations" class="scroll-mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5" data-product-recommendations>
+                    <input type="hidden" name="recommendations_present" value="1">
+                    <div class="text-right">
+                        <h3 class="text-lg font-black text-emerald-950">المنتجات المقترحة مع هذا المنتج</h3>
+                        <p class="mt-1 text-sm font-bold leading-6 text-emerald-700">اختر كل المنتجات التي تريد اقتراحها للعميل عند مشاهدة هذا المنتج أو إضافته إلى السلة. يمكنك اختيار أكثر من منتج وحفظهم مرة واحدة.</p>
+                    </div>
+
+                    <label class="mt-4 block">
+                        <span class="sr-only">البحث في المنتجات</span>
+                        <input type="search" placeholder="ابحث باسم المنتج..." data-recommendation-search
+                            class="w-full rounded-xl border-emerald-200 bg-white text-right focus:border-emerald-500 focus:ring-emerald-500">
+                    </label>
+
+                    <div class="mt-4 grid max-h-80 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-emerald-100 bg-white p-3 sm:grid-cols-2" data-recommendation-list>
+                        @forelse($recommendationProducts as $recommendationProduct)
+                            <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-100 p-3 transition hover:border-emerald-300 hover:bg-emerald-50" data-recommendation-option data-search-text="{{ Illuminate\Support\Str::lower($recommendationProduct->name_ar.' '.$recommendationProduct->name_en.' '.$recommendationProduct->sku) }}">
+                                <input type="checkbox" name="recommended_product_ids[]" value="{{ $recommendationProduct->id }}"
+                                    @checked(in_array((int) $recommendationProduct->id, $selectedRecommendationIds, true))
+                                    class="mt-1 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500">
+                                <span class="min-w-0">
+                                    <span class="block font-black text-slate-900">{{ $recommendationProduct->name_ar }}</span>
+                                    <span class="mt-1 block text-xs font-bold text-slate-500">{{ $recommendationProduct->category?->name_ar ?? 'بدون تصنيف' }}{{ $recommendationProduct->is_active ? '' : ' — غير نشط' }}</span>
+                                </span>
+                            </label>
+                        @empty
+                            <p class="text-sm font-bold text-slate-500">لا توجد منتجات أخرى للاختيار منها.</p>
+                        @endforelse
+                        <p class="hidden text-center text-sm font-bold text-slate-500 sm:col-span-2" data-recommendation-empty>لا توجد نتائج مطابقة.</p>
+                    </div>
+                    <x-input-error :messages="$errors->get('recommended_product_ids')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('recommended_product_ids.*')" class="mt-2" />
+                </section>
+
                 <div class="flex gap-3">
                     <button class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">حفظ</button>
                     <a href="{{ route('admin.products.index') }}" class="rounded-xl border px-5 py-3 font-bold">رجوع</a>
@@ -263,6 +304,28 @@
             });
             mode.addEventListener('change', syncSection);
             syncSection();
+        })();
+
+        (() => {
+            const section = document.querySelector('[data-product-recommendations]');
+            const search = section?.querySelector('[data-recommendation-search]');
+            const options = [...(section?.querySelectorAll('[data-recommendation-option]') ?? [])];
+            const empty = section?.querySelector('[data-recommendation-empty]');
+
+            if (!search || options.length === 0) return;
+
+            search.addEventListener('input', () => {
+                const query = search.value.trim().toLocaleLowerCase('ar');
+                let visible = 0;
+
+                options.forEach((option) => {
+                    const matches = !query || (option.dataset.searchText || '').includes(query);
+                    option.classList.toggle('hidden', !matches);
+                    if (matches) visible += 1;
+                });
+
+                empty?.classList.toggle('hidden', visible !== 0);
+            });
         })();
     </script>
 </x-admin-layout>
