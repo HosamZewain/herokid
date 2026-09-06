@@ -19,12 +19,18 @@ class AgentCheckoutController extends Controller
             $checkout = $production->acquireNext($request->user(), $request);
             $body = $checkout
                 ? ['success' => true, 'checkout' => $checkout]
-                : ['success' => true, 'checkout' => null, 'reason' => 'NO_AVAILABLE_ORDERS'];
+                : [
+                    'success' => true,
+                    'checkout' => null,
+                    'reason' => 'NO_AVAILABLE_ORDERS',
+                    'queue' => $production->queueDiagnostics($request->user()),
+                ];
 
             return [
                 'status' => 200,
                 'body' => $body,
                 'checkout_group_key' => $checkout['checkout_group'] ?? null,
+                'cache' => $checkout !== null,
             ];
         });
 
@@ -46,6 +52,7 @@ class AgentCheckoutController extends Controller
                 'status' => 200,
                 'body' => $body,
                 'checkout_group_key' => $checkout['checkout_group'] ?? null,
+                'cache' => $checkout !== null,
             ];
         });
 

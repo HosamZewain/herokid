@@ -15,7 +15,7 @@ use Throwable;
 class AgentIdempotencyService
 {
     /**
-     * @param  callable(): array{status: int, body: array, checkout_group_key?: string|null, order_id?: int|null}  $operation
+     * @param  callable(): array{status: int, body: array, checkout_group_key?: string|null, order_id?: int|null, cache?: bool}  $operation
      * @return array{status: int, body: array}
      */
     public function execute(User $user, string $action, Request $request, callable $operation): array
@@ -47,6 +47,12 @@ class AgentIdempotencyService
             }
 
             if ($record->status === 'completed') {
+                if ($this->isTransientEmptyQueueResponse($record->response_body ?? [])) {
+                    $record->delete();
+
+                    return $this->execute($user, $action, $request, $operation);
+                }
+
                 return ['status' => $record->response_status ?? 200, 'body' => $record->response_body ?? []];
             }
 
@@ -55,6 +61,12 @@ class AgentIdempotencyService
 
         try {
             $result = $operation();
+            if (($result['cache'] ?? true) === false) {
+                $record->delete();
+
+                return Arr::only($result, ['status', 'body']);
+            }
+
             DB::transaction(function () use ($record, $result): void {
                 $record->update([
                     'status' => 'completed',
@@ -70,6 +82,12 @@ class AgentIdempotencyService
             $record->delete();
             throw $exception;
         }
+    }
+
+    private function isTransientEmptyQueueResponse(array $body): bool
+    {
+        return ($body['checkout'] ?? null) === null
+            && in_array($body['reason'] ?? null, ['NO_AVAILABLE_ORDERS', 'NO_AVAILABLE_REVISIONS'], true);
     }
 
     private function fingerprint(Request $request): string

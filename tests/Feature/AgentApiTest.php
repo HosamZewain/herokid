@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AdminActivityLog;
+use App\Models\AgentApiIdempotencyKey;
 use App\Models\Order;
 use App\Models\OrderAdminNote;
 use App\Models\OrderGroupAssignment;
@@ -182,6 +183,86 @@ class AgentApiTest extends TestCase
 
         $this->withToken($token)->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'acquire-run-1'])
             ->assertStatus(409)->assertJsonPath('error', 'IDEMPOTENCY_KEY_REUSED');
+    }
+
+    public function test_empty_queue_result_is_not_stale_when_the_same_key_is_used_after_a_new_order_arrives(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'polling-key'])
+            ->assertOk()
+            ->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS')
+            ->assertJsonPath('queue.new_checkout_groups', 0);
+        $this->assertDatabaseCount('agent_api_idempotency_keys', 0);
+
+        $order = $this->storyOrder('ARRIVED-LATER', 'HK-ARRIVED-LATER');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'polling-key'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference);
+    }
+
+    public function test_previous_cached_empty_queue_response_is_refreshed_after_deployment(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+        $key = 'legacy-empty-key';
+        $fingerprint = hash('sha256', json_encode([
+            'method' => 'POST',
+            'path' => 'api/agent/checkouts/acquire-next',
+            'payload' => [],
+            'files' => [],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        AgentApiIdempotencyKey::query()->create([
+            'user_id' => $agent->id,
+            'action' => 'checkouts.acquire-next',
+            'key_hash' => hash('sha256', $key),
+            'request_fingerprint' => $fingerprint,
+            'status' => 'completed',
+            'response_status' => 200,
+            'response_body' => ['success' => true, 'checkout' => null, 'reason' => 'NO_AVAILABLE_ORDERS'],
+        ]);
+        $order = $this->storyOrder('AFTER-LEGACY-EMPTY', 'HK-AFTER-LEGACY-EMPTY');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => $key])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference);
+    }
+
+    public function test_acquire_next_scans_past_more_than_fifty_ineligible_checkouts(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+
+        foreach (range(1, 51) as $index) {
+            $this->productOrder('READY-'.$index, 'HK-READY-'.$index, null);
+        }
+        $eligible = $this->storyOrder('ELIGIBLE-AFTER-FIFTY', 'HK-ELIGIBLE-AFTER-FIFTY');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'past-fifty'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+    }
+
+    public function test_empty_queue_diagnostics_explain_catalog_scope_exclusions(): void
+    {
+        $agent = $this->agent();
+        $token = $this->scopedToken($agent, AgentCatalogScope::PRODUCTS);
+        $this->storyOrder('STORY-OUTSIDE-SCOPE', 'HK-STORY-OUTSIDE-SCOPE');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'scope-diagnostics'])
+            ->assertOk()
+            ->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS')
+            ->assertJsonPath('queue.token_catalog_scope', AgentCatalogScope::PRODUCTS)
+            ->assertJsonPath('queue.new_checkout_groups', 1)
+            ->assertJsonPath('queue.outside_token_scope', 1)
+            ->assertJsonPath('queue.eligible_now', 0);
     }
 
     public function test_agent_can_process_revision_queue_in_order_and_read_permanent_team_notes(): void

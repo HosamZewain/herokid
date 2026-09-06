@@ -47,10 +47,10 @@ class AgentCheckoutProductionService
             ->groupBy('checkout_group_key')
             ->orderBy('first_created_at')
             ->orderBy('first_order_id')
-            ->limit(50)
-            ->pluck('checkout_group_key');
+            ->lazy(50);
 
-        foreach ($candidates as $groupKey) {
+        foreach ($candidates as $candidate) {
+            $groupKey = (string) $candidate->checkout_group_key;
             try {
                 $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
                     $orders = $this->lockedOrdersForKey((string) $groupKey);
@@ -112,6 +112,74 @@ class AgentCheckoutProductionService
         }
 
         return null;
+    }
+
+    /** @return array<string, int|string> */
+    public function queueDiagnostics(User $agent): array
+    {
+        $groupKeys = Order::query()
+            ->where('status', 'new')
+            ->whereNotNull('checkout_group_key')
+            ->distinct()
+            ->pluck('checkout_group_key')
+            ->map(fn ($key): string => (string) $key)
+            ->values();
+
+        $summary = [
+            'token_catalog_scope' => AgentCatalogScope::forUser($agent),
+            'new_checkout_groups' => $groupKeys->count(),
+            'eligible_now' => 0,
+            'already_acquired' => 0,
+            'without_production_units' => 0,
+            'outside_token_scope' => 0,
+            'mixed_production_status' => 0,
+        ];
+
+        foreach ($groupKeys->chunk(100) as $chunk) {
+            $assigned = OrderGroupAssignment::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->pluck('checkout_group_key')
+                ->mapWithKeys(fn ($key): array => [(string) $key => true]);
+            $ordersByGroup = Order::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->with($this->relations())
+                ->orderBy('id')
+                ->get()
+                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+            foreach ($chunk as $groupKey) {
+                if ($assigned->has($groupKey)) {
+                    $summary['already_acquired']++;
+
+                    continue;
+                }
+
+                $orders = $ordersByGroup->get($groupKey, collect());
+                $units = $this->units($orders);
+                if ($units->isEmpty()) {
+                    $summary['without_production_units']++;
+
+                    continue;
+                }
+
+                if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                    $summary['outside_token_scope']++;
+
+                    continue;
+                }
+
+                $targets = $this->targetOrders($orders, $units);
+                if ($targets->contains(fn (Order $order): bool => $order->status !== 'new')) {
+                    $summary['mixed_production_status']++;
+
+                    continue;
+                }
+
+                $summary['eligible_now']++;
+            }
+        }
+
+        return $summary;
     }
 
     /** @return array<string, mixed>|null */

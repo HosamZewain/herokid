@@ -45,7 +45,7 @@ php artisan agent:token revoke agent@example.com --name=production-agent
 
 Tokens issued before catalog scoping was added continue to work with both stories and products for backward compatibility. Reissue them from the Admin Panel to enforce a narrower scope.
 
-All `POST` requests require a unique `Idempotency-Key` header. Retrying the identical request with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`.
+All `POST` requests require a unique `Idempotency-Key` header. Retrying an operation that already changed data with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`. Empty queue responses are deliberately transient, so polling with an old key can discover orders that arrived later. Agents should still generate a fresh key for each intended queue poll.
 
 ## Workflow
 
@@ -81,8 +81,23 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next \
 Empty queue:
 
 ```json
-{"success":true,"checkout":null,"reason":"NO_AVAILABLE_ORDERS"}
+{
+  "success": true,
+  "checkout": null,
+  "reason": "NO_AVAILABLE_ORDERS",
+  "queue": {
+    "token_catalog_scope": "products",
+    "new_checkout_groups": 12,
+    "eligible_now": 0,
+    "already_acquired": 2,
+    "without_production_units": 3,
+    "outside_token_scope": 7,
+    "mixed_production_status": 0
+  }
+}
 ```
+
+The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope; and `already_acquired` means another assignment already exists.
 
 ### Production context
 
