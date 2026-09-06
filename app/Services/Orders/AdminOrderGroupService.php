@@ -8,6 +8,7 @@ use App\Models\OrderPaymentEvent;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\OrderDateTime;
+use App\Support\OrderLifecycle;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
@@ -1039,7 +1040,14 @@ class AdminOrderGroupService
     private function unfinishedCheckoutKeys(): \Illuminate\Database\Query\Builder
     {
         $doneOrderKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'delivered');
-        $donePaymentKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, 'paid_in_full');
+        $donePaymentKeys = collect(OrderLifecycle::completePaymentBehaviors())
+            ->flatMap(fn (string $behavior): array => OrderStatusRegistry::keysForBehavior(
+                OrderStatusRegistry::TYPE_PAYMENT,
+                $behavior,
+            ))
+            ->unique()
+            ->values()
+            ->all();
         $donePrintingKeys = array_values(array_unique(array_merge(
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'completed'),
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'not_required'),
