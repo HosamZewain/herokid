@@ -15,6 +15,18 @@
             'returned' => 'مرتجع',
             'cancelled' => 'ملغاة',
         ];
+        $pickupLabels = [
+            'awaiting' => 'بانتظار Pickup',
+            'herokid' => 'Pickup من HeroKid',
+            'bosta_dashboard' => 'Pickup من لوحة Bosta',
+            'provider_progress' => 'استلمتها Bosta',
+        ];
+        $pickupColors = [
+            'awaiting' => 'bg-amber-100 text-amber-800',
+            'herokid' => 'bg-indigo-100 text-indigo-800',
+            'bosta_dashboard' => 'bg-sky-100 text-sky-800',
+            'provider_progress' => 'bg-emerald-100 text-emerald-800',
+        ];
     @endphp
 
     <div class="space-y-6" dir="rtl">
@@ -32,15 +44,31 @@
             </div>
         @endif
 
+        @if($pickupSyncWarning)
+            <div class="rounded-2xl bg-amber-50 p-4 font-bold text-amber-900">{{ $pickupSyncWarning }}</div>
+        @elseif(request()->boolean('refresh_pickups') && $pickupSyncResult && ! $pickupSyncResult['skipped'])
+            <div class="rounded-2xl bg-emerald-50 p-4 font-bold text-emerald-800">
+                تمت مزامنة {{ $pickupSyncResult['synced'] }} Pickup وربط {{ $pickupSyncResult['linked_shipments'] }} شحنة جديدة.
+            </div>
+        @endif
+
         <section class="rounded-3xl border bg-white p-6 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <h2 class="text-xl font-black">حالة الربط</h2>
                     <p class="mt-1 text-sm text-gray-500">COD معلومة تشغيلية للشحن فقط ولا يُسجل كدفعة أو تحصيل داخل HeroKid.</p>
                 </div>
-                <span class="rounded-full px-4 py-2 font-bold {{ $configured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
-                    {{ $configured ? 'جاهز' : 'يحتاج إعداد .env' }}
-                </span>
+                <div class="flex flex-wrap items-center gap-3">
+                    @if($pickupSyncedAt)
+                        <span class="text-xs font-bold text-gray-500">آخر مزامنة: {{ \Carbon\CarbonImmutable::createFromTimestamp((int) $pickupSyncedAt)->setTimezone(\App\Support\AppDateTime::timezone())->format('d/m/Y h:i A') }}</span>
+                    @endif
+                    @if($configured)
+                        <a href="{{ route('admin.bosta.index', array_merge(request()->except('page', 'refresh_pickups'), ['refresh_pickups' => 1])) }}" class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-700 hover:bg-indigo-100">مزامنة Pickups من Bosta</a>
+                    @endif
+                    <span class="rounded-full px-4 py-2 font-bold {{ $configured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+                        {{ $configured ? 'جاهز' : 'يحتاج إعداد .env' }}
+                    </span>
+                </div>
             </div>
         </section>
 
@@ -115,6 +143,7 @@
                             <option value="all" @selected(($filters['pickup_state'] ?? 'all') === 'all')>الكل</option>
                             <option value="awaiting" @selected(($filters['pickup_state'] ?? '') === 'awaiting')>بانتظار Pickup</option>
                             <option value="scheduled" @selected(($filters['pickup_state'] ?? '') === 'scheduled')>تمت إضافتها إلى Pickup</option>
+                            <option value="provider_progress" @selected(($filters['pickup_state'] ?? '') === 'provider_progress')>استلمتها Bosta بدون ربط Pickup محلي</option>
                         </select>
                     </label>
                     <label class="text-sm font-bold text-slate-700">
@@ -169,7 +198,8 @@
                                         $customerName = $shipment->order?->parent_name ?: '—';
                                         $customerPhone = data_get($shipment->order?->delivery_details, 'phone', data_get($shipment->order?->delivery_details, 'mobile', '—'));
                                         $governorate = data_get($shipment->order?->delivery_details, 'governorate', '—');
-                                        $awaitingPickup = $shipment->pickups->isEmpty();
+                                        $pickupState = $shipment->pickupState();
+                                        $awaitingPickup = $shipment->isAwaitingPickup();
                                     @endphp
                                     <tr class="border-b last:border-b-0 hover:bg-slate-50/70">
                                         @if($tab === 'active')
@@ -194,8 +224,8 @@
                                         <td class="p-3" dir="ltr">{{ $shipment->tracking_number }}</td>
                                         <td class="p-3">{{ $statusLabels[$shipment->shipping_status] ?? ($shipment->shipping_status ?: ($shipment->state_code !== null ? 'كود '.$shipment->state_code : 'تم إنشاء الشحنة')) }}</td>
                                         <td class="p-3">
-                                            <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $awaitingPickup ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800' }}">
-                                                {{ $awaitingPickup ? 'بانتظار Pickup' : 'تمت الإضافة' }}
+                                            <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $pickupColors[$pickupState] }}">
+                                                {{ $pickupLabels[$pickupState] }}
                                             </span>
                                         </td>
                                         <td class="p-3">{{ format_money($shipment->cod_amount_cents / 100) }}</td>
@@ -247,7 +277,7 @@
                     @foreach($pickups as $pickup)
                         <div class="rounded-2xl bg-gray-50 p-4">
                             <b>{{ $pickup->scheduled_date->format('d/m/Y') }}</b> · {{ $pickup->number_of_parcels }} شحنة<br>
-                            <span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }}</span>
+                            <span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }} · {{ $pickup->created_by_user_id ? 'من HeroKid' : 'من لوحة Bosta' }}</span>
                         </div>
                     @endforeach
                 </div>

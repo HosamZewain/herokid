@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class BostaPickup extends Model
@@ -18,5 +19,15 @@ class BostaPickup extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereRaw('LOWER(bosta_pickups.status) NOT IN (?, ?, ?)', ['canceled', 'cancelled', 'terminated']);
+    }
+
+    public function isActive(): bool
+    {
+        return ! in_array(strtolower(trim((string) $this->status)), ['canceled', 'cancelled', 'terminated'], true);
     }
 }

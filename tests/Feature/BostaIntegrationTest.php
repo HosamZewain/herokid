@@ -35,6 +35,7 @@ class BostaIntegrationTest extends TestCase
             'bosta.webhook_secret' => 'webhook-secret',
             'bosta.webhook_header' => 'X-Bosta-Webhook-Secret',
             'bosta.retries' => 0,
+            'bosta.pickup_sync_enabled' => false,
         ]);
         Cache::flush();
     }
@@ -252,12 +253,150 @@ class BostaIntegrationTest extends TestCase
             ->get(route('admin.bosta.index'))
             ->assertOk()
             ->assertSee('TRACK-PICKUP')
-            ->assertSee('تمت الإضافة');
+            ->assertSee('Pickup من HeroKid');
 
         $this->actingAs($this->admin)
             ->get(route('admin.bosta.index', ['pickup_state' => 'awaiting']))
             ->assertOk()
             ->assertDontSee('TRACK-PICKUP');
+    }
+
+    public function test_bosta_page_imports_and_links_pickup_created_in_bosta_dashboard(): void
+    {
+        config()->set('bosta.pickup_sync_enabled', true);
+        $orders = $this->checkout('BOSTA-EXTERNAL-PICKUP', 20_000);
+        $shipment = BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-EXTERNAL-PICKUP',
+            'order_id' => $orders->first()->id,
+            'bosta_delivery_id' => 'delivery-external-pickup',
+            'tracking_number' => 'TRACK-EXTERNAL-PICKUP',
+            'business_reference' => 'HK09-EXTERNAL',
+            'creation_status' => 'created',
+            'shipping_status' => 'shipment_created',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+        Http::fake([
+            '*/pickups/search*' => Http::response(['data' => [
+                'list' => [[
+                    '_id' => 'external-pickup-123',
+                    'state' => 'Requested',
+                    'scheduledDate' => now()->addDay()->toDateString(),
+                    'businessLocationId' => 'location-123',
+                ]],
+                'pages' => 1,
+            ]]),
+            '*/pickups/external-pickup-123' => Http::response(['data' => [
+                '_id' => 'external-pickup-123',
+                'state' => 'Requested',
+                'scheduledDate' => now()->addDay()->toDateString(),
+                'businessLocationId' => 'location-123',
+                'numberOfParcels' => 1,
+                'contactPerson' => ['name' => 'Bosta dashboard', 'phone' => '01000000000'],
+                'deliveryIds' => ['delivery-external-pickup'],
+                'deliveryTrackingNumbers' => ['TRACK-EXTERNAL-PICKUP'],
+            ]]),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index', ['refresh_pickups' => 1]))
+            ->assertOk()
+            ->assertSee('Pickup من لوحة Bosta')
+            ->assertSee('TRACK-EXTERNAL-PICKUP');
+
+        $pickup = BostaPickup::query()->where('bosta_pickup_id', 'external-pickup-123')->firstOrFail();
+        $this->assertNull($pickup->created_by_user_id);
+        $this->assertTrue($pickup->shipments()->whereKey($shipment->id)->exists());
+        $this->assertStringNotContainsString('name="shipments[]" value="'.$shipment->id.'"', $response->getContent());
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.pickups.store'), [
+                'shipments' => [$shipment->id],
+                'scheduled_date' => now()->addDays(2)->toDateString(),
+                'contact_name' => 'HeroKid',
+                'contact_phone' => '01501188884',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('shipments');
+
+        $this->assertDatabaseCount('bosta_pickups', 1);
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/pickups/search'));
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/pickups/external-pickup-123'));
+        Http::assertNotSent(fn (HttpRequest $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/pickups'));
+    }
+
+    public function test_provider_progress_prevents_duplicate_pickup_even_without_synced_pickup(): void
+    {
+        $orders = $this->checkout('BOSTA-PROVIDER-PROGRESS', 20_000);
+        $shipment = BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-PROVIDER-PROGRESS',
+            'order_id' => $orders->first()->id,
+            'bosta_delivery_id' => 'delivery-provider-progress',
+            'tracking_number' => 'TRACK-PROVIDER-PROGRESS',
+            'business_reference' => 'HK09-PROGRESS',
+            'creation_status' => 'created',
+            'shipping_status' => 'ready',
+            'state_code' => 20,
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+        Http::fake();
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSee('استلمتها Bosta')
+            ->assertSee('TRACK-PROVIDER-PROGRESS');
+        $this->assertStringNotContainsString('name="shipments[]" value="'.$shipment->id.'"', $response->getContent());
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.pickups.store'), [
+                'shipments' => [$shipment->id],
+                'scheduled_date' => now()->addDay()->toDateString(),
+                'contact_name' => 'HeroKid',
+                'contact_phone' => '01501188884',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('shipments');
+
+        $this->assertDatabaseCount('bosta_pickups', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_cancelled_pickup_releases_shipment_for_another_pickup(): void
+    {
+        $orders = $this->checkout('BOSTA-CANCELLED-PICKUP', 20_000);
+        $shipment = BostaShipment::query()->create([
+            'checkout_group_key' => 'BOSTA-CANCELLED-PICKUP',
+            'order_id' => $orders->first()->id,
+            'bosta_delivery_id' => 'delivery-cancelled-pickup',
+            'tracking_number' => 'TRACK-CANCELLED-PICKUP',
+            'business_reference' => 'HK09-CANCELLED',
+            'creation_status' => 'created',
+            'shipping_status' => 'shipment_created',
+            'cod_amount_cents' => 0,
+            'business_location_id' => 'location-123',
+        ]);
+        $pickup = BostaPickup::query()->create([
+            'uuid' => fake()->uuid(),
+            'bosta_pickup_id' => 'cancelled-pickup-123',
+            'scheduled_date' => now()->addDay()->toDateString(),
+            'business_location_id' => 'location-123',
+            'contact_name' => 'HeroKid',
+            'contact_phone' => '01501188884',
+            'number_of_parcels' => 1,
+            'status' => 'Canceled',
+        ]);
+        $pickup->shipments()->attach($shipment);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.bosta.index'))
+            ->assertOk()
+            ->assertSee('بانتظار Pickup')
+            ->assertSee('TRACK-CANCELLED-PICKUP');
+
+        $this->assertStringContainsString('name="shipments[]" value="'.$shipment->id.'"', $response->getContent());
+        $this->assertTrue($shipment->refresh()->isAwaitingPickup());
     }
 
     public function test_bosta_page_splits_active_and_finished_shipments_and_shows_customer_details(): void

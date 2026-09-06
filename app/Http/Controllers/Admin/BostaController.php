@@ -9,10 +9,12 @@ use App\Models\Order;
 use App\Services\Bosta\BostaAddressCatalogService;
 use App\Services\Bosta\BostaClient;
 use App\Services\Bosta\BostaPickupService;
+use App\Services\Bosta\BostaPickupSyncService;
 use App\Services\Bosta\BostaShipmentEligibilityService;
 use App\Services\Bosta\BostaShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -27,16 +29,31 @@ class BostaController extends Controller
         return response()->json(['districts' => $catalog->districts($values['city_id'])]);
     }
 
-    public function index(Request $request, BostaShipmentEligibilityService $eligibility)
-    {
+    public function index(
+        Request $request,
+        BostaShipmentEligibilityService $eligibility,
+        BostaPickupSyncService $pickupSync,
+    ) {
         $filters = $request->validate([
             'tab' => ['nullable', Rule::in(['active', 'finished'])],
             'q' => ['nullable', 'string', 'max:120'],
             'shipment_status' => ['nullable', 'string', 'max:100'],
             'governorate' => ['nullable', 'string', 'max:120'],
-            'pickup_state' => ['nullable', Rule::in(['all', 'awaiting', 'scheduled'])],
+            'pickup_state' => ['nullable', Rule::in(['all', 'awaiting', 'scheduled', 'provider_progress'])],
             'per_page' => ['nullable', Rule::in(['50', '100'])],
+            'refresh_pickups' => ['nullable', 'boolean'],
         ]);
+
+        $pickupSyncWarning = null;
+        $pickupSyncResult = null;
+        if ($configured = config('bosta.enabled') && filled(config('bosta.api_key')) && filled(config('bosta.business_location_id'))) {
+            try {
+                $pickupSyncResult = $pickupSync->syncIfDue($request->boolean('refresh_pickups'));
+            } catch (Throwable $exception) {
+                report($exception);
+                $pickupSyncWarning = 'تعذر تحديث Pickups من Bosta الآن. ما زالت حالات Webhook تمنع تكرار الاستلام للشحنات التي تحركت لدى Bosta.';
+            }
+        }
 
         $tab = $filters['tab'] ?? 'active';
         $perPage = (int) ($filters['per_page'] ?? 50);
@@ -65,7 +82,7 @@ class BostaController extends Controller
             ->values();
 
         $shipments = (clone $baseShipments)
-            ->with(['order.checkoutReference', 'createdBy:id,name', 'pickups:id'])
+            ->with(['order.checkoutReference', 'createdBy:id,name', 'activePickups:id,created_by_user_id,status'])
             ->when(
                 $tab === 'finished',
                 fn ($query) => $query->where('shipping_status', 'delivered'),
@@ -91,15 +108,16 @@ class BostaController extends Controller
                 'order',
                 fn ($order) => $order->where('delivery_details->governorate', $filters['governorate']),
             ))
-            ->when(($filters['pickup_state'] ?? 'all') === 'awaiting', fn ($query) => $query->whereDoesntHave('pickups'))
-            ->when(($filters['pickup_state'] ?? 'all') === 'scheduled', fn ($query) => $query->whereHas('pickups'))
+            ->when(($filters['pickup_state'] ?? 'all') === 'awaiting', fn ($query) => $query->awaitingPickup())
+            ->when(($filters['pickup_state'] ?? 'all') === 'scheduled', fn ($query) => $query->whereHas('activePickups'))
+            ->when(($filters['pickup_state'] ?? 'all') === 'provider_progress', fn ($query) => $query->withProviderPickupEvidence())
             ->latest('last_event_at')
             ->latest('id')
             ->paginate($perPage)
-            ->withQueryString();
+            ->appends($request->except('page', 'refresh_pickups'));
 
         return view('admin.bosta.index', [
-            'configured' => config('bosta.enabled') && filled(config('bosta.api_key')) && filled(config('bosta.business_location_id')),
+            'configured' => $configured ?? false,
             'shipments' => $shipments,
             'shipmentStatuses' => $shipmentStatuses,
             'governorates' => $governorates,
@@ -107,6 +125,9 @@ class BostaController extends Controller
             'tab' => $tab,
             'activeCount' => $activeCount,
             'finishedCount' => $finishedCount,
+            'pickupSyncWarning' => $pickupSyncWarning,
+            'pickupSyncResult' => $pickupSyncResult,
+            'pickupSyncedAt' => Cache::get(BostaPickupSyncService::LAST_SYNC_CACHE_KEY),
             'pickups' => BostaPickup::query()->with('createdBy:id,name')->latest()->take(10)->get(),
             'eligibleOrders' => $eligibility->eligibleRepresentatives(),
         ]);
