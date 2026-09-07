@@ -137,6 +137,7 @@
                         </div>
                         @if($group['payment_method'])<p class="mt-3 text-xs font-bold text-indigo-800">طريقة الدفع: {{ $group['payment_method'] }}</p>@endif
                     </div>
+                    @include('admin.orders._discount-form')
                 </aside>
             </section>
 

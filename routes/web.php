@@ -641,6 +641,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('orders/groups/{representative}', [OrderEditController::class, 'update'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.update');
     Route::patch('orders/groups/{representative}/status', [OrderGroupController::class, 'updateStatus'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.status');
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
+    Route::patch('orders/groups/{representative}/discount', [OrderGroupController::class, 'updateDiscount'])->whereNumber('representative')->middleware('permission:orders.discount.manage')->name('orders.groups.discount');
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
     Route::post('orders/groups/{representative}/merge', [OrderGroupController::class, 'merge'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.merge');
     Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');

@@ -191,6 +191,15 @@ return [
             'description_en' => 'Update order status, notes, and operational fields.',
             'sort_order' => 30,
         ],
+        'orders.discount.manage' => [
+            'group_key' => 'orders',
+            'name_ar' => 'إدارة خصومات الطلبات',
+            'name_en' => 'Manage order discounts',
+            'description_ar' => 'إضافة أو استبدال خصم على قيمة منتجات عملية الشراء فقط بقيمة ثابتة أو نسبة مع سبب إلزامي وسجل تدقيق.',
+            'description_en' => 'Add or replace a products-only checkout discount by fixed amount or percentage with a required reason and audit trail.',
+            'sort_order' => 33,
+            'sensitive' => true,
+        ],
         'orders.notes.edit' => [
             'group_key' => 'orders',
             'name_ar' => 'تعديل ملاحظات فريق العمل',

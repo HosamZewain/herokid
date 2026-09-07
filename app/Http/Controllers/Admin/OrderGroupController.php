@@ -177,6 +177,45 @@ class OrderGroupController extends Controller
         return back()->with('success', 'تم تحديث حالة الدفع وحساب المبلغ المتبقي بنجاح.');
     }
 
+    public function updateDiscount(
+        Request $request,
+        int $representative,
+        \App\Services\Orders\OrderGroupDiscountService $discounts,
+    ) {
+        $validated = $request->validate([
+            'discount_type' => ['required', Rule::in(['fixed', 'percentage'])],
+            'discount_value' => ['required', 'numeric', 'gt:0', 'max:9999999.99'],
+            'discount_mode' => ['required', Rule::in(['add', 'replace'])],
+            'discount_reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'discount_type.required' => 'اختر نوع الخصم.',
+            'discount_value.required' => 'اكتب قيمة الخصم.',
+            'discount_value.gt' => 'قيمة الخصم يجب أن تكون أكبر من صفر.',
+            'discount_mode.required' => 'اختر طريقة تطبيق الخصم.',
+            'discount_reason.required' => 'اكتب سبب الخصم.',
+            'discount_reason.min' => 'سبب الخصم يجب ألا يقل عن 5 أحرف.',
+        ]);
+
+        if ($validated['discount_type'] === 'percentage' && (float) $validated['discount_value'] > 100) {
+            throw ValidationException::withMessages([
+                'discount_value' => 'نسبة الخصم يجب ألا تتجاوز 100%.',
+            ]);
+        }
+
+        $order = Order::query()->findOrFail($representative);
+        $discounts->apply(
+            representative: $order,
+            type: $validated['discount_type'],
+            value: (float) $validated['discount_value'],
+            mode: $validated['discount_mode'],
+            reason: $validated['discount_reason'],
+            admin: $request->user(),
+            request: $request,
+        );
+
+        return back()->with('success', 'تم تطبيق الخصم على عملية الشراء بالكامل وتحديث الإجمالي والمبلغ المتبقي.');
+    }
+
     public function merge(
         Request $request,
         int $representative,
