@@ -25,7 +25,10 @@
                             <p class="text-sm font-black text-gray-900">{{ $storyOrder->story?->title ?: 'قصة مخصصة' }}</p>
                             <p class="mt-0.5 text-[10px] font-bold text-gray-500">{{ $storyOrder->child_name ?: 'اسم الطفل غير مسجل' }}</p>
                             @if($bookletPreview?->currentVersion)
-                                <p class="mt-0.5 text-[10px] font-bold text-gray-400">آخر ملف رُفع {{ app_datetime($bookletPreview->currentVersion->created_at, 'd/m/Y h:i A') }}</p>
+                                <div class="mt-1 flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-bold text-gray-400">
+                                    <span title="آخر ملف رُفع {{ app_datetime($bookletPreview->currentVersion->created_at, 'd/m/Y h:i A') }}" class="inline-flex rounded-full bg-sky-100 px-2 py-0.5 font-black text-sky-700">{{ app_datetime_human($bookletPreview->currentVersion->created_at) }}</span>
+                                    <span>آخر ملف رُفع {{ app_datetime($bookletPreview->currentVersion->created_at, 'd/m/Y h:i A') }}</span>
+                                </div>
                             @endif
                         </div>
                     </div>

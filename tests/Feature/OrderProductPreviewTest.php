@@ -60,6 +60,7 @@ class OrderProductPreviewTest extends TestCase
             ->assertSee('data-order-ajax-delete', false)
             ->assertSee('data-order-bulk-delete', false)
             ->assertSee('تحديد كل صور المعاينة')
+            ->assertSee(app_datetime_human($gallery->previews->first()->created_at))
             ->assertSee('رُفعت '.app_datetime($gallery->previews->first()->created_at, 'd/m/Y h:i A'))
             ->assertDontSee($gallery->previews->first()->file_path);
 

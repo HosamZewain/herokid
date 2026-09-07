@@ -477,7 +477,10 @@
                                         </a>
                                         <div class="p-2.5">
                                             <p class="truncate text-[11px] font-black text-gray-700" title="{{ $preview->original_name }}">{{ $preview->original_name ?: 'معاينة '.$loop->iteration }}</p>
-                                            <p class="mt-1 text-[10px] font-bold text-gray-400">رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}</p>
+                                            <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                                                <span title="رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}" class="inline-flex rounded-full bg-sky-100 px-2 py-0.5 font-black text-sky-700">{{ app_datetime_human($preview->created_at) }}</span>
+                                                <span>رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}</span>
+                                            </div>
                                             @if($preview->note)<p class="mt-1 line-clamp-2 text-[10px] font-bold text-gray-400">{{ $preview->note }}</p>@endif
                                             @can('orders.preview.upload')
                                                 @if(!$group['trashed'])

@@ -193,6 +193,7 @@ class AdminOrderAttachmentsTest extends TestCase
             ->assertOk()
             ->assertSee('تحديد كل المرفقات')
             ->assertSee('data-order-bulk-delete', false)
+            ->assertSee(app_datetime_human($attachment->created_at))
             ->assertSee('رُفع '.app_datetime($attachment->created_at, 'd/m/Y h:i A'));
     }
 

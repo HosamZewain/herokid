@@ -119,6 +119,7 @@
                                 <span>{{ $attachment->human_size }}</span>
                                 <span dir="ltr">{{ $attachmentOrder->order_number }}</span>
                                 <span>{{ $attachment->uploader?->name ?: 'مشرف' }}</span>
+                                <span title="رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}" class="inline-flex rounded-full bg-sky-100 px-2 py-0.5 font-black text-sky-700">{{ app_datetime_human($attachment->created_at) }}</span>
                                 <span>رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}</span>
                             </div>
                         </div>
