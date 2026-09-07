@@ -181,6 +181,67 @@ class AdminOrderAttachmentsTest extends TestCase
         Storage::disk('local')->assertMissing($attachment->path);
     }
 
+    public function test_attachment_cards_show_upload_date_and_bulk_delete_controls(): void
+    {
+        Storage::fake('local');
+        config(['display.timezone' => 'Africa/Cairo']);
+        $order = $this->productOrder();
+        $attachment = $this->attachment($order, now()->addDays(30));
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('تحديد كل المرفقات')
+            ->assertSee('data-order-bulk-delete', false)
+            ->assertSee('رُفع '.app_datetime($attachment->created_at, 'd/m/Y h:i A'));
+    }
+
+    public function test_admin_can_bulk_delete_selected_attachments_without_touching_unselected_files(): void
+    {
+        Storage::fake('local');
+        $order = $this->productOrder();
+        $selected = collect([
+            $this->attachment($order, now()->addDays(30), 'first.pdf'),
+            $this->attachment($order, now()->addDays(30), 'second.pdf'),
+        ]);
+        $kept = $this->attachment($order, now()->addDays(30), 'keep.pdf');
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.attachments.destroy-many', $order), [
+                'attachment_ids' => $selected->pluck('id')->all(),
+            ])
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'deleted_attachment_ids' => $selected->pluck('id')->all(),
+            ]);
+
+        $selected->each(function (OrderAttachment $attachment): void {
+            $this->assertDatabaseMissing('order_attachments', ['id' => $attachment->id]);
+            Storage::disk('local')->assertMissing($attachment->path);
+        });
+        $this->assertDatabaseHas('order_attachments', ['id' => $kept->id]);
+        Storage::disk('local')->assertExists($kept->path);
+    }
+
+    public function test_bulk_attachment_delete_rejects_a_file_from_another_checkout(): void
+    {
+        Storage::fake('local');
+        $order = $this->productOrder();
+        $other = $this->productOrder();
+        $first = $this->attachment($order, now()->addDays(30), 'first.pdf');
+        $foreign = $this->attachment($other, now()->addDays(30), 'foreign.pdf');
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.attachments.destroy-many', $order), [
+                'attachment_ids' => [$first->id, $foreign->id],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('attachment_ids');
+
+        $this->assertDatabaseCount('order_attachments', 2);
+    }
+
     private function productOrder(): Order
     {
         return Order::query()->create([

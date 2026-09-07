@@ -24,6 +24,9 @@
                         <div class="text-right">
                             <p class="text-sm font-black text-gray-900">{{ $storyOrder->story?->title ?: 'قصة مخصصة' }}</p>
                             <p class="mt-0.5 text-[10px] font-bold text-gray-500">{{ $storyOrder->child_name ?: 'اسم الطفل غير مسجل' }}</p>
+                            @if($bookletPreview?->currentVersion)
+                                <p class="mt-0.5 text-[10px] font-bold text-gray-400">آخر ملف رُفع {{ app_datetime($bookletPreview->currentVersion->created_at, 'd/m/Y h:i A') }}</p>
+                            @endif
                         </div>
                     </div>
 

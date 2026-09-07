@@ -445,14 +445,39 @@
                                 <input x-ref="url" value="{{ $productPreviewGallery->publicUrl() }}" readonly dir="ltr" class="min-w-0 flex-1 rounded-xl border-gray-200 bg-white text-left text-xs text-gray-500">
                             </div>
 
+                            @can('orders.preview.upload')
+                                @if(!$group['trashed'])
+                                    <form id="bulk-product-preview-delete-{{ $group['representative_id'] }}" method="POST" action="{{ route('admin.orders.product-previews.destroy-many', $group['representative_id']) }}" class="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-3 sm:flex-row sm:items-center sm:justify-between" data-order-ajax-delete data-order-bulk-delete data-delete-confirm="سيتم حذف كل صور المعاينة المحددة. هل تريد المتابعة؟">
+                                        @csrf
+                                        @method('DELETE')
+                                        <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-black text-gray-700">
+                                            <input type="checkbox" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-all>
+                                            تحديد كل صور المعاينة
+                                        </label>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-black text-gray-500" data-bulk-delete-selection data-empty-label="لم يتم تحديد صور">لم يتم تحديد صور</span>
+                                            <button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>
+                                        </div>
+                                    </form>
+                                @endif
+                            @endcan
+
                             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 @foreach($productPreviewGallery->previews as $preview)
-                                    <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item>
+                                    <article class="relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item data-order-preview-id="{{ $preview->id }}">
+                                        @can('orders.preview.upload')
+                                            @if(!$group['trashed'])
+                                                <label class="absolute left-2 top-2 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-md" title="تحديد الصورة للحذف">
+                                                    <input type="checkbox" name="preview_ids[]" value="{{ $preview->id }}" form="bulk-product-preview-delete-{{ $group['representative_id'] }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $preview->original_name ?: 'صورة المعاينة' }} للحذف">
+                                                </label>
+                                            @endif
+                                        @endcan
                                         <a href="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block aspect-square bg-slate-100">
                                             <img src="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
                                         </a>
                                         <div class="p-2.5">
                                             <p class="truncate text-[11px] font-black text-gray-700" title="{{ $preview->original_name }}">{{ $preview->original_name ?: 'معاينة '.$loop->iteration }}</p>
+                                            <p class="mt-1 text-[10px] font-bold text-gray-400">رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}</p>
                                             @if($preview->note)<p class="mt-1 line-clamp-2 text-[10px] font-bold text-gray-400">{{ $preview->note }}</p>@endif
                                             @can('orders.preview.upload')
                                                 @if(!$group['trashed'])

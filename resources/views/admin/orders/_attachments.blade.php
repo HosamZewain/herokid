@@ -80,6 +80,23 @@
             @endonce
         @endcan
 
+        @can('orders.update')
+            @if($orderAttachments->isNotEmpty())
+                <form id="bulk-attachment-delete-{{ $attachmentTarget->id }}" method="POST" action="{{ route('admin.orders.attachments.destroy-many', $attachmentTarget) }}" class="mt-5 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-3 sm:flex-row sm:items-center sm:justify-between" data-order-ajax-delete data-order-bulk-delete data-ajax-hide-when-empty data-delete-confirm="سيتم حذف كل المرفقات المحددة نهائيًا. هل تريد المتابعة؟">
+                    @csrf
+                    @method('DELETE')
+                    <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-black text-gray-700">
+                        <input type="checkbox" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-all>
+                        تحديد كل المرفقات
+                    </label>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-black text-gray-500" data-bulk-delete-selection data-empty-label="لم يتم تحديد مرفقات">لم يتم تحديد مرفقات</span>
+                        <button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>
+                    </div>
+                </form>
+            @endif
+        @endcan
+
         <div class="mt-5 grid gap-3 md:grid-cols-2" data-ajax-delete-list>
             @foreach($orderAttachments as $entry)
                 @php
@@ -88,7 +105,12 @@
                     $expired = $attachment->isExpired();
                     $remainingDays = $expired ? 0 : max(1, (int) ceil(now()->diffInHours($attachment->expires_at) / 24));
                 @endphp
-                <article class="rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
+                <article class="relative rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
+                    @can('orders.update')
+                        <label class="absolute left-3 top-3 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-sm" title="تحديد المرفق للحذف">
+                            <input type="checkbox" name="attachment_ids[]" value="{{ $attachment->id }}" form="bulk-attachment-delete-{{ $attachmentTarget->id }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $attachment->original_name }} للحذف">
+                        </label>
+                    @endcan
                     <div class="flex items-start gap-3">
                         <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm" aria-hidden="true">{{ $attachment->icon }}</span>
                         <div class="min-w-0 flex-1">
@@ -97,6 +119,7 @@
                                 <span>{{ $attachment->human_size }}</span>
                                 <span dir="ltr">{{ $attachmentOrder->order_number }}</span>
                                 <span>{{ $attachment->uploader?->name ?: 'مشرف' }}</span>
+                                <span>رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}</span>
                             </div>
                         </div>
                         <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black {{ $expired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800' }}">

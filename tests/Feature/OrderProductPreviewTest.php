@@ -58,6 +58,9 @@ class OrderProductPreviewTest extends TestCase
             ->assertSee('front.jpg')
             ->assertSee('back.png')
             ->assertSee('data-order-ajax-delete', false)
+            ->assertSee('data-order-bulk-delete', false)
+            ->assertSee('تحديد كل صور المعاينة')
+            ->assertSee('رُفعت '.app_datetime($gallery->previews->first()->created_at, 'd/m/Y h:i A'))
             ->assertDontSee($gallery->previews->first()->file_path);
 
         $this->assertDatabaseHas('admin_activity_logs', [
@@ -208,11 +211,67 @@ class OrderProductPreviewTest extends TestCase
         Storage::disk('local')->assertMissing($preview->file_path);
     }
 
-    private function productOrder(): Order
+    public function test_admin_can_bulk_delete_selected_product_previews_without_touching_unselected_files(): void
+    {
+        $order = $this->productOrder();
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $order), [
+            'preview_images' => [
+                UploadedFile::fake()->image('first.jpg', 800, 800),
+                UploadedFile::fake()->image('second.jpg', 800, 800),
+                UploadedFile::fake()->image('keep.jpg', 800, 800),
+            ],
+        ])->assertRedirect();
+
+        $previews = OrderProductPreviewGallery::with('previews')->firstOrFail()->previews;
+        $selected = $previews->take(2);
+        $kept = $previews->last();
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.product-previews.destroy-many', $order), [
+                'preview_ids' => $selected->pluck('id')->all(),
+            ])
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'deleted_preview_ids' => $selected->pluck('id')->all(),
+            ]);
+
+        $selected->each(function ($preview): void {
+            $this->assertDatabaseMissing('order_previews', ['id' => $preview->id]);
+            Storage::disk('local')->assertMissing($preview->file_path);
+        });
+        $this->assertDatabaseHas('order_previews', ['id' => $kept->id]);
+        Storage::disk('local')->assertExists($kept->file_path);
+    }
+
+    public function test_bulk_preview_delete_rejects_a_preview_from_another_checkout(): void
+    {
+        $order = $this->productOrder();
+        $other = $this->productOrder('2');
+
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $order), [
+            'preview_images' => [UploadedFile::fake()->image('first.jpg')],
+        ]);
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $other), [
+            'preview_images' => [UploadedFile::fake()->image('other.jpg')],
+        ]);
+        $previews = \App\Models\OrderPreview::query()->orderBy('id')->get();
+
+        $this->actingAs($this->admin)
+            ->deleteJson(route('admin.orders.product-previews.destroy-many', $order), [
+                'preview_ids' => $previews->pluck('id')->all(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('preview_ids');
+
+        $this->assertDatabaseCount('order_previews', 2);
+    }
+
+    private function productOrder(string $suffix = '1'): Order
     {
         $order = Order::create([
-            'order_number' => 'HK-PRODUCT-PREVIEW-1',
-            'checkout_group_key' => 'GROUP-PRODUCT-PREVIEW',
+            'order_number' => 'HK-PRODUCT-PREVIEW-'.$suffix,
+            'checkout_group_key' => 'GROUP-PRODUCT-PREVIEW-'.$suffix,
             'parent_name' => 'ولي الأمر',
             'status' => 'new',
             'payment_status' => 'unpaid',

@@ -104,6 +104,30 @@ class OrderAttachmentService
         ], $disposition);
     }
 
+    public function delete(OrderAttachment $attachment, ?User $actor = null, ?Request $request = null): int
+    {
+        $attachmentId = (int) $attachment->id;
+        $order = $attachment->order;
+        $properties = [
+            'attachment_id' => $attachmentId,
+            'file_name' => $attachment->original_name,
+            'expires_at' => $attachment->expires_at?->toIso8601String(),
+        ];
+
+        $attachment->delete();
+
+        AdminActivityLogger::log(
+            action: 'order.attachment_deleted',
+            description: 'تم حذف مرفق من الطلب '.($order?->order_number ?? ''),
+            subject: $order,
+            properties: $properties,
+            admin: $actor,
+            request: $request,
+        );
+
+        return $attachmentId;
+    }
+
     /**
      * Permanently delete expired private files and their metadata.
      *

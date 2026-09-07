@@ -9,6 +9,7 @@ use App\Services\Orders\OrderProductPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class OrderProductPreviewController extends Controller
 {
@@ -58,5 +59,54 @@ class OrderProductPreviewController extends Controller
         }
 
         return back()->with('success', 'تم حذف صورة المعاينة.');
+    }
+
+    public function destroyMany(
+        Request $request,
+        Order $representative,
+        OrderProductPreviewService $previews,
+    ): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'preview_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'preview_ids.*' => ['required', 'integer', 'distinct'],
+        ], [
+            'preview_ids.required' => 'حدد صورة معاينة واحدة على الأقل.',
+            'preview_ids.min' => 'حدد صورة معاينة واحدة على الأقل.',
+            'preview_ids.max' => 'يمكن حذف 100 صورة كحد أقصى في المرة الواحدة.',
+        ]);
+
+        $ids = collect($validated['preview_ids'])->map(fn ($id): int => (int) $id)->values();
+        $selected = OrderPreview::query()
+            ->with(['order', 'productGallery'])
+            ->whereNotNull('product_gallery_id')
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->get();
+
+        if ($selected->count() !== $ids->count()
+            || $selected->contains(fn (OrderPreview $preview): bool => $preview->productGallery?->checkout_group_key !== $representative->checkoutGroupKey())) {
+            throw ValidationException::withMessages([
+                'preview_ids' => 'بعض صور المعاينة المحددة لا تنتمي إلى عملية الشراء الحالية.',
+            ]);
+        }
+
+        $deletedIds = $selected->map(function (OrderPreview $preview) use ($previews, $request): int {
+            $previewId = (int) $preview->id;
+            $previews->delete($preview, $request->user());
+
+            return $previewId;
+        })->values()->all();
+        $message = 'تم حذف '.count($deletedIds).' صورة معاينة.';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'deleted_preview_ids' => $deletedIds,
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 }

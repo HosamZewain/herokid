@@ -45,6 +45,7 @@ class AdminOrderGroupService
 
     private const DETAIL_RELATIONS = [
         ...self::INDEX_RELATIONS,
+        'bookletPreview.currentVersion:id,booklet_preview_id,created_at',
         'items.linkedAddOns.product:id,name_ar',
         'statusLogs',
         'previews',
