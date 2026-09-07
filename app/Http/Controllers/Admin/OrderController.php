@@ -11,6 +11,7 @@ use App\Models\Story;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminPackageOrderService;
+use App\Services\Orders\ExistingCustomerOrderLookupService;
 use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderChildIdentityPromptService;
@@ -166,6 +167,26 @@ class OrderController extends Controller
             'paymentStatuses' => OrderPaymentStatus::labels(),
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
             'pricingPackages' => $packages->availablePackages(),
+        ]);
+    }
+
+    public function searchExistingCustomers(Request $request, ExistingCustomerOrderLookupService $customers)
+    {
+        $request->merge(['phone' => Phone::normalize($request->query('phone'))]);
+
+        $validated = $request->validate([
+            'phone' => ['required', 'string', 'max:32', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (strlen((string) preg_replace('/\D/', '', (string) $value)) < 7) {
+                    $fail('اكتب رقم هاتف صحيحًا لا يقل عن 7 أرقام.');
+                }
+            }],
+        ], [
+            'phone.required' => 'اكتب رقم الهاتف للبحث عن العميل.',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'customers' => $customers->search($validated['phone'])->all(),
         ]);
     }
 

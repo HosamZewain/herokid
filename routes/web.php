@@ -632,6 +632,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');
     Route::get('orders/create', [OrderController::class, 'create'])->middleware('permission:orders.create')->name('orders.create');
+    Route::get('orders/existing-customers/search', [OrderController::class, 'searchExistingCustomers'])
+        ->middleware(['permission:orders.create', 'throttle:60,1'])
+        ->name('orders.existing-customers.search');
     Route::post('orders', [OrderController::class, 'store'])->middleware('permission:orders.create')->name('orders.store');
     Route::get('orders/groups/{representative}', [OrderGroupController::class, 'show'])->whereNumber('representative')->middleware('permission:orders.view')->name('orders.groups.show');
     Route::get('orders/groups/{representative}/edit', [OrderEditController::class, 'edit'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.edit');
