@@ -2,6 +2,9 @@
     'permissionGroups',
     'selected' => [],
     'disabled' => false,
+    'title' => 'صلاحيات إضافية مخصصة',
+    'hint' => 'اختياري: افتح هذا القسم فقط إذا احتاج الموظف صلاحيات تزيد عن دوره الوظيفي.',
+    'open' => false,
 ])
 
 @php
@@ -10,11 +13,11 @@
 
 <input type="hidden" name="permissions_present" value="1">
 
-<details class="group space-y-4 rounded-2xl border border-gray-100 bg-white p-4">
+<details class="group space-y-4 rounded-2xl border border-gray-100 bg-white p-4" @if($open) open @endif>
     <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
         <div>
-            <h3 class="text-base font-black text-gray-900">صلاحيات إضافية مخصصة</h3>
-            <p class="mt-1 text-xs text-gray-500">اختياري: افتح هذا القسم فقط إذا احتاج الموظف صلاحيات تزيد عن دوره الوظيفي.</p>
+            <h3 class="text-base font-black text-gray-900">{{ $title }}</h3>
+            <p class="mt-1 text-xs text-gray-500">{{ $hint }}</p>
         </div>
         <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 group-open:hidden">عرض</span>
         <span class="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 group-open:inline">إخفاء</span>

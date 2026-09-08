@@ -16,6 +16,7 @@ return [
             'permission_patterns' => ['*'],
             'exclude_patterns' => [
                 'admin_users.permissions.manage',
+                'admin_users.roles.manage',
                 'admin_users.delete',
                 'agent_api.tokens.manage',
                 'settings.ai_providers.manage_credentials',

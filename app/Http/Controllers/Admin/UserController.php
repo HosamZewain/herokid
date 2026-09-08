@@ -8,7 +8,6 @@ use App\Models\Permission;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
 use App\Support\AdminPermissionRegistry;
-use App\Support\AdminRoleRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,7 +33,7 @@ class UserController extends Controller
         return view('admin.users.create', [
             'permissionGroups' => AdminPermissionRegistry::grouped($this->assignablePermissionKeys()),
             'assignablePermissionKeys' => $this->assignablePermissionKeys(),
-            'roleOptions' => AdminRoleRegistry::options($this->assignableRoleKeys()),
+            'roleOptions' => $this->assignableRoles(),
         ]);
     }
 
@@ -122,7 +121,7 @@ class UserController extends Controller
             'user' => $user,
             'permissionGroups' => AdminPermissionRegistry::grouped($this->assignablePermissionKeys()),
             'assignablePermissionKeys' => $this->assignablePermissionKeys(),
-            'roleOptions' => AdminRoleRegistry::options($this->assignableRoleKeys()),
+            'roleOptions' => $this->assignableRoles(),
         ]);
     }
 
@@ -345,21 +344,41 @@ class UserController extends Controller
 
     private function assignableRoleKeys(): array
     {
+        return $this->assignableRoles()->pluck('key')->all();
+    }
+
+    private function assignableRoles()
+    {
         $assignablePermissions = $this->assignablePermissionKeys();
 
-        return collect(AdminRoleRegistry::keys())
-            ->filter(fn (string $roleKey): bool => array_diff(
-                AdminRoleRegistry::permissionKeys($roleKey),
+        return AdminRole::query()
+            ->with('permissions:id,key')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name_ar')
+            ->get()
+            ->filter(fn (AdminRole $role): bool => array_diff(
+                $role->permissions->pluck('key')->all(),
                 $assignablePermissions,
             ) === [])
-            ->values()
-            ->all();
+            ->map(fn (AdminRole $role): array => [
+                'key' => $role->key,
+                'name_ar' => $role->name_ar,
+                'name_en' => $role->name_en,
+                'description_ar' => $role->description_ar,
+                'permission_keys' => $role->permissions->pluck('key')->all(),
+            ])
+            ->values();
     }
 
     private function effectivePermissionKeys(array $roleKeys, array $directPermissionKeys): array
     {
-        return collect($roleKeys)
-            ->flatMap(fn (string $roleKey): array => AdminRoleRegistry::permissionKeys($roleKey))
+        return AdminRole::query()
+            ->with('permissions:id,key')
+            ->whereIn('key', $roleKeys)
+            ->where('is_active', true)
+            ->get()
+            ->flatMap(fn (AdminRole $role) => $role->permissions->pluck('key'))
             ->merge($directPermissionKeys)
             ->unique()
             ->values()
@@ -384,7 +403,9 @@ class UserController extends Controller
             ->where('id', '!=', $target->id)
             ->where(function ($query): void {
                 $query->whereHas('permissions', fn ($permissions) => $permissions->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION))
-                    ->orWhereHas('adminRoles.permissions', fn ($permissions) => $permissions->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION));
+                    ->orWhereHas('adminRoles', fn ($roles) => $roles
+                        ->where('is_active', true)
+                        ->whereHas('permissions', fn ($permissions) => $permissions->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION)));
             })
             ->count();
 

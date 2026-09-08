@@ -404,6 +404,7 @@ return [
         'admin_users.update' => ['group_key' => 'admin_users', 'name_ar' => 'تعديل المشرفين', 'name_en' => 'Update admin users', 'description_ar' => 'تعديل بيانات حسابات المشرفين.', 'description_en' => 'Update staff account details.', 'sort_order' => 30, 'sensitive' => true],
         'admin_users.delete' => ['group_key' => 'admin_users', 'name_ar' => 'حذف المشرفين', 'name_en' => 'Delete admin users', 'description_ar' => 'حذف حسابات المشرفين.', 'description_en' => 'Delete staff accounts.', 'sort_order' => 40, 'sensitive' => true],
         'admin_users.permissions.manage' => ['group_key' => 'admin_users', 'name_ar' => 'إدارة صلاحيات المشرفين', 'name_en' => 'Manage admin permissions', 'description_ar' => 'تعيين أو سحب الصلاحيات وتفعيل أو إيقاف حسابات المشرفين.', 'description_en' => 'Assign or revoke staff permissions and activate/deactivate staff accounts.', 'sort_order' => 50, 'sensitive' => true],
+        'admin_users.roles.manage' => ['group_key' => 'admin_users', 'name_ar' => 'إدارة الأدوار الوظيفية', 'name_en' => 'Manage admin roles', 'description_ar' => 'إنشاء وتعديل ونسخ وتعطيل الأدوار وربطها بالصلاحيات.', 'description_en' => 'Create, edit, duplicate, and disable roles and manage their permissions.', 'sort_order' => 60, 'sensitive' => true],
 
         'activity_logs.view' => ['group_key' => 'activity_logs', 'name_ar' => 'عرض سجل النشاط', 'name_en' => 'View activity logs', 'description_ar' => 'عرض سجل نشاط لوحة الإدارة.', 'description_en' => 'View admin activity logs.', 'sort_order' => 10, 'sensitive' => true],
     ],

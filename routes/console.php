@@ -28,8 +28,8 @@ Artisan::command('admin-permissions:sync {--grant-existing-admins : Grant all re
     $this->info('Admin permissions synced.');
 })->purpose('Sync the system admin permission registry into the database');
 
-Artisan::command('admin-roles:sync', function (AdminRoleSyncer $syncer) {
-    $syncer->sync();
+Artisan::command('admin-roles:sync {--reset-system-roles : Restore every built-in role to its configured permissions}', function (AdminRoleSyncer $syncer) {
+    $syncer->sync(resetSystemRoles: (bool) $this->option('reset-system-roles'));
     $this->info('Admin roles synced.');
 })->purpose('Sync the system admin roles and their permissions into the database');
 

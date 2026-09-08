@@ -172,7 +172,9 @@ class User extends Authenticatable
         $this->loadMissing(['permissions:id,key', 'adminRoles.permissions:id,key']);
 
         return $this->permissions->pluck('key')
-            ->merge($this->adminRoles->flatMap(fn (AdminRole $role) => $role->permissions->pluck('key')))
+            ->merge($this->adminRoles
+                ->where('is_active', true)
+                ->flatMap(fn (AdminRole $role) => $role->permissions->pluck('key')))
             ->unique()
             ->values();
     }

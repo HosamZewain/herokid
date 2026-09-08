@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
@@ -825,6 +826,11 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor('index', 'permission:admin_users.view')
         ->middlewareFor(['create', 'store'], 'permission:admin_users.create,admin_users.permissions.manage')
         ->middlewareFor('destroy', 'permission:admin_users.delete');
+    Route::post('roles/{role}/duplicate', [AdminRoleController::class, 'duplicate'])
+        ->middleware('permission:admin_users.roles.manage')
+        ->name('roles.duplicate');
+    Route::resource('roles', AdminRoleController::class)->except(['show'])
+        ->middleware('permission:admin_users.roles.manage');
 
     // Pricing Packages
     Route::patch('pricing/{pricing}/homepage-visibility', [PricingPackageController::class, 'updateHomepageVisibility'])

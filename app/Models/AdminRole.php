@@ -13,6 +13,7 @@ class AdminRole extends Model
     {
         return [
             'is_system' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

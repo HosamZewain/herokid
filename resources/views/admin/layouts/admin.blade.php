@@ -155,7 +155,7 @@
                 ]);
                 $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage', 'agent_api.tokens.manage']);
                 $canAdministration = auth()->user()->hasAnyPermission([
-                    'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'activity_logs.view',
+                    'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'admin_users.roles.manage', 'activity_logs.view',
                 ]);
             @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
@@ -309,6 +309,9 @@
                         @if(auth()->user()->hasAnyPermission(['admin_users.view', 'admin_users.create', 'admin_users.permissions.manage']))
                             <a href="{{ route('admin.users.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.users.*') ? $activeLink : $idleLink }}">إدارة المشرفين</a>
                         @endif
+                        @can('admin_users.roles.manage')
+                            <a href="{{ route('admin.roles.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.roles.*') ? $activeLink : $idleLink }}">إدارة الأدوار</a>
+                        @endcan
                         @can('activity_logs.view')
                             <a href="{{ route('admin.activity-logs.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.activity-logs.*') ? $activeLink : $idleLink }}">سجل النشاط</a>
                         @endcan
