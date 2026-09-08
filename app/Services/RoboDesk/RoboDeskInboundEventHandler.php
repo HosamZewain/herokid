@@ -11,7 +11,6 @@ use App\Models\OrderCustomerReview;
 use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
-use App\Services\RoboDesk\Actions\ConfirmIdentityAction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,9 +18,6 @@ use Illuminate\Validation\ValidationException;
 class RoboDeskInboundEventHandler
 {
     public function __construct(
-        private readonly RoboDeskOutbox $outbox,
-        private readonly RoboDeskActionRegistry $actions,
-        private readonly OrderConfirmationGate $gate,
         private readonly ChildIdentityApprovalService $approvals,
         private readonly ChildIdentityAttemptService $attempts,
         private readonly ChildIdentityEventLogger $identityEvents,
@@ -116,8 +112,7 @@ class RoboDeskInboundEventHandler
             throw ValidationException::withMessages(['comment' => 'A comment is required to request identity changes.']);
         }
 
-        $action = $this->actions->get(ConfirmIdentityAction::KEY);
-        $maxRevisions = max(0, (int) $action->param('max_revisions', 3));
+        $maxRevisions = max(0, (int) config('robodesk.journey.identity_max_revisions', 3));
         $used = (int) $identity->events()->where('event_type', 'identity.revision_requested')->count();
 
         $this->identityEvents->record(
@@ -145,7 +140,7 @@ class RoboDeskInboundEventHandler
             return;
         }
 
-        $prefix = trim((string) $action->param('comment_prompt_prefix', ''));
+        $prefix = trim((string) config('robodesk.journey.identity_comment_prompt_prefix', ''));
         $identity->forceFill([
             'prompt_override' => trim($this->attempts->promptFor($identity)."\n\n".$prefix."\n".$comment),
         ])->save();
@@ -338,12 +333,12 @@ class RoboDeskInboundEventHandler
             ['payment_request_status' => 'pending'],
         );
 
-        $this->outbox->queue(
-            'payment.requested',
-            'payment.requested:'.$order->checkoutGroupKey().':'.$version,
-            $order->checkoutGroupKey(),
-            $order->id,
-            ['triggered_by_order_id' => $order->id, 'preview_version_reference' => $version],
+        // No payment integration exists yet; the workflow row records that the
+        // checkout is ready to be asked for payment, and the message goes out
+        // once that integration is added.
+        CheckoutCustomerWorkflow::query()->updateOrCreate(
+            ['checkout_group_key' => $order->checkoutGroupKey()],
+            ['payment_request_status' => 'pending'],
         );
     }
 }

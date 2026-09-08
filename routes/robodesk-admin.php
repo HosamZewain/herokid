@@ -12,9 +12,9 @@ Route::post('payment-proofs/{proof}/approve', [RoboDeskIntegrationController::cl
 Route::post('payment-proofs/{proof}/reject', [RoboDeskIntegrationController::class, 'rejectProof'])->middleware('permission:robodesk.review_payments')->name('payment-proofs.reject');
 
 Route::get('settings', [RoboDeskSettingsController::class, 'index'])->middleware('permission:robodesk.configure')->name('settings.index');
-Route::post('settings/connection', [RoboDeskSettingsController::class, 'updateConnection'])->middleware('permission:robodesk.configure')->name('settings.connection');
-Route::post('settings/credentials', [RoboDeskSettingsController::class, 'updateCredential'])->middleware('permission:robodesk.manage_credentials')->name('settings.credentials');
-Route::post('settings/actions/{actionKey}', [RoboDeskSettingsController::class, 'updateAction'])->middleware('permission:robodesk.configure')->name('settings.actions.update');
+Route::post('settings/general', [RoboDeskSettingsController::class, 'updateGeneral'])->middleware('permission:robodesk.configure')->name('settings.general');
+Route::get('settings/{integrationKey}', [RoboDeskSettingsController::class, 'edit'])->middleware('permission:robodesk.configure')->name('settings.edit');
+Route::post('settings/{integrationKey}', [RoboDeskSettingsController::class, 'update'])->middleware('permission:robodesk.configure')->name('settings.update');
 
 Route::get('simulator', [RoboDeskSimulatorController::class, 'index'])->middleware('permission:robodesk.configure')->name('simulator.index');
 Route::get('simulator/{checkoutReference}', [RoboDeskSimulatorController::class, 'show'])->middleware('permission:robodesk.configure')->name('simulator.show');

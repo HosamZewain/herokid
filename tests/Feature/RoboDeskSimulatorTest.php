@@ -6,9 +6,8 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
-use App\Services\RoboDesk\Actions\ConfirmOrderAction;
-use App\Services\RoboDesk\RoboDeskActionRegistry;
 use App\Services\RoboDesk\RoboDeskCredentialService;
+use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
 use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -34,16 +33,12 @@ class RoboDeskSimulatorTest extends TestCase
     public function test_simulation_mode_records_the_exact_payload_without_sending_it(): void
     {
         $this->simulate();
-        app(RoboDeskActionRegistry::class)->save(ConfirmOrderAction::KEY, true, [
-            'endpoint_path' => '/conversation/start/sendMsg',
-            'template_name' => 'herokid_order_confirm',
-            'payload_template' => '{"to":"{{ customer_phone }}","templateName":"herokid_order_confirm","data":["{{ customer_name }}","{{ total }}"]}',
-        ]);
+        $this->configure('{"to":"{{ customer_phone }}","templateName":"herokid_order_confirm","data":["{{ customer_name }}","{{ total }}"]}');
 
         $order = $this->order('CHK-SIM-1');
 
         $event = RoboDeskIntegrationEvent::query()
-            ->where('event_type', ConfirmOrderAction::KEY)
+            ->where('event_type', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION)
             ->where('checkout_group_key', $order->checkout_group_key)
             ->firstOrFail();
 
@@ -53,9 +48,8 @@ class RoboDeskSimulatorTest extends TestCase
             'https://robodesk.test/conversation/start/sendMsg',
             data_get($event->response_payload, 'would_have_sent.url'),
         );
-        // A configured template is the whole body: no legacy checkout fields
-        // are merged in, and the internal marker is stripped before sending.
-        $body = data_get($event->response_payload, 'would_have_sent.body.data');
+        // The saved template is the whole body — nothing is wrapped around it.
+        $body = data_get($event->response_payload, 'would_have_sent.body');
         $this->assertSame('herokid_order_confirm', $body['templateName']);
         // MySQL's JSON type normalises object key order, so compare the set.
         // Ordered *lists* — which is what template variables are — survive.
@@ -64,6 +58,7 @@ class RoboDeskSimulatorTest extends TestCase
         $this->assertSame(['data', 'templateName', 'to'], $keys);
         $this->assertSame(['ولي الأمر', 50], $body['data']);
         $this->assertArrayNotHasKey('_rendered', $body);
+        $this->assertSame('201501188884', $body['to']);
 
         Http::assertNothingSent();
     }
@@ -71,7 +66,8 @@ class RoboDeskSimulatorTest extends TestCase
     public function test_simulated_confirmation_moves_the_order_and_is_recorded_in_the_thread(): void
     {
         $this->simulate();
-        app(RoboDeskActionRegistry::class)->save(ConfirmOrderAction::KEY, true, ['gate_production' => '1']);
+        app(RoboDeskSettings::class)->save(['robodesk_gate_order_confirmation' => '1']);
+        $this->configure('');
 
         $order = $this->order('CHK-SIM-2', 'pending_confirmation');
 
@@ -131,14 +127,14 @@ class RoboDeskSimulatorTest extends TestCase
     public function test_the_thread_screen_renders_both_directions(): void
     {
         $this->simulate();
-        app(RoboDeskActionRegistry::class)->save(ConfirmOrderAction::KEY, true, []);
+        $this->configure('');
         $order = $this->order('CHK-SIM-5');
 
         $this->actingAs($this->admin())
             ->get(route('admin.robodesk.simulator.show', $order->checkout_group_key))
             ->assertOk()
             ->assertSee($order->order_number)
-            ->assertSee(ConfirmOrderAction::KEY);
+            ->assertSee(RoboDeskIntegrationRegistry::ORDER_CONFIRMATION);
     }
 
     // ── Common exceptions ────────────────────────────────────────────────
@@ -186,8 +182,8 @@ class RoboDeskSimulatorTest extends TestCase
 
     public function test_inbound_token_auth_rejects_a_missing_or_wrong_token(): void
     {
-        app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1', 'robodesk_inbound_auth_mode' => 'token']);
-        app(RoboDeskCredentialService::class)->save('auth_token', 'static-token-value');
+        app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
+        app(RoboDeskCredentialService::class)->save('inbound_token', 'static-token-value');
 
         $payload = ['id' => (string) Str::uuid(), 'type' => 'order.confirmed', 'data' => ['checkout_reference' => 'x']];
 
@@ -200,8 +196,8 @@ class RoboDeskSimulatorTest extends TestCase
 
     public function test_inbound_token_auth_accepts_the_configured_token(): void
     {
-        app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1', 'robodesk_inbound_auth_mode' => 'token']);
-        app(RoboDeskCredentialService::class)->save('auth_token', 'static-token-value');
+        app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
+        app(RoboDeskCredentialService::class)->save('inbound_token', 'static-token-value');
         $order = $this->order('CHK-SIM-TOKEN', 'pending_confirmation');
 
         $eventId = (string) Str::uuid();
@@ -220,12 +216,22 @@ class RoboDeskSimulatorTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
+    private function configure(string $payload): void
+    {
+        app(RoboDeskIntegrationRegistry::class)->save(
+            RoboDeskIntegrationRegistry::ORDER_CONFIRMATION,
+            true,
+            'https://robodesk.test/conversation/start/sendMsg',
+            'static-token',
+            $payload,
+        );
+    }
+
     private function simulate(): void
     {
         app(RoboDeskSettings::class)->save([
             'robodesk_enabled' => '1',
             'robodesk_simulation_mode' => '1',
-            'robodesk_base_url' => 'https://robodesk.test',
         ]);
     }
 

@@ -11,8 +11,6 @@ use Illuminate\Validation\ValidationException;
 
 class PaymentProofService
 {
-    public function __construct(private readonly RoboDeskDispatcher $dispatcher) {}
-
     public function store(string $checkoutGroupKey, UploadedFile $file, array $context = []): OrderPaymentProof
     {
         if (! Order::query()->where('checkout_group_key', $checkoutGroupKey)->exists()) {
@@ -46,10 +44,6 @@ class PaymentProofService
             'status' => 'pending',
             'metadata' => ['received_via' => 'robodesk_webhook'],
         ]);
-
-        // Tell the customer their proof arrived. Reviewing it stays manual —
-        // nothing here touches payment status or the payment ledger.
-        $this->dispatcher->paymentProofReceived($proof);
 
         return $proof;
     }

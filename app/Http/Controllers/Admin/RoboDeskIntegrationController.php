@@ -7,8 +7,8 @@ use App\Models\Order;
 use App\Models\OrderPaymentProof;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Services\Orders\OrderPaymentService;
-use App\Services\RoboDesk\RoboDeskDispatcher;
 use App\Services\RoboDesk\RoboDeskOutbox;
+use App\Services\RoboDesk\RoboDeskSettings;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderWorkflowStatus;
@@ -28,9 +28,12 @@ class RoboDeskIntegrationController extends Controller
         return view('admin.robodesk.index', compact('events', 'proofs'));
     }
 
-    public function retry(RoboDeskIntegrationEvent $event, RoboDeskOutbox $outbox): RedirectResponse
-    {
-        abort_unless(config('robodesk.enabled') && filled(config('robodesk.outbound_secret')), 422, 'أضف بيانات الاعتماد وفعّل التكامل أولاً.');
+    public function retry(
+        RoboDeskIntegrationEvent $event,
+        RoboDeskOutbox $outbox,
+        RoboDeskSettings $settings,
+    ): RedirectResponse {
+        abort_unless($settings->enabled(), 422, 'فعّل تكامل RoboDesk أولاً.');
         $outbox->release($event);
 
         return back()->with('success', 'تمت إعادة الحدث إلى قائمة الإرسال.');
@@ -52,12 +55,11 @@ class RoboDeskIntegrationController extends Controller
         Request $request,
         OrderPaymentProof $proof,
         OrderPaymentService $payments,
-        RoboDeskOutbox $outbox,
     ): RedirectResponse {
         abort_if($proof->status !== 'pending', 422, 'تمت مراجعة هذا الإثبات بالفعل.');
         $representative = Order::query()->where('checkout_group_key', $proof->checkout_group_key)->orderBy('id')->firstOrFail();
 
-        DB::transaction(function () use ($request, $proof, $payments, $outbox, $representative): void {
+        DB::transaction(function () use ($request, $proof, $payments, $representative): void {
             $payments->updateGroup(
                 $representative,
                 OrderPaymentStatus::PAID_IN_FULL,
@@ -97,20 +99,12 @@ class RoboDeskIntegrationController extends Controller
                 admin: $request->user(),
                 request: $request,
             );
-
-            $outbox->queue(
-                'payment.verified',
-                'payment.verified:'.$proof->id,
-                $proof->checkout_group_key,
-                $representative->id,
-                ['payment_proof_id' => $proof->uuid],
-            );
         });
 
         return back()->with('success', 'تم اعتماد الدفع وأصبح الطلب جاهزًا للطباعة.');
     }
 
-    public function rejectProof(Request $request, OrderPaymentProof $proof, RoboDeskDispatcher $dispatcher): RedirectResponse
+    public function rejectProof(Request $request, OrderPaymentProof $proof): RedirectResponse
     {
         abort_if($proof->status !== 'pending', 422, 'تمت مراجعة هذا الإثبات بالفعل.');
         $validated = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
@@ -129,7 +123,6 @@ class RoboDeskIntegrationController extends Controller
             admin: $request->user(),
             request: $request,
         );
-        $dispatcher->paymentProofRejected($proof->refresh(), $validated['reason']);
 
         return back()->with('success', 'تم رفض الإثبات وتسجيل السبب.');
     }

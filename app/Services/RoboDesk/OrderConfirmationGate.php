@@ -2,16 +2,14 @@
 
 namespace App\Services\RoboDesk;
 
-use App\Services\RoboDesk\Actions\ConfirmOrderAction;
-
 /**
  * Decides whether a new checkout waits for the customer to confirm on WhatsApp
  * before production may start.
  *
- * The gate is closed by default and only opens when the integration is enabled,
- * the order-confirm action is enabled, AND its `gate_production` param is on.
- * That triple condition matters: turning RoboDesk off must never strand orders
- * in a status nothing is left to advance.
+ * Closed unless the integration is enabled, the order-confirmation integration
+ * is enabled, AND the journey switch is on. That triple condition matters:
+ * turning RoboDesk off must never strand orders in a status nothing can
+ * advance.
  *
  * `pending_confirmation` is deliberately a status the Agent API does not pick
  * up — AgentCheckoutProductionService only acquires `new` — so an unconfirmed
@@ -23,17 +21,15 @@ class OrderConfirmationGate
 
     public const CONFIRMED_STATUS = 'new';
 
-    public function __construct(private readonly RoboDeskActionRegistry $actions) {}
+    public function __construct(
+        private readonly RoboDeskIntegrationRegistry $integrations,
+        private readonly RoboDeskSettings $settings,
+    ) {}
 
     public function isOpen(): bool
     {
-        $action = $this->actions->find(ConfirmOrderAction::KEY);
-
-        if (! $action || ! $action->isLive()) {
-            return false;
-        }
-
-        return filter_var($action->param('gate_production', '0'), FILTER_VALIDATE_BOOLEAN);
+        return $this->integrations->orderConfirmation()->enabled()
+            && $this->settings->gatesOrderConfirmation();
     }
 
     /**

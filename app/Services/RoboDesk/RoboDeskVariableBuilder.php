@@ -2,13 +2,9 @@
 
 namespace App\Services\RoboDesk;
 
-use App\Models\ChildIdentityGenerationAttempt;
-use App\Models\ChildIdentityRequest;
 use App\Models\Order;
-use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Support\Phone;
-use Illuminate\Support\Facades\URL;
 
 /**
  * Produces the variable bag each action exposes to its payload template.
@@ -69,39 +65,6 @@ class RoboDeskVariableBuilder
             'instapay_url' => $this->settings->instaPayUrl(),
             'whatsapp_number' => $this->settings->whatsAppNumber(),
         ];
-    }
-
-    public function forIdentity(
-        ChildIdentityRequest $identity,
-        ChildIdentityGenerationAttempt $attempt,
-        int $mediaLinkTtlHours = 168,
-    ): array {
-        $order = $identity->convertedOrder;
-        $base = $order ? $this->forCheckout($order->checkout_group_key) : [];
-
-        return array_merge($base, [
-            'identity_uuid' => $identity->uuid,
-            'child_name' => $identity->displayChildName(),
-            'customer_name' => $identity->parent_name ?: ($base['customer_name'] ?? null),
-            'customer_phone' => Phone::forWhatsApp((string) ($identity->parent_phone ?: ($base['customer_phone'] ?? ''))),
-            'attempt_id' => $attempt->id,
-            'attempt_number' => $attempt->attempt_number,
-            // The media route is signed. A temporary URL keeps a child photo
-            // link from living forever inside a WhatsApp thread.
-            'identity_url' => URL::temporarySignedRoute(
-                'child-identity.media.attempt',
-                now()->addHours(max(1, $mediaLinkTtlHours)),
-                ['identity' => $identity->uuid, 'attempt' => $attempt->id],
-            ),
-            'attempts_remaining' => max(0, $this->identityAttemptsRemaining($identity)),
-        ]);
-    }
-
-    private function identityAttemptsRemaining(ChildIdentityRequest $identity): int
-    {
-        $limit = (int) app(ChildIdentitySettings::class)->customerSuccessfulLimit();
-
-        return $limit - (int) $identity->attempts()->whereNotNull('output_storage_path')->count();
     }
 
     private function itemsSummary(array $group): string

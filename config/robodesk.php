@@ -2,83 +2,96 @@
 
 return [
     /*
-    | The integration is deliberately fail-closed. Production will not contact
-    | RoboDesk until the shared credentials are supplied and enabled explicitly.
+    | Fail-closed by default. Nothing is sent until the integration is enabled
+    | and its API URL, token and payload are filled in from
+    | Admin > التكاملات > RoboDesk.
     |
-    | Everything here is a DEFAULT. Admin-managed values in `settings`,
-    | `robodesk_credentials`, and `robodesk_action_settings` take precedence.
-    | See App\Services\RoboDesk\RoboDeskSettings.
+    | Values here are DEFAULTS only; admin-saved rows in `settings`,
+    | `robodesk_credentials` and `robodesk_integration_settings` win.
     */
     'enabled' => (bool) env('ROBODESK_ENABLED', false),
-    'base_url' => rtrim((string) env('ROBODESK_BASE_URL', 'https://herokid.robodesk.ai'), '/'),
-    'events_path' => '/api/integrations/herokid/v1/events',
     'whatsapp_number' => (string) env('ROBODESK_WHATSAPP_NUMBER', '01501188884'),
     'inbound_secret' => (string) env('ROBODESK_INBOUND_SECRET', ''),
-    'outbound_secret' => (string) env('ROBODESK_OUTBOUND_SECRET', ''),
     'timeout_seconds' => (int) env('ROBODESK_TIMEOUT_SECONDS', 15),
-    'signature_tolerance_seconds' => (int) env('ROBODESK_SIGNATURE_TOLERANCE_SECONDS', 300),
     'payment_proof_max_mb' => (int) env('ROBODESK_PAYMENT_PROOF_MAX_MB', 10),
     'instapay_url' => env('ROBODESK_INSTAPAY_URL'),
 
-    /*
-    | Connection settings editable from Admin > التكاملات > RoboDesk. A missing
-    | or empty `settings` row falls back to the legacy key named in
-    | `setting_fallbacks`, then to the default below. Nothing is auto-seeded, so
-    | env-driven deployments keep behaving exactly as they do today.
-    */
     'settings' => [
-        // RoboDesk authenticates with a single static token. The scheme is blank
-        // by default, so the header goes out as `Authorization: <token>` rather
-        // than `Bearer <token>`; set it if that ever changes.
-        'robodesk_auth_header' => 'Authorization',
-        'robodesk_auth_scheme' => '',
-        'robodesk_default_channel' => '',
-        'robodesk_default_language' => 'ar',
-
-        // HMAC signing is off: the agreed contract is token-only in both
-        // directions. Turning it on requires the matching secret to be saved.
-        'robodesk_sign_outbound' => '0',
-        'robodesk_inbound_auth_mode' => 'token',
         'robodesk_inbound_auth_header' => 'X-RoboDesk-Token',
-
-        // Simulation mode keeps every outbound call inside HeroKid so the whole
-        // customer journey can be walked through before RoboDesk exists.
         'robodesk_simulation_mode' => '0',
 
+        // Journey switches. These are business rules, not integration config,
+        // so they live on the general tab rather than on an integration screen.
         'robodesk_gate_order_confirmation' => '0',
         'robodesk_gate_identity_confirmation' => '0',
     ],
 
     'setting_fallbacks' => [
         'robodesk_enabled' => 'robodesk.enabled',
-        'robodesk_base_url' => 'robodesk.base_url',
-        'robodesk_events_path' => 'robodesk.events_path',
         'robodesk_whatsapp_number' => 'robodesk.whatsapp_number',
         'robodesk_instapay_url' => 'robodesk.instapay_url',
         'robodesk_timeout_seconds' => 'robodesk.timeout_seconds',
-        'robodesk_signature_tolerance_seconds' => 'robodesk.signature_tolerance_seconds',
         'robodesk_payment_proof_max_mb' => 'robodesk.payment_proof_max_mb',
     ],
 
     /*
-    | Encrypted secrets held in `robodesk_credentials`. Each falls back to its
-    | legacy env value until an admin saves one.
+    | The single shared secret RoboDesk presents when calling HeroKid back.
+    | Outbound calls carry each integration's own token instead.
     */
     'credentials' => [
-        'auth_token' => [
-            'name_ar' => 'توكن الوصول إلى RoboDesk',
-            'name_en' => 'RoboDesk API token',
-            'legacy_config' => null,
-        ],
-        'outbound_secret' => [
-            'name_ar' => 'مفتاح توقيع الأحداث الصادرة',
-            'name_en' => 'Outbound signing secret',
-            'legacy_config' => 'robodesk.outbound_secret',
-        ],
-        'inbound_secret' => [
-            'name_ar' => 'مفتاح التحقق من الأحداث الواردة',
-            'name_en' => 'Inbound verification secret',
+        'inbound_token' => [
+            'name_ar' => 'توكن التحقق من الطلبات الواردة',
+            'name_en' => 'Inbound verification token',
             'legacy_config' => 'robodesk.inbound_secret',
+        ],
+    ],
+
+    /*
+    | Journey behaviour that is not integration config. Fixed defaults rather
+    | than form fields; promote one to a setting if it ever needs tuning.
+    */
+    'journey' => [
+        'identity_max_revisions' => 3,
+        'identity_comment_prompt_prefix' => 'Apply the following parent feedback while keeping the child recognizable:',
+    ],
+
+    /*
+    | One entry per integration. Each is configured with exactly three fields —
+    | API URL, token, JSON payload — and exposes the variables its payload may
+    | reference. Adding the next one (identity confirmation, item confirmation,
+    | CSAT…) is a new entry here plus a trigger; no new classes, no new UI.
+    */
+    'integrations' => [
+        'order.confirm' => [
+            'name_ar' => 'تأكيد الطلب',
+            'name_en' => 'Order confirmation',
+            'description_ar' => 'يُستدعى فور إنشاء الطلب من المتجر أو التطبيق، لإرسال تفاصيله للعميل على واتساب.',
+            'trigger_ar' => 'عند إنشاء طلب جديد',
+            'variables' => [
+                'checkout_reference' => 'رقم عملية الشراء',
+                'short_reference' => 'الرقم المختصر',
+                'order_number' => 'رقم الطلب',
+                'order_numbers' => 'كل أرقام الطلبات في العملية',
+                'customer_name' => 'اسم ولي الأمر',
+                'customer_phone' => 'رقم الواتساب',
+                'children' => 'أسماء الأطفال',
+                'items_summary' => 'ملخص العناصر',
+                'items_total' => 'إجمالي العناصر',
+                'delivery_fee' => 'مصاريف التوصيل',
+                'discount' => 'الخصم',
+                'total' => 'الإجمالي',
+                'currency' => 'العملة',
+                'delivery_address' => 'عنوان الشحن كاملًا',
+                'delivery_country' => 'الدولة',
+                'delivery_governorate' => 'المحافظة',
+                'delivery_city' => 'المدينة',
+                'delivery_street' => 'الشارع',
+                'customer_notes' => 'ملاحظات العميل',
+                'order_status' => 'حالة الطلب',
+                'payment_status' => 'حالة الدفع',
+                'whatsapp_number' => 'رقم واتساب الشركة',
+                'instapay_url' => 'رابط انستاباي',
+            ],
         ],
     ],
 ];
