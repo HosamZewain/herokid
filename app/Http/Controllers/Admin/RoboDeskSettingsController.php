@@ -37,8 +37,6 @@ class RoboDeskSettingsController extends Controller
                 'gate_order_confirmation' => $this->settings->bool('robodesk_gate_order_confirmation'),
                 'gate_identity_confirmation' => $this->settings->bool('robodesk_gate_identity_confirmation'),
                 'inbound_auth_header' => $this->settings->inboundAuthHeader(),
-                'whatsapp_number' => $this->settings->whatsAppNumber(),
-                'instapay_url' => $this->settings->instaPayUrl(),
             ],
             'inboundToken' => $this->credentials->masked('inbound_token'),
         ]);
@@ -108,8 +106,6 @@ class RoboDeskSettingsController extends Controller
             'gate_order_confirmation' => ['nullable', 'boolean'],
             'gate_identity_confirmation' => ['nullable', 'boolean'],
             'inbound_auth_header' => ['nullable', 'string', 'max:100'],
-            'whatsapp_number' => ['nullable', 'string', 'max:40'],
-            'instapay_url' => ['nullable', 'string', 'max:500'],
             'inbound_token' => ['nullable', 'string', 'min:8', 'max:2000'],
         ]);
 
@@ -119,8 +115,6 @@ class RoboDeskSettingsController extends Controller
             'robodesk_gate_order_confirmation' => $request->boolean('gate_order_confirmation') ? '1' : '0',
             'robodesk_gate_identity_confirmation' => $request->boolean('gate_identity_confirmation') ? '1' : '0',
             'robodesk_inbound_auth_header' => (string) ($validated['inbound_auth_header'] ?? 'X-RoboDesk-Token'),
-            'robodesk_whatsapp_number' => (string) ($validated['whatsapp_number'] ?? ''),
-            'robodesk_instapay_url' => (string) ($validated['instapay_url'] ?? ''),
         ]);
 
         if (filled($validated['inbound_token'] ?? null)) {

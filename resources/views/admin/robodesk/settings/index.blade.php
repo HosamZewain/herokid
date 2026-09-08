@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div>
             <h1 class="text-2xl font-black text-gray-900">تكاملات RoboDesk</h1>
-            <p class="mt-1 text-sm text-gray-500">كل تكامل يُضبط برابط API وتوكن وقالب JSON.</p>
+            <p class="mt-1 text-sm text-gray-500">تفعيل التكامل، التحكم في مسار الطلب، وضبط كل تكامل على حدة.</p>
         </div>
     </x-slot>
 
@@ -17,8 +17,80 @@
             </div>
         @endif
 
+        <form method="POST" action="{{ route('admin.robodesk.settings.general') }}" class="space-y-6">
+            @csrf
+
+            {{-- ── 1. Enable / disable ─────────────────────────────────── --}}
+            <section class="rounded-2xl border border-gray-200 bg-white p-6">
+                <h2 class="text-lg font-black text-gray-900">حالة التكامل</h2>
+
+                <div class="mt-4 grid gap-3 md:grid-cols-2">
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border p-4 {{ $general['enabled'] ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-gray-50' }}">
+                        <input type="checkbox" name="enabled" value="1" @checked($general['enabled']) class="h-5 w-5 rounded border-gray-300">
+                        <span>
+                            <span class="block text-sm font-black text-gray-900">تفعيل RoboDesk</span>
+                            <span class="block text-xs text-gray-500">عند الإيقاف لا يُرسل ولا يُستقبل أي شيء.</span>
+                        </span>
+                    </label>
+
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border p-4 {{ $general['simulation_mode'] ? 'border-violet-300 bg-violet-50' : 'border-gray-200 bg-gray-50' }}">
+                        <input type="checkbox" name="simulation_mode" value="1" @checked($general['simulation_mode']) class="h-5 w-5 rounded border-gray-300">
+                        <span>
+                            <span class="block text-sm font-black text-gray-900">وضع المحاكاة</span>
+                            <span class="block text-xs text-gray-500">تُسجَّل الرسائل بدل إرسالها — <a class="underline" href="{{ route('admin.robodesk.simulator.index') }}">شاشة المحاكاة</a>.</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500">ترويسة التوكن الوارد</label>
+                        <input dir="ltr" name="inbound_auth_header" value="{{ old('inbound_auth_header', $general['inbound_auth_header']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500">
+                            التوكن الوارد
+                            @if ($inboundToken)<span class="text-emerald-600" dir="ltr">({{ $inboundToken }})</span>@endif
+                        </label>
+                        <input dir="ltr" type="password" name="inbound_token" autocomplete="new-password"
+                               placeholder="{{ $inboundToken ? 'اتركه فارغًا للإبقاء على الحالي' : 'التوكن الذي يرسله RoboDesk إلينا' }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                        <p class="mt-1 text-xs text-gray-500">يستخدمه RoboDesk عند إرسال ردود العميل إلينا.</p>
+                    </div>
+                </div>
+            </section>
+
+            {{-- ── 2. Flow control ─────────────────────────────────────── --}}
+            <section class="rounded-2xl border border-gray-200 bg-white p-6">
+                <h2 class="text-lg font-black text-gray-900">التحكم في مسار الطلب</h2>
+                <p class="mt-1 text-sm text-gray-500">قواعد عمل تؤثر على حالات الطلب، وليست إعدادات اتصال.</p>
+
+                <div class="mt-4 space-y-3">
+                    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        <input type="checkbox" name="gate_order_confirmation" value="1" @checked($general['gate_order_confirmation']) class="mt-0.5 h-5 w-5 rounded border-gray-300">
+                        <span>
+                            <span class="block text-sm font-black text-gray-800">إيقاف الإنتاج حتى يؤكد العميل الطلب</span>
+                            <span class="block text-xs text-gray-500">يبدأ الطلب بحالة «بانتظار تأكيد العميل» ولا يلتقطه الـ Agent قبل التأكيد.</span>
+                        </span>
+                    </label>
+
+                    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                        <input type="checkbox" name="gate_identity_confirmation" value="1" @checked($general['gate_identity_confirmation']) class="mt-0.5 h-5 w-5 rounded border-gray-300">
+                        <span>
+                            <span class="block text-sm font-black text-gray-800">إيقاف الاعتماد التلقائي لهوية الطفل</span>
+                            <span class="block text-xs text-gray-500">تبقى الهوية بانتظار موافقة العميل بدل اعتمادها من أول محاولة ناجحة.</span>
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <button class="rounded-xl bg-gray-900 px-6 py-3 text-sm font-black text-white">حفظ</button>
+        </form>
+
+        {{-- ── 3. Integrations ─────────────────────────────────────────── --}}
         <section class="rounded-2xl border border-gray-200 bg-white p-6">
             <h2 class="text-lg font-black text-gray-900">التكاملات</h2>
+            <p class="mt-1 text-sm text-gray-500">كل تكامل يُضبط برابط API وتوكن وقالب JSON.</p>
 
             <div class="mt-5 space-y-3">
                 @foreach ($integrations as $integration)
@@ -43,61 +115,6 @@
             </div>
 
             <p class="mt-4 text-xs text-gray-400">تكاملات أخرى (اعتماد الهوية، اعتماد المنتج، التقييم) تُضاف لاحقًا بنفس الشكل.</p>
-        </section>
-
-        <section class="rounded-2xl border border-gray-200 bg-white p-6">
-            <h2 class="text-lg font-black text-gray-900">إعدادات عامة</h2>
-
-            <form method="POST" action="{{ route('admin.robodesk.settings.general') }}" class="mt-5 space-y-4">
-                @csrf
-
-                <label class="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
-                    <input type="checkbox" name="enabled" value="1" @checked($general['enabled']) class="h-5 w-5 rounded border-gray-300">
-                    <span class="text-sm font-black text-gray-800">تفعيل تكامل RoboDesk</span>
-                </label>
-
-                <label class="flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
-                    <input type="checkbox" name="simulation_mode" value="1" @checked($general['simulation_mode']) class="h-5 w-5 rounded border-gray-300">
-                    <span>
-                        <span class="block text-sm font-black text-violet-900">وضع المحاكاة</span>
-                        <span class="block text-xs text-violet-700">لا تُرسل أي رسالة فعليًا؛ تُسجَّل كما كانت سترسل وتظهر في
-                            <a class="underline" href="{{ route('admin.robodesk.simulator.index') }}">شاشة المحاكاة</a>.</span>
-                    </span>
-                </label>
-
-                <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                    <p class="text-sm font-black text-gray-800">مسار رحلة الطلب</p>
-                    <label class="mt-3 flex items-center gap-3">
-                        <input type="checkbox" name="gate_order_confirmation" value="1" @checked($general['gate_order_confirmation']) class="h-5 w-5 rounded border-gray-300">
-                        <span class="text-sm text-gray-700">إيقاف الإنتاج حتى يؤكد العميل الطلب (يبدأ الطلب بحالة «بانتظار تأكيد العميل»)</span>
-                    </label>
-                    <label class="mt-2 flex items-center gap-3">
-                        <input type="checkbox" name="gate_identity_confirmation" value="1" @checked($general['gate_identity_confirmation']) class="h-5 w-5 rounded border-gray-300">
-                        <span class="text-sm text-gray-700">إيقاف الاعتماد التلقائي لهوية الطفل حتى يوافق العميل</span>
-                    </label>
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">ترويسة التوكن الوارد</label>
-                        <input dir="ltr" name="inbound_auth_header" value="{{ old('inbound_auth_header', $general['inbound_auth_header']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">التوكن الوارد {!! $inboundToken ? '<span class="text-emerald-600">('.e($inboundToken).')</span>' : '' !!}</label>
-                        <input dir="ltr" type="password" name="inbound_token" autocomplete="new-password" placeholder="اتركه فارغًا للإبقاء على الحالي" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">رقم واتساب الشركة</label>
-                        <input dir="ltr" name="whatsapp_number" value="{{ old('whatsapp_number', $general['whatsapp_number']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">رابط انستاباي</label>
-                        <input dir="ltr" name="instapay_url" value="{{ old('instapay_url', $general['instapay_url']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                </div>
-
-                <button class="rounded-xl bg-gray-900 px-6 py-3 text-sm font-black text-white">حفظ الإعدادات العامة</button>
-            </form>
         </section>
     </div>
 </x-admin-layout>

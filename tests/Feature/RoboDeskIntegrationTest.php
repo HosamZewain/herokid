@@ -158,7 +158,118 @@ class RoboDeskIntegrationTest extends TestCase
         $this->assertSame('succeeded', $event->refresh()->status);
     }
 
+    // ── Admin screens ────────────────────────────────────────────────────
+
+    public function test_the_settings_screens_render(): void
+    {
+        $this->enable();
+        $this->configure('{"ref":"{{ checkout_reference }}"}');
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.robodesk.settings.index'))
+            ->assertOk()
+            ->assertSee('تأكيد الطلب');
+
+        // Renders the raw {{ variable }} help, which is where a Blade escaping
+        // mistake previously crashed the page with a ParseError.
+        $this->actingAs($admin)
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertSee('{{ customer_name }}', false)
+            ->assertSee('{{ total }}', false);
+    }
+
+    public function test_the_three_fields_save_and_the_token_is_never_rendered_back(): void
+    {
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => 'super-secret-token',
+                'payload_template' => '{"ref":"{{ checkout_reference }}"}',
+            ])
+            ->assertRedirect();
+
+        $integration = app(RoboDeskIntegrationRegistry::class)->orderConfirmation();
+        $this->assertTrue($integration->enabled());
+        $this->assertSame(self::URL, $integration->apiUrl());
+        $this->assertSame('super-secret-token', $integration->token());
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertDontSee('super-secret-token');
+    }
+
+    public function test_a_blank_token_keeps_the_saved_one(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => '',
+                'payload_template' => '',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('static-token', app(RoboDeskIntegrationRegistry::class)->orderConfirmation()->token());
+    }
+
+    public function test_an_invalid_payload_or_unknown_variable_is_rejected(): void
+    {
+        $this->enable();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'api_url' => self::URL,
+                'payload_template' => '{"broken": ',
+            ])
+            ->assertSessionHasErrors('payload_template');
+
+        $this->actingAs($admin)
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'api_url' => self::URL,
+                'payload_template' => '{"x":"{{ not_a_real_variable }}"}',
+            ])
+            ->assertSessionHasErrors('payload_template');
+    }
+
+    public function test_enabling_without_an_api_url_is_rejected(): void
+    {
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => '',
+            ])
+            ->assertSessionHasErrors('api_url');
+    }
+
+    public function test_settings_require_the_configure_permission(): void
+    {
+        $this->actingAs($this->admin(['robodesk.view']))
+            ->get(route('admin.robodesk.settings.index'))
+            ->assertForbidden();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    private function admin(array $permissions = ['robodesk.configure', 'robodesk.manage_credentials', 'robodesk.view']): User
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::query()->whereIn('key', $permissions)->pluck('id'));
+        $admin->unsetRelation('permissions');
+
+        return $admin;
+    }
 
     private function enable(): void
     {

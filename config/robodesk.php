@@ -89,8 +89,6 @@ return [
                 'customer_notes' => 'ملاحظات العميل',
                 'order_status' => 'حالة الطلب',
                 'payment_status' => 'حالة الدفع',
-                'whatsapp_number' => 'رقم واتساب الشركة',
-                'instapay_url' => 'رابط انستاباي',
             ],
         ],
     ],

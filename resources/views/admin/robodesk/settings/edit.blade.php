@@ -58,23 +58,23 @@
                     <label class="text-sm font-bold text-gray-700">قالب البيانات (JSON)</label>
                     <textarea dir="ltr" name="payload_template" rows="14"
                               class="mt-1 w-full rounded-xl border-gray-200 font-mono text-xs"
-                              placeholder='{&#10;  "to": "{{ customer_phone }}",&#10;  "templateName": "herokid_order_confirm",&#10;  "data": ["{{ customer_name }}", "{{ total }}"]&#10;}'>{{ old('payload_template', $setting->payload_template) }}</textarea>
+                              placeholder='{&#10;  "to": "@{{ customer_phone }}",&#10;  "templateName": "herokid_order_confirm",&#10;  "data": ["@{{ customer_name }}", "@{{ total }}"]&#10;}'>{{ old('payload_template', $setting->payload_template) }}</textarea>
                     <p class="mt-1 text-xs text-gray-500">هذا هو جسم الطلب بالكامل. اتركه فارغًا لإرسال كل المتغيرات كما هي.</p>
                     <p class="mt-1 text-xs text-amber-700">
                         يجب أن يكون JSON صالحًا، لذلك ضع المتغيّر بين علامتي تنصيص دائمًا — حتى للأرقام:
-                        <code dir="ltr">"total": "{{ '{{ total }}' }}"</code> تُرسل رقمًا وليس نصًا.
+                        <code dir="ltr">"total": "@{{ total }}"</code> تُرسل رقمًا وليس نصًا.
                     </p>
                 </div>
             </section>
 
             <section class="rounded-2xl border border-gray-200 bg-white p-6">
                 <h2 class="text-sm font-black text-gray-900">المتغيرات المتاحة</h2>
-                <p class="mt-1 text-xs text-gray-500">استخدمها داخل القالب بالشكل <code dir="ltr">{{ '{{ variable }}' }}</code>.</p>
+                <p class="mt-1 text-xs text-gray-500">استخدمها داخل القالب بالشكل <code dir="ltr">@{{ variable }}</code>.</p>
 
                 <div class="mt-4 grid gap-2 md:grid-cols-2">
                     @foreach ($integration->variables() as $name => $description)
                         <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                            <code class="text-xs font-bold text-indigo-700" dir="ltr">{{ '{{ '.$name.' }}' }}</code>
+                            <code class="text-xs font-bold text-indigo-700" dir="ltr">@{{ {{ $name }} }}</code>
                             <span class="text-xs text-gray-500">{{ $description }}</span>
                         </div>
                     @endforeach
