@@ -271,6 +271,20 @@ class RoboDeskIntegrationTest extends TestCase
         $this->assertSame('static-token', app(RoboDeskIntegrationRegistry::class)->orderConfirmation()->token());
     }
 
+    public function test_the_screen_documents_the_webhook_robodesk_calls_back(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertSee('/api/integrations/robodesk/v1/events', false)
+            ->assertSee('order.confirmed')
+            ->assertSee('order.rejected')
+            ->assertSee('checkout_reference');
+    }
+
     public function test_settings_require_the_configure_permission(): void
     {
         $this->actingAs($this->admin(['robodesk.view']))

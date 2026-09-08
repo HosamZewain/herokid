@@ -44,8 +44,6 @@ class RoboDeskIntegrationController extends Controller
             'data' => ['required', 'array'],
         ]);
 
-        abort_unless(hash_equals((string) $request->header('X-RoboDesk-Event-Id'), (string) $data['id']), 422, 'Event id mismatch.');
-
         $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
             'direction' => 'inbound',
             'event_type' => $data['type'],

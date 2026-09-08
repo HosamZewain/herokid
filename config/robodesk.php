@@ -54,6 +54,26 @@ return [
             'name_en' => 'Order confirmation',
             'description_ar' => 'يُستدعى فور إنشاء الطلب من المتجر أو التطبيق، لإرسال تفاصيله للعميل على واتساب.',
             'trigger_ar' => 'عند إنشاء طلب جديد',
+
+            // What RoboDesk sends back for this flow, shown on the screen so
+            // the contract is documented where it is configured.
+            'inbound' => [
+                'events' => [
+                    'order.confirmed' => 'العميل أكد الطلب — ينتقل الطلب من «بانتظار التأكيد» إلى «طلب جديد»',
+                    'order.rejected' => 'العميل رفض الطلب — تُلغى كل طلبات العملية',
+                ],
+                'example' => [
+                    'id' => '8f14e45f-ceea-4a7b-9e8f-2c2d3f6b1a90',
+                    'type' => 'order.confirmed',
+                    'data' => [
+                        'checkout_reference' => 'CHK-20260907-A7X2QP',
+                        'comment' => 'تم التأكيد من العميل',
+                        'contact_id' => 'rd-contact-123',
+                        'conversation_id' => 'rd-conv-456',
+                        'message_id' => 'rd-msg-789',
+                    ],
+                ],
+            ],
             'variables' => [
                 'checkout_reference' => 'رقم عملية الشراء',
                 'short_reference' => 'الرقم المختصر',

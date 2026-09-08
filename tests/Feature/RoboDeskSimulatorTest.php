@@ -203,7 +203,6 @@ class RoboDeskSimulatorTest extends TestCase
 
         $this->withHeaders([
             'X-RoboDesk-Token' => 'static-token',
-            'X-RoboDesk-Event-Id' => $eventId,
         ])->postJson('/api/integrations/robodesk/v1/events', [
             'id' => $eventId,
             'type' => 'order.confirmed',

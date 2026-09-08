@@ -57,6 +57,27 @@ class RoboDeskIntegration
         return '{'.'{ '.$name.' }'.'}';
     }
 
+    /** @return array<string,string> event type => what it does */
+    public function inboundEvents(): array
+    {
+        return $this->definition['inbound']['events'] ?? [];
+    }
+
+    /** The webhook RoboDesk calls to report this flow's outcome. */
+    public function webhookUrl(): string
+    {
+        return rtrim((string) config('app.url'), '/').'/api/integrations/robodesk/v1/events';
+    }
+
+    public function inboundExample(): string
+    {
+        $example = $this->definition['inbound']['example'] ?? [];
+
+        return $example === []
+            ? ''
+            : json_encode($example, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     public function setting(): RoboDeskIntegrationSetting
     {
         return RoboDeskIntegrationSetting::query()->firstOrNew(['integration_key' => $this->key]);

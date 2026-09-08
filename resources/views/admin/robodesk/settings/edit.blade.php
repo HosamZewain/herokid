@@ -83,5 +83,51 @@
 
             <button class="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white">حفظ</button>
         </form>
+
+        {{-- ── Inbound: what RoboDesk calls back ───────────────────────── --}}
+        @if ($integration->inboundEvents())
+            <section class="rounded-2xl border border-sky-200 bg-sky-50/40 p-6">
+                <h2 class="text-sm font-black text-gray-900">الويبهوك — رد RoboDesk علينا</h2>
+                <p class="mt-1 text-xs text-gray-600">اضبط هذا الرابط في RoboDesk ليُرسل نتيجة هذا التكامل.</p>
+
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <span class="text-xs font-bold text-gray-500">الرابط</span>
+                        <div class="mt-1 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                            <span class="rounded-md bg-gray-900 px-2 py-0.5 text-[10px] font-black text-white">POST</span>
+                            <code class="break-all text-xs text-gray-800" dir="ltr">{{ $integration->webhookUrl() }}</code>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="text-xs font-bold text-gray-500">التوثيق</span>
+                        <div class="mt-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                            <code class="text-xs text-gray-800" dir="ltr">Authorization: &lt;نفس التوكن أعلاه&gt;</code>
+                            <p class="mt-1 text-xs text-gray-500">أو الترويسة <code dir="ltr">X-RoboDesk-Token</code>. نفس توكن هذا التكامل يعمل في الاتجاهين.</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="text-xs font-bold text-gray-500">الأحداث المقبولة</span>
+                        <div class="mt-1 space-y-2">
+                            @foreach ($integration->inboundEvents() as $event => $description)
+                                <div class="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                    <code class="text-xs font-bold text-sky-800" dir="ltr">{{ $event }}</code>
+                                    <span class="text-xs text-gray-600">{{ $description }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="text-xs font-bold text-gray-500">مثال على جسم الطلب</span>
+                        <pre class="mt-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-3 font-mono text-xs" dir="ltr">{{ $integration->inboundExample() }}</pre>
+                        <p class="mt-1 text-xs text-gray-500">
+                            <code dir="ltr">checkout_reference</code> هو المتغيّر <code dir="ltr">{{ $integration->placeholder('checkout_reference') }}</code> الذي أرسلناه في القالب أعلاه.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        @endif
     </div>
 </x-admin-layout>
