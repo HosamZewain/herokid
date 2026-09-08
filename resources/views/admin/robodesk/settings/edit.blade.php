@@ -58,8 +58,11 @@
                     <label class="text-sm font-bold text-gray-700">قالب البيانات (JSON)</label>
                     <textarea dir="ltr" name="payload_template" rows="14"
                               class="mt-1 w-full rounded-xl border-gray-200 font-mono text-xs"
-                              placeholder='{&#10;  "to": "@{{ customer_phone }}",&#10;  "templateName": "herokid_order_confirm",&#10;  "data": ["@{{ customer_name }}", "@{{ total }}"]&#10;}'>{{ old('payload_template', $setting->payload_template) }}</textarea>
-                    <p class="mt-1 text-xs text-gray-500">هذا هو جسم الطلب بالكامل. اتركه فارغًا لإرسال كل المتغيرات كما هي.</p>
+                              placeholder="{{ $integration->defaultPayload() }}">{{ old('payload_template', $setting->payload_template) }}</textarea>
+                    <p class="mt-1 text-xs text-gray-500">
+                        هذا هو جسم الطلب بالكامل — أي مفتاح يتوقعه RoboDesk (مثل <code dir="ltr">procedureId</code>
+                        أو <code dir="ltr">attachments</code>) يُكتب هنا. اتركه فارغًا لإرسال كل المتغيرات كما هي.
+                    </p>
                     <p class="mt-1 text-xs text-amber-700">
                         يجب أن يكون JSON صالحًا، لذلك ضع المتغيّر بين علامتي تنصيص دائمًا — حتى للأرقام:
                         <code dir="ltr">"total": "@{{ total }}"</code> تُرسل رقمًا وليس نصًا.
@@ -118,6 +121,27 @@
                             @endforeach
                         </div>
                     </div>
+
+                    @if ($attachment = $integration->inboundAttachment())
+                        <div>
+                            <span class="text-xs font-bold text-gray-500">{{ $attachment['title_ar'] }}</span>
+                            <div class="mt-1 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="rounded-md bg-gray-900 px-2 py-0.5 text-[10px] font-black text-white">POST</span>
+                                    <code class="break-all text-xs text-gray-800" dir="ltr">{{ $attachment['url'] }}</code>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">{{ $attachment['note_ar'] }}</p>
+                                <div class="mt-2 space-y-1">
+                                    @foreach ($attachment['fields'] as $field => $description)
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <code class="text-xs font-bold text-sky-800" dir="ltr">{{ $field }}</code>
+                                            <span class="text-xs text-gray-600">{{ $description }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
                     <div>
                         <span class="text-xs font-bold text-gray-500">مثال على جسم الطلب</span>

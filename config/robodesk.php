@@ -55,6 +55,21 @@ return [
             'name_en' => 'Order confirmation',
             'description_ar' => 'يُستدعى فور إنشاء الطلب من المتجر أو التطبيق، لإرسال تفاصيله للعميل على واتساب.',
             'trigger_ar' => 'عند إنشاء طلب جديد',
+            'default_payload' => <<<'JSON'
+{
+  "channel": "whatsapp-meta-herokid",
+  "to": "{{ customer_phone }}",
+  "language": "ar",
+  "procedureId": "<RoboDesk order confirmation procedure id>",
+  "templateName": "herokid_order_confirm",
+  "templateMessage": "{{ customer_name }} : {{ checkout_reference }}",
+  "template": {
+    "text": "$1 $2 $3 $4",
+    "data": ["{{ customer_name }}", "{{ items_summary }}", "{{ total }}", "{{ delivery_address }}"]
+  },
+  "reference": "{{ checkout_reference }}"
+}
+JSON,
 
             // What RoboDesk sends back for this flow, shown on the screen so
             // the contract is documented where it is configured.
@@ -105,6 +120,24 @@ return [
             'name_en' => 'Identity confirmation',
             'description_ar' => 'يُستدعى بعد إنشاء هوية الطفل، لعرضها على العميل ليعتمدها أو يطلب تعديلها.',
             'trigger_ar' => 'عند إنشاء هوية طفل بانتظار الاعتماد',
+            'default_payload' => <<<'JSON'
+{
+  "channel": "whatsapp-meta-herokid",
+  "to": "{{ customer_phone }}",
+  "language": "ar",
+  "procedureId": "<RoboDesk identity confirmation procedure id>",
+  "templateName": "herokid_identity_confirm",
+  "templateMessage": "{{ child_name }} : {{ identity_uuid }}",
+  "template": {
+    "text": "$1 $2",
+    "data": ["{{ customer_name }}", "{{ child_name }}"]
+  },
+  "attachments": [
+    { "type": "image", "url": "{{ identity_url }}" }
+  ],
+  "reference": "{{ identity_uuid }}"
+}
+JSON,
             'variables' => [
                 'identity_uuid' => 'معرّف طلب الهوية',
                 'child_name' => 'اسم الطفل',
@@ -123,6 +156,18 @@ return [
                 'events' => [
                     'identity.approved' => 'العميل اعتمد الهوية — يكمل الطلب مساره',
                     'identity.changes_requested' => 'العميل طلب تعديلًا — تُحقن ملاحظاته في البرومبت وتُعاد المحاولة تلقائيًا',
+                ],
+                'attachment' => [
+                    'title_ar' => 'رفع إثبات الدفع (مرفق من العميل)',
+                    'path' => '/api/integrations/robodesk/v1/payment-proofs',
+                    'note_ar' => 'multipart/form-data — يُراجعه المشرف يدويًا ولا يغيّر حالة الدفع تلقائيًا.',
+                    'fields' => [
+                        'checkout_reference' => 'مطلوب — رقم عملية الشراء',
+                        'proof' => 'مطلوب — الملف نفسه (jpg, jpeg, png, webp, pdf)',
+                        'message_id' => 'مطلوب — معرّف الرسالة لمنع التكرار',
+                        'conversation_id' => 'اختياري',
+                        'sender_phone' => 'اختياري',
+                    ],
                 ],
                 'example' => [
                     'id' => '2b7c9d10-4f3a-4c1e-9a55-8d21f7b6c400',

@@ -138,6 +138,22 @@ class RoboDeskIdentityIntegrationTest extends TestCase
         $this->assertFalse($registry->orderConfirmation()->enabled());
     }
 
+    public function test_the_screen_shows_a_starter_payload_and_the_attachment_endpoint(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::IDENTITY_CONFIRMATION))
+            ->assertOk()
+            // RoboDesk's own keys are visible before anything is saved.
+            ->assertSee('procedureId', false)
+            ->assertSee('attachments', false)
+            // The parent's payment proof comes back as a file upload.
+            ->assertSee('/api/integrations/robodesk/v1/payment-proofs', false)
+            ->assertSee('multipart/form-data', false);
+    }
+
     // ── Common exceptions ────────────────────────────────────────────────
 
     public function test_an_auto_approved_identity_is_never_sent_for_confirmation(): void

@@ -57,6 +57,30 @@ class RoboDeskIntegration
         return '{'.'{ '.$name.' }'.'}';
     }
 
+    /**
+     * A realistic starter body, shown as the field's placeholder so RoboDesk's
+     * own keys — procedureId, template, attachments — are visible before
+     * anything is saved. Never sent; only a saved payload is.
+     */
+    public function defaultPayload(): string
+    {
+        return trim((string) ($this->definition['default_payload'] ?? ''));
+    }
+
+    /** An inbound file upload this flow expects, when it has one. */
+    public function inboundAttachment(): array
+    {
+        $attachment = $this->definition['inbound']['attachment'] ?? [];
+
+        if ($attachment === []) {
+            return [];
+        }
+
+        $attachment['url'] = rtrim((string) config('app.url'), '/').$attachment['path'];
+
+        return $attachment;
+    }
+
     /** @return array<string,string> event type => what it does */
     public function inboundEvents(): array
     {
