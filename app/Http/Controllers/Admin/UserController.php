@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminRole;
 use App\Models\Permission;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
 use App\Support\AdminPermissionRegistry;
+use App\Support\AdminRoleRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +21,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $admins = User::with('permissions')
+        $admins = User::with(['permissions', 'adminRoles.permissions'])
             ->where('role', 'admin')
             ->latest()
             ->get();
@@ -32,6 +34,7 @@ class UserController extends Controller
         return view('admin.users.create', [
             'permissionGroups' => AdminPermissionRegistry::grouped($this->assignablePermissionKeys()),
             'assignablePermissionKeys' => $this->assignablePermissionKeys(),
+            'roleOptions' => AdminRoleRegistry::options($this->assignableRoleKeys()),
         ]);
     }
 
@@ -42,20 +45,23 @@ class UserController extends Controller
             'email' => 'required|email|max:255|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)],
             'is_active' => 'nullable|boolean',
+            'admin_role' => ['nullable', 'string', Rule::in($this->assignableRoleKeys())],
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in(AdminPermissionRegistry::keys())],
         ]);
 
         $isActive = $request->boolean('is_active', true);
+        $roleKeys = filled($validated['admin_role'] ?? null) ? [$validated['admin_role']] : [];
         $permissionKeys = $this->validatedAssignablePermissionKeys($request->input('permissions', []));
+        $effectivePermissionKeys = $this->effectivePermissionKeys($roleKeys, $permissionKeys);
 
-        if ($isActive && $permissionKeys === []) {
+        if ($isActive && $effectivePermissionKeys === []) {
             throw ValidationException::withMessages([
-                'permissions' => 'يجب اختيار صلاحية واحدة على الأقل أو إنشاء الحساب موقوفاً.',
+                'admin_role' => 'يجب اختيار دور وظيفي أو صلاحية إضافية واحدة على الأقل، أو إنشاء الحساب موقوفاً.',
             ]);
         }
 
-        $admin = DB::transaction(function () use ($validated, $permissionKeys, $isActive): User {
+        $admin = DB::transaction(function () use ($validated, $roleKeys, $permissionKeys, $isActive): User {
             $admin = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -65,6 +71,7 @@ class UserController extends Controller
                 'email_verified_at' => now(),
             ]);
 
+            $admin->adminRoles()->sync($this->roleIdsForKeys($roleKeys));
             $admin->permissions()->sync($this->permissionIdsForKeys($permissionKeys));
 
             return $admin;
@@ -77,6 +84,7 @@ class UserController extends Controller
             properties: [
                 'admin_user_id' => $admin->id,
                 'is_active' => $admin->is_active,
+                'roles' => $roleKeys,
                 'permissions' => $permissionKeys,
             ],
             request: $request,
@@ -108,12 +116,13 @@ class UserController extends Controller
             abort_unless(auth()->user()->hasAnyPermission(['admin_users.update', 'admin_users.permissions.manage']), 403);
         }
 
-        $user->load('permissions');
+        $user->load(['permissions', 'adminRoles.permissions']);
 
         return view('admin.users.edit', [
             'user' => $user,
             'permissionGroups' => AdminPermissionRegistry::grouped($this->assignablePermissionKeys()),
             'assignablePermissionKeys' => $this->assignablePermissionKeys(),
+            'roleOptions' => AdminRoleRegistry::options($this->assignableRoleKeys()),
         ]);
     }
 
@@ -134,28 +143,36 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
             'password' => ['nullable', 'confirmed', Password::min(8)],
             'is_active' => 'nullable|boolean',
+            'admin_role' => ['nullable', 'string', Rule::in($this->assignableRoleKeys())],
             'permissions' => 'nullable|array',
             'permissions.*' => ['string', Rule::in(AdminPermissionRegistry::keys())],
         ]);
 
-        $user->load('permissions');
+        $user->load(['permissions', 'adminRoles.permissions']);
         $beforePermissions = $user->permissions->pluck('key')->sort()->values()->all();
+        $beforeRoles = $user->adminRoles->pluck('key')->sort()->values()->all();
         $beforeActive = (bool) $user->is_active;
         $permissionKeys = $beforePermissions;
+        $roleKeys = $beforeRoles;
         $nextActive = $beforeActive;
-        $willChangePermissions = $request->has('permissions');
+        $willChangePermissions = $request->has('permissions_present') || $request->has('permissions');
+        $willChangeRoles = $request->has('admin_role');
         $willChangeStatus = $request->has('is_active');
 
         if (! $isSelf && ! $canUpdateOthers && ($validated['name'] !== $user->name || $validated['email'] !== $user->email || ! empty($validated['password']))) {
             abort(403);
         }
 
-        if (($willChangePermissions || $willChangeStatus) && ! $canManagePermissions) {
+        if (($willChangePermissions || $willChangeRoles || $willChangeStatus) && ! $canManagePermissions) {
             abort(403);
         }
 
         if ($willChangePermissions) {
             $permissionKeys = $this->validatedAssignablePermissionKeys($request->input('permissions', []));
+        }
+
+        if ($willChangeRoles) {
+            $roleKeys = filled($validated['admin_role'] ?? null) ? [$validated['admin_role']] : [];
         }
 
         if ($willChangeStatus) {
@@ -168,21 +185,22 @@ class UserController extends Controller
             ]);
         }
 
-        if ($nextActive && $permissionKeys === []) {
+        if ($nextActive && $this->effectivePermissionKeys($roleKeys, $permissionKeys) === []) {
             throw ValidationException::withMessages([
-                'permissions' => 'يجب أن يمتلك الحساب النشط صلاحية واحدة على الأقل.',
+                'admin_role' => 'يجب أن يمتلك الحساب النشط دورًا وظيفيًا أو صلاحية إضافية واحدة على الأقل.',
             ]);
         }
 
-        if ($willChangePermissions || $willChangeStatus) {
+        if ($willChangePermissions || $willChangeRoles || $willChangeStatus) {
             $this->ensureAtLeastOnePermissionManagerRemains(
                 target: $user,
                 targetActive: $nextActive,
                 targetPermissionKeys: $permissionKeys,
+                targetRoleKeys: $roleKeys,
             );
         }
 
-        DB::transaction(function () use ($user, $validated, $permissionKeys, $nextActive, $willChangePermissions, $willChangeStatus): void {
+        DB::transaction(function () use ($user, $validated, $roleKeys, $permissionKeys, $nextActive, $willChangePermissions, $willChangeRoles, $willChangeStatus): void {
             $user->name = $validated['name'];
             $user->email = $validated['email'];
 
@@ -199,10 +217,15 @@ class UserController extends Controller
             if ($willChangePermissions) {
                 $user->permissions()->sync($this->permissionIdsForKeys($permissionKeys));
             }
+
+            if ($willChangeRoles) {
+                $user->adminRoles()->sync($this->roleIdsForKeys($roleKeys));
+            }
         });
 
-        $user->refresh()->load('permissions');
+        $user->refresh()->load(['permissions', 'adminRoles.permissions']);
         $afterPermissions = $user->permissions->pluck('key')->sort()->values()->all();
+        $afterRoles = $user->adminRoles->pluck('key')->sort()->values()->all();
 
         AdminActivityLogger::log(
             action: 'admin_user.updated',
@@ -244,6 +267,16 @@ class UserController extends Controller
             );
         }
 
+        if ($beforeRoles !== $afterRoles) {
+            AdminActivityLogger::log(
+                action: 'admin_roles.updated',
+                description: 'تحديث الدور الوظيفي لمشرف: '.$user->name,
+                subject: $user,
+                properties: ['before' => $beforeRoles, 'after' => $afterRoles],
+                request: $request,
+            );
+        }
+
         $message = $user->id === auth()->id()
             ? 'تم تحديث بياناتك بنجاح!'
             : 'تم تحديث بيانات المشرف بنجاح!';
@@ -268,6 +301,7 @@ class UserController extends Controller
             target: $user,
             targetActive: false,
             targetPermissionKeys: [],
+            targetRoleKeys: [],
             deleting: true,
         );
 
@@ -309,21 +343,54 @@ class UserController extends Controller
         return $permissionKeys;
     }
 
+    private function assignableRoleKeys(): array
+    {
+        $assignablePermissions = $this->assignablePermissionKeys();
+
+        return collect(AdminRoleRegistry::keys())
+            ->filter(fn (string $roleKey): bool => array_diff(
+                AdminRoleRegistry::permissionKeys($roleKey),
+                $assignablePermissions,
+            ) === [])
+            ->values()
+            ->all();
+    }
+
+    private function effectivePermissionKeys(array $roleKeys, array $directPermissionKeys): array
+    {
+        return collect($roleKeys)
+            ->flatMap(fn (string $roleKey): array => AdminRoleRegistry::permissionKeys($roleKey))
+            ->merge($directPermissionKeys)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function permissionIdsForKeys(array $permissionKeys): array
     {
         return Permission::whereIn('key', $permissionKeys)->pluck('id')->all();
     }
 
-    private function ensureAtLeastOnePermissionManagerRemains(User $target, bool $targetActive, array $targetPermissionKeys, bool $deleting = false): void
+    private function roleIdsForKeys(array $roleKeys): array
+    {
+        return AdminRole::whereIn('key', $roleKeys)->pluck('id')->all();
+    }
+
+    private function ensureAtLeastOnePermissionManagerRemains(User $target, bool $targetActive, array $targetPermissionKeys, array $targetRoleKeys, bool $deleting = false): void
     {
         $activeManagers = User::query()
             ->where('role', 'admin')
             ->where('is_active', true)
             ->where('id', '!=', $target->id)
-            ->whereHas('permissions', fn ($query) => $query->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION))
+            ->where(function ($query): void {
+                $query->whereHas('permissions', fn ($permissions) => $permissions->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION))
+                    ->orWhereHas('adminRoles.permissions', fn ($permissions) => $permissions->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION));
+            })
             ->count();
 
-        if (! $deleting && $targetActive && in_array(AdminPermissionRegistry::LAST_MANAGER_PERMISSION, $targetPermissionKeys, true)) {
+        $targetEffectivePermissions = $this->effectivePermissionKeys($targetRoleKeys, $targetPermissionKeys);
+
+        if (! $deleting && $targetActive && in_array(AdminPermissionRegistry::LAST_MANAGER_PERMISSION, $targetEffectivePermissions, true)) {
             $activeManagers++;
         }
 

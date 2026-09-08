@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AdminPermissionSyncer
 {
@@ -38,5 +39,9 @@ class AdminPermissionSyncer
                     });
             }
         });
+
+        if (Schema::hasTable('admin_roles')) {
+            app(AdminRoleSyncer::class)->sync();
+        }
     }
 }

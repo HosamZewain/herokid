@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminRole;
 use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Story;
 use App\Models\User;
 use App\Support\AdminPermissionRegistry;
 use App\Support\AdminPermissionSyncer;
+use App\Support\AdminRoleRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -336,6 +338,83 @@ class AdminPermissionsTest extends TestCase
         $this->assertTrue($staff->hasPermission('orders.view'));
         $this->assertFalse($staff->hasPermission('settings.site.update'));
         $this->assertSame(['orders.view'], $staff->permissions()->pluck('key')->all());
+    }
+
+    public function test_new_admin_can_be_created_with_a_ready_role_without_selecting_permissions_one_by_one(): void
+    {
+        $owner = $this->adminWithPermissions(AdminPermissionRegistry::keys());
+
+        $this->actingAs($owner)
+            ->get(route('admin.users.create'))
+            ->assertOk()
+            ->assertSee('الدور الوظيفي')
+            ->assertSee('موظف إنتاج')
+            ->assertSee('صلاحيات إضافية مخصصة');
+
+        $this->actingAs($owner)
+            ->post(route('admin.users.store'), [
+                'name' => 'Production Staff',
+                'email' => 'production-role@example.test',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'is_active' => '1',
+                'admin_role' => 'production',
+            ])
+            ->assertRedirect(route('admin.users.index'));
+
+        $staff = User::where('email', 'production-role@example.test')->firstOrFail();
+
+        $this->assertSame(['production'], $staff->adminRoles()->pluck('key')->all());
+        $this->assertTrue($staff->hasPermission('orders.view'));
+        $this->assertTrue($staff->hasPermission('orders.preview.upload'));
+        $this->assertFalse($staff->hasPermission('dashboard.statistics.view'));
+        $this->assertSame(0, $staff->permissions()->count());
+    }
+
+    public function test_role_permission_changes_apply_to_every_user_assigned_to_that_role(): void
+    {
+        $role = AdminRole::where('key', 'shipping')->firstOrFail();
+        $admin = $this->adminWithPermissions([]);
+        $admin->adminRoles()->sync([$role->id]);
+
+        $this->assertTrue($admin->refresh()->hasPermission('bosta.create_shipment'));
+
+        $role->permissions()->detach(Permission::where('key', 'bosta.create_shipment')->firstOrFail());
+
+        $this->assertFalse($admin->refresh()->hasPermission('bosta.create_shipment'));
+    }
+
+    public function test_limited_permission_manager_cannot_assign_a_role_containing_permissions_they_do_not_have(): void
+    {
+        $manager = $this->adminWithPermissions([
+            'admin_users.view',
+            'admin_users.create',
+            'admin_users.permissions.manage',
+            'orders.view',
+        ]);
+
+        $this->actingAs($manager)
+            ->from(route('admin.users.create'))
+            ->post(route('admin.users.store'), [
+                'name' => 'Escalated Role',
+                'email' => 'escalated-role@example.test',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'is_active' => '1',
+                'admin_role' => 'owner',
+            ])
+            ->assertRedirect(route('admin.users.create'))
+            ->assertSessionHasErrors('admin_role');
+    }
+
+    public function test_system_role_registry_resolves_only_known_permissions(): void
+    {
+        foreach (AdminRoleRegistry::keys() as $roleKey) {
+            $this->assertSame(
+                [],
+                array_values(array_diff(AdminRoleRegistry::permissionKeys($roleKey), AdminPermissionRegistry::keys()))
+            );
+        }
     }
 
     public function test_permission_sync_grants_existing_active_admins_but_not_customers(): void

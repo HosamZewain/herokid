@@ -8,11 +8,22 @@
     $selected = collect(old('permissions', $selected))->all();
 @endphp
 
-<div class="space-y-4">
+<input type="hidden" name="permissions_present" value="1">
+
+<details class="group space-y-4 rounded-2xl border border-gray-100 bg-white p-4">
+    <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
+        <div>
+            <h3 class="text-base font-black text-gray-900">صلاحيات إضافية مخصصة</h3>
+            <p class="mt-1 text-xs text-gray-500">اختياري: افتح هذا القسم فقط إذا احتاج الموظف صلاحيات تزيد عن دوره الوظيفي.</p>
+        </div>
+        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 group-open:hidden">عرض</span>
+        <span class="hidden rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 group-open:inline">إخفاء</span>
+    </summary>
+
+<div class="mt-5 space-y-4">
     <div class="flex items-start justify-between gap-4">
         <div>
-            <h3 class="text-base font-black text-gray-900">صلاحيات الحساب</h3>
-            <p class="mt-1 text-xs text-gray-500">يمكنك تعيين الصلاحيات التي تملكها فقط. الصلاحيات الحساسة مميزة باللون الأحمر.</p>
+            <p class="text-xs text-gray-500">يمكنك تعيين الصلاحيات التي تملكها فقط. الصلاحيات الحساسة مميزة باللون الأحمر.</p>
         </div>
     </div>
     <x-input-error :messages="$errors->get('permissions')" class="mt-2" />
@@ -63,6 +74,7 @@
         </section>
     @endforeach
 </div>
+</details>
 
 @once
     @push('scripts')

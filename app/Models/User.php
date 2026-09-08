@@ -130,6 +130,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Permission::class)->withTimestamps();
     }
 
+    public function adminRoles(): BelongsToMany
+    {
+        return $this->belongsToMany(AdminRole::class, 'admin_role_user')->withTimestamps();
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin' && $this->is_active === true;
@@ -164,10 +169,11 @@ class User extends Authenticatable
 
     public function permissionKeys()
     {
-        if (! $this->relationLoaded('permissions')) {
-            $this->load('permissions:id,key');
-        }
+        $this->loadMissing(['permissions:id,key', 'adminRoles.permissions:id,key']);
 
-        return $this->permissions->pluck('key');
+        return $this->permissions->pluck('key')
+            ->merge($this->adminRoles->flatMap(fn (AdminRole $role) => $role->permissions->pluck('key')))
+            ->unique()
+            ->values();
     }
 }

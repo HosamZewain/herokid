@@ -12,6 +12,7 @@ use App\Services\Orders\OrderAttachmentService;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
+use App\Support\AdminRoleSyncer;
 use App\Support\ProductionAutomation;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -26,6 +27,11 @@ Artisan::command('admin-permissions:sync {--grant-existing-admins : Grant all re
     $syncer->sync(grantExistingAdmins: (bool) $this->option('grant-existing-admins'));
     $this->info('Admin permissions synced.');
 })->purpose('Sync the system admin permission registry into the database');
+
+Artisan::command('admin-roles:sync', function (AdminRoleSyncer $syncer) {
+    $syncer->sync();
+    $this->info('Admin roles synced.');
+})->purpose('Sync the system admin roles and their permissions into the database');
 
 Artisan::command('ai:providers:sync', function (AiProviderRegistrySyncer $syncer) {
     $syncer->sync();
