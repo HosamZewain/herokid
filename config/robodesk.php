@@ -39,6 +39,7 @@ return [
     */
     'journey' => [
         'identity_max_revisions' => 3,
+        'identity_media_link_ttl_hours' => 168,
         'identity_comment_prompt_prefix' => 'Apply the following parent feedback while keeping the child recognizable:',
     ],
 
@@ -96,6 +97,44 @@ return [
                 'customer_notes' => 'ملاحظات العميل',
                 'order_status' => 'حالة الطلب',
                 'payment_status' => 'حالة الدفع',
+            ],
+        ],
+
+        'identity.confirm' => [
+            'name_ar' => 'اعتماد هوية الطفل',
+            'name_en' => 'Identity confirmation',
+            'description_ar' => 'يُستدعى بعد إنشاء هوية الطفل، لعرضها على العميل ليعتمدها أو يطلب تعديلها.',
+            'trigger_ar' => 'عند إنشاء هوية طفل بانتظار الاعتماد',
+            'variables' => [
+                'identity_uuid' => 'معرّف طلب الهوية',
+                'child_name' => 'اسم الطفل',
+                'customer_name' => 'اسم ولي الأمر',
+                'customer_phone' => 'رقم الواتساب',
+                'identity_url' => 'رابط مؤقت موقّع لصورة الهوية',
+                'attempt_id' => 'رقم المحاولة',
+                'attempt_number' => 'ترتيب المحاولة',
+                'attempts_remaining' => 'المحاولات المتبقية للعميل',
+                'revisions_used' => 'عدد التعديلات المستخدمة',
+                'max_revisions' => 'أقصى عدد تعديلات تلقائية',
+                'checkout_reference' => 'رقم عملية الشراء إن وُجدت',
+                'order_number' => 'رقم الطلب إن وُجد',
+            ],
+            'inbound' => [
+                'events' => [
+                    'identity.approved' => 'العميل اعتمد الهوية — يكمل الطلب مساره',
+                    'identity.changes_requested' => 'العميل طلب تعديلًا — تُحقن ملاحظاته في البرومبت وتُعاد المحاولة تلقائيًا',
+                ],
+                'example' => [
+                    'id' => '2b7c9d10-4f3a-4c1e-9a55-8d21f7b6c400',
+                    'type' => 'identity.changes_requested',
+                    'data' => [
+                        'identity_uuid' => '9f3b1c22-77aa-4d0e-b111-2c9e5a7d3f18',
+                        'comment' => 'الشعر أفتح من الحقيقة، أرجو تعديله',
+                        'contact_id' => 'rd-contact-123',
+                        'conversation_id' => 'rd-conv-456',
+                        'message_id' => 'rd-msg-790',
+                    ],
+                ],
             ],
         ],
     ],

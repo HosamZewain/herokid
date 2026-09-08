@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Http\Middleware\VerifyRoboDeskSignature;
+use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\Order;
 use App\Services\RoboDesk\RoboDeskDispatcher;
 use Illuminate\Support\Facades\Route;
@@ -15,9 +16,9 @@ use Illuminate\Support\ServiceProvider;
  * A trigger only detects a change and hands off to RoboDeskDispatcher, which
  * decides whether the integration is on and what its payload looks like.
  *
- * Today there is one: a new order calls the Order Confirmation integration.
- * The next ones — identity confirmation, item confirmation, CSAT — each add a
- * config entry and one closure here.
+ * Today there are two: a new order calls Order Confirmation, and a generated
+ * child identity awaiting a decision calls Identity Confirmation. The next ones
+ * — item confirmation, CSAT — each add a config entry and one closure here.
  */
 class RoboDeskIntegrationServiceProvider extends ServiceProvider
 {
@@ -40,6 +41,23 @@ class RoboDeskIntegrationServiceProvider extends ServiceProvider
             }
 
             app(RoboDeskDispatcher::class)->confirmOrder($order);
+        });
+
+        // Trigger: identity generated and still undecided → Identity Confirmation.
+        ChildIdentityGenerationAttempt::updated(function (ChildIdentityGenerationAttempt $attempt): void {
+            if (! $this->ready() || ! $attempt->wasChanged('status') || $attempt->status !== 'succeeded') {
+                return;
+            }
+
+            $identity = $attempt->identityRequest;
+
+            // An attempt that approved itself was auto-approved, which means the
+            // identity gate is closed and there is nothing to ask the parent.
+            if (! $identity || $identity->approved_attempt_id === $attempt->id) {
+                return;
+            }
+
+            app(RoboDeskDispatcher::class)->confirmIdentity($identity, $attempt);
         });
     }
 

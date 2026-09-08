@@ -16,6 +16,8 @@ class RoboDeskIntegrationRegistry
 {
     public const ORDER_CONFIRMATION = 'order.confirm';
 
+    public const IDENTITY_CONFIRMATION = 'identity.confirm';
+
     public function __construct(
         private readonly RoboDeskPayloadRenderer $renderer,
         private readonly RoboDeskSettings $settings,
@@ -72,6 +74,11 @@ class RoboDeskIntegrationRegistry
     public function orderConfirmation(): RoboDeskIntegration
     {
         return $this->get(self::ORDER_CONFIRMATION);
+    }
+
+    public function identityConfirmation(): RoboDeskIntegration
+    {
+        return $this->get(self::IDENTITY_CONFIRMATION);
     }
 
     /**
