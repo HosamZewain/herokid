@@ -117,7 +117,7 @@ class TemporaryPhotoUploadTest extends TestCase
             'photo' => UploadedFile::fake()->create('child.txt', 4, 'text/plain'),
         ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.');
+            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.');
 
         $this->postJson(route('photo-uploads.store'), [
             'upload_session_token' => $sessionToken,
@@ -151,6 +151,54 @@ class TemporaryPhotoUploadTest extends TestCase
         $this->get($response->json('preview_url'))
             ->assertOk()
             ->assertHeader('Content-Type', 'image/png');
+    }
+
+    public function test_upload_endpoint_accepts_heic_when_phone_reports_generic_mime(): void
+    {
+        Storage::fake('local');
+        $sessionToken = $this->uploadSessionToken();
+        $heicHeader = pack('N', 24).'ftypheic'.pack('N', 0).'heicmif1';
+
+        $response = $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'photo' => UploadedFile::fake()->createWithContent('iphone-photo.heic', $heicHeader),
+            'prepared_photo' => $this->tinyPngUpload('iphone-photo-ai-input.png'),
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('temporary_photo_uploads', [
+            'public_id' => $response->json('id'),
+            'mime_type' => 'image/heic',
+        ]);
+    }
+
+    public function test_generic_mime_does_not_allow_an_arbitrary_file_disguised_as_an_image(): void
+    {
+        Storage::fake('local');
+        $sessionToken = $this->uploadSessionToken();
+
+        $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'photo' => UploadedFile::fake()->createWithContent('not-an-image.heic', 'plain text'),
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.');
+    }
+
+    public function test_upload_endpoint_accepts_a_valid_avif_container(): void
+    {
+        Storage::fake('local');
+        $sessionToken = $this->uploadSessionToken();
+        $avifHeader = pack('N', 24).'ftypavif'.pack('N', 0).'avifmif1';
+
+        $response = $this->postJson(route('photo-uploads.store'), [
+            'upload_session_token' => $sessionToken,
+            'photo' => UploadedFile::fake()->createWithContent('phone-photo.avif', $avifHeader),
+            'prepared_photo' => $this->tinyPngUpload('phone-photo-ai-input.png'),
+        ])->assertCreated();
+
+        $upload = TemporaryPhotoUpload::where('public_id', $response->json('id'))->firstOrFail();
+        $this->assertSame('image/avif', $upload->mime_type);
+        $this->assertStringEndsWith('.avif', $upload->path);
     }
 
     public function test_temp_uploads_are_limited_per_upload_session(): void

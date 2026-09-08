@@ -228,6 +228,7 @@ class MobileUploadService
             'image/webp' => 'webp',
             'image/heic', 'image/heic-sequence' => 'heic',
             'image/heif', 'image/heif-sequence' => 'heif',
+            'image/avif' => 'avif',
             default => 'jpg',
         };
     }

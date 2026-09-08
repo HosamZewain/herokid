@@ -8,6 +8,8 @@ use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -31,11 +33,21 @@ class TemporaryPhotoUploadController extends Controller
     public function store(Request $request, TemporaryPhotoUploadService $uploads): JsonResponse
     {
         try {
-            if (! $request->hasFile('photo')) {
+            $file = $request->file('photo');
+
+            if (! $file instanceof UploadedFile) {
                 throw new UploadValidationException('يرجى اختيار صورة للرفع.', 422, 'photo');
             }
 
-            $upload = $uploads->upload($request, $request->file('photo'));
+            if (! $file->isValid()) {
+                $message = in_array($file->getError(), [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                    ? 'حجم الصورة أكبر من الحد المسموح على الخادم. اختر صورة أصغر من '.config('photo_uploads.max_size_mb', 15).' ميجا.'
+                    : 'تعذر استلام الصورة كاملة. أعد اختيارها وحاول مرة أخرى.';
+
+                throw new UploadValidationException($message, 422, 'photo');
+            }
+
+            $upload = $uploads->upload($request, $file);
 
             return response()->json([
                 'id' => $upload->public_id,
@@ -56,7 +68,14 @@ class TemporaryPhotoUploadController extends Controller
                 'field' => $exception->field,
                 'retryable' => $exception->statusCode >= 500,
             ], $exception->statusCode);
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            Log::warning('Unexpected temporary child photo upload failure.', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'content_length' => $request->server('CONTENT_LENGTH'),
+                'user_id' => $request->user()?->id,
+            ]);
+
             return response()->json([
                 'message' => 'حدث خطأ مؤقت أثناء رفع الصورة. حاول مرة أخرى.',
                 'retryable' => true,

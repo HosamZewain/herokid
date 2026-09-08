@@ -49,7 +49,7 @@ Accepted MIME types:
 - WebP
 - HEIC / HEIF
 
-HEIC/HEIF is accepted at upload time, but PHP on shared hosting may not decode dimensions for those formats. The current server validation therefore validates MIME and size for HEIC/HEIF and avoids claiming server-side conversion support.
+HEIC/HEIF and AVIF are accepted at upload time. The browser prepares a JPEG derivative when necessary, while the server verifies the ISO image container before accepting formats that shared-hosting PHP may not decode directly.
 
 ## Client-Side Optimization
 

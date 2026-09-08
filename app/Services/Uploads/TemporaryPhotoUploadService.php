@@ -54,7 +54,7 @@ class TemporaryPhotoUploadService
         $sessionHash = $this->validateToken($request);
         $batchHash = $this->batchHash((string) $request->input('upload_batch_token'));
         $this->assertBatchCapacity($sessionHash, $batchHash);
-        $this->assertValidImage($file);
+        $mime = $this->validatedImageMime($file);
         $preparedFile = $request->file('prepared_photo');
 
         if ($preparedFile instanceof UploadedFile) {
@@ -62,7 +62,7 @@ class TemporaryPhotoUploadService
         }
 
         $publicId = (string) Str::uuid();
-        $extension = $this->extensionForMime((string) $file->getMimeType());
+        $extension = $this->extensionForMime($mime);
         $path = 'temporary-uploads/child-photos/'.now()->format('Y/m').'/'.$publicId.'.'.$extension;
         $diskName = (string) config('photo_uploads.disk', 'local');
         $checksum = hash_file('sha256', $file->getRealPath());
@@ -120,7 +120,7 @@ class TemporaryPhotoUploadService
                 'prepared_width' => $preparedDimensions['width'],
                 'prepared_height' => $preparedDimensions['height'],
                 'prepared_checksum' => $preparedChecksum ?: null,
-                'mime_type' => (string) $file->getMimeType(),
+                'mime_type' => $mime,
                 'file_size' => (int) $file->getSize(),
                 'width' => $dimensions['width'],
                 'height' => $dimensions['height'],
@@ -248,7 +248,7 @@ class TemporaryPhotoUploadService
         }
     }
 
-    private function assertValidImage(UploadedFile $file): void
+    private function validatedImageMime(UploadedFile $file): string
     {
         if (! $file->isValid()) {
             throw new UploadValidationException('تعذر رفع الصورة. يرجى إعادة اختيار الصورة والمحاولة مرة أخرى.', 422);
@@ -259,14 +259,16 @@ class TemporaryPhotoUploadService
             throw new UploadValidationException('حجم كل صورة يجب ألا يزيد عن '.config('photo_uploads.max_size_mb', 15).' ميجا.', 422);
         }
 
-        $mime = strtolower((string) $file->getMimeType());
+        $mime = $this->normalizedImageMime($file);
         if (! in_array($mime, config('photo_uploads.allowed_mimes', []), true)) {
-            throw new UploadValidationException('صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.', 422);
+            throw new UploadValidationException('صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.', 422);
         }
 
-        if (! str_contains($mime, 'heic') && ! str_contains($mime, 'heif') && $this->dimensions($file)['width'] === null) {
+        if (! $this->isIsoBaseMediaImage($file, $mime) && $this->dimensions($file)['width'] === null) {
             throw new UploadValidationException('الملف المرفوع ليس صورة صالحة أو لا يمكن قراءته.', 422);
         }
+
+        return $mime;
     }
 
     private function assertValidPreparedImage(UploadedFile $file): void
@@ -294,6 +296,61 @@ class TemporaryPhotoUploadService
         ];
     }
 
+    private function normalizedImageMime(UploadedFile $file): string
+    {
+        $mime = strtolower(trim((string) $file->getMimeType()));
+
+        if ($mime === 'image/jpg') {
+            return 'image/jpeg';
+        }
+
+        if (! in_array($mime, ['', 'application/octet-stream'], true)) {
+            return $mime;
+        }
+
+        $brand = $this->isoBaseMediaBrand($file);
+
+        return match (true) {
+            in_array($brand, ['heic', 'heix', 'hevc', 'hevx'], true) => 'image/heic',
+            in_array($brand, ['heif', 'mif1', 'msf1'], true) => 'image/heif',
+            in_array($brand, ['avif', 'avis'], true) => 'image/avif',
+            default => $mime,
+        };
+    }
+
+    private function isIsoBaseMediaImage(UploadedFile $file, string $mime): bool
+    {
+        $brand = $this->isoBaseMediaBrand($file);
+
+        return match ($mime) {
+            'image/heic', 'image/heic-sequence' => in_array($brand, ['heic', 'heix', 'hevc', 'hevx'], true),
+            'image/heif', 'image/heif-sequence' => in_array($brand, ['heif', 'mif1', 'msf1'], true),
+            'image/avif' => in_array($brand, ['avif', 'avis'], true),
+            default => false,
+        };
+    }
+
+    private function isoBaseMediaBrand(UploadedFile $file): ?string
+    {
+        $handle = @fopen($file->getRealPath(), 'rb');
+
+        if (! is_resource($handle)) {
+            return null;
+        }
+
+        try {
+            $header = fread($handle, 32);
+        } finally {
+            fclose($handle);
+        }
+
+        if (! is_string($header) || strlen($header) < 12 || substr($header, 4, 4) !== 'ftyp') {
+            return null;
+        }
+
+        return strtolower(substr($header, 8, 4));
+    }
+
     private function extensionForMime(string $mime): string
     {
         return match (strtolower($mime)) {
@@ -301,6 +358,7 @@ class TemporaryPhotoUploadService
             'image/webp' => 'webp',
             'image/heic', 'image/heic-sequence' => 'heic',
             'image/heif', 'image/heif-sequence' => 'heif',
+            'image/avif' => 'avif',
             default => 'jpg',
         };
     }

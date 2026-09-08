@@ -8,6 +8,13 @@ function isHeic(file) {
         || name.endsWith('.heif');
 }
 
+function isAvif(file) {
+    const type = String(file?.type || '').toLowerCase();
+    const name = String(file?.name || '').toLowerCase();
+
+    return type === 'image/avif' || name.endsWith('.avif');
+}
+
 function withTimeout(promise, timeoutMs) {
     let timeoutId;
     const timeout = new Promise((_, reject) => {
@@ -49,7 +56,10 @@ export async function prepareImageForUpload(file, options = {}) {
         }
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(String(file.type || '').toLowerCase())) {
+    const inputType = String(file.type || '').toLowerCase();
+    const shouldNormalize = isAvif(file);
+
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(inputType) && !shouldNormalize) {
         return file;
     }
 
@@ -61,7 +71,7 @@ export async function prepareImageForUpload(file, options = {}) {
         const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
         const longEdge = Math.max(bitmap.width, bitmap.height);
 
-        if (longEdge <= maxLongEdge) {
+        if (longEdge <= maxLongEdge && !shouldNormalize) {
             bitmap.close?.();
 
             return file;

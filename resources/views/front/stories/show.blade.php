@@ -320,7 +320,7 @@
                                             <p class="font-bold text-indigo-800">📸 ارفع صورتين أو ٣ صور واضحة للوجه</p>
                                         </div>
                                         <input type="file" id="photos" multiple
-                                            accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                                            accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
                                             class="sr-only"
                                             data-photo-input>
                                         <div data-photo-upload-ids></div>

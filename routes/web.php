@@ -238,7 +238,7 @@ Route::prefix('s')->name('child-identity-shares.')->group(function (): void {
 // Cart and checkout routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::get('/photo-uploads/session', [TemporaryPhotoUploadController::class, 'session'])->name('photo-uploads.session');
-Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:20,1')->name('photo-uploads.store');
+Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:photo-uploads')->name('photo-uploads.store');
 Route::get('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'show'])->name('photo-uploads.show');
 Route::delete('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'destroy'])->name('photo-uploads.destroy');
 Route::post('/cart/stories/{story:slug}', [CartController::class, 'store'])->name('cart.store');

@@ -158,7 +158,7 @@ class OrderPhotoUploadService
         $mime = strtolower((string) $file->getMimeType());
         if (! in_array($mime, config('photo_uploads.allowed_mimes', []), true)) {
             throw ValidationException::withMessages([
-                'photos' => 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.',
+                'photos' => 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.',
             ]);
         }
 
@@ -176,6 +176,7 @@ class OrderPhotoUploadService
             'image/webp' => 'webp',
             'image/heic', 'image/heic-sequence' => 'heic',
             'image/heif', 'image/heif-sequence' => 'heif',
+            'image/avif' => 'avif',
             default => 'jpg',
         };
     }

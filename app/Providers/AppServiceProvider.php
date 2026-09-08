@@ -8,8 +8,11 @@ use App\Services\Mobile\ProviderTokenVerifier;
 use App\Support\AdminPermissionRegistry;
 use App\Support\Seo;
 use App\View\Composers\BostaOrderViewComposer;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +26,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        RateLimiter::for('photo-uploads', function (Request $request): Limit {
+            $sessionToken = (string) $request->session()->get('photo_upload.token', '');
+            $key = $sessionToken !== ''
+                ? hash('sha256', $sessionToken)
+                : hash('sha256', $request->session()->getId());
+
+            return Limit::perMinute(30)->by('photo-upload:'.$key);
+        });
+
         View::composer(['admin.orders.show', 'admin.orders.group-show'], BostaOrderViewComposer::class);
 
         Gate::before(function ($user, string $ability): ?bool {
