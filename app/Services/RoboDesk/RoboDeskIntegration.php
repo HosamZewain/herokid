@@ -47,6 +47,16 @@ class RoboDeskIntegration
         return $this->definition['variables'] ?? [];
     }
 
+    /**
+     * Renders a variable the way it is written inside a payload. Built by
+     * concatenation on purpose: a literal {{ in a Blade template is compiled
+     * rather than printed, and escaping it hides the interpolation too.
+     */
+    public function placeholder(string $name): string
+    {
+        return '{'.'{ '.$name.' }'.'}';
+    }
+
     public function setting(): RoboDeskIntegrationSetting
     {
         return RoboDeskIntegrationSetting::query()->firstOrNew(['integration_key' => $this->key]);

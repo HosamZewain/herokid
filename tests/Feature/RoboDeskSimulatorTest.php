@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
-use App\Services\RoboDesk\RoboDeskCredentialService;
 use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
 use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -183,7 +182,7 @@ class RoboDeskSimulatorTest extends TestCase
     public function test_inbound_token_auth_rejects_a_missing_or_wrong_token(): void
     {
         app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
-        app(RoboDeskCredentialService::class)->save('inbound_token', 'static-token-value');
+        $this->configure('');
 
         $payload = ['id' => (string) Str::uuid(), 'type' => 'order.confirmed', 'data' => ['checkout_reference' => 'x']];
 
@@ -197,13 +196,13 @@ class RoboDeskSimulatorTest extends TestCase
     public function test_inbound_token_auth_accepts_the_configured_token(): void
     {
         app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
-        app(RoboDeskCredentialService::class)->save('inbound_token', 'static-token-value');
+        $this->configure('');
         $order = $this->order('CHK-SIM-TOKEN', 'pending_confirmation');
 
         $eventId = (string) Str::uuid();
 
         $this->withHeaders([
-            'X-RoboDesk-Token' => 'static-token-value',
+            'X-RoboDesk-Token' => 'static-token',
             'X-RoboDesk-Event-Id' => $eventId,
         ])->postJson('/api/integrations/robodesk/v1/events', [
             'id' => $eventId,

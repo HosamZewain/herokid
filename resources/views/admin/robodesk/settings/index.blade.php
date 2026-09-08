@@ -42,22 +42,6 @@
                     </label>
                 </div>
 
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">ترويسة التوكن الوارد</label>
-                        <input dir="ltr" name="inbound_auth_header" value="{{ old('inbound_auth_header', $general['inbound_auth_header']) }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-gray-500">
-                            التوكن الوارد
-                            @if ($inboundToken)<span class="text-emerald-600" dir="ltr">({{ $inboundToken }})</span>@endif
-                        </label>
-                        <input dir="ltr" type="password" name="inbound_token" autocomplete="new-password"
-                               placeholder="{{ $inboundToken ? 'اتركه فارغًا للإبقاء على الحالي' : 'التوكن الذي يرسله RoboDesk إلينا' }}"
-                               class="mt-1 w-full rounded-xl border-gray-200 text-sm">
-                        <p class="mt-1 text-xs text-gray-500">يستخدمه RoboDesk عند إرسال ردود العميل إلينا.</p>
-                    </div>
-                </div>
             </section>
 
             {{-- ── 2. Flow control ─────────────────────────────────────── --}}

@@ -52,6 +52,23 @@ class RoboDeskIntegrationRegistry
         return $integration;
     }
 
+    /**
+     * Tokens an inbound RoboDesk call may present. Each integration owns one
+     * token used in both directions, so enabling an integration is what makes
+     * its token valid for callbacks too.
+     *
+     * @return array<int,string>
+     */
+    public function inboundTokens(): array
+    {
+        return $this->all()
+            ->filter(fn (RoboDeskIntegration $integration): bool => $integration->enabled())
+            ->map(fn (RoboDeskIntegration $integration): string => $integration->token())
+            ->filter(fn (string $token): bool => $token !== '')
+            ->values()
+            ->all();
+    }
+
     public function orderConfirmation(): RoboDeskIntegration
     {
         return $this->get(self::ORDER_CONFIRMATION);

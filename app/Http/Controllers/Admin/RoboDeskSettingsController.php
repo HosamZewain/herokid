@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Services\RoboDesk\RoboDeskCredentialService;
 use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
 use App\Services\RoboDesk\RoboDeskPayloadRenderer;
 use App\Services\RoboDesk\RoboDeskSettings;
@@ -22,7 +21,6 @@ class RoboDeskSettingsController extends Controller
 {
     public function __construct(
         private readonly RoboDeskSettings $settings,
-        private readonly RoboDeskCredentialService $credentials,
         private readonly RoboDeskIntegrationRegistry $integrations,
         private readonly RoboDeskPayloadRenderer $renderer,
     ) {}
@@ -36,9 +34,7 @@ class RoboDeskSettingsController extends Controller
                 'simulation_mode' => $this->settings->simulating(),
                 'gate_order_confirmation' => $this->settings->bool('robodesk_gate_order_confirmation'),
                 'gate_identity_confirmation' => $this->settings->bool('robodesk_gate_identity_confirmation'),
-                'inbound_auth_header' => $this->settings->inboundAuthHeader(),
             ],
-            'inboundToken' => $this->credentials->masked('inbound_token'),
         ]);
     }
 
@@ -75,6 +71,12 @@ class RoboDeskSettingsController extends Controller
             return back()->withErrors(['api_url' => 'أدخل رابط الـ API قبل تفعيل التكامل.'])->withInput();
         }
 
+        // Editing the URL or payload only needs robodesk.configure; changing
+        // the secret is held to the stricter credentials permission.
+        if (filled($validated['token'] ?? null)) {
+            abort_unless($request->user()->hasPermission('robodesk.manage_credentials'), 403);
+        }
+
         $this->integrations->save(
             $integrationKey,
             $request->boolean('is_enabled'),
@@ -105,8 +107,6 @@ class RoboDeskSettingsController extends Controller
             'simulation_mode' => ['nullable', 'boolean'],
             'gate_order_confirmation' => ['nullable', 'boolean'],
             'gate_identity_confirmation' => ['nullable', 'boolean'],
-            'inbound_auth_header' => ['nullable', 'string', 'max:100'],
-            'inbound_token' => ['nullable', 'string', 'min:8', 'max:2000'],
         ]);
 
         $this->settings->save([
@@ -114,13 +114,7 @@ class RoboDeskSettingsController extends Controller
             'robodesk_simulation_mode' => $request->boolean('simulation_mode') ? '1' : '0',
             'robodesk_gate_order_confirmation' => $request->boolean('gate_order_confirmation') ? '1' : '0',
             'robodesk_gate_identity_confirmation' => $request->boolean('gate_identity_confirmation') ? '1' : '0',
-            'robodesk_inbound_auth_header' => (string) ($validated['inbound_auth_header'] ?? 'X-RoboDesk-Token'),
         ]);
-
-        if (filled($validated['inbound_token'] ?? null)) {
-            abort_unless($request->user()->hasPermission('robodesk.manage_credentials'), 403);
-            $this->credentials->save('inbound_token', (string) $validated['inbound_token'], $request->user());
-        }
 
         AdminActivityLogger::log(
             action: 'robodesk.general_updated',

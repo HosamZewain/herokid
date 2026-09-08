@@ -7,11 +7,10 @@ return [
     | Admin > التكاملات > RoboDesk.
     |
     | Values here are DEFAULTS only; admin-saved rows in `settings`,
-    | `robodesk_credentials` and `robodesk_integration_settings` win.
+    | `robodesk_integration_settings` win.
     */
     'enabled' => (bool) env('ROBODESK_ENABLED', false),
     'whatsapp_number' => (string) env('ROBODESK_WHATSAPP_NUMBER', '01501188884'),
-    'inbound_secret' => (string) env('ROBODESK_INBOUND_SECRET', ''),
     'timeout_seconds' => (int) env('ROBODESK_TIMEOUT_SECONDS', 15),
     'payment_proof_max_mb' => (int) env('ROBODESK_PAYMENT_PROOF_MAX_MB', 10),
     'instapay_url' => env('ROBODESK_INSTAPAY_URL'),
@@ -32,18 +31,6 @@ return [
         'robodesk_instapay_url' => 'robodesk.instapay_url',
         'robodesk_timeout_seconds' => 'robodesk.timeout_seconds',
         'robodesk_payment_proof_max_mb' => 'robodesk.payment_proof_max_mb',
-    ],
-
-    /*
-    | The single shared secret RoboDesk presents when calling HeroKid back.
-    | Outbound calls carry each integration's own token instead.
-    */
-    'credentials' => [
-        'inbound_token' => [
-            'name_ar' => 'توكن التحقق من الطلبات الواردة',
-            'name_en' => 'Inbound verification token',
-            'legacy_config' => 'robodesk.inbound_secret',
-        ],
     ],
 
     /*

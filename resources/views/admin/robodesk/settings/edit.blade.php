@@ -74,7 +74,7 @@
                 <div class="mt-4 grid gap-2 md:grid-cols-2">
                     @foreach ($integration->variables() as $name => $description)
                         <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                            <code class="text-xs font-bold text-indigo-700" dir="ltr">@{{ {{ $name }} }}</code>
+                            <code class="text-xs font-bold text-indigo-700" dir="ltr">{{ $integration->placeholder($name) }}</code>
                             <span class="text-xs text-gray-500">{{ $description }}</span>
                         </div>
                     @endforeach

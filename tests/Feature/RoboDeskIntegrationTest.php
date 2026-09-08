@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
-use App\Services\RoboDesk\RoboDeskCredentialService;
 use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
 use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -177,7 +176,10 @@ class RoboDeskIntegrationTest extends TestCase
             ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
             ->assertOk()
             ->assertSee('{{ customer_name }}', false)
-            ->assertSee('{{ total }}', false);
+            ->assertSee('{{ total }}', false)
+            // Each variable renders its own name, not the literal Blade source.
+            ->assertSee('{{ delivery_address }}', false)
+            ->assertDontSee('$name');
     }
 
     public function test_the_three_fields_save_and_the_token_is_never_rendered_back(): void
@@ -253,6 +255,22 @@ class RoboDeskIntegrationTest extends TestCase
             ->assertSessionHasErrors('api_url');
     }
 
+    public function test_changing_the_token_needs_the_credentials_permission(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin(['robodesk.configure', 'robodesk.view']))
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => 'a-new-secret',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('static-token', app(RoboDeskIntegrationRegistry::class)->orderConfirmation()->token());
+    }
+
     public function test_settings_require_the_configure_permission(): void
     {
         $this->actingAs($this->admin(['robodesk.view']))
@@ -274,7 +292,6 @@ class RoboDeskIntegrationTest extends TestCase
     private function enable(): void
     {
         app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
-        app(RoboDeskCredentialService::class)->save('inbound_token', 'inbound-token-value');
     }
 
     private function configure(string $payload): void
