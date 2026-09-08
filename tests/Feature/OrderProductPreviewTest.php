@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderPreview;
 use App\Models\OrderProductPreviewGallery;
 use App\Models\Setting;
 use App\Models\User;
@@ -68,6 +69,29 @@ class OrderProductPreviewTest extends TestCase
             'subject_id' => $order->id,
             'action' => 'order.product_previews_uploaded',
         ]);
+    }
+
+    public function test_group_page_still_renders_when_a_preview_owner_child_is_soft_deleted(): void
+    {
+        $removedChild = $this->productOrder();
+        $remainingChild = $this->productOrder('remaining-child');
+        $remainingChild->update([
+            'checkout_group_key' => $removedChild->checkout_group_key,
+        ]);
+
+        $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $removedChild), [
+            'preview_images' => [UploadedFile::fake()->image('removed-child-preview.jpg', 800, 800)],
+        ])->assertRedirect();
+
+        $removedChild->delete();
+
+        $preview = OrderProductPreviewGallery::with('previews.order')->firstOrFail()->previews->firstOrFail();
+        $this->assertTrue($preview->order->trashed());
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $remainingChild))
+            ->assertOk()
+            ->assertSee('removed-child-preview.jpg');
     }
 
     public function test_existing_whatsapp_preview_variable_uses_product_gallery_link(): void
@@ -256,7 +280,7 @@ class OrderProductPreviewTest extends TestCase
         $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $other), [
             'preview_images' => [UploadedFile::fake()->image('other.jpg')],
         ]);
-        $previews = \App\Models\OrderPreview::query()->orderBy('id')->get();
+        $previews = OrderPreview::query()->orderBy('id')->get();
 
         $this->actingAs($this->admin)
             ->deleteJson(route('admin.orders.product-previews.destroy-many', $order), [
