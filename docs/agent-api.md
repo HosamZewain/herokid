@@ -45,6 +45,98 @@ php artisan agent:token revoke agent@example.com --name=production-agent
 
 Tokens issued before catalog scoping was added continue to work with both stories and products for backward compatibility. Reissue them from the Admin Panel to enforce a narrower scope.
 
+## HeroKid Studio read-only API
+
+HeroKid Studio uses the same Sanctum Agent token. Both Studio routes require the base `agent` ability, `agent:orders.read`, an enabled `agent_api_enabled` account, and the application permission `orders.view`. They do not acquire, assign, or mutate an order, and they do not require the checkout to be owned by the requesting Agent.
+
+### Test connection
+
+```bash
+curl https://hero-kid.com/api/agent/studio/connection \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer TOKEN'
+```
+
+```json
+{
+  "success": true,
+  "agent": { "id": 42, "name": "HeroKid Studio Agent" },
+  "abilities": ["agent", "agent:orders.read"],
+  "studio_api": true,
+  "api_version": "1"
+}
+```
+
+### Read an order for Studio
+
+The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads every personalized story row in the same persisted `checkout_group_key`. Ready-made and custom product rows are not serialized as stories.
+
+```bash
+curl https://hero-kid.com/api/agent/studio/orders/HK-2026-XXXXXX \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer TOKEN'
+```
+
+```json
+{
+  "success": true,
+  "order": {
+    "id": "CHK-20260909-ABC123",
+    "order_number": "HK-2026-XXXXXX",
+    "checkout_reference": "HK09-236",
+    "status": "generating",
+    "created_at": "2026-09-09T10:00:00+03:00",
+    "source_revision": "sha256:..."
+  },
+  "production_stories": [
+    {
+      "production_unit_id": "story:456",
+      "order_id": 456,
+      "order_number": "HK-2026-XXXXXX",
+      "status": "generating",
+      "child": {
+        "name": "ياسين",
+        "age": 7,
+        "gender": "boy",
+        "production_data": { "interests": "العلوم" }
+      },
+      "story": {
+        "id": 31,
+        "template_id": "story:31",
+        "title": "المخترع الصغير",
+        "language": "ar"
+      },
+      "dedication": "إلى مبدعي الصغير...",
+      "scenes": [
+        {
+          "id": "order_scene_snapshot:1001",
+          "number": 1,
+          "text": "بدأ ياسين مغامرته.",
+          "title": null,
+          "metadata": { "source": "order_snapshot" }
+        }
+      ],
+      "metadata": {
+        "scene_text_source": "نسخة الطلب المحفوظة",
+        "updated_at": "2026-09-09T10:05:00+03:00"
+      }
+    }
+  ]
+}
+```
+
+Stable identifier semantics:
+
+- `order.id` is the persisted `checkout_group_key`.
+- `production_unit_id` is `story:{orders.id}` and remains tied to that exact personalized story row.
+- `story.template_id` is `story:{stories.id}`.
+- Scene IDs identify the database record actually supplying the text: `production_scene:{id}`, `order_scene_snapshot:{id}`, or `story_scene_template:{id}`.
+- `source_revision` is a deterministic SHA-256 digest of relevant order, story, snapshot, and Production Studio scene update timestamps.
+
+Scene text follows the existing production precedence: the latest Production Studio scene, then the order-owned scene snapshot, then the current story template for legacy orders. Scenes are explicitly sorted by scene number and Arabic Unicode is returned unchanged. The dedication is read from the individual story order's `gift_note`.
+
+A checkout with no personalized stories returns HTTP 200 with `production_stories: []`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, or a missing `orders.view` permission return `FORBIDDEN`. Phone, email, delivery address, payment data, storage paths, product rows, and unrelated Admin notes are never returned.
+
 All `POST` requests require a unique `Idempotency-Key` header. Retrying an operation that already changed data with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`. Empty queue responses are deliberately transient, so polling with an old key can discover orders that arrived later. Agents should still generate a fresh key for each intended queue poll.
 
 ## Workflow

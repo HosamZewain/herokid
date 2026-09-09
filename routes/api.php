@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Agent\AgentCheckoutController;
 use App\Http\Controllers\Api\Agent\AgentOrderController;
+use App\Http\Controllers\Api\Agent\AgentStudioController;
 use App\Http\Controllers\Api\BostaWebhookController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BootstrapController;
@@ -32,6 +33,11 @@ Route::post('integrations/bosta/webhook', BostaWebhookController::class)
     ->name('integrations.bosta.webhook');
 
 Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
+    Route::get('studio/connection', [AgentStudioController::class, 'connection'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.view');
+    Route::get('studio/orders/{orderNumber}', [AgentStudioController::class, 'show'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.view');
+
     Route::post('checkouts/acquire-next-identity', [AgentCheckoutController::class, 'acquireNextIdentity'])
         ->middleware('agent_api:ability:orders.identity,permission:orders.assign');
     Route::get('checkouts/{reference}/identity-context', [AgentCheckoutController::class, 'identityContext'])
