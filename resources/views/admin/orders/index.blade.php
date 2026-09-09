@@ -31,6 +31,7 @@
         $printingStatusColors = \App\Support\OrderWorkflowStatus::printingColors();
         $shippingStatusColors = \App\Support\OrderWorkflowStatus::shippingColors();
         $eventOrderStatuses = \App\Services\Orders\OrderStatusService::labels(false);
+        $bulkOrderStatuses = \App\Services\Orders\OrderStatusService::labels();
         $eventPaymentStatuses = \App\Support\OrderPaymentStatus::labels(false);
         $eventPrintingStatuses = \App\Support\OrderWorkflowStatus::printingLabels(false);
         $eventShippingStatuses = \App\Support\OrderWorkflowStatus::shippingLabels(false);
@@ -46,6 +47,9 @@
             'cancelled' => 'لا توجد طلبات ملغاة أو محذوفة تطابق الفلاتر.',
             default => 'لا توجد طلبات نشطة تطابق الفلاتر.',
         };
+        $canBulkUpdateStatus = auth()->user()->hasPermission('orders.update');
+        $canBulkReleaseAssignments = auth()->user()->hasPermission('orders.assignment.manage');
+        $showBulkActions = !$trash && ($canBulkUpdateStatus || $canBulkReleaseAssignments);
     @endphp
 
     <div class="py-8">
@@ -236,6 +240,39 @@
                 </form>
             </div>
 
+            @if($showBulkActions)
+                <form id="order-bulk-actions" method="POST" action="{{ route('admin.orders.bulk-actions') }}" class="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-4 shadow-sm sm:p-5" data-order-bulk-actions>
+                    @csrf
+                    <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+                        <div class="min-w-44">
+                            <p class="text-sm font-black text-indigo-950">إجراءات جماعية</p>
+                            <p class="mt-1 text-xs font-bold text-indigo-700"><span data-bulk-selected-count>0</span> عملية شراء محددة</p>
+                        </div>
+                        <div class="min-w-64 flex-1">
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">الإجراء</label>
+                            <select name="action" required class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-action>
+                                @if($canBulkUpdateStatus)<option value="update_status">تغيير حالة الطلبات المحددة</option>@endif
+                                @if($canBulkReleaseAssignments)<option value="release_assignments">إلغاء الاستحواذ عن الطلبات المحددة</option>@endif
+                                @if($canBulkUpdateStatus && $canBulkReleaseAssignments)<option value="update_status_and_release">تغيير الحالة وإلغاء الاستحواذ</option>@endif
+                            </select>
+                        </div>
+                        <div class="min-w-64 flex-1" data-bulk-status-field>
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة الجديدة</label>
+                            <select name="status" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-status>
+                                <option value="">اختر الحالة</option>
+                                @foreach($bulkOrderStatuses as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-64 flex-[1.5]">
+                            <label class="mb-1.5 block text-xs font-black text-gray-600">ملاحظة للسجل (اختياري)</label>
+                            <input name="admin_notes" maxlength="2000" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" placeholder="سبب التغيير أو الإجراء">
+                        </div>
+                        <button type="submit" disabled class="min-h-11 rounded-xl bg-indigo-600 px-6 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" data-bulk-submit>تنفيذ على المحدد</button>
+                    </div>
+                    <p class="mt-3 text-[11px] font-bold text-amber-700">إلغاء الاستحواذ عن طلب استلمه مستخدم آخر يحتاج صلاحية إدارة مسؤولية الطلبات، ويتم تسجيل المنفذ والمسؤول السابق في سجل النشاط.</p>
+                </form>
+            @endif
+
             @can('orders.statistics.view')
             <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
@@ -286,6 +323,12 @@
                         @endphp
                         <article class="space-y-4 p-5">
                             <div class="flex items-start justify-between gap-3">
+                                @if($showBulkActions && !$group['trashed'])
+                                    <label class="flex min-h-10 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-xs font-black text-indigo-700">
+                                        <input type="checkbox" value="{{ $group['representative_id'] }}" class="rounded border-indigo-300 text-indigo-600" data-bulk-order-checkbox aria-label="تحديد {{ $group['short_reference'] ?: $group['key'] }}">
+                                        تحديد
+                                    </label>
+                                @endif
                                 <div class="min-w-0 text-right">
                                     <a href="{{ $detailsUrl }}" class="block truncate font-mono text-base font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</a>
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
@@ -364,6 +407,11 @@
                     <table class="min-w-full divide-y divide-gray-100 text-right text-sm">
                         <thead class="bg-gray-50">
                             <tr>
+                                @if($showBulkActions)
+                                    <th class="w-12 px-3 py-3 text-center">
+                                        <input type="checkbox" class="rounded border-indigo-300 text-indigo-600" data-bulk-select-all aria-label="تحديد كل الطلبات الظاهرة">
+                                    </th>
+                                @endif
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">عملية الشراء</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المصدر</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
@@ -386,6 +434,13 @@
                                     $detailsUrl = route('admin.orders.groups.show', $group['representative_id']);
                                 @endphp
                                 <tr class="align-top transition hover:bg-slate-50">
+                                    @if($showBulkActions)
+                                        <td class="px-3 py-4 text-center">
+                                            @if(!$group['trashed'])
+                                                <input type="checkbox" value="{{ $group['representative_id'] }}" class="rounded border-indigo-300 text-indigo-600" data-bulk-order-checkbox aria-label="تحديد {{ $group['short_reference'] ?: $group['key'] }}">
+                                            @endif
+                                        </td>
+                                    @endif
                                     <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>
                                         <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</a>
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
@@ -476,12 +531,12 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="9" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="{{ $showBulkActions ? 10 : 9 }}" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
                                         </tr>
                                     @endif
                                 @endcan
                             @empty
-                                <tr><td colspan="9" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
+                                <tr><td colspan="{{ $showBulkActions ? 10 : 9 }}" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -492,4 +547,78 @@
             </div>
         </div>
     </div>
+
+    @if($showBulkActions)
+        <script>
+            (() => {
+                const form = document.querySelector('[data-order-bulk-actions]');
+                if (!form) return;
+
+                const action = form.querySelector('[data-bulk-action]');
+                const status = form.querySelector('[data-bulk-status]');
+                const statusField = form.querySelector('[data-bulk-status-field]');
+                const submit = form.querySelector('[data-bulk-submit]');
+                const count = form.querySelector('[data-bulk-selected-count]');
+                const orderCheckboxes = () => Array.from(document.querySelectorAll('[data-bulk-order-checkbox]'));
+                const selectedIds = () => [...new Set(orderCheckboxes().filter(checkbox => checkbox.checked).map(checkbox => checkbox.value))];
+                const allIds = () => [...new Set(orderCheckboxes().map(checkbox => checkbox.value))];
+
+                const sync = () => {
+                    const selected = selectedIds();
+                    count.textContent = new Intl.NumberFormat('ar-EG').format(selected.length);
+                    submit.disabled = selected.length === 0;
+                    document.querySelectorAll('[data-bulk-select-all]').forEach(checkbox => {
+                        checkbox.checked = allIds().length > 0 && selected.length === allIds().length;
+                        checkbox.indeterminate = selected.length > 0 && selected.length < allIds().length;
+                    });
+                };
+
+                const syncAction = () => {
+                    const needsStatus = action.value !== 'release_assignments';
+                    statusField.hidden = !needsStatus;
+                    status.disabled = !needsStatus;
+                    status.required = needsStatus;
+                };
+
+                document.addEventListener('change', event => {
+                    if (event.target.matches('[data-bulk-select-all]')) {
+                        orderCheckboxes().forEach(checkbox => checkbox.checked = event.target.checked);
+                        sync();
+                        return;
+                    }
+                    if (event.target.matches('[data-bulk-order-checkbox]')) {
+                        orderCheckboxes()
+                            .filter(checkbox => checkbox.value === event.target.value)
+                            .forEach(checkbox => checkbox.checked = event.target.checked);
+                        sync();
+                    }
+                });
+                action.addEventListener('change', syncAction);
+
+                form.addEventListener('submit', event => {
+                    const ids = selectedIds();
+                    if (ids.length === 0) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    form.querySelectorAll('[data-generated-bulk-id]').forEach(input => input.remove());
+                    ids.forEach(id => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'representative_ids[]';
+                        input.value = id;
+                        input.dataset.generatedBulkId = '1';
+                        form.appendChild(input);
+                    });
+
+                    const label = action.selectedOptions[0]?.textContent?.trim() || 'تنفيذ الإجراء';
+                    if (!window.confirm(`${label} على ${ids.length} عملية شراء؟`)) event.preventDefault();
+                });
+
+                syncAction();
+                sync();
+            })();
+        </script>
+    @endif
 </x-admin-layout>

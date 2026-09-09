@@ -23,11 +23,12 @@ use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
-use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderActivityController;
+use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderApprovedChildIdentityController;
 use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
+use App\Http\Controllers\Admin\OrderBulkActionController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
@@ -641,6 +642,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('attachments/{attachment}', [StoryAttachmentController::class, 'destroy'])->middleware('permission:story_attachments.delete')->name('attachments.destroy');
 
     Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
+    Route::post('orders/bulk-actions', OrderBulkActionController::class)
+        ->middleware('permission:orders.view')
+        ->name('orders.bulk-actions');
     Route::get('bosta', [BostaController::class, 'index'])->middleware('permission:bosta.view')->name('bosta.index');
     Route::get('bosta/districts', [BostaController::class, 'districts'])->middleware('permission:bosta.view')->name('bosta.districts');
     Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
