@@ -58,7 +58,12 @@
                 <p class="text-sm font-bold text-indigo-700">رقم طلبك</p>
                 <p class="mt-2 font-mono text-3xl font-black text-indigo-950" dir="ltr">{{ $checkoutReference }}</p>
                 <p class="mt-2 text-xs font-bold text-indigo-600">احتفظ بهذا الرقم للاستفسار عن الطلب أو تتبعه.</p>
+                <a href="{{ route('track.index') }}" class="mt-4 inline-flex rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white">متابعة أو تعديل الطلب</a>
             </div>
+
+            @if(session('checkout.order_decision_message'))
+                <div class="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-black text-emerald-800">{{ session('checkout.order_decision_message') }}</div>
+            @endif
             
             <div class="bg-indigo-50 rounded-xl p-6 mb-8 text-right">
                 <h2 class="font-bold text-indigo-900 mb-4 text-lg border-b border-indigo-100 pb-2">تفاصيل الطلب:</h2>

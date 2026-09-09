@@ -1,55 +1,100 @@
 <x-front-layout>
-    <div class="bg-gray-50 py-12 min-h-[70vh]">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            
-            <div class="mb-6">
-                <a href="{{ route('track.index') }}" class="text-indigo-600 hover:text-indigo-800 flex items-center gap-2 font-medium text-sm">
-                    <svg class="w-4 h-4 rtl:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                    تتبع طلب آخر
-                </a>
-            </div>
+    <x-slot name="pageTitle">متابعة الطلب {{ $group['short_reference'] }}</x-slot>
+    <x-slot name="robots">noindex, nofollow</x-slot>
 
-            <div class="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                <div class="bg-indigo-600 text-white p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center">
+    <main class="min-h-[70vh] bg-slate-50 py-8 sm:py-12">
+        <div class="mx-auto max-w-5xl space-y-6 px-4 sm:px-6 lg:px-8">
+            @if(session('success'))
+                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-black text-emerald-800" role="status">{{ session('success') }}</div>
+            @endif
+            @if($errors->any())
+                <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-black text-red-700" role="alert">{{ $errors->first() }}</div>
+            @endif
+
+            <section class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-700 to-violet-600 p-6 text-white shadow-xl shadow-indigo-100 sm:p-8">
+                <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 class="text-2xl font-bold mb-2">طلب رقم {{ $order->checkoutReference?->short_reference ?: $order->order_number }}</h1>
-                        @if($order->story)
-                            <p class="text-indigo-200">الطفل البطل: {{ $order->child_name }} | القصة: {{ $order->story->title }}</p>
-                        @else
-                            <p class="text-indigo-200">طلب منتجات من متجر HeroKid</p>
-                        @endif
+                        <p class="text-sm font-bold text-indigo-200">رقم الطلب</p>
+                        <h1 class="mt-1 font-mono text-3xl font-black" dir="ltr">{{ $group['short_reference'] }}</h1>
+                        <p class="mt-3 text-sm font-bold text-indigo-100">تم الإنشاء {{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</p>
                     </div>
-                    <div class="mt-4 md:mt-0 bg-white/20 px-4 py-2 rounded-full font-bold">
-                        تاريخ الطلب: {{ app_datetime($order->created_at, 'Y/m/d') }}
-                    </div>
+                    <span class="w-fit rounded-full bg-white px-4 py-2 text-sm font-black text-indigo-700">{{ $group['status_label'] }}</span>
                 </div>
+            </section>
 
-                <div class="p-6 md:p-8">
-                    <h2 class="text-xl font-bold text-gray-900 mb-6">تحديثات حالة الطلب</h2>
-                    
-                    <div class="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-300 before:to-transparent">
-                        @foreach($order->statusLogs()->latest()->get() as $log)
-                            <div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                                <div class="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-white text-indigo-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 font-bold">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                </div>
-                                
-                                <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
-                                    <div class="flex items-center justify-between space-x-2 rtl:space-x-reverse mb-1">
-                                        <div class="font-bold text-gray-900">{{ \App\Support\OrderStatusRegistry::label(\App\Support\OrderStatusRegistry::TYPE_ORDER, $log->status) }}</div>
-                                        <time class="text-xs font-medium text-gray-500">{{ app_datetime_human($log->created_at) }}</time>
-                                    </div>
-                                    <div class="text-gray-600 text-sm">
-                                        {{ $log->notes ?? 'تم تحديث حالة الطلب' }}
-                                    </div>
-                                </div>
-                            </div>
+            <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                @foreach([
+                    ['حالة الطلب', $group['status_label'], 'text-indigo-700'],
+                    ['حالة الدفع', $group['payment_status_label'], 'text-amber-700'],
+                    ['حالة الطباعة', $group['printing_status_label'], 'text-violet-700'],
+                    ['حالة الشحن', $group['shipping_status_label'], 'text-emerald-700'],
+                ] as [$label, $value, $color])
+                    <article class="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                        <p class="text-xs font-bold text-slate-500">{{ $label }}</p>
+                        <p class="mt-2 text-sm font-black {{ $color }}">{{ $value }}</p>
+                    </article>
+                @endforeach
+            </section>
+
+            <section class="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm sm:p-7">
+                <div class="flex items-center justify-between gap-4">
+                    <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{{ $group['story_count'] + $group['product_quantity'] + $group['add_on_quantity'] }} عنصر</span>
+                    <h2 class="text-xl font-black text-slate-950">محتويات الطلب</h2>
+                </div>
+                <div class="mt-5 grid gap-3 md:grid-cols-2">
+                    @foreach($group['active_orders'] as $order)
+                        @foreach($order->items as $item)
+                            <article class="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right">
+                                <p class="font-black text-slate-900">{{ $item->title }}</p>
+                                <p class="mt-1 text-xs font-bold text-slate-500">الكمية: {{ $item->quantity }}</p>
+                                @if($order->child_name)<p class="mt-2 text-sm font-bold text-indigo-700">الطفل: {{ $order->child_name }}</p>@endif
+                            </article>
                         @endforeach
-                    </div>
-
+                    @endforeach
                 </div>
-            </div>
+            </section>
 
+            <section class="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm sm:p-7">
+                <h2 class="text-xl font-black text-slate-950">بيانات الاستلام</h2>
+                <dl class="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+                    <div><dt class="font-bold text-slate-500">اسم ولي الأمر</dt><dd class="mt-1 font-black text-slate-900">{{ $group['customer_name'] }}</dd></div>
+                    <div><dt class="font-bold text-slate-500">رقم الموبايل</dt><dd class="mt-1 font-black text-slate-900" dir="ltr">{{ $group['phone'] }}</dd></div>
+                    <div><dt class="font-bold text-slate-500">المحافظة والمدينة</dt><dd class="mt-1 font-black text-slate-900">{{ data_get($group['delivery'], 'governorate') }} — {{ data_get($group['delivery'], 'city') }}</dd></div>
+                    <div><dt class="font-bold text-slate-500">العنوان</dt><dd class="mt-1 font-black text-slate-900">{{ data_get($group['delivery'], 'address') }}</dd></div>
+                </dl>
+            </section>
+
+            <section class="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm sm:p-7">
+                <h2 class="text-xl font-black text-slate-950">آخر تحديثات الطلب</h2>
+                <div class="mt-5 space-y-3">
+                    @foreach($group['active_orders']->flatMap->statusLogs->sortByDesc('created_at')->take(12) as $log)
+                        <div class="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+                            <time class="shrink-0 text-xs font-bold text-slate-400">{{ app_datetime_human($log->created_at) }}</time>
+                            <p class="text-sm font-black text-slate-800">{{ \App\Support\OrderStatusRegistry::label($log->status_type ?: 'order', $log->status) }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+
+            <section class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 sm:p-7">
+                <div class="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
+                    <div class="text-right">
+                        <h2 class="text-lg font-black text-indigo-950">إدارة الطلب</h2>
+                        <p class="mt-1 text-sm font-bold leading-6 text-indigo-700">{{ $group['can_edit'] ? 'يمكنك تعديل البيانات أو إلغاء الطلب قبل بدء التنفيذ.' : 'بدأ تنفيذ الطلب؛ ما زال بإمكانك تحديث ملاحظات ولي الأمر.' }}</p>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        @if($group['can_edit'] || $group['can_update_parent_notes'])<a href="{{ route('track.edit', $group['short_reference']) }}" class="inline-flex min-h-12 items-center justify-center rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black text-white">{{ $group['can_edit'] ? 'تعديل الطلب' : 'تحديث ملاحظات ولي الأمر' }}</a>@endif
+                        @if($group['can_cancel'])
+                            <form method="POST" action="{{ route('track.cancel', $group['short_reference']) }}" onsubmit="return confirm('هل أنت متأكد من إلغاء الطلب بالكامل؟')">
+                                @csrf
+                                <input type="hidden" name="confirm_cancel" value="1">
+                                <button class="min-h-12 w-full rounded-2xl border border-red-200 bg-white px-6 py-3 text-sm font-black text-red-700">إلغاء الطلب</button>
+                            </form>
+                        @endif
+                        <a href="{{ route('track.index') }}" class="inline-flex min-h-12 items-center justify-center rounded-2xl border border-indigo-200 bg-white px-6 py-3 text-sm font-black text-indigo-700">طلب آخر</a>
+                    </div>
+                </div>
+            </section>
         </div>
-    </div>
+    </main>
 </x-front-layout>

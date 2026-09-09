@@ -33,7 +33,7 @@ class OrderGroupMergeService
         Order $targetRepresentative,
         string $sourceReference,
         string $reason,
-        User $admin,
+        ?User $admin,
         Request $request,
     ): array {
         return DB::transaction(function () use ($targetRepresentative, $sourceReference, $reason, $admin, $request): array {
@@ -103,7 +103,7 @@ class OrderGroupMergeService
                     'payment_status' => $paymentStatus,
                     'paid_amount_cents' => $combinedPaidCents,
                     'payment_method' => $paymentMethod,
-                    'payment_updated_by_user_id' => $admin->id,
+                    'payment_updated_by_user_id' => $admin?->id,
                     'payment_updated_at' => now(),
                 ])->save();
             }
@@ -122,7 +122,7 @@ class OrderGroupMergeService
                 'target_short_reference' => $targetReference?->short_reference,
                 'source_representative_order_id' => $sourceOrders->first()->id,
                 'target_representative_order_id' => $targetOrders->first()->id,
-                'merged_by_user_id' => $admin->id,
+                'merged_by_user_id' => $admin?->id,
                 'removed_delivery_fee_cents' => (int) $source['delivery_cents'],
                 'reason' => trim($reason),
                 'merged_at' => now(),

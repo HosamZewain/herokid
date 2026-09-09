@@ -185,6 +185,7 @@
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">{{ old('address_details', data_get($savedDeliveryDetails, 'address_details')) }}</textarea>
                                 <x-input-error :messages="$errors->get('address_details')" class="mt-1" />
                             </div>
+                            @include('front.cart._existing-order-choice')
                             <button type="submit"
                                 class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-200">
                                 إتمام الطلب

@@ -15,6 +15,7 @@ use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
@@ -36,6 +37,7 @@ class CheckoutController extends Controller
         OrderSceneTextService $sceneTexts,
         MetaPurchaseTrackingService $metaPurchaseTracking,
         PackageCartExpander $packageCartExpander,
+        CustomerOrderSelfService $customerOrders,
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -55,6 +57,8 @@ class CheckoutController extends Controller
             'city' => 'required|string|max:255',
             'street' => 'required|string|max:255',
             'address_details' => 'required|string|max:1000',
+            'previous_order_action' => ['nullable', Rule::in(['separate', 'cancel_previous', 'merge'])],
+            'previous_order_reference' => ['nullable', 'string', 'max:50'],
         ]);
 
         $country = DeliveryCountry::where('active', true)->findOrFail($validated['delivery_country_id']);
@@ -116,7 +120,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds): void {
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -432,6 +436,20 @@ class CheckoutController extends Controller
                     ]);
 
                     $this->decrementStock($product, $variant, $quantity);
+                }
+
+                if ($firstOrder) {
+                    $message = $customerOrders->applyCheckoutDecision(
+                        $request,
+                        $firstOrder,
+                        $validated['previous_order_action'] ?? null,
+                        $validated['previous_order_reference'] ?? null,
+                        $validated['phone'],
+                    );
+
+                    if ($message) {
+                        $request->session()->flash('checkout.order_decision_message', $message);
+                    }
                 }
             });
         } catch (\RuntimeException) {

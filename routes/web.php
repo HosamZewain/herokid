@@ -252,6 +252,21 @@ Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('c
 // Order Tracking
 Route::get('/track-order', [TrackOrderController::class, 'index'])->name('track.index');
 Route::post('/track-order', [TrackOrderController::class, 'track'])->name('track.search');
+Route::post('/checkout/active-orders', [TrackOrderController::class, 'activeOrders'])
+    ->middleware('throttle:30,1')
+    ->name('checkout.active-orders');
+Route::get('/track-order/{reference}', [TrackOrderController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('track.show');
+Route::get('/track-order/{reference}/edit', [TrackOrderController::class, 'edit'])
+    ->middleware('throttle:30,1')
+    ->name('track.edit');
+Route::put('/track-order/{reference}', [TrackOrderController::class, 'update'])
+    ->middleware('throttle:20,1')
+    ->name('track.update');
+Route::post('/track-order/{reference}/cancel', [TrackOrderController::class, 'cancel'])
+    ->middleware('throttle:10,1')
+    ->name('track.cancel');
 
 // Preview Approval (customer)
 Route::post('/orders/{order}/approve-preview', [CustomerPreviewDecisionController::class, 'approve'])
