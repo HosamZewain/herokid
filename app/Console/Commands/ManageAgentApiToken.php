@@ -15,6 +15,7 @@ class ManageAgentApiToken extends Command
         {--name=production-agent : Token name}
         {--expires=90 : Expiry in days for newly issued tokens}
         {--scope=all : Catalog scope: all, stories, or products}
+        {--product=* : Restrict a products token to one or more product IDs}
         {--rework : Allow selecting and correcting existing checkouts}
         {--identity-only : Restrict the token to the story identity queue only}';
 
@@ -66,7 +67,14 @@ class ManageAgentApiToken extends Command
             $scope = AgentCatalogScope::STORIES;
         }
 
-        $token = $tokens->issue($user, $name, $days, $scope, (bool) $this->option('rework'), $identityOnly);
+        $productIds = collect($this->option('product'))
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $token = $tokens->issue($user, $name, $days, $scope, (bool) $this->option('rework'), $identityOnly, $productIds);
 
         $this->warn('Copy this token now. It will not be shown again:');
         $this->line($token->plainTextToken);
@@ -75,6 +83,7 @@ class ManageAgentApiToken extends Command
         $this->info('Catalog scope: '.AgentCatalogScope::label($scope));
         $this->info('Existing-order rework: '.($this->option('rework') ? 'enabled' : 'disabled'));
         $this->info('Story identity only: '.($identityOnly ? 'enabled' : 'disabled'));
+        $this->info('Allowed product IDs: '.($productIds === [] ? 'all products in scope' : implode(', ', $productIds)));
 
         return self::SUCCESS;
     }

@@ -114,7 +114,7 @@ class AgentCheckoutProductionService
         return null;
     }
 
-    /** @return array<string, int|string> */
+    /** @return array<string, mixed> */
     public function queueDiagnostics(User $agent): array
     {
         $groupKeys = Order::query()
@@ -127,6 +127,7 @@ class AgentCheckoutProductionService
 
         $summary = [
             'token_catalog_scope' => AgentCatalogScope::forUser($agent),
+            'token_product_ids' => AgentProductScope::forUser($agent),
             'new_checkout_groups' => $groupKeys->count(),
             'eligible_now' => 0,
             'already_acquired' => 0,
@@ -685,6 +686,7 @@ class AgentCheckoutProductionService
             'type' => 'product',
             'order_id' => $order->id,
             'order_item_id' => $item->id,
+            'product_id' => $item->product_id,
             'order_number' => $order->order_number,
             'status' => $order->status,
             'title' => $item->title,

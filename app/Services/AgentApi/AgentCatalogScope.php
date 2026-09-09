@@ -63,6 +63,7 @@ class AgentCatalogScope
     /** @param Collection<int, array<string, mixed>> $units */
     public static function allowsEveryUnit(User $user, Collection $units): bool
     {
-        return $units->every(fn (array $unit): bool => self::allows($user, (string) $unit['type']));
+        return $units->every(fn (array $unit): bool => self::allows($user, (string) $unit['type']))
+            && AgentProductScope::allowsEveryUnit($user, $units);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services\AgentApi;
 
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -45,6 +46,7 @@ class AgentTokenService
         string $catalogScope,
         bool $allowRework = false,
         bool $identityOnly = false,
+        array $allowedProductIds = [],
     ): NewAccessToken {
         if (! $agent->isAdmin()) {
             throw ValidationException::withMessages(['agent_user_id' => 'يجب اختيار حساب مشرف نشط ومخصص للـAgent.']);
@@ -62,12 +64,28 @@ class AgentTokenService
             throw ValidationException::withMessages(['allow_rework' => 'لا يمكن جمع وضع هويات القصص فقط مع صلاحية إعادة الإنتاج.']);
         }
 
+        $allowedProductIds = collect($allowedProductIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        if ($allowedProductIds !== [] && $catalogScope !== AgentCatalogScope::PRODUCTS) {
+            throw ValidationException::withMessages(['product_ids' => 'تحديد منتجات بعينها متاح فقط مع نطاق المنتجات فقط.']);
+        }
+
+        if ($allowedProductIds !== [] && Product::query()->whereIn('id', $allowedProductIds)->count() !== count($allowedProductIds)) {
+            throw ValidationException::withMessages(['product_ids' => 'أحد المنتجات المحددة غير موجود.']);
+        }
+
         $permissionIds = Permission::query()->whereIn('key', self::REQUIRED_PERMISSIONS)->pluck('id');
         if ($permissionIds->count() !== count(self::REQUIRED_PERMISSIONS)) {
             throw ValidationException::withMessages(['agent_user_id' => 'صلاحيات الطلبات المطلوبة غير مكتملة. شغّل migrations أولًا.']);
         }
 
-        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $allowRework, $identityOnly, $permissionIds): NewAccessToken {
+        return DB::transaction(function () use ($agent, $name, $expiresInDays, $catalogScope, $allowRework, $identityOnly, $allowedProductIds, $permissionIds): NewAccessToken {
             $agent->permissions()->syncWithoutDetaching($permissionIds);
             $agent->forceFill(['agent_api_enabled' => true])->save();
 
@@ -78,6 +96,7 @@ class AgentTokenService
                     : [
                         ...self::OPERATION_ABILITIES,
                         ...AgentCatalogScope::abilities($catalogScope),
+                        ...AgentProductScope::abilities($allowedProductIds),
                         ...($allowRework ? self::REWORK_ABILITIES : []),
                     ],
                 now()->addDays($expiresInDays),

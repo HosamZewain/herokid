@@ -74,6 +74,35 @@
                 @error('catalog_scope')<span class="mt-1 block text-sm text-red-600">{{ $message }}</span>@enderror
             </fieldset>
 
+            <fieldset class="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 lg:col-span-2" data-product-restriction>
+                <label class="flex items-start gap-3">
+                    <input type="hidden" name="restrict_products" value="0">
+                    <input type="checkbox" name="restrict_products" value="1" @checked(old('restrict_products'))
+                        class="mt-1 rounded border-cyan-300 text-cyan-700" data-restrict-products>
+                    <span>
+                        <strong class="block text-cyan-950">تقييد هذا الـAgent بمنتجات محددة</strong>
+                        <small class="mt-1 block text-cyan-800">يعمل فقط مع نطاق «المنتجات فقط». إذا احتوت عملية الشراء منتج إنتاج آخر غير محدد فلن يستحوذ عليها الـAgent.</small>
+                    </span>
+                </label>
+
+                <div class="mt-4 grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-cyan-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-3" data-product-options>
+                    @forelse($products as $product)
+                        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 hover:border-cyan-400">
+                            <input type="checkbox" name="product_ids[]" value="{{ $product->id }}"
+                                @checked(in_array($product->id, old('product_ids', []))) class="mt-1 rounded border-slate-300 text-cyan-700">
+                            <span class="min-w-0">
+                                <strong class="block text-sm text-slate-900">{{ $product->name_ar ?: $product->name_en ?: $product->slug }}</strong>
+                                <small class="block truncate text-slate-500" dir="ltr">#{{ $product->id }}{{ $product->sku ? ' · '.$product->sku : '' }}</small>
+                            </span>
+                        </label>
+                    @empty
+                        <p class="text-sm text-slate-500 sm:col-span-2 lg:col-span-3">لا توجد منتجات نشطة لها Production Prompt حاليًا.</p>
+                    @endforelse
+                </div>
+                @error('product_ids')<span class="mt-2 block text-sm text-red-600">{{ $message }}</span>@enderror
+                @error('product_ids.*')<span class="mt-2 block text-sm text-red-600">{{ $message }}</span>@enderror
+            </fieldset>
+
             <label class="block">
                 <span class="mb-1 block text-sm font-bold text-slate-700">الصلاحية بالأيام</span>
                 <input name="expires_in_days" type="number" min="1" max="365" required value="{{ old('expires_in_days', 90) }}" class="w-full rounded-xl border-slate-300" dir="ltr">
@@ -93,13 +122,22 @@
         @else
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">نوع العمل</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
+                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">المنتجات المحددة</th><th class="p-3 text-right">نوع العمل</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach($tokens as $token)
                             <tr>
                                 <td class="p-3 font-mono" dir="ltr">{{ $token['name'] }}</td>
                                 <td class="p-3"><strong>{{ $token['agent']->name }}</strong><span class="block text-xs text-slate-500">{{ $token['agent']->email }}</span></td>
                                 <td class="p-3"><span class="rounded-full bg-indigo-50 px-3 py-1 font-bold text-indigo-700">{{ \App\Services\AgentApi\AgentCatalogScope::label($token['scope']) }}</span></td>
+                                <td class="p-3 text-slate-600">
+                                    @if($token['scope'] !== \App\Services\AgentApi\AgentCatalogScope::PRODUCTS)
+                                        <span class="text-xs">—</span>
+                                    @elseif($token['allowed_products'] === [])
+                                        <span class="text-xs">كل منتجات النطاق</span>
+                                    @else
+                                        <span class="text-xs font-bold text-cyan-800">{{ implode('، ', $token['allowed_products']) }}</span>
+                                    @endif
+                                </td>
                                 <td class="p-3"><span class="rounded-full px-3 py-1 font-bold {{ $token['identity_only'] ? 'bg-violet-100 text-violet-800' : 'bg-slate-100 text-slate-600' }}">{{ $token['identity_only'] ? 'هويات فقط' : 'إنتاج' }}</span></td>
                                 <td class="p-3"><span class="rounded-full px-3 py-1 font-bold {{ $token['can_rework'] ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500' }}">{{ $token['can_rework'] ? 'مسموح' : 'غير مسموح' }}</span></td>
                                 <td class="p-3 text-slate-600">{{ $token['last_used_at'] ? app_datetime($token['last_used_at']) : 'لم يُستخدم' }}</td>
@@ -133,4 +171,22 @@ document.querySelector('[data-copy-agent-token]')?.addEventListener('click', asy
 });
 </script>
 @endif
+<script>
+(() => {
+    const restrict = document.querySelector('[data-restrict-products]');
+    const options = document.querySelector('[data-product-options]');
+    const productScope = document.querySelector('input[name="catalog_scope"][value="products"]');
+    if (!restrict || !options || !productScope) return;
+
+    const sync = () => {
+        const enabled = productScope.checked && restrict.checked;
+        options.classList.toggle('opacity-50', !enabled);
+        options.querySelectorAll('input[type="checkbox"]').forEach((input) => input.disabled = !enabled);
+    };
+
+    document.querySelectorAll('input[name="catalog_scope"]').forEach((input) => input.addEventListener('change', sync));
+    restrict.addEventListener('change', sync);
+    sync();
+})();
+</script>
 </x-admin-layout>

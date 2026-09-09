@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\AgentApi\AgentCatalogScope;
 use App\Services\AgentApi\AgentStudioOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -60,6 +61,24 @@ class AgentStudioApiTest extends TestCase
         $response->assertJsonMissingPath('token')
             ->assertJsonMissingPath('agent.email')
             ->assertJsonMissingPath('agent.password');
+    }
+
+    public function test_product_scoped_token_cannot_use_the_story_studio_lookup(): void
+    {
+        $story = $this->story('قصة محمية', 'protected-story');
+        $this->storyOrder('PROTECTED-STUDIO-GROUP', 'HK-PROTECTED-STUDIO', $story, 'علي', null);
+        $agent = $this->agent();
+        $token = $agent->createToken('product-only-studio', [
+            'agent',
+            'agent:orders.read',
+            ...AgentCatalogScope::abilities(AgentCatalogScope::PRODUCTS),
+        ])->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/agent/studio/orders/HK-PROTECTED-STUDIO')
+            ->assertForbidden()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error', 'FORBIDDEN');
     }
 
     public function test_studio_lookup_returns_all_story_units_without_acquisition_and_excludes_products_and_private_data(): void

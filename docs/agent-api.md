@@ -12,6 +12,13 @@ From the Admin Panel, open **التكاملات → Agent API Tokens** (`/admin/
 - `stories`: story production only.
 - `products`: product production only.
 
+For a dedicated worker that must process one product (or a small allowed set), choose `products` and enable **تقييد هذا الـAgent بمنتجات محددة**. Select the allowed products from the token page. The restriction is embedded in the Sanctum token abilities, so it cannot be widened by changing an API request.
+
+- Existing product tokens without selected product IDs remain allowed to process all production products for backward compatibility.
+- A restricted token skips a complete checkout if any production unit is a story or a different personalized product.
+- Ready-made items without a Production Prompt are not production units and do not block an otherwise eligible checkout.
+- Product restrictions apply to acquisition, context, uploads, previews, rework, and completion.
+
 Enable **السماح بتعديل وإعادة إنتاج الطلبات السابقة** only for an Agent that must correct existing orders. This adds two narrowly scoped abilities:
 
 - `agent:orders.edit-personalization`
@@ -25,6 +32,9 @@ The same operation is available from Artisan:
 
 ```bash
 php artisan agent:token issue agent@example.com --name=production-agent --expires=90 --scope=stories
+
+# Restrict a product worker to product IDs 12 and 19
+php artisan agent:token issue agent@example.com --name=specific-product-agent --expires=90 --scope=products --product=12 --product=19
 
 # Add --rework only when this Agent may correct existing orders
 php artisan agent:token issue agent@example.com --name=production-rework-agent --expires=90 --scope=products --rework
@@ -234,6 +244,8 @@ Empty queue:
 ```
 
 The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope; and `already_acquired` means another assignment already exists.
+
+For a product-restricted token, `queue.token_product_ids` lists the enforced product IDs. The normal workflow and endpoints do not change: acquire with `POST /checkouts/acquire-next`, execute every returned product prompt, upload at least one production attachment for every unit, optionally upload previews, then call `POST /checkouts/{reference}/complete-production`. Successful completion changes the production orders to `ready_preview`.
 
 ### Production context
 

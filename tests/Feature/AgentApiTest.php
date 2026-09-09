@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
+use App\Services\AgentApi\AgentProductScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -113,6 +114,52 @@ class AgentApiTest extends TestCase
         $this->actingAs($manager)->delete(route('admin.agent-api-tokens.destroy', $token))
             ->assertRedirect();
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->id]);
+    }
+
+    public function test_admin_can_restrict_a_products_token_to_selected_products(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+        $allowed = Product::create([
+            'name_ar' => 'ستيكر مخصص للوكيل',
+            'slug' => 'agent-selected-sticker',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}}.',
+        ]);
+
+        $response = $this->actingAs($manager)->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'one-product-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::PRODUCTS,
+            'restrict_products' => true,
+            'product_ids' => [$allowed->id],
+        ])->assertRedirect(route('admin.agent-api-tokens.index'))
+            ->assertSessionHas('new_agent_token');
+
+        $token = PersonalAccessToken::query()->where('name', 'one-product-worker')->firstOrFail();
+        $this->assertSame([$allowed->id], AgentProductScope::productIdsFromAbilities($token->abilities));
+        $this->assertContains('agent:catalog.products', $token->abilities);
+
+        $this->actingAs($manager)->get(route('admin.agent-api-tokens.index'))
+            ->assertOk()
+            ->assertSee('ستيكر مخصص للوكيل');
+    }
+
+    public function test_specific_product_token_requires_products_scope_and_a_selection(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+
+        $this->actingAs($manager)->from(route('admin.agent-api-tokens.index'))->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'invalid-product-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::STORIES,
+            'restrict_products' => true,
+        ])->assertRedirect(route('admin.agent-api-tokens.index'))
+            ->assertSessionHasErrors('catalog_scope');
     }
 
     public function test_admin_can_explicitly_enable_existing_order_rework_on_a_new_token(): void
@@ -600,6 +647,73 @@ class AgentApiTest extends TestCase
         $this->assertSame('generating', $product->refresh()->status);
     }
 
+    public function test_specific_product_token_only_acquires_complete_eligible_checkouts_and_finishes_ready_preview(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $allowedProduct = Product::create([
+            'name_ar' => 'المنتج المسموح',
+            'slug' => 'allowed-agent-product',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}} for {{child_full_name}}.',
+        ]);
+        $blockedProduct = Product::create([
+            'name_ar' => 'منتج غير مسموح',
+            'slug' => 'blocked-agent-product',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}}.',
+        ]);
+        $token = $agent->createToken('specific-product', [
+            ...$this->abilities(),
+            ...AgentCatalogScope::abilities(AgentCatalogScope::PRODUCTS),
+            ...AgentProductScope::abilities([$allowedProduct->id]),
+        ])->plainTextToken;
+
+        $blocked = $this->productOrder('BLOCKED-PRODUCT', 'HK-BLOCKED-PRODUCT', null, $blockedProduct);
+        $mixed = $this->productOrder('MIXED-PRODUCTS', 'HK-MIXED-PRODUCTS', null, $allowedProduct);
+        OrderItem::create([
+            'order_id' => $mixed->id,
+            'item_type' => 'product',
+            'product_id' => $blockedProduct->id,
+            'title' => $blockedProduct->name_ar,
+            'unit_price_cents' => 10000,
+            'quantity' => 1,
+            'total_price_cents' => 10000,
+            'personalization_snapshot' => ['child_name' => 'Ali'],
+        ]);
+        $eligible = $this->productOrder('ALLOWED-PRODUCT', 'HK-ALLOWED-PRODUCT', null, $allowedProduct);
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'specific-product-acquire'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+
+        $this->assertSame('new', $blocked->refresh()->status);
+        $this->assertSame('new', $mixed->refresh()->status);
+        $this->assertSame('generating', $eligible->refresh()->status);
+
+        $reference = $acquired->json('checkout.reference');
+        $context = $this->withToken($token)->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk()
+            ->assertJsonCount(1, 'production_units')
+            ->assertJsonPath('production_units.0.product_id', $allowedProduct->id);
+        $unitKey = $context->json('production_units.0.unit_key');
+
+        $this->withToken($token)->post("/api/agent/orders/{$eligible->id}/attachments", [
+            'production_unit_key' => $unitKey,
+            'attachments' => [UploadedFile::fake()->create('finished.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'specific-product-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'specific-product-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview');
+        $this->assertSame('ready_preview', $eligible->refresh()->status);
+    }
+
     public function test_legacy_unscoped_agent_token_keeps_access_to_both_catalog_types(): void
     {
         $agent = $this->agent();
@@ -961,9 +1075,9 @@ class AgentApiTest extends TestCase
         ]);
     }
 
-    private function productOrder(string $group, string $number, ?string $prompt): Order
+    private function productOrder(string $group, string $number, ?string $prompt, ?Product $product = null): Order
     {
-        $product = Product::create([
+        $product ??= Product::create([
             'name_ar' => 'منتج '.$number,
             'slug' => strtolower($number),
             'price_cents' => 10000,
