@@ -114,6 +114,10 @@ class CustomerOrderSelfServiceTest extends TestCase
         ]);
         $this->post(route('track.cancel', $reference), ['confirm_cancel' => '1'])
             ->assertSessionHasErrors('order');
+
+        $order->update(['shipping_status' => 'delivered']);
+        $this->get(route('track.show', $reference))->assertOk()->assertDontSee('تحديث ملاحظات ولي الأمر');
+        $this->get(route('track.edit', $reference))->assertForbidden();
     }
 
     public function test_checkout_phone_lookup_returns_only_active_orders_and_allowed_actions(): void

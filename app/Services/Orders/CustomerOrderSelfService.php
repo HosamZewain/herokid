@@ -372,12 +372,7 @@ class CustomerOrderSelfService
 
     private function canUpdateParentNotes(Collection $orders): bool
     {
-        return $orders->isNotEmpty()
-            && $orders->contains(fn (Order $order): bool => ! in_array(
-                OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $order->status),
-                ['cancelled', 'delivered'],
-                true,
-            ));
+        return $this->isActive($orders);
     }
 
     private function canMerge(Collection $orders): bool

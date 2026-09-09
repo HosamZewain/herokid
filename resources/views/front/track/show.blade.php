@@ -80,7 +80,7 @@
                 <div class="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
                     <div class="text-right">
                         <h2 class="text-lg font-black text-indigo-950">إدارة الطلب</h2>
-                        <p class="mt-1 text-sm font-bold leading-6 text-indigo-700">{{ $group['can_edit'] ? 'يمكنك تعديل البيانات أو إلغاء الطلب قبل بدء التنفيذ.' : 'بدأ تنفيذ الطلب؛ ما زال بإمكانك تحديث ملاحظات ولي الأمر.' }}</p>
+                        <p class="mt-1 text-sm font-bold leading-6 text-indigo-700">{{ $group['can_edit'] ? 'يمكنك تعديل البيانات أو إلغاء الطلب قبل بدء التنفيذ.' : ($group['can_update_parent_notes'] ? 'بدأ تنفيذ الطلب؛ ما زال بإمكانك تحديث ملاحظات ولي الأمر.' : 'اكتمل الطلب، وتبقى تفاصيله متاحة للمتابعة هنا.') }}</p>
                     </div>
                     <div class="flex flex-col gap-2 sm:flex-row">
                         @if($group['can_edit'] || $group['can_update_parent_notes'])<a href="{{ route('track.edit', $group['short_reference']) }}" class="inline-flex min-h-12 items-center justify-center rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black text-white">{{ $group['can_edit'] ? 'تعديل الطلب' : 'تحديث ملاحظات ولي الأمر' }}</a>@endif
