@@ -68,18 +68,24 @@ class AgentStudioOrderResource extends JsonResource
             'scenes' => collect($presentation['scenes'])
                 ->filter(fn (array $scene): bool => $scene['complete'])
                 ->sortBy('scene_number')
-                ->map(function (array $scene) use ($snapshots, $templates, $productionScenes): array {
+                ->map(function (array $scene) use ($snapshots, $templates, $productionScenes): ?array {
                     $number = (int) $scene['scene_number'];
                     $source = match ($scene['source']) {
                         'production_scene' => $productionScenes->get($number),
                         'order_snapshot' => $snapshots->get($number),
-                        default => $templates->get($number),
+                        'story_template_fallback' => $templates->get($number),
+                        default => null,
                     };
                     $sourcePrefix = match ($scene['source']) {
                         'production_scene' => 'production_scene',
                         'order_snapshot' => 'order_scene_snapshot',
-                        default => 'story_scene_template',
+                        'story_template_fallback' => 'story_scene_template',
+                        default => null,
                     };
+
+                    if (! $source || ! $sourcePrefix) {
+                        return null;
+                    }
 
                     return [
                         'id' => $sourcePrefix.':'.$source->id,
@@ -92,6 +98,7 @@ class AgentStudioOrderResource extends JsonResource
                         ], fn (mixed $value): bool => filled($value)),
                     ];
                 })
+                ->filter()
                 ->values()
                 ->all(),
             'metadata' => [

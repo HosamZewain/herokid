@@ -275,6 +275,132 @@ class StorySceneTextHandoffTest extends TestCase
         $this->assertSame('story_template_fallback', $legacy['scenes'][0]['source']);
     }
 
+    public function test_order_without_snapshots_uses_all_populated_story_templates(): void
+    {
+        $story = $this->story();
+        $this->addTemplates($story, 'النص العربي للمشهد مع {{child_name}}');
+        $order = $this->order($story, ['child_name' => 'ليان']);
+
+        $presented = app(OrderSceneTextService::class)->present($order);
+
+        $this->assertSame(13, $presented['ready_count']);
+        $this->assertTrue($presented['all_ready']);
+        $this->assertTrue($presented['is_legacy_fallback']);
+        $this->assertSame(range(1, 13), collect($presented['scenes'])->pluck('scene_number')->all());
+        $this->assertTrue(collect($presented['scenes'])->every(
+            fn (array $scene): bool => $scene['source'] === 'story_template_fallback'
+                && $scene['text'] === 'النص العربي للمشهد مع ليان',
+        ));
+    }
+
+    public function test_blank_snapshot_rows_fall_back_to_the_corresponding_templates_without_being_mutated(): void
+    {
+        $story = $this->story();
+        $this->addTemplates($story, 'قالب المشهد العربي {{child_name}}');
+        $order = $this->order($story, ['child_name' => 'نور']);
+
+        foreach ($story->sceneTemplates()->orderBy('scene_number')->get() as $template) {
+            $order->sceneTextSnapshots()->create([
+                'source_story_scene_template_id' => $template->id,
+                'scene_number' => $template->scene_number,
+                'rendered_text' => $template->scene_number % 2 === 0 ? '' : null,
+            ]);
+        }
+
+        $presented = app(OrderSceneTextService::class)->present($order->fresh());
+
+        $this->assertSame(13, $presented['ready_count']);
+        $this->assertTrue(collect($presented['scenes'])->every(
+            fn (array $scene): bool => $scene['source'] === 'story_template_fallback'
+                && $scene['text'] === 'قالب المشهد العربي نور',
+        ));
+        $this->assertSame(0, $order->sceneTextSnapshots()->get()->filter(
+            fn ($snapshot): bool => filled($snapshot->rendered_text),
+        )->count());
+    }
+
+    public function test_populated_historical_snapshot_remains_authoritative_over_current_template(): void
+    {
+        $story = $this->story();
+        $this->addTemplates($story, 'قالب حالي لا يجب أن يحل محل اللقطة');
+        $order = $this->order($story);
+        $template = $story->sceneTemplates()->where('scene_number', 1)->firstOrFail();
+        $snapshot = $order->sceneTextSnapshots()->create([
+            'source_story_scene_template_id' => $template->id,
+            'scene_number' => 1,
+            'rendered_text' => 'النص التاريخي المحفوظ كما هو',
+        ]);
+
+        $scene = app(OrderSceneTextService::class)->present($order->fresh())['scenes'][0];
+
+        $this->assertSame('order_snapshot', $scene['source']);
+        $this->assertSame('النص التاريخي المحفوظ كما هو', $scene['text']);
+        $this->assertSame('النص التاريخي المحفوظ كما هو', $snapshot->fresh()->rendered_text);
+    }
+
+    public function test_mixed_scene_sources_resolve_independently_in_priority_order(): void
+    {
+        $story = $this->story();
+        $this->addTemplates($story, 'قالب عربي {{child_name}}');
+        $story->sceneTemplates()->where('scene_number', 5)->update(['text_template' => null]);
+        $order = $this->order($story, ['child_name' => 'سارة']);
+        $templates = $story->sceneTemplates()->get()->keyBy('scene_number');
+
+        $order->sceneTextSnapshots()->create([
+            'source_story_scene_template_id' => $templates->get(1)->id,
+            'scene_number' => 1,
+            'rendered_text' => 'لقطة المشهد الأول',
+        ]);
+        $blankSnapshot = $order->sceneTextSnapshots()->create([
+            'source_story_scene_template_id' => $templates->get(2)->id,
+            'scene_number' => 2,
+            'rendered_text' => '',
+        ]);
+        $snapshotThree = $order->sceneTextSnapshots()->create([
+            'source_story_scene_template_id' => $templates->get(3)->id,
+            'scene_number' => 3,
+            'rendered_text' => 'لقطة عربية للمشهد الثالث',
+        ]);
+        $order->sceneTextSnapshots()->create([
+            'source_story_scene_template_id' => $templates->get(5)->id,
+            'scene_number' => 5,
+            'rendered_text' => null,
+        ]);
+
+        $project = ProductionProject::create([
+            'order_id' => $order->id,
+            'status' => 'draft',
+            'current_stage' => 'intake',
+        ]);
+        $productionOne = $project->scenes()->create([
+            'scene_number' => 1,
+            'story_text' => 'نص Production Studio النهائي',
+            'status' => 'draft',
+        ]);
+        $project->scenes()->create([
+            'scene_number' => 3,
+            'story_text' => '',
+            'status' => 'draft',
+        ]);
+
+        $presented = app(OrderSceneTextService::class)->present($order->fresh());
+        $scenes = collect($presented['scenes'])->keyBy('scene_number');
+
+        $this->assertSame('production_scene', $scenes->get(1)['source']);
+        $this->assertSame('نص Production Studio النهائي', $scenes->get(1)['text']);
+        $this->assertSame('story_template_fallback', $scenes->get(2)['source']);
+        $this->assertSame('قالب عربي سارة', $scenes->get(2)['text']);
+        $this->assertSame('order_snapshot', $scenes->get(3)['source']);
+        $this->assertSame('لقطة عربية للمشهد الثالث', $scenes->get(3)['text']);
+        $this->assertSame('story_template_fallback', $scenes->get(4)['source']);
+        $this->assertSame('missing', $scenes->get(5)['source']);
+        $this->assertFalse($scenes->get(5)['complete']);
+        $this->assertSame(range(1, 13), $scenes->keys()->all());
+        $this->assertSame('', $blankSnapshot->fresh()->rendered_text);
+        $this->assertSame('لقطة عربية للمشهد الثالث', $snapshotThree->fresh()->rendered_text);
+        $this->assertSame('نص Production Studio النهائي', $productionOne->fresh()->story_text);
+    }
+
     public function test_production_draft_seeds_from_order_snapshots_without_changing_story(): void
     {
         $admin = $this->admin(['production_studio.story_edit']);

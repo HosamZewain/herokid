@@ -6,6 +6,7 @@ use App\Http\Resources\Agent\AgentStudioOrderResource;
 use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
@@ -177,6 +178,66 @@ class AgentStudioApiTest extends TestCase
         $this->assertSame('order_scene_snapshot:'.$snapshot->id, $first['production_stories'][0]['scenes'][0]['id']);
         $this->assertSame($first['order']['source_revision'], $second['order']['source_revision']);
         $this->assertSame($first['production_stories'][0]['scenes'][0]['id'], $second['production_stories'][0]['scenes'][0]['id']);
+    }
+
+    public function test_studio_lookup_resolves_each_scene_source_and_keeps_stable_source_ids(): void
+    {
+        $story = $this->story('قصة المصادر', 'per-scene-sources');
+        foreach (range(1, 13) as $sceneNumber) {
+            $story->sceneTemplates()->create([
+                'scene_number' => $sceneNumber,
+                'title' => 'عنوان '.$sceneNumber,
+                'text_template' => 'قالب عربي للمشهد '.$sceneNumber.' مع {{child_name}}',
+            ]);
+        }
+        $order = $this->storyOrder('PER-SCENE-SOURCE-GROUP', 'HK-PER-SCENE-SOURCES', $story, 'مريم', null);
+        $templates = $story->sceneTemplates()->get()->keyBy('scene_number');
+
+        foreach (range(1, 13) as $sceneNumber) {
+            $order->sceneTextSnapshots()->create([
+                'source_story_scene_template_id' => $templates->get($sceneNumber)->id,
+                'scene_number' => $sceneNumber,
+                'rendered_text' => null,
+            ]);
+        }
+        $snapshotTwo = $order->sceneTextSnapshots()->where('scene_number', 2)->firstOrFail();
+        $snapshotTwo->update(['rendered_text' => 'لقطة الطلب العربية للمشهد الثاني']);
+        $snapshotFour = $order->sceneTextSnapshots()->where('scene_number', 4)->firstOrFail();
+        $snapshotFour->update(['rendered_text' => 'لقطة الطلب العربية للمشهد الرابع']);
+
+        $project = ProductionProject::create([
+            'order_id' => $order->id,
+            'status' => 'draft',
+            'current_stage' => 'intake',
+        ]);
+        $productionThree = $project->scenes()->create([
+            'scene_number' => 3,
+            'story_text' => 'نص Production Studio العربي للمشهد الثالث',
+            'status' => 'draft',
+        ]);
+        $project->scenes()->create([
+            'scene_number' => 4,
+            'story_text' => '',
+            'status' => 'draft',
+        ]);
+
+        $response = $this->withToken($this->token($this->agent()))
+            ->getJson('/api/agent/studio/orders/'.$order->order_number)
+            ->assertOk()
+            ->assertJsonCount(13, 'production_stories.0.scenes');
+
+        $scenes = collect($response->json('production_stories.0.scenes'))->keyBy('number');
+        $this->assertSame(range(1, 13), $scenes->keys()->all());
+        $this->assertSame('story_scene_template:'.$templates->get(1)->id, $scenes->get(1)['id']);
+        $this->assertSame('story_template_fallback', $scenes->get(1)['metadata']['source']);
+        $this->assertSame('قالب عربي للمشهد 1 مع مريم', $scenes->get(1)['text']);
+        $this->assertSame('order_scene_snapshot:'.$snapshotTwo->id, $scenes->get(2)['id']);
+        $this->assertSame('لقطة الطلب العربية للمشهد الثاني', $scenes->get(2)['text']);
+        $this->assertSame('production_scene:'.$productionThree->id, $scenes->get(3)['id']);
+        $this->assertSame('نص Production Studio العربي للمشهد الثالث', $scenes->get(3)['text']);
+        $this->assertSame('order_scene_snapshot:'.$snapshotFour->id, $scenes->get(4)['id']);
+        $this->assertSame('لقطة الطلب العربية للمشهد الرابع', $scenes->get(4)['text']);
+        $this->assertNull($order->sceneTextSnapshots()->where('scene_number', 1)->value('rendered_text'));
     }
 
     public function test_unknown_order_returns_agent_404_and_product_only_checkout_returns_empty_stories(): void

@@ -79,7 +79,6 @@ class OrderSceneTextService
         ]);
 
         $snapshots = $order->sceneTextSnapshots->keyBy('scene_number');
-        $hasSnapshots = $snapshots->isNotEmpty();
         $templates = $order->story?->sceneTemplates?->keyBy('scene_number') ?? collect();
         $productionScenes = $includeProductionScenes
             ? $this->productionScenes($order)
@@ -105,10 +104,10 @@ class OrderSceneTextService
                 $source = 'production_scene';
                 $sourceLabel = 'Production Studio';
                 $variantLabel = 'نص Production Studio';
-            } elseif ($hasSnapshots) {
+            } elseif ($snapshot && filled($snapshot->rendered_text)) {
                 $title = trim((string) $snapshot?->title_snapshot);
                 $text = trim((string) $snapshot?->rendered_text);
-                $source = filled($text) ? 'order_snapshot' : 'missing';
+                $source = 'order_snapshot';
                 $textVariant = $snapshot?->selected_text_variant;
                 $variantLabel = $this->variantLabel(
                     $textVariant,
@@ -116,7 +115,7 @@ class OrderSceneTextService
                     historical: $textVariant === null,
                 );
                 $usesGenderFallback = $textVariant === 'original_fallback';
-                $sourceLabel = filled($text) ? 'نسخة الطلب المحفوظة' : 'نص غير متوفر';
+                $sourceLabel = 'نسخة الطلب المحفوظة';
             } elseif ($template) {
                 $selection = $this->selectTemplate($template, $order, $order->story);
                 $title = trim((string) $template->title);
@@ -158,7 +157,7 @@ class OrderSceneTextService
             'ready_count' => $readyCount,
             'all_ready' => $readyCount === StorySceneParser::SCENE_COUNT,
             'has_any' => $readyCount > 0,
-            'is_legacy_fallback' => ! $hasSnapshots,
+            'is_legacy_fallback' => collect($scenes)->contains('source', 'story_template_fallback'),
             'source_summary' => $sources->isEmpty() ? 'لا يوجد مصدر نص' : $sources->implode(' + '),
             'has_gender_fallback' => $genderFallbackSceneNumbers !== [],
             'gender_fallback_scene_numbers' => $genderFallbackSceneNumbers,
