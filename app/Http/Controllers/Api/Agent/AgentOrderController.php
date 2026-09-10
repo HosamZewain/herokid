@@ -180,7 +180,6 @@ class AgentOrderController extends Controller
         BookletPreviewManager $booklets,
         OrderProductPreviewService $productPreviews,
     ): JsonResponse {
-        $production->authorizedOrder($order, $request->user());
         $type = (string) $request->input('type');
         $rules = match ($type) {
             'booklet' => ['type' => ['required', 'in:booklet'], 'preview_files' => ['required', 'array', 'size:1'], 'preview_files.*' => ['required', 'file', 'mimes:pdf', 'max:51200'], 'note' => ['nullable', 'string', 'max:1000']],
@@ -189,7 +188,7 @@ class AgentOrderController extends Controller
         };
         $validated = $this->validate($request, $rules, 'INVALID_ATTACHMENT');
 
-        $production->assertPreviewTypeForOrder($order, $type);
+        $production->authorizePreviewUpload($order, $request->user(), $type);
 
         $result = $idempotency->execute($request->user(), 'orders.previews:'.$order->id.':'.$type, $request, function () use ($request, $order, $type, $validated, $booklets, $productPreviews): array {
             try {

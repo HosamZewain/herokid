@@ -53,6 +53,16 @@ Revoke it with:
 php artisan agent:token revoke agent@example.com --name=production-agent
 ```
 
+### Edit an existing Agent token
+
+Admins with `agent_api.tokens.manage` can use **Edit** on `/admin/agent-api-tokens` to change an existing, non-revoked token without issuing a new secret. The edit page updates only the Sanctum token row's name, allowlisted abilities, catalog/product scope abilities, rework abilities, and expiry. The stored token hash and owner are never displayed or changed, so the same token string already configured in HeroKid Studio takes on the new abilities immediately.
+
+The base `agent` ability is mandatory and is always retained. Order abilities can be added or removed individually. Catalog scope and selected-product restrictions continue to use `agent:catalog.*` abilities, and the rework control continues to manage `agent:orders.rework` plus `agent:orders.edit-personalization` together. Unknown ability strings and attempts to change the token owner are rejected.
+
+Token abilities and Agent account permissions remain separate. Editing a token does not grant or remove account permissions. The page shows the current account-permission state beside each ability and warns when an enabled token ability is blocked by a missing application permission. Creation retains its existing behavior of granting the standard Agent account permissions intentionally.
+
+Revocation remains final because Sanctum revocation deletes the token row. Revoked tokens cannot be edited, and no reversible disable state is simulated. The secret is still shown only once at creation and can never be recovered from the edit page.
+
 Tokens issued before catalog scoping was added continue to work with both stories and products for backward compatibility. Reissue them from the Admin Panel to enforce a narrower scope.
 
 ## HeroKid Studio read-only API
@@ -146,6 +156,44 @@ Stable identifier semantics:
 Scene text follows the existing production precedence: the latest Production Studio scene, then the order-owned scene snapshot, then the current story template for legacy orders. Scenes are explicitly sorted by scene number and Arabic Unicode is returned unchanged. The dedication is read from the individual story order's `gift_note`.
 
 A checkout with no personalized stories returns HTTP 200 with `production_stories: []`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, or a missing `orders.view` permission return `FORBIDDEN`. Phone, email, delivery address, payment data, storage paths, product rows, and unrelated Admin notes are never returned.
+
+## Upload a story preview from HeroKid Studio
+
+Story preview upload is a separate production operation and does not acquire the checkout. It does not require an existing assignment, and an assignment owned by another Agent does not block a properly authorized uploader.
+
+The existing endpoint and multipart contract remain unchanged:
+
+```http
+POST /api/agent/orders/{storyOrderId}/previews
+Authorization: Bearer TOKEN
+Accept: application/json
+Idempotency-Key: UNIQUE_OPERATION_KEY
+Content-Type: multipart/form-data
+
+type=booklet
+preview_files[]=@preview.pdf
+```
+
+Authorization requires all of the following:
+
+- a valid Sanctum Agent token with the base `agent` ability;
+- an active Admin account with `agent_api_enabled = true`;
+- token ability `agent:orders.upload-preview`;
+- application permission `orders.preview.upload`;
+- a story catalog scope that allows the selected story production unit.
+
+The token ability is intentionally separate from `agent:orders.read`; a read-only Studio token cannot upload previews. Standard production tokens issued from **Agent API Tokens** or `php artisan agent:token issue` already include `agent:orders.upload-preview` and grant the account `orders.preview.upload`. Existing custom or read-only tokens are not upgraded automatically; an authorized Admin can add the ability through **Edit** while keeping the same token secret, provided the Agent account already has `orders.preview.upload`.
+
+Booklet previews are keyed by the exact story order ID, not by the checkout group. In a checkout containing multiple stories, uploading Story A creates or replaces only Story A's preview and does not modify Story B. Replacements keep the same preview record and create the next immutable preview version according to the existing booklet-preview rules.
+
+Every request requires `Idempotency-Key`. Repeating the same request with the same key returns the saved response without creating another preview version or file. Reusing the key with different input returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+Error behavior:
+
+- `401 UNAUTHORIZED`: missing or invalid Sanctum token.
+- `403 FORBIDDEN`: disabled Agent API account, missing preview-upload ability, missing application permission, or disallowed catalog scope.
+- `404 ORDER_NOT_FOUND`: unknown story order ID.
+- `422 INVALID_ATTACHMENT`: missing/invalid multipart fields, a non-PDF file, an unreadable/encrypted PDF, an unsafe size/page count, or an order without a story production unit.
 
 All `POST` requests require a unique `Idempotency-Key` header. Retrying an operation that already changed data with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`. Empty queue responses are deliberately transient, so polling with an old key can discover orders that arrived later. Agents should still generate a fresh key for each intended queue poll.
 

@@ -416,6 +416,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('agent-api-tokens', [AgentApiTokenController::class, 'store'])
         ->middleware(['permission:agent_api.tokens.manage', 'throttle:10,1'])
         ->name('agent-api-tokens.store');
+    Route::get('agent-api-tokens/{token}/edit', [AgentApiTokenController::class, 'edit'])
+        ->whereNumber('token')
+        ->middleware('permission:agent_api.tokens.manage')
+        ->name('agent-api-tokens.edit');
+    Route::patch('agent-api-tokens/{token}', [AgentApiTokenController::class, 'update'])
+        ->whereNumber('token')
+        ->middleware(['permission:agent_api.tokens.manage', 'throttle:20,1'])
+        ->name('agent-api-tokens.update');
     Route::delete('agent-api-tokens/{token}', [AgentApiTokenController::class, 'destroy'])
         ->whereNumber('token')
         ->middleware(['permission:agent_api.tokens.manage', 'throttle:20,1'])

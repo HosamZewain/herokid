@@ -122,13 +122,22 @@
         @else
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">المنتجات المحددة</th><th class="p-3 text-right">نوع العمل</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
+                    <thead class="bg-slate-50 text-slate-600"><tr><th class="p-3 text-right">الاسم</th><th class="p-3 text-right">الحساب</th><th class="p-3 text-right">النطاق</th><th class="p-3 text-right">الصلاحيات</th><th class="p-3 text-right">المنتجات المحددة</th><th class="p-3 text-right">نوع العمل</th><th class="p-3 text-right">إعادة العمل</th><th class="p-3 text-right">آخر استخدام</th><th class="p-3 text-right">الانتهاء</th><th class="p-3"></th></tr></thead>
                     <tbody class="divide-y divide-slate-100">
                         @foreach($tokens as $token)
                             <tr>
                                 <td class="p-3 font-mono" dir="ltr">{{ $token['name'] }}</td>
                                 <td class="p-3"><strong>{{ $token['agent']->name }}</strong><span class="block text-xs text-slate-500">{{ $token['agent']->email }}</span></td>
                                 <td class="p-3"><span class="rounded-full bg-indigo-50 px-3 py-1 font-bold text-indigo-700">{{ \App\Services\AgentApi\AgentCatalogScope::label($token['scope']) }}</span></td>
+                                <td class="p-3">
+                                    <div class="flex max-w-xs flex-wrap gap-1.5">
+                                        @forelse($token['ability_badges'] as $abilityLabel)
+                                            <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{{ $abilityLabel }}</span>
+                                        @empty
+                                            <span class="text-xs font-bold text-amber-700">بدون صلاحيات تشغيل</span>
+                                        @endforelse
+                                    </div>
+                                </td>
                                 <td class="p-3 text-slate-600">
                                     @if($token['scope'] !== \App\Services\AgentApi\AgentCatalogScope::PRODUCTS)
                                         <span class="text-xs">—</span>
@@ -143,10 +152,13 @@
                                 <td class="p-3 text-slate-600">{{ $token['last_used_at'] ? app_datetime($token['last_used_at']) : 'لم يُستخدم' }}</td>
                                 <td class="p-3 text-slate-600">{{ $token['expires_at'] ? app_datetime($token['expires_at']) : 'بدون تاريخ' }}</td>
                                 <td class="p-3">
-                                    <form method="POST" action="{{ route('admin.agent-api-tokens.destroy', $token['id']) }}" onsubmit="return confirm('إلغاء هذا التوكن فورًا؟');">
+                                    <div class="flex items-center gap-2">
+                                        <a href="{{ route('admin.agent-api-tokens.edit', $token['id']) }}" class="min-h-10 rounded-lg bg-indigo-50 px-4 py-2 font-bold text-indigo-700 hover:bg-indigo-100">تعديل</a>
+                                        <form method="POST" action="{{ route('admin.agent-api-tokens.destroy', $token['id']) }}" onsubmit="return confirm('إلغاء هذا التوكن فورًا؟');">
                                         @csrf @method('DELETE')
                                         <button class="min-h-10 rounded-lg bg-red-50 px-4 font-bold text-red-700 hover:bg-red-100">إلغاء</button>
-                                    </form>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         @endforeach

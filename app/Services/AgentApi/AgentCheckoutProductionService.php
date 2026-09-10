@@ -562,18 +562,25 @@ class AgentCheckoutProductionService
         return $unitKey;
     }
 
-    public function assertPreviewTypeForOrder(Order $order, string $type): void
+    public function authorizePreviewUpload(Order $order, User $agent, string $type): void
     {
-        $orders = Order::query()->where('checkout_group_key', $order->checkoutGroupKey())->with($this->relations())->get();
-        $units = $this->units($orders)->where('order_id', $order->id);
+        if ($order->trashed()) {
+            throw new AgentApiException('ORDER_NOT_FOUND', 'Order not found.', 404);
+        }
 
-        if ($type === 'booklet' && ! $units->contains('type', 'story')) {
+        $units = $this->units(collect([$order]));
+        $unitType = $type === 'booklet' ? 'story' : 'product';
+        $previewUnits = $units->where('type', $unitType)->values();
+
+        if ($type === 'booklet' && $previewUnits->isEmpty()) {
             throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no story production unit.', 422);
         }
 
-        if ($type === 'product_images' && ! $units->contains('type', 'product')) {
+        if ($type === 'product_images' && $previewUnits->isEmpty()) {
             throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no product production unit.', 422);
         }
+
+        $this->assertUnitsAllowed($agent, $previewUnits);
     }
 
     /** @return Collection<int, array<string, mixed>> */
