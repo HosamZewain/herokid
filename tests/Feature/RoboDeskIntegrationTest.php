@@ -292,6 +292,126 @@ class RoboDeskIntegrationTest extends TestCase
             ->assertForbidden();
     }
 
+    // ── Live test button ─────────────────────────────────────────────────
+
+    public function test_the_test_button_sends_the_real_payload_with_sample_values(): void
+    {
+        Http::fake([self::URL => Http::response(['accepted' => true], 200)]);
+        $this->enable();
+        $this->configure('{"to":"{{ customer_phone }}","ref":"{{ checkout_reference }}","total":"{{ total }}"}');
+
+        $response = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        $reference = $response->json('reference');
+        $this->assertStringStartsWith('TEST-', $reference);
+        $this->assertSame('succeeded', $response->json('sent.status'));
+        $this->assertSame(200, $response->json('sent.http_status'));
+
+        Http::assertSent(fn ($request): bool => $request['ref'] === $reference && $request['total'] === 300.0);
+    }
+
+    public function test_a_test_run_creates_no_order_and_its_callback_changes_nothing(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('');
+
+        $reference = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->json('reference');
+
+        $this->assertSame(0, Order::query()->count());
+
+        $this->withHeader('X-RoboDesk-Token', 'static-token')
+            ->postJson('/api/integrations/robodesk/v1/events', [
+                'id' => (string) Str::uuid(),
+                'type' => 'order.confirmed',
+                'data' => ['checkout_reference' => $reference],
+            ])->assertAccepted();
+
+        // Recorded against the test run, with nothing filed under a checkout.
+        $this->assertDatabaseHas('robodesk_integration_events', [
+            'direction' => 'inbound',
+            'aggregate_type' => 'test',
+            'aggregate_id' => $reference,
+            'checkout_group_key' => null,
+        ]);
+        $this->assertSame(0, Order::query()->count());
+    }
+
+    public function test_the_status_endpoint_reports_what_came_back(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('');
+        $admin = $this->admin();
+
+        $reference = $this->actingAs($admin)
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->json('reference');
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.robodesk.settings.test.status', [RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, $reference]))
+            ->assertOk()
+            ->assertJsonPath('received', []);
+
+        $this->withHeader('X-RoboDesk-Token', 'static-token')
+            ->postJson('/api/integrations/robodesk/v1/events', [
+                'id' => (string) Str::uuid(),
+                'type' => 'order.confirmed',
+                'data' => ['checkout_reference' => $reference, 'comment' => 'تم'],
+            ])->assertAccepted();
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.robodesk.settings.test.status', [RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, $reference]))
+            ->assertOk()
+            ->assertJsonPath('received.0.type', 'order.confirmed')
+            ->assertJsonPath('received.0.body.comment', 'تم');
+    }
+
+    public function test_a_test_run_sends_even_while_simulation_mode_is_on(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        app(RoboDeskSettings::class)->save(['robodesk_simulation_mode' => '1']);
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        // A test that never leaves the server would prove nothing.
+        Http::assertSentCount(1);
+    }
+
+    public function test_testing_an_unconfigured_integration_is_refused(): void
+    {
+        Http::fake();
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertStatus(422);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_a_failing_remote_is_reported_rather_than_thrown(): void
+    {
+        Http::fake([self::URL => Http::response(['error' => 'nope'], 500)]);
+        $this->enable();
+        $this->configure('');
+
+        $response = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        $this->assertSame('failed', $response->json('sent.status'));
+        $this->assertSame(500, $response->json('sent.http_status'));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private function admin(array $permissions = ['robodesk.configure', 'robodesk.manage_credentials', 'robodesk.view']): User

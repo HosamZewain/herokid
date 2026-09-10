@@ -8,6 +8,7 @@ use App\Services\RoboDesk\PaymentProofService;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Services\RoboDesk\RoboDeskInboundEventHandler;
 use App\Services\RoboDesk\RoboDeskSettings;
+use App\Services\RoboDesk\RoboDeskTestRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -44,12 +45,16 @@ class RoboDeskIntegrationController extends Controller
             'data' => ['required', 'array'],
         ]);
 
+        $reference = collect(['checkout_reference', 'identity_uuid', 'reference'])
+            ->map(fn (string $key): mixed => data_get($data, 'data.'.$key))
+            ->first(fn (mixed $value): bool => RoboDeskTestRunner::isTestReference($value));
+
         $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
             'direction' => 'inbound',
             'event_type' => $data['type'],
-            'aggregate_type' => 'checkout',
-            'aggregate_id' => data_get($data, 'data.checkout_reference'),
-            'checkout_group_key' => data_get($data, 'data.checkout_reference'),
+            'aggregate_type' => $reference ? 'test' : 'checkout',
+            'aggregate_id' => $reference ?: data_get($data, 'data.checkout_reference'),
+            'checkout_group_key' => $reference ? null : data_get($data, 'data.checkout_reference'),
             'status' => 'processing',
             'attempts' => 1,
             'payload' => $data['data'],

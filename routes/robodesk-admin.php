@@ -19,3 +19,5 @@ Route::post('settings/{integrationKey}', [RoboDeskSettingsController::class, 'up
 Route::get('simulator', [RoboDeskSimulatorController::class, 'index'])->middleware('permission:robodesk.configure')->name('simulator.index');
 Route::get('simulator/{checkoutReference}', [RoboDeskSimulatorController::class, 'show'])->middleware('permission:robodesk.configure')->name('simulator.show');
 Route::post('simulator/{checkoutReference}/reply', [RoboDeskSimulatorController::class, 'reply'])->middleware('permission:robodesk.configure')->name('simulator.reply');
+Route::post('settings/{integrationKey}/test', [RoboDeskSettingsController::class, 'test'])->middleware('permission:robodesk.configure')->name('settings.test');
+Route::get('settings/{integrationKey}/test/{reference}', [RoboDeskSettingsController::class, 'testStatus'])->middleware('permission:robodesk.configure')->name('settings.test.status');

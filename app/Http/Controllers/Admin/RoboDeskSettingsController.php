@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
 use App\Services\RoboDesk\RoboDeskPayloadRenderer;
 use App\Services\RoboDesk\RoboDeskSettings;
+use App\Services\RoboDesk\RoboDeskTestRunner;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class RoboDeskSettingsController extends Controller
         private readonly RoboDeskSettings $settings,
         private readonly RoboDeskIntegrationRegistry $integrations,
         private readonly RoboDeskPayloadRenderer $renderer,
+        private readonly RoboDeskTestRunner $tester,
     ) {}
 
     public function index()
@@ -96,6 +98,42 @@ class RoboDeskSettingsController extends Controller
         return redirect()
             ->route('admin.robodesk.settings.edit', $integrationKey)
             ->with('success', 'تم حفظ إعدادات التكامل.');
+    }
+
+    /**
+     * Fires the integration for real with sample values. Ignores simulation
+     * mode on purpose — a test that never leaves the server proves nothing.
+     */
+    public function test(Request $request, string $integrationKey)
+    {
+        abort_unless($request->user()->hasPermission('robodesk.configure'), 403);
+
+        $integration = $this->integrations->get($integrationKey);
+
+        abort_unless($integration->configured(), 422, 'أدخل رابط الـ API أولًا.');
+
+        $result = $this->tester->run($integration);
+
+        AdminActivityLogger::log(
+            action: 'robodesk.integration_tested',
+            description: 'شغّل المشرف اختبار تكامل RoboDesk: '.$integration->nameEn(),
+            properties: ['integration' => $integrationKey, 'reference' => $result['reference']],
+            request: $request,
+        );
+
+        return response()->json($this->tester->status($result['reference']));
+    }
+
+    /** Polled by the test panel while it waits for RoboDesk to call back. */
+    public function testStatus(Request $request, string $integrationKey, string $reference)
+    {
+        abort_unless($request->user()->hasPermission('robodesk.configure'), 403);
+        abort_unless(RoboDeskTestRunner::isTestReference($reference), 404);
+
+        $this->integrations->get($integrationKey);
+
+        return response()->json($this->tester->status($reference))
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function updateGeneral(Request $request): RedirectResponse

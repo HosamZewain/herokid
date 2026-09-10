@@ -25,6 +25,13 @@ class RoboDeskInboundEventHandler
 
     public function handle(string $type, array $data): void
     {
+        // A callback for a test run is recorded and goes no further: the whole
+        // point of the reserved reference is that verifying the contract never
+        // creates or moves anything real.
+        if ($this->isTestCallback($data)) {
+            return;
+        }
+
         DB::transaction(function () use ($type, $data): void {
             match ($type) {
                 'order.confirmed' => $this->confirmCheckout($data),
@@ -264,6 +271,17 @@ class RoboDeskInboundEventHandler
         }
 
         return $identity->convertedOrder;
+    }
+
+    private function isTestCallback(array $data): bool
+    {
+        foreach (['checkout_reference', 'identity_uuid', 'reference'] as $key) {
+            if (RoboDeskTestRunner::isTestReference($data[$key] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function checkoutKey(array $data): string
