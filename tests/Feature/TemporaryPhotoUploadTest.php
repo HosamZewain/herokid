@@ -181,7 +181,7 @@ class TemporaryPhotoUploadTest extends TestCase
             'photo' => UploadedFile::fake()->createWithContent('not-an-image.heic', 'plain text'),
         ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.');
+            ->assertJsonPath('message', 'الملف المرفوع ليس صورة صالحة أو لا يمكن قراءته.');
     }
 
     public function test_upload_endpoint_accepts_a_valid_avif_container(): void

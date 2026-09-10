@@ -77,7 +77,7 @@ class AdminOrderStatusSettingsTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $definition = OrderStatusDefinition::create([
             'type' => 'order',
-            'key' => 'waiting_customer',
+            'key' => 'waiting_customer_test',
             'label_ar' => 'بانتظار العميل',
             'behavior' => 'standard',
             'color' => 'amber',
@@ -89,7 +89,7 @@ class AdminOrderStatusSettingsTest extends TestCase
         $order = Order::create([
             'order_number' => 'HK-CUSTOM-STATUS',
             'parent_name' => 'عميل اختبار',
-            'status' => 'waiting_customer',
+            'status' => 'waiting_customer_test',
             'delivery_details' => ['phone' => '01000000000'],
         ]);
 
@@ -99,8 +99,8 @@ class AdminOrderStatusSettingsTest extends TestCase
 
         $this->assertDatabaseHas('order_status_definitions', ['id' => $definition->id, 'is_active' => false]);
         $this->assertSame('بانتظار العميل', OrderStatusRegistry::label('order', $order->fresh()->status));
-        $this->assertNotContains('waiting_customer', OrderStatusRegistry::keys('order'));
-        $this->assertContains('waiting_customer', OrderStatusRegistry::keys('order', false));
+        $this->assertNotContains('waiting_customer_test', OrderStatusRegistry::keys('order'));
+        $this->assertContains('waiting_customer_test', OrderStatusRegistry::keys('order', false));
     }
 
     public function test_payment_status_behavior_drives_amount_calculation(): void

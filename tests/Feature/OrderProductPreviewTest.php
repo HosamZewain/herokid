@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderProductPreviewImageService;
 use App\Services\Orders\OrderWhatsAppMessageService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,7 @@ class OrderProductPreviewTest extends TestCase
 
     public function test_admin_can_upload_multiple_private_images_and_product_order_shows_gallery(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 12:00:00', 'Africa/Cairo')->utc());
         $order = $this->productOrder();
 
         $this->actingAs($this->admin)
@@ -44,6 +46,9 @@ class OrderProductPreviewTest extends TestCase
             ->assertSessionHas('success');
 
         $gallery = OrderProductPreviewGallery::with('previews')->firstOrFail();
+        $gallery->previews()->update(['created_at' => now()->subMinutes(5)]);
+        $gallery->load('previews');
+        $uploadedAgo = app_datetime_human($gallery->previews->first()->created_at);
         $this->assertCount(2, $gallery->previews);
         $this->assertSame($order->checkoutGroupKey(), $gallery->checkout_group_key);
         $gallery->previews->each(function ($preview): void {
@@ -52,7 +57,7 @@ class OrderProductPreviewTest extends TestCase
             $this->assertNotNull($preview->checksum);
         });
 
-        $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('معاينة المنتجات للعميل')
@@ -60,8 +65,10 @@ class OrderProductPreviewTest extends TestCase
             ->assertSee('back.png')
             ->assertSee('data-order-ajax-delete', false)
             ->assertSee('data-order-bulk-delete', false)
-            ->assertSee('تحديد كل صور المعاينة')
-            ->assertSee(app_datetime_human($gallery->previews->first()->created_at))
+            ->assertSee('تحديد كل صور المعاينة');
+
+        $response
+            ->assertSee($uploadedAgo)
             ->assertSee('رُفعت '.app_datetime($gallery->previews->first()->created_at, 'd/m/Y h:i A'))
             ->assertDontSee($gallery->previews->first()->file_path);
 

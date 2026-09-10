@@ -183,17 +183,20 @@ class AdminOrderAttachmentsTest extends TestCase
 
     public function test_attachment_cards_show_upload_date_and_bulk_delete_controls(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 12:00:00', 'Africa/Cairo')->utc());
         Storage::fake('local');
         config(['display.timezone' => 'Africa/Cairo']);
         $order = $this->productOrder();
         $attachment = $this->attachment($order, now()->addDays(30));
+        $attachment->forceFill(['created_at' => now()->subMinutes(5)])->saveQuietly();
+        $uploadedAgo = app_datetime_human($attachment->fresh()->created_at);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('تحديد كل المرفقات')
             ->assertSee('data-order-bulk-delete', false)
-            ->assertSee(app_datetime_human($attachment->created_at))
+            ->assertSee($uploadedAgo)
             ->assertSee('رُفع '.app_datetime($attachment->created_at, 'd/m/Y h:i A'));
     }
 
