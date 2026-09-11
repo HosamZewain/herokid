@@ -620,6 +620,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor(['create', 'store'], 'permission:store.categories.create')
         ->middlewareFor(['edit', 'update'], 'permission:store.categories.update')
         ->middlewareFor('destroy', 'permission:store.categories.delete');
+    Route::get('products/{product}/duplicate', [ProductController::class, 'duplicate'])
+        ->middleware(['permission:store.products.view', 'permission:store.products.create'])
+        ->name('products.duplicate');
     Route::resource('products', ProductController::class)->except(['show'])
         ->middlewareFor('index', 'permission:store.products.view')
         ->middlewareFor(['create', 'store'], 'permission:store.products.create')

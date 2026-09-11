@@ -5,6 +5,7 @@ import { initializeIdentitySharing } from './identity-sharing';
 import { initializeStorySceneEditor } from './story-scene-editor';
 import { initializeOrderSceneTexts } from './order-scene-texts';
 import { initializeOrderPaymentSummaries } from './order-payment-summary';
+import { initializeOrderInvoices } from './order-invoice';
 import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
 import { storyCoverRecovery } from './story-cover-recovery';
 import { initializeHomePackageCarousels } from './home-package-carousel';
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeStorySceneEditor();
     initializeOrderSceneTexts();
     initializeOrderPaymentSummaries();
+    initializeOrderInvoices();
     initializeFootballStories();
     initializeHomePackageCarousels();
 

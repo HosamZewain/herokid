@@ -697,6 +697,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
             ->assertSee('تعديل الطلب بالكامل')
             ->assertSee('data-order-compact-customer', false)
+            ->assertSee('grid grid-cols-2 gap-1.5 lg:grid-cols-4', false)
             ->assertSee('data-order-items-summary', false)
             ->assertSeeInOrder(['العميل والتوصيل', 'ملخص الطلب', 'المنتج المطلوب', 'العدد', 'سعر الوحدة'])
             ->assertSee('القصص والأطفال')
@@ -797,6 +798,48 @@ class AdminOrderGroupManagementTest extends TestCase
                 ->assertSee(route('admin.orders.groups.show', $related->id), false)
                 ->assertDontSee($unrelatedReference);
         }
+    }
+
+    public function test_group_page_provides_a6_branded_invoice_preview_and_download_data(): void
+    {
+        [$first] = $this->checkoutFixture();
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $first))
+            ->assertOk()
+            ->assertSeeInOrder(['ملخص القيمة', 'data-order-invoice-open'], false)
+            ->assertSee('فاتورة')
+            ->assertSee('A6 عمودي — صورة PNG')
+            ->assertSee('data-order-invoice-modal', false)
+            ->assertSee('data-order-invoice-preview', false)
+            ->assertSee('data-order-invoice-download', false)
+            ->assertSee('data-order-invoice-new-tab', false)
+            ->assertSee('data-order-invoice-data', false);
+
+        $this->assertMatchesRegularExpression(
+            '/<script type="application\/json" data-order-invoice-data>(.*?)<\/script>/s',
+            $response->getContent(),
+        );
+        preg_match(
+            '/<script type="application\/json" data-order-invoice-data>(.*?)<\/script>/s',
+            $response->getContent(),
+            $matches,
+        );
+        $invoice = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame('GROUP-MULTI', $invoice['checkout_reference']);
+        $this->assertSame('HeroKid-invoice-'.$invoice['reference'].'.png', $invoice['file_name']);
+        $this->assertCount(4, $invoice['items']);
+        $directProduct = collect($invoice['items'])->firstWhere('title', 'كتاب تلوين مباشر');
+        $this->assertSame(2, $directProduct['quantity']);
+        $this->assertSame(format_money(75), $directProduct['unit_price']);
+        $this->assertSame(format_money(150), $directProduct['line_total']);
+        $this->assertSame(format_money(938), $invoice['grand_total']);
+
+        $invoiceJavascript = file_get_contents(resource_path('js/order-invoice.js'));
+        $this->assertStringContainsString('const A6_WIDTH = 1240;', $invoiceJavascript);
+        $this->assertStringContainsString('const A6_HEIGHT = 1748;', $invoiceJavascript);
+        $this->assertStringContainsString('canvas.toBlob', $invoiceJavascript);
     }
 
     public function test_order_details_show_a_downloadable_checkout_payment_summary_with_all_items(): void

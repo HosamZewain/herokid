@@ -12,10 +12,16 @@
 @endphp
 
 <x-admin-layout>
-    <x-slot name="header"><h2 class="text-xl font-semibold text-gray-800">{{ $product->exists ? 'تعديل منتج' : 'إضافة منتج' }}</h2></x-slot>
+    <x-slot name="header"><h2 class="text-xl font-semibold text-gray-800">{{ $product->exists ? 'تعديل منتج' : ($duplicateSource ? 'تكرار منتج' : 'إضافة منتج') }}</h2></x-slot>
     <div class="py-8" dir="rtl">
         <div class="mx-auto max-w-5xl space-y-6 sm:px-6 lg:px-8">
             @if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-bold text-green-700">{{ session('success') }}</div>@endif
+            @if($duplicateSource)
+                <div class="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4 text-right">
+                    <p class="font-black text-indigo-950">إنشاء نسخة جديدة من «{{ $duplicateSource->name_ar }}»</p>
+                    <p class="mt-1 text-sm font-bold text-indigo-700">البيانات والصور والمتغيرات والمنتجات المقترحة ستُنسخ عند الحفظ. النسخة الجديدة غير منشورة حتى تفعّل خيار «نشط».</p>
+                </div>
+            @endif
             @if($product->exists)
                 <div class="flex justify-end">
                     <a href="#product-recommendations" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800">المنتجات المقترحة مع هذا المنتج ↓</a>
@@ -34,6 +40,7 @@
             <form action="{{ $product->exists ? route('admin.products.update', $product) : route('admin.products.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6 rounded-2xl bg-white p-6 shadow-sm">
                 @csrf
                 @if($product->exists) @method('PUT') @endif
+                @if($duplicateSource)<input type="hidden" name="duplicate_source_id" value="{{ $duplicateSource->id }}">@endif
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div><label class="mb-1 block font-bold">التصنيف</label><select name="product_category_id" required class="w-full rounded-xl border-gray-300 text-right"><option value="">اختر...</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(old('product_category_id', $product->product_category_id) == $category->id)>{{ $category->name_ar }}</option>@endforeach</select><x-input-error :messages="$errors->get('product_category_id')" /></div>
                     <div><label class="mb-1 block font-bold">SKU</label><input name="sku" value="{{ old('sku', $product->sku) }}" class="w-full rounded-xl border-gray-300 text-left" dir="ltr"></div>
@@ -211,7 +218,7 @@
                 </section>
 
                 <div class="flex gap-3">
-                    <button class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">حفظ</button>
+                    <button class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">{{ $duplicateSource ? 'إنشاء النسخة' : 'حفظ' }}</button>
                     <a href="{{ route('admin.products.index') }}" class="rounded-xl border px-5 py-3 font-bold">رجوع</a>
                 </div>
             </form>

@@ -92,6 +92,7 @@
                     },
                     'quantity' => (int) $items->sum(fn ($current) => (int) $current->quantity),
                     'unit_price_cents' => (int) $item->unit_price_cents,
+                    'line_total_cents' => (int) $items->sum(fn ($current) => (int) $current->total_price_cents),
                 ];
             })
             ->values();
@@ -168,20 +169,20 @@
             @endif
 
             <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
-                <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-                    <h3 class="mb-3 text-lg font-black text-gray-900">العميل والتوصيل</h3>
-                    <div class="grid gap-2 text-sm md:grid-cols-3" data-order-compact-customer>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">اسم ولي الأمر</p><p class="mt-0.5 font-black text-gray-900">{{ $group['customer_name'] }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">الهاتف</p><p class="mt-0.5 font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">الدولة / المحافظة</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">المدينة / الشارع</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2 md:col-span-2"><p class="text-[11px] font-bold text-gray-400">تفاصيل العنوان</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">مصدر الطلب</p><p class="mt-0.5 font-black text-gray-900">{{ $sourceLabel }}</p></div>
-                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">أُنشئ بواسطة</p><p class="mt-0.5 font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
-                        @if($group['source_notes'])<div class="rounded-xl bg-gray-50/70 px-3 py-2 md:col-span-2"><p class="text-[11px] font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-0.5 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
+                <div class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <h3 class="mb-2 text-sm font-black text-gray-900">العميل والتوصيل</h3>
+                    <div class="grid grid-cols-2 gap-1.5 lg:grid-cols-4" data-order-compact-customer>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">اسم ولي الأمر</p><p class="truncate text-xs font-black text-gray-900" title="{{ $group['customer_name'] }}">{{ $group['customer_name'] }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الهاتف</p><p class="truncate text-xs font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الدولة / المحافظة</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">المدينة / الشارع</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-2"><p class="text-[9px] font-bold text-gray-400">تفاصيل العنوان</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">مصدر الطلب</p><p class="truncate text-[11px] font-black text-gray-900">{{ $sourceLabel }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">أُنشئ بواسطة</p><p class="truncate text-[11px] font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
+                        @if($group['source_notes'])<div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-4"><p class="text-[9px] font-bold text-gray-400">تفاصيل المصدر</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ $group['source_notes'] }}">{{ $group['source_notes'] }}</p></div>@endif
                     </div>
 
-                    <div class="mt-4 border-t border-gray-100 pt-4" data-order-items-summary>
+                    <div class="mt-3 border-t border-gray-100 pt-3" data-order-items-summary>
                         <div class="mb-2 flex items-center justify-between gap-3">
                             <h4 class="text-base font-black text-gray-900">ملخص الطلب</h4>
                             <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-700">{{ $orderSummaryItems->sum('quantity') }} عنصر</span>
@@ -216,7 +217,10 @@
                     </div>
                 </div>
                 <aside class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 xl:sticky xl:top-5 xl:self-start">
-                    <h3 class="text-base font-black text-indigo-900">ملخص القيمة</h3>
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-base font-black text-indigo-900">ملخص القيمة</h3>
+                        @include('admin.orders._invoice', ['invoiceGroup' => $group, 'invoiceItems' => $orderSummaryItems])
+                    </div>
                     <div class="mt-5 space-y-3 text-sm font-bold text-indigo-900">
                         <div class="flex justify-between gap-3"><span>العناصر</span><span>{{ format_money($group['items_cents'] / 100) }}</span></div>
                         <div class="flex justify-between gap-3"><span>التوصيل</span><span>{{ format_money($group['delivery_cents'] / 100) }}</span></div>

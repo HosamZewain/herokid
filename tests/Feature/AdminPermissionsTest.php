@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AdminRole;
 use App\Models\Order;
 use App\Models\Permission;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\User;
 use App\Support\AdminPermissionRegistry;
@@ -303,6 +305,40 @@ class AdminPermissionsTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.settings.index'))
             ->assertForbidden();
+    }
+
+    public function test_product_duplicate_requires_both_view_and_create_permissions(): void
+    {
+        $category = ProductCategory::create([
+            'name_ar' => 'منتجات',
+            'slug' => 'duplicate-permission-products',
+            'is_active' => true,
+            'show_in_store' => true,
+        ]);
+        $product = Product::create([
+            'product_category_id' => $category->id,
+            'name_ar' => 'منتج للتكرار',
+            'slug' => 'duplicate-permission-product',
+            'price_cents' => 10000,
+            'is_active' => true,
+        ]);
+        $viewer = $this->adminWithPermissions(['store.products.view']);
+        $creator = $this->adminWithPermissions(['store.products.create']);
+        $manager = $this->adminWithPermissions(['store.products.view', 'store.products.create']);
+
+        $this->actingAs($viewer)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertDontSee(route('admin.products.duplicate', $product), false);
+        $this->actingAs($viewer)
+            ->get(route('admin.products.duplicate', $product))
+            ->assertForbidden();
+        $this->actingAs($creator)
+            ->get(route('admin.products.duplicate', $product))
+            ->assertForbidden();
+        $this->actingAs($manager)
+            ->get(route('admin.products.duplicate', $product))
+            ->assertOk();
     }
 
     public function test_content_editor_cannot_access_orders_without_permission(): void

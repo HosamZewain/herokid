@@ -111,6 +111,51 @@ class AdminOrderGroupTagsTest extends TestCase
         $this->assertNotSame($other->checkoutGroupKey(), $report->viewData('report')['rows']->first()['key']);
     }
 
+    public function test_orders_index_shows_compact_checkout_level_counts_for_active_tag_filters(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$first] = $this->checkout('TAG-COUNT-FIRST', ['HK-TAG-COUNT-1A', 'HK-TAG-COUNT-1B']);
+        [$second] = $this->checkout('TAG-COUNT-SECOND', ['HK-TAG-COUNT-2A', 'HK-TAG-COUNT-2B']);
+
+        $this->actingAs($admin)->patch(route('admin.orders.groups.tags', $first), [
+            'tags' => 'جديد، ضروري',
+        ]);
+        $this->actingAs($admin)->patch(route('admin.orders.groups.tags', $second), [
+            'tags' => 'جديد',
+        ]);
+        OrderTag::query()->create(['name' => 'بدون طلبات', 'normalized_name' => 'بدون طلبات']);
+
+        $response = $this->actingAs($admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'stories',
+            'lifecycle' => 'active',
+        ]))->assertOk();
+        $activeTags = $response->viewData('activeTags')->keyBy('name');
+
+        $this->assertSame(2, (int) $activeTags->get('جديد')->checkouts_count);
+        $this->assertSame(1, (int) $activeTags->get('ضروري')->checkouts_count);
+        $this->assertFalse($activeTags->has('بدون طلبات'));
+
+        $newTag = $activeTags->get('جديد');
+        $response
+            ->assertSeeInOrder(['إحصائيات الطلبات المطابقة للفلاتر', 'العلامات النشطة على الطلبات'], false)
+            ->assertSee('#جديد')
+            ->assertSee('#ضروري')
+            ->assertDontSee('#بدون طلبات')
+            ->assertSee('tag_id='.$newTag->id, false);
+
+        $filtered = $this->actingAs($admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'stories',
+            'lifecycle' => 'active',
+            'tag_id' => $newTag->id,
+        ]))->assertOk();
+
+        $this->assertSame(2, $filtered->viewData('groups')->total());
+        $filtered
+            ->assertSee('aria-current="page"', false)
+            ->assertSee('HK-TAG-COUNT-1A')
+            ->assertSee('HK-TAG-COUNT-2A');
+    }
+
     public function test_order_viewer_can_add_but_cannot_delete_tags_without_delete_permission(): void
     {
         $viewOnly = User::factory()->create(['role' => 'admin']);

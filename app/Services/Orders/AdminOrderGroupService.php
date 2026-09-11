@@ -105,6 +105,10 @@ class AdminOrderGroupService
             ];
         }
 
+        $activeTags = $includeStatistics
+            ? $this->activeTagCounts($request, $includeDeleted, $catalogType, $lifecycle)
+            : collect();
+
         return [
             'groups' => $groups,
             'stats' => $stats,
@@ -128,7 +132,35 @@ class AdminOrderGroupService
                 ->orderBy('name_ar')
                 ->get(['id', 'name_ar', 'slug']),
             'filterTags' => $this->tagOptions(),
+            'activeTags' => $activeTags,
         ];
+    }
+
+    /** @return Collection<int, OrderTag> */
+    private function activeTagCounts(
+        Request $request,
+        bool $includeDeleted,
+        string $catalogType,
+        string $lifecycle,
+    ): Collection {
+        $matchingCheckoutKeys = $this->groupedFilteredQuery(
+            $request,
+            $includeDeleted,
+            $catalogType,
+            $lifecycle,
+            applyTagFilter: false,
+        )->select('checkout_group_key')->distinct();
+
+        return OrderTag::query()
+            ->join('order_checkout_reference_tag as active_tag_assignments', 'active_tag_assignments.order_tag_id', '=', 'order_tags.id')
+            ->join('order_checkout_references as active_tag_references', 'active_tag_references.id', '=', 'active_tag_assignments.order_checkout_reference_id')
+            ->whereIn('active_tag_references.checkout_group_key', $matchingCheckoutKeys)
+            ->select(['order_tags.id', 'order_tags.name'])
+            ->selectRaw('COUNT(DISTINCT active_tag_references.checkout_group_key) as checkouts_count')
+            ->groupBy(['order_tags.id', 'order_tags.name'])
+            ->orderByDesc('checkouts_count')
+            ->orderBy('order_tags.name')
+            ->get();
     }
 
     /** @return Collection<int, OrderTag> */
@@ -565,6 +597,7 @@ class AdminOrderGroupService
         bool $includeDeleted,
         string $catalogType,
         string $lifecycle,
+        bool $applyTagFilter = true,
     ): Builder {
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
         $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
@@ -634,7 +667,7 @@ class AdminOrderGroupService
             }
         }
 
-        if ($request->filled('tag_id')) {
+        if ($applyTagFilter && $request->filled('tag_id')) {
             $tagId = $request->integer('tag_id');
 
             $query->whereHas(
@@ -808,8 +841,9 @@ class AdminOrderGroupService
         bool $includeDeleted,
         string $catalogType,
         string $lifecycle,
+        bool $applyTagFilter = true,
     ): Builder {
-        $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
+        $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle, $applyTagFilter);
 
         if ($request->query('status') === 'mixed') {
             $mixedKeys = (clone $query)

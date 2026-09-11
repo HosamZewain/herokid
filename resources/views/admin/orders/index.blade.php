@@ -327,6 +327,27 @@
                     <p class="mt-2 text-2xl font-black text-cyan-950">{{ number_format($stats['shipped_checkouts']) }}</p>
                 </div>
             </section>
+
+            @if($activeTags->isNotEmpty())
+                <section aria-label="العلامات النشطة على الطلبات" class="rounded-2xl border border-fuchsia-100 bg-white px-4 py-3 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="ml-1 text-[11px] font-black text-gray-500">العلامات النشطة</span>
+                        @foreach($activeTags as $activeTag)
+                            @php
+                                $isSelectedTag = (string) request('tag_id') === (string) $activeTag->id;
+                            @endphp
+                            <a
+                                href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'tag_id']), ['tag_id' => $activeTag->id])) }}"
+                                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black transition {{ $isSelectedTag ? 'border-fuchsia-500 bg-fuchsia-600 text-white shadow-sm' : 'border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700 hover:border-fuchsia-200 hover:bg-fuchsia-100' }}"
+                                aria-current="{{ $isSelectedTag ? 'page' : 'false' }}"
+                            >
+                                <span>#{{ $activeTag->name }}</span>
+                                <span class="rounded-full px-1.5 py-0.5 text-[9px] {{ $isSelectedTag ? 'bg-white/20 text-white' : 'bg-white text-fuchsia-800' }}">{{ number_format($activeTag->checkouts_count) }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
             @endcan
 
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
