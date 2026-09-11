@@ -689,21 +689,35 @@ class AdminOrderGroupManagementTest extends TestCase
         [$first, $second] = $this->checkoutFixture();
         $shortReference = $first->checkoutReference()->value('short_reference');
 
-        $this->actingAs($this->admin)
-            ->get(route('admin.orders.groups.show', $first->id))
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $first->id));
+
+        $response
             ->assertOk()
             ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
             ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('data-order-compact-customer', false)
+            ->assertSee('data-order-items-summary', false)
+            ->assertSeeInOrder(['العميل والتوصيل', 'ملخص الطلب', 'المنتج المطلوب', 'العدد', 'سعر الوحدة'])
             ->assertSee('القصص والأطفال')
             ->assertSee('المنتجات المباشرة')
             ->assertSee('مغامرة رنا')
+            ->assertSee('رحلة آدم')
+            ->assertSee('ملصق باسم الطفل')
             ->assertSee('كتاب تلوين مباشر')
+            ->assertSee(format_money(299))
+            ->assertSee(format_money(399))
+            ->assertSee(format_money(50))
+            ->assertSee(format_money(75))
             ->assertSee('data-inline-production-prompt', false)
             ->assertSee('برومبت إنتاج قصة رنا')
             ->assertSee('معاينات القصص للعميل')
             ->assertSee('data-order-shipping-disclosure', false)
             ->assertDontSee('href="'.route('admin.orders.show', $first).'"', false)
             ->assertDontSee('href="'.route('admin.orders.show', $second).'"', false);
+
+        $this->assertSame(4, substr_count($response->getContent(), 'data-order-summary-item'));
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,1fr)_22rem]', $response->getContent());
 
         // The old per-story URL remains available for backward compatibility,
         // but the primary workspace no longer sends staff into it.

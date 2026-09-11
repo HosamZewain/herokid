@@ -70,6 +70,31 @@
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
         $adminNotesCount = collect($orderAdminNotes ?? [])->count();
         $attachmentsCount = collect($attachmentOrders ?? [])->sum(fn ($order) => $order->attachments->count());
+        $summaryOrders = $group['trashed'] ? $group['orders'] : $group['active_orders'];
+        $orderSummaryItems = $summaryOrders
+            ->flatMap->items
+            ->groupBy(fn ($item) => implode('|', [
+                $item->item_type,
+                $item->story_id,
+                $item->product_id,
+                $item->title,
+                $item->unit_price_cents,
+            ]))
+            ->map(function ($items) {
+                $item = $items->first();
+
+                return [
+                    'title' => $item->title ?: 'عنصر بدون اسم',
+                    'type' => match ($item->item_type) {
+                        'story' => 'قصة',
+                        'product_add_on' => 'إضافة',
+                        default => 'منتج',
+                    },
+                    'quantity' => (int) $items->sum(fn ($current) => (int) $current->quantity),
+                    'unit_price_cents' => (int) $item->unit_price_cents,
+                ];
+            })
+            ->values();
     @endphp
 
     @include('admin.orders._activity-drawer', ['activityTargetOrder' => $attachmentTarget])
@@ -144,16 +169,50 @@
 
             <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-                    <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>
-                    <div class="grid gap-4 text-sm md:grid-cols-2">
-                        <div><p class="text-xs font-bold text-gray-400">اسم ولي الأمر</p><p class="mt-1 font-black text-gray-900">{{ $group['customer_name'] }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">الهاتف</p><p class="mt-1 font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">الدولة / المحافظة</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">المدينة / الشارع</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
-                        <div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل العنوان</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">مصدر الطلب</p><p class="mt-1 font-black text-gray-900">{{ $sourceLabel }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">أُنشئ بواسطة</p><p class="mt-1 font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
-                        @if($group['source_notes'])<div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-1 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
+                    <h3 class="mb-3 text-lg font-black text-gray-900">العميل والتوصيل</h3>
+                    <div class="grid gap-2 text-sm md:grid-cols-3" data-order-compact-customer>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">اسم ولي الأمر</p><p class="mt-0.5 font-black text-gray-900">{{ $group['customer_name'] }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">الهاتف</p><p class="mt-0.5 font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">الدولة / المحافظة</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">المدينة / الشارع</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2 md:col-span-2"><p class="text-[11px] font-bold text-gray-400">تفاصيل العنوان</p><p class="mt-0.5 font-bold text-gray-800">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">مصدر الطلب</p><p class="mt-0.5 font-black text-gray-900">{{ $sourceLabel }}</p></div>
+                        <div class="rounded-xl bg-gray-50/70 px-3 py-2"><p class="text-[11px] font-bold text-gray-400">أُنشئ بواسطة</p><p class="mt-0.5 font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
+                        @if($group['source_notes'])<div class="rounded-xl bg-gray-50/70 px-3 py-2 md:col-span-2"><p class="text-[11px] font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-0.5 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
+                    </div>
+
+                    <div class="mt-4 border-t border-gray-100 pt-4" data-order-items-summary>
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-base font-black text-gray-900">ملخص الطلب</h4>
+                            <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-700">{{ $orderSummaryItems->sum('quantity') }} عنصر</span>
+                        </div>
+                        @if($orderSummaryItems->isNotEmpty())
+                            <div class="overflow-hidden rounded-2xl border border-gray-100">
+                                <table class="w-full table-fixed text-right text-xs">
+                                    <thead class="bg-gray-50 text-[10px] font-black text-gray-500">
+                                        <tr>
+                                            <th class="w-auto px-3 py-2">المنتج المطلوب</th>
+                                            <th class="w-16 px-2 py-2 text-center">العدد</th>
+                                            <th class="w-28 px-3 py-2">سعر الوحدة</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 bg-white">
+                                        @foreach($orderSummaryItems as $item)
+                                            <tr data-order-summary-item>
+                                                <td class="px-3 py-2 font-black text-gray-800">
+                                                    <span>{{ $item['title'] }}</span>
+                                                    <span class="mr-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500">{{ $item['type'] }}</span>
+                                                </td>
+                                                <td class="px-2 py-2 text-center font-black text-gray-700">{{ $item['quantity'] }}</td>
+                                                <td class="px-3 py-2 font-black text-indigo-700">{{ format_money($item['unit_price_cents'] / 100) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <p class="rounded-xl bg-gray-50 px-3 py-3 text-xs font-bold text-gray-400">لا توجد عناصر مسجلة في عملية الشراء.</p>
+                        @endif
                     </div>
                 </div>
                 <aside class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 xl:sticky xl:top-5 xl:self-start">

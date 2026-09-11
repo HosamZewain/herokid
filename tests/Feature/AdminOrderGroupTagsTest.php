@@ -95,6 +95,12 @@ class AdminOrderGroupTagsTest extends TestCase
             ->assertSee('SEARCH-TAGGED')
             ->assertDontSee('SEARCH-OTHER')
             ->assertSeeInOrder(['المحتويات', 'العلامات', 'الحالة', 'القيمة والدفع', 'آخر تحديث'])
+            ->assertSee('data-order-list-tag-manager', false)
+            ->assertSee('data-order-list-tag-add', false)
+            ->assertSee('aria-label="إضافة علامة"', false)
+            ->assertSee(route('admin.orders.groups.tags.store', $tagged), false)
+            ->assertSeeInOrder(['const formData = new FormData(form);', 'checkoutInputs.forEach(item => item.disabled = true);', 'body: formData,'], false)
+            ->assertDontSee('data-order-group-tag-delete', false)
             ->assertDontSee('>القيمة</th>', false)
             ->assertDontSee('>الدفع</th>', false);
         $this->assertSame(1, $filter->viewData('groups')->total());

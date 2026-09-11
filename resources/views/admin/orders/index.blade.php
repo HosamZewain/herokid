@@ -98,6 +98,12 @@
                     </div>
                 </div>
 
+                @if($showBulkActions)
+                    <form id="order-bulk-actions" method="POST" action="{{ route('admin.orders.bulk-actions') }}" class="hidden" data-order-bulk-actions-form>
+                        @csrf
+                    </form>
+                @endif
+
                 <form method="GET" action="{{ route('admin.orders.index') }}" class="space-y-3">
                     <input type="hidden" name="catalog_type" value="{{ $catalogType }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
@@ -245,42 +251,41 @@
                                 </select>
                             </div>
                         </div>
+
+                        @if($showBulkActions)
+                            <div class="border-t border-indigo-100 bg-indigo-50/60 p-4 sm:p-5" data-order-bulk-actions>
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+                                    <div class="min-w-44">
+                                        <p class="text-sm font-black text-indigo-950">إجراءات جماعية</p>
+                                        <p class="mt-1 text-xs font-bold text-indigo-700"><span data-bulk-selected-count>0</span> عملية شراء محددة</p>
+                                    </div>
+                                    <div class="min-w-64 flex-1">
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">الإجراء</label>
+                                        <select name="action" form="order-bulk-actions" required class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-action>
+                                            @if($canBulkUpdateStatus)<option value="update_status">تغيير حالة الطلبات المحددة</option>@endif
+                                            @if($canBulkReleaseAssignments)<option value="release_assignments">إلغاء الاستحواذ عن الطلبات المحددة</option>@endif
+                                            @if($canBulkUpdateStatus && $canBulkReleaseAssignments)<option value="update_status_and_release">تغيير الحالة وإلغاء الاستحواذ</option>@endif
+                                        </select>
+                                    </div>
+                                    <div class="min-w-64 flex-1" data-bulk-status-field>
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة الجديدة</label>
+                                        <select name="status" form="order-bulk-actions" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-status>
+                                            <option value="">اختر الحالة</option>
+                                            @foreach($bulkOrderStatuses as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                                        </select>
+                                    </div>
+                                    <div class="min-w-64 flex-[1.5]">
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">ملاحظة للسجل (اختياري)</label>
+                                        <input name="admin_notes" form="order-bulk-actions" maxlength="2000" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" placeholder="سبب التغيير أو الإجراء">
+                                    </div>
+                                    <button type="submit" form="order-bulk-actions" disabled class="min-h-11 rounded-xl bg-indigo-600 px-6 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" data-bulk-submit>تنفيذ على المحدد</button>
+                                </div>
+                                <p class="mt-3 text-[11px] font-bold text-amber-700">إلغاء الاستحواذ عن طلب استلمه مستخدم آخر يحتاج صلاحية إدارة مسؤولية الطلبات، ويتم تسجيل المنفذ والمسؤول السابق في سجل النشاط.</p>
+                            </div>
+                        @endif
                     </details>
                 </form>
             </div>
-
-            @if($showBulkActions)
-                <form id="order-bulk-actions" method="POST" action="{{ route('admin.orders.bulk-actions') }}" class="rounded-3xl border border-indigo-100 bg-indigo-50/60 p-4 shadow-sm sm:p-5" data-order-bulk-actions>
-                    @csrf
-                    <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
-                        <div class="min-w-44">
-                            <p class="text-sm font-black text-indigo-950">إجراءات جماعية</p>
-                            <p class="mt-1 text-xs font-bold text-indigo-700"><span data-bulk-selected-count>0</span> عملية شراء محددة</p>
-                        </div>
-                        <div class="min-w-64 flex-1">
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">الإجراء</label>
-                            <select name="action" required class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-action>
-                                @if($canBulkUpdateStatus)<option value="update_status">تغيير حالة الطلبات المحددة</option>@endif
-                                @if($canBulkReleaseAssignments)<option value="release_assignments">إلغاء الاستحواذ عن الطلبات المحددة</option>@endif
-                                @if($canBulkUpdateStatus && $canBulkReleaseAssignments)<option value="update_status_and_release">تغيير الحالة وإلغاء الاستحواذ</option>@endif
-                            </select>
-                        </div>
-                        <div class="min-w-64 flex-1" data-bulk-status-field>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة الجديدة</label>
-                            <select name="status" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-status>
-                                <option value="">اختر الحالة</option>
-                                @foreach($bulkOrderStatuses as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div class="min-w-64 flex-[1.5]">
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">ملاحظة للسجل (اختياري)</label>
-                            <input name="admin_notes" maxlength="2000" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" placeholder="سبب التغيير أو الإجراء">
-                        </div>
-                        <button type="submit" disabled class="min-h-11 rounded-xl bg-indigo-600 px-6 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" data-bulk-submit>تنفيذ على المحدد</button>
-                    </div>
-                    <p class="mt-3 text-[11px] font-bold text-amber-700">إلغاء الاستحواذ عن طلب استلمه مستخدم آخر يحتاج صلاحية إدارة مسؤولية الطلبات، ويتم تسجيل المنفذ والمسؤول السابق في سجل النشاط.</p>
-                </form>
-            @endif
 
             @can('orders.statistics.view')
             <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
@@ -373,13 +378,7 @@
                                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                 <div class="mt-3 border-t border-slate-200 pt-3">
                                     <p class="mb-1.5 text-[10px] font-black text-gray-400">العلامات</p>
-                                    <div class="flex flex-wrap gap-1">
-                                        @forelse($group['tags'] as $tag)
-                                            <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-100 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
-                                        @empty
-                                            <span class="text-[10px] font-bold text-gray-400">—</span>
-                                        @endforelse
-                                    </div>
+                                    @include('admin.orders._index-tag-manager', ['group' => $group, 'mode' => 'mobile'])
                                 </div>
                                 @php
                                     $mobileUpdatedAt = \App\Support\OrderDateTime::display($group['updated_at']);
@@ -513,13 +512,7 @@
                                         <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                     </td>
                                     <td class="min-w-36 px-4 py-4">
-                                        <div class="flex max-w-44 flex-wrap gap-1">
-                                            @forelse($group['tags'] as $tag)
-                                                <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2.5 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100">#{{ $tag->name }}</a>
-                                            @empty
-                                                <span class="text-xs font-bold text-gray-300">—</span>
-                                            @endforelse
-                                        </div>
+                                        @include('admin.orders._index-tag-manager', ['group' => $group, 'mode' => 'desktop'])
                                     </td>
                                     <td class="px-4 py-4" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                         <div class="flex min-w-36 flex-col items-start gap-1">
@@ -576,17 +569,133 @@
         </div>
     </div>
 
+    @push('scripts')
+        <script>
+            (() => {
+                const managers = [...document.querySelectorAll('[data-order-list-tag-manager]')];
+                const knownSuggestions = new Set({{ Illuminate\Support\Js::from($filterTags->pluck('name')->values()) }});
+                let feedbackTimer;
+
+                if (!managers.length) return;
+
+                const normalize = value => value.trim().toLocaleLowerCase();
+                const forCheckout = id => managers.filter(manager => manager.dataset.orderListTagManager === id);
+                const filterUrl = tagId => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('page');
+                    url.searchParams.set('tag_id', tagId);
+
+                    return url.toString();
+                };
+
+                const refreshSuggestions = (manager, tags) => {
+                    const suggestions = manager.querySelector('[data-order-list-tag-suggestions]');
+                    if (!suggestions) return;
+                    const selected = new Set(tags.map(tag => normalize(tag.name)));
+                    suggestions.replaceChildren();
+                    [...knownSuggestions]
+                        .filter(name => !selected.has(normalize(name)))
+                        .sort((first, second) => first.localeCompare(second, 'ar'))
+                        .forEach(name => {
+                            const option = document.createElement('option');
+                            option.value = name;
+                            suggestions.append(option);
+                        });
+                };
+
+                const render = (manager, tags) => {
+                    const list = manager.querySelector('[data-order-list-tag-list]');
+                    list.replaceChildren();
+
+                    if (!tags.length) {
+                        const empty = document.createElement('span');
+                        empty.className = 'text-[10px] font-bold text-gray-300';
+                        empty.dataset.orderListTagsEmpty = '';
+                        empty.textContent = '—';
+                        list.append(empty);
+                    } else {
+                        tags.forEach(tag => {
+                            knownSuggestions.add(tag.name);
+                            const link = document.createElement('a');
+                            link.href = filterUrl(tag.id);
+                            link.className = 'rounded-full bg-fuchsia-50 px-2.5 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100';
+                            link.textContent = `#${tag.name}`;
+                            list.append(link);
+                        });
+                    }
+
+                    refreshSuggestions(manager, tags);
+                };
+
+                const showFeedback = (checkoutManagers, message, error = false) => {
+                    window.clearTimeout(feedbackTimer);
+                    checkoutManagers.forEach(manager => {
+                        const feedback = manager.querySelector('[data-order-list-tag-feedback]');
+                        feedback.textContent = message;
+                        feedback.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+                        feedback.classList.add(error ? 'text-red-600' : 'text-emerald-600');
+                    });
+                    feedbackTimer = window.setTimeout(() => checkoutManagers.forEach(manager => manager.querySelector('[data-order-list-tag-feedback]')?.classList.add('hidden')), 3000);
+                };
+
+                const errorMessage = payload => Object.values(payload?.errors || {}).flat()[0] || payload?.message || 'تعذر إضافة العلامة. حاول مرة أخرى.';
+
+                managers.forEach(manager => {
+                    const form = manager.querySelector('[data-order-list-tag-add]');
+                    const input = manager.querySelector('[data-order-list-tag-input]');
+                    if (!form || !input) return;
+
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        if (!input.value.trim()) return;
+
+                        const checkoutManagers = forCheckout(manager.dataset.orderListTagManager);
+                        const checkoutInputs = checkoutManagers.map(item => item.querySelector('[data-order-list-tag-input]')).filter(Boolean);
+                        const formData = new FormData(form);
+                        checkoutInputs.forEach(item => item.disabled = true);
+
+                        try {
+                            const response = await fetch(form.action, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    Accept: 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                            });
+                            const payload = await response.json().catch(() => ({}));
+                            if (!response.ok) throw new Error(errorMessage(payload));
+
+                            checkoutManagers.forEach(item => {
+                                render(item, payload.tags || []);
+                                const checkoutInput = item.querySelector('[data-order-list-tag-input]');
+                                if (checkoutInput) checkoutInput.value = '';
+                                item.querySelector('[data-order-list-tag-add-panel]')?.removeAttribute('open');
+                            });
+                            showFeedback(checkoutManagers, payload.message || 'تمت إضافة العلامة.');
+                        } catch (error) {
+                            showFeedback(checkoutManagers, error.message, true);
+                        } finally {
+                            checkoutInputs.forEach(item => item.disabled = false);
+                        }
+                    });
+                });
+            })();
+        </script>
+    @endpush
+
     @if($showBulkActions)
         <script>
             (() => {
-                const form = document.querySelector('[data-order-bulk-actions]');
-                if (!form) return;
+                const form = document.querySelector('[data-order-bulk-actions-form]');
+                const panel = document.querySelector('[data-order-bulk-actions]');
+                if (!form || !panel) return;
 
-                const action = form.querySelector('[data-bulk-action]');
-                const status = form.querySelector('[data-bulk-status]');
-                const statusField = form.querySelector('[data-bulk-status-field]');
-                const submit = form.querySelector('[data-bulk-submit]');
-                const count = form.querySelector('[data-bulk-selected-count]');
+                const action = panel.querySelector('[data-bulk-action]');
+                const status = panel.querySelector('[data-bulk-status]');
+                const statusField = panel.querySelector('[data-bulk-status-field]');
+                const submit = panel.querySelector('[data-bulk-submit]');
+                const count = panel.querySelector('[data-bulk-selected-count]');
                 const orderCheckboxes = () => Array.from(document.querySelectorAll('[data-bulk-order-checkbox]'));
                 const selectedIds = () => [...new Set(orderCheckboxes().filter(checkbox => checkbox.checked).map(checkbox => checkbox.value))];
                 const allIds = () => [...new Set(orderCheckboxes().map(checkbox => checkbox.value))];

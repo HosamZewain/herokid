@@ -21,13 +21,28 @@ class AdminOrderBulkActionTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin']);
         $order = $this->order('BULK-INDEX', 'BULK-INDEX-1');
 
-        $this->actingAs($admin)
-            ->get(route('admin.orders.index'))
+        $response = $this->actingAs($admin)
+            ->get(route('admin.orders.index'));
+
+        $response
             ->assertOk()
             ->assertSee('إجراءات جماعية')
             ->assertSee('data-order-bulk-actions', false)
+            ->assertSee('data-order-bulk-actions-form', false)
+            ->assertSee('form="order-bulk-actions"', false)
             ->assertSee('data-bulk-select-all', false)
             ->assertSee('value="'.$order->id.'"', false);
+
+        $html = $response->getContent();
+        $advancedStart = strpos($html, 'data-advanced-order-filters');
+        $advancedEnd = strpos($html, '</details>', $advancedStart);
+        $bulkPanel = strpos($html, 'data-order-bulk-actions>', $advancedStart);
+
+        $this->assertNotFalse($advancedStart);
+        $this->assertNotFalse($advancedEnd);
+        $this->assertNotFalse($bulkPanel);
+        $this->assertGreaterThan($advancedStart, $bulkPanel);
+        $this->assertLessThan($advancedEnd, $bulkPanel);
     }
 
     public function test_admin_can_change_status_for_multiple_checkout_groups(): void
