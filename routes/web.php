@@ -33,6 +33,7 @@ use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
+use App\Http\Controllers\Admin\OrderGroupTagController;
 use App\Http\Controllers\Admin\OrderPhotoController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderProductPreviewController as AdminOrderProductPreviewController;
@@ -671,6 +672,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
     Route::patch('orders/groups/{representative}/discount', [OrderGroupController::class, 'updateDiscount'])->whereNumber('representative')->middleware('permission:orders.discount.manage')->name('orders.groups.discount');
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
+    Route::patch('orders/groups/{representative}/tags', OrderGroupTagController::class)->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.tags');
     Route::post('orders/groups/{representative}/merge', [OrderGroupController::class, 'merge'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.merge');
     Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');
     Route::delete('orders/groups/{representative}/product-previews', [AdminOrderProductPreviewController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy-many');

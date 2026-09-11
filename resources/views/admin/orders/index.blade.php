@@ -36,7 +36,7 @@
         $eventPrintingStatuses = \App\Support\OrderWorkflowStatus::printingLabels(false);
         $eventShippingStatuses = \App\Support\OrderWorkflowStatus::shippingLabels(false);
         $nextUpdatedDirection = request('sort') === 'updated_at' && request('direction', 'desc') === 'desc' ? 'asc' : 'desc';
-        $advancedFiltersActive = collect(['product_id', 'from', 'to', 'event', 'event_from', 'event_to', 'assignment'])
+        $advancedFiltersActive = collect(['product_id', 'tag_id', 'from', 'to', 'event', 'event_from', 'event_to', 'assignment'])
             ->contains(fn (string $field): bool => request()->filled($field))
             || request('per_page', '25') !== '25'
             || request('sort', 'created_at') !== 'created_at'
@@ -104,7 +104,7 @@
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
                         <div class="xl:col-span-2">
                             <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
-                            <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة أو منتج"
+                            <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج أو علامة"
                                    class="w-full rounded-xl border-gray-200 text-right text-sm">
                         </div>
                         <div>
@@ -150,6 +150,15 @@
                             </span>
                         </summary>
                         <div class="grid gap-3 border-t border-gray-100 p-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">علامة الطلب</label>
+                                <select name="tag_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="">كل العلامات</option>
+                                    @foreach($filterTags as $filterTag)
+                                        <option value="{{ $filterTag->id }}" @selected((string) request('tag_id') === (string) $filterTag->id)>{{ $filterTag->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="xl:col-span-2">
                                 <label class="mb-1.5 block text-xs font-black text-gray-600">المنتج الموجود بالطلب</label>
                                 <select name="product_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
@@ -334,6 +343,13 @@
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
                                     <p class="mt-2 text-[10px] font-black text-amber-700">المصدر: {{ \App\Support\OrderSource::label($group['order_source']) }}</p>
+                                    @if($group['tags']->isNotEmpty())
+                                        <div class="mt-2 flex flex-wrap justify-end gap-1">
+                                            @foreach($group['tags'] as $tag)
+                                                <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                     <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -446,6 +462,13 @@
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-40 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
+                                        @if($group['tags']->isNotEmpty())
+                                            <div class="mt-2 flex max-w-44 flex-wrap gap-1">
+                                                @foreach($group['tags'] as $tag)
+                                                    <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                         <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>
                                             <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-8 w-8 place-items-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                                                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

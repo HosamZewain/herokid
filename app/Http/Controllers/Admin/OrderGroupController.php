@@ -9,6 +9,7 @@ use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderDeletionService;
+use App\Services\Orders\OrderGroupDiscountService;
 use App\Services\Orders\OrderGroupMergeService;
 use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderPaymentService;
@@ -98,6 +99,7 @@ class OrderGroupController extends Controller
             'paymentEvents' => $paymentLedger->forCheckout($group['key']),
             'productPreviewGallery' => $productPreviewGallery,
             'relatedCustomerCheckouts' => $relatedCheckouts->forGroup($group),
+            'availableOrderTags' => $groups->tagOptions(),
         ]);
     }
 
@@ -180,7 +182,7 @@ class OrderGroupController extends Controller
     public function updateDiscount(
         Request $request,
         int $representative,
-        \App\Services\Orders\OrderGroupDiscountService $discounts,
+        OrderGroupDiscountService $discounts,
     ) {
         $validated = $request->validate([
             'discount_type' => ['required', Rule::in(['fixed', 'percentage'])],

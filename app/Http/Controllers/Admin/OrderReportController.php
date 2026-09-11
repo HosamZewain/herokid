@@ -47,7 +47,7 @@ class OrderReportController extends Controller
                 'filters' => $request->only([
                     'from', 'to', 'catalog_type', 'lifecycle', 'status', 'payment_status',
                     'printing_status', 'shipping_status', 'order_source', 'payment_method',
-                    'assignment', 'q',
+                    'assignment', 'tag_id', 'q',
                 ]),
             ],
             request: $request,

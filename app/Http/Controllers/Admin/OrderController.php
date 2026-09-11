@@ -78,6 +78,7 @@ class OrderController extends Controller
                 'from' => $request->query('from'),
                 'to' => $request->query('to'),
                 'assignment' => $request->query('assignment'),
+                'tag_id' => $request->query('tag_id'),
                 'has_search' => $request->filled('q'),
             ],
             request: $request,

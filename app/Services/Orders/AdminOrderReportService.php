@@ -43,6 +43,7 @@ class AdminOrderReportService
                 'shipping_statuses' => OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_SHIPPING, false),
                 'sources' => OrderSource::options(),
                 'payment_methods' => OrderPaymentStatus::paymentMethods(),
+                'tags' => $this->groups->tagOptions(),
             ],
         ];
     }

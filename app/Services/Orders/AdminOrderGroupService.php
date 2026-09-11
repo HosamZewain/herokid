@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderPaymentEvent;
+use App\Models\OrderTag;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\OrderDateTime;
@@ -35,6 +36,7 @@ class AdminOrderGroupService
         'paymentUpdatedBy:id,name',
         'groupAssignment.assignee:id,name',
         'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
+        'checkoutReference.tags:id,name,normalized_name',
         'bookletPreview:id,order_id,uuid,status,current_version_id,public_token_encrypted',
         'productPreviewGallery:id,checkout_group_key,status,public_token_encrypted',
         'productPreviewGallery.previews:id,product_gallery_id',
@@ -125,7 +127,17 @@ class AdminOrderGroupService
                     ->whereColumn('order_items.product_id', 'products.id'))
                 ->orderBy('name_ar')
                 ->get(['id', 'name_ar', 'slug']),
+            'filterTags' => $this->tagOptions(),
         ];
+    }
+
+    /** @return Collection<int, OrderTag> */
+    public function tagOptions(): Collection
+    {
+        return OrderTag::query()
+            ->whereHas('checkoutReferences')
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     public function export(Request $request): Collection
@@ -169,10 +181,15 @@ class AdminOrderGroupService
             ->keyBy('status');
 
         $checkouts = [
-            'total' => Order::query()->distinct()->count('checkout_group_key'),
+            'total' => Order::withTrashed()
+                ->whereNotNull('checkout_group_key')
+                ->distinct()
+                ->count('checkout_group_key'),
         ];
         $records = [
-            'total' => (int) $byStatus->sum('record_count'),
+            'total' => Order::withTrashed()
+                ->whereNotNull('checkout_group_key')
+                ->count(),
         ];
 
         foreach (self::DASHBOARD_STATUSES as $status) {
@@ -483,6 +500,7 @@ class AdminOrderGroupService
         return [
             'key' => $first->checkoutGroupKey(),
             'short_reference' => $first->checkoutReference?->short_reference,
+            'tags' => $first->checkoutReference?->tags?->sortBy('name')->values() ?? collect(),
             'representative_id' => (int) $first->id,
             'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
@@ -616,6 +634,15 @@ class AdminOrderGroupService
             }
         }
 
+        if ($request->filled('tag_id')) {
+            $tagId = $request->integer('tag_id');
+
+            $query->whereHas(
+                'checkoutReference.tags',
+                fn (Builder $tags): Builder => $tags->whereKey($tagId),
+            );
+        }
+
         $this->applyEventFilter($query, $request);
 
         if ($request->filled('q')) {
@@ -632,6 +659,8 @@ class AdminOrderGroupService
                     ->where('checkout_group_key', 'like', '%'.$term.'%')
                     ->orWhereHas('checkoutReference', fn (Builder $reference): Builder => $reference
                         ->where('short_reference', 'like', '%'.$term.'%'))
+                    ->orWhereHas('checkoutReference.tags', fn (Builder $tags): Builder => $tags
+                        ->where('name', 'like', '%'.$term.'%'))
                     ->orWhere('order_number', 'like', '%'.$term.'%')
                     ->orWhere('parent_name', 'like', '%'.$term.'%')
                     ->orWhere('child_name', 'like', '%'.$term.'%')

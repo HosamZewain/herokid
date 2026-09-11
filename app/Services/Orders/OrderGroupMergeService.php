@@ -61,8 +61,8 @@ class OrderGroupMergeService
 
             $target = $this->groups->present($this->loadForPresentation($targetOrders));
             $source = $this->groups->present($this->loadForPresentation($sourceOrders));
-            $targetReference = OrderCheckoutReference::query()->where('checkout_group_key', $targetKey)->first();
-            $sourceCheckoutReference = OrderCheckoutReference::query()->where('checkout_group_key', $sourceKey)->first();
+            $targetReference = OrderCheckoutReference::query()->with('tags:id')->where('checkout_group_key', $targetKey)->first();
+            $sourceCheckoutReference = OrderCheckoutReference::query()->with('tags:id')->where('checkout_group_key', $sourceKey)->first();
             $combinedItemsCents = (int) $target['items_cents'] + (int) $source['items_cents'];
             $combinedDiscountCents = (int) $target['discount_cents'] + (int) $source['discount_cents'];
             $deliveryCents = (int) $target['delivery_cents'];
@@ -114,6 +114,9 @@ class OrderGroupMergeService
             RoboDeskIntegrationEvent::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
             $this->mergeProductPreviewGallery($targetKey, $sourceKey);
             $this->mergeCustomerWorkflow($targetKey, $sourceKey);
+            if ($targetReference && $sourceCheckoutReference) {
+                $targetReference->tags()->syncWithoutDetaching($sourceCheckoutReference->tags->modelKeys());
+            }
 
             OrderGroupMergeAlias::query()->create([
                 'source_checkout_group_key' => $sourceKey,
@@ -297,6 +300,7 @@ class OrderGroupMergeService
             'paymentUpdatedBy:id,name',
             'groupAssignment.assignee:id,name',
             'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
+            'checkoutReference.tags:id,name,normalized_name',
             'story:id,title,price',
             'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
             'items.variant:id,product_id,name_ar,sku,stock_quantity',

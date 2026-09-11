@@ -156,6 +156,28 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(1, $groups->total());
     }
 
+    public function test_dashboard_total_matches_the_order_report_and_includes_soft_deleted_checkouts(): void
+    {
+        $this->createStoryOrder('HK-DASH-ACTIVE', 'GROUP-DASH-ACTIVE', 'ليلى', 'new');
+        $deleted = $this->createStoryOrder('HK-DASH-DELETED', 'GROUP-DASH-DELETED', 'عمر', 'cancelled');
+        $deleted->delete();
+
+        $dashboard = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk();
+        $report = $this->actingAs($this->admin)
+            ->get(route('admin.order-report.index'))
+            ->assertOk();
+
+        $dashboardTotal = $dashboard->viewData('totalOrders');
+        $reportTotal = $report->viewData('report')['summary']['checkouts'];
+
+        $this->assertSame(2, $dashboardTotal);
+        $this->assertSame($reportTotal, $dashboardTotal);
+        $this->assertSame(2, $dashboard->viewData('orderRecordCounts')['total']);
+        $this->assertSame(1, $dashboard->viewData('newOrders'));
+    }
+
     public function test_dashboard_uses_actual_payment_deltas_and_compares_new_orders_with_yesterday(): void
     {
         $order = $this->createStoryOrder('HK-DASH-OLD', 'GROUP-DASHBOARD-OLD', 'سلمى', 'under_review');
