@@ -191,6 +191,15 @@ return [
             'description_en' => 'Update order status, notes, and operational fields.',
             'sort_order' => 30,
         ],
+        'orders.tags.delete' => [
+            'group_key' => 'orders',
+            'name_ar' => 'حذف علامات الطلبات',
+            'name_en' => 'Delete order tags',
+            'description_ar' => 'حذف العلامات التنظيمية من عمليات الشراء. لا تُطلب هذه الصلاحية لإضافة العلامات أو استخدامها في التصفية.',
+            'description_en' => 'Delete organizational tags from checkouts. This permission is not required to add tags or filter by them.',
+            'sort_order' => 34,
+            'sensitive' => true,
+        ],
         'orders.discount.manage' => [
             'group_key' => 'orders',
             'name_ar' => 'إدارة خصومات الطلبات',

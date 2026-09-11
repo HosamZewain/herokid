@@ -14,33 +14,43 @@
                     <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
                 </div>
             </div>
-            <div class="flex flex-wrap items-center gap-1.5" data-order-group-tags>
+            <div class="flex flex-wrap items-center gap-1.5" data-order-group-tags data-can-delete="{{ auth()->user()->hasPermission('orders.tags.delete') ? '1' : '0' }}">
                 <span class="text-[10px] font-black text-gray-400">العلامات</span>
-                @forelse($group['tags'] as $tag)
-                    <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'tag_id' => $tag->id]) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100">#{{ $tag->name }}</a>
-                @empty
-                    <span class="text-[10px] font-bold text-gray-400">بدون علامات</span>
-                @endforelse
-                @can('orders.update')
+                <span class="contents" data-order-group-tag-list>
+                    @forelse($group['tags'] as $tag)
+                        <span class="group inline-flex items-center rounded-full bg-fuchsia-50 text-fuchsia-700" data-order-group-tag="{{ $tag->id }}" data-tag-name="{{ $tag->name }}">
+                            <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'tag_id' => $tag->id]) }}" class="px-2 py-1 text-[10px] font-black hover:text-fuchsia-900">#{{ $tag->name }}</a>
+                            @if(!$group['trashed'])
+                                @can('orders.tags.delete')
+                                    <button type="button" data-order-group-tag-delete data-delete-url="{{ route('admin.orders.groups.tags.destroy', [$group['representative_id'], $tag]) }}" class="ml-1 grid h-5 w-5 place-items-center rounded-full bg-fuchsia-100 text-xs font-black leading-none text-fuchsia-700 opacity-0 transition hover:bg-red-100 hover:text-red-700 group-hover:opacity-100 focus:opacity-100" aria-label="حذف علامة {{ $tag->name }}" title="حذف العلامة">×</button>
+                                @endcan
+                            @endif
+                        </span>
+                    @empty
+                        <span class="text-[10px] font-bold text-gray-400" data-order-group-tags-empty>بدون علامات</span>
+                    @endforelse
+                </span>
+                @can('orders.view')
                     @if(!$group['trashed'])
-                        <details class="group relative">
-                            <summary class="cursor-pointer list-none rounded-full border border-fuchsia-200 bg-white px-2 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-50 [&::-webkit-details-marker]:hidden">+ تعديل</summary>
-                            <div class="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-fuchsia-100 bg-white p-4 shadow-2xl">
-                                <form method="POST" action="{{ route('admin.orders.groups.tags', $group['representative_id']) }}">
+                        <details class="relative" data-order-group-tag-add-panel>
+                            <summary class="grid h-6 w-6 cursor-pointer list-none place-items-center rounded-full border border-fuchsia-200 bg-white text-sm font-black leading-none text-fuchsia-700 hover:bg-fuchsia-50 [&::-webkit-details-marker]:hidden" aria-label="إضافة علامة" title="إضافة علامة">+</summary>
+                            <div class="absolute right-0 z-40 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-fuchsia-100 bg-white p-3 shadow-2xl">
+                                <form method="POST" action="{{ route('admin.orders.groups.tags.store', $group['representative_id']) }}" data-order-group-tag-add>
                                     @csrf
-                                    @method('PATCH')
-                                    <label for="checkout-tags" class="mb-1.5 block text-xs font-black text-gray-700">علامات عملية الشراء</label>
-                                    <input id="checkout-tags" name="tags" type="text" list="order-tag-suggestions" value="{{ old('tags', $group['tags']->pluck('name')->implode('، ')) }}" maxlength="600" placeholder="عاجل، هدية، متابعة" class="min-h-10 w-full rounded-xl border-gray-200 text-right text-sm">
-                                    <p class="mt-1.5 text-[10px] font-bold leading-5 text-gray-400">افصل بفاصلة عربية أو إنجليزية. مسح الحقل يزيل كل العلامات.</p>
-                                    <button class="mt-3 min-h-10 w-full rounded-xl bg-fuchsia-600 px-4 py-2 text-xs font-black text-white hover:bg-fuchsia-700">حفظ العلامات</button>
-                                    <datalist id="order-tag-suggestions">
-                                        @foreach($availableOrderTags as $availableTag)<option value="{{ $availableTag->name }}"></option>@endforeach
-                                    </datalist>
+                                    <label for="checkout-tag" class="mb-1.5 block text-xs font-black text-gray-700">إضافة علامة</label>
+                                    <input id="checkout-tag" name="tag" type="text" list="order-tag-suggestions" value="" maxlength="40" autocomplete="off" placeholder="اكتب العلامة واضغط Enter" class="min-h-10 w-full rounded-xl border-gray-200 text-right text-sm" data-order-group-tag-input>
+                                    <p class="mt-1.5 text-[10px] font-bold leading-5 text-gray-400">تُضاف فورًا عند الضغط على Enter.</p>
                                 </form>
+                                <datalist id="order-tag-suggestions" data-order-tag-suggestions>
+                                    @foreach($availableOrderTags as $availableTag)
+                                        @unless($group['tags']->contains('id', $availableTag->id))<option value="{{ $availableTag->name }}"></option>@endunless
+                                    @endforeach
+                                </datalist>
                             </div>
                         </details>
                     @endif
                 @endcan
+                <span class="hidden text-[10px] font-black" data-order-group-tag-feedback aria-live="polite"></span>
                 <span class="mx-1 hidden h-3 w-px bg-gray-200 sm:inline-block"></span>
                 <span class="text-[10px] font-bold text-gray-400">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></span>
                 @if($group['short_reference'])<span class="hidden max-w-52 truncate text-[9px] font-mono text-gray-300 xl:inline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</span>@endif
@@ -597,5 +607,155 @@
             @endcan
         </div>
     </div>
+
+    @push('scripts')
+        <script>
+            (() => {
+                const root = document.querySelector('[data-order-group-tags]');
+                const list = root?.querySelector('[data-order-group-tag-list]');
+                const addForm = root?.querySelector('[data-order-group-tag-add]');
+                const addPanel = root?.querySelector('[data-order-group-tag-add-panel]');
+                const input = root?.querySelector('[data-order-group-tag-input]');
+                const suggestions = root?.querySelector('[data-order-tag-suggestions]');
+                const feedback = root?.querySelector('[data-order-group-tag-feedback]');
+                const canDelete = root?.dataset.canDelete === '1';
+                const knownSuggestions = new Set({{ Illuminate\Support\Js::from($availableOrderTags->pluck('name')->merge($group['tags']->pluck('name'))->unique()->values()) }});
+                let feedbackTimer;
+
+                if (!root || !list) return;
+
+                const normalize = value => value.trim().toLocaleLowerCase();
+
+                const showFeedback = (message, error = false) => {
+                    if (!feedback) return;
+                    window.clearTimeout(feedbackTimer);
+                    feedback.textContent = message;
+                    feedback.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+                    feedback.classList.add(error ? 'text-red-600' : 'text-emerald-600');
+                    feedbackTimer = window.setTimeout(() => feedback.classList.add('hidden'), 3000);
+                };
+
+                const errorMessage = payload => Object.values(payload?.errors || {}).flat()[0] || payload?.message || 'تعذر تحديث العلامات. حاول مرة أخرى.';
+
+                const refreshSuggestions = tags => {
+                    if (!suggestions) return;
+                    const selected = new Set(tags.map(tag => normalize(tag.name)));
+                    suggestions.replaceChildren();
+                    [...knownSuggestions]
+                        .filter(name => !selected.has(normalize(name)))
+                        .sort((first, second) => first.localeCompare(second, 'ar'))
+                        .forEach(name => {
+                            const option = document.createElement('option');
+                            option.value = name;
+                            suggestions.append(option);
+                        });
+                };
+
+                const renderTags = tags => {
+                    list.replaceChildren();
+
+                    if (!tags.length) {
+                        const empty = document.createElement('span');
+                        empty.className = 'text-[10px] font-bold text-gray-400';
+                        empty.dataset.orderGroupTagsEmpty = '';
+                        empty.textContent = 'بدون علامات';
+                        list.append(empty);
+                        refreshSuggestions(tags);
+                        return;
+                    }
+
+                    tags.forEach(tag => {
+                        knownSuggestions.add(tag.name);
+                        const badge = document.createElement('span');
+                        badge.className = 'group inline-flex items-center rounded-full bg-fuchsia-50 text-fuchsia-700';
+                        badge.dataset.orderGroupTag = tag.id;
+                        badge.dataset.tagName = tag.name;
+
+                        const link = document.createElement('a');
+                        link.href = tag.filter_url;
+                        link.className = 'px-2 py-1 text-[10px] font-black hover:text-fuchsia-900';
+                        link.textContent = `#${tag.name}`;
+                        badge.append(link);
+
+                        if (canDelete && tag.delete_url) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.dataset.orderGroupTagDelete = '';
+                            button.dataset.deleteUrl = tag.delete_url;
+                            button.className = 'ml-1 grid h-5 w-5 place-items-center rounded-full bg-fuchsia-100 text-xs font-black leading-none text-fuchsia-700 opacity-0 transition hover:bg-red-100 hover:text-red-700 group-hover:opacity-100 focus:opacity-100';
+                            button.setAttribute('aria-label', `حذف علامة ${tag.name}`);
+                            button.title = 'حذف العلامة';
+                            button.textContent = '×';
+                            badge.append(button);
+                        }
+
+                        list.append(badge);
+                    });
+
+                    refreshSuggestions(tags);
+                };
+
+                const request = async (url, options) => {
+                    root.setAttribute('aria-busy', 'true');
+                    try {
+                        const response = await fetch(url, {
+                            ...options,
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                ...(options.headers || {}),
+                            },
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) throw new Error(errorMessage(payload));
+
+                        renderTags(payload.tags || []);
+                        showFeedback(payload.message || 'تم تحديث العلامات.');
+                    } finally {
+                        root.removeAttribute('aria-busy');
+                    }
+                };
+
+                addForm?.addEventListener('submit', async event => {
+                    event.preventDefault();
+                    const tagName = input.value.trim();
+                    if (!tagName) return;
+
+                    input.disabled = true;
+                    try {
+                        await request(addForm.action, {
+                            method: 'POST',
+                            body: new FormData(addForm),
+                        });
+                        input.value = '';
+                        addPanel?.removeAttribute('open');
+                    } catch (error) {
+                        showFeedback(error.message, true);
+                    } finally {
+                        input.disabled = false;
+                    }
+                });
+
+                root.addEventListener('click', async event => {
+                    const button = event.target.closest('[data-order-group-tag-delete]');
+                    if (!button || button.disabled) return;
+
+                    button.disabled = true;
+                    try {
+                        await request(button.dataset.deleteUrl, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': addForm?.querySelector('[name="_token"]')?.value || '',
+                            },
+                        });
+                    } catch (error) {
+                        button.disabled = false;
+                        showFeedback(error.message, true);
+                    }
+                });
+            })();
+        </script>
+    @endpush
 
 </x-admin-layout>

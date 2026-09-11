@@ -59,6 +59,12 @@ class AdminOrderGroupTagsTest extends TestCase
             ->assertSee('علامات عملية الشراء')
             ->assertSee('متابعة')
             ->assertSee('طباعة خاصة')
+            ->assertSee('data-order-group-tag-add', false)
+            ->assertSee('data-order-group-tag-delete', false)
+            ->assertSee('aria-label="إضافة علامة"', false)
+            ->assertSee('اكتب العلامة واضغط Enter')
+            ->assertSee('name="tag" type="text" list="order-tag-suggestions" value=""', false)
+            ->assertDontSee('حفظ العلامات')
             ->assertSee(route('admin.orders.groups.tags', $order), false);
 
         $this->actingAs($admin)
@@ -98,7 +104,7 @@ class AdminOrderGroupTagsTest extends TestCase
         $this->assertNotSame($other->checkoutGroupKey(), $report->viewData('report')['rows']->first()['key']);
     }
 
-    public function test_tag_updates_require_order_update_permission(): void
+    public function test_order_viewer_can_add_but_cannot_delete_tags_without_delete_permission(): void
     {
         $viewOnly = User::factory()->create(['role' => 'admin']);
         $viewOnly->permissions()->sync(
@@ -107,11 +113,57 @@ class AdminOrderGroupTagsTest extends TestCase
         [$order] = $this->checkout('TAG-PERMISSION', ['HK-TAG-PERMISSION']);
 
         $this->actingAs($viewOnly)
-            ->patch(route('admin.orders.groups.tags', $order), ['tags' => 'غير مسموح'])
+            ->postJson(route('admin.orders.groups.tags.store', $order), ['tag' => 'مسموح'])
+            ->assertOk()
+            ->assertJsonPath('tags.0.name', 'مسموح')
+            ->assertJsonPath('tags.0.delete_url', null);
+
+        $tag = OrderTag::query()->where('normalized_name', 'مسموح')->sole();
+        $this->assertDatabaseHas('order_checkout_reference_tag', ['order_tag_id' => $tag->id]);
+
+        $this->actingAs($viewOnly)
+            ->deleteJson(route('admin.orders.groups.tags.destroy', [$order, $tag]))
             ->assertForbidden();
 
-        $this->assertDatabaseCount('order_tags', 0);
+        $this->actingAs($viewOnly)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('aria-label="إضافة علامة"', false)
+            ->assertDontSee('data-delete-url="'.route('admin.orders.groups.tags.destroy', [$order, $tag]).'"', false);
+
+        $viewOnly->permissions()->syncWithoutDetaching(
+            Permission::query()->where('key', 'orders.tags.delete')->pluck('id'),
+        );
+
+        $this->actingAs($viewOnly->refresh())
+            ->deleteJson(route('admin.orders.groups.tags.destroy', [$order, $tag]))
+            ->assertOk()
+            ->assertJsonCount(0, 'tags');
+
         $this->assertDatabaseCount('order_checkout_reference_tag', 0);
+    }
+
+    public function test_ajax_add_keeps_existing_tags_and_returns_live_ui_payload(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$order] = $this->checkout('TAG-AJAX', ['HK-TAG-AJAX']);
+
+        $this->actingAs($admin)->postJson(route('admin.orders.groups.tags.store', $order), [
+            'tag' => 'الأولى',
+        ])->assertOk();
+
+        $response = $this->actingAs($admin)->postJson(route('admin.orders.groups.tags.store', $order), [
+            'tag' => 'الثانية',
+        ])->assertOk();
+
+        $response
+            ->assertJsonCount(2, 'tags')
+            ->assertJsonStructure(['tags' => [['id', 'name', 'filter_url', 'delete_url']]]);
+        $this->assertEqualsCanonicalizing(
+            ['الأولى', 'الثانية'],
+            collect($response->json('tags'))->pluck('name')->all(),
+        );
+        $this->assertDatabaseCount('order_checkout_reference_tag', 2);
     }
 
     public function test_tag_count_and_length_are_validated(): void

@@ -25,6 +25,54 @@ class OrderGroupTagService
     public function update(Order $representative, ?string $tagList, User $admin, Request $request): Collection
     {
         $names = $this->parse($tagList);
+
+        return $this->persist($representative, $names, $admin, $request);
+    }
+
+    /** @return Collection<int, OrderTag> */
+    public function add(Order $representative, string $tagName, User $admin, Request $request): Collection
+    {
+        $reference = $this->references->ensureForOrder($representative);
+
+        return DB::transaction(function () use ($representative, $reference, $tagName, $admin, $request): Collection {
+            $reference = OrderCheckoutReference::query()
+                ->with('tags:id,name,normalized_name')
+                ->lockForUpdate()
+                ->findOrFail($reference->id);
+            $names = $this->parse($reference->tags->pluck('name')->push($tagName)->implode(','));
+
+            return $this->sync($representative, $reference, $names, $admin, $request);
+        });
+    }
+
+    /** @return Collection<int, OrderTag> */
+    public function remove(Order $representative, OrderTag $tag, User $admin, Request $request): Collection
+    {
+        $reference = $this->references->ensureForOrder($representative);
+
+        return DB::transaction(function () use ($representative, $reference, $tag, $admin, $request): Collection {
+            $reference = OrderCheckoutReference::query()
+                ->with('tags:id,name,normalized_name')
+                ->lockForUpdate()
+                ->findOrFail($reference->id);
+            abort_unless($reference->tags->contains('id', $tag->id), 404);
+            $names = $this->parse(
+                $reference->tags
+                    ->reject(fn (OrderTag $current): bool => $current->is($tag))
+                    ->pluck('name')
+                    ->implode(','),
+            );
+
+            return $this->sync($representative, $reference, $names, $admin, $request);
+        });
+    }
+
+    /**
+     * @param  Collection<int, array{name: string, normalized: string}>  $names
+     * @return Collection<int, OrderTag>
+     */
+    private function persist(Order $representative, Collection $names, User $admin, Request $request): Collection
+    {
         $reference = $this->references->ensureForOrder($representative);
 
         return DB::transaction(function () use ($representative, $reference, $names, $admin, $request): Collection {
@@ -32,36 +80,51 @@ class OrderGroupTagService
                 ->with('tags:id,name,normalized_name')
                 ->lockForUpdate()
                 ->findOrFail($reference->id);
-            $before = $reference->tags->sortBy('normalized_name')->pluck('name')->values()->all();
 
-            $tagIds = $names->map(function (array $tag): int {
-                return (int) OrderTag::query()->firstOrCreate(
-                    ['normalized_name' => $tag['normalized']],
-                    ['name' => $tag['name']],
-                )->id;
-            });
-
-            $reference->tags()->sync($tagIds->all());
-            $reference->touch();
-            $after = $reference->tags()->orderBy('normalized_name')->pluck('name')->all();
-
-            if ($before !== $after) {
-                AdminActivityLogger::log(
-                    action: 'checkout.tags_updated',
-                    description: 'تم تحديث علامات عملية الشراء.',
-                    subject: $representative,
-                    properties: [
-                        'checkout_group_key' => $representative->checkoutGroupKey(),
-                        'before' => $before,
-                        'after' => $after,
-                    ],
-                    admin: $admin,
-                    request: $request,
-                );
-            }
-
-            return $reference->tags()->orderBy('normalized_name')->get();
+            return $this->sync($representative, $reference, $names, $admin, $request);
         });
+    }
+
+    /**
+     * @param  Collection<int, array{name: string, normalized: string}>  $names
+     * @return Collection<int, OrderTag>
+     */
+    private function sync(
+        Order $representative,
+        OrderCheckoutReference $reference,
+        Collection $names,
+        User $admin,
+        Request $request,
+    ): Collection {
+        $before = $reference->tags->sortBy('normalized_name')->pluck('name')->values()->all();
+
+        $tagIds = $names->map(function (array $tag): int {
+            return (int) OrderTag::query()->firstOrCreate(
+                ['normalized_name' => $tag['normalized']],
+                ['name' => $tag['name']],
+            )->id;
+        });
+
+        $reference->tags()->sync($tagIds->all());
+        $reference->touch();
+        $after = $reference->tags()->orderBy('normalized_name')->pluck('name')->all();
+
+        if ($before !== $after) {
+            AdminActivityLogger::log(
+                action: 'checkout.tags_updated',
+                description: 'تم تحديث علامات عملية الشراء.',
+                subject: $representative,
+                properties: [
+                    'checkout_group_key' => $representative->checkoutGroupKey(),
+                    'before' => $before,
+                    'after' => $after,
+                ],
+                admin: $admin,
+                request: $request,
+            );
+        }
+
+        return $reference->tags()->orderBy('normalized_name')->get();
     }
 
     /** @return Collection<int, array{name: string, normalized: string}> */
