@@ -55,6 +55,7 @@ class AdminOrderGroupTagsTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
+            ->assertSeeInOrder(['data-order-group-tags', 'data-admin-order-quick-search'], false)
             ->assertSee('علامات عملية الشراء')
             ->assertSee('متابعة')
             ->assertSee('طباعة خاصة')
@@ -83,7 +84,12 @@ class AdminOrderGroupTagsTest extends TestCase
         $this->assertSame(1, $search->viewData('groups')->total());
 
         $filter = $this->actingAs($admin)->get(route('admin.orders.index', ['tag_id' => $tag->id]))->assertOk();
-        $filter->assertSee('SEARCH-TAGGED')->assertDontSee('SEARCH-OTHER');
+        $filter
+            ->assertSee('SEARCH-TAGGED')
+            ->assertDontSee('SEARCH-OTHER')
+            ->assertSeeInOrder(['المحتويات', 'العلامات', 'الحالة', 'القيمة والدفع', 'آخر تحديث'])
+            ->assertDontSee('>القيمة</th>', false)
+            ->assertDontSee('>الدفع</th>', false);
         $this->assertSame(1, $filter->viewData('groups')->total());
 
         $report = $this->actingAs($admin)->get(route('admin.order-report.index', ['tag_id' => $tag->id]))->assertOk();

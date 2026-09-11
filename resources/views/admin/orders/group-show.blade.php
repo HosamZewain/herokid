@@ -1,18 +1,49 @@
 <x-admin-layout>
     <x-slot name="title">{{ $group['short_reference'] ?: $group['key'] }}</x-slot>
     <x-slot name="header">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-right">
-                <p class="text-xs font-black text-indigo-500">تفاصيل عملية الشراء</p>
-                <h2 class="mt-1 text-2xl font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</h2>
-                @if($group['short_reference'])<p class="mt-1 text-[10px] font-mono text-gray-400" dir="ltr">{{ $group['key'] }}</p>@endif
-                <p class="mt-1 text-xs font-bold text-gray-500">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></p>
+        <div class="min-w-0 space-y-2 text-right">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <div class="flex min-w-0 items-center gap-2">
+                    <span class="shrink-0 text-[10px] font-black text-indigo-500">عملية الشراء</span>
+                    <h2 class="truncate text-lg font-black text-indigo-700" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</h2>
+                </div>
+                <div class="flex flex-wrap gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                    <span data-workflow-badge="status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
+                    <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']) }}">{{ $group['payment_status_label'] }}</span>
+                    <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']) }}">{{ $group['printing_status_label'] }}</span>
+                    <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
+                </div>
             </div>
-            <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
-                <span data-workflow-badge="status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
-                <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']) }}">{{ $group['payment_status_label'] }}</span>
-                <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']) }}">{{ $group['printing_status_label'] }}</span>
-                <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
+            <div class="flex flex-wrap items-center gap-1.5" data-order-group-tags>
+                <span class="text-[10px] font-black text-gray-400">العلامات</span>
+                @forelse($group['tags'] as $tag)
+                    <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'tag_id' => $tag->id]) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100">#{{ $tag->name }}</a>
+                @empty
+                    <span class="text-[10px] font-bold text-gray-400">بدون علامات</span>
+                @endforelse
+                @can('orders.update')
+                    @if(!$group['trashed'])
+                        <details class="group relative">
+                            <summary class="cursor-pointer list-none rounded-full border border-fuchsia-200 bg-white px-2 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-50 [&::-webkit-details-marker]:hidden">+ تعديل</summary>
+                            <div class="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-fuchsia-100 bg-white p-4 shadow-2xl">
+                                <form method="POST" action="{{ route('admin.orders.groups.tags', $group['representative_id']) }}">
+                                    @csrf
+                                    @method('PATCH')
+                                    <label for="checkout-tags" class="mb-1.5 block text-xs font-black text-gray-700">علامات عملية الشراء</label>
+                                    <input id="checkout-tags" name="tags" type="text" list="order-tag-suggestions" value="{{ old('tags', $group['tags']->pluck('name')->implode('، ')) }}" maxlength="600" placeholder="عاجل، هدية، متابعة" class="min-h-10 w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <p class="mt-1.5 text-[10px] font-bold leading-5 text-gray-400">افصل بفاصلة عربية أو إنجليزية. مسح الحقل يزيل كل العلامات.</p>
+                                    <button class="mt-3 min-h-10 w-full rounded-xl bg-fuchsia-600 px-4 py-2 text-xs font-black text-white hover:bg-fuchsia-700">حفظ العلامات</button>
+                                    <datalist id="order-tag-suggestions">
+                                        @foreach($availableOrderTags as $availableTag)<option value="{{ $availableTag->name }}"></option>@endforeach
+                                    </datalist>
+                                </form>
+                            </div>
+                        </details>
+                    @endif
+                @endcan
+                <span class="mx-1 hidden h-3 w-px bg-gray-200 sm:inline-block"></span>
+                <span class="text-[10px] font-bold text-gray-400">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></span>
+                @if($group['short_reference'])<span class="hidden max-w-52 truncate text-[9px] font-mono text-gray-300 xl:inline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</span>@endif
             </div>
         </div>
     </x-slot>
@@ -76,39 +107,6 @@
                         </div>
                         @include('admin.orders._assignment-controls', ['group' => $group])
                     </div>
-                </div>
-            </section>
-
-            <section class="rounded-2xl border border-fuchsia-100 bg-white p-4 shadow-sm" aria-label="علامات عملية الشراء" data-order-group-tags>
-                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                    <div class="min-w-0">
-                        <h3 class="text-sm font-black text-gray-900">علامات عملية الشراء</h3>
-                        <p class="mt-1 text-xs font-bold text-gray-500">تُطبق العلامات على كل القصص والمنتجات داخل عملية الشراء.</p>
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            @forelse($group['tags'] as $tag)
-                                <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'tag_id' => $tag->id]) }}" class="rounded-full bg-fuchsia-50 px-3 py-1.5 text-xs font-black text-fuchsia-700 hover:bg-fuchsia-100">#{{ $tag->name }}</a>
-                            @empty
-                                <span class="text-xs font-bold text-gray-400">لا توجد علامات.</span>
-                            @endforelse
-                        </div>
-                    </div>
-                    @can('orders.update')
-                        @if(!$group['trashed'])
-                            <form method="POST" action="{{ route('admin.orders.groups.tags', $group['representative_id']) }}" class="w-full max-w-2xl">
-                                @csrf
-                                @method('PATCH')
-                                <label for="checkout-tags" class="mb-1.5 block text-xs font-black text-gray-600">إضافة أو تعديل العلامات</label>
-                                <div class="flex flex-col gap-2 sm:flex-row">
-                                    <input id="checkout-tags" name="tags" type="text" list="order-tag-suggestions" value="{{ old('tags', $group['tags']->pluck('name')->implode('، ')) }}" maxlength="600" placeholder="مثال: عاجل، هدية، متابعة" class="min-h-11 flex-1 rounded-xl border-gray-200 text-right text-sm">
-                                    <button class="min-h-11 rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-black text-white hover:bg-fuchsia-700">حفظ العلامات</button>
-                                </div>
-                                <p class="mt-1.5 text-[11px] font-bold text-gray-400">افصل بين العلامات بفاصلة عربية أو إنجليزية. مسح الحقل يزيل كل العلامات.</p>
-                                <datalist id="order-tag-suggestions">
-                                    @foreach($availableOrderTags as $availableTag)<option value="{{ $availableTag->name }}"></option>@endforeach
-                                </datalist>
-                            </form>
-                        @endif
-                    @endcan
                 </div>
             </section>
 

@@ -343,13 +343,6 @@
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
                                     <p class="mt-2 text-[10px] font-black text-amber-700">المصدر: {{ \App\Support\OrderSource::label($group['order_source']) }}</p>
-                                    @if($group['tags']->isNotEmpty())
-                                        <div class="mt-2 flex flex-wrap justify-end gap-1">
-                                            @foreach($group['tags'] as $tag)
-                                                <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
-                                            @endforeach
-                                        </div>
-                                    @endif
                                 </div>
                                 <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                     <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -378,6 +371,16 @@
                                 </div>
                                 @if($group['child_names'])<p class="mt-3 text-xs font-bold text-gray-600">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
+                                <div class="mt-3 border-t border-slate-200 pt-3">
+                                    <p class="mb-1.5 text-[10px] font-black text-gray-400">العلامات</p>
+                                    <div class="flex flex-wrap gap-1">
+                                        @forelse($group['tags'] as $tag)
+                                            <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-100 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
+                                        @empty
+                                            <span class="text-[10px] font-bold text-gray-400">—</span>
+                                        @endforelse
+                                    </div>
+                                </div>
                                 @php
                                     $mobileUpdatedAt = \App\Support\OrderDateTime::display($group['updated_at']);
                                     $mobileCreatedAt = \App\Support\OrderDateTime::display($group['created_at']);
@@ -433,9 +436,9 @@
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المسؤول</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">العلامات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">الدفع</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة والدفع</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">
                                     <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['sort' => 'updated_at', 'direction' => $nextUpdatedDirection])) }}" class="inline-flex items-center gap-1 hover:text-indigo-700">
                                         آخر تحديث
@@ -462,13 +465,6 @@
                                         <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
                                         <p class="mt-1 max-w-40 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
-                                        @if($group['tags']->isNotEmpty())
-                                            <div class="mt-2 flex max-w-44 flex-wrap gap-1">
-                                                @foreach($group['tags'] as $tag)
-                                                    <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2 py-1 text-[10px] font-black text-fuchsia-700">#{{ $tag->name }}</a>
-                                                @endforeach
-                                            </div>
-                                        @endif
                                         <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>
                                             <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-8 w-8 place-items-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                                                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -516,6 +512,15 @@
                                         @if($group['child_names'])<p class="mt-2 text-xs font-bold text-gray-700">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                         <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                     </td>
+                                    <td class="min-w-36 px-4 py-4">
+                                        <div class="flex max-w-44 flex-wrap gap-1">
+                                            @forelse($group['tags'] as $tag)
+                                                <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['tag_id' => $tag->id])) }}" class="rounded-full bg-fuchsia-50 px-2.5 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100">#{{ $tag->name }}</a>
+                                            @empty
+                                                <span class="text-xs font-bold text-gray-300">—</span>
+                                            @endforelse
+                                        </div>
+                                    </td>
                                     <td class="px-4 py-4" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                         <div class="flex min-w-36 flex-col items-start gap-1">
                                             <span data-workflow-badge="status" class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -530,13 +535,13 @@
                                             </div>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
+                                    <td class="min-w-44 whitespace-nowrap px-4 py-4">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
+                                            <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        </div>
                                         <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_money($group['delivery_cents'] / 100) }}</p>
                                         @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
-                                    </td>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
                                         @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع <span data-workflow-paid>{{ format_money($group['paid_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي <span data-workflow-remaining>{{ format_money($group['remaining_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
