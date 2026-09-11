@@ -722,11 +722,12 @@
                     const tagName = input.value.trim();
                     if (!tagName) return;
 
+                    const formData = new FormData(addForm);
                     input.disabled = true;
                     try {
                         await request(addForm.action, {
                             method: 'POST',
-                            body: new FormData(addForm),
+                            body: formData,
                         });
                         input.value = '';
                         addPanel?.removeAttribute('open');

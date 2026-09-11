@@ -64,6 +64,7 @@ class AdminOrderGroupTagsTest extends TestCase
             ->assertSee('aria-label="إضافة علامة"', false)
             ->assertSee('اكتب العلامة واضغط Enter')
             ->assertSee('name="tag" type="text" list="order-tag-suggestions" value=""', false)
+            ->assertSeeInOrder(['const formData = new FormData(addForm);', 'input.disabled = true;', 'body: formData,'], false)
             ->assertDontSee('حفظ العلامات')
             ->assertSee(route('admin.orders.groups.tags', $order), false);
 
