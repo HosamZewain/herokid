@@ -482,7 +482,13 @@
                                     @endif
                                     <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>
                                         <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</a>
-                                        <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
+                                        @if($group['customer_rating'])
+                                            <div class="mt-1 flex w-40 items-center gap-0.5" dir="ltr" data-order-list-rating aria-label="تقييم العميل {{ $group['customer_rating'] }} من 5" title="تقييم العميل: {{ $group['customer_rating'] }} من 5">
+                                                @for($star = 1; $star <= 5; $star++)
+                                                    <span class="text-sm leading-none {{ $star <= $group['customer_rating'] ? 'text-amber-400' : 'text-slate-200' }}" aria-hidden="true">★</span>
+                                                @endfor
+                                            </div>
+                                        @endif
                                         <p class="mt-1 max-w-40 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
                                         <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>

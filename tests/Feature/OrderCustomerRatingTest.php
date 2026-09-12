@@ -165,6 +165,22 @@ class OrderCustomerRatingTest extends TestCase
         );
     }
 
+    public function test_orders_index_shows_only_rating_stars_below_the_checkout_id(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $order = $this->order();
+        app(OrderCustomerRatingService::class)->submit($order, 4, null);
+
+        $response = $this->actingAs($admin)->get(route('admin.orders.index', [
+            'catalog_type' => 'products',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('data-order-list-rating', false)
+            ->assertSee('تقييم العميل 4 من 5')
+            ->assertDontSee('1 سجل طلب');
+    }
+
     public function test_admin_page_has_a_separate_whatsapp_rating_action_with_a_signed_url(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

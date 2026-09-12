@@ -40,6 +40,7 @@ class AdminOrderGroupService
         'bookletPreview:id,order_id,uuid,status,current_version_id,public_token_encrypted',
         'productPreviewGallery:id,checkout_group_key,status,public_token_encrypted',
         'productPreviewGallery.previews:id,product_gallery_id',
+        'submittedServiceRatings:id,order_id,metadata,decided_at',
         'story:id,title,price,short_desc,full_desc,full_story,age_range,gender,language,lesson_value',
         'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
@@ -528,11 +529,16 @@ class AdminOrderGroupService
             ? $first->payment_status
             : OrderPaymentStatus::UNPAID;
         $paidAmountCents = min($totalCents, max(0, (int) $first->paid_amount_cents));
+        $customerRating = $orders
+            ->flatMap(fn (Order $order): Collection => $order->submittedServiceRatings)
+            ->sortByDesc('id')
+            ->first()?->qualityRating();
 
         return [
             'key' => $first->checkoutGroupKey(),
             'short_reference' => $first->checkoutReference?->short_reference,
             'tags' => $first->checkoutReference?->tags?->sortBy('name')->values() ?? collect(),
+            'customer_rating' => $customerRating,
             'representative_id' => (int) $first->id,
             'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
