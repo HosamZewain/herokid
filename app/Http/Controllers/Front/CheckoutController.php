@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
+use App\Rules\InternationalMobileNumber;
 use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
@@ -43,11 +44,13 @@ class CheckoutController extends Controller
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
+            'alternate_phone' => Phone::normalize($request->input('alternate_phone')),
         ]);
 
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
+            'phone' => ['required', 'string', 'max:20', new InternationalMobileNumber],
+            'alternate_phone' => ['nullable', 'string', 'max:20', new InternationalMobileNumber],
             'delivery_country_id' => [
                 'required',
                 Rule::exists('delivery_countries', 'id')->where(fn ($query) => $query->where('active', true)),
@@ -193,6 +196,7 @@ class CheckoutController extends Controller
                         'parent_notes' => $item['parent_notes'] ?? null,
                         'delivery_details' => [
                             'phone' => $validated['phone'],
+                            'alternate_phone' => $validated['alternate_phone'] ?? null,
                             'delivery_country_id' => $country->id,
                             'delivery_governorate_id' => $governorate->id,
                             'country' => $country->name,
@@ -556,6 +560,7 @@ class CheckoutController extends Controller
     {
         return [
             'phone' => $validated['phone'],
+            'alternate_phone' => $validated['alternate_phone'] ?? null,
             'delivery_country_id' => $country->id,
             'delivery_governorate_id' => $governorate->id,
             'country' => $country->name,

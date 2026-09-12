@@ -120,10 +120,18 @@
                             </div>
                             <div>
                                 <label for="checkout-phone" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم الموبايل / واتساب <span class="text-red-500">*</span></label>
-                                <input id="checkout-phone" type="tel" inputmode="tel" autocomplete="tel" name="phone" value="{{ old('phone', auth()->user()->phone ?? data_get($savedDeliveryDetails, 'phone')) }}" required dir="ltr"
+                                <input id="checkout-phone" type="tel" inputmode="tel" autocomplete="tel" name="phone" value="{{ old('phone', auth()->user()->phone ?? data_get($savedDeliveryDetails, 'phone')) }}" required dir="ltr" maxlength="24" placeholder="01012345678"
                                     @if($errors->has('phone')) aria-invalid="true" @endif
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
+                                <p class="mt-1 text-right text-xs font-medium text-slate-500">الرقم المصري يُكتب عاديًا مثل 01012345678، والرقم الدولي برمز الدولة مثل +966...</p>
                                 <x-input-error :messages="$errors->get('phone')" class="mt-1" />
+                            </div>
+                            <div>
+                                <label for="checkout-alternate-phone" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">رقم هاتف إضافي <span class="text-xs font-medium text-slate-400">(اختياري)</span></label>
+                                <input id="checkout-alternate-phone" type="tel" inputmode="tel" autocomplete="tel-national" name="alternate_phone" value="{{ old('alternate_phone', data_get($savedDeliveryDetails, 'alternate_phone')) }}" dir="ltr" maxlength="24" placeholder="رقم احتياطي للتواصل"
+                                    @if($errors->has('alternate_phone')) aria-invalid="true" @endif
+                                    class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-3">
+                                <x-input-error :messages="$errors->get('alternate_phone')" class="mt-1" />
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
                                 <div>

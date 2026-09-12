@@ -500,6 +500,71 @@ class CartCheckoutTest extends TestCase
             ->assertSee($shortReference);
     }
 
+    public function test_checkout_accepts_an_egyptian_local_mobile_and_saves_an_optional_international_phone(): void
+    {
+        Storage::fake('local');
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('mobile-validation-story', 'قصة رقم الهاتف', 100);
+
+        $cart = [
+            'mobile-validation-item' => [
+                'key' => 'mobile-validation-item',
+                'item_type' => 'story',
+                'story_id' => $story->id,
+                'story_title' => $story->title,
+                'story_slug' => $story->slug,
+                'story_price' => 100.0,
+                'child_name' => 'سلمى',
+                'child_age' => 6,
+                'child_gender' => 'girl',
+                'uploaded_photos' => [],
+            ],
+        ];
+
+        $this->withSession(['cart.items' => $cart])
+            ->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('name="alternate_phone"', false)
+            ->assertSee('رقم هاتف إضافي')
+            ->assertSee('الرقم المصري يُكتب عاديًا');
+
+        $payload = [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '١٢٣٤٥',
+            'alternate_phone' => '',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'city' => 'مدينة نصر',
+            'street' => '١٢ شارع النصر',
+        ];
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), $payload)
+            ->assertSessionHasErrors('phone');
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), array_replace($payload, [
+                'phone' => '01012345678',
+                'alternate_phone' => '+20223456789',
+            ]))
+            ->assertSessionHasErrors('alternate_phone');
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), array_replace($payload, [
+                'phone' => '٠١٠١٢٣٤٥٦٧٨',
+                'alternate_phone' => '+966 51 234 5678',
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('checkout.success'));
+
+        $order = Order::query()->sole();
+        $this->assertSame('01012345678', data_get($order->delivery_details, 'phone'));
+        $this->assertSame('+966512345678', data_get($order->delivery_details, 'alternate_phone'));
+    }
+
     public function test_customer_selects_an_easy_official_bosta_area_and_checkout_saves_provider_ids(): void
     {
         Storage::fake('local');
@@ -710,6 +775,7 @@ class CartCheckoutTest extends TestCase
             'language' => 'ar',
             'delivery_details' => [
                 'phone' => '201000000000',
+                'alternate_phone' => '+966512345678',
                 'country' => 'Egypt',
                 'governorate' => 'القاهرة',
                 'city' => 'Nasr City',
@@ -728,6 +794,8 @@ class CartCheckoutTest extends TestCase
             ->assertSee('Nasr City')
             ->assertSee('Street 1')
             ->assertSee('Building 2, Apartment 3')
+            ->assertSee('هاتف إضافي')
+            ->assertSee('+966512345678')
             ->assertDontSee('البريد الإلكتروني');
     }
 
@@ -789,6 +857,7 @@ class CartCheckoutTest extends TestCase
             'language' => 'ar',
             'delivery_details' => [
                 'phone' => '201000000000',
+                'alternate_phone' => '+966512345678',
                 'delivery_country_id' => $egypt->id,
                 'delivery_governorate_id' => $cairo->id,
                 'country' => 'Egypt',
@@ -822,6 +891,7 @@ class CartCheckoutTest extends TestCase
             ->assertOk()
             ->assertSee('value="Parent User"', false)
             ->assertSee('value="201555555555"', false)
+            ->assertSee('value="+966512345678"', false)
             ->assertSee('value="Nasr City"', false)
             ->assertSee('value="Street 9"', false)
             ->assertSee('Building 10, Apartment 4')
