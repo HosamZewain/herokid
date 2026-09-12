@@ -8,6 +8,7 @@ use App\Models\OrderProductPreviewGallery;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
+use App\Services\Orders\OrderCustomerRatingService;
 use App\Services\Orders\OrderDeletionService;
 use App\Services\Orders\OrderGroupDiscountService;
 use App\Services\Orders\OrderGroupMergeService;
@@ -36,6 +37,7 @@ class OrderGroupController extends Controller
         OrderActivityTimelineService $activityTimeline,
         OrderPaymentLedgerService $paymentLedger,
         RelatedCustomerCheckoutService $relatedCheckouts,
+        OrderCustomerRatingService $customerRatings,
     ) {
         $group = $groups->findByRepresentative($representative);
 
@@ -100,6 +102,8 @@ class OrderGroupController extends Controller
             'productPreviewGallery' => $productPreviewGallery,
             'relatedCustomerCheckouts' => $relatedCheckouts->forGroup($group),
             'availableOrderTags' => $groups->tagOptions(),
+            'customerRating' => $customerRatings->ratingForGroup($group),
+            'ratingWhatsAppAction' => $customerRatings->whatsappActionForGroup($group),
         ]);
     }
 

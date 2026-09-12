@@ -63,6 +63,7 @@ use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
 use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\FootballStoriesController;
+use App\Http\Controllers\Front\OrderCustomerRatingController;
 use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
@@ -169,6 +170,15 @@ Route::get('/order-preview/{token}/images/{preview}', [PublicOrderProductPreview
     ->whereNumber('preview')
     ->middleware('throttle:300,1')
     ->name('order-product-previews.image');
+
+Route::get('/order-rating/{order}', [OrderCustomerRatingController::class, 'show'])
+    ->whereNumber('order')
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('order-ratings.show');
+Route::post('/order-rating/{order}', [OrderCustomerRatingController::class, 'store'])
+    ->whereNumber('order')
+    ->middleware(['signed', 'throttle:10,1'])
+    ->name('order-ratings.store');
 
 // Public Store Routes
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');

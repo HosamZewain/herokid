@@ -111,6 +111,8 @@
                 </div>
             @endif
 
+            @include('admin.orders._customer-rating')
+
             @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
             @include('admin.orders._related-customer-checkouts')
@@ -126,6 +128,12 @@
                     @endcan
                     @if(!empty($whatsappMessages) && !$group['trashed'])
                             @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $whatsappMessages, 'compact' => true, 'labelledCompact' => true])
+                    @endif
+                    @if($ratingWhatsAppAction)
+                        <a href="{{ $ratingWhatsAppAction['url'] }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" data-order-rating-whatsapp>
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.91 11.91 0 0 0 12.05 0C5.46 0 .1 5.36.1 11.95c0 2.1.55 4.16 1.59 5.97L0 24l6.22-1.63a11.94 11.94 0 0 0 5.82 1.48h.01C18.64 23.85 24 18.49 24 11.9c0-3.18-1.24-6.17-3.48-8.42Zm-8.47 18.35h-.01a9.9 9.9 0 0 1-5.05-1.38l-.36-.21-3.69.97.99-3.6-.23-.37a9.9 9.9 0 1 1 8.35 4.59Zm5.43-7.42c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-1.76-.88-2.92-1.57-4.09-3.57-.31-.53.31-.49.88-1.63.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.27.49 1.7.63.71.23 1.36.19 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+                            <span>{{ $ratingWhatsAppAction['title'] }}</span>
+                        </a>
                     @endif
                     @can('orders.delete')
                         @if($group['trashed'])
