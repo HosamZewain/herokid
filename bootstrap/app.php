@@ -27,6 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['_fbp', '_fbc']);
+        $middleware->validateCsrfTokens(except: [
+            'order-rating/*',
+        ]);
 
         $middleware->web(
             prepend: [

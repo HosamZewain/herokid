@@ -77,7 +77,6 @@
                     @endif
 
                     <form method="POST" action="{{ $submitUrl }}" class="space-y-7" data-order-rating-form>
-                        @csrf
                         <fieldset class="text-center">
                             <legend class="w-full text-lg font-black text-slate-950">مدي رضاك عن جودة المنتج؟</legend>
                             <p class="mt-1 text-xs font-bold text-slate-400">اختر من نجمة إلى خمس نجوم</p>

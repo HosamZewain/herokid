@@ -7,6 +7,7 @@ use App\Models\OrderCustomerReview;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderCustomerRatingService;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
@@ -39,6 +40,27 @@ class OrderCustomerRatingTest extends TestCase
             ->assertDontSee('01012345678')
             ->assertDontSee('عنوان سري للاختبار')
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
+    public function test_signed_rating_submission_does_not_depend_on_a_browser_session_csrf_token(): void
+    {
+        $order = $this->order();
+
+        $this->assertContains(
+            'order-rating/*',
+            app(ValidateCsrfToken::class)->getExcludedPaths(),
+        );
+
+        $this->get($this->signedUrl($order))
+            ->assertOk()
+            ->assertDontSee('name="_token"', false);
+
+        $this->post($this->signedUrl($order), [
+            'quality_rating' => 5,
+            'customer_comment' => 'تم الإرسال من رابط واتساب بدون جلسة متصفح مسبقة',
+        ])->assertRedirect($this->signedUrl($order));
+
+        $this->assertDatabaseCount('order_customer_reviews', 1);
     }
 
     public function test_customer_can_submit_one_rating_for_the_checkout(): void
