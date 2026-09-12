@@ -46,8 +46,14 @@ class BostaOrderViewComposer
         $eligible = $this->eligibility->isEligible($group['active_orders']);
         $cities = [];
         $districts = [];
-        $selectedCityId = session()->getOldInput('bosta_city_id');
-        $selectedDistrictId = session()->getOldInput('bosta_district_id');
+        $selectedCityId = session()->getOldInput(
+            'bosta_city_id',
+            data_get($group, 'delivery.bosta_city_id'),
+        );
+        $selectedDistrictId = session()->getOldInput(
+            'bosta_district_id',
+            data_get($group, 'delivery.bosta_district_id'),
+        );
         $catalogAvailable = false;
 
         if ($configured && $eligible && (! $shipment || $shipment->creation_status === 'failed')) {
@@ -55,7 +61,8 @@ class BostaOrderViewComposer
                 $cities = $this->catalog->cities();
                 $matchedCity = $selectedCityId
                     ? $this->catalog->findCityById((string) $selectedCityId)
-                    : $this->catalog->findCityByName((string) data_get($group, 'delivery.governorate'));
+                    : null;
+                $matchedCity ??= $this->catalog->findCityByName((string) data_get($group, 'delivery.governorate'));
                 $selectedCityId = $matchedCity['id'] ?? null;
                 if ($selectedCityId) {
                     $districts = $this->catalog->districts((string) $selectedCityId);

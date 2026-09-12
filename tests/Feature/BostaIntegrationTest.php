@@ -727,6 +727,12 @@ class BostaIntegrationTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $orders->first()->id))
+            ->assertOk()
+            ->assertSee('value="city-cairo" selected', false)
+            ->assertSee('value="district-maadi" selected', false);
+
+        $this->actingAs($this->admin)
             ->post(route('admin.bosta.shipments.store', $orders->first()->id))
             ->assertRedirect()
             ->assertSessionHas('success');
