@@ -166,18 +166,69 @@
                                     </select>
                                     <x-input-error :messages="$errors->get('delivery_governorate_id')" class="mt-1" />
                                 </div>
-                                <div data-bosta-district-wrapper class="{{ $bostaAddressEnabled ? '' : 'hidden' }}">
-                                    <label for="checkout-bosta-district" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المنطقة <span class="text-red-500">*</span></label>
+                                <div data-bosta-district-wrapper class="space-y-3 {{ $bostaAddressEnabled ? '' : 'hidden' }}">
                                     <input type="hidden" name="bosta_city_id" value="{{ old('bosta_city_id', data_get($savedDeliveryDetails, 'bosta_city_id')) }}" data-bosta-city-input>
                                     <select id="checkout-bosta-district" name="bosta_district_id"
                                         data-bosta-district
                                         data-districts-url="{{ route('checkout.address-districts') }}"
                                         data-selected-id="{{ $selectedBostaDistrictId }}"
                                         data-selected-name="{{ $selectedCityName }}"
-                                        class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
+                                        class="hidden"
+                                        tabindex="-1"
+                                        aria-hidden="true"
                                     >
                                         <option value="">اختر المحافظة أولاً...</option>
                                     </select>
+                                    <div>
+                                        <label for="checkout-bosta-zone" class="mb-1.5 block text-right text-sm font-bold text-slate-700">المدينة أو المركز <span class="text-red-500">*</span></label>
+                                        <select
+                                            id="checkout-bosta-zone"
+                                            data-bosta-zone
+                                            disabled
+                                            class="block w-full rounded-2xl border-slate-200 py-3 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                                        >
+                                            <option value="">اختر المحافظة أولاً...</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="checkout-bosta-district-search" class="mb-1.5 block text-right text-sm font-bold text-slate-700">المنطقة <span class="text-red-500">*</span></label>
+                                        <div class="relative" data-bosta-district-combobox>
+                                            <input
+                                                id="checkout-bosta-district-search"
+                                                type="search"
+                                                inputmode="search"
+                                                autocomplete="off"
+                                                placeholder="اختر المدينة أو المركز أولاً..."
+                                                role="combobox"
+                                                aria-autocomplete="list"
+                                                aria-controls="checkout-bosta-district-options"
+                                                aria-expanded="false"
+                                                data-bosta-district-search
+                                                disabled
+                                                class="block w-full rounded-2xl border-slate-200 py-3 pe-11 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                                            >
+                                            <button
+                                                type="button"
+                                                data-bosta-district-toggle
+                                                class="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                                aria-label="عرض المناطق"
+                                                aria-controls="checkout-bosta-district-options"
+                                                aria-expanded="false"
+                                                disabled
+                                            >
+                                                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </button>
+                                            <div
+                                                id="checkout-bosta-district-options"
+                                                data-bosta-district-options
+                                                role="listbox"
+                                                class="absolute z-30 mt-1 hidden max-h-56 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 text-right shadow-xl"
+                                            ></div>
+                                        </div>
+                                        <p class="mt-1 text-xs font-bold text-slate-400">يمكنك كتابة أول حروف المنطقة لتصفية النتائج.</p>
+                                    </div>
                                     <p class="mt-1 hidden text-xs font-bold text-red-600" data-bosta-district-error role="alert"></p>
                                     <x-input-error :messages="$errors->get('bosta_district_id')" class="mt-1" />
                                 </div>
@@ -506,9 +557,14 @@
             const cityTextWrapper = document.querySelector('[data-city-text-wrapper]');
             const districtWrapper = document.querySelector('[data-bosta-district-wrapper]');
             const districtSelect = document.querySelector('[data-bosta-district]');
+            const zoneSelect = document.querySelector('[data-bosta-zone]');
+            const districtSearch = document.querySelector('[data-bosta-district-search]');
+            const districtOptions = document.querySelector('[data-bosta-district-options]');
+            const districtToggle = document.querySelector('[data-bosta-district-toggle]');
             const bostaCityInput = document.querySelector('[data-bosta-city-input]');
             const districtError = document.querySelector('[data-bosta-district-error]');
             let districtRequest = 0;
+            let availableDistricts = [];
             let subtotal = Number(@json((float) $subtotal));
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
 
@@ -566,29 +622,135 @@
                     .toLowerCase();
             }
 
+            function closeDistrictOptions() {
+                districtOptions?.classList.add('hidden');
+                districtSearch?.setAttribute('aria-expanded', 'false');
+                districtToggle?.setAttribute('aria-expanded', 'false');
+            }
+
+            function renderDistrictOptions(query = '') {
+                if (!districtOptions || !districtSearch || !zoneSelect?.value) return;
+
+                const normalizedQuery = normalizedAddressName(query);
+                const matches = availableDistricts.filter((district) => {
+                    const zoneId = district.zone_id || '__other__';
+
+                    return zoneId === zoneSelect.value && (normalizedQuery === '' || [
+                        district.label,
+                        district.name,
+                        district.other_name,
+                    ].some((name) => normalizedAddressName(name).includes(normalizedQuery)));
+                });
+
+                districtOptions.innerHTML = '';
+
+                if (matches.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'px-3 py-2.5 text-sm font-bold text-slate-500';
+                    empty.textContent = 'لا توجد منطقة مطابقة. جرّب اسمًا آخر.';
+                    districtOptions.appendChild(empty);
+                } else {
+                    matches.forEach((district) => {
+                        const option = document.createElement('button');
+                        option.type = 'button';
+                        option.role = 'option';
+                        option.dataset.districtId = district.id;
+                        option.className = 'block w-full rounded-xl px-3 py-2.5 text-right text-sm font-bold text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700 focus:bg-indigo-50 focus:text-indigo-700 focus:outline-none';
+                        option.textContent = district.label;
+                        option.setAttribute('aria-selected', districtSelect?.value === district.id ? 'true' : 'false');
+                        option.addEventListener('click', () => selectDistrict(district));
+                        districtOptions.appendChild(option);
+                    });
+                }
+
+                districtOptions.classList.remove('hidden');
+                districtSearch.setAttribute('aria-expanded', 'true');
+                districtToggle?.setAttribute('aria-expanded', 'true');
+            }
+
+            function selectDistrict(district) {
+                if (!districtSelect || !districtSearch || !cityInput) return;
+
+                districtSelect.value = district.id;
+                districtSearch.value = district.label;
+                districtSearch.setCustomValidity('');
+                cityInput.value = district.other_name || district.name || district.label;
+                closeDistrictOptions();
+                districtSelect.dispatchEvent(new Event('change'));
+            }
+
+            function resetDistrictSearch(message, disabled = true) {
+                if (districtSearch) {
+                    districtSearch.value = '';
+                    districtSearch.placeholder = message;
+                    districtSearch.disabled = disabled;
+                    districtSearch.setCustomValidity('');
+                }
+                if (districtToggle) districtToggle.disabled = disabled;
+                closeDistrictOptions();
+            }
+
+            function zoneLabel(district) {
+                const names = [district.zone_other_name, district.zone_name]
+                    .map((name) => String(name || '').trim())
+                    .filter((name, index, values) => name !== '' && values.indexOf(name) === index);
+
+                return names.join(' — ') || 'مناطق أخرى';
+            }
+
+            function populateZones(savedDistrict = null) {
+                if (!zoneSelect) return;
+
+                const zones = new Map();
+                availableDistricts.forEach((district) => {
+                    const id = district.zone_id || '__other__';
+                    if (!zones.has(id)) zones.set(id, zoneLabel(district));
+                });
+
+                zoneSelect.innerHTML = '<option value="">اختر المدينة أو المركز...</option>';
+                Array.from(zones.entries())
+                    .sort((first, second) => first[1].localeCompare(second[1], 'ar'))
+                    .forEach(([id, label]) => zoneSelect.add(new Option(label, id)));
+                zoneSelect.disabled = false;
+
+                if (savedDistrict) {
+                    zoneSelect.value = savedDistrict.zone_id || '__other__';
+                }
+            }
+
             async function updateAddressMode() {
-                if (!districtSelect || !districtWrapper || !cityTextWrapper || !cityInput || !bostaCityInput) return;
+                if (!districtSelect || !districtWrapper || !cityTextWrapper || !cityInput || !bostaCityInput || !districtSearch || !zoneSelect) return;
 
                 const cityId = governorateSelect?.selectedOptions?.[0]?.dataset?.bostaCityId || '';
                 const useOfficialDistrict = cityId !== '';
                 districtWrapper.classList.toggle('hidden', !useOfficialDistrict);
                 cityTextWrapper.classList.toggle('hidden', useOfficialDistrict);
-                districtSelect.required = useOfficialDistrict;
+                districtSelect.required = false;
+                zoneSelect.required = useOfficialDistrict;
+                districtSearch.required = useOfficialDistrict;
                 cityInput.required = !useOfficialDistrict;
                 bostaCityInput.value = cityId;
                 districtError?.classList.add('hidden');
 
                 if (!useOfficialDistrict) {
+                    availableDistricts = [];
                     districtSelect.innerHTML = '<option value="">اختر المحافظة أولاً...</option>';
                     districtSelect.disabled = true;
+                    zoneSelect.innerHTML = '<option value="">اختر المحافظة أولاً...</option>';
+                    zoneSelect.disabled = true;
+                    resetDistrictSearch('اختر المحافظة أولاً...');
                     return;
                 }
 
                 const requestId = ++districtRequest;
                 const selectedId = districtSelect.dataset.selectedId || '';
                 const selectedName = districtSelect.dataset.selectedName || cityInput.value || '';
+                availableDistricts = [];
                 districtSelect.disabled = true;
                 districtSelect.innerHTML = '<option value="">جاري تحميل المناطق...</option>';
+                zoneSelect.innerHTML = '<option value="">جاري تحميل المدن والمراكز...</option>';
+                zoneSelect.disabled = true;
+                resetDistrictSearch('جاري تحميل المناطق...');
 
                 try {
                     const url = new URL(districtSelect.dataset.districtsUrl, window.location.origin);
@@ -599,25 +761,92 @@
                     if (requestId !== districtRequest) return;
 
                     districtSelect.innerHTML = '<option value="">اختر المنطقة...</option>';
-                    (payload.districts || []).forEach((district) => {
+                    availableDistricts = payload.districts || [];
+                    let savedDistrict = null;
+                    availableDistricts.forEach((district) => {
                         const option = new Option(district.label, district.id);
                         option.dataset.name = district.other_name || district.name || district.label;
                         const matchesSavedName = selectedName !== '' && [district.name, district.other_name, district.label]
                             .some((name) => normalizedAddressName(name) === normalizedAddressName(selectedName));
                         option.selected = district.id === selectedId || (!selectedId && matchesSavedName);
+                        if (option.selected) savedDistrict = district;
                         districtSelect.add(option);
                     });
                     districtSelect.disabled = false;
-                    districtSelect.dispatchEvent(new Event('change'));
+                    populateZones(savedDistrict);
+                    if (savedDistrict) {
+                        districtSearch.disabled = false;
+                        districtToggle.disabled = false;
+                        districtSearch.placeholder = 'اكتب اسم المنطقة للبحث...';
+                        selectDistrict(savedDistrict);
+                    } else {
+                        resetDistrictSearch('اختر المدينة أو المركز أولاً...');
+                    }
                     districtSelect.dataset.selectedId = '';
                     districtSelect.dataset.selectedName = '';
                 } catch (error) {
                     if (requestId !== districtRequest) return;
+                    availableDistricts = [];
                     districtSelect.innerHTML = '<option value="">تعذر تحميل المناطق — أعد اختيار المحافظة</option>';
+                    zoneSelect.innerHTML = '<option value="">تعذر تحميل المدن والمراكز</option>';
+                    zoneSelect.disabled = true;
+                    resetDistrictSearch('تعذر تحميل المناطق — أعد اختيار المحافظة');
                     districtError.textContent = 'تعذر تحميل المناطق الآن. أعد اختيار المحافظة للمحاولة مرة أخرى.';
                     districtError.classList.remove('hidden');
                 }
             }
+
+            zoneSelect?.addEventListener('change', () => {
+                districtSelect.value = '';
+                cityInput.value = '';
+
+                if (!zoneSelect.value) {
+                    resetDistrictSearch('اختر المدينة أو المركز أولاً...');
+                    return;
+                }
+
+                districtSearch.disabled = false;
+                districtToggle.disabled = false;
+                districtSearch.placeholder = 'اكتب اسم المنطقة للبحث...';
+                districtSearch.value = '';
+                districtSearch.setCustomValidity('اختر المنطقة من القائمة.');
+                closeDistrictOptions();
+            });
+
+            districtSearch?.addEventListener('focus', () => {
+                if (!districtSearch.disabled && zoneSelect?.value) renderDistrictOptions(districtSearch.value);
+            });
+            districtSearch?.addEventListener('input', () => {
+                districtSelect.value = '';
+                cityInput.value = '';
+                districtSearch.setCustomValidity('اختر المنطقة من القائمة.');
+                renderDistrictOptions(districtSearch.value);
+            });
+            districtSearch?.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeDistrictOptions();
+                    return;
+                }
+
+                if (event.key === 'Enter') {
+                    const firstMatch = districtOptions?.querySelector('[data-district-id]');
+                    if (!firstMatch || districtOptions.classList.contains('hidden')) return;
+                    event.preventDefault();
+                    firstMatch.click();
+                }
+            });
+            districtToggle?.addEventListener('click', () => {
+                if (districtSearch?.disabled) return;
+                if (districtOptions?.classList.contains('hidden')) {
+                    districtSearch.focus();
+                    renderDistrictOptions(districtSearch.value);
+                } else {
+                    closeDistrictOptions();
+                }
+            });
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('[data-bosta-district-combobox]')) closeDistrictOptions();
+            });
 
             countrySelect?.addEventListener('change', filterGovernorates);
             governorateSelect?.addEventListener('change', () => {

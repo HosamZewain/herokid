@@ -539,6 +539,14 @@ class CartCheckoutTest extends TestCase
             ->assertOk()
             ->assertSee('data-bosta-city-id="city-cairo"', false)
             ->assertSee('data-bosta-district', false)
+            ->assertSee('data-bosta-district-search', false)
+            ->assertSee('data-bosta-zone', false)
+            ->assertSee('role="combobox"', false)
+            ->assertSee('data-bosta-district-options', false)
+            ->assertSee('max-h-56', false)
+            ->assertSee('المدينة أو المركز')
+            ->assertSee('اكتب اسم المنطقة للبحث...')
+            ->assertSee('يمكنك كتابة أول حروف المنطقة لتصفية النتائج.')
             ->assertSee('المنطقة')
             ->assertSee('تفاصيل إضافية أو علامة مميزة')
             ->assertSee('(اختياري)');
@@ -546,7 +554,9 @@ class CartCheckoutTest extends TestCase
         $this->getJson(route('checkout.address-districts', ['city_id' => 'city-cairo']))
             ->assertOk()
             ->assertJsonPath('districts.0.id', 'district-nasr-city')
-            ->assertJsonPath('districts.0.other_name', 'مدينة نصر');
+            ->assertJsonPath('districts.0.other_name', 'مدينة نصر')
+            ->assertJsonPath('districts.0.zone_id', 'zone-east-cairo')
+            ->assertJsonPath('districts.0.zone_other_name', 'شرق القاهرة');
 
         $this->post(route('checkout.store'), [
             'parent_name' => 'ولي أمر سلمى',

@@ -49,6 +49,9 @@ class CheckoutAddressController extends Controller
                     'name' => $district['name'],
                     'other_name' => $district['other_name'],
                     'label' => $district['label'],
+                    'zone_id' => $district['zone_id'],
+                    'zone_name' => $district['zone_name'],
+                    'zone_other_name' => $district['zone_other_name'],
                 ])
                 ->values(),
         ]);
