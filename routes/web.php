@@ -57,6 +57,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
+use App\Http\Controllers\Front\CheckoutAddressController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
@@ -258,6 +259,9 @@ Route::post('/cart/stories/{story:slug}', [CartController::class, 'store'])->nam
 Route::post('/cart/products/{product:slug}', [ProductCartController::class, 'store'])->name('cart.products.store');
 Route::post('/cart/packages/{pricingPackage:slug}', [PackageCartController::class, 'store'])->name('cart.packages.store');
 Route::delete('/cart/{key}', [CartController::class, 'destroy'])->name('cart.destroy');
+Route::get('/checkout/address-districts', [CheckoutAddressController::class, 'districts'])
+    ->middleware('throttle:60,1')
+    ->name('checkout.address-districts');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
 

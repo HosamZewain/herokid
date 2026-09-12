@@ -36,6 +36,20 @@ BOSTA_PICKUP_SYNC_PAGES=5
 
 Never commit the API key or webhook secret. After changing `.env`, rebuild Laravel's configuration cache.
 
+## Customer checkout address
+
+When Bosta is enabled and its address catalog is available, the public website keeps the address flow simple and stores the official provider identity at checkout:
+
+1. The customer chooses the normal HeroKid delivery governorate. This remains the source for the delivery fee.
+2. HeroKid maps that governorate to the matching Bosta city without exposing technical IDs.
+3. The customer chooses an Arabic-labelled area from Bosta's drop-off-enabled districts.
+4. The customer enters the street and building number. Extra directions or a landmark are optional.
+5. The order delivery snapshot stores both the readable names and the Bosta city, district, and zone IDs.
+
+Shipment creation uses the saved `bosta_city_id` and `bosta_district_id` automatically. The administrator can still review or override the address before creating a shipment, and legacy orders without provider IDs continue through the existing name-matching/manual-review path.
+
+The public district endpoint is read-only, rate limited, and returns only the safe city/district catalog fields. Bosta credentials are never sent to the browser. City and district lists use the existing one-day server cache to avoid a provider request for every customer interaction.
+
 ## Admin workflow
 
 Administrators with the relevant permissions use the following workflow:

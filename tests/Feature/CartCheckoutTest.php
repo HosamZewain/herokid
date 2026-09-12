@@ -14,6 +14,7 @@ use App\Services\Cart\CartTrackingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -497,6 +498,111 @@ class CartCheckoutTest extends TestCase
         ])
             ->assertOk()
             ->assertSee($shortReference);
+    }
+
+    public function test_customer_selects_an_easy_official_bosta_area_and_checkout_saves_provider_ids(): void
+    {
+        Storage::fake('local');
+        config()->set([
+            'bosta.enabled' => true,
+            'bosta.api_key' => 'test-bosta-key',
+            'bosta.country_id' => 'egypt-123',
+            'bosta.retries' => 0,
+        ]);
+        Http::fake([
+            '*/cities/city-cairo/districts' => Http::response(['data' => [[
+                'districtId' => 'district-nasr-city',
+                'districtName' => 'Nasr City',
+                'districtOtherName' => 'مدينة نصر',
+                'zoneId' => 'zone-east-cairo',
+                'zoneName' => 'East Cairo',
+                'zoneOtherName' => 'شرق القاهرة',
+                'dropOffAvailability' => true,
+            ]]]),
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+        ]);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('bosta-checkout-story', 'رحلة عنوان بوسطة', 349);
+
+        $this->post(route('cart.store', $story), $this->cartPayload('سلمى', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('data-bosta-city-id="city-cairo"', false)
+            ->assertSee('data-bosta-district', false)
+            ->assertSee('المنطقة')
+            ->assertSee('تفاصيل إضافية أو علامة مميزة')
+            ->assertSee('(اختياري)');
+
+        $this->getJson(route('checkout.address-districts', ['city_id' => 'city-cairo']))
+            ->assertOk()
+            ->assertJsonPath('districts.0.id', 'district-nasr-city')
+            ->assertJsonPath('districts.0.other_name', 'مدينة نصر');
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '01012345678',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'bosta_city_id' => 'city-cairo',
+            'bosta_district_id' => 'district-nasr-city',
+            'street' => '١٢ شارع النصر',
+        ])->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+
+        $delivery = Order::query()->sole()->delivery_details;
+        $this->assertSame('مدينة نصر', $delivery['city']);
+        $this->assertSame('city-cairo', $delivery['bosta_city_id']);
+        $this->assertSame('district-nasr-city', $delivery['bosta_district_id']);
+        $this->assertSame('Nasr City', $delivery['bosta_district_name']);
+        $this->assertSame('zone-east-cairo', $delivery['bosta_zone_id']);
+        $this->assertSame('', $delivery['address_details']);
+        $this->assertSame('١٢ شارع النصر', $delivery['address']);
+    }
+
+    public function test_checkout_rejects_a_bosta_district_that_does_not_belong_to_the_governorate(): void
+    {
+        Storage::fake('local');
+        config()->set([
+            'bosta.enabled' => true,
+            'bosta.api_key' => 'test-bosta-key',
+            'bosta.country_id' => 'egypt-123',
+            'bosta.retries' => 0,
+        ]);
+        Http::fake([
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+        ]);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('invalid-bosta-address-story', 'عنوان بوسطة غير صحيح', 349);
+        $this->post(route('cart.store', $story), $this->cartPayload('سلمى', 'الرسم'));
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '01012345678',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'bosta_city_id' => 'city-giza',
+            'bosta_district_id' => 'district-dokki',
+            'street' => '١٢ شارع النصر',
+        ])->assertSessionHasErrors('bosta_district_id');
+
+        $this->assertDatabaseCount('orders', 0);
     }
 
     public function test_admin_can_control_delivery_fee_setting(): void

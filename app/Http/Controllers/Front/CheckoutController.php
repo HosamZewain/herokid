@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Services\Analytics\MetaPurchaseTrackingService;
+use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
@@ -38,6 +39,7 @@ class CheckoutController extends Controller
         MetaPurchaseTrackingService $metaPurchaseTracking,
         PackageCartExpander $packageCartExpander,
         CustomerOrderSelfService $customerOrders,
+        BostaCheckoutAddressService $checkoutAddresses,
     ) {
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
@@ -54,9 +56,11 @@ class CheckoutController extends Controller
                 'required',
                 Rule::exists('delivery_governorates', 'id')->where(fn ($query) => $query->where('active', true)),
             ],
-            'city' => 'required|string|max:255',
-            'street' => 'required|string|max:255',
-            'address_details' => 'required|string|max:1000',
+            'city' => 'nullable|string|max:255',
+            'bosta_city_id' => 'nullable|string|max:100',
+            'bosta_district_id' => 'nullable|string|max:100',
+            'street' => 'required|string|min:6|max:255',
+            'address_details' => 'nullable|string|max:1000',
             'previous_order_action' => ['nullable', Rule::in(['separate', 'cancel_previous', 'merge'])],
             'previous_order_reference' => ['nullable', 'string', 'max:50'],
         ]);
@@ -65,6 +69,10 @@ class CheckoutController extends Controller
         $governorate = DeliveryGovernorate::where('active', true)
             ->where('delivery_country_id', $country->id)
             ->findOrFail($validated['delivery_governorate_id']);
+        $validated = array_replace(
+            $validated,
+            $checkoutAddresses->normalizeForCheckout($country, $governorate, $validated),
+        );
 
         $sessionCart = session('cart.items', []);
         $cart = $packageCartExpander->expand($sessionCart);
@@ -189,10 +197,7 @@ class CheckoutController extends Controller
                             'delivery_governorate_id' => $governorate->id,
                             'country' => $country->name,
                             'governorate' => $governorate->name,
-                            'city' => $validated['city'],
-                            'street' => $validated['street'],
-                            'address_details' => $validated['address_details'],
-                            'address' => trim($validated['street'].' - '.$validated['address_details']),
+                            ...$this->deliveryAddressSnapshot($validated),
                             'checkout_group' => $checkoutGroup,
                             'checkout_session_id' => $checkoutSessionId,
                             'cart_item_index' => count($orderIds) + 1,
@@ -555,10 +560,7 @@ class CheckoutController extends Controller
             'delivery_governorate_id' => $governorate->id,
             'country' => $country->name,
             'governorate' => $governorate->name,
-            'city' => $validated['city'],
-            'street' => $validated['street'],
-            'address_details' => $validated['address_details'],
-            'address' => trim($validated['street'].' - '.$validated['address_details']),
+            ...$this->deliveryAddressSnapshot($validated),
             'checkout_group' => $checkoutGroup,
             'checkout_session_id' => $checkoutSessionId,
             'cart_item_index' => $itemIndex,
@@ -569,6 +571,37 @@ class CheckoutController extends Controller
             'total' => $subtotal + $deliveryFee,
             'source' => 'website',
             'marketing_attribution' => $attribution,
+        ];
+    }
+
+    /** @param array<string, mixed> $validated
+     * @return array<string, mixed>
+     */
+    private function deliveryAddressSnapshot(array $validated): array
+    {
+        $details = trim((string) ($validated['address_details'] ?? ''));
+        $address = trim((string) $validated['street']);
+
+        if ($details !== '') {
+            $address .= ' - '.$details;
+        }
+
+        return [
+            'city' => $validated['city'],
+            'street' => trim((string) $validated['street']),
+            'address_details' => $details,
+            'address' => $address,
+            ...collect($validated)->only([
+                'bosta_city_id',
+                'bosta_city_name',
+                'bosta_city_other_name',
+                'bosta_district_id',
+                'bosta_district_name',
+                'bosta_district_other_name',
+                'bosta_zone_id',
+                'bosta_zone_name',
+                'bosta_zone_other_name',
+            ])->all(),
         ];
     }
 

@@ -10,6 +10,8 @@
     $savedDeliveryDetails = $savedDeliveryDetails ?? [];
     $selectedCountryId = (string) old('delivery_country_id', data_get($savedDeliveryDetails, 'delivery_country_id', $defaultCountry?->id));
     $selectedGovernorateId = (string) old('delivery_governorate_id', data_get($savedDeliveryDetails, 'delivery_governorate_id'));
+    $selectedBostaDistrictId = (string) old('bosta_district_id', data_get($savedDeliveryDetails, 'bosta_district_id'));
+    $selectedCityName = (string) old('city', data_get($savedDeliveryDetails, 'city'));
     $cartCollection = collect($cartItems);
     $storyLineItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'story');
     $standaloneProductItems = $cartCollection->filter(fn ($item) => ($item['item_type'] ?? 'story') === 'product');
@@ -154,6 +156,7 @@
                                                     value="{{ $governorate->id }}"
                                                     data-country-id="{{ $country->id }}"
                                                     data-fee="{{ $effectiveFee }}"
+                                                    data-bosta-city-id="{{ data_get($bostaCityMap, $governorate->id.'.id') }}"
                                                     @selected($selectedGovernorateId === (string) $governorate->id)
                                                 >
                                                     {{ $governorate->name }}
@@ -163,15 +166,30 @@
                                     </select>
                                     <x-input-error :messages="$errors->get('delivery_governorate_id')" class="mt-1" />
                                 </div>
-                                <div>
-                                    <label for="checkout-city" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة <span class="text-red-500">*</span></label>
-                                    <input id="checkout-city" type="text" name="city" value="{{ old('city', data_get($savedDeliveryDetails, 'city')) }}" required autocomplete="address-level2"
+                                <div data-bosta-district-wrapper class="{{ $bostaAddressEnabled ? '' : 'hidden' }}">
+                                    <label for="checkout-bosta-district" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المنطقة <span class="text-red-500">*</span></label>
+                                    <input type="hidden" name="bosta_city_id" value="{{ old('bosta_city_id', data_get($savedDeliveryDetails, 'bosta_city_id')) }}" data-bosta-city-input>
+                                    <select id="checkout-bosta-district" name="bosta_district_id"
+                                        data-bosta-district
+                                        data-districts-url="{{ route('checkout.address-districts') }}"
+                                        data-selected-id="{{ $selectedBostaDistrictId }}"
+                                        data-selected-name="{{ $selectedCityName }}"
+                                        class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3"
+                                    >
+                                        <option value="">اختر المحافظة أولاً...</option>
+                                    </select>
+                                    <p class="mt-1 hidden text-xs font-bold text-red-600" data-bosta-district-error role="alert"></p>
+                                    <x-input-error :messages="$errors->get('bosta_district_id')" class="mt-1" />
+                                </div>
+                                <div data-city-text-wrapper class="{{ $bostaAddressEnabled ? 'hidden' : '' }}">
+                                    <label for="checkout-city" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">المدينة أو المنطقة <span class="text-red-500">*</span></label>
+                                    <input id="checkout-city" type="text" name="city" value="{{ $selectedCityName }}" required autocomplete="address-level2"
                                         @if($errors->has('city')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
                                     <x-input-error :messages="$errors->get('city')" class="mt-1" />
                                 </div>
                                 <div>
-                                    <label for="checkout-street" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الشارع <span class="text-red-500">*</span></label>
+                                    <label for="checkout-street" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">الشارع ورقم العقار <span class="text-red-500">*</span></label>
                                     <input id="checkout-street" type="text" name="street" value="{{ old('street', data_get($savedDeliveryDetails, 'street')) }}" required autocomplete="address-line1"
                                         @if($errors->has('street')) aria-invalid="true" @endif
                                         class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">
@@ -179,8 +197,8 @@
                                 </div>
                             </div>
                             <div>
-                                <label for="checkout-address-details" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">تفاصيل العنوان <span class="text-red-500">*</span></label>
-                                <textarea id="checkout-address-details" name="address_details" rows="3" required autocomplete="address-line2"
+                                <label for="checkout-address-details" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">تفاصيل إضافية أو علامة مميزة <span class="text-xs text-slate-400">(اختياري)</span></label>
+                                <textarea id="checkout-address-details" name="address_details" rows="2" autocomplete="address-line2"
                                     @if($errors->has('address_details')) aria-invalid="true" @endif
                                     class="block w-full rounded-2xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right py-3">{{ old('address_details', data_get($savedDeliveryDetails, 'address_details')) }}</textarea>
                                 <x-input-error :messages="$errors->get('address_details')" class="mt-1" />
@@ -484,6 +502,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             const countrySelect = document.getElementById('delivery_country_id');
             const governorateSelect = document.getElementById('delivery_governorate_id');
+            const cityInput = document.getElementById('checkout-city');
+            const cityTextWrapper = document.querySelector('[data-city-text-wrapper]');
+            const districtWrapper = document.querySelector('[data-bosta-district-wrapper]');
+            const districtSelect = document.querySelector('[data-bosta-district]');
+            const bostaCityInput = document.querySelector('[data-bosta-city-input]');
+            const districtError = document.querySelector('[data-bosta-district-error]');
+            let districtRequest = 0;
             let subtotal = Number(@json((float) $subtotal));
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
 
@@ -527,13 +552,83 @@
                 }
 
                 updateTotals(selectedCountryFee());
+                updateAddressMode();
+            }
+
+            function normalizedAddressName(value) {
+                return String(value || '')
+                    .normalize('NFKD')
+                    .replace(/[ًٌٍَُِّْـ]/gu, '')
+                    .replace(/[أإآ]/gu, 'ا')
+                    .replace(/ة/gu, 'ه')
+                    .replace(/ى/gu, 'ي')
+                    .trim()
+                    .toLowerCase();
+            }
+
+            async function updateAddressMode() {
+                if (!districtSelect || !districtWrapper || !cityTextWrapper || !cityInput || !bostaCityInput) return;
+
+                const cityId = governorateSelect?.selectedOptions?.[0]?.dataset?.bostaCityId || '';
+                const useOfficialDistrict = cityId !== '';
+                districtWrapper.classList.toggle('hidden', !useOfficialDistrict);
+                cityTextWrapper.classList.toggle('hidden', useOfficialDistrict);
+                districtSelect.required = useOfficialDistrict;
+                cityInput.required = !useOfficialDistrict;
+                bostaCityInput.value = cityId;
+                districtError?.classList.add('hidden');
+
+                if (!useOfficialDistrict) {
+                    districtSelect.innerHTML = '<option value="">اختر المحافظة أولاً...</option>';
+                    districtSelect.disabled = true;
+                    return;
+                }
+
+                const requestId = ++districtRequest;
+                const selectedId = districtSelect.dataset.selectedId || '';
+                const selectedName = districtSelect.dataset.selectedName || cityInput.value || '';
+                districtSelect.disabled = true;
+                districtSelect.innerHTML = '<option value="">جاري تحميل المناطق...</option>';
+
+                try {
+                    const url = new URL(districtSelect.dataset.districtsUrl, window.location.origin);
+                    url.searchParams.set('city_id', cityId);
+                    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                    if (!response.ok) throw new Error('districts_unavailable');
+                    const payload = await response.json();
+                    if (requestId !== districtRequest) return;
+
+                    districtSelect.innerHTML = '<option value="">اختر المنطقة...</option>';
+                    (payload.districts || []).forEach((district) => {
+                        const option = new Option(district.label, district.id);
+                        option.dataset.name = district.other_name || district.name || district.label;
+                        const matchesSavedName = selectedName !== '' && [district.name, district.other_name, district.label]
+                            .some((name) => normalizedAddressName(name) === normalizedAddressName(selectedName));
+                        option.selected = district.id === selectedId || (!selectedId && matchesSavedName);
+                        districtSelect.add(option);
+                    });
+                    districtSelect.disabled = false;
+                    districtSelect.dispatchEvent(new Event('change'));
+                    districtSelect.dataset.selectedId = '';
+                    districtSelect.dataset.selectedName = '';
+                } catch (error) {
+                    if (requestId !== districtRequest) return;
+                    districtSelect.innerHTML = '<option value="">تعذر تحميل المناطق — أعد اختيار المحافظة</option>';
+                    districtError.textContent = 'تعذر تحميل المناطق الآن. أعد اختيار المحافظة للمحاولة مرة أخرى.';
+                    districtError.classList.remove('hidden');
+                }
             }
 
             countrySelect?.addEventListener('change', filterGovernorates);
             governorateSelect?.addEventListener('change', () => {
                 const fee = governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee();
                 updateTotals(fee);
+                updateAddressMode();
             });
+            districtSelect?.addEventListener('change', () => {
+                cityInput.value = districtSelect.selectedOptions?.[0]?.dataset?.name || '';
+            });
+            filterGovernorates();
 
             document.querySelectorAll('[data-cart-upsell-form]').forEach((form) => {
                 form.addEventListener('submit', async (event) => {

@@ -7,6 +7,7 @@ use App\Models\ChildIdentityRequest;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
+use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
@@ -43,13 +44,15 @@ class CartController extends Controller
         'image/heif-sequence',
     ];
 
-    public function index()
+    public function index(BostaCheckoutAddressService $checkoutAddresses)
     {
         $cart = $this->cart();
         $cartCollection = collect($cart);
         $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $upsellStoryKey = session('upsell_story_key');
         $recommendedProducts = app(ProductRecommendations::class)->forCartItems($cart, 6);
+        $deliveryCountries = $this->deliveryCountries();
+        $bostaAddressOptions = $checkoutAddresses->checkoutOptions($deliveryCountries);
 
         return view('front.cart.index', [
             'cartItems' => $cart,
@@ -58,8 +61,10 @@ class CartController extends Controller
             'upsellStoryKey' => $upsellStoryKey,
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
-            'deliveryCountries' => $this->deliveryCountries(),
+            'deliveryCountries' => $deliveryCountries,
             'savedDeliveryDetails' => $this->savedDeliveryDetails(),
+            'bostaAddressEnabled' => $bostaAddressOptions['enabled'],
+            'bostaCityMap' => $bostaAddressOptions['city_map'],
         ]);
     }
 

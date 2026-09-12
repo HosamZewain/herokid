@@ -694,6 +694,49 @@ class BostaIntegrationTest extends TestCase
         });
     }
 
+    public function test_shipment_automatically_uses_the_official_bosta_address_saved_at_checkout(): void
+    {
+        $orders = $this->checkout('BOSTA-SAVED-OFFICIAL-ADDRESS', 40_000);
+        $orders->each(function (Order $order): void {
+            $order->update(['delivery_details' => array_merge($order->delivery_details, [
+                'bosta_city_id' => 'city-cairo',
+                'bosta_city_name' => 'Cairo',
+                'bosta_city_other_name' => 'القاهرة',
+                'bosta_district_id' => 'district-maadi',
+                'bosta_district_name' => 'ElMaadi',
+                'bosta_district_other_name' => 'المعادي',
+                'city' => 'المعادي',
+            ])]);
+        });
+        Http::fake([
+            '*/cities/city-cairo/districts' => Http::response(['data' => [[
+                'districtId' => 'district-maadi',
+                'districtName' => 'ElMaadi',
+                'districtOtherName' => 'المعادي',
+                'dropOffAvailability' => true,
+            ]]]),
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+            '*/deliveries?apiVersion=1' => Http::response(['data' => [
+                '_id' => 'delivery-saved-address',
+                'trackingNumber' => 'TRACK-SAVED-ADDRESS',
+            ]]),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.bosta.shipments.store', $orders->first()->id))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Http::assertSent(fn (HttpRequest $request): bool => str_contains($request->url(), '/deliveries?apiVersion=1')
+            && $request['dropOffAddress']['cityId'] === 'city-cairo'
+            && $request['dropOffAddress']['districtId'] === 'district-maadi'
+            && ! isset($request['dropOffAddress']['districtName']));
+    }
+
     public function test_awb_defaults_to_a6_and_accepts_a4(): void
     {
         $orders = $this->checkout('BOSTA-AWB', 20_000);
