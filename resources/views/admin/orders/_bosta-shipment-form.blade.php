@@ -9,7 +9,7 @@
     <p class="mt-1 text-xs font-bold text-sky-700">يمكنك تعديل بيانات المستلم والعنوان وCOD قبل إرسالها إلى Bosta.</p>
 
     @can('bosta.create_shipment')
-        <details class="mt-4 rounded-2xl border border-sky-200 bg-white p-4" @if($isRetry || $errors->hasAny(['receiver_name', 'receiver_phone', 'bosta_city_id', 'bosta_district_id', 'governorate', 'district_name', 'first_line', 'second_line', 'cod_amount', 'order'])) open @endif>
+        <details data-bosta-lazy-catalog class="mt-4 rounded-2xl border border-sky-200 bg-white p-4" @if($isRetry || $errors->hasAny(['receiver_name', 'receiver_phone', 'bosta_city_id', 'bosta_district_id', 'governorate', 'district_name', 'first_line', 'second_line', 'cod_amount', 'order'])) open @endif>
             <summary class="cursor-pointer select-none text-sm font-black text-indigo-700">
                 {{ $isRetry ? 'مراجعة البيانات وإعادة محاولة إنشاء الشحنة' : 'مراجعة بيانات الشحنة وإنشاؤها' }}
             </summary>
@@ -34,7 +34,7 @@
                     @if($bostaAddressCatalogAvailable)
                         <label class="text-xs font-black text-gray-700">محافظة Bosta
                             <input type="search" data-bosta-select-search data-bosta-search-target="[data-bosta-city]" placeholder="ابحث باسم المحافظة…" autocomplete="off" class="mt-1 w-full rounded-xl border-sky-200 bg-sky-50 text-sm font-normal">
-                            <select name="bosta_city_id" required data-bosta-city data-districts-url="{{ route('admin.bosta.districts') }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                            <select name="bosta_city_id" required data-bosta-city data-cities-url="{{ route('admin.bosta.cities') }}" data-selected="{{ $bostaSelectedCityId }}" data-districts-url="{{ route('admin.bosta.districts') }}" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                                 <option value="">اختر المحافظة المعتمدة</option>
                                 @foreach($bostaCities as $city)
                                     <option value="{{ $city['id'] }}" @selected(old('bosta_city_id', $bostaSelectedCityId) === $city['id'])>{{ $city['label'] }}</option>
@@ -91,6 +91,36 @@
             });
         }
 
+        async function loadBostaCatalog(details) {
+            const city = details.querySelector('[data-bosta-city]');
+            if (!details.open || !city || details.dataset.catalogLoading === '1') return;
+            if (city.options.length > 1) {
+                const district = details.querySelector('[data-bosta-district]');
+                if (city.value && district?.options.length <= 1) city.dispatchEvent(new Event('change', { bubbles: true }));
+                return;
+            }
+            details.dataset.catalogLoading = '1';
+            city.disabled = true;
+            try {
+                const response = await fetch(city.dataset.citiesUrl, { headers: { Accept: 'application/json' } });
+                if (!response.ok) throw new Error('Catalog unavailable');
+                const data = await response.json();
+                city.replaceChildren(new Option('اختر المحافظة المعتمدة', ''));
+                (data.cities || []).forEach(item => city.add(new Option(item.label, item.id)));
+                city.value = city.dataset.selected || '';
+                if (city.value) city.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch {
+                city.replaceChildren(new Option('تعذر التحميل — أغلق القسم وافتحه لإعادة المحاولة', ''));
+            } finally {
+                city.disabled = false;
+                delete details.dataset.catalogLoading;
+            }
+        }
+        document.addEventListener('toggle', event => {
+            if (event.target.matches('[data-bosta-lazy-catalog]')) loadBostaCatalog(event.target);
+        }, true);
+        document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('[data-bosta-lazy-catalog][open]').forEach(loadBostaCatalog));
+
         document.addEventListener('input', (event) => {
             const searchInput = event.target.closest('[data-bosta-select-search]');
             if (searchInput) filterBostaAddressSelect(searchInput);
@@ -104,21 +134,35 @@
             const districtSearch = district?.closest('label')?.querySelector('[data-bosta-select-search]');
             if (!district) return;
 
+            city.districtRequest?.abort();
+            const controller = new AbortController();
+            city.districtRequest = controller;
+            if (!city.value) {
+                district.replaceChildren(new Option('اختر المحافظة أولًا', ''));
+                district.disabled = false;
+                return;
+            }
+
             if (districtSearch) districtSearch.value = '';
             district.disabled = true;
             district.innerHTML = '<option value="">جارٍ تحميل المناطق…</option>';
             try {
                 const url = new URL(city.dataset.districtsUrl, window.location.origin);
                 url.searchParams.set('city_id', city.value);
-                const response = await fetch(url, {headers: {'Accept': 'application/json'}});
+                const response = await fetch(url, {headers: {'Accept': 'application/json'}, signal: controller.signal});
                 if (!response.ok) throw new Error('Bosta districts request failed');
                 const data = await response.json();
                 district.innerHTML = '<option value="">اختر المنطقة المعتمدة</option>';
                 (data.districts || []).forEach((item) => district.add(new Option(item.label, item.id)));
-            } catch (_) {
+                if (district.dataset.selected) {
+                    if (city.value === city.dataset.selected) district.value = district.dataset.selected;
+                    delete district.dataset.selected;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
                 district.innerHTML = '<option value="">تعذر تحميل المناطق — أعد المحاولة</option>';
             } finally {
-                district.disabled = false;
+                if (city.districtRequest === controller) district.disabled = false;
                 if (districtSearch) filterBostaAddressSelect(districtSearch);
             }
         });

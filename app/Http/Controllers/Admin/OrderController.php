@@ -21,6 +21,7 @@ use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
+use App\Services\Orders\PrivateOrderThumbnail;
 use App\Services\Orders\RelatedCustomerCheckoutService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
@@ -649,6 +650,10 @@ class OrderController extends Controller
         $disk = Storage::disk($attempt->output_disk ?: 'local');
         abort_unless($disk->exists($attempt->output_storage_path), 404);
 
+        if (request()->routeIs('admin.orders.approved-child-identity-thumbnail')) {
+            return app(PrivateOrderThumbnail::class)->response($disk->path($attempt->output_storage_path));
+        }
+
         return response()->file($disk->path($attempt->output_storage_path), [
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             'X-Content-Type-Options' => 'nosniff',
@@ -672,6 +677,10 @@ class OrderController extends Controller
         $disk = Storage::disk('local');
 
         if ($disk->exists($photoPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($disk->path($photoPath));
+            }
+
             return response()->file($disk->path($photoPath), [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
@@ -679,6 +688,10 @@ class OrderController extends Controller
 
         $publicDisk = Storage::disk('public');
         if ($publicDisk->exists($photoPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($publicDisk->path($photoPath));
+            }
+
             return response()->file($publicDisk->path($photoPath), [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
@@ -687,6 +700,10 @@ class OrderController extends Controller
         // Backward compatibility for files saved before Laravel's local disk moved to storage/app/private.
         $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
         if (file_exists($legacyPath) && is_file($legacyPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($legacyPath);
+            }
+
             return response()->file($legacyPath, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);

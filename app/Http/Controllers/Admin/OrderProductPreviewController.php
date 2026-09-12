@@ -6,13 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Services\Orders\OrderProductPreviewService;
+use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class OrderProductPreviewController extends Controller
 {
+    public function thumbnail(OrderPreview $preview)
+    {
+        abort_unless($preview->product_gallery_id && ! str_contains($preview->file_path, '..'), 404);
+        $disk = Storage::disk($preview->disk ?: 'local');
+        abort_unless($disk->exists($preview->file_path), 404);
+
+        return app(PrivateOrderThumbnail::class)->response($disk->path($preview->file_path));
+    }
+
     public function store(
         Request $request,
         Order $order,
@@ -36,6 +47,10 @@ class OrderProductPreviewController extends Controller
             $validated['preview_note'] ?? null,
             $request->user(),
         );
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'تم حفظ صورة المعاينة.']);
+        }
 
         return back()->with('success', 'تم رفع صور المعاينة وتجهيز رابط العميل بنجاح.');
     }
@@ -65,8 +80,7 @@ class OrderProductPreviewController extends Controller
         Request $request,
         Order $representative,
         OrderProductPreviewService $previews,
-    ): JsonResponse|RedirectResponse
-    {
+    ): JsonResponse|RedirectResponse {
         $validated = $request->validate([
             'preview_ids' => ['required', 'array', 'min:1', 'max:100'],
             'preview_ids.*' => ['required', 'integer', 'distinct'],

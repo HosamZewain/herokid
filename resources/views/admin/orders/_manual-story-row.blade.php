@@ -70,7 +70,7 @@
                     @foreach($row['photos'] as $photoIndex => $photo)
                         <div class="relative" data-existing-photo data-photo-index="{{ $photoIndex }}">
                             <a href="{{ route('admin.orders.photo', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" target="_blank" class="block">
-                                <img src="{{ route('admin.orders.photo', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" alt="صورة الطفل {{ $photoIndex + 1 }}" class="h-20 w-20 rounded-xl object-cover ring-1 ring-violet-200">
+                                <img src="{{ route('admin.orders.photo', ['order' => $existingOrderId, 'index' => $photoIndex, 'thumbnail' => 1]) }}" alt="صورة الطفل {{ $photoIndex + 1 }}" class="h-20 w-20 rounded-xl object-cover ring-1 ring-violet-200">
                             </a>
                             <button type="button" data-delete-order-photo data-delete-url="{{ route('admin.orders.photos.destroy', ['order' => $existingOrderId, 'index' => $photoIndex]) }}" class="absolute -left-2 -top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white shadow" aria-label="حذف الصورة">حذف</button>
                         </div>

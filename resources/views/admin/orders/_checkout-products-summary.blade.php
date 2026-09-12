@@ -45,7 +45,7 @@
                                 <div class="flex flex-wrap gap-1.5">
                                     @foreach(array_slice($productPhotos, 0, 4) as $photo)
                                         <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-12 w-12 overflow-hidden rounded-lg border-2 border-white bg-white shadow-sm">
-                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
+                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index, 'thumbnail' => 1]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
                                         </a>
                                     @endforeach
                                 </div>

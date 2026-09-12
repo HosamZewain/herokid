@@ -58,20 +58,20 @@ class BostaOrderViewComposer
 
         if ($configured && $eligible && (! $shipment || $shipment->creation_status === 'failed')) {
             try {
-                $cities = $this->catalog->cities();
+                $cities = $this->catalog->cachedCities();
                 $matchedCity = $selectedCityId
-                    ? $this->catalog->findCityById((string) $selectedCityId)
+                    ? collect($cities)->firstWhere('id', (string) $selectedCityId)
                     : null;
-                $matchedCity ??= $this->catalog->findCityByName((string) data_get($group, 'delivery.governorate'));
-                $selectedCityId = $matchedCity['id'] ?? null;
+                $matchedCity ??= $this->catalog->findCityByName((string) data_get($group, 'delivery.governorate'), $cities);
+                $selectedCityId = $matchedCity['id'] ?? $selectedCityId;
                 if ($selectedCityId) {
-                    $districts = $this->catalog->districts((string) $selectedCityId);
+                    $districts = $this->catalog->cachedDistricts((string) $selectedCityId);
                     if (! $selectedDistrictId) {
                         $candidate = (string) (data_get($group, 'delivery.city') ?: data_get($group, 'delivery.area'));
-                        $selectedDistrictId = $this->catalog->findDistrictByName((string) $selectedCityId, $candidate)['id'] ?? null;
+                        $selectedDistrictId = collect($districts)->first(fn ($district) => in_array($candidate, [$district['name'], $district['other_name']], true))['id'] ?? null;
                     }
                 }
-                $catalogAvailable = $cities !== [];
+                $catalogAvailable = true; // Load a cold catalog only when the shipment form opens.
             } catch (Throwable $exception) {
                 report($exception);
             }

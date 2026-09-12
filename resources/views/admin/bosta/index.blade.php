@@ -46,9 +46,9 @@
 
         @if($pickupSyncWarning)
             <div class="rounded-2xl bg-amber-50 p-4 font-bold text-amber-900">{{ $pickupSyncWarning }}</div>
-        @elseif(request()->boolean('refresh_pickups') && $pickupSyncResult && ! $pickupSyncResult['skipped'])
+        @elseif(request()->boolean('refresh_pickups') && $pickupSyncResult)
             <div class="rounded-2xl bg-emerald-50 p-4 font-bold text-emerald-800">
-                تمت مزامنة {{ $pickupSyncResult['synced'] }} Pickup وربط {{ $pickupSyncResult['linked_shipments'] }} شحنة جديدة.
+                تمت جدولة مزامنة Pickups في الخلفية. حدّث الصفحة بعد اكتمالها للاطلاع على النتائج.
             </div>
         @endif
 

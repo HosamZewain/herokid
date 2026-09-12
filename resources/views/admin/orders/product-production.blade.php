@@ -88,7 +88,7 @@
                     <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                         @foreach($photos as $photo)
                             <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" rel="noopener" class="group overflow-hidden rounded-2xl border border-sky-100 bg-sky-50 p-2 focus:outline-none focus:ring-2 focus:ring-sky-500">
-                                <img src="{{ route('admin.orders.photo', [$order, $loop->index]) }}" alt="صورة الطفل {{ $loop->iteration }}" class="aspect-square w-full rounded-xl object-cover transition group-hover:scale-[1.02]" loading="lazy">
+                                <img src="{{ route('admin.orders.photo', [$order, $loop->index, 'thumbnail' => 1]) }}" alt="صورة الطفل {{ $loop->iteration }}" class="aspect-square w-full rounded-xl object-cover transition group-hover:scale-[1.02]" loading="lazy">
                                 <span class="mt-2 block text-center text-xs font-black text-sky-700">فتح الصورة {{ $loop->iteration }}</span>
                             </a>
                         @endforeach

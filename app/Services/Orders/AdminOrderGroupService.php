@@ -93,19 +93,8 @@ class AdminOrderGroupService
         $stats = null;
 
         if ($includeStatistics) {
-            $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
-            $matchingOrders = $this->visibleOrdersForStats(
-                $this->ordersForStats($allKeys, $includeDeleted),
-                $includeDeleted,
-            );
-            $financialStats = $this->financialStats($matchingOrders);
-
-            $stats = [
-                'checkouts' => $allKeys->count(),
-                'stories' => $matchingOrders->filter(fn (Order $order): bool => $this->isStoryOrder($order))->count(),
-                'products' => (int) $matchingOrders->flatMap->items->whereIn('item_type', ['product', 'product_add_on'])->sum('quantity'),
-                ...$financialStats,
-            ];
+            $allKeys = (clone $query)->select('checkout_group_key')->distinct()->toBase();
+            $stats = app(OrderFinancialStatistics::class)->summarize($allKeys, $includeDeleted);
         }
 
         $activeTags = $includeStatistics
@@ -245,7 +234,7 @@ class AdminOrderGroupService
             ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->distinct()
             ->pluck('checkout_group_key');
-        $todayFinancial = $this->financialStats($this->ordersForStats($todayKeys, false));
+        $todayFinancial = app(OrderFinancialStatistics::class)->summarize($todayKeys, false);
         $todayPayments = $this->paymentActivityBetween($todayStart, $todayEnd);
 
         $yesterday = OrderDateTime::display(now())->subDay()->toDateString();
@@ -262,7 +251,7 @@ class AdminOrderGroupService
             ->whereIn('checkout_group_key', $this->unfinishedCheckoutKeys())
             ->distinct()
             ->pluck('checkout_group_key');
-        $activeFinancial = $this->financialStats($this->ordersForStats($activeKeys, false));
+        $activeFinancial = app(OrderFinancialStatistics::class)->summarize($activeKeys, false);
         $unassignedCheckouts = $activeKeys->isEmpty()
             ? 0
             : Order::query()
@@ -332,10 +321,7 @@ class AdminOrderGroupService
             return [(string) $checkout->checkout_group_key => OrderDateTime::display($createdAt)->toDateString()];
         });
         $checkoutKeys = $checkoutDates->keys();
-        $ordersByCheckout = $this->visibleOrdersForStats(
-            $this->ordersForStats($checkoutKeys, true),
-            true,
-        )->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+        $ordersByCheckout = app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, true)->get()->keyBy('checkout_group_key');
 
         $paymentActivity = $this->paymentEventsBetween($start, $end)
             ->map(function (OrderPaymentEvent $event): array {
@@ -373,16 +359,11 @@ class AdminOrderGroupService
             $dayKeys = $checkoutDates
                 ->filter(fn (string $createdDate): bool => $createdDate === $dateString)
                 ->keys();
-            $dayOrders = $dayKeys
-                ->flatMap(fn (string $key): Collection => $ordersByCheckout->get($key, collect()))
-                ->values();
-            $storyKeys = $dayOrders
-                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
-                ->filter(fn (Collection $orders): bool => $orders->contains(fn (Order $order): bool => $this->isStoryOrder($order)))
-                ->keys();
+            $dayOrders = $ordersByCheckout->only($dayKeys->all());
+            $storyKeys = $dayOrders->filter(fn ($checkout) => $checkout->stories > 0)->keys();
             $productKeys = $dayKeys->diff($storyKeys)->values();
-            $storyFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $storyKeys)->values());
-            $productFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $productKeys)->values());
+            $storyFinancial = ['total_value_cents' => (int) $dayOrders->only($storyKeys->all())->sum('total_cents')];
+            $productFinancial = ['total_value_cents' => (int) $dayOrders->only($productKeys->all())->sum('total_cents')];
             $totalValueCents = $storyFinancial['total_value_cents'] + $productFinancial['total_value_cents'];
             $newCheckouts = $dayKeys->count();
 

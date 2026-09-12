@@ -2,18 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncBostaPickups;
 use App\Models\BostaPickup;
 use App\Models\BostaShipment;
 use App\Models\Order;
 use App\Models\OrderPaymentEvent;
 use App\Models\Permission;
 use App\Models\User;
+use App\Services\Bosta\BostaPickupSyncService;
 use App\Services\Bosta\BostaShipmentEligibilityService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class BostaIntegrationTest extends TestCase
@@ -298,9 +301,14 @@ class BostaIntegrationTest extends TestCase
             ]]),
         ]);
 
-        $response = $this->actingAs($this->admin)
+        Queue::fake();
+        $this->actingAs($this->admin)
             ->get(route('admin.bosta.index', ['refresh_pickups' => 1]))
-            ->assertOk()
+            ->assertOk();
+        Http::assertNothingSent();
+        Queue::assertPushed(SyncBostaPickups::class);
+        (new SyncBostaPickups(true))->handle(app(BostaPickupSyncService::class));
+        $response = $this->get(route('admin.bosta.index'))->assertOk()
             ->assertSee('Pickup من لوحة Bosta')
             ->assertSee('TRACK-EXTERNAL-PICKUP');
 
@@ -652,7 +660,7 @@ class BostaIntegrationTest extends TestCase
             ->get(route('admin.orders.groups.show', $orders->first()->id))
             ->assertOk()
             ->assertSee('محافظة Bosta')
-            ->assertSee('المعادي — ElMaadi')
+            ->assertSee('data-bosta-lazy-catalog', false)
             ->assertSee('ابحث باسم المحافظة…')
             ->assertSee('ابحث باسم المنطقة…')
             ->assertSee('data-bosta-select-search', false)
@@ -729,8 +737,8 @@ class BostaIntegrationTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $orders->first()->id))
             ->assertOk()
-            ->assertSee('value="city-cairo" selected', false)
-            ->assertSee('value="district-maadi" selected', false);
+            ->assertSee('data-selected="city-cairo"', false)
+            ->assertSee('data-selected="district-maadi"', false);
 
         $this->actingAs($this->admin)
             ->post(route('admin.bosta.shipments.store', $orders->first()->id))

@@ -318,7 +318,7 @@
                                             <div class="flex flex-wrap gap-2">
                                                 @foreach(array_slice($order->uploaded_photos ?? [], 0, 5) as $photo)
                                                     <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" class="block h-16 w-16 overflow-hidden rounded-xl border-2 border-white bg-white shadow-sm">
-                                                        <img src="{{ route('admin.orders.photo', [$order, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للطفل {{ $order->child_name }}" class="h-full w-full object-cover" loading="lazy">
+                                                        <img src="{{ route('admin.orders.photo', [$order, $loop->index, 'thumbnail' => 1]) }}" alt="صورة {{ $loop->iteration }} للطفل {{ $order->child_name }}" class="h-full w-full object-cover" loading="lazy">
                                                     </a>
                                                 @endforeach
                                                 @if(count($order->uploaded_photos ?? []) > 5)
@@ -385,7 +385,7 @@
                                     <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-white p-3 sm:flex-row sm:items-center">
                                         @can('orders.photos.view')
                                             <a href="{{ $approvedIdentityUrl }}" target="_blank" rel="noopener" class="block h-24 w-32 shrink-0 overflow-hidden rounded-xl border border-emerald-100 bg-slate-50">
-                                                <img src="{{ $approvedIdentityUrl }}" alt="الهوية المعتمدة للطفل {{ $order->child_name }}" class="h-full w-full object-contain" loading="lazy">
+                                                <img src="{{ route('admin.orders.approved-child-identity-thumbnail', $order) }}" alt="الهوية المعتمدة للطفل {{ $order->child_name }}" class="h-full w-full object-contain" loading="lazy">
                                             </a>
                                         @endcan
                                         <div class="min-w-0 text-right">
@@ -498,7 +498,7 @@
                                                 <div class="flex flex-wrap gap-1.5">
                                                     @foreach($productPhotos as $photo)
                                                         <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-14 w-14 overflow-hidden rounded-lg border-2 border-white bg-white shadow-sm" title="فتح الصورة بالحجم الكامل">
-                                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
+                                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index, 'thumbnail' => 1]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
                                                         </a>
                                                     @endforeach
                                                 </div>
@@ -588,7 +588,7 @@
                                             @endif
                                         @endcan
                                         <a href="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block aspect-square bg-slate-100">
-                                            <img src="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
+                                            <img src="{{ route('admin.orders.product-previews.thumbnail', $preview) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
                                         </a>
                                         <div class="p-2.5">
                                             <p class="truncate text-[11px] font-black text-gray-700" title="{{ $preview->original_name }}">{{ $preview->original_name ?: 'معاينة '.$loop->iteration }}</p>

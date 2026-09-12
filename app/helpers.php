@@ -2,10 +2,9 @@
 
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
-use App\Models\Setting;
 use App\Support\AppDateTime;
+use App\Support\RequestSettings;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\Cache;
 
 if (! function_exists('app_datetime')) {
     function app_datetime(CarbonInterface|DateTimeInterface|string|null $date, string $format = 'd/m/Y h:i A', string $fallback = '—'): string
@@ -24,13 +23,7 @@ if (! function_exists('app_datetime_human')) {
 if (! function_exists('setting')) {
     function setting(string $key, mixed $default = null): mixed
     {
-        $settings = Cache::rememberForever('site_settings', function () {
-            try {
-                return Setting::query()->pluck('value', 'key')->toArray();
-            } catch (Throwable) {
-                return [];
-            }
-        });
+        $settings = RequestSettings::all();
 
         return array_key_exists($key, $settings) && $settings[$key] !== '' ? $settings[$key] : $default;
     }

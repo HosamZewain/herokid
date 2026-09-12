@@ -30,7 +30,10 @@ class BostaPickupSyncService
             return ['synced' => 0, 'linked_shipments' => 0, 'skipped' => true];
         }
 
-        $lock = Cache::lock('bosta:pickups:sync-lock', 120);
+        if (! $force && Cache::has('bosta:pickups:failure-cooldown')) {
+            return ['synced' => 0, 'linked_shipments' => 0, 'skipped' => true];
+        }
+        $lock = Cache::lock('bosta:pickups:sync-lock', 360);
         if (! $lock->get()) {
             return ['synced' => 0, 'linked_shipments' => 0, 'skipped' => true];
         }
@@ -40,6 +43,9 @@ class BostaPickupSyncService
             Cache::put(self::LAST_SYNC_CACHE_KEY, now()->timestamp, now()->addDay());
 
             return $result + ['skipped' => false];
+        } catch (Throwable $exception) {
+            Cache::put('bosta:pickups:failure-cooldown', true, now()->addMinutes($interval));
+            throw $exception;
         } finally {
             $lock->release();
         }

@@ -1,3 +1,5 @@
+import { uploadPhoto, appendPhoto, restorePhotos, safeStorage, observePhotoSession } from './photo-upload-transport';
+const sessionStorage = safeStorage('sessionStorage');
 import { prepareImageForUpload } from './image-upload-preparer';
 
 function trackEvent(name, properties = {}, standard = false) {
@@ -207,7 +209,7 @@ export function initializeFootballStories() {
     initializeValidation(form, selectedCards, () => submitting, (value) => { submitting = value; });
 }
 
-function initializePhotoUploader(form, trackEventCallback) {
+async function initializePhotoUploader(form, trackEventCallback) {
     const container = form.querySelector('[data-football-photo-uploader]');
     const input = container?.querySelector('[data-football-photo-input]');
     const queue = container?.querySelector('[data-football-photo-queue]');
@@ -235,6 +237,7 @@ function initializePhotoUploader(form, trackEventCallback) {
     const storageKey = 'herokid:football-landing:photo-ids';
     const items = [];
     let activeUploads = 0;
+    observePhotoSession(config, items, render, pump);
 
     const uploaded = () => items.filter((item) => item.status === 'uploaded' && item.uploadId);
     const setError = (message = '') => {
@@ -290,66 +293,35 @@ function initializePhotoUploader(form, trackEventCallback) {
     }
 
     async function upload(item) {
-        activeUploads += 1;
-        patch(item, { status: 'preparing', progress: 5 });
-        let prepared;
-
+        activeUploads++;
+        const controller = new AbortController();
+        item.xhr = controller;
         try {
-            prepared = await prepareImageForUpload(item.file, {
+            patch(item, { status: 'preparing', progress: 5 });
+            const prepared = await prepareImageForUpload(item.file, {
                 maxLongEdge: Number(config.maxLongEdge || 2560),
-                jpegQuality: Math.min(1, Math.max(0.5, Number(config.jpegQuality || 90) / 100)),
+                jpegQuality: Number(config.jpegQuality || 90) / 100,
             });
-        } catch (exception) {
-            activeUploads -= 1;
-            patch(item, { status: 'failed', progress: 0 });
-            setError(exception.message || 'تعذر تجهيز الصورة.');
-            pump();
-            return;
-        }
-
-        if (prepared !== item.file) {
-            const oldPreview = item.previewUrl;
-            item.previewUrl = URL.createObjectURL(prepared);
-            if (oldPreview?.startsWith('blob:')) URL.revokeObjectURL(oldPreview);
-        }
-
-        patch(item, { status: 'uploading', progress: 10 });
-        const payload = new FormData();
-        payload.append('photo', item.file);
-        if (prepared !== item.file) payload.append('prepared_photo', prepared);
-        payload.append('upload_session_token', config.sessionToken);
-        payload.append('upload_batch_token', config.batchToken || '');
-        const xhr = new XMLHttpRequest();
-        item.xhr = xhr;
-        xhr.open('POST', config.uploadUrl);
-        xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
-        xhr.setRequestHeader('Accept', 'application/json');
-        xhr.upload.addEventListener('progress', (event) => {
-            if (event.lengthComputable) patch(item, { progress: Math.min(95, Math.round((event.loaded / event.total) * 90)) });
-        });
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState !== XMLHttpRequest.DONE) return;
-            activeUploads = Math.max(0, activeUploads - 1);
-            let body = {};
-            try { body = JSON.parse(xhr.responseText || '{}'); } catch { body = {}; }
-
-            if (xhr.status >= 200 && xhr.status < 300 && body.id) {
+            if (controller.signal.aborted || !items.includes(item)) return;
+            patch(item, { status: 'uploading', progress: 10 });
+            const payload = new FormData();
+            appendPhoto(payload, item.file, prepared);
+            const body = await uploadPhoto(config, payload, { signal: controller.signal,
+                onProgress: (progress) => patch(item, { progress }) });
+            if (items.includes(item)) {
                 patch(item, { status: 'uploaded', progress: 100, uploadId: body.id, previewUrl: body.preview_url || item.previewUrl });
                 trackEventCallback('UploadPhoto', { upload_count: uploaded().length });
                 setError();
-            } else {
-                patch(item, { status: 'failed', progress: 0 });
-                setError(body.message || 'تعذر رفع الصورة. حاول مرة أخرى.');
             }
-            pump();
-        };
-        xhr.onerror = () => {
+        } catch (error) {
+            if (error.name !== 'AbortError' && items.includes(item)) {
+                patch(item, { status: 'failed', progress: 0 });
+                setError(error.message);
+            }
+        } finally {
             activeUploads = Math.max(0, activeUploads - 1);
-            patch(item, { status: 'failed', progress: 0 });
-            setError('انقطع الاتصال أثناء رفع الصورة. حاول مرة أخرى.');
             pump();
-        };
-        xhr.send(payload);
+        }
     }
 
     function pump() {
@@ -402,7 +374,7 @@ function initializePhotoUploader(form, trackEventCallback) {
 
     if (config.serverRejectedUploads) sessionStorage.removeItem(storageKey);
     try {
-        const stored = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+        const stored = await restorePhotos(config, JSON.parse(sessionStorage.getItem(storageKey) || '[]'));
         if (Array.isArray(stored)) stored.slice(0, maximum).forEach((id) => items.push({
             id: `stored-${id}`,
             file: null,

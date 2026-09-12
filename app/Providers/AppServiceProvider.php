@@ -6,6 +6,7 @@ use App\Contracts\MobileSocialIdentityVerifier;
 use App\Models\Setting;
 use App\Services\Mobile\ProviderTokenVerifier;
 use App\Support\AdminPermissionRegistry;
+use App\Support\RequestSettings;
 use App\Support\Seo;
 use App\View\Composers\BostaOrderViewComposer;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -59,13 +60,7 @@ class AppServiceProvider extends ServiceProvider
         // Share $settings (key => value map) with ALL views.
         // Cached until a Setting model write clears the cache.
         View::composer('*', function ($view) {
-            $settings = Cache::rememberForever('site_settings', function () {
-                try {
-                    return Setting::all()->pluck('value', 'key')->toArray();
-                } catch (\Exception $e) {
-                    return [];
-                }
-            });
+            $settings = RequestSettings::all();
             $view->with('settings', $settings);
         });
     }

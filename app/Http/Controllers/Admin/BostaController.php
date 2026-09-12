@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncBostaPickups;
 use App\Models\BostaPickup;
 use App\Models\BostaShipment;
 use App\Models\Order;
@@ -21,6 +22,11 @@ use Throwable;
 
 class BostaController extends Controller
 {
+    public function cities(BostaAddressCatalogService $catalog): JsonResponse
+    {
+        return response()->json(['cities' => $catalog->cities()]);
+    }
+
     public function districts(Request $request, BostaAddressCatalogService $catalog): JsonResponse
     {
         $values = $request->validate(['city_id' => ['required', 'string', 'max:100']]);
@@ -48,7 +54,11 @@ class BostaController extends Controller
         $pickupSyncResult = null;
         if ($configured = config('bosta.enabled') && filled(config('bosta.api_key')) && filled(config('bosta.business_location_id'))) {
             try {
-                $pickupSyncResult = $pickupSync->syncIfDue($request->boolean('refresh_pickups'));
+                if (config('bosta.pickup_sync_enabled')) {
+                    SyncBostaPickups::dispatch($request->boolean('refresh_pickups'))
+                        ->onConnection(config('queue.default') === 'sync' ? 'database' : config('queue.default'));
+                }
+                $pickupSyncResult = ['synced' => 0, 'linked_shipments' => 0, 'skipped' => true];
             } catch (Throwable $exception) {
                 report($exception);
                 $pickupSyncWarning = 'تعذر تحديث Pickups من Bosta الآن. ما زالت حالات Webhook تمنع تكرار الاستلام للشحنات التي تحركت لدى Bosta.';

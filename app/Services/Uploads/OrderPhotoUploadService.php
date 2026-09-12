@@ -3,6 +3,7 @@
 namespace App\Services\Uploads;
 
 use App\Models\Order;
+use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,7 @@ class OrderPhotoUploadService
             ->whereJsonContains('uploaded_photos', $removedPath)
             ->exists();
         if (! $stillReferenced && ! str_contains($removedPath, '..')) {
+            app(PrivateOrderThumbnail::class)->forget(Storage::disk((string) config('photo_uploads.disk', 'local'))->path($removedPath));
             Storage::disk((string) config('photo_uploads.disk', 'local'))->delete($removedPath);
         }
 

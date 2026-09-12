@@ -521,7 +521,7 @@
                                 <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" class="block">
                                     <div class="aspect-square bg-gray-100 rounded-xl overflow-hidden">
                                         <img
-                                            src="{{ route('admin.orders.photo', [$order, $loop->index]) }}"
+                                            src="{{ route('admin.orders.photo', [$order, $loop->index, 'thumbnail' => 1]) }}"
                                             alt="صورة الطفل {{ $loop->iteration }}"
                                             class="w-full h-full object-cover transition group-hover:scale-105"
                                             loading="lazy"

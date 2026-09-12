@@ -31,11 +31,11 @@ export async function prepareImageForUpload(file, options = {}) {
 
     if (isHeic(file)) {
         try {
-            const { default: heic2any } = await import('heic2any');
+            const { heicTo } = await import('heic-to/csp');
             const converted = await withTimeout(
-                heic2any({
+                heicTo({
                     blob: file,
-                    toType: 'image/jpeg',
+                    type: 'image/jpeg',
                     quality: jpegQuality,
                 }),
                 conversionTimeoutMs,
@@ -46,11 +46,12 @@ export async function prepareImageForUpload(file, options = {}) {
                 throw new Error('empty_conversion');
             }
 
-            return new File(
+            const normalized = new File(
                 [jpeg],
                 String(file.name || 'child-photo.heic').replace(/\.(heic|heif)$/i, '.jpg'),
                 { type: 'image/jpeg', lastModified: file.lastModified || Date.now() },
             );
+            return prepareImageForUpload(normalized, options);
         } catch {
             throw new Error('تعذر تجهيز إحدى الصور. جرّب مرة أخرى أو اختر نسخة JPG من الصورة.');
         }
@@ -77,7 +78,7 @@ export async function prepareImageForUpload(file, options = {}) {
             return file;
         }
 
-        const scale = maxLongEdge / longEdge;
+        const scale = Math.min(1, maxLongEdge / longEdge);
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(bitmap.width * scale);
         canvas.height = Math.round(bitmap.height * scale);
@@ -85,7 +86,7 @@ export async function prepareImageForUpload(file, options = {}) {
         bitmap.close?.();
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', jpegQuality));
 
-        if (!blob || blob.size > file.size) {
+        if (!blob || (blob.size > file.size && !shouldNormalize)) {
             return file;
         }
 

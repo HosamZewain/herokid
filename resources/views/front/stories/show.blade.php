@@ -494,7 +494,9 @@
             })();
         </script>
         <script>
-            (() => {
+            document.addEventListener('DOMContentLoaded', async () => {
+                const localStorage = window.HeroKidImageUpload.storage('localStorage');
+                const sessionStorage = window.HeroKidImageUpload.storage('sessionStorage');
                 const config = @json($photoUploadConfig ?? []);
                 const form = document.querySelector('[data-story-order-form]');
                 const input = document.querySelector('[data-photo-input]');
@@ -522,6 +524,7 @@
                 let activeUploads = 0;
                 let submitLocked = false;
                 let submitAttempted = false;
+                window.HeroKidImageUpload.observeSession(config, items, render, pumpQueue);
 
                 const arabicStatus = {
                     waiting: 'في الانتظار',
@@ -742,73 +745,32 @@
 
                 async function uploadItem(item) {
                     activeUploads++;
-                    patchItem(item.id, { status: 'preparing', progress: 3, message: 'جاري تجهيز الصورة قبل الرفع...' });
-                    let preparedFile;
+                    const controller = new AbortController();
+                    item.xhr = controller;
                     try {
-                        preparedFile = await optimizeImage(item.file);
-                    } catch (conversionError) {
-                        activeUploads = Math.max(0, activeUploads - 1);
-                        patchItem(item.id, {
-                            status: 'failed',
-                            progress: 0,
-                            message: conversionError.message || 'تعذر تجهيز الصورة قبل الرفع.',
+                        patchItem(item.id, { status: 'preparing', progress: 3, message: 'جاري تجهيز الصورة...' });
+                        const prepared = await optimizeImage(item.file);
+                        if (controller.signal.aborted || !items.includes(item)) return;
+                        patchItem(item.id, { status: 'uploading', progress: 8, message: 'جاري رفع الصورة...' });
+                        const data = new FormData();
+                        data.append('photo', prepared);
+                        const body = await window.HeroKidImageUpload.upload(config, data, {
+                            signal: controller.signal,
+                            onProgress: (progress) => patchItem(item.id, { progress }),
                         });
+                        if (items.includes(item)) patchItem(item.id, {
+                            status: 'uploaded', progress: 100, uploadId: body.id,
+                            serverPreviewUrl: body.preview_url, previewUrl: body.preview_url || item.previewUrl,
+                            message: 'تم رفع الصورة بنجاح.',
+                        });
+                    } catch (error) {
+                        if (error.name !== 'AbortError' && items.includes(item)) patchItem(item.id, {
+                            status: 'failed', progress: 0, message: error.message,
+                        });
+                    } finally {
+                        activeUploads = Math.max(0, activeUploads - 1);
                         pumpQueue();
-                        return;
                     }
-                    patchItem(item.id, { status: 'uploading', progress: 8, message: 'جاري رفع الصورة...' });
-
-                    const formData = new FormData();
-                    formData.append('photo', preparedFile);
-                    formData.append('upload_session_token', config.sessionToken);
-                    formData.append('upload_batch_token', config.batchToken || '');
-
-                    const xhr = new XMLHttpRequest();
-                    item.xhr = xhr;
-                    xhr.open('POST', config.uploadUrl);
-                    xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
-                    xhr.setRequestHeader('Accept', 'application/json');
-                    xhr.upload.addEventListener('progress', event => {
-                        if (!event.lengthComputable) return;
-                        const percent = Math.min(95, Math.max(10, Math.round((event.loaded / event.total) * 90)));
-                        patchItem(item.id, { progress: percent });
-                    });
-                    xhr.onreadystatechange = () => {
-                        if (xhr.readyState !== XMLHttpRequest.DONE) return;
-                        activeUploads = Math.max(0, activeUploads - 1);
-                        let body = {};
-                        try { body = JSON.parse(xhr.responseText || '{}'); } catch {}
-
-                        if (xhr.status >= 200 && xhr.status < 300 && body.id) {
-                            patchItem(item.id, {
-                                status: 'uploaded',
-                                progress: 100,
-                                uploadId: body.id,
-                                serverPreviewUrl: body.preview_url || null,
-                                previewUrl: body.preview_url || item.previewUrl,
-                                message: 'تم رفع الصورة بنجاح.',
-                            });
-                        } else {
-                            patchItem(item.id, {
-                                status: 'failed',
-                                progress: 0,
-                                message: body.message || 'تعذر رفع الصورة. حاول مرة أخرى.',
-                                retryable: body.retryable !== false && xhr.status >= 500,
-                            });
-                        }
-                        pumpQueue();
-                    };
-                    xhr.onerror = () => {
-                        activeUploads = Math.max(0, activeUploads - 1);
-                        patchItem(item.id, {
-                            status: 'failed',
-                            progress: 0,
-                            message: 'انقطع الاتصال أثناء رفع الصورة. حاول مرة أخرى.',
-                            retryable: true,
-                        });
-                        pumpQueue();
-                    };
-                    xhr.send(formData);
                 }
 
                 function retryItem(id) {
@@ -900,7 +862,7 @@
                     if (serverRejectedStoredUploads) {
                         localStorage.removeItem(storageKey);
                     }
-                    const storedUploads = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    const storedUploads = await window.HeroKidImageUpload.restore(config, JSON.parse(localStorage.getItem(storageKey) || '[]'));
                     if (Array.isArray(storedUploads) && storedUploads.length) {
                         storedUploads.slice(0, maxFiles).forEach(stored => {
                             const uploadId = typeof stored === 'string' ? stored : stored?.id;
@@ -928,7 +890,7 @@
                 } catch {
                     updateSubmitState();
                 }
-            })();
+            });
         </script>
     @endpush
 </x-front-layout>

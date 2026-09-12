@@ -18,9 +18,17 @@ class TemporaryPhotoUploadController extends Controller
     public function session(Request $request, TemporaryPhotoUploadService $uploads): JsonResponse
     {
         $session = $uploads->ensureSession($request);
+        $values = $request->validate(['ids' => ['sometimes', 'array', 'max:10'], 'ids.*' => ['required', 'uuid']]);
+        $validIds = TemporaryPhotoUpload::whereIn('public_id', $values['ids'] ?? [])
+            ->where('session_hash', $session['hash'])->where('status', 'uploaded')
+            ->where('expires_at', '>', now())
+            ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', $request->user()?->id))
+            ->pluck('public_id')->all();
 
         return response()->json([
             'upload_session_token' => $session['token'],
+            'csrf_token' => csrf_token(),
+            'valid_upload_ids' => $validIds,
             'upload_batch_token' => Str::random(48),
             'max_files' => (int) config('photo_uploads.max_files', 3),
             'max_size_mb' => (int) config('photo_uploads.max_size_mb', 15),

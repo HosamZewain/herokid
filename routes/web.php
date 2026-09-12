@@ -422,6 +422,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
         ->name('dashboard.index');
+    Route::get('analytics/widget', [AnalyticsController::class, 'widget'])->middleware(['permission:dashboard.view', 'permission:dashboard.statistics.view', 'permission:analytics.view'])->name('analytics.widget');
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')
         ->name('analytics.index');
@@ -672,6 +673,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middleware('permission:orders.view')
         ->name('orders.bulk-actions');
     Route::get('bosta', [BostaController::class, 'index'])->middleware('permission:bosta.view')->name('bosta.index');
+    Route::get('product-previews/{preview}/thumbnail', [AdminOrderProductPreviewController::class, 'thumbnail'])->middleware('permission:orders.view')->name('orders.product-previews.thumbnail');
+    Route::get('orders/{order}/approved-child-identity-thumbnail', [OrderController::class, 'serveApprovedChildIdentity'])->middleware('permission:orders.photos.view')->name('orders.approved-child-identity-thumbnail');
+    Route::get('bosta/cities', [BostaController::class, 'cities'])->middleware('permission:bosta.view')->name('bosta.cities');
     Route::get('bosta/districts', [BostaController::class, 'districts'])->middleware('permission:bosta.view')->name('bosta.districts');
     Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
     Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');

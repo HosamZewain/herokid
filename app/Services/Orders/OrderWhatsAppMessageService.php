@@ -2,8 +2,8 @@
 
 namespace App\Services\Orders;
 
-use App\Models\Setting;
 use App\Support\Phone;
+use App\Support\RequestSettings;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -40,7 +40,7 @@ class OrderWhatsAppMessageService
      */
     public function templates(bool $activeOnly = false): array
     {
-        $stored = Setting::query()->where('key', self::SETTING_KEY)->value('value');
+        $stored = RequestSettings::all()[self::SETTING_KEY] ?? null;
         $decoded = $stored === null ? $this->defaults() : json_decode((string) $stored, true);
         $templates = is_array($decoded) ? $decoded : $this->defaults();
 

@@ -17,6 +17,7 @@ use App\Support\ProductionAutomation;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Console\Command\Command;
 
 Artisan::command('inspire', function () {
@@ -162,6 +163,18 @@ Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to proc
 })->purpose('Expire and delete unattached temporary child photo uploads');
 
 Schedule::command('photo-uploads:cleanup')->hourly();
+
+Artisan::command('order-thumbnails:cleanup', function () {
+    $disk = Storage::disk('local');
+    $deleted = 0;
+    foreach ($disk->allFiles('order-thumbnails') as $path) {
+        if ($disk->lastModified($path) < now()->subDays(7)->timestamp) {
+            $deleted += $disk->delete($path) ? 1 : 0;
+        }
+    }
+    $this->info('Expired derived thumbnails removed: '.$deleted);
+})->purpose('Remove private thumbnail cache files older than seven days; originals are untouched');
+Schedule::command('order-thumbnails:cleanup')->daily()->withoutOverlapping(10);
 
 Artisan::command('order-attachments:cleanup {--batch=100 : Maximum expired attachments to delete}', function (OrderAttachmentService $attachments) {
     $result = $attachments->cleanupExpired((int) $this->option('batch'));

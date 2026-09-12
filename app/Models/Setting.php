@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\RequestSettings;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Cache;
 
 class Setting extends Model
 {
@@ -11,8 +11,8 @@ class Setting extends Model
 
     protected static function booted(): void
     {
-        static::saved(fn () => Cache::forget('site_settings'));
-        static::deleted(fn () => Cache::forget('site_settings'));
+        static::saved(fn () => RequestSettings::forget());
+        static::deleted(fn () => RequestSettings::forget());
     }
 
     public function editor()

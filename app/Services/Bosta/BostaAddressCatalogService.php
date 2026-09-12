@@ -9,6 +9,16 @@ class BostaAddressCatalogService
 {
     public function __construct(private BostaClient $client) {}
 
+    public function cachedCities(): array
+    {
+        return Cache::get('bosta.address-catalog.v2.cities.'.config('bosta.country_id'), []);
+    }
+
+    public function cachedDistricts(string $cityId): array
+    {
+        return Cache::get('bosta.address-catalog.v2.districts.'.$cityId, []);
+    }
+
     /** @return array<int, array{id:string,name:string,other_name:string,label:string}> */
     public function cities(): array
     {

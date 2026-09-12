@@ -27,6 +27,10 @@ class OrderAttachmentController extends Controller
 
         $attachments->upload($order, $request->file('attachments', []), $validated['note'] ?? null, $request->user(), $request);
 
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'تم حفظ المرفق.']);
+        }
+
         return back()->with('success', 'تم رفع '.count($request->file('attachments', [])).' مرفق بنجاح. سيتم حذفه تلقائيًا بعد '.OrderAttachmentService::VALIDITY_DAYS.' يومًا.');
     }
 
@@ -44,8 +48,7 @@ class OrderAttachmentController extends Controller
         Request $request,
         OrderAttachment $attachment,
         OrderAttachmentService $attachments,
-    ): JsonResponse|RedirectResponse
-    {
+    ): JsonResponse|RedirectResponse {
         $attachmentId = $attachments->delete($attachment, $request->user(), $request);
 
         if ($request->expectsJson()) {
@@ -63,8 +66,7 @@ class OrderAttachmentController extends Controller
         Request $request,
         Order $representative,
         OrderAttachmentService $attachments,
-    ): JsonResponse|RedirectResponse
-    {
+    ): JsonResponse|RedirectResponse {
         $validated = $request->validate([
             'attachment_ids' => ['required', 'array', 'min:1', 'max:100'],
             'attachment_ids.*' => ['required', 'integer', 'distinct'],
