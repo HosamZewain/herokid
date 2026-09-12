@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Orders\ProductProductionComponentSnapshotService;
 use App\Support\ProductPersonalizationSchema;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,6 +16,11 @@ class OrderItem extends Model
         'personalization_snapshot' => 'array',
         'stock_released_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(fn (OrderItem $item) => app(ProductProductionComponentSnapshotService::class)->captureForItem($item));
+    }
 
     public function order()
     {
@@ -44,6 +50,13 @@ class OrderItem extends Model
     public function linkedAddOns()
     {
         return $this->hasMany(OrderItem::class, 'linked_order_item_id');
+    }
+
+    public function productionComponents()
+    {
+        return $this->hasMany(OrderItemProductionComponent::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function stockReleasedBy()

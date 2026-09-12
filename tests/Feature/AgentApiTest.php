@@ -714,6 +714,99 @@ class AgentApiTest extends TestCase
         $this->assertSame('ready_preview', $eligible->refresh()->status);
     }
 
+    public function test_multi_component_product_is_returned_and_completed_as_independent_production_units(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent);
+        $product = Product::create([
+            'name_ar' => 'باقة إنتاج متعددة',
+            'slug' => 'multi-component-agent-product',
+            'price_cents' => 25000,
+            'is_active' => true,
+        ]);
+        $product->productionComponents()->createMany([
+            [
+                'stable_key' => 'book',
+                'name' => 'الكتاب',
+                'prompt_template' => 'كتاب {{child_full_name}} — {{component_quantity}} نسخة',
+                'quantity_per_item' => 1,
+                'sort_order' => 10,
+                'is_active' => true,
+            ],
+            [
+                'stable_key' => 'stickers',
+                'name' => 'الاستيكرات',
+                'prompt_template' => 'استيكرات {{child_full_name}} — {{component_quantity}} ورقة',
+                'quantity_per_item' => 3,
+                'sort_order' => 20,
+                'is_active' => true,
+            ],
+        ]);
+        $order = $this->productOrder('MULTI-COMPONENT-AGENT', 'HK-MULTI-COMPONENT-AGENT', null, $product);
+        $item = $order->items()->firstOrFail();
+        $item->update(['quantity' => 2, 'total_price_cents' => 50000]);
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'multi-component-acquire'])
+            ->assertOk();
+        $reference = $acquired->json('checkout.reference');
+        $bookKey = 'product:'.$item->id.':component:book';
+        $stickersKey = 'product:'.$item->id.':component:stickers';
+
+        $context = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk()
+            ->assertJsonCount(2, 'production_units')
+            ->assertJsonPath('production_units.0.unit_key', $bookKey)
+            ->assertJsonPath('production_units.0.production_component.key', 'book')
+            ->assertJsonPath('production_units.0.quantity', 2)
+            ->assertJsonPath('production_units.1.unit_key', $stickersKey)
+            ->assertJsonPath('production_units.1.production_component.key', 'stickers')
+            ->assertJsonPath('production_units.1.quantity', 6);
+        $this->assertSame('كتاب Ali — 2 نسخة', $context->json('production_units.0.production_prompt'));
+        $this->assertSame('استيكرات Ali — 6 ورقة', $context->json('production_units.1.production_prompt'));
+
+        $this->withToken($token)
+            ->patchJson("/api/agent/orders/{$order->id}/personalization", [
+                'production_unit_key' => $stickersKey,
+                'personalization' => ['child_name' => 'ليلى أحمد'],
+                'change_reason' => 'Correct customer personalization.',
+            ], ['Idempotency-Key' => 'multi-component-personalization'])
+            ->assertOk()
+            ->assertJsonPath('production_unit_key', $stickersKey);
+
+        $updatedContext = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk();
+        $this->assertSame('كتاب ليلى أحمد — 2 نسخة', $updatedContext->json('production_units.0.production_prompt'));
+        $this->assertSame('استيكرات ليلى أحمد — 6 ورقة', $updatedContext->json('production_units.1.production_prompt'));
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => $bookKey,
+            'attachments' => [UploadedFile::fake()->create('book.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'multi-component-book-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'multi-component-incomplete'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'PRODUCTION_FILES_MISSING')
+            ->assertJsonPath('details.production_units.0', $stickersKey);
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => $stickersKey,
+            'attachments' => [UploadedFile::fake()->create('stickers.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'multi-component-stickers-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'multi-component-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview');
+        $this->assertSame('ready_preview', $order->fresh()->status);
+    }
+
     public function test_legacy_unscoped_agent_token_keeps_access_to_both_catalog_types(): void
     {
         $agent = $this->agent();

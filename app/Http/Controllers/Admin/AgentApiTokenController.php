@@ -53,8 +53,7 @@ class AgentApiTokenController extends Controller
 
         $products = Product::query()
             ->where('is_active', true)
-            ->whereNotNull('production_prompt_template')
-            ->where('production_prompt_template', '!=', '')
+            ->withProductionPrompt()
             ->orderBy('name_ar')
             ->orderBy('id')
             ->get(['id', 'name_ar', 'name_en', 'slug', 'sku']);
@@ -82,8 +81,7 @@ class AgentApiTokenController extends Controller
             ->where(function ($query) use ($configuration): void {
                 $query->where(function ($query): void {
                     $query->where('is_active', true)
-                        ->whereNotNull('production_prompt_template')
-                        ->where('production_prompt_template', '!=', '');
+                        ->withProductionPrompt();
                 })->orWhereIn('id', $configuration['product_ids']);
             })
             ->orderBy('name_ar')

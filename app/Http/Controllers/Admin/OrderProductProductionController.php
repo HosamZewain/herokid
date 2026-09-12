@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderActivityTimelineService;
+use App\Services\Orders\ProductProductionComponentSnapshotService;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Http\RedirectResponse;
@@ -36,13 +37,11 @@ class OrderProductProductionController extends Controller
             $order->uploaded_photos ?? [],
             fn (mixed $photo): bool => is_string($photo) && trim($photo) !== '',
         ));
-        $productPrompt = [
-            'item' => $item,
-            'prompt' => ProductProductionPrompt::renderForItem($item),
-            'uses_live_template' => ProductProductionPrompt::usesLiveTemplate($item),
-            'uses_snapshot' => ! ProductProductionPrompt::usesLiveTemplate($item),
-        ];
+        $productProductionPrompts = ProductProductionPrompt::forItem($item);
+        $productPrompt = $productProductionPrompts->first();
         $promptTemplate = ProductProductionPrompt::templateForItem($item) ?? '';
+        $hasConfiguredComponents = $item->productionComponents->isNotEmpty()
+            || ($item->product?->productionComponents?->isNotEmpty() ?? false);
 
         AdminActivityLogger::log(
             action: 'order.product_production.viewed',
@@ -65,7 +64,9 @@ class OrderProductProductionController extends Controller
             'item',
             'photos',
             'productPrompt',
+            'productProductionPrompts',
             'promptTemplate',
+            'hasConfiguredComponents',
             'checkoutGroup',
             'orderActivity',
         ));
@@ -97,6 +98,12 @@ class OrderProductProductionController extends Controller
         if (! $product) {
             return back()->withErrors([
                 'production_prompt_template' => 'لا يمكن تحديث القالب العام لأن المنتج لم يعد موجودًا.',
+            ]);
+        }
+
+        if ($product->productionComponents()->exists() || $item->productionComponents()->exists()) {
+            return back()->withErrors([
+                'production_prompt_template' => 'تُدار برومبتات هذا المنتج من قسم أجزاء الإنتاج داخل صفحة تعديل المنتج.',
             ]);
         }
 
@@ -136,21 +143,30 @@ class OrderProductProductionController extends Controller
         return back()->with('success', 'تم حفظ قالب المنتج، وسيظهر فورًا في كل الطلبات الحالية والجديدة لهذا المنتج.');
     }
 
-    public function useCurrentPrompt(Request $request, Order $order, OrderItem $item): RedirectResponse
-    {
+    public function useCurrentPrompt(
+        Request $request,
+        Order $order,
+        OrderItem $item,
+        ProductProductionComponentSnapshotService $snapshots,
+    ): RedirectResponse {
         $this->assertItemBelongsToOrder($order, $item);
         $item->loadMissing('product');
+        $hasComponents = $item->product?->productionComponents()->where('is_active', true)->exists() ?? false;
         $template = trim((string) $item->product?->production_prompt_template);
 
-        if ($template === '') {
+        if (! $hasComponents && $template === '') {
             return back()->withErrors([
                 'production_prompt_template' => 'لا يوجد قالب برومبت حالي محفوظ على المنتج.',
             ]);
         }
 
-        $snapshot = $item->item_snapshot ?? [];
-        unset($snapshot['production_prompt_template']);
-        $item->update(['item_snapshot' => $snapshot]);
+        if ($hasComponents) {
+            $snapshots->refreshForItem($item);
+        } else {
+            $snapshot = $item->item_snapshot ?? [];
+            unset($snapshot['production_prompt_template']);
+            $item->update(['item_snapshot' => $snapshot]);
+        }
 
         AdminActivityLogger::log(
             action: 'order.product_production_prompt.synced',
@@ -164,7 +180,9 @@ class OrderProductProductionController extends Controller
             request: $request,
         );
 
-        return back()->with('success', 'هذا الطلب يقرأ الآن قالب المنتج الحالي تلقائيًا.');
+        return back()->with('success', $hasComponents
+            ? 'تم تحديث أجزاء إنتاج هذا الطلب من إعدادات المنتج الحالية.'
+            : 'هذا الطلب يقرأ الآن قالب المنتج الحالي تلقائيًا.');
     }
 
     private function assertItemBelongsToOrder(Order $order, OrderItem $item): void

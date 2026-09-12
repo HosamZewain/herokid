@@ -101,12 +101,22 @@
             <section class="rounded-3xl border border-fuchsia-200 bg-fuchsia-50/40 p-5 shadow-sm sm:p-6">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div class="text-right">
-                        <h3 class="text-xl font-black text-fuchsia-950">تعديل قالب برومبت المنتج</h3>
-                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">هذا هو القالب العام للمنتج. أي تعديل وحفظ هنا ينعكس فورًا على كل الطلبات الحالية والجديدة لهذا المنتج مع الاحتفاظ ببيانات كل طفل وصوره.</p>
+                        <h3 class="text-xl font-black text-fuchsia-950">إدارة تعليمات الإنتاج</h3>
+                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">أجزاء الإنتاج تُدار من صفحة المنتج، ويمكن تحديث نسخة هذا الطلب صراحةً بعد مراجعة التغييرات.</p>
                     </div>
                 </div>
 
-                @if($item->product && auth()->user()->hasPermission('store.products.update'))
+                @if($hasConfiguredComponents && $item->product)
+                    <div class="mt-5 flex flex-wrap gap-3">
+                        @can('store.products.update')
+                            <a href="{{ route('admin.products.edit', $item->product) }}#production-components" class="rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-black text-white hover:bg-fuchsia-700">تعديل أجزاء المنتج</a>
+                        @endcan
+                        <form action="{{ route('admin.orders.products.production-prompt.use-current', [$order, $item]) }}" method="POST">
+                            @csrf
+                            <button class="rounded-xl border border-fuchsia-200 bg-white px-5 py-3 text-sm font-black text-fuchsia-800 hover:bg-fuchsia-50">تحديث هذا الطلب من المنتج الحالي</button>
+                        </form>
+                    </div>
+                @elseif($item->product && auth()->user()->hasPermission('store.products.update'))
                     <form action="{{ route('admin.orders.products.production-prompt.update', [$order, $item]) }}" method="POST" class="mt-5">
                         @csrf
                         @method('PUT')
@@ -131,7 +141,7 @@
             </section>
 
             @include('admin.orders._product-production-prompts', [
-                'productProductionPrompts' => collect([$productPrompt]),
+                'productProductionPrompts' => $productProductionPrompts,
             ])
         </div>
     </div>

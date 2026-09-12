@@ -9,6 +9,7 @@
     $selectedRecommendationIds = collect(old('recommended_product_ids', $selectedRecommendedProductIds ?? []))
         ->map(fn ($id) => (int) $id)
         ->all();
+    $productionComponentRows = collect(old('production_components', $productionComponents ?? []))->values();
 @endphp
 
 <x-admin-layout>
@@ -128,21 +129,77 @@
                     </div>
                 </section>
 
-                <section class="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/50 p-5">
-                    <div class="mb-4 text-right">
-                        <h3 class="text-lg font-black text-fuchsia-950">برومبت إنتاج المنتج</h3>
-                        <p class="mt-1 text-sm leading-6 text-fuchsia-700">اتركه فارغًا للمنتجات التي لا تحتاج برومبت. عند حفظ أي تعديل هنا يُطبّق القالب فورًا على كل الطلبات الحالية والجديدة التي تحتوي على هذا المنتج، مع تعبئة بيانات وصور الطفل الخاصة بكل طلب.</p>
+                <section id="production-components" class="scroll-mt-24 rounded-2xl border border-fuchsia-200 bg-fuchsia-50/50 p-5" data-production-components>
+                    <input type="hidden" name="production_components_present" value="1">
+                    <input type="hidden" name="production_prompt_template" value="{{ old('production_prompt_template', $product->production_prompt_template) }}">
+                    <div class="mb-4 flex flex-wrap items-start justify-between gap-3 text-right">
+                        <button type="button" data-add-production-component class="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-black text-white hover:bg-fuchsia-700">+ إضافة جزء إنتاج</button>
+                        <div>
+                            <h3 class="text-lg font-black text-fuchsia-950">برومبت إنتاج المنتج</h3>
+                            <p class="mt-1 max-w-3xl text-sm leading-6 text-fuchsia-700">أضف برومبت مستقل لكل جزء يمكن إنتاجه وتسليم ملفه منفصلًا. يظل المنتج عنصرًا واحدًا في المتجر والسلة، وتُحفظ نسخة الأجزاء مع كل طلب جديد.</p>
+                        </div>
                     </div>
 
-                    <textarea
-                        name="production_prompt_template"
-                        rows="24"
-                        maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}"
-                        dir="ltr"
-                        spellcheck="false"
-                        class="block w-full rounded-xl border-fuchsia-200 bg-white text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"
-                    >{{ old('production_prompt_template', $product->production_prompt_template) }}</textarea>
-                    <x-input-error :messages="$errors->get('production_prompt_template')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('production_components')" class="mb-3" />
+                    <div class="space-y-4" data-production-component-list>
+                        @foreach($productionComponentRows as $componentIndex => $component)
+                            <article class="rounded-2xl border border-fuchsia-100 bg-white p-4" data-production-component-row>
+                                <input type="hidden" name="production_components[{{ $componentIndex }}][stable_key]" value="{{ data_get($component, 'stable_key') }}">
+                                <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end">
+                                    <label class="block text-xs font-black text-slate-600">اسم الجزء
+                                        <input name="production_components[{{ $componentIndex }}][name]" value="{{ data_get($component, 'name') }}" required maxlength="255" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-right text-sm" placeholder="مثال: الاستيكرات الكبيرة">
+                                    </label>
+                                    <label class="block text-xs font-black text-slate-600">الكمية لكل منتج
+                                        <input type="number" name="production_components[{{ $componentIndex }}][quantity_per_item]" value="{{ data_get($component, 'quantity_per_item', 1) }}" required min="1" max="1000" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-center text-sm">
+                                    </label>
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" data-move-production-component="up" title="تحريك لأعلى" aria-label="تحريك جزء الإنتاج لأعلى" class="rounded-lg border border-fuchsia-200 px-2.5 py-2 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-50">↑</button>
+                                        <button type="button" data-move-production-component="down" title="تحريك لأسفل" aria-label="تحريك جزء الإنتاج لأسفل" class="rounded-lg border border-fuchsia-200 px-2.5 py-2 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-50">↓</button>
+                                        <button type="button" data-remove-production-component class="rounded-xl border border-red-200 px-3 py-2.5 text-xs font-black text-red-600 hover:bg-red-50">حذف</button>
+                                    </div>
+                                </div>
+                                <label class="mt-3 block text-xs font-black text-slate-600">برومبت الإنتاج
+                                    <textarea name="production_components[{{ $componentIndex }}][prompt_template]" rows="12" required maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}" dir="ltr" spellcheck="false" class="mt-1.5 block w-full rounded-xl border-fuchsia-200 text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500">{{ data_get($component, 'prompt_template') }}</textarea>
+                                </label>
+                                <label class="mt-3 inline-flex items-center gap-2 text-sm font-black text-fuchsia-800">
+                                    <input type="hidden" name="production_components[{{ $componentIndex }}][is_active]" value="0">
+                                    <input type="checkbox" name="production_components[{{ $componentIndex }}][is_active]" value="1" @checked(filter_var(data_get($component, 'is_active', true), FILTER_VALIDATE_BOOL))>
+                                    فعال للطلبات الجديدة
+                                </label>
+                                <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.name')" class="mt-2" />
+                                <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.prompt_template')" class="mt-2" />
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <p class="mt-3 text-sm font-bold text-slate-500" data-production-components-empty @class(['hidden' => $productionComponentRows->isNotEmpty()])>لا توجد أجزاء إنتاج. لن يظهر لهذا المنتج برومبت إنتاج حتى تضيف جزءًا.</p>
+
+                    <template data-production-component-template>
+                        <article class="rounded-2xl border border-fuchsia-100 bg-white p-4" data-production-component-row>
+                            <input type="hidden" name="production_components[__INDEX__][stable_key]" value="">
+                            <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-end">
+                                <label class="block text-xs font-black text-slate-600">اسم الجزء
+                                    <input name="production_components[__INDEX__][name]" required maxlength="255" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-right text-sm" placeholder="مثال: الاستيكرات الكبيرة">
+                                </label>
+                                <label class="block text-xs font-black text-slate-600">الكمية لكل منتج
+                                    <input type="number" name="production_components[__INDEX__][quantity_per_item]" value="1" required min="1" max="1000" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-center text-sm">
+                                </label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" data-move-production-component="up" title="تحريك لأعلى" aria-label="تحريك جزء الإنتاج لأعلى" class="rounded-lg border border-fuchsia-200 px-2.5 py-2 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-50">↑</button>
+                                    <button type="button" data-move-production-component="down" title="تحريك لأسفل" aria-label="تحريك جزء الإنتاج لأسفل" class="rounded-lg border border-fuchsia-200 px-2.5 py-2 text-sm font-black text-fuchsia-700 hover:bg-fuchsia-50">↓</button>
+                                    <button type="button" data-remove-production-component class="rounded-xl border border-red-200 px-3 py-2.5 text-xs font-black text-red-600 hover:bg-red-50">حذف</button>
+                                </div>
+                            </div>
+                            <label class="mt-3 block text-xs font-black text-slate-600">برومبت الإنتاج
+                                <textarea name="production_components[__INDEX__][prompt_template]" rows="12" required maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}" dir="ltr" spellcheck="false" class="mt-1.5 block w-full rounded-xl border-fuchsia-200 text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"></textarea>
+                            </label>
+                            <label class="mt-3 inline-flex items-center gap-2 text-sm font-black text-fuchsia-800">
+                                <input type="hidden" name="production_components[__INDEX__][is_active]" value="0">
+                                <input type="checkbox" name="production_components[__INDEX__][is_active]" value="1" checked>
+                                فعال للطلبات الجديدة
+                            </label>
+                        </article>
+                    </template>
 
                     <details class="mt-4 rounded-xl border border-fuchsia-100 bg-white p-4 text-right">
                         <summary class="cursor-pointer text-sm font-black text-fuchsia-800">المتغيرات المتاحة داخل القالب</summary>
@@ -311,6 +368,50 @@
             });
             mode.addEventListener('change', syncSection);
             syncSection();
+        })();
+
+        (() => {
+            const section = document.querySelector('[data-production-components]');
+            const list = section?.querySelector('[data-production-component-list]');
+            const template = section?.querySelector('[data-production-component-template]');
+            const addButton = section?.querySelector('[data-add-production-component]');
+            const empty = section?.querySelector('[data-production-components-empty]');
+            let nextIndex = list?.children.length ?? 0;
+
+            if (!section || !list || !template || !addButton) return;
+
+            const syncEmpty = () => empty?.classList.toggle('hidden', list.children.length !== 0);
+
+            addButton.addEventListener('click', () => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = template.innerHTML.replaceAll('__INDEX__', String(nextIndex++));
+                const row = wrapper.firstElementChild;
+                if (!row) return;
+                list.appendChild(row);
+                row.querySelector('input[name$="[name]"]')?.focus();
+                syncEmpty();
+            });
+
+            list.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-remove-production-component]');
+                if (button) {
+                    button.closest('[data-production-component-row]')?.remove();
+                    syncEmpty();
+                    return;
+                }
+
+                const moveButton = event.target.closest('[data-move-production-component]');
+                const row = moveButton?.closest('[data-production-component-row]');
+                if (!moveButton || !row) return;
+
+                if (moveButton.dataset.moveProductionComponent === 'up' && row.previousElementSibling) {
+                    list.insertBefore(row, row.previousElementSibling);
+                } else if (moveButton.dataset.moveProductionComponent === 'down' && row.nextElementSibling) {
+                    list.insertBefore(row.nextElementSibling, row);
+                }
+            });
+
+            syncEmpty();
         })();
 
         (() => {

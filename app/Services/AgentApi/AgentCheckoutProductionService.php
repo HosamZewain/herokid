@@ -689,19 +689,27 @@ class AgentCheckoutProductionService
     private function productUnit(Order $order, OrderItem $item, array $prompt): array
     {
         return [
-            'unit_key' => 'product:'.$item->id,
+            'unit_key' => $prompt['unit_key'],
             'type' => 'product',
             'order_id' => $order->id,
             'order_item_id' => $item->id,
             'product_id' => $item->product_id,
             'order_number' => $order->order_number,
             'status' => $order->status,
-            'title' => $item->title,
+            'title' => $prompt['component_count'] > 1
+                ? $item->title.' — '.$prompt['component_name']
+                : $item->title,
             'sku' => $item->sku,
-            'quantity' => (int) $item->quantity,
+            'quantity' => $prompt['quantity'],
+            'product_quantity' => (int) $item->quantity,
+            'production_component' => [
+                'key' => $prompt['component_key'],
+                'name' => $prompt['component_name'],
+                'quantity_per_item' => $prompt['quantity_per_item'],
+            ],
             'language' => $order->language,
             'production_prompt' => $this->agentSafePrompt($prompt['prompt'], $order),
-            'prompt_source' => $prompt['uses_live_template'] ? 'live_product_template' : 'historical_snapshot',
+            'prompt_source' => $prompt['prompt_source'],
             'personalization' => $item->personalizationDisplayValues(),
             'notes' => array_filter(['parent' => $order->parent_notes, 'order' => $order->notes]),
             'reference_files' => $this->references($order),
@@ -911,7 +919,8 @@ class AgentCheckoutProductionService
             'checkoutReference',
             'groupAssignment',
             'story',
-            'items.product',
+            'items.product.productionComponents',
+            'items.productionComponents',
             'attachments',
             'bookletPreview.currentVersion',
             'productPreviewGallery.previews',

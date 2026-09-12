@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderItemProductionComponent;
+use App\Models\ProductProductionComponent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -15,28 +17,73 @@ class ProductProductionPrompt
     private const NOT_AVAILABLE = '[MISSING — CONFIRM BEFORE PRODUCTION]';
 
     /**
-     * @return Collection<int, array{item: OrderItem, prompt: string, uses_live_template: bool, uses_snapshot: bool}>
+     * @return Collection<int, array<string, mixed>>
      */
     public static function forOrder(Order $order): Collection
     {
-        $order->loadMissing(['items.product']);
+        $order->loadMissing([
+            'items.product.productionComponents',
+            'items.productionComponents',
+        ]);
 
         return $order->items
-            ->filter(fn (OrderItem $item): bool => self::templateForItem($item) !== null)
-            ->map(fn (OrderItem $item): array => [
-                'item' => $item,
-                'prompt' => self::renderForItem($item),
-                'uses_live_template' => self::usesLiveTemplate($item),
-                'uses_snapshot' => ! self::usesLiveTemplate($item),
-            ])
+            ->flatMap(fn (OrderItem $item): Collection => self::forItem($item))
             ->values();
     }
 
-    public static function renderForItem(OrderItem $item): string
+    /** @return Collection<int, array<string, mixed>> */
+    public static function forItem(OrderItem $item): Collection
+    {
+        $definitions = self::componentDefinitionsForItem($item);
+        $componentCount = $definitions->count();
+
+        return $definitions->map(function (array $definition) use ($item, $componentCount): array {
+            $componentKey = $definition['stable_key'];
+            $unitKey = $componentCount === 1
+                ? 'product:'.$item->id
+                : 'product:'.$item->id.':component:'.$componentKey;
+
+            return [
+                'item' => $item,
+                'component' => $definition['component'],
+                'component_key' => $componentKey,
+                'component_name' => $definition['name'],
+                'component_count' => $componentCount,
+                'quantity_per_item' => $definition['quantity_per_item'],
+                'quantity' => max(1, (int) $item->quantity) * $definition['quantity_per_item'],
+                'unit_key' => $unitKey,
+                'prompt' => self::renderTemplate($item, $definition),
+                'prompt_source' => $definition['source'],
+                'uses_live_template' => str_starts_with($definition['source'], 'live_'),
+                'uses_snapshot' => $definition['source'] === 'order_component_snapshot',
+                'source_label' => match ($definition['source']) {
+                    'order_component_snapshot' => 'نسخة محفوظة مع الطلب',
+                    'live_component_template' => 'قالب جزء المنتج الحالي',
+                    'live_product_template' => 'قالب المنتج الحالي — يتحدّث تلقائيًا',
+                    default => 'نسخة تاريخية احتياطية',
+                },
+            ];
+        })->values();
+    }
+
+    public static function renderForItem(
+        OrderItem $item,
+        OrderItemProductionComponent|ProductProductionComponent|string|null $component = null,
+    ): string {
+        $definitions = self::componentDefinitionsForItem($item);
+        $componentKey = is_string($component) ? $component : $component?->stable_key;
+        $definition = $componentKey
+            ? $definitions->firstWhere('stable_key', $componentKey)
+            : $definitions->first();
+
+        return $definition ? self::renderTemplate($item, $definition) : '';
+    }
+
+    private static function renderTemplate(OrderItem $item, array $definition): string
     {
         $item->loadMissing(['order.checkoutReference', 'product']);
-        $template = self::templateForItem($item) ?? '';
-        $values = self::variablesForItem($item);
+        $template = $definition['prompt_template'];
+        $values = self::variablesForItem($item, $definition);
 
         return preg_replace_callback('/{{\s*([a-zA-Z0-9_]+)\s*}}/', function (array $matches) use ($values): string {
             return array_key_exists($matches[1], $values) ? $values[$matches[1]] : $matches[0];
@@ -45,30 +92,14 @@ class ProductProductionPrompt
 
     public static function templateForItem(OrderItem $item): ?string
     {
-        $item->loadMissing('product');
-
-        if ($item->product !== null) {
-            $currentTemplate = $item->product->production_prompt_template;
-
-            return is_string($currentTemplate) && trim($currentTemplate) !== ''
-                ? $currentTemplate
-                : null;
-        }
-
-        // Historical orders may outlive their linked product. Preserve the old
-        // snapshot only for that orphaned case; every linked item always reads
-        // the current product template, including when an admin clears it.
-        $template = data_get($item->item_snapshot, 'production_prompt_template');
-
-        return is_string($template) && trim($template) !== '' ? $template : null;
+        return self::componentDefinitionsForItem($item)->first()['prompt_template'] ?? null;
     }
 
     public static function usesLiveTemplate(OrderItem $item): bool
     {
-        $item->loadMissing('product');
-        $template = $item->product?->production_prompt_template;
+        $source = self::componentDefinitionsForItem($item)->first()['source'] ?? null;
 
-        return is_string($template) && trim($template) !== '';
+        return is_string($source) && str_starts_with($source, 'live_');
     }
 
     /** @return array<string, array{label: string, example: string}> */
@@ -77,6 +108,9 @@ class ProductProductionPrompt
         return [
             'order_number' => ['label' => 'رقم الطلب المختصر', 'example' => 'HK08-151'],
             'product_name' => ['label' => 'اسم المنتج', 'example' => 'ستيكر مخصص باسم وصورة طفلك'],
+            'component_name' => ['label' => 'اسم جزء الإنتاج', 'example' => 'الاستيكرات الكبيرة'],
+            'component_quantity' => ['label' => 'الكمية المطلوبة من هذا الجزء', 'example' => '2'],
+            'product_quantity' => ['label' => 'عدد وحدات المنتج المشتراة', 'example' => '1'],
             'child_full_name' => ['label' => 'اسم الطفل كاملًا', 'example' => 'Roqaya Ahmed Ali'],
             'sticker_name' => ['label' => 'الاسم كما سيظهر على الاستيكر', 'example' => 'Roqaya Ahmed Ali'],
             'name_language' => ['label' => 'لغة الاسم', 'example' => 'ENGLISH'],
@@ -105,7 +139,7 @@ class ProductProductionPrompt
     }
 
     /** @return array<string, string> */
-    private static function variablesForItem(OrderItem $item): array
+    private static function variablesForItem(OrderItem $item, array $definition): array
     {
         $order = $item->order;
         $snapshot = $item->personalization_snapshot ?? [];
@@ -115,6 +149,9 @@ class ProductProductionPrompt
         return [
             'order_number' => self::value($order->checkoutReference?->short_reference ?: $order->order_number),
             'product_name' => self::value($item->title),
+            'component_name' => self::value($definition['name']),
+            'component_quantity' => (string) (max(1, (int) $item->quantity) * $definition['quantity_per_item']),
+            'product_quantity' => (string) max(1, (int) $item->quantity),
             'child_full_name' => self::value($childName),
             'sticker_name' => self::value($childName),
             'name_language' => self::nameLanguage($childName),
@@ -127,6 +164,70 @@ class ProductProductionPrompt
             'preferred_photo' => 'Choose the clearest attached photo unless the order notes explicitly identify another photo.',
             'child_image_references' => self::childImageReferences($order),
         ];
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private static function componentDefinitionsForItem(OrderItem $item): Collection
+    {
+        $item->loadMissing([
+            'product.productionComponents',
+            'productionComponents',
+        ]);
+
+        if ($item->productionComponents->isNotEmpty()) {
+            return $item->productionComponents->map(fn (OrderItemProductionComponent $component): array => [
+                'component' => $component,
+                'stable_key' => $component->stable_key,
+                'name' => $component->name,
+                'prompt_template' => $component->prompt_template,
+                'quantity_per_item' => max(1, (int) $component->quantity_per_item),
+                'source' => 'order_component_snapshot',
+            ])->values();
+        }
+
+        if ($item->product) {
+            $components = $item->product->productionComponents
+                ->where('is_active', true)
+                ->filter(fn (ProductProductionComponent $component): bool => filled($component->prompt_template))
+                ->values();
+
+            if ($components->isNotEmpty()) {
+                return $components->map(fn (ProductProductionComponent $component): array => [
+                    'component' => $component,
+                    'stable_key' => $component->stable_key,
+                    'name' => $component->name,
+                    'prompt_template' => $component->prompt_template,
+                    'quantity_per_item' => max(1, (int) $component->quantity_per_item),
+                    'source' => 'live_component_template',
+                ])->values();
+            }
+
+            $template = $item->product->production_prompt_template;
+
+            return is_string($template) && trim($template) !== ''
+                ? collect([[
+                    'component' => null,
+                    'stable_key' => 'main',
+                    'name' => $item->title ?: $item->product->name_ar,
+                    'prompt_template' => $template,
+                    'quantity_per_item' => 1,
+                    'source' => 'live_product_template',
+                ]])
+                : collect();
+        }
+
+        $template = data_get($item->item_snapshot, 'production_prompt_template');
+
+        return is_string($template) && trim($template) !== ''
+            ? collect([[
+                'component' => null,
+                'stable_key' => 'main',
+                'name' => $item->title ?: 'منتج تاريخي',
+                'prompt_template' => $template,
+                'quantity_per_item' => 1,
+                'source' => 'historical_snapshot',
+            ]])
+            : collect();
     }
 
     private static function snapshotValue(array $snapshot, string $key): mixed

@@ -45,12 +45,39 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class)->where('is_active', true)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function productionComponents()
+    {
+        return $this->hasMany(ProductProductionComponent::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    public function activeProductionComponents()
+    {
+        return $this->hasMany(ProductProductionComponent::class)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
     public function scopePubliclyVisible(Builder $query): Builder
     {
         return $query->where('is_active', true)
             ->whereHas('category', fn (Builder $category) => $category
                 ->where('is_active', true)
                 ->where('show_in_store', true));
+    }
+
+    public function scopeWithProductionPrompt(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query->where(function (Builder $query): void {
+                $query->whereNotNull('production_prompt_template')
+                    ->where('production_prompt_template', '!=', '');
+            })->orWhereHas('productionComponents', fn (Builder $components) => $components
+                ->where('is_active', true)
+                ->where('prompt_template', '!=', ''));
+        });
     }
 
     public function scopeForAgeGroup(Builder $query, ?string $ageGroup): Builder

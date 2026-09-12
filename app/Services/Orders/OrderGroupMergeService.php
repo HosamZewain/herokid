@@ -303,6 +303,8 @@ class OrderGroupMergeService
             'checkoutReference.tags:id,name,normalized_name',
             'story:id,title,price',
             'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
+            'items.product.productionComponents',
+            'items.productionComponents',
             'items.variant:id,product_id,name_ar,sku,stock_quantity',
         ]);
     }

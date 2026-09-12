@@ -305,6 +305,10 @@ curl https://hero-kid.com/api/agent/checkouts/HK08-151/production-context \
 
 The response contains a compact `production_units` list. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. The top-level `team_notes` list contains the checkout's permanent staff notes in newest-first order, including writer and Cairo timestamp. Customer address and payment data are not returned.
 
+A store product can define multiple independently produced components. In that case, each component is returned as its own production unit using `product:{orderItemId}:component:{stableKey}` and includes `production_component.key`, `production_component.name`, `production_component.quantity_per_item`, the purchased `product_quantity`, and the final component `quantity`. A product with exactly one production prompt keeps the backward-compatible `product:{orderItemId}` unit key.
+
+Product component definitions are snapshotted when the order item is created. Later edits to a product do not silently rewrite historical production instructions. An authorized Admin can explicitly refresh one order item from the product's current active components on its product-production page.
+
 ### Upload production attachments
 
 Use the returned `unit_key`. It is optional only when the underlying order has exactly one production unit.
@@ -345,7 +349,7 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK08-151/complete-producti
   -H 'Idempotency-Key: run-123-complete'
 ```
 
-Every production unit must have at least one production attachment. The existing status service moves all production orders to `ready_preview` (جاهز للمعاينة). A staff member sends the preview to the customer and then moves the checkout to `preview_uploaded` (انتظار الموافقة). A repeated successful Agent completion is safe.
+Every production unit, including every component of a multi-component product, must have at least one production attachment. The existing status service moves all production orders to `ready_preview` (جاهز للمعاينة). A staff member sends the preview to the customer and then moves the checkout to `preview_uploaded` (انتظار الموافقة). A repeated successful Agent completion is safe.
 
 The Agent API deliberately does not expose a free-form status-change endpoint. Production completion can only perform the controlled `generating` → `ready_preview` transition.
 

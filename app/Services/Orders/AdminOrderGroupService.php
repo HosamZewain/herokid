@@ -43,6 +43,8 @@ class AdminOrderGroupService
         'submittedServiceRatings:id,order_id,metadata,decided_at',
         'story:id,title,price,short_desc,full_desc,full_story,age_range,gender,language,lesson_value',
         'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
+        'items.product.productionComponents',
+        'items.productionComponents',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
     ];
 

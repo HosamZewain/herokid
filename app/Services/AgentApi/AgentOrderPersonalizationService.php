@@ -111,7 +111,8 @@ class AgentOrderPersonalizationService
     ): array {
         $this->assertAllowedKeys($personalization, self::PRODUCT_FIELDS);
         $validated = $this->validatePersonalization($personalization, false);
-        $itemId = (int) str($unitKey)->after('product:')->toString();
+        preg_match('/^product:(\d+)(?::component:[a-z0-9_-]+)?$/', $unitKey, $matches);
+        $itemId = (int) ($matches[1] ?? 0);
 
         $changes = DB::transaction(function () use ($order, $itemId, $validated, $reason, $agent, $request): array {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
