@@ -1,4 +1,5 @@
 import './bootstrap';
+import { initializeOrderStatusFilters } from './order-status-filters';
 import { initializeAdminFileUploads } from './admin-file-uploads';
 import { initializeIdentityHeicRecovery, initializeIdentityPhotoUploader } from './identity-photo-uploader';
 import { prepareImageForUpload } from './image-upload-preparer';
@@ -25,6 +26,7 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeOrderStatusFilters();
     initializeAdminFileUploads();
     document.querySelectorAll('[data-analytics-widget]').forEach(async (panel) => {
         try {

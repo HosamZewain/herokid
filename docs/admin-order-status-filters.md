@@ -11,3 +11,14 @@ The order list supports multiple selections for order, shipping, printing, and p
 - No schema migration or permission change is required. Committed frontend assets must be deployed with the Blade changes.
 
 Regression coverage: `tests/Feature/AdminOrderMultiStatusFilterTest.php`.
+
+The controls use native HTML `details`/`summary`, not Alpine (the admin bundle does not initialize Alpine). They start closed and remain toggleable without JavaScript. The application bundle enhances clearing, selection counts, outside-click/Escape closing, and closes other open filters.
+
+Browser regression coverage loads the actual compiled application bundle and renders the real Blade component without injecting a UI library:
+
+```bash
+npm run build
+node --test tests/Frontend/order-status-filters.test.mjs
+```
+
+The browser test requires the local Docker application and Chrome (`BROWSER_EXECUTABLE` can override its path).
