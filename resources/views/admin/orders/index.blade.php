@@ -113,34 +113,10 @@
                             <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج أو علامة"
                                    class="w-full rounded-xl border-gray-200 text-right text-sm">
                         </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطلب</label>
-                            <select name="status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($statusLabels as $value => $label)
-                                    <option value="{{ $value }}" @selected(request('status', '') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الشحن</label>
-                            <select name="shipping_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطباعة</label>
-                            <select name="printing_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($printingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('printing_status', '') === $value)>{{ $label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الدفع</label>
-                            <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($paymentStatusLabels as $value => $label)
-                                    <option value="{{ $value }}" @selected(request('payment_status', '') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                        <x-admin.status-filter name="status" label="حالة الطلب" :options="$statusLabels" :selected="$selectedStatuses" />
+                        <x-admin.status-filter name="shipping_status" label="حالة الشحن" :options="$shippingStatusLabels" :selected="$selectedShippingStatuses" />
+                        <x-admin.status-filter name="printing_status" label="حالة الطباعة" :options="$printingStatusLabels" :selected="$selectedPrintingStatuses" />
+                        <x-admin.status-filter name="payment_status" label="حالة الدفع" :options="$paymentStatusLabels" :selected="$selectedPaymentStatuses" />
                         <div class="flex items-end gap-2 xl:col-span-2">
                             <button class="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
                             <a href="{{ route('admin.orders.index', ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => $lifecycle]) }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-black text-gray-500 hover:bg-gray-50">مسح</a>

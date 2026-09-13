@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class AdminOrderGroupService
 {
@@ -107,6 +109,10 @@ class AdminOrderGroupService
             'trash' => $request->query('view') === 'trash',
             'catalogType' => $catalogType,
             'lifecycle' => $lifecycle,
+            'selectedStatuses' => $this->selectedStatuses($request),
+            'selectedShippingStatuses' => $this->selectedStatuses($request, 'shipping_status', OrderStatusRegistry::TYPE_SHIPPING),
+            'selectedPrintingStatuses' => $this->selectedStatuses($request, 'printing_status', OrderStatusRegistry::TYPE_PRINTING),
+            'selectedPaymentStatuses' => $this->selectedStatuses($request, 'payment_status', OrderStatusRegistry::TYPE_PAYMENT),
             'assignmentUsers' => User::query()
                 ->where('role', 'admin')
                 ->where(function (Builder $query): void {
@@ -591,26 +597,12 @@ class AdminOrderGroupService
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
         $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
         $this->applyLifecycleFilter($query, $lifecycle);
-        $status = (string) $request->query('status', '');
 
-        if ($status !== '' && $status !== 'mixed') {
-            $query->where('status', $status);
-        }
-
-        if ($request->filled('payment_status')) {
-            $paymentStatus = (string) $request->query('payment_status');
-
-            if (in_array($paymentStatus, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)) {
-                $query->where('payment_status', $paymentStatus);
+        foreach (['payment_status' => OrderStatusRegistry::TYPE_PAYMENT, 'printing_status' => OrderStatusRegistry::TYPE_PRINTING, 'shipping_status' => OrderStatusRegistry::TYPE_SHIPPING] as $field => $type) {
+            $selected = $this->selectedStatuses($request, $field, $type);
+            if ($selected !== []) {
+                $query->whereIn($field, $selected);
             }
-        }
-
-        if ($request->filled('printing_status') && in_array($request->query('printing_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PRINTING, false), true)) {
-            $query->where('printing_status', $request->query('printing_status'));
-        }
-
-        if ($request->filled('shipping_status') && in_array($request->query('shipping_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false), true)) {
-            $query->where('shipping_status', $request->query('shipping_status'));
         }
 
         if ($request->filled('order_source') && array_key_exists((string) $request->query('order_source'), OrderSource::options())) {
@@ -834,17 +826,38 @@ class AdminOrderGroupService
     ): Builder {
         $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle, $applyTagFilter);
 
-        if ($request->query('status') === 'mixed') {
-            $mixedKeys = (clone $query)
-                ->get(['checkout_group_key', 'status'])
-                ->groupBy('checkout_group_key')
-                ->filter(fn (Collection $orders): bool => $orders->pluck('status')->unique()->count() > 1)
-                ->keys();
-
-            $query->whereIn('checkout_group_key', $mixedKeys);
+        $statuses = $this->selectedStatuses($request);
+        if ($statuses !== []) {
+            // Compute mixed groups before applying the selected status union.
+            $mixedKeys = (clone $query)->select('checkout_group_key')
+                ->groupBy('checkout_group_key')->havingRaw('COUNT(DISTINCT status) > 1');
+            $query->where(function (Builder $matches) use ($statuses, $mixedKeys): void {
+                $matches->whereIn('status', array_values(array_diff($statuses, ['mixed'])));
+                if (in_array('mixed', $statuses, true)) {
+                    $matches->orWhereIn('checkout_group_key', $mixedKeys);
+                }
+            });
         }
 
         return $query;
+    }
+
+    private function selectedStatuses(Request $request, string $field = 'status', string $type = OrderStatusRegistry::TYPE_ORDER): array
+    {
+        // Keep existing bookmarked ?status=new links compatible with status[].
+        $values = $request->query($field, []);
+        $values = is_array($values) ? $values : [$values];
+        $values = array_values(array_filter($values, fn ($value): bool => $value !== '' && $value !== null));
+        $allowed = OrderStatusRegistry::keys($type, false);
+        if ($field === 'status') {
+            $allowed[] = 'mixed';
+        }
+        Validator::make([$field => $values], [
+            $field => ['array', 'max:100'],
+            $field.'.*' => ['string', Rule::in($allowed)],
+        ])->validate();
+
+        return array_values(array_unique($values));
     }
 
     private function ordersForKeys(Collection $keys, bool $includeDeleted): Collection
