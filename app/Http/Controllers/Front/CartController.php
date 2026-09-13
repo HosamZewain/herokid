@@ -11,6 +11,7 @@ use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
+use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
@@ -56,6 +57,7 @@ class CartController extends Controller
 
         return view('front.cart.index', [
             'cartItems' => $cart,
+            'checkoutSubmissionToken' => app(CheckoutSubmissionService::class)->token(request(), $cart),
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,
@@ -259,6 +261,7 @@ class CartController extends Controller
             return response()->json([
                 'message' => 'تم حذف العنصر من السلة.',
                 'removed_keys' => $removedKeys,
+                'checkout_submission_token' => app(CheckoutSubmissionService::class)->token($request, $cart),
                 'cart_count' => count($cart),
                 'subtotal' => $this->subtotal($cart),
                 'cart_empty' => $cart === [],

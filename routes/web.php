@@ -262,12 +262,14 @@ Route::delete('/cart/{key}', [CartController::class, 'destroy'])->name('cart.des
 Route::get('/checkout/address-districts', [CheckoutAddressController::class, 'districts'])
     ->middleware('throttle:60,1')
     ->name('checkout.address-districts');
-Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+Route::post('/checkout', [CheckoutController::class, 'store'])->block(120, 120)->name('checkout.store');
 Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
 
 // Order Tracking
 Route::get('/track-order', [TrackOrderController::class, 'index'])->name('track.index');
-Route::post('/track-order', [TrackOrderController::class, 'track'])->name('track.search');
+Route::post('/track-order', [TrackOrderController::class, 'track'])
+    ->middleware('throttle:30,1')
+    ->name('track.search');
 Route::post('/checkout/active-orders', [TrackOrderController::class, 'activeOrders'])
     ->middleware('throttle:30,1')
     ->name('checkout.active-orders');

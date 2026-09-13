@@ -110,6 +110,7 @@
                         @endguest
 
                         <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4" data-checkout-form>
+                            <input type="hidden" name="checkout_submission_token" value="{{ $checkoutSubmissionToken }}">
                             @csrf
                             <div>
                                 <label for="checkout-parent-name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم ولي الأمر <span class="text-red-500">*</span></label>
@@ -900,6 +901,7 @@
                         }
 
                         subtotal += Number(payload.added_line_total || 0);
+                        document.querySelector('[name="checkout_submission_token"]').value = payload.checkout_submission_token;
                         const selectedFee = governorateSelect?.value
                             ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())
                             : selectedCountryFee();
@@ -973,6 +975,7 @@
                     }
 
                     subtotal = Number(payload.subtotal || 0);
+                    document.querySelector('[name="checkout_submission_token"]').value = payload.checkout_submission_token;
                     const selectedFee = governorateSelect?.value
                         ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())
                         : selectedCountryFee();

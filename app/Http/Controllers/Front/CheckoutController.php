@@ -17,6 +17,7 @@ use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
@@ -41,7 +42,13 @@ class CheckoutController extends Controller
         PackageCartExpander $packageCartExpander,
         CustomerOrderSelfService $customerOrders,
         BostaCheckoutAddressService $checkoutAddresses,
+        CheckoutSubmissionService $submissions,
     ) {
+        if ($existingIds = $submissions->completed($request)) {
+            $request->session()->put('checkout.last_order_ids', $existingIds);
+
+            return redirect()->route('checkout.success');
+        }
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
             'alternate_phone' => Phone::normalize($request->input('alternate_phone')),
@@ -124,6 +131,7 @@ class CheckoutController extends Controller
         $attribution = $this->attributionSnapshot($request);
         $isNewCustomer = $this->isNewCustomer($validated['phone']);
         $orderIds = [];
+        $replayed = false;
         app(CartTrackingService::class)->recordCheckoutStarted($request);
 
         if (auth()->check() && ! auth()->user()->phone) {
@@ -131,7 +139,14 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds, &$replayed): void {
+                $submission = $submissions->claim($request, $sessionCart);
+                if ($submission['order_ids']) {
+                    $orderIds = $submission['order_ids'];
+                    $replayed = true;
+
+                    return;
+                }
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -460,6 +475,10 @@ class CheckoutController extends Controller
                         $request->session()->flash('checkout.order_decision_message', $message);
                     }
                 }
+                if ($orderIds === []) {
+                    throw new \RuntimeException('No purchasable cart items remain.');
+                }
+                $submissions->complete($submission['key'], $orderIds);
             });
         } catch (\RuntimeException) {
             return redirect()->route('cart.index')->with('error', 'بعض المنتجات لم تعد متاحة بالكمية المطلوبة. يرجى مراجعة السلة.');
@@ -467,6 +486,13 @@ class CheckoutController extends Controller
 
         if ($orderIds === []) {
             return redirect()->route('cart.index')->with('error', 'تعذر إنشاء الطلب لأن بعض القصص لم تعد متاحة.');
+        }
+
+        if ($replayed) {
+            session()->forget('cart.items');
+            session(['checkout.last_order_ids' => $orderIds]);
+
+            return redirect()->route('checkout.success');
         }
 
         $representativeOrder = Order::query()

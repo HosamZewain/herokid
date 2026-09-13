@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\AdminOrderUpdateService;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -689,6 +690,52 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame(['الطفل الأول', 'الطفل الثالث'], $active->pluck('child_name')->all());
         $this->assertSoftDeleted('orders', ['id' => $removed->id]);
         $this->assertSame(8, $product->fresh()->stock_quantity);
+    }
+
+    public function test_failed_full_edit_cleans_only_its_own_uploaded_photos(): void
+    {
+        [$first] = $this->createCheckout();
+        $existingPaths = Storage::disk('local')->allFiles('orders/photos');
+        $payload = $this->editBasePayload($first);
+        $payload['stories'][0]['photos'] = $this->photos('rollback-owned');
+        $realGroups = app(AdminOrderGroupService::class);
+        $calls = 0;
+        $unrelated = 'orders/photos/another-order/concurrent.jpg';
+        $this->mock(AdminOrderGroupService::class, function ($mock) use ($realGroups, &$calls, $unrelated, $existingPaths): void {
+            $mock->shouldReceive('present')->twice()->andReturnUsing(function ($orders) use ($realGroups, &$calls, $unrelated, $existingPaths) {
+                if (++$calls === 2) {
+                    $this->assertCount(count($existingPaths) + 2, Storage::disk('local')->allFiles('orders/photos'));
+                    Storage::disk('local')->put($unrelated, 'Synthetic unrelated upload');
+                    throw new \RuntimeException('Synthetic late edit failure');
+                }
+
+                return $realGroups->present($orders);
+            });
+        });
+        try {
+            app(AdminOrderUpdateService::class)->update($first, $payload, $this->admin, request());
+            $this->fail('Expected rollback.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Synthetic late edit failure', $exception->getMessage());
+        }
+        $this->assertEqualsCanonicalizing([...$existingPaths, $unrelated], Storage::disk('local')->allFiles('orders/photos'));
+    }
+
+    public function test_full_admin_address_edit_removes_stale_provider_ids(): void
+    {
+        [$first] = $this->createCheckout();
+        $first->update(['delivery_details' => array_merge($first->delivery_details, [
+            'bosta_city_id' => 'OLD-CITY', 'bosta_district_id' => 'OLD-DISTRICT', 'bosta_zone_id' => 'OLD-ZONE',
+        ])]);
+        $payload = $this->editBasePayload($first);
+        $payload['city'] = 'منطقة جديدة';
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $first->id), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $delivery = $first->fresh()->delivery_details;
+        $this->assertSame('منطقة جديدة', $delivery['city']);
+        foreach (['city', 'district', 'zone'] as $part) {
+            $this->assertArrayNotHasKey('bosta_'.$part.'_id', $delivery);
+        }
     }
 
     private function createCheckout(): array

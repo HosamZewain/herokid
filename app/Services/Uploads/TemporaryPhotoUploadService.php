@@ -7,6 +7,7 @@ use App\Models\TemporaryPhotoUpload;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -140,6 +141,7 @@ class TemporaryPhotoUploadService
         array $publicIds,
         int $minimum = 1,
         ?int $maximum = null,
+        bool $lockForUpdate = false,
     ): Collection {
         $sessionHash = $this->validateToken($request);
         $maximum ??= (int) config('photo_uploads.max_files', 3);
@@ -156,7 +158,11 @@ class TemporaryPhotoUploadService
             throw new UploadValidationException('يمكنك رفع '.$maximum.' صور كحد أقصى.', 422, 'photo_upload_ids');
         }
 
-        $uploads = TemporaryPhotoUpload::whereIn('public_id', $publicIds)->get()->keyBy('public_id');
+        $query = TemporaryPhotoUpload::whereIn('public_id', $publicIds)->orderBy('id');
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+        $uploads = $query->get()->keyBy('public_id');
 
         if ($uploads->count() !== count($publicIds)) {
             throw new UploadValidationException('بعض الصور المرفوعة غير موجودة أو انتهت صلاحيتها.', 422, 'photo_upload_ids');
@@ -177,16 +183,18 @@ class TemporaryPhotoUploadService
 
     public function attachIdsToCart(Request $request, array $publicIds, string $cartKey): Collection
     {
-        $uploads = $this->validatedUploadedIds($request, $publicIds);
+        return DB::transaction(function () use ($request, $publicIds, $cartKey): Collection {
+            $uploads = $this->validatedUploadedIds($request, $publicIds, lockForUpdate: true);
 
-        TemporaryPhotoUpload::whereIn('id', $uploads->pluck('id'))->update([
-            'status' => 'attached',
-            'attached_cart_key' => $cartKey,
-            'user_id' => $request->user()?->id,
-            'updated_at' => now(),
-        ]);
+            TemporaryPhotoUpload::whereIn('id', $uploads->pluck('id'))->update([
+                'status' => 'attached',
+                'attached_cart_key' => $cartKey,
+                'user_id' => $request->user()?->id,
+                'updated_at' => now(),
+            ]);
 
-        return $uploads;
+            return $uploads;
+        });
     }
 
     public function markOrderAttached(array $paths, Order $order): void

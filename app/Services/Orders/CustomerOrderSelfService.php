@@ -6,6 +6,7 @@ use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
+use App\Support\OrderDeliveryAddress;
 use App\Support\OrderStatusRegistry;
 use App\Support\Phone;
 use Illuminate\Http\Request;
@@ -168,7 +169,7 @@ class CustomerOrderSelfService
 
             foreach ($orders as $order) {
                 $delivery = $order->delivery_details ?? [];
-                $delivery = array_merge($delivery, [
+                $delivery = OrderDeliveryAddress::mergeEdited($delivery, [
                     'phone' => $data['phone'],
                     'delivery_country_id' => $country->id,
                     'delivery_governorate_id' => $governorate->id,

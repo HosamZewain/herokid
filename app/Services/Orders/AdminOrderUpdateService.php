@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderDeliveryAddress;
 use App\Support\OrderPaymentStatus;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
@@ -40,10 +41,10 @@ class AdminOrderUpdateService
     public function update(Order $representative, array $data, User $admin, Request $request): array
     {
         $disk = Storage::disk((string) config('photo_uploads.disk', 'local'));
-        $beforeFiles = collect($disk->allFiles('orders/photos'))->flip();
+        $createdPaths = [];
 
         try {
-            $result = DB::transaction(function () use ($representative, $data, $admin, $request): array {
+            $result = DB::transaction(function () use ($representative, $data, $admin, $request, &$createdPaths): array {
                 $groupKey = $representative->checkoutGroupKey();
                 $orders = Order::query()
                     ->with(['story.sceneTemplates', 'items.product', 'items.variant'])
@@ -214,7 +215,9 @@ class AdminOrderUpdateService
                         $targetOrder->forceFill(['uploaded_photos' => array_values($sourceOrder?->uploaded_photos ?? [])])->save();
                     }
                     if ($line['photos'] !== []) {
-                        $this->photoUploads->append($targetOrder, $line['photos']);
+                        $this->photoUploads->append($targetOrder, $line['photos'], function (string $path) use (&$createdPaths): void {
+                            $createdPaths[] = $path;
+                        });
                     }
                     $this->decrementStock($line['product'], $line['variant'], $line['quantity']);
                 }
@@ -275,8 +278,7 @@ class AdminOrderUpdateService
 
                 foreach ($activeOrders as $position => $order) {
                     $storyItem = $order->items->firstWhere('item_type', 'story');
-                    $delivery = [
-                        ...(is_array($order->delivery_details) ? $order->delivery_details : []),
+                    $delivery = OrderDeliveryAddress::mergeEdited($order->delivery_details ?? [], [
                         'phone' => $data['phone'],
                         'delivery_country_id' => $country->id,
                         'delivery_governorate_id' => $governorate->id,
@@ -300,7 +302,7 @@ class AdminOrderUpdateService
                         'remaining_amount' => $payment['remaining_amount_cents'] / 100,
                         'order_source' => $data['order_source'],
                         'source_notes' => $data['source_notes'] ?? null,
-                    ];
+                    ]);
                     if ($storyItem) {
                         $storySnapshot = $storyItem->item_snapshot ?? [];
                         $delivery['story_regular_price'] = $storySnapshot['regular_price'] ?? ($storyItem->unit_price_cents / 100);
@@ -328,7 +330,9 @@ class AdminOrderUpdateService
                     $photos = $input['photos'] ?? [];
                     if ($photos !== []) {
                         $photoOrder = $ordersByInput->get((int) $index);
-                        $this->photoUploads->append($photoOrder, $photos);
+                        $this->photoUploads->append($photoOrder, $photos, function (string $path) use (&$createdPaths): void {
+                            $createdPaths[] = $path;
+                        });
                         $storyItem = $photoOrder->items()->where('item_type', 'story')->first();
                         if ($storyItem) {
                             $snapshot = $storyItem->personalization_snapshot ?? [];
@@ -393,10 +397,8 @@ class AdminOrderUpdateService
                 return ['representative' => $representativeOrder, 'orders' => $activeOrders];
             });
         } catch (\Throwable $exception) {
-            $newFiles = collect($disk->allFiles('orders/photos'))
-                ->reject(fn (string $path): bool => $beforeFiles->has($path));
-            if ($newFiles->isNotEmpty()) {
-                $disk->delete($newFiles->all());
+            if ($createdPaths !== []) {
+                $disk->delete($createdPaths);
             }
 
             throw $exception;

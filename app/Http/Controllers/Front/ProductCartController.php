@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -91,6 +93,7 @@ class ProductCartController extends Controller
         $unitPriceCents = $product->effectivePriceCents($variant);
         $linkedStory = $linkedStoryKey ? $cart[$linkedStoryKey] : null;
         $personalizationUnits = [];
+        $photoBatches = [];
 
         if ($collectsChildDetails) {
             $submittedUnits = $request->input('personalizations');
@@ -142,11 +145,11 @@ class ProductCartController extends Controller
 
                 if ($photoField && ! empty($unitData['photo_upload_ids'])) {
                     try {
-                        $uploadedPhotos = $uploads->attachIdsToCart(
+                        $uploadedPhotos = $uploads->validatedUploadedIds(
                             $request,
                             $unitData['photo_upload_ids'],
-                            $unitKey,
                         )->pluck('path')->all();
+                        $photoBatches[$index] = ['ids' => $unitData['photo_upload_ids'], 'key' => $unitKey];
                     } catch (UploadValidationException $exception) {
                         return $this->errorResponse(
                             $request,
@@ -164,6 +167,18 @@ class ProductCartController extends Controller
                     'reused_from_unit' => null,
                 ];
             }
+        }
+
+        // No upload becomes attached until every child's input is valid.
+        $attachmentIndex = 0;
+        try {
+            DB::transaction(function () use ($photoBatches, $uploads, $request, &$attachmentIndex): void {
+                foreach ($photoBatches as $attachmentIndex => $batch) {
+                    $uploads->attachIdsToCart($request, $batch['ids'], $batch['key']);
+                }
+            });
+        } catch (UploadValidationException $exception) {
+            return $this->errorResponse($request, $exception->getMessage(), 'personalizations.'.$attachmentIndex.'.'.($exception->field ?: 'photo_upload_ids'));
         }
 
         $unitsToAdd = $collectsChildDetails ? $personalizationUnits : [[
@@ -233,6 +248,7 @@ class ProductCartController extends Controller
                 'product_name' => $product->name_ar,
                 'added_line_total' => ($unitPriceCents * $quantity) / 100,
                 'cart_count' => count($cart),
+                'checkout_submission_token' => app(CheckoutSubmissionService::class)->token($request, $cart),
                 'mobile_item_html' => view('front.cart._mobile_item', [
                     'key' => $addedKeys[0],
                     'item' => $cart[$addedKeys[0]],

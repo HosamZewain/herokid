@@ -65,7 +65,7 @@ class OrderPhotoUploadService
      * @param  array<int, UploadedFile>  $files
      * @return array{added_count: int, total_count: int, files: array<int, array{original_name: string, mime_type: string, size: int}>}
      */
-    public function append(Order $order, array $files): array
+    public function append(Order $order, array $files, ?callable $onStored = null): array
     {
         if ($files === []) {
             throw ValidationException::withMessages([
@@ -100,6 +100,9 @@ class OrderPhotoUploadService
                 }
 
                 $storedPaths[] = $path;
+                if ($onStored) {
+                    $onStored($path);
+                }
             }
 
             $totalCount = DB::transaction(function () use ($order, $storedPaths): int {
