@@ -151,9 +151,34 @@ Stable identifier semantics:
 - `production_unit_id` is `story:{orders.id}` and remains tied to that exact personalized story row.
 - `story.template_id` is `story:{stories.id}`.
 - Scene IDs identify the database record actually supplying the text: `production_scene:{id}`, `order_scene_snapshot:{id}`, or `story_scene_template:{id}`.
-- `source_revision` is a deterministic SHA-256 digest of relevant order, story, snapshot, and Production Studio scene update timestamps.
+- `source_revision` is a deterministic SHA-256 digest of relevant update timestamps **and the returned production-story content**, so even same-second text changes invalidate it. Repeated unchanged reads remain stable.
 
 Scene text precedence is evaluated independently for every scene number: a populated latest Production Studio scene wins, otherwise a populated order-owned snapshot wins, otherwise a populated current story template is rendered as fallback. An empty or missing snapshot for one scene does not suppress that scene's template fallback, while a populated historical snapshot is never replaced implicitly. The read path does not write or refresh snapshots. Scenes are explicitly sorted by scene number and Arabic Unicode is returned unchanged. The dedication is read from the individual story order's `gift_note`.
+
+### Gender-specific production text synchronization
+
+An explicit Admin story save now synchronizes that story's existing order snapshots, **including completed/printed orders**, as approved for text corrections/reprinting. The previous snapshot is archived in private `order_scene_text_snapshot_revisions` records inside the same transaction. The existing snapshot and production-unit IDs stay unchanged. GET remains read-only; "Refresh from Hero Kid" reads the newly synchronized snapshot after the Admin save completes. No Studio change is required.
+
+The centralized resolver accepts `girl`/`female` and `boy`/`male` (case/whitespace normalized). `child.gender` in this Studio endpoint is canonical `female`/`male`, or null if unspecified. Existing storage is unchanged: `text_template` belongs to `story.gender`, and `alternate_text_template` to the opposite gender. A `both`/unspecified story retains the documented neutral-original policy; it does not guess the language's grammatical gender. Missing child gender uses the original. New-order legacy missing-alternate fallback remains original with its existing fallback warning; explicit synchronization refuses a missing required alternate rather than claiming a successful correction.
+
+`scenes[].metadata.text_variant` reports the **actual selected** `female`, `male`, or `neutral` from saved render context. Historical snapshots without this context retain legacy `original`/`alternate`/`original_fallback` metadata until synchronized; they are not relabeled using today's template. Internal original/alternate column semantics remain backward-compatible. Production-scene text matching a known snapshot may carry that snapshot's resolved variant; independently edited text is not assigned a guessed variant.
+
+Synchronization updates only text/variant context and source references. It does not change identity, ownership, payment, status, attachments, images or assets. Auto-derived Production Studio text is updated only when it still matches the previous snapshot (or already matches the new text). Independently edited production text, missing variants, differing template identity or scene sets other than exactly 1–13 block the unit and are reported to the Admin; no guessing/partial scene updates. Other story templates' orders are untouched. `stories.update` authorizes this propagation from catalog saves; the separate per-order action requires `orders.update`.
+
+For previously edited stories, after deploying and migrating, re-save their approved text through Admin to synchronize their units, or explicitly repair individual units:
+
+```bash
+# Read-only audit, across stories or one story; output excludes customer text/contact data.
+php artisan orders:audit-production-scenes --all
+php artisan orders:audit-production-scenes --story=77
+
+# Dry-run first. Replace ADMIN_ID with the responsible authorized Admin ID.
+php artisan orders:refresh-production-scenes story:734 --story=77 --admin=ADMIN_ID --reason="Approved gender text correction" --allow-completed
+# Explicit targeted write; stable IDs, previous snapshot archived.
+php artisan orders:refresh-production-scenes story:734 --story=77 --admin=ADMIN_ID --reason="Approved gender text correction" --allow-completed --apply
+```
+
+The per-order Admin "تحديث نصوص هذه القصة من القالب الحالي" action provides the same targeted service with CSRF, permission and explicit confirmation. CLI defaults to dry-run; completed orders require `--allow-completed` on targeted repairs. No migration performs a backfill. The history table is private and is never included in Agent responses or activity-log payloads. Deployment alone does not repair snapshots created before the synchronization feature.
 
 A checkout with no personalized stories returns HTTP 200 with `production_stories: []`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, or a missing `orders.view` permission return `FORBIDDEN`. Phone, email, delivery address, payment data, storage paths, product rows, and unrelated Admin notes are never returned.
 

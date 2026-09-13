@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\PricingPackageController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductionAutomationController;
+use App\Http\Controllers\Admin\ProductionSceneSnapshotController;
 use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
@@ -726,6 +727,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('orders/{order}/notes/{note}', [OrderAdminNoteController::class, 'destroy'])->whereNumber(['order', 'note'])->middleware('permission:orders.notes.delete')->name('orders.notes.destroy');
     Route::post('orders/{order}/activity/prompt-copied', [OrderActivityController::class, 'promptCopied'])->whereNumber('order')->middleware('permission:orders.view')->name('orders.activity.prompt-copied');
     Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');
+    Route::post('orders/{order}/scene-snapshots/refresh', ProductionSceneSnapshotController::class)->middleware('permission:orders.update')->name('orders.scene-snapshots.refresh');
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');

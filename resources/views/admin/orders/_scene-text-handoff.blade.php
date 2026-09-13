@@ -21,6 +21,20 @@
             {{ $sceneTextHandoff['all_ready'] ? 'جاهز للتسليم' : 'يحتاج استكمال' }}
         </span>
     </summary>
+    @if($order->story_id && auth()->user()->hasPermission('orders.update'))
+        <details class="m-4 rounded-xl border border-amber-200 p-4">
+            <summary class="cursor-pointer text-sm font-bold">تحديث نصوص هذه القصة من القالب الحالي</summary>
+            <p class="my-3 text-xs">تحديث صريح لنصوص هذا الطلب فقط مع حفظ النسخة السابقة. لا يغيّر الصور أو المرفقات أو حالة الطلب. حفظ القصة يزامن الطلبات أيضًا.</p>
+            <form method="POST" action="{{ route('admin.orders.scene-snapshots.refresh', $order) }}" class="space-y-3">
+                @csrf
+                <input type="hidden" name="story_id" value="{{ $order->story_id }}">
+                <input name="reason" required maxlength="500" placeholder="سبب تحديث النصوص" aria-label="سبب تحديث النصوص" class="w-full rounded-lg border-gray-300 text-sm">
+                <label class="block text-xs"><input type="checkbox" name="confirm_refresh" value="1" required> أوافق على استبدال لقطة النص المحفوظة بالنسخة الحالية المناسبة لجنس الطفل.</label>
+                <label class="block text-xs"><input type="checkbox" name="allow_completed" value="1"> أوافق صراحةً على تحديث النص حتى لو بدأ/اكتمل الإنتاج أو الطباعة أو الشحن.</label>
+                <button class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white" type="submit">تحديث نصوص هذه القصة فقط</button>
+            </form>
+        </details>
+    @endif
 
     <div class="border-t border-indigo-100 p-4 sm:p-6">
         @if($sceneTextHandoff['has_any'])

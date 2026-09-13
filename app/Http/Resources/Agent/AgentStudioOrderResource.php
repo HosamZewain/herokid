@@ -4,6 +4,7 @@ namespace App\Http\Resources\Agent;
 
 use App\Models\Order;
 use App\Services\Orders\OrderSceneTextService;
+use App\Services\Stories\ProductionSceneVariantResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -18,6 +19,7 @@ class AgentStudioOrderResource extends JsonResource
         /** @var Order $matched */
         $matched = $this->resource['matched_order'];
         $storyOrders = $orders->filter(fn (Order $order): bool => $order->story_id !== null && $order->story !== null)->values();
+        $productionStories = $storyOrders->map(fn (Order $order): array => $this->story($order))->all();
 
         return [
             'success' => true,
@@ -27,11 +29,9 @@ class AgentStudioOrderResource extends JsonResource
                 'checkout_reference' => $this->resource['checkout_reference'],
                 'status' => $matched->status,
                 'created_at' => $orders->min('created_at')?->toIso8601String(),
-                'source_revision' => $this->revision($storyOrders),
+                'source_revision' => $this->revision($storyOrders, $productionStories),
             ],
-            'production_stories' => $storyOrders
-                ->map(fn (Order $order): array => $this->story($order))
-                ->all(),
+            'production_stories' => $productionStories,
         ];
     }
 
@@ -52,7 +52,7 @@ class AgentStudioOrderResource extends JsonResource
             'child' => [
                 'name' => (string) $order->child_name,
                 'age' => $order->child_age,
-                'gender' => $order->child_gender,
+                'gender' => ProductionSceneVariantResolver::gender($order->child_gender),
                 'production_data' => array_filter([
                     'lesson' => $order->lesson,
                     'interests' => $order->interests,
@@ -94,7 +94,7 @@ class AgentStudioOrderResource extends JsonResource
                         'title' => filled($scene['title']) ? $scene['title'] : null,
                         'metadata' => array_filter([
                             'source' => $scene['source'],
-                            'text_variant' => $scene['text_variant'],
+                            'text_variant' => $scene['resolved_text_variant'] ?? $scene['text_variant'],
                         ], fn (mixed $value): bool => filled($value)),
                     ];
                 })
@@ -109,7 +109,7 @@ class AgentStudioOrderResource extends JsonResource
     }
 
     /** @param Collection<int, Order> $storyOrders */
-    private function revision(Collection $storyOrders): string
+    private function revision(Collection $storyOrders, array $productionStories): string
     {
         $parts = $storyOrders->flatMap(function (Order $order): array {
             return [
@@ -121,7 +121,8 @@ class AgentStudioOrderResource extends JsonResource
             ];
         })->sort()->values()->all();
 
-        return 'sha256:'.hash('sha256', implode('|', $parts));
+        // Include returned content: timestamps alone can miss same-second updates.
+        return 'sha256:'.hash('sha256', implode('|', $parts).'|'.json_encode($productionStories, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     private function language(Order $order): string
