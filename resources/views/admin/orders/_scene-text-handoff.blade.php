@@ -28,6 +28,12 @@
             <form method="POST" action="{{ route('admin.orders.scene-snapshots.refresh', $order) }}" class="space-y-3">
                 @csrf
                 <input type="hidden" name="story_id" value="{{ $order->story_id }}">
+                <label class="block text-sm">لغة القصة — تغييرها يعيد تجهيز النصوص حتى لإعادة الطباعة
+                    <select name="language" class="rounded-lg border-gray-300 text-sm">
+                        <option value="ar" @selected(($order->language ?? 'ar') === 'ar')>العربية</option>
+                        <option value="en" @selected($order->language === 'en')>English</option>
+                    </select>
+                </label>
                 <input name="reason" required maxlength="500" placeholder="سبب تحديث النصوص" aria-label="سبب تحديث النصوص" class="w-full rounded-lg border-gray-300 text-sm">
                 <label class="block text-xs"><input type="checkbox" name="confirm_refresh" value="1" required> أوافق على استبدال لقطة النص المحفوظة بالنسخة الحالية المناسبة لجنس الطفل.</label>
                 <label class="block text-xs"><input type="checkbox" name="allow_completed" value="1"> أوافق صراحةً على تحديث النص حتى لو بدأ/اكتمل الإنتاج أو الطباعة أو الشحن.</label>

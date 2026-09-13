@@ -12,6 +12,7 @@ use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Orders\CheckoutSubmissionService;
+use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
@@ -86,6 +87,11 @@ class CartController extends Controller
             'child_name' => 'required|string|max:255',
             'child_age' => ['required', 'integer', Rule::in($allowedAges)],
             'child_gender' => 'required|in:boy,girl',
+            'language' => ['sometimes', 'required', Rule::in(['ar', 'en']), function ($attribute, $value, $fail) use ($story) {
+                if ($value === 'en' && ! app(StoryLanguageAvailability::class)->english($story)) {
+                    $fail('النسخة الإنجليزية غير متاحة لهذه القصة حاليًا.');
+                }
+            }],
             'gift_note' => 'nullable|string|max:500',
             'interests' => 'nullable|string|max:500',
             'parent_notes' => 'nullable|string|max:1000',

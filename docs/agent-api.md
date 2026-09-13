@@ -496,3 +496,10 @@ Errors use a stable JSON shape:
 Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_ACQUIRED`, `CHECKOUT_NOT_REWORKABLE`, `INVALID_ORDER_STATUS`, `ORDER_NOT_ACQUIRED_BY_AGENT`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_PERSONALIZATION`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
 
 Reference and attachment URLs require the same Bearer token and only work for the Agent currently assigned to that checkout. They never expose private storage paths.
+# Story languages and reprints
+
+Story orders now select Arabic or English independently. English scene text uses
+explicit male/female templates. Studio can request a safe language-only change
+through the existing personalization endpoint, retaining its write permission,
+acquisition and idempotency requirements. See [story languages](story-languages.md)
+for the request contract, safeguards, and Admin controls.

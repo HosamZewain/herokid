@@ -14,8 +14,10 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
 use App\Services\AgentApi\AgentProductScope;
+use App\Services\Orders\OrderSceneTextService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
@@ -1049,6 +1051,33 @@ class AgentApiTest extends TestCase
         $this->assertSame('Mariam Ahmed', $order->fresh()->child_name);
         $this->assertSame(9, (int) $order->fresh()->child_age);
         $this->assertSame('en', $order->fresh()->language);
+    }
+
+    public function test_agent_language_switch_uses_existing_permission_acquisition_and_idempotency(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::STORIES);
+        $order = $this->storyOrder('LANGUAGE-REWORK', 'HK-LANGUAGE-REWORK', true);
+        foreach (range(1, 13) as $number) {
+            $order->story->sceneTemplates()->create(['scene_number' => $number, 'text_template' => 'نص عربي',
+                'english_female_text_template' => 'She smiled.']);
+        }
+        app(OrderSceneTextService::class)->snapshotForOrder($order, $order->story);
+        $payload = ['production_unit_key' => 'story:'.$order->id, 'personalization' => ['language' => 'en'], 'change_reason' => 'Customer requested English'];
+        $url = "/api/agent/orders/{$order->id}/personalization";
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'unacquired-language'])->assertForbidden();
+        $order->update(['status' => 'revision_requested']);
+        $this->withToken($token)->postJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/acquire', [], ['Idempotency-Key' => 'language-acquire'])->assertOk();
+        $ids = $order->sceneTextSnapshots()->pluck('id')->all();
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'language-switch'])->assertOk();
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'language-switch'])->assertOk();
+        $this->assertSame('en', $order->fresh()->language);
+        $this->assertSame('She smiled.', $order->sceneTextSnapshots()->first()->rendered_text);
+        $this->assertSame($ids, $order->sceneTextSnapshots()->pluck('id')->all());
+        $this->assertSame(13, DB::table('order_scene_text_snapshot_revisions')->count());
+        $readOnly = $agent->createToken('read-only', ['agent', 'agent:orders.read'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($readOnly)->patchJson($url, $payload, ['Idempotency-Key' => 'denied-language'])->assertForbidden();
     }
 
     public function test_agent_rework_rejects_cancelled_or_shipment_created_checkout(): void

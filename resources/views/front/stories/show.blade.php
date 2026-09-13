@@ -283,6 +283,14 @@
                                             placeholder="الاسم الأول للطفل">
                                         <x-input-error :messages="$errors->get('child_name')" class="mt-1" />
                                     </div>
+                                    <div>
+                                        <label for="story-language" class="block text-sm font-bold text-slate-700 mb-1.5">لغة القصة</label>
+                                        <select id="story-language" name="language" required class="block w-full rounded-xl border-slate-200 py-3">
+                                            <option value="ar" @selected(old('language', 'ar') === 'ar')>العربية</option>
+                                            <option value="en" @selected(old('language') === 'en') @disabled(! app(\App\Services\Stories\StoryLanguageAvailability::class)->english($story))>English — الإنجليزية</option>
+                                        </select>
+                                        <x-input-error :messages="$errors->get('language')" class="mt-1" />
+                                    </div>
                                     <div class="grid grid-cols-2 gap-3">
                                         <div>
                                             <label for="child_age"
@@ -810,7 +818,7 @@
                     });
                 });
 
-                const draftFields = ['child_name', 'child_age', 'child_gender', 'interests', 'gift_note', 'parent_notes'];
+                const draftFields = ['child_name', 'child_age', 'child_gender', 'language', 'interests', 'gift_note', 'parent_notes'];
                 if (draftKey) {
                     try {
                         const draft = JSON.parse(sessionStorage.getItem(draftKey) || '{}');

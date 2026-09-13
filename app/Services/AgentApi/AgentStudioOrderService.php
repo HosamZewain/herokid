@@ -55,7 +55,7 @@ class AgentStudioOrderService
             ->with([
                 'checkoutReference:id,checkout_group_key,short_reference',
                 'story:id,title,slug,language,gender,updated_at',
-                'story.sceneTemplates:id,story_id,scene_number,title,text_template,alternate_text_template,updated_at',
+                'story.sceneTemplates:id,story_id,scene_number,title,text_template,alternate_text_template,english_male_text_template,english_female_text_template,updated_at',
                 'sceneTextSnapshots:id,order_id,source_story_scene_template_id,scene_number,title_snapshot,rendered_text,selected_text_variant,render_context_snapshot,updated_at',
                 'productionProject:id,order_id,updated_at',
                 'productionProject.scenes:id,production_project_id,scene_number,title,story_text,updated_at',

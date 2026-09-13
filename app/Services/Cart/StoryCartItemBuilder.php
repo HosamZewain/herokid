@@ -24,7 +24,7 @@ class StoryCartItemBuilder
             'story_offer_applied' => $price['offer_applied'],
             'story_offer_label' => $price['offer_label'],
             'story_cover_url' => $story->cover_url,
-            'story_language' => $story->language,
+            'story_language' => $personalization['language'] ?? 'ar',
             'story_lesson' => $story->lesson_value,
             'child_name' => $personalization['child_name'],
             'child_age' => $personalization['child_age'],

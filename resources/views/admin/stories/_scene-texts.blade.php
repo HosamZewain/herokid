@@ -142,6 +142,14 @@
                                 >{{ old("scenes.$sceneNumber.alternate_text_template", $template?->alternate_text_template) }}</textarea>
                                 <x-input-error :messages="$errors->get("scenes.$sceneNumber.alternate_text_template")" class="mt-2" />
                             </div>
+                            @foreach(['male' => 'النص الإنجليزي للولد', 'female' => 'النص الإنجليزي للبنت'] as $englishGender => $englishLabel)
+                                @php($englishField = 'english_'.$englishGender.'_text_template')
+                                <div>
+                                    <label for="scene-{{ $englishField }}-{{ $sceneNumber }}" class="block text-sm font-bold">{{ $englishLabel }}</label>
+                                    <textarea id="scene-{{ $englishField }}-{{ $sceneNumber }}" name="scenes[{{ $sceneNumber }}][{{ $englishField }}]" rows="8" maxlength="10000" dir="ltr" class="mt-1 block w-full rounded-lg border-gray-300 leading-7">{{ old("scenes.$sceneNumber.$englishField", $template?->getAttribute($englishField)) }}</textarea>
+                                    <x-input-error :messages="$errors->get("scenes.$sceneNumber.$englishField")" class="mt-2" />
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                 </details>

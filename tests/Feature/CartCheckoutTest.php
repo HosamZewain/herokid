@@ -22,6 +22,32 @@ class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_checkout_keeps_independent_story_languages_and_correct_scene_text(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('bilingual-story', 'قصة لغتين', 100);
+        $story->update(['gender' => 'girl']);
+        foreach (range(1, 13) as $number) {
+            $story->sceneTemplates()->create(['scene_number' => $number,
+                'text_template' => 'ابتسمت {{child_name}}', 'alternate_text_template' => 'ابتسم {{child_name}}',
+                'english_male_text_template' => 'He smiled {{child_name}}', 'english_female_text_template' => 'She smiled {{child_name}}']);
+        }
+        foreach (['ar', 'en'] as $language) {
+            $this->post(route('cart.store', $story->slug), [...$this->cartPayload('Test '.$language, ''), 'language' => $language])
+                ->assertSessionHasNoErrors()->assertRedirect(route('cart.index'));
+        }
+        $country = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $governorate = DeliveryGovernorate::where('delivery_country_id', $country->id)->firstOrFail();
+        $this->post(route('checkout.store'), ['parent_name' => 'Synthetic Parent', 'phone' => '01000000000',
+            'delivery_country_id' => $country->id, 'delivery_governorate_id' => $governorate->id,
+            'city' => 'Test city', 'street' => 'Test street'])
+            ->assertSessionHasNoErrors()->assertRedirect(route('checkout.success'));
+        $orders = Order::where('story_id', $story->id)->get()->keyBy('language');
+        $this->assertCount(2, $orders);
+        $this->assertSame('She smiled Test en', $orders['en']->sceneTextSnapshots()->first()->rendered_text);
+        $this->assertSame('ابتسمت Test ar', $orders['ar']->sceneTextSnapshots()->first()->rendered_text);
+    }
+
     public function test_story_page_sets_session_cookie_for_cart_csrf_submission(): void
     {
         $story = $this->story('space-story', 'رحلة الفضاء', 100);

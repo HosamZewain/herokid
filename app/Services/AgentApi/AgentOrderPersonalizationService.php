@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
 use App\Services\Orders\OrderDetailsUpdateService;
+use App\Services\Orders\OrderStoryLanguageService;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\StoryAgeOptions;
@@ -79,6 +80,12 @@ class AgentOrderPersonalizationService
     ): array {
         $this->assertAllowedKeys($personalization, self::STORY_FIELDS);
         $validated = $this->validatePersonalization($personalization, true);
+        if (array_keys($validated) === ['language'] && $validated['language'] !== null) {
+            $previous = $order->language;
+            app(OrderStoryLanguageService::class)->change($order, $validated['language'], $agent, $reason);
+
+            return $this->response($order, $unitKey, ['language' => ['old' => $previous, 'new' => $validated['language']]], $reason, $agent, $request);
+        }
         $current = $order->fresh();
         $values = [
             'parent_name' => $current->parent_name,

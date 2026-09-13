@@ -4,6 +4,22 @@
     </x-slot>
 
     <x-slot name="headerActions">
+        @if($order->story_id && auth()->user()->hasPermission('orders.update'))
+            <details class="relative rounded-lg border border-gray-200 bg-white p-2 text-sm">
+                <summary class="cursor-pointer font-bold">لغة القصة: {{ $order->language === 'en' ? 'English' : 'العربية' }}</summary>
+                <form method="POST" action="{{ route('admin.orders.scene-snapshots.refresh', $order) }}" class="space-y-3 p-3">
+                    @csrf
+                    <input type="hidden" name="story_id" value="{{ $order->story_id }}">
+                    <select name="language" required aria-label="لغة القصة" class="rounded-lg border-gray-300">
+                        <option value="ar" @selected($order->language !== 'en')>العربية</option>
+                        <option value="en" @selected($order->language === 'en')>English</option>
+                    </select>
+                    <input name="reason" required maxlength="500" placeholder="سبب تغيير اللغة" aria-label="سبب تغيير اللغة" class="rounded-lg border-gray-300">
+                    <label class="block text-xs"><input type="checkbox" name="confirm_refresh" value="1" required> أوافق على تحديث النصوص باللغة المختارة، حتى لإعادة الطباعة. الصور والمرفقات لا تتغير.</label>
+                    <button class="rounded-lg bg-indigo-600 px-3 py-2 text-white">تحديث لغة النصوص</button>
+                </form>
+            </details>
+        @endif
         @can('production_studio.ai_review')
             <button type="button"
                     class="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"

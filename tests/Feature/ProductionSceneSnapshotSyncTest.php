@@ -6,9 +6,13 @@ use App\Models\Order;
 use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\Orders\OrderSceneTextService;
+use App\Services\Orders\OrderStoryLanguageService;
 use App\Services\Orders\ProductionSceneSnapshotRefreshService;
 use App\Services\Stories\ProductionSceneVariantResolver;
+use App\Services\Stories\StoryLanguageAvailability;
+use App\Services\Stories\StorySceneTemplateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +21,94 @@ use Tests\TestCase;
 class ProductionSceneSnapshotSyncTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_language_switch_is_atomic_for_completed_order_and_preserves_identity(): void
+    {
+        [$order, $story] = $this->fixture('boy');
+        $order->update(['status' => 'delivered', 'printing_status' => 'completed', 'language' => 'ar']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $service = app(OrderStoryLanguageService::class);
+        $before = $order->sceneTextSnapshots()->get()->toArray();
+        try {
+            $service->change($order, 'en', $admin, 'Customer reprint request');
+            $this->fail('Missing English must reject switching');
+        } catch (ValidationException) {
+            $this->assertSame('ar', $order->fresh()->language);
+            $this->assertSame($before, $order->sceneTextSnapshots()->get()->toArray());
+        }
+        $story->sceneTemplates()->update(['english_male_text_template' => 'He smiles {{child_name}}.']);
+        $service->change($order, 'en', $admin, 'Customer reprint request');
+        $this->assertSame('en', $order->fresh()->language);
+        $this->assertSame('delivered', $order->fresh()->status);
+        $this->assertSame('completed', $order->fresh()->printing_status);
+        $this->assertSame(array_column($before, 'id'), $order->sceneTextSnapshots()->pluck('id')->all());
+        $this->assertStringStartsWith('He smiles', $order->sceneTextSnapshots()->first()->rendered_text);
+        $service->change($order, 'ar', $admin, 'Customer Arabic reprint');
+        $this->assertSame('ar', $order->fresh()->language);
+        $this->assertStringStartsWith('استيقظ ', $order->sceneTextSnapshots()->first()->rendered_text);
+    }
+
+    public function test_english_gender_variants_flow_to_api_and_refresh_without_changing_sibling(): void
+    {
+        [$arabic, $story] = $this->fixture('boy');
+        $story->sceneTemplates()->update(['english_male_text_template' => 'He smiled, {{child_name}}.', 'english_female_text_template' => 'She smiled, {{child_name}}.']);
+        $arabicBefore = $arabic->sceneTextSnapshots()->get()->toArray();
+        $admin = User::factory()->create(['role' => 'admin', 'agent_api_enabled' => true]);
+        $token = $admin->createToken('language-test', ['agent', 'agent:orders.read'])->plainTextToken;
+        foreach (['boy' => 'male', 'girl' => 'female', 'male' => 'male', 'female' => 'female'] as $gender => $variant) {
+            $order = $arabic->replicate();
+            $order->order_number .= '-'.$gender;
+            $order->language = 'en';
+            $order->child_gender = $gender;
+            $order->save();
+            app(OrderSceneTextService::class)->snapshotForOrder($order, $story->fresh());
+            $response = $this->withToken($token)->getJson('/api/agent/studio/orders/'.$order->order_number)->assertOk()->json();
+            $unit = collect($response['production_stories'])->firstWhere('production_unit_id', 'story:'.$order->id);
+            $this->assertSame('en', $unit['story']['language']);
+            $this->assertCount(13, $unit['scenes']);
+            $this->assertSame(range(1, 13), array_column($unit['scenes'], 'number'));
+            $this->assertSame($variant, $unit['scenes'][0]['metadata']['text_variant']);
+            $this->assertStringStartsWith($variant === 'male' ? 'He smiled' : 'She smiled', $unit['scenes'][0]['text']);
+            $ids = $order->sceneTextSnapshots()->pluck('id')->all();
+            $story->sceneTemplates()->update(['english_'.$variant.'_text_template' => 'Updated '.$variant.' {{child_name}}.']);
+            app(ProductionSceneSnapshotRefreshService::class)->refresh($order->id, $story->id, $admin, 'English correction', true);
+            $this->assertSame($ids, $order->sceneTextSnapshots()->pluck('id')->all());
+            $after = $this->withToken($token)->getJson('/api/agent/studio/orders/'.$order->order_number)->assertOk()->json();
+            $this->assertNotSame($response['order']['source_revision'], $after['order']['source_revision']);
+            $story->sceneTemplates()->update(['english_male_text_template' => 'He smiled, {{child_name}}.', 'english_female_text_template' => 'She smiled, {{child_name}}.']);
+        }
+        $this->assertSame($arabicBefore, $arabic->sceneTextSnapshots()->get()->toArray());
+    }
+
+    public function test_english_availability_requires_all_scenes_and_both_genders(): void
+    {
+        [$order, $story] = $this->fixture();
+        $availability = app(StoryLanguageAvailability::class);
+        $this->assertFalse($availability->english($story));
+        $story->sceneTemplates()->update(['english_male_text_template' => 'Boy', 'english_female_text_template' => 'Girl']);
+        $this->assertTrue($availability->english($story));
+        $story->sceneTemplates()->first()->update(['english_female_text_template' => '  ']);
+        $this->assertFalse($availability->english($story));
+        $order->language = 'en';
+        $this->assertSame('  ', app(ProductionSceneVariantResolver::class)->resolve($story->sceneTemplates()->first(), $order, $story)['text']);
+        $this->post(route('cart.store', $story->slug), ['language' => 'en'])->assertSessionHasErrors('language');
+        $this->post(route('cart.store', $story->slug), ['language' => 'fr'])->assertSessionHasErrors('language');
+    }
+
+    public function test_cart_language_defaults_to_arabic_and_english_template_storage_is_preserved(): void
+    {
+        [$order, $story] = $this->fixture();
+        $builder = app(StoryCartItemBuilder::class);
+        $data = ['child_name' => 'Test', 'child_age' => 4, 'child_gender' => 'boy'];
+        $this->assertSame('ar', $builder->build($story, 'A', $data, [])['story_language']);
+        $this->assertSame('en', $builder->build($story, 'B', [...$data, 'language' => 'en'], [])['story_language']);
+        $service = app(StorySceneTemplateService::class);
+        $service->sync($story, [1 => ['english_male_text_template' => 'He {{child_name}}', 'english_female_text_template' => 'She {{child_name}}']]);
+        $this->assertSame('She {{child_name}}', $story->sceneTemplates()->first()->english_female_text_template);
+        $service->sync($story, [1 => ['text_template' => 'عربي']]);
+        $this->assertSame('He {{child_name}}', $story->sceneTemplates()->first()->english_male_text_template);
+        $this->assertArrayHasKey('scenes.1.english_male_text_template', $service->validationErrors([1 => ['english_male_text_template' => '{{unsupported}}']]));
+    }
 
     private function fixture(string $gender = 'female'): array
     {

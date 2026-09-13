@@ -127,8 +127,8 @@ class AgentStudioOrderResource extends JsonResource
 
     private function language(Order $order): string
     {
-        return in_array($order->language ?: $order->story->language, ['ar', 'en'], true)
-            ? ($order->language ?: $order->story->language)
+        return in_array($order->language, ['ar', 'en'], true)
+            ? $order->language
             : 'ar';
     }
 }

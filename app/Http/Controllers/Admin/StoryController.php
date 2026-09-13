@@ -110,6 +110,8 @@ class StoryController extends Controller
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
             'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_male_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_female_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];
@@ -192,6 +194,8 @@ class StoryController extends Controller
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
             'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_male_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_female_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];

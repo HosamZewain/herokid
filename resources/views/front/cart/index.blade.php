@@ -318,6 +318,7 @@
                                                     @if($itemType === 'story')
                                                         <p class="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-extrabold text-indigo-600 mb-2">قصة مخصصة</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['story_title'] ?? 'قصة' }}</h3>
+                                                        <p class="text-sm text-slate-500">لغة القصة: {{ ($item['story_language'] ?? 'ar') === 'en' ? 'English' : 'العربية' }}</p>
                                                     @elseif($itemType === 'package')
                                                         <p class="inline-flex rounded-full bg-fuchsia-50 px-3 py-1 text-xs font-extrabold text-fuchsia-700 mb-2">باقة موفرة</p>
                                                         <h3 class="text-lg sm:text-xl font-black text-slate-950">{{ $item['package_name'] ?? 'باقة HeroKid' }}</h3>

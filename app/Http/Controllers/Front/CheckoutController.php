@@ -21,6 +21,7 @@ use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
+use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
@@ -29,6 +30,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CheckoutController extends Controller
 {
@@ -94,6 +96,13 @@ class CheckoutController extends Controller
         $storyItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $productItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') !== 'story');
         $stories = Story::whereIn('id', $storyItems->pluck('story_id')->filter()->all())->get()->keyBy('id');
+        foreach ($storyItems as $item) {
+            $language = $item['story_language'] ?? 'ar';
+            $targetStory = $stories->get($item['story_id']);
+            if (! in_array($language, ['ar', 'en'], true) || ($language === 'en' && (! $targetStory || ! app(StoryLanguageAvailability::class)->english($targetStory)))) {
+                throw ValidationException::withMessages(['language' => 'النسخة الإنجليزية غير مكتملة. يرجى مراجعة القصة في السلة.']);
+            }
+        }
         $products = Product::with('variants')->whereIn('id', $productItems->pluck('product_id')->filter()->all())->get()->keyBy('id');
 
         $incompletePersonalizedProduct = $productItems->first(function (array $item) use ($products): bool {
@@ -203,7 +212,7 @@ class CheckoutController extends Controller
                         'child_name' => $childName,
                         'child_age' => $childAge,
                         'child_gender' => $childGender,
-                        'language' => $story->language,
+                        'language' => $item['story_language'] ?? 'ar',
                         'lesson' => $story->lesson_value,
                         'interests' => $item['interests'] ?? null,
                         'gift_note' => $item['gift_note'] ?? null,
@@ -252,7 +261,7 @@ class CheckoutController extends Controller
                         'personalization_mode' => 'collect_child_details',
                         'item_snapshot' => [
                             'story_slug' => $story->slug,
-                            'story_language' => $story->language,
+                            'story_language' => $item['story_language'] ?? 'ar',
                             'lesson' => $story->lesson_value,
                             'regular_price' => $storyRegularPrice,
                             'offer_applied' => $storyOfferApplied,

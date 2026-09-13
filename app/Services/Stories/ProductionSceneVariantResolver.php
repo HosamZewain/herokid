@@ -24,6 +24,13 @@ class ProductionSceneVariantResolver
     {
         $base = self::gender($story?->gender);
         $child = self::gender($order->child_gender);
+        if (($order->language ?? 'ar') === 'en') {
+            // Unspecified gender uses the explicitly documented male English default.
+            $gender = $child ?? 'male';
+
+            return ['text' => $template?->getAttribute('english_'.$gender.'_text_template'),
+                'variant' => 'original', 'resolved_variant' => $gender, 'uses_fallback' => false];
+        }
         $alternate = $base !== null && $child !== null && $base !== $child;
         if ($alternate && filled($template?->alternate_text_template)) {
             return ['text' => $template->alternate_text_template, 'variant' => 'alternate',

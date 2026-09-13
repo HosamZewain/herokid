@@ -58,6 +58,7 @@ class StorySceneTemplateRenderer
             'story_title' => trim((string) $story?->title),
             'child_gender' => trim((string) $order->child_gender),
             'story_gender' => trim((string) $story?->gender),
+            'language' => $order->language ?? 'ar',
         ];
     }
 }
