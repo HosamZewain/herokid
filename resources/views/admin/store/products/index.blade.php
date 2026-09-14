@@ -38,6 +38,17 @@
                                     @else
                                         <span class="font-black text-gray-900">{{ $product->name_ar }}</span>
                                     @endcan
+                                    @can('store.products.create')
+                                        <div class="mt-1">
+                                            <a href="{{ route('admin.products.duplicate', $product) }}" class="inline-grid h-7 w-7 place-items-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100" title="تكرار المنتج" aria-label="تكرار المنتج {{ $product->name_ar }}">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5" aria-hidden="true">
+                                                    <rect x="8" y="8" width="11" height="11" rx="2"></rect>
+                                                    <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                                                </svg>
+                                                <span class="sr-only">تكرار</span>
+                                            </a>
+                                        </div>
+                                    @endcan
                                     <div class="text-xs text-gray-400">{{ $product->slug }}</div>
                                 </td>
                                 <td class="px-4 py-3">{{ $product->category?->name_ar ?? '-' }}</td>

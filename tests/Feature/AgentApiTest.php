@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AdminActivityLog;
+use App\Models\AgentApiIdempotencyKey;
 use App\Models\Order;
 use App\Models\OrderAdminNote;
 use App\Models\OrderGroupAssignment;
@@ -12,8 +13,11 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
+use App\Services\AgentApi\AgentProductScope;
+use App\Services\Orders\OrderSceneTextService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
@@ -114,6 +118,52 @@ class AgentApiTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $token->id]);
     }
 
+    public function test_admin_can_restrict_a_products_token_to_selected_products(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+        $allowed = Product::create([
+            'name_ar' => 'ستيكر مخصص للوكيل',
+            'slug' => 'agent-selected-sticker',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}}.',
+        ]);
+
+        $response = $this->actingAs($manager)->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'one-product-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::PRODUCTS,
+            'restrict_products' => true,
+            'product_ids' => [$allowed->id],
+        ])->assertRedirect(route('admin.agent-api-tokens.index'))
+            ->assertSessionHas('new_agent_token');
+
+        $token = PersonalAccessToken::query()->where('name', 'one-product-worker')->firstOrFail();
+        $this->assertSame([$allowed->id], AgentProductScope::productIdsFromAbilities($token->abilities));
+        $this->assertContains('agent:catalog.products', $token->abilities);
+
+        $this->actingAs($manager)->get(route('admin.agent-api-tokens.index'))
+            ->assertOk()
+            ->assertSee('ستيكر مخصص للوكيل');
+    }
+
+    public function test_specific_product_token_requires_products_scope_and_a_selection(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+
+        $this->actingAs($manager)->from(route('admin.agent-api-tokens.index'))->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'invalid-product-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::STORIES,
+            'restrict_products' => true,
+        ])->assertRedirect(route('admin.agent-api-tokens.index'))
+            ->assertSessionHasErrors('catalog_scope');
+    }
+
     public function test_admin_can_explicitly_enable_existing_order_rework_on_a_new_token(): void
     {
         $manager = $this->agent();
@@ -130,6 +180,32 @@ class AgentApiTest extends TestCase
         $token = PersonalAccessToken::query()->where('name', 'rework-worker')->firstOrFail();
         $this->assertContains('agent:orders.rework', $token->abilities);
         $this->assertContains('agent:orders.edit-personalization', $token->abilities);
+    }
+
+    public function test_admin_can_issue_an_identity_only_token_that_cannot_use_production_queue(): void
+    {
+        $manager = $this->agent();
+        $agent = $this->agent(false);
+
+        $response = $this->actingAs($manager)->post(route('admin.agent-api-tokens.store'), [
+            'agent_user_id' => $agent->id,
+            'name' => 'identity-only-worker',
+            'expires_in_days' => 30,
+            'catalog_scope' => AgentCatalogScope::STORIES,
+            'identity_only' => true,
+        ])->assertRedirect(route('admin.agent-api-tokens.index'))
+            ->assertSessionHas('new_agent_token');
+
+        $token = PersonalAccessToken::query()->where('name', 'identity-only-worker')->firstOrFail();
+        $this->assertContains('agent:orders.identity', $token->abilities);
+        $this->assertContains('agent:catalog.stories', $token->abilities);
+        $this->assertNotContains('agent:orders.acquire', $token->abilities);
+        $this->assertNotContains('agent:orders.upload-attachment', $token->abilities);
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($response->getSession()->get('new_agent_token'))
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'identity-cannot-production'])
+            ->assertForbidden();
     }
 
     public function test_agent_token_management_page_requires_its_sensitive_permission(): void
@@ -182,6 +258,86 @@ class AgentApiTest extends TestCase
 
         $this->withToken($token)->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'acquire-run-1'])
             ->assertStatus(409)->assertJsonPath('error', 'IDEMPOTENCY_KEY_REUSED');
+    }
+
+    public function test_empty_queue_result_is_not_stale_when_the_same_key_is_used_after_a_new_order_arrives(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'polling-key'])
+            ->assertOk()
+            ->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS')
+            ->assertJsonPath('queue.new_checkout_groups', 0);
+        $this->assertDatabaseCount('agent_api_idempotency_keys', 0);
+
+        $order = $this->storyOrder('ARRIVED-LATER', 'HK-ARRIVED-LATER');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'polling-key'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference);
+    }
+
+    public function test_previous_cached_empty_queue_response_is_refreshed_after_deployment(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+        $key = 'legacy-empty-key';
+        $fingerprint = hash('sha256', json_encode([
+            'method' => 'POST',
+            'path' => 'api/agent/checkouts/acquire-next',
+            'payload' => [],
+            'files' => [],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        AgentApiIdempotencyKey::query()->create([
+            'user_id' => $agent->id,
+            'action' => 'checkouts.acquire-next',
+            'key_hash' => hash('sha256', $key),
+            'request_fingerprint' => $fingerprint,
+            'status' => 'completed',
+            'response_status' => 200,
+            'response_body' => ['success' => true, 'checkout' => null, 'reason' => 'NO_AVAILABLE_ORDERS'],
+        ]);
+        $order = $this->storyOrder('AFTER-LEGACY-EMPTY', 'HK-AFTER-LEGACY-EMPTY');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => $key])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference);
+    }
+
+    public function test_acquire_next_scans_past_more_than_fifty_ineligible_checkouts(): void
+    {
+        $agent = $this->agent();
+        $token = $this->token($agent);
+
+        foreach (range(1, 51) as $index) {
+            $this->productOrder('READY-'.$index, 'HK-READY-'.$index, null);
+        }
+        $eligible = $this->storyOrder('ELIGIBLE-AFTER-FIFTY', 'HK-ELIGIBLE-AFTER-FIFTY');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'past-fifty'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+    }
+
+    public function test_empty_queue_diagnostics_explain_catalog_scope_exclusions(): void
+    {
+        $agent = $this->agent();
+        $token = $this->scopedToken($agent, AgentCatalogScope::PRODUCTS);
+        $this->storyOrder('STORY-OUTSIDE-SCOPE', 'HK-STORY-OUTSIDE-SCOPE');
+
+        $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'scope-diagnostics'])
+            ->assertOk()
+            ->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS')
+            ->assertJsonPath('queue.token_catalog_scope', AgentCatalogScope::PRODUCTS)
+            ->assertJsonPath('queue.new_checkout_groups', 1)
+            ->assertJsonPath('queue.outside_token_scope', 1)
+            ->assertJsonPath('queue.eligible_now', 0);
     }
 
     public function test_agent_can_process_revision_queue_in_order_and_read_permanent_team_notes(): void
@@ -371,6 +527,112 @@ class AgentApiTest extends TestCase
         $this->assertSame('generating', $story->refresh()->status);
     }
 
+    public function test_identity_only_workflow_handles_multiple_stories_and_defers_mixed_products(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $token = $this->identityToken($agent);
+        $first = $this->storyOrder('IDENTITY-MIXED', 'HK-IDENTITY-STORY-1', true);
+        $second = $this->storyOrder('IDENTITY-MIXED', 'HK-IDENTITY-STORY-2', true);
+        $product = $this->productOrder('IDENTITY-MIXED', 'HK-IDENTITY-PRODUCT', 'Create this product.');
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-identity', [], ['Idempotency-Key' => 'identity-acquire-mixed'])
+            ->assertOk()
+            ->assertJsonPath('workflow', 'story_identity_only')
+            ->assertJsonPath('checkout.story_orders_count', 2)
+            ->assertJsonPath('checkout.identities_required', 2)
+            ->assertJsonPath('checkout.deferred_products_count', 1);
+
+        $reference = $acquired->json('checkout.reference');
+        $this->assertDatabaseHas('order_group_assignments', [
+            'checkout_group_key' => 'IDENTITY-MIXED',
+            'assigned_to_user_id' => $agent->id,
+        ]);
+        $this->assertSame('new', $first->fresh()->status);
+        $this->assertSame('new', $second->fresh()->status);
+        $this->assertSame('new', $product->fresh()->status);
+
+        $context = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/identity-context")
+            ->assertOk()
+            ->assertJsonCount(2, 'identity_units')
+            ->assertJsonCount(1, 'deferred_units')
+            ->assertJsonPath('deferred_units.0.instruction', 'DEFERRED_DO_NOT_PROCESS_IN_IDENTITY_WORKFLOW')
+            ->assertJsonMissingPath('production_units');
+        $this->assertStringContainsString('Create ONLY the reusable child hero identity', $context->json('identity_units.0.identity_prompt'));
+        $this->assertStringContainsString('/api/agent/orders/', $context->json('identity_units.0.identity_prompt'));
+        $this->assertStringContainsString('/identity-references/child-photos/', $context->json('identity_units.0.identity_prompt'));
+        $this->assertStringNotContainsString('Create this product.', json_encode($context->json(), JSON_THROW_ON_ERROR));
+
+        $referenceResponse = $this->withToken($token)
+            ->get($context->json('identity_units.0.reference_files.0.url'))
+            ->assertOk();
+        $this->assertStringContainsString('no-store', (string) $referenceResponse->headers->get('Cache-Control'));
+
+        $this->withToken($token)
+            ->post("/api/agent/orders/{$first->id}/identity-preview", [
+                'identity' => UploadedFile::fake()->image('first-identity.png', 1200, 800),
+            ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'identity-first-upload'])
+            ->assertCreated()
+            ->assertJsonPath('identity.unit_key', 'identity:'.$first->id);
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-identity", [], ['Idempotency-Key' => 'identity-complete-too-early'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'IDENTITY_FILES_MISSING')
+            ->assertJsonPath('details.order_ids.0', $second->id);
+
+        $this->withToken($token)
+            ->post("/api/agent/orders/{$second->id}/identity-preview", [
+                'identity' => UploadedFile::fake()->image('second-identity.webp', 1200, 800),
+            ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'identity-second-upload'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-identity", [], ['Idempotency-Key' => 'identity-complete-success'])
+            ->assertOk()
+            ->assertJsonPath('status', 'waiting_customer')
+            ->assertJsonPath('story_identities_count', 2)
+            ->assertJsonPath('deferred_products_count', 1)
+            ->assertJsonPath('already_completed', false);
+
+        $this->assertSame('waiting_customer', $first->fresh()->status);
+        $this->assertSame('waiting_customer', $second->fresh()->status);
+        $this->assertSame('waiting_customer', $product->fresh()->status);
+        $this->assertNotNull($first->fresh()->child_identity_approved_attempt_id);
+        $this->assertNotNull($second->fresh()->child_identity_approved_attempt_id);
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-identity", [], ['Idempotency-Key' => 'identity-complete-repeat'])
+            ->assertOk()
+            ->assertJsonPath('already_completed', true);
+    }
+
+    public function test_identity_queue_rejects_product_token_and_skips_story_without_photos(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $productToken = $this->scopedToken($agent, AgentCatalogScope::PRODUCTS);
+
+        $this->withToken($productToken)
+            ->postJson('/api/agent/checkouts/acquire-next-identity', [], ['Idempotency-Key' => 'product-identity-forbidden'])
+            ->assertForbidden();
+
+        $storyToken = $this->identityToken($agent);
+        $this->app['auth']->forgetGuards();
+        $missingPhotos = $this->storyOrder('IDENTITY-NO-PHOTOS', 'HK-IDENTITY-NO-PHOTOS');
+        $eligible = $this->storyOrder('IDENTITY-HAS-PHOTOS', 'HK-IDENTITY-HAS-PHOTOS', true);
+
+        $this->withToken($storyToken)
+            ->postJson('/api/agent/checkouts/acquire-next-identity', [], ['Idempotency-Key' => 'identity-skip-no-photos'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+
+        $this->assertNull($missingPhotos->fresh()->groupAssignment);
+        $this->assertNotNull($eligible->fresh()->groupAssignment);
+    }
+
     public function test_product_only_token_skips_story_checkouts(): void
     {
         $agent = $this->agent();
@@ -385,6 +647,166 @@ class AgentApiTest extends TestCase
         $this->assertSame($product->checkoutReference->short_reference, $response->json('checkout.reference'));
         $this->assertSame('new', $story->refresh()->status);
         $this->assertSame('generating', $product->refresh()->status);
+    }
+
+    public function test_specific_product_token_only_acquires_complete_eligible_checkouts_and_finishes_ready_preview(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $allowedProduct = Product::create([
+            'name_ar' => 'المنتج المسموح',
+            'slug' => 'allowed-agent-product',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}} for {{child_full_name}}.',
+        ]);
+        $blockedProduct = Product::create([
+            'name_ar' => 'منتج غير مسموح',
+            'slug' => 'blocked-agent-product',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create {{product_name}}.',
+        ]);
+        $token = $agent->createToken('specific-product', [
+            ...$this->abilities(),
+            ...AgentCatalogScope::abilities(AgentCatalogScope::PRODUCTS),
+            ...AgentProductScope::abilities([$allowedProduct->id]),
+        ])->plainTextToken;
+
+        $blocked = $this->productOrder('BLOCKED-PRODUCT', 'HK-BLOCKED-PRODUCT', null, $blockedProduct);
+        $mixed = $this->productOrder('MIXED-PRODUCTS', 'HK-MIXED-PRODUCTS', null, $allowedProduct);
+        OrderItem::create([
+            'order_id' => $mixed->id,
+            'item_type' => 'product',
+            'product_id' => $blockedProduct->id,
+            'title' => $blockedProduct->name_ar,
+            'unit_price_cents' => 10000,
+            'quantity' => 1,
+            'total_price_cents' => 10000,
+            'personalization_snapshot' => ['child_name' => 'Ali'],
+        ]);
+        $eligible = $this->productOrder('ALLOWED-PRODUCT', 'HK-ALLOWED-PRODUCT', null, $allowedProduct);
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'specific-product-acquire'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+
+        $this->assertSame('new', $blocked->refresh()->status);
+        $this->assertSame('new', $mixed->refresh()->status);
+        $this->assertSame('generating', $eligible->refresh()->status);
+
+        $reference = $acquired->json('checkout.reference');
+        $context = $this->withToken($token)->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk()
+            ->assertJsonCount(1, 'production_units')
+            ->assertJsonPath('production_units.0.product_id', $allowedProduct->id);
+        $unitKey = $context->json('production_units.0.unit_key');
+
+        $this->withToken($token)->post("/api/agent/orders/{$eligible->id}/attachments", [
+            'production_unit_key' => $unitKey,
+            'attachments' => [UploadedFile::fake()->create('finished.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'specific-product-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'specific-product-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview');
+        $this->assertSame('ready_preview', $eligible->refresh()->status);
+    }
+
+    public function test_multi_component_product_is_returned_and_completed_as_independent_production_units(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent);
+        $product = Product::create([
+            'name_ar' => 'باقة إنتاج متعددة',
+            'slug' => 'multi-component-agent-product',
+            'price_cents' => 25000,
+            'is_active' => true,
+        ]);
+        $product->productionComponents()->createMany([
+            [
+                'stable_key' => 'book',
+                'name' => 'الكتاب',
+                'prompt_template' => 'كتاب {{child_full_name}} — {{component_quantity}} نسخة',
+                'quantity_per_item' => 1,
+                'sort_order' => 10,
+                'is_active' => true,
+            ],
+            [
+                'stable_key' => 'stickers',
+                'name' => 'الاستيكرات',
+                'prompt_template' => 'استيكرات {{child_full_name}} — {{component_quantity}} ورقة',
+                'quantity_per_item' => 3,
+                'sort_order' => 20,
+                'is_active' => true,
+            ],
+        ]);
+        $order = $this->productOrder('MULTI-COMPONENT-AGENT', 'HK-MULTI-COMPONENT-AGENT', null, $product);
+        $item = $order->items()->firstOrFail();
+        $item->update(['quantity' => 2, 'total_price_cents' => 50000]);
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'multi-component-acquire'])
+            ->assertOk();
+        $reference = $acquired->json('checkout.reference');
+        $bookKey = 'product:'.$item->id.':component:book';
+        $stickersKey = 'product:'.$item->id.':component:stickers';
+
+        $context = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk()
+            ->assertJsonCount(2, 'production_units')
+            ->assertJsonPath('production_units.0.unit_key', $bookKey)
+            ->assertJsonPath('production_units.0.production_component.key', 'book')
+            ->assertJsonPath('production_units.0.quantity', 2)
+            ->assertJsonPath('production_units.1.unit_key', $stickersKey)
+            ->assertJsonPath('production_units.1.production_component.key', 'stickers')
+            ->assertJsonPath('production_units.1.quantity', 6);
+        $this->assertSame('كتاب Ali — 2 نسخة', $context->json('production_units.0.production_prompt'));
+        $this->assertSame('استيكرات Ali — 6 ورقة', $context->json('production_units.1.production_prompt'));
+
+        $this->withToken($token)
+            ->patchJson("/api/agent/orders/{$order->id}/personalization", [
+                'production_unit_key' => $stickersKey,
+                'personalization' => ['child_name' => 'ليلى أحمد'],
+                'change_reason' => 'Correct customer personalization.',
+            ], ['Idempotency-Key' => 'multi-component-personalization'])
+            ->assertOk()
+            ->assertJsonPath('production_unit_key', $stickersKey);
+
+        $updatedContext = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk();
+        $this->assertSame('كتاب ليلى أحمد — 2 نسخة', $updatedContext->json('production_units.0.production_prompt'));
+        $this->assertSame('استيكرات ليلى أحمد — 6 ورقة', $updatedContext->json('production_units.1.production_prompt'));
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => $bookKey,
+            'attachments' => [UploadedFile::fake()->create('book.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'multi-component-book-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'multi-component-incomplete'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'PRODUCTION_FILES_MISSING')
+            ->assertJsonPath('details.production_units.0', $stickersKey);
+
+        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+            'production_unit_key' => $stickersKey,
+            'attachments' => [UploadedFile::fake()->create('stickers.pdf', 100, 'application/pdf')],
+        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'multi-component-stickers-file'])
+            ->assertCreated();
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'multi-component-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview');
+        $this->assertSame('ready_preview', $order->fresh()->status);
     }
 
     public function test_legacy_unscoped_agent_token_keeps_access_to_both_catalog_types(): void
@@ -631,6 +1053,33 @@ class AgentApiTest extends TestCase
         $this->assertSame('en', $order->fresh()->language);
     }
 
+    public function test_agent_language_switch_uses_existing_permission_acquisition_and_idempotency(): void
+    {
+        $agent = $this->agent();
+        $token = $this->reworkToken($agent, AgentCatalogScope::STORIES);
+        $order = $this->storyOrder('LANGUAGE-REWORK', 'HK-LANGUAGE-REWORK', true);
+        foreach (range(1, 13) as $number) {
+            $order->story->sceneTemplates()->create(['scene_number' => $number, 'text_template' => 'نص عربي',
+                'english_female_text_template' => 'She smiled.']);
+        }
+        app(OrderSceneTextService::class)->snapshotForOrder($order, $order->story);
+        $payload = ['production_unit_key' => 'story:'.$order->id, 'personalization' => ['language' => 'en'], 'change_reason' => 'Customer requested English'];
+        $url = "/api/agent/orders/{$order->id}/personalization";
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'unacquired-language'])->assertForbidden();
+        $order->update(['status' => 'revision_requested']);
+        $this->withToken($token)->postJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/acquire', [], ['Idempotency-Key' => 'language-acquire'])->assertOk();
+        $ids = $order->sceneTextSnapshots()->pluck('id')->all();
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'language-switch'])->assertOk();
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'language-switch'])->assertOk();
+        $this->assertSame('en', $order->fresh()->language);
+        $this->assertSame('She smiled.', $order->sceneTextSnapshots()->first()->rendered_text);
+        $this->assertSame($ids, $order->sceneTextSnapshots()->pluck('id')->all());
+        $this->assertSame(13, DB::table('order_scene_text_snapshot_revisions')->count());
+        $readOnly = $agent->createToken('read-only', ['agent', 'agent:orders.read'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($readOnly)->patchJson($url, $payload, ['Idempotency-Key' => 'denied-language'])->assertForbidden();
+    }
+
     public function test_agent_rework_rejects_cancelled_or_shipment_created_checkout(): void
     {
         $agent = $this->agent();
@@ -702,6 +1151,14 @@ class AgentApiTest extends TestCase
         )->plainTextToken;
     }
 
+    private function identityToken(User $user): string
+    {
+        return $user->createToken(
+            'identity-agent-test',
+            ['agent', 'agent:orders.identity', 'agent:catalog.stories'],
+        )->plainTextToken;
+    }
+
     private function abilities(): array
     {
         return ['agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.update-status', 'agent:orders.upload-attachment', 'agent:orders.upload-preview'];
@@ -740,9 +1197,9 @@ class AgentApiTest extends TestCase
         ]);
     }
 
-    private function productOrder(string $group, string $number, ?string $prompt): Order
+    private function productOrder(string $group, string $number, ?string $prompt, ?Product $product = null): Order
     {
-        $product = Product::create([
+        $product ??= Product::create([
             'name_ar' => 'منتج '.$number,
             'slug' => strtolower($number),
             'price_cents' => 10000,

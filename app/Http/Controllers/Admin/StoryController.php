@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Services\Stories\StoryProductionTextSyncService;
 use App\Services\Stories\StorySceneParser;
 use App\Services\Stories\StorySceneTemplateService;
 use App\Support\AdminActivityLogger;
@@ -109,6 +110,8 @@ class StoryController extends Controller
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
             'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_male_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_female_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];
@@ -191,6 +194,8 @@ class StoryController extends Controller
             'scenes.*.title' => 'nullable|string|max:255',
             'scenes.*.text_template' => 'nullable|string|max:10000',
             'scenes.*.alternate_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_male_text_template' => 'nullable|string|max:10000',
+            'scenes.*.english_female_text_template' => 'nullable|string|max:10000',
         ]);
 
         $sceneInput = $validated['scenes'] ?? [];
@@ -234,7 +239,16 @@ class StoryController extends Controller
             request: $request,
         );
 
-        return redirect()->route('admin.stories.index')->with('success', 'تم تحديث القصة بنجاح!');
+        // Catalog text corrections are an explicit production-text synchronization,
+        // including printed orders; previous snapshots are archived, assets untouched.
+        $sync = app(StoryProductionTextSyncService::class)->sync($story, $request->user(), allowCompleted: true);
+        $response = redirect()->route('admin.stories.index')->with('success',
+            'تم تحديث القصة بنجاح! تم تحديث نصوص '.count($sync['updated_units']).' طلب مع حفظ النسخ السابقة.');
+        if ($sync['blocked_units'] !== []) {
+            $response->with('error', 'تعذر تحديث بعض الطلبات بأمان: '.collect($sync['blocked_units'])->map(fn ($unit) => $unit['unit'].' — '.$unit['reason'])->implode('؛ '));
+        }
+
+        return $response;
     }
 
     /**

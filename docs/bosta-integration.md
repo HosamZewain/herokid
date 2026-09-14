@@ -29,9 +29,26 @@ BOSTA_WEBHOOK_SECRET=replace-with-a-long-random-secret
 BOSTA_TIMEOUT=30
 BOSTA_CONNECT_TIMEOUT=10
 BOSTA_RETRIES=2
+BOSTA_PICKUP_SYNC_ENABLED=true
+BOSTA_PICKUP_SYNC_INTERVAL_MINUTES=5
+BOSTA_PICKUP_SYNC_PAGES=5
 ```
 
 Never commit the API key or webhook secret. After changing `.env`, rebuild Laravel's configuration cache.
+
+## Customer checkout address
+
+When Bosta is enabled and its address catalog is available, the public website keeps the address flow simple and stores the official provider identity at checkout:
+
+1. The customer chooses the normal HeroKid delivery governorate. This remains the source for the delivery fee.
+2. HeroKid maps that governorate to the matching Bosta city without exposing technical IDs.
+3. The customer chooses an Arabic-labelled area from Bosta's drop-off-enabled districts.
+4. The customer enters the street and building number. Extra directions or a landmark are optional.
+5. The order delivery snapshot stores both the readable names and the Bosta city, district, and zone IDs.
+
+Shipment creation uses the saved `bosta_city_id` and `bosta_district_id` automatically. The administrator can still review or override the address before creating a shipment, and legacy orders without provider IDs continue through the existing name-matching/manual-review path.
+
+The public district endpoint is read-only, rate limited, and returns only the safe city/district catalog fields. Bosta credentials are never sent to the browser. City and district lists use the existing one-day server cache to avoid a provider request for every customer interaction.
 
 ## Admin workflow
 
@@ -41,13 +58,19 @@ Administrators with the relevant permissions use the following workflow:
 2. Open the Bosta panel on that order, review and optionally edit the receiver, phone, address, and operational COD.
 3. Confirm delivery creation. HeroKid sends the reviewed data, the configured business location, a `Small` parcel, and `allowToOpenPackage=false`.
 4. After Bosta confirms creation, HeroKid moves the checkout shipping status to `shipment_created` (تم إنشاء شحنة).
-5. Open `/admin/bosta`; its pickup table contains only created deliveries that have not been attached to a pickup.
-6. Select deliveries and request a pickup manually for a chosen date, or open their generated A4 AWB PDF.
+5. Open `/admin/bosta`; HeroKid periodically imports recent pickups created directly in the Bosta dashboard and links them to local shipments by Bosta delivery ID or tracking number.
+6. The active table offers selection only for deliveries that have no active pickup and no provider status proving that Bosta already scheduled or received them. Select those deliveries and request a pickup manually, or open their generated A6/A4 AWB PDF.
 7. Follow the current Bosta state and tracking number from the order page.
 
 The Bosta page may show ready checkouts as shortcuts, but delivery creation always takes place after reviewing the editable data on the order page.
 
 Failed delivery creation is kept as a failed local attempt and can be retried. A unique database constraint and a pending-request guard prevent duplicate local or concurrent delivery creation for the same checkout group.
+
+### Pickups created in Bosta
+
+The Bosta page refreshes pickup data at most once every five minutes by default. Use **مزامنة Pickups من Bosta** to force an immediate refresh. Imported pickups are marked **Pickup من لوحة Bosta**; pickups created from HeroKid are marked separately. A canceled or terminated pickup releases its shipments for a new pickup.
+
+If pickup-list synchronization is temporarily unavailable, delivery webhooks remain a safety fallback: a route-assigned or later Bosta state removes the shipment from the selectable pickup queue. Sync failures are visible to the administrator and do not break the page.
 
 ## Permissions
 

@@ -10,14 +10,19 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
+use App\Rules\InternationalMobileNumber;
 use App\Services\Analytics\MetaPurchaseTrackingService;
+use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\Orders\CheckoutSubmissionService;
+use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\RoboDesk\OrderConfirmationGate;
+use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
@@ -26,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CheckoutController extends Controller
 {
@@ -37,14 +43,24 @@ class CheckoutController extends Controller
         OrderSceneTextService $sceneTexts,
         MetaPurchaseTrackingService $metaPurchaseTracking,
         PackageCartExpander $packageCartExpander,
+        CustomerOrderSelfService $customerOrders,
+        BostaCheckoutAddressService $checkoutAddresses,
+        CheckoutSubmissionService $submissions,
     ) {
+        if ($existingIds = $submissions->completed($request)) {
+            $request->session()->put('checkout.last_order_ids', $existingIds);
+
+            return redirect()->route('checkout.success');
+        }
         $request->merge([
             'phone' => Phone::normalize($request->input('phone')),
+            'alternate_phone' => Phone::normalize($request->input('alternate_phone')),
         ]);
 
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
+            'phone' => ['required', 'string', 'max:20', new InternationalMobileNumber],
+            'alternate_phone' => ['nullable', 'string', 'max:20', new InternationalMobileNumber],
             'delivery_country_id' => [
                 'required',
                 Rule::exists('delivery_countries', 'id')->where(fn ($query) => $query->where('active', true)),
@@ -53,15 +69,23 @@ class CheckoutController extends Controller
                 'required',
                 Rule::exists('delivery_governorates', 'id')->where(fn ($query) => $query->where('active', true)),
             ],
-            'city' => 'required|string|max:255',
-            'street' => 'required|string|max:255',
-            'address_details' => 'required|string|max:1000',
+            'city' => 'nullable|string|max:255',
+            'bosta_city_id' => 'nullable|string|max:100',
+            'bosta_district_id' => 'nullable|string|max:100',
+            'street' => 'required|string|min:6|max:255',
+            'address_details' => 'nullable|string|max:1000',
+            'previous_order_action' => ['nullable', Rule::in(['separate', 'cancel_previous', 'merge'])],
+            'previous_order_reference' => ['nullable', 'string', 'max:50'],
         ]);
 
         $country = DeliveryCountry::where('active', true)->findOrFail($validated['delivery_country_id']);
         $governorate = DeliveryGovernorate::where('active', true)
             ->where('delivery_country_id', $country->id)
             ->findOrFail($validated['delivery_governorate_id']);
+        $validated = array_replace(
+            $validated,
+            $checkoutAddresses->normalizeForCheckout($country, $governorate, $validated),
+        );
 
         $sessionCart = session('cart.items', []);
         $cart = $packageCartExpander->expand($sessionCart);
@@ -73,6 +97,13 @@ class CheckoutController extends Controller
         $storyItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $productItems = collect($cart)->filter(fn (array $item) => ($item['item_type'] ?? 'story') !== 'story');
         $stories = Story::whereIn('id', $storyItems->pluck('story_id')->filter()->all())->get()->keyBy('id');
+        foreach ($storyItems as $item) {
+            $language = $item['story_language'] ?? 'ar';
+            $targetStory = $stories->get($item['story_id']);
+            if (! in_array($language, ['ar', 'en'], true) || ($language === 'en' && (! $targetStory || ! app(StoryLanguageAvailability::class)->english($targetStory)))) {
+                throw ValidationException::withMessages(['language' => 'النسخة الإنجليزية غير مكتملة. يرجى مراجعة القصة في السلة.']);
+            }
+        }
         $products = Product::with('variants')->whereIn('id', $productItems->pluck('product_id')->filter()->all())->get()->keyBy('id');
 
         $incompletePersonalizedProduct = $productItems->first(function (array $item) use ($products): bool {
@@ -116,6 +147,7 @@ class CheckoutController extends Controller
         $attribution = $this->attributionSnapshot($request);
         $isNewCustomer = $this->isNewCustomer($validated['phone']);
         $orderIds = [];
+        $replayed = false;
         app(CartTrackingService::class)->recordCheckoutStarted($request);
 
         if (auth()->check() && ! auth()->user()->phone) {
@@ -123,7 +155,14 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $initialStatus, $initialStatusNote, &$orderIds): void {
+            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, $initialStatus, $initialStatusNote, &$orderIds, &$replayed): void {
+                $submission = $submissions->claim($request, $sessionCart);
+                if ($submission['order_ids']) {
+                    $orderIds = $submission['order_ids'];
+                    $replayed = true;
+
+                    return;
+                }
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -180,7 +219,7 @@ class CheckoutController extends Controller
                         'child_name' => $childName,
                         'child_age' => $childAge,
                         'child_gender' => $childGender,
-                        'language' => $story->language,
+                        'language' => $item['story_language'] ?? 'ar',
                         'lesson' => $story->lesson_value,
                         'interests' => $item['interests'] ?? null,
                         'gift_note' => $item['gift_note'] ?? null,
@@ -188,14 +227,12 @@ class CheckoutController extends Controller
                         'parent_notes' => $item['parent_notes'] ?? null,
                         'delivery_details' => [
                             'phone' => $validated['phone'],
+                            'alternate_phone' => $validated['alternate_phone'] ?? null,
                             'delivery_country_id' => $country->id,
                             'delivery_governorate_id' => $governorate->id,
                             'country' => $country->name,
                             'governorate' => $governorate->name,
-                            'city' => $validated['city'],
-                            'street' => $validated['street'],
-                            'address_details' => $validated['address_details'],
-                            'address' => trim($validated['street'].' - '.$validated['address_details']),
+                            ...$this->deliveryAddressSnapshot($validated),
                             'checkout_group' => $checkoutGroup,
                             'checkout_session_id' => $checkoutSessionId,
                             'cart_item_index' => count($orderIds) + 1,
@@ -231,7 +268,7 @@ class CheckoutController extends Controller
                         'personalization_mode' => 'collect_child_details',
                         'item_snapshot' => [
                             'story_slug' => $story->slug,
-                            'story_language' => $story->language,
+                            'story_language' => $item['story_language'] ?? 'ar',
                             'lesson' => $story->lesson_value,
                             'regular_price' => $storyRegularPrice,
                             'offer_applied' => $storyOfferApplied,
@@ -440,6 +477,24 @@ class CheckoutController extends Controller
 
                     $this->decrementStock($product, $variant, $quantity);
                 }
+
+                if ($firstOrder) {
+                    $message = $customerOrders->applyCheckoutDecision(
+                        $request,
+                        $firstOrder,
+                        $validated['previous_order_action'] ?? null,
+                        $validated['previous_order_reference'] ?? null,
+                        $validated['phone'],
+                    );
+
+                    if ($message) {
+                        $request->session()->flash('checkout.order_decision_message', $message);
+                    }
+                }
+                if ($orderIds === []) {
+                    throw new \RuntimeException('No purchasable cart items remain.');
+                }
+                $submissions->complete($submission['key'], $orderIds);
             });
         } catch (\RuntimeException) {
             return redirect()->route('cart.index')->with('error', 'بعض المنتجات لم تعد متاحة بالكمية المطلوبة. يرجى مراجعة السلة.');
@@ -447,6 +502,13 @@ class CheckoutController extends Controller
 
         if ($orderIds === []) {
             return redirect()->route('cart.index')->with('error', 'تعذر إنشاء الطلب لأن بعض القصص لم تعد متاحة.');
+        }
+
+        if ($replayed) {
+            session()->forget('cart.items');
+            session(['checkout.last_order_ids' => $orderIds]);
+
+            return redirect()->route('checkout.success');
         }
 
         $representativeOrder = Order::query()
@@ -540,14 +602,12 @@ class CheckoutController extends Controller
     {
         return [
             'phone' => $validated['phone'],
+            'alternate_phone' => $validated['alternate_phone'] ?? null,
             'delivery_country_id' => $country->id,
             'delivery_governorate_id' => $governorate->id,
             'country' => $country->name,
             'governorate' => $governorate->name,
-            'city' => $validated['city'],
-            'street' => $validated['street'],
-            'address_details' => $validated['address_details'],
-            'address' => trim($validated['street'].' - '.$validated['address_details']),
+            ...$this->deliveryAddressSnapshot($validated),
             'checkout_group' => $checkoutGroup,
             'checkout_session_id' => $checkoutSessionId,
             'cart_item_index' => $itemIndex,
@@ -558,6 +618,37 @@ class CheckoutController extends Controller
             'total' => $subtotal + $deliveryFee,
             'source' => 'website',
             'marketing_attribution' => $attribution,
+        ];
+    }
+
+    /** @param array<string, mixed> $validated
+     * @return array<string, mixed>
+     */
+    private function deliveryAddressSnapshot(array $validated): array
+    {
+        $details = trim((string) ($validated['address_details'] ?? ''));
+        $address = trim((string) $validated['street']);
+
+        if ($details !== '') {
+            $address .= ' - '.$details;
+        }
+
+        return [
+            'city' => $validated['city'],
+            'street' => trim((string) $validated['street']),
+            'address_details' => $details,
+            'address' => $address,
+            ...collect($validated)->only([
+                'bosta_city_id',
+                'bosta_city_name',
+                'bosta_city_other_name',
+                'bosta_district_id',
+                'bosta_district_name',
+                'bosta_district_other_name',
+                'bosta_zone_id',
+                'bosta_zone_name',
+                'bosta_zone_other_name',
+            ])->all(),
         ];
     }
 

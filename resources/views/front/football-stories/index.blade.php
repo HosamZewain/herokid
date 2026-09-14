@@ -307,7 +307,7 @@
                                 </div>
                                 <span data-football-photo-count class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">٠ / ٣</span>
                             </div>
-                            <input type="file" id="football_photos" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" class="sr-only" data-football-photo-input>
+                            <input type="file" id="football_photos" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" class="sr-only" data-football-photo-input>
                             <div data-football-photo-ids></div>
                             <label for="football_photos" class="mt-4 inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-5 font-black text-white transition hover:bg-indigo-700 focus-within:ring-4 focus-within:ring-indigo-200">
                                 اختيار صورتين أو ٣ صور

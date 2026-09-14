@@ -50,10 +50,16 @@
                 </div>
 
                 <div class="rounded-xl border border-gray-100 bg-white p-8 shadow-sm">
+                    @include('admin.users._role-picker', [
+                        'roleOptions' => $roleOptions,
+                    ])
+
+                    <div class="mt-6">
                     @include('admin.users._permissions-matrix', [
                         'permissionGroups' => $permissionGroups,
                         'selected' => [],
                     ])
+                    </div>
                 </div>
 
                 <div class="flex items-center justify-between">

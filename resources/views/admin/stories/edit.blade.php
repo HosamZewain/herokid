@@ -132,6 +132,7 @@
                     </div>
 
                     @include('admin.stories._scene-texts')
+                    <p class="mt-3 text-sm text-amber-800">حفظ القصة يزامن نصوص طلباتها حسب جنس كل طفل، حتى الطلبات المطبوعة، مع حفظ النسخ السابقة دون تغيير الصور أو الحالات. بعدها استخدم Refresh from Hero Kid في Studio. أي اختلاف في عدد المشاهد أو نص إنتاج مستقل سيظهر كتعذر مزامنة للمراجعة.</p>
 
                     <!-- Prompt (internal only) -->
                     <div class="mt-6">

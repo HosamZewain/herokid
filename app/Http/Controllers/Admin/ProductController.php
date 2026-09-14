@@ -11,9 +11,11 @@ use App\Support\ProductProductionPrompt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ProductController extends Controller
 {
@@ -52,40 +54,98 @@ class ProductController extends Controller
         ));
     }
 
+    public function duplicate(Product $product)
+    {
+        $product->load('productionComponents');
+        $duplicate = $product->replicate(['slug', 'is_active', 'created_at', 'updated_at']);
+        $duplicate->slug = $this->duplicateSlug($product->slug);
+        $duplicate->is_active = false;
+
+        return view('admin.store.products.form', $this->formData($duplicate, $product));
+    }
+
     public function store(Request $request)
     {
-        $product = DB::transaction(function () use ($request): Product {
-            $product = Product::create($this->validatedData($request));
-            $this->syncRecommendedProducts($request, $product);
+        $productionComponents = $this->validatedProductionComponents($request);
+        $duplicateSourceId = $request->validate([
+            'duplicate_source_id' => ['nullable', 'integer', Rule::exists('products', 'id')],
+        ])['duplicate_source_id'] ?? null;
+        $duplicateSource = $duplicateSourceId
+            ? Product::with('variants')->findOrFail((int) $duplicateSourceId)
+            : null;
+        $newFiles = [];
 
-            return $product;
-        });
+        try {
+            $product = DB::transaction(function () use ($request, $duplicateSource, $productionComponents, &$newFiles): Product {
+                $data = $this->validatedData($request);
+                $data = $this->withProductionPromptMirror($data, $productionComponents);
 
-        return redirect()->route('admin.products.edit', $product)->with('success', 'تم إنشاء المنتج. يمكنك إضافة المتغيرات من نفس الصفحة.');
+                if ($duplicateSource) {
+                    $data = $this->withDuplicatedProductMedia($data, $request, $duplicateSource, $newFiles);
+                }
+
+                $product = Product::create($data);
+                $this->syncRecommendedProducts($request, $product);
+                $this->syncProductionComponents($product, $productionComponents);
+
+                if ($duplicateSource) {
+                    $this->duplicateVariants($duplicateSource, $product, $newFiles);
+
+                    if ($productionComponents === null) {
+                        $this->duplicateProductionComponents($duplicateSource, $product);
+                    }
+                }
+
+                return $product;
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('public')->delete($newFiles);
+
+            throw $exception;
+        }
+
+        $message = $duplicateSource
+            ? 'تم إنشاء نسخة جديدة غير منشورة من المنتج. راجعها ثم فعّلها للنشر.'
+            : 'تم إنشاء المنتج. يمكنك إضافة المتغيرات من نفس الصفحة.';
+
+        return redirect()->route('admin.products.edit', $product)->with('success', $message);
     }
 
     public function edit(Product $product)
     {
-        $product->load(['variants' => fn ($query) => $query->withSum('orderItems as sold_quantity', 'quantity')]);
+        $product->load([
+            'productionComponents',
+            'variants' => fn ($query) => $query->withSum('orderItems as sold_quantity', 'quantity'),
+        ]);
 
         return view('admin.store.products.form', $this->formData($product));
     }
 
     public function update(Request $request, Product $product)
     {
-        DB::transaction(function () use ($request, $product): void {
-            $product->update($this->validatedData($request, $product));
+        $productionComponents = $this->validatedProductionComponents($request);
+
+        DB::transaction(function () use ($request, $product, $productionComponents): void {
+            $data = $this->withProductionPromptMirror(
+                $this->validatedData($request, $product),
+                $productionComponents,
+            );
+            $product->update($data);
+            $this->syncProductionComponents($product, $productionComponents);
             $this->syncRecommendedProducts($request, $product);
         });
 
         return redirect()->route('admin.products.edit', $product)->with('success', 'تم تحديث المنتج.');
     }
 
-    private function formData(Product $product): array
+    private function formData(Product $product, ?Product $duplicateSource = null): array
     {
-        $selectedRecommendedProductIds = $product->exists
+        $recommendationSource = $product->exists ? $product : $duplicateSource;
+        $componentSource = $product->exists ? $product : $duplicateSource;
+        $componentSource?->loadMissing('productionComponents');
+        $selectedRecommendedProductIds = $recommendationSource
             ? ProductUpsellRule::query()
-                ->where('source_product_id', $product->id)
+                ->where('source_product_id', $recommendationSource->id)
                 ->whereNull('source_story_id')
                 ->whereNull('source_story_category_id')
                 ->whereNull('age_group')
@@ -106,7 +166,225 @@ class ProductController extends Controller
                 ->orderBy('name_ar')
                 ->get(),
             'selectedRecommendedProductIds' => $selectedRecommendedProductIds,
+            'duplicateSource' => $duplicateSource,
+            'productionComponents' => $this->productionComponentFormRows($componentSource ?: $product),
         ];
+    }
+
+    /** @return array<int, array<string, mixed>>|null */
+    private function validatedProductionComponents(Request $request): ?array
+    {
+        if (! $request->boolean('production_components_present')) {
+            return null;
+        }
+
+        $rows = collect($request->input('production_components', []))
+            ->filter(fn ($row): bool => is_array($row)
+                && (filled($row['name'] ?? null) || filled($row['prompt_template'] ?? null)))
+            ->values()
+            ->all();
+
+        $validated = Validator::make(
+            ['production_components' => $rows],
+            [
+                'production_components' => ['array', 'max:20'],
+                'production_components.*.stable_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/', 'distinct'],
+                'production_components.*.name' => ['required', 'string', 'max:255'],
+                'production_components.*.prompt_template' => ['required', 'string', 'max:'.ProductProductionPrompt::MAX_TEMPLATE_LENGTH],
+                'production_components.*.quantity_per_item' => ['required', 'integer', 'min:1', 'max:1000'],
+                'production_components.*.is_active' => ['nullable', 'boolean'],
+            ],
+            [
+                'production_components.max' => 'لا يمكن إضافة أكثر من 20 جزء إنتاج للمنتج.',
+                'production_components.*.name.required' => 'اسم كل جزء إنتاج مطلوب.',
+                'production_components.*.prompt_template.required' => 'برومبت كل جزء إنتاج مطلوب.',
+                'production_components.*.stable_key.regex' => 'المعرّف الداخلي لجزء الإنتاج غير صالح.',
+                'production_components.*.stable_key.distinct' => 'لا يمكن تكرار معرّف جزء الإنتاج.',
+            ],
+        )->validate()['production_components'];
+
+        $usedKeys = [];
+
+        return collect($validated)->map(function (array $row, int $index) use (&$usedKeys): array {
+            $unsupported = ProductProductionPrompt::unsupportedVariables($row['prompt_template']);
+            if ($unsupported !== []) {
+                throw ValidationException::withMessages([
+                    "production_components.{$index}.prompt_template" => 'متغيرات غير مدعومة في برومبت جزء المنتج: '.implode('، ', $unsupported),
+                ]);
+            }
+
+            $baseKey = $row['stable_key'] ?? null;
+            $baseKey = $baseKey ?: Str::slug($row['name']);
+            $baseKey = $baseKey ?: 'part-'.($index + 1);
+            $key = $baseKey;
+            $suffix = 2;
+
+            while (in_array($key, $usedKeys, true)) {
+                $key = Str::limit($baseKey, 74, '').'-'.$suffix;
+                $suffix++;
+            }
+            $usedKeys[] = $key;
+
+            return [
+                'stable_key' => $key,
+                'name' => trim($row['name']),
+                'prompt_template' => trim($row['prompt_template']),
+                'quantity_per_item' => (int) $row['quantity_per_item'],
+                'is_active' => (bool) ($row['is_active'] ?? false),
+                'sort_order' => $index,
+            ];
+        })->all();
+    }
+
+    private function withProductionPromptMirror(array $data, ?array $components): array
+    {
+        if ($components === null) {
+            return $data;
+        }
+
+        $active = collect($components)->where('is_active', true)->values();
+        $data['production_prompt_template'] = $active->count() === 1
+            ? $active->first()['prompt_template']
+            : null;
+
+        return $data;
+    }
+
+    private function syncProductionComponents(Product $product, ?array $components): void
+    {
+        if ($components === null) {
+            return;
+        }
+
+        $keys = collect($components)->pluck('stable_key');
+        $product->productionComponents()->whereNotIn('stable_key', $keys)->delete();
+
+        foreach ($components as $component) {
+            $product->productionComponents()->updateOrCreate(
+                ['stable_key' => $component['stable_key']],
+                $component,
+            );
+        }
+
+        $product->unsetRelation('productionComponents');
+    }
+
+    private function duplicateProductionComponents(Product $source, Product $duplicate): void
+    {
+        $source->loadMissing('productionComponents');
+
+        foreach ($source->productionComponents as $component) {
+            $duplicate->productionComponents()->create($component->only([
+                'stable_key',
+                'name',
+                'prompt_template',
+                'quantity_per_item',
+                'sort_order',
+                'is_active',
+            ]));
+        }
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function productionComponentFormRows(Product $product): array
+    {
+        $product->loadMissing('productionComponents');
+
+        if ($product->productionComponents->isNotEmpty()) {
+            return $product->productionComponents->map(fn ($component): array => $component->only([
+                'stable_key',
+                'name',
+                'prompt_template',
+                'quantity_per_item',
+                'is_active',
+            ]))->values()->all();
+        }
+
+        if (filled($product->production_prompt_template)) {
+            return [[
+                'stable_key' => 'main',
+                'name' => $product->name_ar ?: $product->name_en ?: 'المنتج الرئيسي',
+                'prompt_template' => $product->production_prompt_template,
+                'quantity_per_item' => 1,
+                'is_active' => true,
+            ]];
+        }
+
+        return [];
+    }
+
+    private function duplicateSlug(string $sourceSlug): string
+    {
+        $base = Str::limit($sourceSlug.'-copy', 240, '');
+        $slug = $base;
+        $suffix = 2;
+
+        while (Product::query()->where('slug', $slug)->exists()) {
+            $slug = Str::limit($base, 246 - strlen((string) $suffix), '').'-'.$suffix;
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    /** @param array<int, string> $newFiles */
+    private function withDuplicatedProductMedia(array $data, Request $request, Product $source, array &$newFiles): array
+    {
+        if (! $request->hasFile('featured_image')) {
+            $data['featured_image'] = $this->duplicateMediaPath($source->featured_image, $newFiles);
+        }
+
+        $sourceGallery = collect($source->gallery_images ?? [])
+            ->map(fn (string $path): ?string => $this->duplicateMediaPath($path, $newFiles))
+            ->filter()
+            ->values()
+            ->all();
+        $data['gallery_images'] = [...$sourceGallery, ...($data['gallery_images'] ?? [])];
+
+        return $data;
+    }
+
+    /** @param array<int, string> $newFiles */
+    private function duplicateVariants(Product $source, Product $duplicate, array &$newFiles): void
+    {
+        foreach ($source->variants as $variant) {
+            $newVariant = $variant->replicate(['product_id', 'image', 'gallery_images', 'created_at', 'updated_at']);
+            $newVariant->image = $this->duplicateMediaPath($variant->image, $newFiles);
+            $newVariant->gallery_images = collect($variant->gallery_images ?? [])
+                ->map(fn (string $path): ?string => $this->duplicateMediaPath($path, $newFiles))
+                ->filter()
+                ->values()
+                ->all();
+            $duplicate->variants()->save($newVariant);
+        }
+    }
+
+    /** @param array<int, string> $newFiles */
+    private function duplicateMediaPath(?string $sourcePath, array &$newFiles): ?string
+    {
+        if (! $sourcePath || str_starts_with($sourcePath, 'http')) {
+            return $sourcePath;
+        }
+
+        $disk = Storage::disk('public');
+        if (! $disk->exists($sourcePath)) {
+            return null;
+        }
+
+        $directory = pathinfo($sourcePath, PATHINFO_DIRNAME);
+        $extension = pathinfo($sourcePath, PATHINFO_EXTENSION);
+        $destination = ($directory === '.' ? 'store/products' : $directory)
+            .'/'.Str::uuid().($extension ? '.'.$extension : '');
+
+        if (! $disk->copy($sourcePath, $destination)) {
+            throw ValidationException::withMessages([
+                'featured_image' => 'تعذر نسخ صور المنتج الأصلي. حاول مرة أخرى.',
+            ]);
+        }
+
+        $newFiles[] = $destination;
+
+        return $destination;
     }
 
     private function syncRecommendedProducts(Request $request, Product $product): void

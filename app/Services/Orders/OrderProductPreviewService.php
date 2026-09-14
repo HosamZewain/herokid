@@ -96,6 +96,7 @@ class OrderProductPreviewService
         DB::transaction(function () use ($preview, $order, $actor): void {
             $fileName = $preview->original_name ?: basename($preview->file_path);
             $this->imageService->deleteCustomerImage($preview);
+            app(PrivateOrderThumbnail::class)->forget(Storage::disk($preview->disk ?: 'local')->path($preview->file_path));
             Storage::disk($preview->disk ?: 'local')->delete($preview->file_path);
             $preview->delete();
 

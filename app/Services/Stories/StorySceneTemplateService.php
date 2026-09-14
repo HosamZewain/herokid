@@ -24,7 +24,7 @@ class StorySceneTemplateService
             }
 
             $sceneNumber = (int) ($scene['scene_number'] ?? $key);
-            foreach (['text_template', 'alternate_text_template'] as $variant) {
+            foreach (['text_template', 'alternate_text_template', 'english_male_text_template', 'english_female_text_template'] as $variant) {
                 $unknown = $this->renderer->unknownVariables($scene[$variant] ?? null);
 
                 if ($unknown !== []) {
@@ -83,6 +83,8 @@ class StorySceneTemplateService
                     'title' => $title !== '' ? $title : null,
                     'text_template' => $text !== '' ? $text : null,
                     'alternate_text_template' => $alternateText !== '' ? $alternateText : null,
+                    'english_male_text_template' => array_key_exists('english_male_text_template', $scene) ? ($scene['english_male_text_template'] ?: null) : $current?->english_male_text_template,
+                    'english_female_text_template' => array_key_exists('english_female_text_template', $scene) ? ($scene['english_female_text_template'] ?: null) : $current?->english_female_text_template,
                 ],
             );
 

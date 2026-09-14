@@ -31,11 +31,12 @@
         $printingStatusColors = \App\Support\OrderWorkflowStatus::printingColors();
         $shippingStatusColors = \App\Support\OrderWorkflowStatus::shippingColors();
         $eventOrderStatuses = \App\Services\Orders\OrderStatusService::labels(false);
+        $bulkOrderStatuses = \App\Services\Orders\OrderStatusService::labels();
         $eventPaymentStatuses = \App\Support\OrderPaymentStatus::labels(false);
         $eventPrintingStatuses = \App\Support\OrderWorkflowStatus::printingLabels(false);
         $eventShippingStatuses = \App\Support\OrderWorkflowStatus::shippingLabels(false);
         $nextUpdatedDirection = request('sort') === 'updated_at' && request('direction', 'desc') === 'desc' ? 'asc' : 'desc';
-        $advancedFiltersActive = collect(['product_id', 'from', 'to', 'event', 'event_from', 'event_to', 'assignment'])
+        $advancedFiltersActive = collect(['product_id', 'tag_id', 'from', 'to', 'event', 'event_from', 'event_to', 'assignment'])
             ->contains(fn (string $field): bool => request()->filled($field))
             || request('per_page', '25') !== '25'
             || request('sort', 'created_at') !== 'created_at'
@@ -46,6 +47,9 @@
             'cancelled' => 'لا توجد طلبات ملغاة أو محذوفة تطابق الفلاتر.',
             default => 'لا توجد طلبات نشطة تطابق الفلاتر.',
         };
+        $canBulkUpdateStatus = auth()->user()->hasPermission('orders.update');
+        $canBulkReleaseAssignments = auth()->user()->hasPermission('orders.assignment.manage');
+        $showBulkActions = !$trash && ($canBulkUpdateStatus || $canBulkReleaseAssignments);
     @endphp
 
     <div class="py-8">
@@ -94,43 +98,25 @@
                     </div>
                 </div>
 
+                @if($showBulkActions)
+                    <form id="order-bulk-actions" method="POST" action="{{ route('admin.orders.bulk-actions') }}" class="hidden" data-order-bulk-actions-form>
+                        @csrf
+                    </form>
+                @endif
+
                 <form method="GET" action="{{ route('admin.orders.index') }}" class="space-y-3">
                     <input type="hidden" name="catalog_type" value="{{ $catalogType }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
                         <div class="xl:col-span-2">
                             <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
-                            <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة أو منتج"
+                            <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج أو علامة"
                                    class="w-full rounded-xl border-gray-200 text-right text-sm">
                         </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطلب</label>
-                            <select name="status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($statusLabels as $value => $label)
-                                    <option value="{{ $value }}" @selected(request('status', '') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الشحن</label>
-                            <select name="shipping_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($shippingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('shipping_status', '') === $value)>{{ $label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الطباعة</label>
-                            <select name="printing_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($printingStatusLabels as $value => $label)<option value="{{ $value }}" @selected(request('printing_status', '') === $value)>{{ $label }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="mb-1.5 block text-xs font-black text-gray-600">حالة الدفع</label>
-                            <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
-                                @foreach($paymentStatusLabels as $value => $label)
-                                    <option value="{{ $value }}" @selected(request('payment_status', '') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                        <x-admin.status-filter name="status" label="حالة الطلب" :options="$statusLabels" :selected="$selectedStatuses" />
+                        <x-admin.status-filter name="shipping_status" label="حالة الشحن" :options="$shippingStatusLabels" :selected="$selectedShippingStatuses" />
+                        <x-admin.status-filter name="printing_status" label="حالة الطباعة" :options="$printingStatusLabels" :selected="$selectedPrintingStatuses" />
+                        <x-admin.status-filter name="payment_status" label="حالة الدفع" :options="$paymentStatusLabels" :selected="$selectedPaymentStatuses" />
                         <div class="flex items-end gap-2 xl:col-span-2">
                             <button class="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
                             <a href="{{ route('admin.orders.index', ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => $lifecycle]) }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-black text-gray-500 hover:bg-gray-50">مسح</a>
@@ -146,6 +132,15 @@
                             </span>
                         </summary>
                         <div class="grid gap-3 border-t border-gray-100 p-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div>
+                                <label class="mb-1.5 block text-xs font-black text-gray-600">علامة الطلب</label>
+                                <select name="tag_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                    <option value="">كل العلامات</option>
+                                    @foreach($filterTags as $filterTag)
+                                        <option value="{{ $filterTag->id }}" @selected((string) request('tag_id') === (string) $filterTag->id)>{{ $filterTag->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="xl:col-span-2">
                                 <label class="mb-1.5 block text-xs font-black text-gray-600">المنتج الموجود بالطلب</label>
                                 <select name="product_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
@@ -232,6 +227,38 @@
                                 </select>
                             </div>
                         </div>
+
+                        @if($showBulkActions)
+                            <div class="border-t border-indigo-100 bg-indigo-50/60 p-4 sm:p-5" data-order-bulk-actions>
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
+                                    <div class="min-w-44">
+                                        <p class="text-sm font-black text-indigo-950">إجراءات جماعية</p>
+                                        <p class="mt-1 text-xs font-bold text-indigo-700"><span data-bulk-selected-count>0</span> عملية شراء محددة</p>
+                                    </div>
+                                    <div class="min-w-64 flex-1">
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">الإجراء</label>
+                                        <select name="action" form="order-bulk-actions" required class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-action>
+                                            @if($canBulkUpdateStatus)<option value="update_status">تغيير حالة الطلبات المحددة</option>@endif
+                                            @if($canBulkReleaseAssignments)<option value="release_assignments">إلغاء الاستحواذ عن الطلبات المحددة</option>@endif
+                                            @if($canBulkUpdateStatus && $canBulkReleaseAssignments)<option value="update_status_and_release">تغيير الحالة وإلغاء الاستحواذ</option>@endif
+                                        </select>
+                                    </div>
+                                    <div class="min-w-64 flex-1" data-bulk-status-field>
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة الجديدة</label>
+                                        <select name="status" form="order-bulk-actions" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-status>
+                                            <option value="">اختر الحالة</option>
+                                            @foreach($bulkOrderStatuses as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                                        </select>
+                                    </div>
+                                    <div class="min-w-64 flex-[1.5]">
+                                        <label class="mb-1.5 block text-xs font-black text-gray-600">ملاحظة للسجل (اختياري)</label>
+                                        <input name="admin_notes" form="order-bulk-actions" maxlength="2000" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" placeholder="سبب التغيير أو الإجراء">
+                                    </div>
+                                    <button type="submit" form="order-bulk-actions" disabled class="min-h-11 rounded-xl bg-indigo-600 px-6 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40" data-bulk-submit>تنفيذ على المحدد</button>
+                                </div>
+                                <p class="mt-3 text-[11px] font-bold text-amber-700">إلغاء الاستحواذ عن طلب استلمه مستخدم آخر يحتاج صلاحية إدارة مسؤولية الطلبات، ويتم تسجيل المنفذ والمسؤول السابق في سجل النشاط.</p>
+                            </div>
+                        @endif
                     </details>
                 </form>
             </div>
@@ -276,6 +303,27 @@
                     <p class="mt-2 text-2xl font-black text-cyan-950">{{ number_format($stats['shipped_checkouts']) }}</p>
                 </div>
             </section>
+
+            @if($activeTags->isNotEmpty())
+                <section aria-label="العلامات النشطة على الطلبات" class="rounded-2xl border border-fuchsia-100 bg-white px-4 py-3 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="ml-1 text-[11px] font-black text-gray-500">العلامات النشطة</span>
+                        @foreach($activeTags as $activeTag)
+                            @php
+                                $isSelectedTag = (string) request('tag_id') === (string) $activeTag->id;
+                            @endphp
+                            <a
+                                href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'tag_id']), ['tag_id' => $activeTag->id])) }}"
+                                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black transition {{ $isSelectedTag ? 'border-fuchsia-500 bg-fuchsia-600 text-white shadow-sm' : 'border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700 hover:border-fuchsia-200 hover:bg-fuchsia-100' }}"
+                                aria-current="{{ $isSelectedTag ? 'page' : 'false' }}"
+                            >
+                                <span>#{{ $activeTag->name }}</span>
+                                <span class="rounded-full px-1.5 py-0.5 text-[9px] {{ $isSelectedTag ? 'bg-white/20 text-white' : 'bg-white text-fuchsia-800' }}">{{ number_format($activeTag->checkouts_count) }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
             @endcan
 
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
@@ -286,6 +334,12 @@
                         @endphp
                         <article class="space-y-4 p-5">
                             <div class="flex items-start justify-between gap-3">
+                                @if($showBulkActions && !$group['trashed'])
+                                    <label class="flex min-h-10 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-xs font-black text-indigo-700">
+                                        <input type="checkbox" value="{{ $group['representative_id'] }}" class="rounded border-indigo-300 text-indigo-600" data-bulk-order-checkbox aria-label="تحديد {{ $group['short_reference'] ?: $group['key'] }}">
+                                        تحديد
+                                    </label>
+                                @endif
                                 <div class="min-w-0 text-right">
                                     <a href="{{ $detailsUrl }}" class="block truncate font-mono text-base font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</a>
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
@@ -319,6 +373,10 @@
                                 </div>
                                 @if($group['child_names'])<p class="mt-3 text-xs font-bold text-gray-600">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
+                                <div class="mt-3 border-t border-slate-200 pt-3">
+                                    <p class="mb-1.5 text-[10px] font-black text-gray-400">العلامات</p>
+                                    @include('admin.orders._index-tag-manager', ['group' => $group, 'mode' => 'mobile'])
+                                </div>
                                 @php
                                     $mobileUpdatedAt = \App\Support\OrderDateTime::display($group['updated_at']);
                                     $mobileCreatedAt = \App\Support\OrderDateTime::display($group['created_at']);
@@ -364,14 +422,19 @@
                     <table class="min-w-full divide-y divide-gray-100 text-right text-sm">
                         <thead class="bg-gray-50">
                             <tr>
+                                @if($showBulkActions)
+                                    <th class="w-12 px-3 py-3 text-center">
+                                        <input type="checkbox" class="rounded border-indigo-300 text-indigo-600" data-bulk-select-all aria-label="تحديد كل الطلبات الظاهرة">
+                                    </th>
+                                @endif
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">عملية الشراء</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المصدر</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المسؤول</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">العلامات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">الدفع</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">القيمة والدفع</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">
                                     <a href="{{ route('admin.orders.index', array_merge(request()->except('page'), ['sort' => 'updated_at', 'direction' => $nextUpdatedDirection])) }}" class="inline-flex items-center gap-1 hover:text-indigo-700">
                                         آخر تحديث
@@ -386,9 +449,22 @@
                                     $detailsUrl = route('admin.orders.groups.show', $group['representative_id']);
                                 @endphp
                                 <tr class="align-top transition hover:bg-slate-50">
+                                    @if($showBulkActions)
+                                        <td class="px-3 py-4 text-center">
+                                            @if(!$group['trashed'])
+                                                <input type="checkbox" value="{{ $group['representative_id'] }}" class="rounded border-indigo-300 text-indigo-600" data-bulk-order-checkbox aria-label="تحديد {{ $group['short_reference'] ?: $group['key'] }}">
+                                            @endif
+                                        </td>
+                                    @endif
                                     <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>
                                         <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</a>
-                                        <p class="mt-1 text-xs text-gray-400">{{ count($group['order_numbers']) }} سجل طلب</p>
+                                        @if($group['customer_rating'])
+                                            <div class="mt-1 flex w-40 items-center gap-0.5" dir="ltr" data-order-list-rating aria-label="تقييم العميل {{ $group['customer_rating'] }} من 5" title="تقييم العميل: {{ $group['customer_rating'] }} من 5">
+                                                @for($star = 1; $star <= 5; $star++)
+                                                    <span class="text-sm leading-none {{ $star <= $group['customer_rating'] ? 'text-amber-400' : 'text-slate-200' }}" aria-hidden="true">★</span>
+                                                @endfor
+                                            </div>
+                                        @endif
                                         <p class="mt-1 max-w-40 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
                                         <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>
@@ -438,6 +514,9 @@
                                         @if($group['child_names'])<p class="mt-2 text-xs font-bold text-gray-700">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                         <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                     </td>
+                                    <td class="min-w-36 px-4 py-4">
+                                        @include('admin.orders._index-tag-manager', ['group' => $group, 'mode' => 'desktop'])
+                                    </td>
                                     <td class="px-4 py-4" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                         <div class="flex min-w-36 flex-col items-start gap-1">
                                             <span data-workflow-badge="status" class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -452,13 +531,13 @@
                                             </div>
                                         @endif
                                     </td>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
+                                    <td class="min-w-44 whitespace-nowrap px-4 py-4">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
+                                            <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
+                                        </div>
                                         <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_money($group['delivery_cents'] / 100) }}</p>
                                         @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
-                                    </td>
-                                    <td class="px-4 py-4 whitespace-nowrap">
-                                        <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-xs font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
                                         @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع <span data-workflow-paid>{{ format_money($group['paid_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي <span data-workflow-remaining>{{ format_money($group['remaining_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
@@ -476,12 +555,12 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="9" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="{{ $showBulkActions ? 10 : 9 }}" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
                                         </tr>
                                     @endif
                                 @endcan
                             @empty
-                                <tr><td colspan="9" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
+                                <tr><td colspan="{{ $showBulkActions ? 10 : 9 }}" class="px-6 py-16 text-center text-sm font-bold text-gray-400">{{ $emptyState }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -492,4 +571,194 @@
             </div>
         </div>
     </div>
+
+    @push('scripts')
+        <script>
+            (() => {
+                const managers = [...document.querySelectorAll('[data-order-list-tag-manager]')];
+                const knownSuggestions = new Set({{ Illuminate\Support\Js::from($filterTags->pluck('name')->values()) }});
+                let feedbackTimer;
+
+                if (!managers.length) return;
+
+                const normalize = value => value.trim().toLocaleLowerCase();
+                const forCheckout = id => managers.filter(manager => manager.dataset.orderListTagManager === id);
+                const filterUrl = tagId => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('page');
+                    url.searchParams.set('tag_id', tagId);
+
+                    return url.toString();
+                };
+
+                const refreshSuggestions = (manager, tags) => {
+                    const suggestions = manager.querySelector('[data-order-list-tag-suggestions]');
+                    if (!suggestions) return;
+                    const selected = new Set(tags.map(tag => normalize(tag.name)));
+                    suggestions.replaceChildren();
+                    [...knownSuggestions]
+                        .filter(name => !selected.has(normalize(name)))
+                        .sort((first, second) => first.localeCompare(second, 'ar'))
+                        .forEach(name => {
+                            const option = document.createElement('option');
+                            option.value = name;
+                            suggestions.append(option);
+                        });
+                };
+
+                const render = (manager, tags) => {
+                    const list = manager.querySelector('[data-order-list-tag-list]');
+                    list.replaceChildren();
+
+                    if (!tags.length) {
+                        const empty = document.createElement('span');
+                        empty.className = 'text-[10px] font-bold text-gray-300';
+                        empty.dataset.orderListTagsEmpty = '';
+                        empty.textContent = '—';
+                        list.append(empty);
+                    } else {
+                        tags.forEach(tag => {
+                            knownSuggestions.add(tag.name);
+                            const link = document.createElement('a');
+                            link.href = filterUrl(tag.id);
+                            link.className = 'rounded-full bg-fuchsia-50 px-2.5 py-1 text-[10px] font-black text-fuchsia-700 hover:bg-fuchsia-100';
+                            link.textContent = `#${tag.name}`;
+                            list.append(link);
+                        });
+                    }
+
+                    refreshSuggestions(manager, tags);
+                };
+
+                const showFeedback = (checkoutManagers, message, error = false) => {
+                    window.clearTimeout(feedbackTimer);
+                    checkoutManagers.forEach(manager => {
+                        const feedback = manager.querySelector('[data-order-list-tag-feedback]');
+                        feedback.textContent = message;
+                        feedback.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+                        feedback.classList.add(error ? 'text-red-600' : 'text-emerald-600');
+                    });
+                    feedbackTimer = window.setTimeout(() => checkoutManagers.forEach(manager => manager.querySelector('[data-order-list-tag-feedback]')?.classList.add('hidden')), 3000);
+                };
+
+                const errorMessage = payload => Object.values(payload?.errors || {}).flat()[0] || payload?.message || 'تعذر إضافة العلامة. حاول مرة أخرى.';
+
+                managers.forEach(manager => {
+                    const form = manager.querySelector('[data-order-list-tag-add]');
+                    const input = manager.querySelector('[data-order-list-tag-input]');
+                    if (!form || !input) return;
+
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        if (!input.value.trim()) return;
+
+                        const checkoutManagers = forCheckout(manager.dataset.orderListTagManager);
+                        const checkoutInputs = checkoutManagers.map(item => item.querySelector('[data-order-list-tag-input]')).filter(Boolean);
+                        const formData = new FormData(form);
+                        checkoutInputs.forEach(item => item.disabled = true);
+
+                        try {
+                            const response = await fetch(form.action, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    Accept: 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                },
+                            });
+                            const payload = await response.json().catch(() => ({}));
+                            if (!response.ok) throw new Error(errorMessage(payload));
+
+                            checkoutManagers.forEach(item => {
+                                render(item, payload.tags || []);
+                                const checkoutInput = item.querySelector('[data-order-list-tag-input]');
+                                if (checkoutInput) checkoutInput.value = '';
+                                item.querySelector('[data-order-list-tag-add-panel]')?.removeAttribute('open');
+                            });
+                            showFeedback(checkoutManagers, payload.message || 'تمت إضافة العلامة.');
+                        } catch (error) {
+                            showFeedback(checkoutManagers, error.message, true);
+                        } finally {
+                            checkoutInputs.forEach(item => item.disabled = false);
+                        }
+                    });
+                });
+            })();
+        </script>
+    @endpush
+
+    @if($showBulkActions)
+        <script>
+            (() => {
+                const form = document.querySelector('[data-order-bulk-actions-form]');
+                const panel = document.querySelector('[data-order-bulk-actions]');
+                if (!form || !panel) return;
+
+                const action = panel.querySelector('[data-bulk-action]');
+                const status = panel.querySelector('[data-bulk-status]');
+                const statusField = panel.querySelector('[data-bulk-status-field]');
+                const submit = panel.querySelector('[data-bulk-submit]');
+                const count = panel.querySelector('[data-bulk-selected-count]');
+                const orderCheckboxes = () => Array.from(document.querySelectorAll('[data-bulk-order-checkbox]'));
+                const selectedIds = () => [...new Set(orderCheckboxes().filter(checkbox => checkbox.checked).map(checkbox => checkbox.value))];
+                const allIds = () => [...new Set(orderCheckboxes().map(checkbox => checkbox.value))];
+
+                const sync = () => {
+                    const selected = selectedIds();
+                    count.textContent = new Intl.NumberFormat('ar-EG').format(selected.length);
+                    submit.disabled = selected.length === 0;
+                    document.querySelectorAll('[data-bulk-select-all]').forEach(checkbox => {
+                        checkbox.checked = allIds().length > 0 && selected.length === allIds().length;
+                        checkbox.indeterminate = selected.length > 0 && selected.length < allIds().length;
+                    });
+                };
+
+                const syncAction = () => {
+                    const needsStatus = action.value !== 'release_assignments';
+                    statusField.hidden = !needsStatus;
+                    status.disabled = !needsStatus;
+                    status.required = needsStatus;
+                };
+
+                document.addEventListener('change', event => {
+                    if (event.target.matches('[data-bulk-select-all]')) {
+                        orderCheckboxes().forEach(checkbox => checkbox.checked = event.target.checked);
+                        sync();
+                        return;
+                    }
+                    if (event.target.matches('[data-bulk-order-checkbox]')) {
+                        orderCheckboxes()
+                            .filter(checkbox => checkbox.value === event.target.value)
+                            .forEach(checkbox => checkbox.checked = event.target.checked);
+                        sync();
+                    }
+                });
+                action.addEventListener('change', syncAction);
+
+                form.addEventListener('submit', event => {
+                    const ids = selectedIds();
+                    if (ids.length === 0) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    form.querySelectorAll('[data-generated-bulk-id]').forEach(input => input.remove());
+                    ids.forEach(id => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'representative_ids[]';
+                        input.value = id;
+                        input.dataset.generatedBulkId = '1';
+                        form.appendChild(input);
+                    });
+
+                    const label = action.selectedOptions[0]?.textContent?.trim() || 'تنفيذ الإجراء';
+                    if (!window.confirm(`${label} على ${ids.length} عملية شراء؟`)) event.preventDefault();
+                });
+
+                syncAction();
+                sync();
+            })();
+        </script>
+    @endif
 </x-admin-layout>

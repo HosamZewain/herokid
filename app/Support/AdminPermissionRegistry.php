@@ -90,6 +90,7 @@ class AdminPermissionRegistry
             'settings.delivery_zones.view' => 'admin.delivery-zones.index',
             'settings.pricing.view' => 'admin.pricing.index',
             'admin_users.view' => 'admin.users.index',
+            'admin_users.roles.manage' => 'admin.roles.index',
             'activity_logs.view' => 'admin.activity-logs.index',
         ];
 

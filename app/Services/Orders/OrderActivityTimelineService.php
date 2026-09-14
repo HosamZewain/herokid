@@ -98,6 +98,7 @@ class OrderActivityTimelineService
             'order.attachment_deleted' => 'تم حذف مرفق من الطلب.',
             'order.status_updated', 'checkout.workflow_statuses_updated' => 'تم تحديث حالة الطلب.',
             'checkout.payment_updated' => 'تم تحديث حالة الدفع.',
+            'checkout.discount_updated' => 'تم تحديث خصم عملية الشراء.',
             'order.details_updated', 'checkout.full_order_updated' => 'تم تعديل بيانات الطلب.',
             'order.note_added' => 'تمت إضافة ملاحظة داخلية.',
             'order.assignment_acquired' => 'تم استلام مسؤولية الطلب.',

@@ -1,16 +1,24 @@
 import './bootstrap';
+import { initializeOrderStatusFilters } from './order-status-filters';
+import { initializeAdminFileUploads } from './admin-file-uploads';
 import { initializeIdentityHeicRecovery, initializeIdentityPhotoUploader } from './identity-photo-uploader';
 import { prepareImageForUpload } from './image-upload-preparer';
+import { uploadPhoto, restorePhotos, safeStorage, observePhotoSession } from './photo-upload-transport';
 import { initializeIdentitySharing } from './identity-sharing';
 import { initializeStorySceneEditor } from './story-scene-editor';
 import { initializeOrderSceneTexts } from './order-scene-texts';
 import { initializeOrderPaymentSummaries } from './order-payment-summary';
+import { initializeOrderInvoices } from './order-invoice';
 import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
 import { storyCoverRecovery } from './story-cover-recovery';
 import { initializeHomePackageCarousels } from './home-package-carousel';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
+    upload: uploadPhoto,
+    restore: restorePhotos,
+    storage: safeStorage,
+    observeSession: observePhotoSession,
 });
 window.HeroKidAnalytics = Object.freeze({
     track: trackHeroKidEvent,
@@ -18,6 +26,25 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeOrderStatusFilters();
+    initializeAdminFileUploads();
+    document.querySelectorAll('[data-analytics-widget]').forEach(async (panel) => {
+        try {
+            const response = await fetch(panel.dataset.analyticsWidget, { headers: { Accept: 'application/json' } });
+            if (!response.ok) throw new Error('Analytics unavailable');
+            const data = await response.json();
+            if (data.status !== 'ready') throw new Error(data.status === 'setup_required' ? 'تحليلات GA4 تحتاج إعداد credentials.' : 'تعذر تحميل ملخص التحليلات حالياً.');
+            panel.replaceChildren(...[['نشطون الآن', data.active_users_30m], ['مستخدمون اليوم', data.users_today], ['جلسات اليوم', data.sessions_today]].map(([label, value]) => {
+                const card = document.createElement('div');
+                card.className = 'rounded-2xl bg-indigo-50 px-4 py-3';
+                const title = document.createElement('p'); title.className = 'text-xs font-bold text-indigo-500'; title.textContent = label;
+                const number = document.createElement('p'); number.className = 'text-2xl font-black text-indigo-800'; number.textContent = value ?? '—';
+                card.append(title, number); return card;
+            }));
+        } catch (error) {
+            panel.textContent = error.message === 'Analytics unavailable' ? 'تعذر تحميل ملخص التحليلات حالياً.' : error.message;
+        }
+    });
     const bookletReader = document.querySelector('[data-booklet-reader]');
     if (bookletReader) {
         import('./booklet-reader')
@@ -44,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeStorySceneEditor();
     initializeOrderSceneTexts();
     initializeOrderPaymentSummaries();
+    initializeOrderInvoices();
     initializeFootballStories();
     initializeHomePackageCarousels();
 

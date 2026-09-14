@@ -1,18 +1,59 @@
 <x-admin-layout>
     <x-slot name="title">{{ $group['short_reference'] ?: $group['key'] }}</x-slot>
     <x-slot name="header">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-right">
-                <p class="text-xs font-black text-indigo-500">تفاصيل عملية الشراء</p>
-                <h2 class="mt-1 text-2xl font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</h2>
-                @if($group['short_reference'])<p class="mt-1 text-[10px] font-mono text-gray-400" dir="ltr">{{ $group['key'] }}</p>@endif
-                <p class="mt-1 text-xs font-bold text-gray-500">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></p>
+        <div class="min-w-0 space-y-2 text-right">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <div class="flex min-w-0 items-center gap-2">
+                    <span class="shrink-0 text-[10px] font-black text-indigo-500">عملية الشراء</span>
+                    <h2 class="truncate text-lg font-black text-indigo-700" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</h2>
+                </div>
+                <div class="flex flex-wrap gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                    <span data-workflow-badge="status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
+                    <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']) }}">{{ $group['payment_status_label'] }}</span>
+                    <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']) }}">{{ $group['printing_status_label'] }}</span>
+                    <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
+                </div>
             </div>
-            <div class="flex flex-wrap gap-1.5" data-workflow-badge-group="{{ $group['representative_id'] }}">
-                <span data-workflow-badge="status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ $group['status'] === 'mixed' ? 'bg-slate-100 text-slate-700' : \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $group['status']) }}">{{ $group['status_label'] }}</span>
-                <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PAYMENT, $group['payment_status']) }}">{{ $group['payment_status_label'] }}</span>
-                <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_PRINTING, $group['printing_status']) }}">{{ $group['printing_status_label'] }}</span>
-                <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-3 py-1.5 text-xs font-black {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_SHIPPING, $group['shipping_status']) }}">{{ $group['shipping_status_label'] }}</span>
+            <div class="flex flex-wrap items-center gap-1.5" data-order-group-tags data-can-delete="{{ auth()->user()->hasPermission('orders.tags.delete') ? '1' : '0' }}">
+                <span class="text-[10px] font-black text-gray-400">العلامات</span>
+                <span class="contents" data-order-group-tag-list>
+                    @forelse($group['tags'] as $tag)
+                        <span class="group inline-flex items-center rounded-full bg-fuchsia-50 text-fuchsia-700" data-order-group-tag="{{ $tag->id }}" data-tag-name="{{ $tag->name }}">
+                            <a href="{{ route('admin.orders.index', ['catalog_type' => 'all', 'lifecycle' => 'all', 'tag_id' => $tag->id]) }}" class="px-2 py-1 text-[10px] font-black hover:text-fuchsia-900">#{{ $tag->name }}</a>
+                            @if(!$group['trashed'])
+                                @can('orders.tags.delete')
+                                    <button type="button" data-order-group-tag-delete data-delete-url="{{ route('admin.orders.groups.tags.destroy', [$group['representative_id'], $tag]) }}" class="ml-1 grid h-5 w-5 place-items-center rounded-full bg-fuchsia-100 text-xs font-black leading-none text-fuchsia-700 opacity-0 transition hover:bg-red-100 hover:text-red-700 group-hover:opacity-100 focus:opacity-100" aria-label="حذف علامة {{ $tag->name }}" title="حذف العلامة">×</button>
+                                @endcan
+                            @endif
+                        </span>
+                    @empty
+                        <span class="text-[10px] font-bold text-gray-400" data-order-group-tags-empty>بدون علامات</span>
+                    @endforelse
+                </span>
+                @can('orders.view')
+                    @if(!$group['trashed'])
+                        <details class="relative" data-order-group-tag-add-panel>
+                            <summary class="grid h-6 w-6 cursor-pointer list-none place-items-center rounded-full border border-fuchsia-200 bg-white text-sm font-black leading-none text-fuchsia-700 hover:bg-fuchsia-50 [&::-webkit-details-marker]:hidden" aria-label="إضافة علامة" title="إضافة علامة">+</summary>
+                            <div class="absolute right-0 z-40 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-fuchsia-100 bg-white p-3 shadow-2xl">
+                                <form method="POST" action="{{ route('admin.orders.groups.tags.store', $group['representative_id']) }}" data-order-group-tag-add>
+                                    @csrf
+                                    <label for="checkout-tag" class="mb-1.5 block text-xs font-black text-gray-700">إضافة علامة</label>
+                                    <input id="checkout-tag" name="tag" type="text" list="order-tag-suggestions" value="" maxlength="40" autocomplete="off" placeholder="اكتب العلامة واضغط Enter" class="min-h-10 w-full rounded-xl border-gray-200 text-right text-sm" data-order-group-tag-input>
+                                    <p class="mt-1.5 text-[10px] font-bold leading-5 text-gray-400">تُضاف فورًا عند الضغط على Enter.</p>
+                                </form>
+                                <datalist id="order-tag-suggestions" data-order-tag-suggestions>
+                                    @foreach($availableOrderTags as $availableTag)
+                                        @unless($group['tags']->contains('id', $availableTag->id))<option value="{{ $availableTag->name }}"></option>@endunless
+                                    @endforeach
+                                </datalist>
+                            </div>
+                        </details>
+                    @endif
+                @endcan
+                <span class="hidden text-[10px] font-black" data-order-group-tag-feedback aria-live="polite"></span>
+                <span class="mx-1 hidden h-3 w-px bg-gray-200 sm:inline-block"></span>
+                <span class="text-[10px] font-bold text-gray-400">تاريخ إنشاء الطلب: <span dir="ltr">{{ app_datetime($group['created_at'], 'd/m/Y h:i A') }}</span></span>
+                @if($group['short_reference'])<span class="hidden max-w-52 truncate text-[9px] font-mono text-gray-300 xl:inline" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</span>@endif
             </div>
         </div>
     </x-slot>
@@ -29,6 +70,32 @@
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
         $adminNotesCount = collect($orderAdminNotes ?? [])->count();
         $attachmentsCount = collect($attachmentOrders ?? [])->sum(fn ($order) => $order->attachments->count());
+        $summaryOrders = $group['trashed'] ? $group['orders'] : $group['active_orders'];
+        $orderSummaryItems = $summaryOrders
+            ->flatMap->items
+            ->groupBy(fn ($item) => implode('|', [
+                $item->item_type,
+                $item->story_id,
+                $item->product_id,
+                $item->title,
+                $item->unit_price_cents,
+            ]))
+            ->map(function ($items) {
+                $item = $items->first();
+
+                return [
+                    'title' => $item->title ?: 'عنصر بدون اسم',
+                    'type' => match ($item->item_type) {
+                        'story' => 'قصة',
+                        'product_add_on' => 'إضافة',
+                        default => 'منتج',
+                    },
+                    'quantity' => (int) $items->sum(fn ($current) => (int) $current->quantity),
+                    'unit_price_cents' => (int) $item->unit_price_cents,
+                    'line_total_cents' => (int) $items->sum(fn ($current) => (int) $current->total_price_cents),
+                ];
+            })
+            ->values();
     @endphp
 
     @include('admin.orders._activity-drawer', ['activityTargetOrder' => $attachmentTarget])
@@ -43,6 +110,8 @@
                     @foreach($errors->all() as $message)<p>{{ $message }}</p>@endforeach
                 </div>
             @endif
+
+            @include('admin.orders._customer-rating')
 
             @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
@@ -59,6 +128,12 @@
                     @endcan
                     @if(!empty($whatsappMessages) && !$group['trashed'])
                             @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $whatsappMessages, 'compact' => true, 'labelledCompact' => true])
+                    @endif
+                    @if($ratingWhatsAppAction)
+                        <a href="{{ $ratingWhatsAppAction['url'] }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-700" data-order-rating-whatsapp>
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.91 11.91 0 0 0 12.05 0C5.46 0 .1 5.36.1 11.95c0 2.1.55 4.16 1.59 5.97L0 24l6.22-1.63a11.94 11.94 0 0 0 5.82 1.48h.01C18.64 23.85 24 18.49 24 11.9c0-3.18-1.24-6.17-3.48-8.42Zm-8.47 18.35h-.01a9.9 9.9 0 0 1-5.05-1.38l-.36-.21-3.69.97.99-3.6-.23-.37a9.9 9.9 0 1 1 8.35 4.59Zm5.43-7.42c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-1.76-.88-2.92-1.57-4.09-3.57-.31-.53.31-.49.88-1.63.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.27.49 1.7.63.71.23 1.36.19 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+                            <span>{{ $ratingWhatsAppAction['title'] }}</span>
+                        </a>
                     @endif
                     @can('orders.delete')
                         @if($group['trashed'])
@@ -102,21 +177,61 @@
             @endif
 
             <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
-                <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-                    <h3 class="mb-4 text-lg font-black text-gray-900">العميل والتوصيل</h3>
-                    <div class="grid gap-4 text-sm md:grid-cols-2">
-                        <div><p class="text-xs font-bold text-gray-400">اسم ولي الأمر</p><p class="mt-1 font-black text-gray-900">{{ $group['customer_name'] }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">الهاتف</p><p class="mt-1 font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">الدولة / المحافظة</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">المدينة / الشارع</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
-                        <div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل العنوان</p><p class="mt-1 font-bold text-gray-800">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">مصدر الطلب</p><p class="mt-1 font-black text-gray-900">{{ $sourceLabel }}</p></div>
-                        <div><p class="text-xs font-bold text-gray-400">أُنشئ بواسطة</p><p class="mt-1 font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
-                        @if($group['source_notes'])<div class="md:col-span-2"><p class="text-xs font-bold text-gray-400">تفاصيل المصدر</p><p class="mt-1 font-bold text-gray-800">{{ $group['source_notes'] }}</p></div>@endif
+                <div class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <h3 class="mb-2 text-sm font-black text-gray-900">العميل والتوصيل</h3>
+                    <div class="grid grid-cols-2 gap-1.5 lg:grid-cols-4" data-order-compact-customer>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">اسم ولي الأمر</p><p class="truncate text-xs font-black text-gray-900" title="{{ $group['customer_name'] }}">{{ $group['customer_name'] }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الهاتف</p><p class="truncate text-xs font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
+                        @if(data_get($group['delivery'], 'alternate_phone'))
+                            <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">هاتف إضافي</p><p class="truncate text-xs font-black text-gray-900" dir="ltr">{{ data_get($group['delivery'], 'alternate_phone') }}</p></div>
+                        @endif
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الدولة / المحافظة</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">المدينة / الشارع</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-2"><p class="text-[9px] font-bold text-gray-400">تفاصيل العنوان</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">مصدر الطلب</p><p class="truncate text-[11px] font-black text-gray-900">{{ $sourceLabel }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">أُنشئ بواسطة</p><p class="truncate text-[11px] font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
+                        @if($group['source_notes'])<div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-4"><p class="text-[9px] font-bold text-gray-400">تفاصيل المصدر</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ $group['source_notes'] }}">{{ $group['source_notes'] }}</p></div>@endif
+                    </div>
+
+                    <div class="mt-3 border-t border-gray-100 pt-3" data-order-items-summary>
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-base font-black text-gray-900">ملخص الطلب</h4>
+                            <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-700">{{ $orderSummaryItems->sum('quantity') }} عنصر</span>
+                        </div>
+                        @if($orderSummaryItems->isNotEmpty())
+                            <div class="overflow-hidden rounded-2xl border border-gray-100">
+                                <table class="w-full table-fixed text-right text-xs">
+                                    <thead class="bg-gray-50 text-[10px] font-black text-gray-500">
+                                        <tr>
+                                            <th class="w-auto px-3 py-2">المنتج المطلوب</th>
+                                            <th class="w-16 px-2 py-2 text-center">العدد</th>
+                                            <th class="w-28 px-3 py-2">سعر الوحدة</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 bg-white">
+                                        @foreach($orderSummaryItems as $item)
+                                            <tr data-order-summary-item>
+                                                <td class="px-3 py-2 font-black text-gray-800">
+                                                    <span>{{ $item['title'] }}</span>
+                                                    <span class="mr-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500">{{ $item['type'] }}</span>
+                                                </td>
+                                                <td class="px-2 py-2 text-center font-black text-gray-700">{{ $item['quantity'] }}</td>
+                                                <td class="px-3 py-2 font-black text-indigo-700">{{ format_money($item['unit_price_cents'] / 100) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <p class="rounded-xl bg-gray-50 px-3 py-3 text-xs font-bold text-gray-400">لا توجد عناصر مسجلة في عملية الشراء.</p>
+                        @endif
                     </div>
                 </div>
                 <aside class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 xl:sticky xl:top-5 xl:self-start">
-                    <h3 class="text-base font-black text-indigo-900">ملخص القيمة</h3>
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-base font-black text-indigo-900">ملخص القيمة</h3>
+                        @include('admin.orders._invoice', ['invoiceGroup' => $group, 'invoiceItems' => $orderSummaryItems])
+                    </div>
                     <div class="mt-5 space-y-3 text-sm font-bold text-indigo-900">
                         <div class="flex justify-between gap-3"><span>العناصر</span><span>{{ format_money($group['items_cents'] / 100) }}</span></div>
                         <div class="flex justify-between gap-3"><span>التوصيل</span><span>{{ format_money($group['delivery_cents'] / 100) }}</span></div>
@@ -137,6 +252,7 @@
                         </div>
                         @if($group['payment_method'])<p class="mt-3 text-xs font-bold text-indigo-800">طريقة الدفع: {{ $group['payment_method'] }}</p>@endif
                     </div>
+                    @include('admin.orders._discount-form')
                 </aside>
             </section>
 
@@ -202,7 +318,7 @@
                                             <div class="flex flex-wrap gap-2">
                                                 @foreach(array_slice($order->uploaded_photos ?? [], 0, 5) as $photo)
                                                     <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" class="block h-16 w-16 overflow-hidden rounded-xl border-2 border-white bg-white shadow-sm">
-                                                        <img src="{{ route('admin.orders.photo', [$order, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للطفل {{ $order->child_name }}" class="h-full w-full object-cover" loading="lazy">
+                                                        <img src="{{ route('admin.orders.photo', [$order, $loop->index, 'thumbnail' => 1]) }}" alt="صورة {{ $loop->iteration }} للطفل {{ $order->child_name }}" class="h-full w-full object-cover" loading="lazy">
                                                     </a>
                                                 @endforeach
                                                 @if(count($order->uploaded_photos ?? []) > 5)
@@ -269,7 +385,7 @@
                                     <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-white p-3 sm:flex-row sm:items-center">
                                         @can('orders.photos.view')
                                             <a href="{{ $approvedIdentityUrl }}" target="_blank" rel="noopener" class="block h-24 w-32 shrink-0 overflow-hidden rounded-xl border border-emerald-100 bg-slate-50">
-                                                <img src="{{ $approvedIdentityUrl }}" alt="الهوية المعتمدة للطفل {{ $order->child_name }}" class="h-full w-full object-contain" loading="lazy">
+                                                <img src="{{ route('admin.orders.approved-child-identity-thumbnail', $order) }}" alt="الهوية المعتمدة للطفل {{ $order->child_name }}" class="h-full w-full object-contain" loading="lazy">
                                             </a>
                                         @endcan
                                         <div class="min-w-0 text-right">
@@ -382,7 +498,7 @@
                                                 <div class="flex flex-wrap gap-1.5">
                                                     @foreach($productPhotos as $photo)
                                                         <a href="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" target="_blank" rel="noopener" class="block h-14 w-14 overflow-hidden rounded-lg border-2 border-white bg-white shadow-sm" title="فتح الصورة بالحجم الكامل">
-                                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
+                                                            <img src="{{ route('admin.orders.photo', [$productOrder, $loop->index, 'thumbnail' => 1]) }}" alt="صورة {{ $loop->iteration }} للمنتج {{ $product->title }}" class="h-full w-full object-cover" loading="lazy">
                                                         </a>
                                                     @endforeach
                                                 </div>
@@ -444,14 +560,42 @@
                                 <input x-ref="url" value="{{ $productPreviewGallery->publicUrl() }}" readonly dir="ltr" class="min-w-0 flex-1 rounded-xl border-gray-200 bg-white text-left text-xs text-gray-500">
                             </div>
 
+                            @can('orders.preview.upload')
+                                @if(!$group['trashed'])
+                                    <form id="bulk-product-preview-delete-{{ $group['representative_id'] }}" method="POST" action="{{ route('admin.orders.product-previews.destroy-many', $group['representative_id']) }}" class="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-3 sm:flex-row sm:items-center sm:justify-between" data-order-ajax-delete data-order-bulk-delete data-delete-confirm="سيتم حذف كل صور المعاينة المحددة. هل تريد المتابعة؟">
+                                        @csrf
+                                        @method('DELETE')
+                                        <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-black text-gray-700">
+                                            <input type="checkbox" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-all>
+                                            تحديد كل صور المعاينة
+                                        </label>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-black text-gray-500" data-bulk-delete-selection data-empty-label="لم يتم تحديد صور">لم يتم تحديد صور</span>
+                                            <button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>
+                                        </div>
+                                    </form>
+                                @endif
+                            @endcan
+
                             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 @foreach($productPreviewGallery->previews as $preview)
-                                    <article class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item>
+                                    <article class="relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item data-order-preview-id="{{ $preview->id }}">
+                                        @can('orders.preview.upload')
+                                            @if(!$group['trashed'])
+                                                <label class="absolute left-2 top-2 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-md" title="تحديد الصورة للحذف">
+                                                    <input type="checkbox" name="preview_ids[]" value="{{ $preview->id }}" form="bulk-product-preview-delete-{{ $group['representative_id'] }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $preview->original_name ?: 'صورة المعاينة' }} للحذف">
+                                                </label>
+                                            @endif
+                                        @endcan
                                         <a href="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" target="_blank" rel="noopener" class="block aspect-square bg-slate-100">
-                                            <img src="{{ route('order-product-previews.image', ['token' => $productPreviewToken, 'preview' => $preview]) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
+                                            <img src="{{ route('admin.orders.product-previews.thumbnail', $preview) }}" alt="معاينة المنتج {{ $loop->iteration }}" loading="lazy" class="h-full w-full object-cover">
                                         </a>
                                         <div class="p-2.5">
                                             <p class="truncate text-[11px] font-black text-gray-700" title="{{ $preview->original_name }}">{{ $preview->original_name ?: 'معاينة '.$loop->iteration }}</p>
+                                            <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                                                <span title="رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}" class="inline-flex rounded-full bg-sky-100 px-2 py-0.5 font-black text-sky-700">{{ app_datetime_human($preview->created_at) }}</span>
+                                                <span>رُفعت {{ app_datetime($preview->created_at, 'd/m/Y h:i A') }}</span>
+                                            </div>
                                             @if($preview->note)<p class="mt-1 line-clamp-2 text-[10px] font-bold text-gray-400">{{ $preview->note }}</p>@endif
                                             @can('orders.preview.upload')
                                                 @if(!$group['trashed'])
@@ -537,5 +681,156 @@
             @endcan
         </div>
     </div>
+
+    @push('scripts')
+        <script>
+            (() => {
+                const root = document.querySelector('[data-order-group-tags]');
+                const list = root?.querySelector('[data-order-group-tag-list]');
+                const addForm = root?.querySelector('[data-order-group-tag-add]');
+                const addPanel = root?.querySelector('[data-order-group-tag-add-panel]');
+                const input = root?.querySelector('[data-order-group-tag-input]');
+                const suggestions = root?.querySelector('[data-order-tag-suggestions]');
+                const feedback = root?.querySelector('[data-order-group-tag-feedback]');
+                const canDelete = root?.dataset.canDelete === '1';
+                const knownSuggestions = new Set({{ Illuminate\Support\Js::from($availableOrderTags->pluck('name')->merge($group['tags']->pluck('name'))->unique()->values()) }});
+                let feedbackTimer;
+
+                if (!root || !list) return;
+
+                const normalize = value => value.trim().toLocaleLowerCase();
+
+                const showFeedback = (message, error = false) => {
+                    if (!feedback) return;
+                    window.clearTimeout(feedbackTimer);
+                    feedback.textContent = message;
+                    feedback.classList.remove('hidden', 'text-emerald-600', 'text-red-600');
+                    feedback.classList.add(error ? 'text-red-600' : 'text-emerald-600');
+                    feedbackTimer = window.setTimeout(() => feedback.classList.add('hidden'), 3000);
+                };
+
+                const errorMessage = payload => Object.values(payload?.errors || {}).flat()[0] || payload?.message || 'تعذر تحديث العلامات. حاول مرة أخرى.';
+
+                const refreshSuggestions = tags => {
+                    if (!suggestions) return;
+                    const selected = new Set(tags.map(tag => normalize(tag.name)));
+                    suggestions.replaceChildren();
+                    [...knownSuggestions]
+                        .filter(name => !selected.has(normalize(name)))
+                        .sort((first, second) => first.localeCompare(second, 'ar'))
+                        .forEach(name => {
+                            const option = document.createElement('option');
+                            option.value = name;
+                            suggestions.append(option);
+                        });
+                };
+
+                const renderTags = tags => {
+                    list.replaceChildren();
+
+                    if (!tags.length) {
+                        const empty = document.createElement('span');
+                        empty.className = 'text-[10px] font-bold text-gray-400';
+                        empty.dataset.orderGroupTagsEmpty = '';
+                        empty.textContent = 'بدون علامات';
+                        list.append(empty);
+                        refreshSuggestions(tags);
+                        return;
+                    }
+
+                    tags.forEach(tag => {
+                        knownSuggestions.add(tag.name);
+                        const badge = document.createElement('span');
+                        badge.className = 'group inline-flex items-center rounded-full bg-fuchsia-50 text-fuchsia-700';
+                        badge.dataset.orderGroupTag = tag.id;
+                        badge.dataset.tagName = tag.name;
+
+                        const link = document.createElement('a');
+                        link.href = tag.filter_url;
+                        link.className = 'px-2 py-1 text-[10px] font-black hover:text-fuchsia-900';
+                        link.textContent = `#${tag.name}`;
+                        badge.append(link);
+
+                        if (canDelete && tag.delete_url) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.dataset.orderGroupTagDelete = '';
+                            button.dataset.deleteUrl = tag.delete_url;
+                            button.className = 'ml-1 grid h-5 w-5 place-items-center rounded-full bg-fuchsia-100 text-xs font-black leading-none text-fuchsia-700 opacity-0 transition hover:bg-red-100 hover:text-red-700 group-hover:opacity-100 focus:opacity-100';
+                            button.setAttribute('aria-label', `حذف علامة ${tag.name}`);
+                            button.title = 'حذف العلامة';
+                            button.textContent = '×';
+                            badge.append(button);
+                        }
+
+                        list.append(badge);
+                    });
+
+                    refreshSuggestions(tags);
+                };
+
+                const request = async (url, options) => {
+                    root.setAttribute('aria-busy', 'true');
+                    try {
+                        const response = await fetch(url, {
+                            ...options,
+                            headers: {
+                                Accept: 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                ...(options.headers || {}),
+                            },
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) throw new Error(errorMessage(payload));
+
+                        renderTags(payload.tags || []);
+                        showFeedback(payload.message || 'تم تحديث العلامات.');
+                    } finally {
+                        root.removeAttribute('aria-busy');
+                    }
+                };
+
+                addForm?.addEventListener('submit', async event => {
+                    event.preventDefault();
+                    const tagName = input.value.trim();
+                    if (!tagName) return;
+
+                    const formData = new FormData(addForm);
+                    input.disabled = true;
+                    try {
+                        await request(addForm.action, {
+                            method: 'POST',
+                            body: formData,
+                        });
+                        input.value = '';
+                        addPanel?.removeAttribute('open');
+                    } catch (error) {
+                        showFeedback(error.message, true);
+                    } finally {
+                        input.disabled = false;
+                    }
+                });
+
+                root.addEventListener('click', async event => {
+                    const button = event.target.closest('[data-order-group-tag-delete]');
+                    if (!button || button.disabled) return;
+
+                    button.disabled = true;
+                    try {
+                        await request(button.dataset.deleteUrl, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': addForm?.querySelector('[name="_token"]')?.value || '',
+                            },
+                        });
+                    } catch (error) {
+                        button.disabled = false;
+                        showFeedback(error.message, true);
+                    }
+                });
+            })();
+        </script>
+    @endpush
 
 </x-admin-layout>

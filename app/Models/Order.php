@@ -112,6 +112,14 @@ class Order extends Model
         return $this->hasMany(BookletPreviewDecision::class);
     }
 
+    public function submittedServiceRatings()
+    {
+        return $this->hasMany(OrderCustomerReview::class)
+            ->where('review_type', OrderCustomerReview::TYPE_SERVICE_RATING)
+            ->where('version_reference', OrderCustomerReview::VERSION_CHECKOUT)
+            ->where('decision', OrderCustomerReview::DECISION_SUBMITTED);
+    }
+
     public function items()
     {
         return $this->hasMany(OrderItem::class);

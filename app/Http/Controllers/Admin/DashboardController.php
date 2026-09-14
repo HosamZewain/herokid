@@ -37,7 +37,7 @@ class DashboardController extends Controller
 
         $recentOrders = $orderGroups->recent();
         $analyticsWidget = $canViewStatistics && auth()->user()->hasPermission('analytics.view')
-            ? $analytics->widget()
+            ? ['status' => 'loading']
             : null;
 
         return view('admin.dashboard.index', compact(

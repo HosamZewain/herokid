@@ -34,7 +34,7 @@ The legacy `photos[]` path remains as a transitional fallback for old clients an
 Configured in `.env`:
 
 ```env
-PHOTO_UPLOAD_MAX_FILES=5
+PHOTO_UPLOAD_MAX_FILES=3
 PHOTO_UPLOAD_MAX_SIZE_MB=15
 PHOTO_UPLOAD_CONCURRENCY=2
 PHOTO_UPLOAD_TEMP_RETENTION_HOURS=24
@@ -48,8 +48,9 @@ Accepted MIME types:
 - PNG
 - WebP
 - HEIC / HEIF
+- AVIF
 
-HEIC/HEIF is accepted at upload time, but PHP on shared hosting may not decode dimensions for those formats. The current server validation therefore validates MIME and size for HEIC/HEIF and avoids claiming server-side conversion support.
+HEIC/HEIF and AVIF are accepted at upload time. The browser prepares a JPEG derivative when necessary, while the server verifies the ISO image container before accepting formats that shared-hosting PHP may not decode directly.
 
 ## Client-Side Optimization
 
@@ -61,6 +62,27 @@ Before upload, the browser attempts to resize JPEG, PNG, and WebP images when th
 - falls back to the original file if browser image decoding is unavailable
 
 Server-side validation remains authoritative.
+
+### Reliability update (September 2026)
+
+- HEIC conversion uses the pinned `heic-to/csp` build. The production CSP is unchanged: no `unsafe-eval` exception is added. Converted JPEGs are also resized, without upscaling.
+- Shared upload transport handles progress, cancellation, a three-minute timeout, and actionable 413/419/429/network messages. Only a rejected 419 is automatically replayed, once, after a same-origin session/CSRF refresh. Network/5xx errors are not blindly replayed because the server may already have stored the file.
+- Refreshing a changed upload session updates final form tokens and requeues retained local images; stale restored references are removed. Session refresh does not transfer ownership of any existing image.
+- Story, product/identity, football and package uploaders use the shared transport. Queue slots are released exactly once, and removing an image during conversion prevents its later upload.
+- Browser storage is optional. A blocked/full storage API cannot stop uploading. Restored IDs are validated against the current session, owner, expiry and unattached state before being shown as uploaded.
+- Identity/product/football flows preserve original source photos. Ordinary JPEG/PNG/WebP uploads no longer send a redundant second file. HEIC/AVIF may still include the compatible derivative because shared-hosting decoders are not guaranteed. This is an intentional fidelity/compatibility tradeoff, not duplicate active records.
+- `GET /photo-uploads/session` also returns the fresh CSRF token and `valid_upload_ids` for at most ten requested UUIDs. The existing private/no-store policy applies. Nothing is made public.
+
+Browser regression tests use synthetic imagery only:
+
+```bash
+node --test tests/Frontend/upload-reliability.test.mjs
+HEROKID_LOCAL_E2E=1 node --test tests/Frontend/local-photo-upload.test.mjs
+```
+
+Set `BROWSER_EXECUTABLE` for an installed Chromium/Chrome executable on non-macOS systems. The second test is hard-coded to localhost, uploads one synthetic image through Laravel, verifies the private preview and removes the files afterward. It must never target production.
+
+The decoder is unmodified `heic-to` 1.5.2 (LGPL-3.0), source and build instructions: https://github.com/hoppergee/heic-to . The lockfile pins the npm package; its CSP variant is lazily bundled by Vite. Browser test tooling is a development dependency, not a production PHP dependency.
 
 ## Temporary Upload Lifecycle
 

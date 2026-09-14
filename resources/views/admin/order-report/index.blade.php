@@ -32,7 +32,7 @@
                     <div class="xl:col-span-2">
                         <label for="report-q" class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
                         <input id="report-q" name="q" type="search" value="{{ request('q') }}"
-                               placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج أو SKU"
+                               placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج، SKU أو علامة"
                                class="w-full rounded-xl border-gray-200 text-right text-sm">
                     </div>
                     <div>
@@ -110,6 +110,15 @@
                             <option value="">كل طرق الدفع</option>
                             @foreach($options['payment_methods'] as $method)
                                 <option value="{{ $method }}" @selected(request('payment_method') === $method)>{{ $method }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label for="report-tag" class="mb-1.5 block text-xs font-black text-gray-600">علامة الطلب</label>
+                        <select id="report-tag" name="tag_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                            <option value="">كل العلامات</option>
+                            @foreach($options['tags'] as $tag)
+                                <option value="{{ $tag->id }}" @selected((string) request('tag_id') === (string) $tag->id)>{{ $tag->name }}</option>
                             @endforeach
                         </select>
                     </div>

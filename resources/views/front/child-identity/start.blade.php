@@ -76,13 +76,13 @@
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <h3 class="text-lg font-black text-indigo-950">صور الطفل</h3>
-                                    <p class="mt-1 text-sm leading-6 text-indigo-700">اختر صورتين أو ٣ صور معًا. JPG وPNG وWebP وHEIC/HEIF مدعومة.</p>
+                                    <p class="mt-1 text-sm leading-6 text-indigo-700">اختر صورتين أو ٣ صور معًا. JPG وPNG وWebP وHEIC/HEIF وAVIF مدعومة.</p>
                                 </div>
                                 <span class="rounded-full bg-white px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count>تم رفع ٠ من ٢ المطلوبة</span>
                             </div>
 
                             <input type="file" id="identity-photos" multiple
-                                   accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                                   accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
                                    class="sr-only" data-identity-photo-input>
                             <div data-identity-photo-ids></div>
 

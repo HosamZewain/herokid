@@ -12,6 +12,13 @@ From the Admin Panel, open **التكاملات → Agent API Tokens** (`/admin/
 - `stories`: story production only.
 - `products`: product production only.
 
+For a dedicated worker that must process one product (or a small allowed set), choose `products` and enable **تقييد هذا الـAgent بمنتجات محددة**. Select the allowed products from the token page. The restriction is embedded in the Sanctum token abilities, so it cannot be widened by changing an API request.
+
+- Existing product tokens without selected product IDs remain allowed to process all production products for backward compatibility.
+- A restricted token skips a complete checkout if any production unit is a story or a different personalized product.
+- Ready-made items without a Production Prompt are not production units and do not block an otherwise eligible checkout.
+- Product restrictions apply to acquisition, context, uploads, previews, rework, and completion.
+
 Enable **السماح بتعديل وإعادة إنتاج الطلبات السابقة** only for an Agent that must correct existing orders. This adds two narrowly scoped abilities:
 
 - `agent:orders.edit-personalization`
@@ -25,6 +32,9 @@ The same operation is available from Artisan:
 
 ```bash
 php artisan agent:token issue agent@example.com --name=production-agent --expires=90 --scope=stories
+
+# Restrict a product worker to product IDs 12 and 19
+php artisan agent:token issue agent@example.com --name=specific-product-agent --expires=90 --scope=products --product=12 --product=19
 
 # Add --rework only when this Agent may correct existing orders
 php artisan agent:token issue agent@example.com --name=production-rework-agent --expires=90 --scope=products --rework
@@ -43,9 +53,174 @@ Revoke it with:
 php artisan agent:token revoke agent@example.com --name=production-agent
 ```
 
+### Edit an existing Agent token
+
+Admins with `agent_api.tokens.manage` can use **Edit** on `/admin/agent-api-tokens` to change an existing, non-revoked token without issuing a new secret. The edit page updates only the Sanctum token row's name, allowlisted abilities, catalog/product scope abilities, rework abilities, and expiry. The stored token hash and owner are never displayed or changed, so the same token string already configured in HeroKid Studio takes on the new abilities immediately.
+
+The base `agent` ability is mandatory and is always retained. Order abilities can be added or removed individually. Catalog scope and selected-product restrictions continue to use `agent:catalog.*` abilities, and the rework control continues to manage `agent:orders.rework` plus `agent:orders.edit-personalization` together. Unknown ability strings and attempts to change the token owner are rejected.
+
+Token abilities and Agent account permissions remain separate. Editing a token does not grant or remove account permissions. The page shows the current account-permission state beside each ability and warns when an enabled token ability is blocked by a missing application permission. Creation retains its existing behavior of granting the standard Agent account permissions intentionally.
+
+Revocation remains final because Sanctum revocation deletes the token row. Revoked tokens cannot be edited, and no reversible disable state is simulated. The secret is still shown only once at creation and can never be recovered from the edit page.
+
 Tokens issued before catalog scoping was added continue to work with both stories and products for backward compatibility. Reissue them from the Admin Panel to enforce a narrower scope.
 
-All `POST` requests require a unique `Idempotency-Key` header. Retrying the identical request with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`.
+## HeroKid Studio read-only API
+
+HeroKid Studio uses the same Sanctum Agent token. Both Studio routes require the base `agent` ability, `agent:orders.read`, an enabled `agent_api_enabled` account, and the application permission `orders.view`. They do not acquire, assign, or mutate an order, and they do not require the checkout to be owned by the requesting Agent.
+
+### Test connection
+
+```bash
+curl https://hero-kid.com/api/agent/studio/connection \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer TOKEN'
+```
+
+```json
+{
+  "success": true,
+  "agent": { "id": 42, "name": "HeroKid Studio Agent" },
+  "abilities": ["agent", "agent:orders.read"],
+  "studio_api": true,
+  "api_version": "1"
+}
+```
+
+### Read an order for Studio
+
+The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads every personalized story row in the same persisted `checkout_group_key`. Ready-made and custom product rows are not serialized as stories.
+
+```bash
+curl https://hero-kid.com/api/agent/studio/orders/HK-2026-XXXXXX \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer TOKEN'
+```
+
+```json
+{
+  "success": true,
+  "order": {
+    "id": "CHK-20260909-ABC123",
+    "order_number": "HK-2026-XXXXXX",
+    "checkout_reference": "HK09-236",
+    "status": "generating",
+    "created_at": "2026-09-09T10:00:00+03:00",
+    "source_revision": "sha256:..."
+  },
+  "production_stories": [
+    {
+      "production_unit_id": "story:456",
+      "order_id": 456,
+      "order_number": "HK-2026-XXXXXX",
+      "status": "generating",
+      "child": {
+        "name": "ياسين",
+        "age": 7,
+        "gender": "boy",
+        "production_data": { "interests": "العلوم" }
+      },
+      "story": {
+        "id": 31,
+        "template_id": "story:31",
+        "title": "المخترع الصغير",
+        "language": "ar"
+      },
+      "dedication": "إلى مبدعي الصغير...",
+      "scenes": [
+        {
+          "id": "order_scene_snapshot:1001",
+          "number": 1,
+          "text": "بدأ ياسين مغامرته.",
+          "title": null,
+          "metadata": { "source": "order_snapshot" }
+        }
+      ],
+      "metadata": {
+        "scene_text_source": "نسخة الطلب المحفوظة",
+        "updated_at": "2026-09-09T10:05:00+03:00"
+      }
+    }
+  ]
+}
+```
+
+Stable identifier semantics:
+
+- `order.id` is the persisted `checkout_group_key`.
+- `production_unit_id` is `story:{orders.id}` and remains tied to that exact personalized story row.
+- `story.template_id` is `story:{stories.id}`.
+- Scene IDs identify the database record actually supplying the text: `production_scene:{id}`, `order_scene_snapshot:{id}`, or `story_scene_template:{id}`.
+- `source_revision` is a deterministic SHA-256 digest of relevant update timestamps **and the returned production-story content**, so even same-second text changes invalidate it. Repeated unchanged reads remain stable.
+
+Scene text precedence is evaluated independently for every scene number: a populated latest Production Studio scene wins, otherwise a populated order-owned snapshot wins, otherwise a populated current story template is rendered as fallback. An empty or missing snapshot for one scene does not suppress that scene's template fallback, while a populated historical snapshot is never replaced implicitly. The read path does not write or refresh snapshots. Scenes are explicitly sorted by scene number and Arabic Unicode is returned unchanged. The dedication is read from the individual story order's `gift_note`.
+
+### Gender-specific production text synchronization
+
+An explicit Admin story save now synchronizes that story's existing order snapshots, **including completed/printed orders**, as approved for text corrections/reprinting. The previous snapshot is archived in private `order_scene_text_snapshot_revisions` records inside the same transaction. The existing snapshot and production-unit IDs stay unchanged. GET remains read-only; "Refresh from Hero Kid" reads the newly synchronized snapshot after the Admin save completes. No Studio change is required.
+
+The centralized resolver accepts `girl`/`female` and `boy`/`male` (case/whitespace normalized). `child.gender` in this Studio endpoint is canonical `female`/`male`, or null if unspecified. Existing storage is unchanged: `text_template` belongs to `story.gender`, and `alternate_text_template` to the opposite gender. A `both`/unspecified story retains the documented neutral-original policy; it does not guess the language's grammatical gender. Missing child gender uses the original. New-order legacy missing-alternate fallback remains original with its existing fallback warning; explicit synchronization refuses a missing required alternate rather than claiming a successful correction.
+
+`scenes[].metadata.text_variant` reports the **actual selected** `female`, `male`, or `neutral` from saved render context. Historical snapshots without this context retain legacy `original`/`alternate`/`original_fallback` metadata until synchronized; they are not relabeled using today's template. Internal original/alternate column semantics remain backward-compatible. Production-scene text matching a known snapshot may carry that snapshot's resolved variant; independently edited text is not assigned a guessed variant.
+
+Synchronization updates only text/variant context and source references. It does not change identity, ownership, payment, status, attachments, images or assets. Auto-derived Production Studio text is updated only when it still matches the previous snapshot (or already matches the new text). Independently edited production text, missing variants, differing template identity or scene sets other than exactly 1–13 block the unit and are reported to the Admin; no guessing/partial scene updates. Other story templates' orders are untouched. `stories.update` authorizes this propagation from catalog saves; the separate per-order action requires `orders.update`.
+
+For previously edited stories, after deploying and migrating, re-save their approved text through Admin to synchronize their units, or explicitly repair individual units:
+
+```bash
+# Read-only audit, across stories or one story; output excludes customer text/contact data.
+php artisan orders:audit-production-scenes --all
+php artisan orders:audit-production-scenes --story=77
+
+# Dry-run first. Replace ADMIN_ID with the responsible authorized Admin ID.
+php artisan orders:refresh-production-scenes story:734 --story=77 --admin=ADMIN_ID --reason="Approved gender text correction" --allow-completed
+# Explicit targeted write; stable IDs, previous snapshot archived.
+php artisan orders:refresh-production-scenes story:734 --story=77 --admin=ADMIN_ID --reason="Approved gender text correction" --allow-completed --apply
+```
+
+The per-order Admin "تحديث نصوص هذه القصة من القالب الحالي" action provides the same targeted service with CSRF, permission and explicit confirmation. CLI defaults to dry-run; completed orders require `--allow-completed` on targeted repairs. No migration performs a backfill. The history table is private and is never included in Agent responses or activity-log payloads. Deployment alone does not repair snapshots created before the synchronization feature.
+
+A checkout with no personalized stories returns HTTP 200 with `production_stories: []`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, or a missing `orders.view` permission return `FORBIDDEN`. Phone, email, delivery address, payment data, storage paths, product rows, and unrelated Admin notes are never returned.
+
+## Upload a story preview from HeroKid Studio
+
+Story preview upload is a separate production operation and does not acquire the checkout. It does not require an existing assignment, and an assignment owned by another Agent does not block a properly authorized uploader.
+
+The existing endpoint and multipart contract remain unchanged:
+
+```http
+POST /api/agent/orders/{storyOrderId}/previews
+Authorization: Bearer TOKEN
+Accept: application/json
+Idempotency-Key: UNIQUE_OPERATION_KEY
+Content-Type: multipart/form-data
+
+type=booklet
+preview_files[]=@preview.pdf
+```
+
+Authorization requires all of the following:
+
+- a valid Sanctum Agent token with the base `agent` ability;
+- an active Admin account with `agent_api_enabled = true`;
+- token ability `agent:orders.upload-preview`;
+- application permission `orders.preview.upload`;
+- a story catalog scope that allows the selected story production unit.
+
+The token ability is intentionally separate from `agent:orders.read`; a read-only Studio token cannot upload previews. Standard production tokens issued from **Agent API Tokens** or `php artisan agent:token issue` already include `agent:orders.upload-preview` and grant the account `orders.preview.upload`. Existing custom or read-only tokens are not upgraded automatically; an authorized Admin can add the ability through **Edit** while keeping the same token secret, provided the Agent account already has `orders.preview.upload`.
+
+Booklet previews are keyed by the exact story order ID, not by the checkout group. In a checkout containing multiple stories, uploading Story A creates or replaces only Story A's preview and does not modify Story B. Replacements keep the same preview record and create the next immutable preview version according to the existing booklet-preview rules.
+
+Every request requires `Idempotency-Key`. Repeating the same request with the same key returns the saved response without creating another preview version or file. Reusing the key with different input returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+Error behavior:
+
+- `401 UNAUTHORIZED`: missing or invalid Sanctum token.
+- `403 FORBIDDEN`: disabled Agent API account, missing preview-upload ability, missing application permission, or disallowed catalog scope.
+- `404 ORDER_NOT_FOUND`: unknown story order ID.
+- `422 INVALID_ATTACHMENT`: missing/invalid multipart fields, a non-PDF file, an unreadable/encrypted PDF, an unsafe size/page count, or an order without a story production unit.
+
+All `POST` requests require a unique `Idempotency-Key` header. Retrying an operation that already changed data with the same key returns the saved response; reusing the key for different input returns `IDEMPOTENCY_KEY_REUSED`. Empty queue responses are deliberately transient, so polling with an old key can discover orders that arrived later. Agents should still generate a fresh key for each intended queue poll.
 
 ## Workflow
 
@@ -67,6 +242,50 @@ repeat
 
 Acquisition is atomic for the complete `checkout_group`. Every production order in it is assigned to the same Agent and moved from `new` to `generating`. Ready products remain part of the checkout but are not production units and do not block completion.
 
+## Story identity-only workflow
+
+Create a separate token from **Agent API Tokens**, choose **القصص فقط**, and enable **هويات القصص فقط**. This token cannot use the normal story/product production or rework endpoints.
+
+```text
+POST /checkouts/acquire-next-identity
+       ↓
+GET /checkouts/{reference}/identity-context
+       ↓
+Execute every identity_units[].identity_prompt
+       ↓
+POST /orders/{order}/identity-preview for every missing identity
+       ↓
+POST /checkouts/{reference}/complete-identity
+       ↓
+repeat with a fresh Idempotency-Key
+```
+
+Acquisition remains atomic for the complete checkout. A checkout containing multiple stories returns one `identity_units[]` entry per story. Products in a mixed checkout are returned only as `deferred_units[]` with `DEFERRED_DO_NOT_PROCESS_IN_IDENTITY_WORKFLOW`; no product or story-production prompt is exposed. After every story has an uploaded identity, completion moves every row in that checkout from `new` to `waiting_customer` so the checkout cannot split into conflicting statuses.
+
+```bash
+curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next-identity \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-poll-001'
+
+curl https://hero-kid.com/api/agent/checkouts/HK09-236/identity-context \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN'
+
+curl -X POST https://hero-kid.com/api/agent/orders/123/identity-preview \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-upload-123-v1' \
+  -F 'identity=@child-identity.png'
+
+curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-236/complete-identity \
+  -H 'Accept: application/json' \
+  -H 'Authorization: Bearer IDENTITY_ONLY_TOKEN' \
+  -H 'Idempotency-Key: identity-complete-HK09-236'
+```
+
+`complete-identity` returns `IDENTITY_FILES_MISSING` until every story has an identity. A repeated successful completion is idempotent. Story checkouts missing original child photos are skipped because the Agent cannot safely generate their identity.
+
 ## Endpoints
 
 ### Acquire next checkout
@@ -81,8 +300,25 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next \
 Empty queue:
 
 ```json
-{"success":true,"checkout":null,"reason":"NO_AVAILABLE_ORDERS"}
+{
+  "success": true,
+  "checkout": null,
+  "reason": "NO_AVAILABLE_ORDERS",
+  "queue": {
+    "token_catalog_scope": "products",
+    "new_checkout_groups": 12,
+    "eligible_now": 0,
+    "already_acquired": 2,
+    "without_production_units": 3,
+    "outside_token_scope": 7,
+    "mixed_production_status": 0
+  }
+}
 ```
+
+The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope; and `already_acquired` means another assignment already exists.
+
+For a product-restricted token, `queue.token_product_ids` lists the enforced product IDs. The normal workflow and endpoints do not change: acquire with `POST /checkouts/acquire-next`, execute every returned product prompt, upload at least one production attachment for every unit, optionally upload previews, then call `POST /checkouts/{reference}/complete-production`. Successful completion changes the production orders to `ready_preview`.
 
 ### Production context
 
@@ -93,6 +329,10 @@ curl https://hero-kid.com/api/agent/checkouts/HK08-151/production-context \
 ```
 
 The response contains a compact `production_units` list. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. The top-level `team_notes` list contains the checkout's permanent staff notes in newest-first order, including writer and Cairo timestamp. Customer address and payment data are not returned.
+
+A store product can define multiple independently produced components. In that case, each component is returned as its own production unit using `product:{orderItemId}:component:{stableKey}` and includes `production_component.key`, `production_component.name`, `production_component.quantity_per_item`, the purchased `product_quantity`, and the final component `quantity`. A product with exactly one production prompt keeps the backward-compatible `product:{orderItemId}` unit key.
+
+Product component definitions are snapshotted when the order item is created. Later edits to a product do not silently rewrite historical production instructions. An authorized Admin can explicitly refresh one order item from the product's current active components on its product-production page.
 
 ### Upload production attachments
 
@@ -134,7 +374,7 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK08-151/complete-producti
   -H 'Idempotency-Key: run-123-complete'
 ```
 
-Every production unit must have at least one production attachment. The existing status service moves all production orders to `ready_preview` (جاهز للمعاينة). A staff member sends the preview to the customer and then moves the checkout to `preview_uploaded` (انتظار الموافقة). A repeated successful Agent completion is safe.
+Every production unit, including every component of a multi-component product, must have at least one production attachment. The existing status service moves all production orders to `ready_preview` (جاهز للمعاينة). A staff member sends the preview to the customer and then moves the checkout to `preview_uploaded` (انتظار الموافقة). A repeated successful Agent completion is safe.
 
 The Agent API deliberately does not expose a free-form status-change endpoint. Production completion can only perform the controlled `generating` → `ready_preview` transition.
 
@@ -256,3 +496,10 @@ Errors use a stable JSON shape:
 Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_ACQUIRED`, `CHECKOUT_NOT_REWORKABLE`, `INVALID_ORDER_STATUS`, `ORDER_NOT_ACQUIRED_BY_AGENT`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_PERSONALIZATION`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
 
 Reference and attachment URLs require the same Bearer token and only work for the Agent currently assigned to that checkout. They never expose private storage paths.
+# Story languages and reprints
+
+Story orders now select Arabic or English independently. English scene text uses
+explicit male/female templates. Studio can request a safe language-only change
+through the existing personalization endpoint, retaining its write permission,
+acquisition and idempotency requirements. See [story languages](story-languages.md)
+for the request contract, safeguards, and Admin controls.

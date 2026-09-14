@@ -19,5 +19,6 @@ return [
         'image/heif',
         'image/heic-sequence',
         'image/heif-sequence',
+        'image/avif',
     ],
 ];

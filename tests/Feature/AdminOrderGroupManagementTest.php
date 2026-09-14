@@ -156,6 +156,28 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(1, $groups->total());
     }
 
+    public function test_dashboard_total_matches_the_order_report_and_includes_soft_deleted_checkouts(): void
+    {
+        $this->createStoryOrder('HK-DASH-ACTIVE', 'GROUP-DASH-ACTIVE', 'ليلى', 'new');
+        $deleted = $this->createStoryOrder('HK-DASH-DELETED', 'GROUP-DASH-DELETED', 'عمر', 'cancelled');
+        $deleted->delete();
+
+        $dashboard = $this->actingAs($this->admin)
+            ->get(route('admin.dashboard.index'))
+            ->assertOk();
+        $report = $this->actingAs($this->admin)
+            ->get(route('admin.order-report.index'))
+            ->assertOk();
+
+        $dashboardTotal = $dashboard->viewData('totalOrders');
+        $reportTotal = $report->viewData('report')['summary']['checkouts'];
+
+        $this->assertSame(2, $dashboardTotal);
+        $this->assertSame($reportTotal, $dashboardTotal);
+        $this->assertSame(2, $dashboard->viewData('orderRecordCounts')['total']);
+        $this->assertSame(1, $dashboard->viewData('newOrders'));
+    }
+
     public function test_dashboard_uses_actual_payment_deltas_and_compares_new_orders_with_yesterday(): void
     {
         $order = $this->createStoryOrder('HK-DASH-OLD', 'GROUP-DASHBOARD-OLD', 'سلمى', 'under_review');
@@ -667,21 +689,36 @@ class AdminOrderGroupManagementTest extends TestCase
         [$first, $second] = $this->checkoutFixture();
         $shortReference = $first->checkoutReference()->value('short_reference');
 
-        $this->actingAs($this->admin)
-            ->get(route('admin.orders.groups.show', $first->id))
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $first->id));
+
+        $response
             ->assertOk()
             ->assertSee('<title>'.$shortReference.' — '.config('app.name').'</title>', false)
             ->assertSee('تعديل الطلب بالكامل')
+            ->assertSee('data-order-compact-customer', false)
+            ->assertSee('grid grid-cols-2 gap-1.5 lg:grid-cols-4', false)
+            ->assertSee('data-order-items-summary', false)
+            ->assertSeeInOrder(['العميل والتوصيل', 'ملخص الطلب', 'المنتج المطلوب', 'العدد', 'سعر الوحدة'])
             ->assertSee('القصص والأطفال')
             ->assertSee('المنتجات المباشرة')
             ->assertSee('مغامرة رنا')
+            ->assertSee('رحلة آدم')
+            ->assertSee('ملصق باسم الطفل')
             ->assertSee('كتاب تلوين مباشر')
+            ->assertSee(format_money(299))
+            ->assertSee(format_money(399))
+            ->assertSee(format_money(50))
+            ->assertSee(format_money(75))
             ->assertSee('data-inline-production-prompt', false)
             ->assertSee('برومبت إنتاج قصة رنا')
             ->assertSee('معاينات القصص للعميل')
             ->assertSee('data-order-shipping-disclosure', false)
             ->assertDontSee('href="'.route('admin.orders.show', $first).'"', false)
             ->assertDontSee('href="'.route('admin.orders.show', $second).'"', false);
+
+        $this->assertSame(4, substr_count($response->getContent(), 'data-order-summary-item'));
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,1fr)_22rem]', $response->getContent());
 
         // The old per-story URL remains available for backward compatibility,
         // but the primary workspace no longer sends staff into it.
@@ -761,6 +798,48 @@ class AdminOrderGroupManagementTest extends TestCase
                 ->assertSee(route('admin.orders.groups.show', $related->id), false)
                 ->assertDontSee($unrelatedReference);
         }
+    }
+
+    public function test_group_page_provides_a6_branded_invoice_preview_and_download_data(): void
+    {
+        [$first] = $this->checkoutFixture();
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $first))
+            ->assertOk()
+            ->assertSeeInOrder(['ملخص القيمة', 'data-order-invoice-open'], false)
+            ->assertSee('فاتورة')
+            ->assertSee('A6 عمودي — صورة PNG')
+            ->assertSee('data-order-invoice-modal', false)
+            ->assertSee('data-order-invoice-preview', false)
+            ->assertSee('data-order-invoice-download', false)
+            ->assertSee('data-order-invoice-new-tab', false)
+            ->assertSee('data-order-invoice-data', false);
+
+        $this->assertMatchesRegularExpression(
+            '/<script type="application\/json" data-order-invoice-data>(.*?)<\/script>/s',
+            $response->getContent(),
+        );
+        preg_match(
+            '/<script type="application\/json" data-order-invoice-data>(.*?)<\/script>/s',
+            $response->getContent(),
+            $matches,
+        );
+        $invoice = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame('GROUP-MULTI', $invoice['checkout_reference']);
+        $this->assertSame('HeroKid-invoice-'.$invoice['reference'].'.png', $invoice['file_name']);
+        $this->assertCount(4, $invoice['items']);
+        $directProduct = collect($invoice['items'])->firstWhere('title', 'كتاب تلوين مباشر');
+        $this->assertSame(2, $directProduct['quantity']);
+        $this->assertSame(format_money(75), $directProduct['unit_price']);
+        $this->assertSame(format_money(150), $directProduct['line_total']);
+        $this->assertSame(format_money(938), $invoice['grand_total']);
+
+        $invoiceJavascript = file_get_contents(resource_path('js/order-invoice.js'));
+        $this->assertStringContainsString('const A6_WIDTH = 1240;', $invoiceJavascript);
+        $this->assertStringContainsString('const A6_HEIGHT = 1748;', $invoiceJavascript);
+        $this->assertStringContainsString('canvas.toBlob', $invoiceJavascript);
     }
 
     public function test_order_details_show_a_downloadable_checkout_payment_summary_with_all_items(): void

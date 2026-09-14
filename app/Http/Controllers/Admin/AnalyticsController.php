@@ -5,12 +5,18 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\AnalyticsDateRange;
 use App\Services\Analytics\Ga4AnalyticsRepository;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AnalyticsController extends Controller
 {
+    public function widget(Ga4AnalyticsRepository $analytics): JsonResponse
+    {
+        return response()->json($analytics->widget());
+    }
+
     public function index(Request $request, Ga4AnalyticsRepository $analytics): View
     {
         $range = AnalyticsDateRange::fromRequest($request);

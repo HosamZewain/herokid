@@ -41,6 +41,26 @@
                 @if($isEditing) @method('PUT') @endif
 
                 <div class="space-y-5">
+                    @if(! $isEditing)
+                        <section class="rounded-3xl border border-indigo-200 bg-gradient-to-l from-indigo-50 to-white p-5 shadow-sm sm:p-6" data-existing-customer-lookup data-search-url="{{ route('admin.orders.existing-customers.search') }}">
+                            <div class="grid items-end gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+                                <div class="text-right">
+                                    <h3 class="text-lg font-black text-gray-950">اختيار عميل سابق <span class="text-xs font-bold text-gray-400">(اختياري)</span></h3>
+                                    <p class="mt-1 text-xs font-bold leading-6 text-gray-600">ابحث برقم الموبايل ثم اختر أحد العناوين التي استخدمها العميل سابقًا. يمكنك تعديل أي بيان قبل حفظ الطلب الجديد.</p>
+                                    <div class="mt-3 flex flex-col gap-2 sm:flex-row-reverse">
+                                        <input type="search" inputmode="tel" dir="ltr" autocomplete="off" placeholder="رقم موبايل العميل" class="min-w-0 flex-1 rounded-xl border-indigo-200 bg-white text-left text-sm" data-existing-customer-phone>
+                                        <button type="button" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60" data-existing-customer-search>بحث عن العميل</button>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl bg-white px-4 py-3 text-center text-xs font-black text-indigo-700 ring-1 ring-indigo-100">
+                                    يتم نسخ بيانات العميل والتوصيل فقط
+                                </div>
+                            </div>
+                            <p class="mt-3 hidden rounded-xl px-4 py-3 text-sm font-bold" role="status" data-existing-customer-status></p>
+                            <div class="mt-4 hidden grid gap-3 md:grid-cols-2" data-existing-customer-results></div>
+                        </section>
+                    @endif
+
                     @if(! $isEditing && $pricingPackages->isNotEmpty())
                         <section class="rounded-3xl border border-amber-200 bg-gradient-to-l from-amber-50 to-white p-5 shadow-sm sm:p-6">
                             <div class="grid items-end gap-4 md:grid-cols-2">
@@ -325,10 +345,109 @@
                 const packageDescription = root.querySelector('[data-package-description]');
                 const country = root.querySelector('[data-country-select]');
                 const governorate = root.querySelector('[data-governorate-select]');
+                const existingCustomerLookup = root.querySelector('[data-existing-customer-lookup]');
                 let restoringPackage = root.dataset.restoredPackage === '1';
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
                 const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
+
+                const setExistingCustomerStatus = (message, type = 'info') => {
+                    const status = existingCustomerLookup?.querySelector('[data-existing-customer-status]');
+                    if (!status) return;
+                    status.textContent = message;
+                    status.className = `mt-3 rounded-xl px-4 py-3 text-sm font-bold ${type === 'error' ? 'bg-red-50 text-red-700' : type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600 ring-1 ring-indigo-100'}`;
+                };
+
+                const applyExistingCustomer = profile => {
+                    root.querySelector('#parent-name').value = profile.parent_name || '';
+                    root.querySelector('#phone').value = profile.phone || '';
+                    country.value = profile.delivery_country_id ? String(profile.delivery_country_id) : '';
+                    country.dispatchEvent(new Event('change'));
+                    governorate.value = profile.delivery_governorate_id ? String(profile.delivery_governorate_id) : '';
+                    governorate.dispatchEvent(new Event('change'));
+                    root.querySelector('#city').value = profile.city || '';
+                    root.querySelector('#street').value = profile.street || '';
+                    root.querySelector('#address-details').value = profile.address_details || '';
+                    setExistingCustomerStatus(`تم اختيار ${profile.parent_name || 'العميل'} من الطلب ${profile.checkout_reference}. راجع البيانات ويمكنك تعديلها قبل الحفظ.`, 'success');
+                    root.querySelector('#parent-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                };
+
+                const renderExistingCustomers = customers => {
+                    const results = existingCustomerLookup?.querySelector('[data-existing-customer-results]');
+                    if (!results) return;
+                    results.replaceChildren();
+                    results.classList.toggle('hidden', customers.length === 0);
+
+                    customers.forEach(profile => {
+                        const card = document.createElement('button');
+                        card.type = 'button';
+                        card.className = 'rounded-2xl border border-indigo-100 bg-white p-4 text-right transition hover:border-indigo-400 hover:shadow-sm';
+
+                        const heading = document.createElement('span');
+                        heading.className = 'flex items-center justify-between gap-3';
+                        const reference = document.createElement('span');
+                        reference.className = 'text-xs font-black text-indigo-600';
+                        reference.textContent = profile.checkout_reference || '';
+                        const name = document.createElement('strong');
+                        name.className = 'text-sm font-black text-gray-950';
+                        name.textContent = profile.parent_name || 'عميل سابق';
+                        heading.append(reference, name);
+
+                        const phone = document.createElement('span');
+                        phone.className = 'mt-2 block text-xs font-bold text-gray-600';
+                        phone.dir = 'ltr';
+                        phone.textContent = profile.phone || '';
+
+                        const address = document.createElement('span');
+                        address.className = 'mt-2 block text-xs font-bold leading-6 text-gray-500';
+                        address.textContent = [profile.delivery_governorate_name, profile.city, profile.street, profile.address_details].filter(Boolean).join(' — ');
+
+                        const action = document.createElement('span');
+                        action.className = 'mt-3 inline-flex rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700';
+                        action.textContent = 'استخدام هذه البيانات';
+                        card.append(heading, phone, address, action);
+                        card.addEventListener('click', () => applyExistingCustomer(profile));
+                        results.appendChild(card);
+                    });
+                };
+
+                const searchExistingCustomers = async () => {
+                    const input = existingCustomerLookup?.querySelector('[data-existing-customer-phone]');
+                    const button = existingCustomerLookup?.querySelector('[data-existing-customer-search]');
+                    const phone = input?.value.trim() || '';
+                    if (!phone) {
+                        setExistingCustomerStatus('اكتب رقم موبايل العميل أولًا.', 'error');
+                        return;
+                    }
+
+                    button.disabled = true;
+                    setExistingCustomerStatus('جاري البحث في الطلبات السابقة...');
+                    try {
+                        const url = new URL(existingCustomerLookup.dataset.searchUrl, window.location.origin);
+                        url.searchParams.set('phone', phone);
+                        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                        const payload = await response.json();
+                        if (!response.ok || !payload.success) {
+                            const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                            throw new Error(validationMessage || payload.message || 'تعذر البحث عن العميل.');
+                        }
+                        const customers = Array.isArray(payload.customers) ? payload.customers : [];
+                        renderExistingCustomers(customers);
+                        setExistingCustomerStatus(customers.length ? `تم العثور على ${customers.length} عنوان سابق. اختر البيانات المناسبة.` : 'لا توجد طلبات سابقة مسجلة بهذا الرقم.', customers.length ? 'info' : 'error');
+                    } catch (error) {
+                        renderExistingCustomers([]);
+                        setExistingCustomerStatus(error.message || 'تعذر البحث عن العميل.', 'error');
+                    } finally {
+                        button.disabled = false;
+                    }
+                };
+
+                existingCustomerLookup?.querySelector('[data-existing-customer-search]')?.addEventListener('click', searchExistingCustomers);
+                existingCustomerLookup?.querySelector('[data-existing-customer-phone]')?.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    searchExistingCustomers();
+                });
 
                 const selectedPackage = () => {
                     const option = packageSelect?.selectedOptions[0];

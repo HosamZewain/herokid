@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
+use App\Services\AgentApi\AgentProductScope;
 use App\Services\AgentApi\AgentTokenService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -29,9 +34,16 @@ class AgentApiTokenController extends Controller
                 'id' => $token->id,
                 'name' => $token->name,
                 'agent' => $agent,
+                'ability_badges' => collect(AgentTokenService::abilityDefinitions())
+                    ->filter(fn (array $definition, string $ability): bool => in_array($ability, $token->abilities ?? [], true))
+                    ->pluck('short_label')
+                    ->values()
+                    ->all(),
                 'scope' => AgentCatalogScope::fromAbilities($token->abilities ?? []),
                 'can_rework' => in_array('agent:orders.rework', $token->abilities ?? [], true)
                     && in_array('agent:orders.edit-personalization', $token->abilities ?? [], true),
+                'identity_only' => in_array('agent:orders.identity', $token->abilities ?? [], true),
+                'product_ids' => AgentProductScope::productIdsFromAbilities($token->abilities ?? []),
                 'last_used_at' => $token->last_used_at,
                 'expires_at' => $token->expires_at,
                 'created_at' => $token->created_at,
@@ -39,7 +51,60 @@ class AgentApiTokenController extends Controller
             ->sortByDesc('created_at')
             ->values();
 
-        return view('admin.agent-api-tokens.index', compact('agents', 'tokens'));
+        $products = Product::query()
+            ->where('is_active', true)
+            ->withProductionPrompt()
+            ->orderBy('name_ar')
+            ->orderBy('id')
+            ->get(['id', 'name_ar', 'name_en', 'slug', 'sku']);
+        $productsById = Product::query()
+            ->whereIn('id', $tokens->pluck('product_ids')->flatten()->unique())
+            ->get(['id', 'name_ar', 'name_en', 'slug', 'sku'])
+            ->keyBy('id');
+
+        $tokens = $tokens->map(function (array $token) use ($productsById): array {
+            $token['allowed_products'] = collect($token['product_ids'])
+                ->map(fn (int $id): string => ($productsById->get($id)?->name_ar ?: $productsById->get($id)?->name_en ?: $productsById->get($id)?->slug) ?? '#'.$id)
+                ->all();
+
+            return $token;
+        });
+
+        return view('admin.agent-api-tokens.index', compact('agents', 'tokens', 'products'));
+    }
+
+    public function edit(PersonalAccessToken $token, AgentTokenService $tokens): View
+    {
+        $agent = $tokens->agentForToken($token);
+        $configuration = $tokens->configuration($token);
+        $products = Product::query()
+            ->where(function ($query) use ($configuration): void {
+                $query->where(function ($query): void {
+                    $query->where('is_active', true)
+                        ->withProductionPrompt();
+                })->orWhereIn('id', $configuration['product_ids']);
+            })
+            ->orderBy('name_ar')
+            ->orderBy('id')
+            ->get(['id', 'name_ar', 'name_en', 'slug', 'sku']);
+
+        return view('admin.agent-api-tokens.edit', [
+            'token' => [
+                'id' => $token->id,
+                'name' => $token->name,
+                'created_at' => $token->created_at,
+                'last_used_at' => $token->last_used_at,
+                'expires_at' => $token->expires_at,
+                'status' => $token->expires_at?->isPast() ? 'expired' : 'active',
+            ],
+            'agent' => $agent,
+            'configuration' => $configuration,
+            'abilityDefinitions' => AgentTokenService::abilityDefinitions(),
+            'operationAbilities' => AgentTokenService::editableOperationAbilities(),
+            'reworkAbilities' => AgentTokenService::reworkAbilities(),
+            'accountPermissionKeys' => $agent->permissionKeys()->all(),
+            'products' => $products,
+        ]);
     }
 
     public function store(Request $request, AgentTokenService $tokens): RedirectResponse
@@ -50,7 +115,20 @@ class AgentApiTokenController extends Controller
             'expires_in_days' => ['required', 'integer', 'min:1', 'max:365'],
             'catalog_scope' => ['required', 'in:all,stories,products'],
             'allow_rework' => ['nullable', 'boolean'],
+            'identity_only' => ['nullable', 'boolean'],
+            'restrict_products' => ['nullable', 'boolean'],
+            'product_ids' => ['nullable', 'array', 'max:50'],
+            'product_ids.*' => ['integer', 'distinct', 'exists:products,id'],
         ]);
+
+        $restrictProducts = (bool) ($validated['restrict_products'] ?? false);
+        $productIds = $restrictProducts ? array_values($validated['product_ids'] ?? []) : [];
+        if ($restrictProducts && $validated['catalog_scope'] !== AgentCatalogScope::PRODUCTS) {
+            throw ValidationException::withMessages(['catalog_scope' => 'اختر نطاق المنتجات فقط عند تقييد التوكن بمنتجات محددة.']);
+        }
+        if ($restrictProducts && $productIds === []) {
+            throw ValidationException::withMessages(['product_ids' => 'اختر منتجًا واحدًا على الأقل.']);
+        }
 
         $agent = User::query()->findOrFail($validated['agent_user_id']);
         $token = $tokens->issue(
@@ -59,6 +137,8 @@ class AgentApiTokenController extends Controller
             (int) $validated['expires_in_days'],
             $validated['catalog_scope'],
             (bool) ($validated['allow_rework'] ?? false),
+            (bool) ($validated['identity_only'] ?? false),
+            $productIds,
         );
 
         AdminActivityLogger::log(
@@ -71,6 +151,8 @@ class AgentApiTokenController extends Controller
                 'token_name' => $token->accessToken->name,
                 'catalog_scope' => $validated['catalog_scope'],
                 'allow_rework' => (bool) ($validated['allow_rework'] ?? false),
+                'identity_only' => (bool) ($validated['identity_only'] ?? false),
+                'allowed_product_ids' => $productIds,
                 'expires_at' => $token->accessToken->expires_at?->toIso8601String(),
             ],
             request: $request,
@@ -81,17 +163,62 @@ class AgentApiTokenController extends Controller
             ->with('new_agent_token', $token->plainTextToken);
     }
 
+    public function update(Request $request, PersonalAccessToken $token, AgentTokenService $tokens): RedirectResponse
+    {
+        $agent = $tokens->agentForToken($token);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'abilities' => ['sometimes', 'array', 'max:'.count(AgentTokenService::editableOperationAbilities())],
+            'abilities.*' => ['string', 'distinct', Rule::in(AgentTokenService::editableOperationAbilities())],
+            'catalog_scope' => ['required', Rule::in([AgentCatalogScope::ALL, AgentCatalogScope::STORIES, AgentCatalogScope::PRODUCTS])],
+            'allow_rework' => ['nullable', 'boolean'],
+            'identity_only' => ['nullable', 'boolean'],
+            'restrict_products' => ['nullable', 'boolean'],
+            'product_ids' => ['nullable', 'array', 'max:50'],
+            'product_ids.*' => ['integer', 'distinct', 'exists:products,id'],
+            'expires_at' => ['required', 'date', 'after:now', 'before_or_equal:'.now()->addDays(365)->toDateTimeString()],
+            'agent_user_id' => ['prohibited'],
+            'tokenable_id' => ['prohibited'],
+            'tokenable_type' => ['prohibited'],
+            'token' => ['prohibited'],
+        ]);
+
+        $updated = DB::transaction(function () use ($agent, $request, $token, $tokens, $validated): PersonalAccessToken {
+            $before = $tokens->configuration($token);
+            $updated = $tokens->update($token, $validated);
+            $after = $tokens->configuration($updated);
+
+            AdminActivityLogger::log(
+                action: 'agent_api.token_updated',
+                description: 'تم تعديل صلاحيات وإعدادات Agent API Token.',
+                subject: $agent,
+                properties: [
+                    'agent_user_id' => $agent->id,
+                    'credential_record_id' => $updated->id,
+                    'previous' => $before,
+                    'new' => $after,
+                ],
+                request: $request,
+            );
+
+            return $updated;
+        });
+
+        return redirect()->route('admin.agent-api-tokens.edit', $updated->id)
+            ->with('success', 'تم تحديث التوكن الحالي وتطبيق صلاحياته فورًا دون تغيير قيمته السرية.');
+    }
+
     public function destroy(Request $request, PersonalAccessToken $token, AgentTokenService $tokens): RedirectResponse
     {
-        abort_unless($token->tokenable_type === User::class, 404);
-
-        $agent = User::query()->where('role', 'admin')->findOrFail($token->tokenable_id);
+        $agent = $tokens->agentForToken($token);
         $metadata = [
             'agent_user_id' => $agent->id,
             'token_id' => $token->id,
             'token_name' => $token->name,
             'catalog_scope' => AgentCatalogScope::fromAbilities($token->abilities ?? []),
             'allow_rework' => in_array('agent:orders.rework', $token->abilities ?? [], true),
+            'identity_only' => in_array('agent:orders.identity', $token->abilities ?? [], true),
+            'allowed_product_ids' => AgentProductScope::productIdsFromAbilities($token->abilities ?? []),
         ];
 
         $tokens->revoke($agent, $token);

@@ -9,9 +9,12 @@ class OrderPreview extends Model
 {
     protected $guarded = [];
 
-    public function order()
+    public function order(): BelongsTo
     {
-        return $this->belongsTo(Order::class);
+        // Product preview galleries belong to the whole checkout. A single
+        // child/order can later be soft-deleted while its siblings and the
+        // gallery remain active, so the historical owner must stay resolvable.
+        return $this->belongsTo(Order::class)->withTrashed();
     }
 
     public function productGallery(): BelongsTo

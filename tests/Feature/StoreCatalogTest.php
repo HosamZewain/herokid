@@ -96,6 +96,106 @@ class StoreCatalogTest extends TestCase
             ->assertSee('كتاب متاهات');
     }
 
+    public function test_admin_can_open_and_save_an_independent_unpublished_product_duplicate(): void
+    {
+        Storage::fake('public');
+        $admin = $this->admin();
+        $source = $this->product('school-sticker', 245, [
+            'name_ar' => 'ستيكر المدرسة',
+            'name_en' => 'School Sticker',
+            'short_description_ar' => 'وصف المنتج',
+            'featured_image' => 'store/products/original.png',
+            'gallery_images' => ['store/products/gallery/original-side.png'],
+            'features' => ['مقاوم للماء'],
+            'age_groups' => ['6-9'],
+            'is_featured' => true,
+            'production_prompt_template' => 'Create {{child_full_name}}',
+        ]);
+        Storage::disk('public')->put($source->featured_image, 'main-image');
+        Storage::disk('public')->put($source->gallery_images[0], 'side-image');
+        $variant = $source->variants()->create([
+            'name_ar' => 'مقاس كبير',
+            'sku' => 'LARGE',
+            'image' => 'store/products/variants/original.png',
+            'gallery_images' => ['store/products/variants/gallery/original-side.png'],
+            'price_adjustment_cents' => 2500,
+            'is_active' => true,
+        ]);
+        Storage::disk('public')->put($variant->image, 'variant-image');
+        Storage::disk('public')->put($variant->gallery_images[0], 'variant-side-image');
+        $recommended = $this->product('recommended-poster', 100, ['name_ar' => 'بوستر مقترح']);
+        ProductUpsellRule::create([
+            'source_product_id' => $source->id,
+            'target_product_id' => $recommended->id,
+            'trigger_scope' => 'product_added',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.products.index'))
+            ->assertOk()
+            ->assertSee('title="تكرار المنتج"', false)
+            ->assertSee(route('admin.products.duplicate', $source), false);
+
+        $duplicatePage = $this->actingAs($admin)
+            ->get(route('admin.products.duplicate', $source))
+            ->assertOk()
+            ->assertSee('تكرار منتج')
+            ->assertSee('إنشاء نسخة جديدة من «ستيكر المدرسة»')
+            ->assertSee('name="duplicate_source_id" value="'.$source->id.'"', false)
+            ->assertSee('value="school-sticker-copy"', false)
+            ->assertSee('name="recommended_product_ids[]" value="'.$recommended->id.'"', false);
+
+        $this->assertStringContainsString(
+            'name="recommended_product_ids[]" value="'.$recommended->id.'"',
+            $duplicatePage->getContent(),
+        );
+
+        $this->actingAs($admin)->post(route('admin.products.store'), [
+            'duplicate_source_id' => $source->id,
+            'product_category_id' => $source->product_category_id,
+            'name_ar' => 'ستيكر المدرسة - نسخة جديدة',
+            'name_en' => $source->name_en,
+            'slug' => 'school-sticker-copy',
+            'short_description_ar' => $source->short_description_ar,
+            'price' => 245,
+            'fulfillment_type' => 'physical',
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'none',
+            'inventory_mode' => 'no_tracking',
+            'features_text' => 'مقاوم للماء',
+            'age_groups' => ['6-9'],
+            'production_prompt_template' => 'Create {{child_full_name}}',
+            'recommendations_present' => 1,
+            'recommended_product_ids' => [$recommended->id],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $duplicate = Product::query()->where('slug', 'school-sticker-copy')->firstOrFail();
+
+        $this->assertNotSame($source->id, $duplicate->id);
+        $this->assertFalse($duplicate->is_active);
+        $this->assertSame('ستيكر المدرسة - نسخة جديدة', $duplicate->name_ar);
+        $this->assertNotSame($source->featured_image, $duplicate->featured_image);
+        $this->assertNotSame($source->gallery_images[0], $duplicate->gallery_images[0]);
+        Storage::disk('public')->assertExists($duplicate->featured_image);
+        Storage::disk('public')->assertExists($duplicate->gallery_images[0]);
+        $this->assertDatabaseHas('product_variants', [
+            'product_id' => $duplicate->id,
+            'name_ar' => 'مقاس كبير',
+            'price_adjustment_cents' => 2500,
+        ]);
+        $duplicateVariant = $duplicate->variants()->firstOrFail();
+        $this->assertNotSame($variant->image, $duplicateVariant->image);
+        Storage::disk('public')->assertExists($duplicateVariant->image);
+        $this->assertDatabaseHas('product_upsell_rules', [
+            'source_product_id' => $duplicate->id,
+            'target_product_id' => $recommended->id,
+            'trigger_scope' => 'product_added',
+            'is_active' => true,
+        ]);
+        $this->assertTrue($source->fresh()->is_active);
+    }
+
     public function test_products_without_age_groups_are_treated_as_all_ages(): void
     {
         $category = ProductCategory::create(['name_ar' => 'قصص', 'slug' => 'public-ready', 'is_active' => true, 'show_in_store' => true]);

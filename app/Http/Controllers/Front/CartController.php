@@ -7,9 +7,12 @@ use App\Models\ChildIdentityRequest;
 use App\Models\DeliveryCountry;
 use App\Models\Order;
 use App\Models\Story;
+use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
+use App\Services\Orders\CheckoutSubmissionService;
+use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
 use App\Support\ProductRecommendations;
@@ -43,23 +46,28 @@ class CartController extends Controller
         'image/heif-sequence',
     ];
 
-    public function index()
+    public function index(BostaCheckoutAddressService $checkoutAddresses)
     {
         $cart = $this->cart();
         $cartCollection = collect($cart);
         $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $upsellStoryKey = session('upsell_story_key');
         $recommendedProducts = app(ProductRecommendations::class)->forCartItems($cart, 6);
+        $deliveryCountries = $this->deliveryCountries();
+        $bostaAddressOptions = $checkoutAddresses->checkoutOptions($deliveryCountries);
 
         return view('front.cart.index', [
             'cartItems' => $cart,
+            'checkoutSubmissionToken' => app(CheckoutSubmissionService::class)->token(request(), $cart),
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,
             'subtotal' => $this->subtotal($cart),
             'deliveryFee' => $this->defaultDeliveryFee(),
-            'deliveryCountries' => $this->deliveryCountries(),
+            'deliveryCountries' => $deliveryCountries,
             'savedDeliveryDetails' => $this->savedDeliveryDetails(),
+            'bostaAddressEnabled' => $bostaAddressOptions['enabled'],
+            'bostaCityMap' => $bostaAddressOptions['city_map'],
         ]);
     }
 
@@ -79,6 +87,11 @@ class CartController extends Controller
             'child_name' => 'required|string|max:255',
             'child_age' => ['required', 'integer', Rule::in($allowedAges)],
             'child_gender' => 'required|in:boy,girl',
+            'language' => ['sometimes', 'required', Rule::in(['ar', 'en']), function ($attribute, $value, $fail) use ($story) {
+                if ($value === 'en' && ! app(StoryLanguageAvailability::class)->english($story)) {
+                    $fail('النسخة الإنجليزية غير متاحة لهذه القصة حاليًا.');
+                }
+            }],
             'gift_note' => 'nullable|string|max:500',
             'interests' => 'nullable|string|max:500',
             'parent_notes' => 'nullable|string|max:1000',
@@ -254,6 +267,7 @@ class CartController extends Controller
             return response()->json([
                 'message' => 'تم حذف العنصر من السلة.',
                 'removed_keys' => $removedKeys,
+                'checkout_submission_token' => app(CheckoutSubmissionService::class)->token($request, $cart),
                 'cart_count' => count($cart),
                 'subtotal' => $this->subtotal($cart),
                 'cart_empty' => $cart === [],

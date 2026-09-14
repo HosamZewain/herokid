@@ -70,7 +70,7 @@
                 <h3 class="font-black text-indigo-950">{{ $photoField['label'] }}</h3>
                 <span class="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700" data-identity-photo-count></span>
             </div>
-            <input type="file" id="product-child-photos-{{ $unitIndex }}" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" class="sr-only" data-identity-photo-input>
+            <input type="file" id="product-child-photos-{{ $unitIndex }}" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" class="sr-only" data-identity-photo-input>
             <div data-identity-photo-ids></div>
             <label for="product-child-photos-{{ $unitIndex }}" data-identity-photo-picker class="mt-4 flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3 text-center">
                 <span class="font-black text-indigo-700" data-identity-photo-picker-title></span>

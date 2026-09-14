@@ -14,12 +14,39 @@ use App\Services\Cart\CartTrackingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_checkout_keeps_independent_story_languages_and_correct_scene_text(): void
+    {
+        Storage::fake('local');
+        $story = $this->story('bilingual-story', 'قصة لغتين', 100);
+        $story->update(['gender' => 'girl']);
+        foreach (range(1, 13) as $number) {
+            $story->sceneTemplates()->create(['scene_number' => $number,
+                'text_template' => 'ابتسمت {{child_name}}', 'alternate_text_template' => 'ابتسم {{child_name}}',
+                'english_male_text_template' => 'He smiled {{child_name}}', 'english_female_text_template' => 'She smiled {{child_name}}']);
+        }
+        foreach (['ar', 'en'] as $language) {
+            $this->post(route('cart.store', $story->slug), [...$this->cartPayload('Test '.$language, ''), 'language' => $language])
+                ->assertSessionHasNoErrors()->assertRedirect(route('cart.index'));
+        }
+        $country = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $governorate = DeliveryGovernorate::where('delivery_country_id', $country->id)->firstOrFail();
+        $this->post(route('checkout.store'), ['parent_name' => 'Synthetic Parent', 'phone' => '01000000000',
+            'delivery_country_id' => $country->id, 'delivery_governorate_id' => $governorate->id,
+            'city' => 'Test city', 'street' => 'Test street'])
+            ->assertSessionHasNoErrors()->assertRedirect(route('checkout.success'));
+        $orders = Order::where('story_id', $story->id)->get()->keyBy('language');
+        $this->assertCount(2, $orders);
+        $this->assertSame('She smiled Test en', $orders['en']->sceneTextSnapshots()->first()->rendered_text);
+        $this->assertSame('ابتسمت Test ar', $orders['ar']->sceneTextSnapshots()->first()->rendered_text);
+    }
 
     public function test_story_page_sets_session_cookie_for_cart_csrf_submission(): void
     {
@@ -499,6 +526,186 @@ class CartCheckoutTest extends TestCase
             ->assertSee($shortReference);
     }
 
+    public function test_checkout_accepts_an_egyptian_local_mobile_and_saves_an_optional_international_phone(): void
+    {
+        Storage::fake('local');
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('mobile-validation-story', 'قصة رقم الهاتف', 100);
+
+        $cart = [
+            'mobile-validation-item' => [
+                'key' => 'mobile-validation-item',
+                'item_type' => 'story',
+                'story_id' => $story->id,
+                'story_title' => $story->title,
+                'story_slug' => $story->slug,
+                'story_price' => 100.0,
+                'child_name' => 'سلمى',
+                'child_age' => 6,
+                'child_gender' => 'girl',
+                'uploaded_photos' => [],
+            ],
+        ];
+
+        $this->withSession(['cart.items' => $cart])
+            ->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('name="alternate_phone"', false)
+            ->assertSee('رقم هاتف إضافي')
+            ->assertSee('الرقم المصري يُكتب عاديًا');
+
+        $payload = [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '١٢٣٤٥',
+            'alternate_phone' => '',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'city' => 'مدينة نصر',
+            'street' => '١٢ شارع النصر',
+        ];
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), $payload)
+            ->assertSessionHasErrors('phone');
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), array_replace($payload, [
+                'phone' => '01012345678',
+                'alternate_phone' => '+20223456789',
+            ]))
+            ->assertSessionHasErrors('alternate_phone');
+
+        $this->withSession(['cart.items' => $cart])
+            ->post(route('checkout.store'), array_replace($payload, [
+                'phone' => '٠١٠١٢٣٤٥٦٧٨',
+                'alternate_phone' => '+966 51 234 5678',
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('checkout.success'));
+
+        $order = Order::query()->sole();
+        $this->assertSame('01012345678', data_get($order->delivery_details, 'phone'));
+        $this->assertSame('+966512345678', data_get($order->delivery_details, 'alternate_phone'));
+    }
+
+    public function test_customer_selects_an_easy_official_bosta_area_and_checkout_saves_provider_ids(): void
+    {
+        Storage::fake('local');
+        config()->set([
+            'bosta.enabled' => true,
+            'bosta.api_key' => 'test-bosta-key',
+            'bosta.country_id' => 'egypt-123',
+            'bosta.retries' => 0,
+        ]);
+        Http::fake([
+            '*/cities/city-cairo/districts' => Http::response(['data' => [[
+                'districtId' => 'district-nasr-city',
+                'districtName' => 'Nasr City',
+                'districtOtherName' => 'مدينة نصر',
+                'zoneId' => 'zone-east-cairo',
+                'zoneName' => 'East Cairo',
+                'zoneOtherName' => 'شرق القاهرة',
+                'dropOffAvailability' => true,
+            ]]]),
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+        ]);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('bosta-checkout-story', 'رحلة عنوان بوسطة', 349);
+
+        $this->post(route('cart.store', $story), $this->cartPayload('سلمى', 'الرسم'))
+            ->assertRedirect(route('cart.index'));
+
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('data-bosta-city-id="city-cairo"', false)
+            ->assertSee('data-bosta-district', false)
+            ->assertSee('data-bosta-district-search', false)
+            ->assertSee('data-bosta-zone', false)
+            ->assertSee('role="combobox"', false)
+            ->assertSee('data-bosta-district-options', false)
+            ->assertSee('max-h-56', false)
+            ->assertSee('المدينة أو المركز')
+            ->assertSee('اكتب اسم المنطقة للبحث...')
+            ->assertSee('يمكنك كتابة أول حروف المنطقة لتصفية النتائج.')
+            ->assertSee('المنطقة')
+            ->assertSee('تفاصيل إضافية أو علامة مميزة')
+            ->assertSee('(اختياري)');
+
+        $this->getJson(route('checkout.address-districts', ['city_id' => 'city-cairo']))
+            ->assertOk()
+            ->assertJsonPath('districts.0.id', 'district-nasr-city')
+            ->assertJsonPath('districts.0.other_name', 'مدينة نصر')
+            ->assertJsonPath('districts.0.zone_id', 'zone-east-cairo')
+            ->assertJsonPath('districts.0.zone_other_name', 'شرق القاهرة');
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '01012345678',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'bosta_city_id' => 'city-cairo',
+            'bosta_district_id' => 'district-nasr-city',
+            'street' => '١٢ شارع النصر',
+        ])->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+
+        $delivery = Order::query()->sole()->delivery_details;
+        $this->assertSame('مدينة نصر', $delivery['city']);
+        $this->assertSame('city-cairo', $delivery['bosta_city_id']);
+        $this->assertSame('district-nasr-city', $delivery['bosta_district_id']);
+        $this->assertSame('Nasr City', $delivery['bosta_district_name']);
+        $this->assertSame('zone-east-cairo', $delivery['bosta_zone_id']);
+        $this->assertSame('', $delivery['address_details']);
+        $this->assertSame('١٢ شارع النصر', $delivery['address']);
+    }
+
+    public function test_checkout_rejects_a_bosta_district_that_does_not_belong_to_the_governorate(): void
+    {
+        Storage::fake('local');
+        config()->set([
+            'bosta.enabled' => true,
+            'bosta.api_key' => 'test-bosta-key',
+            'bosta.country_id' => 'egypt-123',
+            'bosta.retries' => 0,
+        ]);
+        Http::fake([
+            '*/cities*' => Http::response(['data' => ['list' => [[
+                '_id' => 'city-cairo',
+                'name' => 'Cairo',
+                'otherName' => 'القاهرة',
+            ]]]]),
+        ]);
+
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)
+            ->where('name', 'القاهرة')
+            ->firstOrFail();
+        $story = $this->story('invalid-bosta-address-story', 'عنوان بوسطة غير صحيح', 349);
+        $this->post(route('cart.store', $story), $this->cartPayload('سلمى', 'الرسم'));
+
+        $this->post(route('checkout.store'), [
+            'parent_name' => 'ولي أمر سلمى',
+            'phone' => '01012345678',
+            'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id,
+            'bosta_city_id' => 'city-giza',
+            'bosta_district_id' => 'district-dokki',
+            'street' => '١٢ شارع النصر',
+        ])->assertSessionHasErrors('bosta_district_id');
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_admin_can_control_delivery_fee_setting(): void
     {
         $admin = User::create([
@@ -594,6 +801,7 @@ class CartCheckoutTest extends TestCase
             'language' => 'ar',
             'delivery_details' => [
                 'phone' => '201000000000',
+                'alternate_phone' => '+966512345678',
                 'country' => 'Egypt',
                 'governorate' => 'القاهرة',
                 'city' => 'Nasr City',
@@ -612,6 +820,8 @@ class CartCheckoutTest extends TestCase
             ->assertSee('Nasr City')
             ->assertSee('Street 1')
             ->assertSee('Building 2, Apartment 3')
+            ->assertSee('هاتف إضافي')
+            ->assertSee('+966512345678')
             ->assertDontSee('البريد الإلكتروني');
     }
 
@@ -673,6 +883,7 @@ class CartCheckoutTest extends TestCase
             'language' => 'ar',
             'delivery_details' => [
                 'phone' => '201000000000',
+                'alternate_phone' => '+966512345678',
                 'delivery_country_id' => $egypt->id,
                 'delivery_governorate_id' => $cairo->id,
                 'country' => 'Egypt',
@@ -706,6 +917,7 @@ class CartCheckoutTest extends TestCase
             ->assertOk()
             ->assertSee('value="Parent User"', false)
             ->assertSee('value="201555555555"', false)
+            ->assertSee('value="+966512345678"', false)
             ->assertSee('value="Nasr City"', false)
             ->assertSee('value="Street 9"', false)
             ->assertSee('Building 10, Apartment 4')

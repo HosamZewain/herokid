@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\StorySceneTemplate;
+use App\Services\Stories\ProductionSceneVariantResolver;
 use App\Services\Stories\StorySceneParser;
 use App\Services\Stories\StorySceneTemplateRenderer;
 use Illuminate\Support\Collection;
@@ -40,6 +41,7 @@ class OrderSceneTextService
             $snapshotContext = [
                 ...$context,
                 'selected_text_variant' => $selection['variant'],
+                'resolved_text_variant' => $selection['resolved_variant'],
             ];
 
             $order->sceneTextSnapshots()->updateOrCreate(
@@ -79,7 +81,6 @@ class OrderSceneTextService
         ]);
 
         $snapshots = $order->sceneTextSnapshots->keyBy('scene_number');
-        $hasSnapshots = $snapshots->isNotEmpty();
         $templates = $order->story?->sceneTemplates?->keyBy('scene_number') ?? collect();
         $productionScenes = $includeProductionScenes
             ? $this->productionScenes($order)
@@ -96,6 +97,7 @@ class OrderSceneTextService
             $source = 'missing';
             $sourceLabel = 'نص غير متوفر';
             $textVariant = null;
+            $resolvedVariant = null;
             $variantLabel = '';
             $usesGenderFallback = false;
 
@@ -105,23 +107,28 @@ class OrderSceneTextService
                 $source = 'production_scene';
                 $sourceLabel = 'Production Studio';
                 $variantLabel = 'نص Production Studio';
-            } elseif ($hasSnapshots) {
+                if ($snapshot && trim((string) $snapshot->rendered_text) === $text) {
+                    $resolvedVariant = $snapshot->render_context_snapshot['resolved_text_variant'] ?? null;
+                }
+            } elseif ($snapshot && filled($snapshot->rendered_text)) {
                 $title = trim((string) $snapshot?->title_snapshot);
                 $text = trim((string) $snapshot?->rendered_text);
-                $source = filled($text) ? 'order_snapshot' : 'missing';
+                $source = 'order_snapshot';
                 $textVariant = $snapshot?->selected_text_variant;
+                $resolvedVariant = $snapshot?->render_context_snapshot['resolved_text_variant'] ?? null;
                 $variantLabel = $this->variantLabel(
                     $textVariant,
                     $snapshot?->render_context_snapshot['child_gender'] ?? null,
                     historical: $textVariant === null,
                 );
                 $usesGenderFallback = $textVariant === 'original_fallback';
-                $sourceLabel = filled($text) ? 'نسخة الطلب المحفوظة' : 'نص غير متوفر';
+                $sourceLabel = 'نسخة الطلب المحفوظة';
             } elseif ($template) {
                 $selection = $this->selectTemplate($template, $order, $order->story);
                 $title = trim((string) $template->title);
                 $text = $this->renderer->render($selection['text'], $context);
                 $textVariant = $selection['variant'];
+                $resolvedVariant = $selection['resolved_variant'];
                 $variantLabel = $this->variantLabel($textVariant, $order->child_gender);
                 $usesGenderFallback = $selection['uses_fallback'];
                 $source = filled($text) ? 'story_template_fallback' : 'missing';
@@ -135,6 +142,7 @@ class OrderSceneTextService
                 'source' => $source,
                 'source_label' => $sourceLabel,
                 'text_variant' => $textVariant,
+                'resolved_text_variant' => $resolvedVariant,
                 'variant_label' => $variantLabel,
                 'uses_gender_fallback' => $usesGenderFallback,
                 'complete' => filled($text),
@@ -158,7 +166,7 @@ class OrderSceneTextService
             'ready_count' => $readyCount,
             'all_ready' => $readyCount === StorySceneParser::SCENE_COUNT,
             'has_any' => $readyCount > 0,
-            'is_legacy_fallback' => ! $hasSnapshots,
+            'is_legacy_fallback' => collect($scenes)->contains('source', 'story_template_fallback'),
             'source_summary' => $sources->isEmpty() ? 'لا يوجد مصدر نص' : $sources->implode(' + '),
             'has_gender_fallback' => $genderFallbackSceneNumbers !== [],
             'gender_fallback_scene_numbers' => $genderFallbackSceneNumbers,
@@ -170,43 +178,7 @@ class OrderSceneTextService
      */
     private function selectTemplate(?StorySceneTemplate $template, Order $order, ?Story $story): array
     {
-        $storyGender = $this->normalizedGender($story?->gender);
-        $childGender = $this->normalizedGender($order->child_gender);
-
-        if ($storyGender === 'both' || ! in_array($storyGender, ['boy', 'girl'], true) || ! in_array($childGender, ['boy', 'girl'], true)) {
-            return [
-                'text' => $template?->text_template,
-                'variant' => 'original',
-                'uses_fallback' => false,
-            ];
-        }
-
-        if ($storyGender === $childGender) {
-            return [
-                'text' => $template?->text_template,
-                'variant' => 'original',
-                'uses_fallback' => false,
-            ];
-        }
-
-        if (filled($template?->alternate_text_template)) {
-            return [
-                'text' => $template?->alternate_text_template,
-                'variant' => 'alternate',
-                'uses_fallback' => false,
-            ];
-        }
-
-        return [
-            'text' => $template?->text_template,
-            'variant' => 'original_fallback',
-            'uses_fallback' => true,
-        ];
-    }
-
-    private function normalizedGender(?string $gender): string
-    {
-        return in_array($gender, ['boy', 'girl', 'both'], true) ? $gender : 'both';
+        return app(ProductionSceneVariantResolver::class)->resolve($template, $order, $story);
     }
 
     private function variantLabel(?string $variant, ?string $childGender = null, bool $historical = false): string

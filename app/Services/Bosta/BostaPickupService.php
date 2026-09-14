@@ -21,7 +21,7 @@ class BostaPickupService
             $shipments = BostaShipment::query()
                 ->whereIn('id', $shipmentIds)
                 ->whereNotNull('tracking_number')
-                ->whereDoesntHave('pickups')
+                ->awaitingPickup()
                 ->lockForUpdate()
                 ->get();
             if ($shipments->count() !== count(array_unique($shipmentIds))) {
@@ -49,7 +49,9 @@ class BostaPickupService
                 'notes' => $values['notes'] ?? null,
                 'number_of_parcels' => $shipments->count(),
                 'package_type' => 'Normal',
-                'provider_response' => collect($data)->only(['_id', 'id', 'state', 'scheduledDate'])->all(),
+                'provider_response' => collect($data)->only(['_id', 'id', 'state', 'scheduledDate'])
+                    ->put('source', 'herokid')
+                    ->all(),
                 'created_by_user_id' => $admin->id,
             ]);
             $pickup->shipments()->sync($shipments->modelKeys());

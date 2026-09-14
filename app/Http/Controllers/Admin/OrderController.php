@@ -11,6 +11,7 @@ use App\Models\Story;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminPackageOrderService;
+use App\Services\Orders\ExistingCustomerOrderLookupService;
 use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderAdminNoteService;
 use App\Services\Orders\OrderChildIdentityPromptService;
@@ -20,6 +21,7 @@ use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
+use App\Services\Orders\PrivateOrderThumbnail;
 use App\Services\Orders\RelatedCustomerCheckoutService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
@@ -77,6 +79,7 @@ class OrderController extends Controller
                 'from' => $request->query('from'),
                 'to' => $request->query('to'),
                 'assignment' => $request->query('assignment'),
+                'tag_id' => $request->query('tag_id'),
                 'has_search' => $request->filled('q'),
             ],
             request: $request,
@@ -166,6 +169,26 @@ class OrderController extends Controller
             'paymentStatuses' => OrderPaymentStatus::labels(),
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),
             'pricingPackages' => $packages->availablePackages(),
+        ]);
+    }
+
+    public function searchExistingCustomers(Request $request, ExistingCustomerOrderLookupService $customers)
+    {
+        $request->merge(['phone' => Phone::normalize($request->query('phone'))]);
+
+        $validated = $request->validate([
+            'phone' => ['required', 'string', 'max:32', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (strlen((string) preg_replace('/\D/', '', (string) $value)) < 7) {
+                    $fail('اكتب رقم هاتف صحيحًا لا يقل عن 7 أرقام.');
+                }
+            }],
+        ], [
+            'phone.required' => 'اكتب رقم الهاتف للبحث عن العميل.',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'customers' => $customers->search($validated['phone'])->all(),
         ]);
     }
 
@@ -627,6 +650,10 @@ class OrderController extends Controller
         $disk = Storage::disk($attempt->output_disk ?: 'local');
         abort_unless($disk->exists($attempt->output_storage_path), 404);
 
+        if (request()->routeIs('admin.orders.approved-child-identity-thumbnail')) {
+            return app(PrivateOrderThumbnail::class)->response($disk->path($attempt->output_storage_path));
+        }
+
         return response()->file($disk->path($attempt->output_storage_path), [
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             'X-Content-Type-Options' => 'nosniff',
@@ -650,6 +677,10 @@ class OrderController extends Controller
         $disk = Storage::disk('local');
 
         if ($disk->exists($photoPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($disk->path($photoPath));
+            }
+
             return response()->file($disk->path($photoPath), [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
@@ -657,6 +688,10 @@ class OrderController extends Controller
 
         $publicDisk = Storage::disk('public');
         if ($publicDisk->exists($photoPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($publicDisk->path($photoPath));
+            }
+
             return response()->file($publicDisk->path($photoPath), [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
@@ -665,6 +700,10 @@ class OrderController extends Controller
         // Backward compatibility for files saved before Laravel's local disk moved to storage/app/private.
         $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
         if (file_exists($legacyPath) && is_file($legacyPath)) {
+            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
+                return app(PrivateOrderThumbnail::class)->response($legacyPath);
+            }
+
             return response()->file($legacyPath, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);

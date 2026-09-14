@@ -9,7 +9,9 @@ use App\Models\OrderAttachment;
 use App\Services\AgentApi\AgentCheckoutProductionService;
 use App\Services\AgentApi\AgentIdempotencyService;
 use App\Services\AgentApi\AgentOrderPersonalizationService;
+use App\Services\AgentApi\AgentStoryIdentityService;
 use App\Services\BookletPreviews\BookletPreviewManager;
+use App\Services\Orders\OrderApprovedChildIdentityUploadService;
 use App\Services\Orders\OrderAttachmentService;
 use App\Services\Orders\OrderProductPreviewService;
 use App\Support\AdminActivityLogger;
@@ -21,6 +23,78 @@ use Illuminate\Validation\ValidationException;
 
 class AgentOrderController extends Controller
 {
+    public function identityPreview(
+        Request $request,
+        Order $order,
+        AgentStoryIdentityService $identities,
+        AgentIdempotencyService $idempotency,
+        OrderApprovedChildIdentityUploadService $uploads,
+    ): JsonResponse {
+        $identities->authorizedStoryOrder($order, $request->user());
+        $this->validate($request, [
+            'identity' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:15360'],
+        ], 'INVALID_ATTACHMENT');
+
+        $result = $idempotency->execute($request->user(), 'orders.identity-preview:'.$order->id, $request, function () use ($request, $order, $uploads): array {
+            $attempt = $uploads->upload($order, $request->file('identity'), $request->user(), 'agent_api_identity_preview');
+
+            AdminActivityLogger::log(
+                action: 'agent.story_identity_uploaded',
+                description: 'رفع Agent API هوية قصة لعرضها على العميل.',
+                subject: $order,
+                properties: [
+                    'agent_user_id' => $request->user()->id,
+                    'attempt_id' => $attempt->id,
+                    'output_checksum' => $attempt->output_checksum,
+                    'request_identifier' => hash('sha256', (string) $request->header('Idempotency-Key')),
+                ],
+                admin: $request->user(),
+                request: $request,
+            );
+
+            return [
+                'status' => 201,
+                'body' => [
+                    'success' => true,
+                    'workflow' => 'story_identity_only',
+                    'identity' => [
+                        'unit_key' => 'identity:'.$order->id,
+                        'order_id' => $order->id,
+                        'attempt_id' => $attempt->id,
+                        'checksum' => $attempt->output_checksum,
+                    ],
+                ],
+                'order_id' => $order->id,
+                'checkout_group_key' => $order->checkoutGroupKey(),
+            ];
+        });
+
+        return response()->json($result['body'], $result['status']);
+    }
+
+    public function identityChildPhoto(Request $request, Order $order, int $index, AgentStoryIdentityService $identities)
+    {
+        $identities->authorizedStoryOrder($order, $request->user());
+        $photos = array_values(array_filter($order->uploaded_photos ?? [], 'is_string'));
+        $path = $photos[$index] ?? null;
+        if (! $path || str_contains($path, '..')) {
+            throw new AgentApiException('ORDER_NOT_FOUND', 'Identity reference file not found.', 404);
+        }
+
+        return $this->privateFile($path, 'identity-child-reference-'.$order->id.'-'.($index + 1));
+    }
+
+    public function identityImage(Request $request, Order $order, AgentStoryIdentityService $identities)
+    {
+        $identities->authorizedStoryOrder($order, $request->user());
+        $attempt = $order->childIdentityApprovedAttempt;
+        if (! $attempt || $attempt->status !== 'succeeded' || blank($attempt->output_storage_path)) {
+            throw new AgentApiException('ORDER_NOT_FOUND', 'Identity image not found.', 404);
+        }
+
+        return $this->privateFile($attempt->output_storage_path, 'story-identity-'.$order->id, $attempt->output_disk ?: 'local');
+    }
+
     public function updatePersonalization(
         Request $request,
         Order $order,
@@ -106,7 +180,6 @@ class AgentOrderController extends Controller
         BookletPreviewManager $booklets,
         OrderProductPreviewService $productPreviews,
     ): JsonResponse {
-        $production->authorizedOrder($order, $request->user());
         $type = (string) $request->input('type');
         $rules = match ($type) {
             'booklet' => ['type' => ['required', 'in:booklet'], 'preview_files' => ['required', 'array', 'size:1'], 'preview_files.*' => ['required', 'file', 'mimes:pdf', 'max:51200'], 'note' => ['nullable', 'string', 'max:1000']],
@@ -115,7 +188,7 @@ class AgentOrderController extends Controller
         };
         $validated = $this->validate($request, $rules, 'INVALID_ATTACHMENT');
 
-        $production->assertPreviewTypeForOrder($order, $type);
+        $production->authorizePreviewUpload($order, $request->user(), $type);
 
         $result = $idempotency->execute($request->user(), 'orders.previews:'.$order->id.':'.$type, $request, function () use ($request, $order, $type, $validated, $booklets, $productPreviews): array {
             try {

@@ -65,6 +65,75 @@ class AdminManualOrderCreationTest extends TestCase
             ->assertSee('زيارة');
     }
 
+    public function test_admin_can_find_an_existing_customer_by_phone_and_reuse_only_customer_delivery_data(): void
+    {
+        $previous = Order::create([
+            'order_number' => 'HK-2026-EXISTING',
+            'checkout_group_key' => 'CHK-EXISTING-CUSTOMER',
+            'parent_name' => 'عميلة سابقة',
+            'status' => 'delivered',
+            'payment_status' => 'paid_in_full',
+            'paid_amount_cents' => 99_900,
+            'delivery_details' => [
+                'phone' => '+201012345678',
+                'delivery_country_id' => $this->country->id,
+                'delivery_governorate_id' => $this->governorate->id,
+                'country' => $this->country->name,
+                'governorate' => $this->governorate->name,
+                'city' => 'مدينة نصر',
+                'street' => 'شارع سابق',
+                'address_details' => 'عمارة 8 الدور 3',
+            ],
+        ]);
+
+        $response = $this->actingAs($this->admin)->getJson(route('admin.orders.existing-customers.search', [
+            'phone' => '010 1234 5678',
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'customers')
+            ->assertJsonPath('customers.0.order_id', $previous->id)
+            ->assertJsonPath('customers.0.parent_name', 'عميلة سابقة')
+            ->assertJsonPath('customers.0.phone', '+201012345678')
+            ->assertJsonPath('customers.0.delivery_country_id', $this->country->id)
+            ->assertJsonPath('customers.0.delivery_governorate_id', $this->governorate->id)
+            ->assertJsonPath('customers.0.city', 'مدينة نصر')
+            ->assertJsonPath('customers.0.street', 'شارع سابق')
+            ->assertJsonPath('customers.0.address_details', 'عمارة 8 الدور 3')
+            ->assertJsonMissingPath('customers.0.payment_status')
+            ->assertJsonMissingPath('customers.0.paid_amount_cents')
+            ->assertJsonMissingPath('customers.0.status');
+    }
+
+    public function test_existing_customer_phone_lookup_is_protected_and_requires_a_valid_phone(): void
+    {
+        $limited = User::factory()->create(['role' => 'admin']);
+        $limited->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $limited->unsetRelation('permissions');
+
+        $this->getJson(route('admin.orders.existing-customers.search', ['phone' => '01012345678']))
+            ->assertUnauthorized();
+        $this->actingAs($limited)
+            ->getJson(route('admin.orders.existing-customers.search', ['phone' => '01012345678']))
+            ->assertForbidden();
+        $this->actingAs($this->admin)
+            ->getJson(route('admin.orders.existing-customers.search', ['phone' => '123']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('phone');
+    }
+
+    public function test_manual_order_page_exposes_existing_customer_phone_search(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.create'))
+            ->assertOk()
+            ->assertSee('اختيار عميل سابق')
+            ->assertSee('ابحث برقم الموبايل')
+            ->assertSee(route('admin.orders.existing-customers.search'), false);
+    }
+
     public function test_admin_can_create_one_checkout_with_multiple_stories_children_products_and_discount(): void
     {
         $firstStory = $this->story('مغامرة ليلى', 400);

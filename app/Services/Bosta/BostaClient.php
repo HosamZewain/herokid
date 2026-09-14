@@ -18,6 +18,20 @@ class BostaClient
         return $this->request()->post('/pickups', $payload)->throw()->json();
     }
 
+    public function searchPickups(int $page = 0, int $limit = 50): array
+    {
+        return $this->request()->get('/pickups/search', [
+            'page' => $page,
+            'limit' => $limit,
+            'businessLocationId' => (string) config('bosta.business_location_id'),
+        ])->throw()->json();
+    }
+
+    public function pickup(string $id): array
+    {
+        return $this->request()->get('/pickups/'.rawurlencode($id))->throw()->json();
+    }
+
     public function createAwb(array $trackingNumbers, string $language = 'ar', string $type = 'A6'): array
     {
         return $this->request()->post('/deliveries/mass-awb', [

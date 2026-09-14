@@ -3,6 +3,7 @@
 namespace App\Services\Uploads;
 
 use App\Models\Order;
+use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -48,6 +49,7 @@ class OrderPhotoUploadService
             ->whereJsonContains('uploaded_photos', $removedPath)
             ->exists();
         if (! $stillReferenced && ! str_contains($removedPath, '..')) {
+            app(PrivateOrderThumbnail::class)->forget(Storage::disk((string) config('photo_uploads.disk', 'local'))->path($removedPath));
             Storage::disk((string) config('photo_uploads.disk', 'local'))->delete($removedPath);
         }
 
@@ -63,7 +65,7 @@ class OrderPhotoUploadService
      * @param  array<int, UploadedFile>  $files
      * @return array{added_count: int, total_count: int, files: array<int, array{original_name: string, mime_type: string, size: int}>}
      */
-    public function append(Order $order, array $files): array
+    public function append(Order $order, array $files, ?callable $onStored = null): array
     {
         if ($files === []) {
             throw ValidationException::withMessages([
@@ -98,6 +100,9 @@ class OrderPhotoUploadService
                 }
 
                 $storedPaths[] = $path;
+                if ($onStored) {
+                    $onStored($path);
+                }
             }
 
             $totalCount = DB::transaction(function () use ($order, $storedPaths): int {
@@ -158,7 +163,7 @@ class OrderPhotoUploadService
         $mime = strtolower((string) $file->getMimeType());
         if (! in_array($mime, config('photo_uploads.allowed_mimes', []), true)) {
             throw ValidationException::withMessages([
-                'photos' => 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF.',
+                'photos' => 'صيغة الصورة غير مدعومة. ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF أو AVIF.',
             ]);
         }
 
@@ -176,6 +181,7 @@ class OrderPhotoUploadService
             'image/webp' => 'webp',
             'image/heic', 'image/heic-sequence' => 'heic',
             'image/heif', 'image/heif-sequence' => 'heif',
+            'image/avif' => 'avif',
             default => 'jpg',
         };
     }

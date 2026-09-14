@@ -195,6 +195,9 @@
                                 <div><span class="font-bold text-gray-600">الهاتف / واتساب:</span>
                                     <a href="https://wa.me/{{ \App\Support\Phone::forWhatsApp($order->delivery_details['phone'] ?? '') }}" target="_blank" rel="noopener" class="text-green-600 font-bold hover:underline dir-ltr">{{ $order->delivery_details['phone'] ?? '-' }}</a>
                                 </div>
+                                @if(data_get($order->delivery_details, 'alternate_phone'))
+                                    <div><span class="font-bold text-gray-600">هاتف إضافي:</span> <span class="font-bold text-gray-900" dir="ltr">{{ data_get($order->delivery_details, 'alternate_phone') }}</span></div>
+                                @endif
                             </div>
                             <div class="space-y-3">
                                 <div><span class="font-bold text-gray-600">اسم الطفل:</span> <span class="text-gray-900 font-bold">{{ $order->child_name ?? '-' }}</span></div>
@@ -518,7 +521,7 @@
                                 <a href="{{ route('admin.orders.photo', [$order, $loop->index]) }}" target="_blank" class="block">
                                     <div class="aspect-square bg-gray-100 rounded-xl overflow-hidden">
                                         <img
-                                            src="{{ route('admin.orders.photo', [$order, $loop->index]) }}"
+                                            src="{{ route('admin.orders.photo', [$order, $loop->index, 'thumbnail' => 1]) }}"
                                             alt="صورة الطفل {{ $loop->iteration }}"
                                             class="w-full h-full object-cover transition group-hover:scale-105"
                                             loading="lazy"

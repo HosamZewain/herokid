@@ -1,10 +1,12 @@
+import { uploadPhoto, appendPhoto, restorePhotos, safeStorage, observePhotoSession } from './photo-upload-transport';
+const sessionStorage = safeStorage('sessionStorage');
 import { prepareImageForUpload } from './image-upload-preparer';
 
 export function initializeIdentityPhotoUploader() {
     document.querySelectorAll('[data-identity-intake]').forEach(initializeIdentityPhotoUploaderForRoot);
 }
 
-function initializeIdentityPhotoUploaderForRoot(root) {
+async function initializeIdentityPhotoUploaderForRoot(root) {
     const form = root.closest('form') || root;
     const input = root.querySelector('[data-identity-photo-input]');
     const queue = root.querySelector('[data-identity-photo-queue]');
@@ -50,6 +52,7 @@ function initializeIdentityPhotoUploaderForRoot(root) {
     const items = [];
     let activeUploads = 0;
     let submitting = false;
+    observePhotoSession(config, items, render, pump);
 
     const uid = () => crypto?.randomUUID
         ? crypto.randomUUID()
@@ -168,7 +171,7 @@ function initializeIdentityPhotoUploaderForRoot(root) {
         } else if (failed) {
             submitLabel.textContent = 'راجع الصورة التي فشل رفعها';
         } else if (remainingRequired === 1) {
-            submitLabel.textContent = 'أضف صورة أخرى للمتابعة';
+            submitLabel.textContent = uploaded.length > 0 ? 'أضف صورة أخرى للمتابعة' : 'أضف صورة للمتابعة';
         } else if (remainingRequired > 1) {
             submitLabel.textContent = `أضف ${arabicNumber(remainingRequired)} صور للمتابعة`;
         } else {
@@ -190,10 +193,14 @@ function initializeIdentityPhotoUploaderForRoot(root) {
                 `تم رفع ${arabicNumber(uploaded.length)} حتى الآن. انتظر حتى يكتمل رفع الصور المحددة.`,
             );
         } else if (remainingRequired === 1) {
+            const hasUploadedPhotos = uploaded.length > 0;
+
             setRequirementState(
                 'warning',
-                'أضف صورة أخرى للمتابعة',
-                `تم رفع الصور بنجاح. نحتاج صورة أخرى لاستكمال ${arabicNumber(minimum)} صور مطلوبة.`,
+                hasUploadedPhotos ? 'أضف صورة أخرى للمتابعة' : 'أضف صورة للمتابعة',
+                hasUploadedPhotos
+                    ? `تم رفع ${arabicNumber(uploaded.length)} صورة بنجاح. نحتاج صورة أخرى لاستكمال ${arabicNumber(minimum)} صور مطلوبة.`
+                    : 'لم يتم رفع صورة بعد. اختر صورة واضحة للطفل للمتابعة.',
             );
         } else if (remainingRequired > 1) {
             setRequirementState(
@@ -355,95 +362,32 @@ function initializeIdentityPhotoUploaderForRoot(root) {
     }
 
     async function upload(item) {
-        activeUploads += 1;
-        patch(item.id, { status: 'preparing', progress: 4, message: 'جاري تجهيز الصورة...' });
-        let preparedFile;
-
+        activeUploads++;
+        const controller = new AbortController();
+        item.xhr = controller;
         try {
-            preparedFile = await prepareImageForUpload(item.file, { maxLongEdge, jpegQuality });
-        } catch (conversionError) {
-            activeUploads = Math.max(0, activeUploads - 1);
-            patch(item.id, {
-                status: 'failed',
-                progress: 0,
-                message: conversionError.message || 'تعذر تجهيز الصورة قبل الرفع.',
+            patch(item.id, { status: 'preparing', progress: 3, message: 'جاري تجهيز الصورة...' });
+            const prepared = await prepareImageForUpload(item.file, { maxLongEdge, jpegQuality });
+            if (controller.signal.aborted || !items.includes(item)) return;
+            patch(item.id, { status: 'uploading', progress: 8, message: 'جاري رفع الصورة...' });
+            const data = new FormData();
+            appendPhoto(data, item.file, prepared);
+            const body = await uploadPhoto(config, data, {
+                signal: controller.signal,
+                onProgress: (progress) => patch(item.id, { progress }),
             });
-            pump();
-
-            return;
-        }
-
-        if (preparedFile !== item.file) {
-            const previousPreview = item.previewUrl;
-            patch(item.id, { previewUrl: URL.createObjectURL(preparedFile) });
-
-            if (previousPreview?.startsWith('blob:')) {
-                URL.revokeObjectURL(previousPreview);
-            }
-        }
-
-        patch(item.id, { status: 'uploading', progress: 8, message: 'جاري الرفع تلقائيًا...' });
-        const data = new FormData();
-        data.append('photo', item.file);
-
-        if (preparedFile !== item.file) {
-            data.append('prepared_photo', preparedFile);
-        }
-
-        data.append('upload_session_token', config.sessionToken);
-        data.append('upload_batch_token', config.batchToken || '');
-        const xhr = new XMLHttpRequest();
-        item.xhr = xhr;
-        xhr.open('POST', config.uploadUrl);
-        xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
-        xhr.setRequestHeader('Accept', 'application/json');
-        xhr.upload.addEventListener('progress', (event) => {
-            if (event.lengthComputable) {
-                patch(item.id, { progress: Math.min(95, Math.max(10, Math.round((event.loaded / event.total) * 90))) });
-            }
-        });
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-
-            activeUploads = Math.max(0, activeUploads - 1);
-            let body = {};
-
-            try {
-                body = JSON.parse(xhr.responseText || '{}');
-            } catch {
-                body = {};
-            }
-
-            if (xhr.status >= 200 && xhr.status < 300 && body.id) {
-                patch(item.id, {
-                    status: 'uploaded',
-                    progress: 100,
-                    uploadId: body.id,
-                    previewUrl: body.preview_url || item.previewUrl,
-                    message: 'تم الرفع بنجاح.',
-                });
-            } else {
-                patch(item.id, {
-                    status: 'failed',
-                    progress: 0,
-                    message: body.message || 'تعذر رفع الصورة. حاول مرة أخرى.',
-                });
-            }
-
-            pump();
-        };
-        xhr.onerror = () => {
-            activeUploads = Math.max(0, activeUploads - 1);
-            patch(item.id, {
-                status: 'failed',
-                progress: 0,
-                message: 'انقطع الاتصال أثناء الرفع. حاول مرة أخرى.',
+            if (items.includes(item)) patch(item.id, {
+                status: 'uploaded', progress: 100, uploadId: body.id,
+                previewUrl: body.preview_url || item.previewUrl, message: 'تم الرفع بنجاح.',
             });
+        } catch (error) {
+            if (error.name !== 'AbortError' && items.includes(item)) patch(item.id, {
+                status: 'failed', progress: 0, message: error.message,
+            });
+        } finally {
+            activeUploads = Math.max(0, activeUploads - 1);
             pump();
-        };
-        xhr.send(data);
+        }
     }
 
     function retry(id) {
@@ -515,9 +459,10 @@ function initializeIdentityPhotoUploaderForRoot(root) {
     }
 
     try {
-        const restored = Array.isArray(config.restoredUploadIds) && config.restoredUploadIds.length > 0
+        const candidates = Array.isArray(config.restoredUploadIds) && config.restoredUploadIds.length > 0
             ? config.restoredUploadIds
             : JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+        const restored = await restorePhotos(config, candidates);
 
         if (Array.isArray(restored)) {
             restored.slice(0, maximum).forEach((id) => items.push({

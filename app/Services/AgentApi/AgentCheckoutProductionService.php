@@ -47,10 +47,10 @@ class AgentCheckoutProductionService
             ->groupBy('checkout_group_key')
             ->orderBy('first_created_at')
             ->orderBy('first_order_id')
-            ->limit(50)
-            ->pluck('checkout_group_key');
+            ->lazy(50);
 
-        foreach ($candidates as $groupKey) {
+        foreach ($candidates as $candidate) {
+            $groupKey = (string) $candidate->checkout_group_key;
             try {
                 $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
                     $orders = $this->lockedOrdersForKey((string) $groupKey);
@@ -112,6 +112,75 @@ class AgentCheckoutProductionService
         }
 
         return null;
+    }
+
+    /** @return array<string, mixed> */
+    public function queueDiagnostics(User $agent): array
+    {
+        $groupKeys = Order::query()
+            ->where('status', 'new')
+            ->whereNotNull('checkout_group_key')
+            ->distinct()
+            ->pluck('checkout_group_key')
+            ->map(fn ($key): string => (string) $key)
+            ->values();
+
+        $summary = [
+            'token_catalog_scope' => AgentCatalogScope::forUser($agent),
+            'token_product_ids' => AgentProductScope::forUser($agent),
+            'new_checkout_groups' => $groupKeys->count(),
+            'eligible_now' => 0,
+            'already_acquired' => 0,
+            'without_production_units' => 0,
+            'outside_token_scope' => 0,
+            'mixed_production_status' => 0,
+        ];
+
+        foreach ($groupKeys->chunk(100) as $chunk) {
+            $assigned = OrderGroupAssignment::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->pluck('checkout_group_key')
+                ->mapWithKeys(fn ($key): array => [(string) $key => true]);
+            $ordersByGroup = Order::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->with($this->relations())
+                ->orderBy('id')
+                ->get()
+                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+            foreach ($chunk as $groupKey) {
+                if ($assigned->has($groupKey)) {
+                    $summary['already_acquired']++;
+
+                    continue;
+                }
+
+                $orders = $ordersByGroup->get($groupKey, collect());
+                $units = $this->units($orders);
+                if ($units->isEmpty()) {
+                    $summary['without_production_units']++;
+
+                    continue;
+                }
+
+                if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                    $summary['outside_token_scope']++;
+
+                    continue;
+                }
+
+                $targets = $this->targetOrders($orders, $units);
+                if ($targets->contains(fn (Order $order): bool => $order->status !== 'new')) {
+                    $summary['mixed_production_status']++;
+
+                    continue;
+                }
+
+                $summary['eligible_now']++;
+            }
+        }
+
+        return $summary;
     }
 
     /** @return array<string, mixed>|null */
@@ -493,18 +562,25 @@ class AgentCheckoutProductionService
         return $unitKey;
     }
 
-    public function assertPreviewTypeForOrder(Order $order, string $type): void
+    public function authorizePreviewUpload(Order $order, User $agent, string $type): void
     {
-        $orders = Order::query()->where('checkout_group_key', $order->checkoutGroupKey())->with($this->relations())->get();
-        $units = $this->units($orders)->where('order_id', $order->id);
+        if ($order->trashed()) {
+            throw new AgentApiException('ORDER_NOT_FOUND', 'Order not found.', 404);
+        }
 
-        if ($type === 'booklet' && ! $units->contains('type', 'story')) {
+        $units = $this->units(collect([$order]));
+        $unitType = $type === 'booklet' ? 'story' : 'product';
+        $previewUnits = $units->where('type', $unitType)->values();
+
+        if ($type === 'booklet' && $previewUnits->isEmpty()) {
             throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no story production unit.', 422);
         }
 
-        if ($type === 'product_images' && ! $units->contains('type', 'product')) {
+        if ($type === 'product_images' && $previewUnits->isEmpty()) {
             throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no product production unit.', 422);
         }
+
+        $this->assertUnitsAllowed($agent, $previewUnits);
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -613,18 +689,27 @@ class AgentCheckoutProductionService
     private function productUnit(Order $order, OrderItem $item, array $prompt): array
     {
         return [
-            'unit_key' => 'product:'.$item->id,
+            'unit_key' => $prompt['unit_key'],
             'type' => 'product',
             'order_id' => $order->id,
             'order_item_id' => $item->id,
+            'product_id' => $item->product_id,
             'order_number' => $order->order_number,
             'status' => $order->status,
-            'title' => $item->title,
+            'title' => $prompt['component_count'] > 1
+                ? $item->title.' — '.$prompt['component_name']
+                : $item->title,
             'sku' => $item->sku,
-            'quantity' => (int) $item->quantity,
+            'quantity' => $prompt['quantity'],
+            'product_quantity' => (int) $item->quantity,
+            'production_component' => [
+                'key' => $prompt['component_key'],
+                'name' => $prompt['component_name'],
+                'quantity_per_item' => $prompt['quantity_per_item'],
+            ],
             'language' => $order->language,
             'production_prompt' => $this->agentSafePrompt($prompt['prompt'], $order),
-            'prompt_source' => $prompt['uses_live_template'] ? 'live_product_template' : 'historical_snapshot',
+            'prompt_source' => $prompt['prompt_source'],
             'personalization' => $item->personalizationDisplayValues(),
             'notes' => array_filter(['parent' => $order->parent_notes, 'order' => $order->notes]),
             'reference_files' => $this->references($order),
@@ -834,7 +919,8 @@ class AgentCheckoutProductionService
             'checkoutReference',
             'groupAssignment',
             'story',
-            'items.product',
+            'items.product.productionComponents',
+            'items.productionComponents',
             'attachments',
             'bookletPreview.currentVersion',
             'productPreviewGallery.previews',

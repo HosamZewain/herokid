@@ -5,9 +5,11 @@ namespace App\Services\Orders;
 use App\Models\Order;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderPaymentEvent;
+use App\Models\OrderTag;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\OrderDateTime;
+use App\Support\OrderLifecycle;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
@@ -18,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class AdminOrderGroupService
 {
@@ -34,16 +38,21 @@ class AdminOrderGroupService
         'paymentUpdatedBy:id,name',
         'groupAssignment.assignee:id,name',
         'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
+        'checkoutReference.tags:id,name,normalized_name',
         'bookletPreview:id,order_id,uuid,status,current_version_id,public_token_encrypted',
         'productPreviewGallery:id,checkout_group_key,status,public_token_encrypted',
         'productPreviewGallery.previews:id,product_gallery_id',
+        'submittedServiceRatings:id,order_id,metadata,decided_at',
         'story:id,title,price,short_desc,full_desc,full_story,age_range,gender,language,lesson_value',
         'items.product:id,name_ar,inventory_mode,stock_quantity,production_prompt_template',
+        'items.product.productionComponents',
+        'items.productionComponents',
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
     ];
 
     private const DETAIL_RELATIONS = [
         ...self::INDEX_RELATIONS,
+        'bookletPreview.currentVersion:id,booklet_preview_id,created_at',
         'items.linkedAddOns.product:id,name_ar',
         'statusLogs',
         'previews',
@@ -86,20 +95,13 @@ class AdminOrderGroupService
         $stats = null;
 
         if ($includeStatistics) {
-            $allKeys = (clone $query)->distinct()->pluck('checkout_group_key');
-            $matchingOrders = $this->visibleOrdersForStats(
-                $this->ordersForStats($allKeys, $includeDeleted),
-                $includeDeleted,
-            );
-            $financialStats = $this->financialStats($matchingOrders);
-
-            $stats = [
-                'checkouts' => $allKeys->count(),
-                'stories' => $matchingOrders->filter(fn (Order $order): bool => $this->isStoryOrder($order))->count(),
-                'products' => (int) $matchingOrders->flatMap->items->whereIn('item_type', ['product', 'product_add_on'])->sum('quantity'),
-                ...$financialStats,
-            ];
+            $allKeys = (clone $query)->select('checkout_group_key')->distinct()->toBase();
+            $stats = app(OrderFinancialStatistics::class)->summarize($allKeys, $includeDeleted);
         }
+
+        $activeTags = $includeStatistics
+            ? $this->activeTagCounts($request, $includeDeleted, $catalogType, $lifecycle)
+            : collect();
 
         return [
             'groups' => $groups,
@@ -107,6 +109,10 @@ class AdminOrderGroupService
             'trash' => $request->query('view') === 'trash',
             'catalogType' => $catalogType,
             'lifecycle' => $lifecycle,
+            'selectedStatuses' => $this->selectedStatuses($request),
+            'selectedShippingStatuses' => $this->selectedStatuses($request, 'shipping_status', OrderStatusRegistry::TYPE_SHIPPING),
+            'selectedPrintingStatuses' => $this->selectedStatuses($request, 'printing_status', OrderStatusRegistry::TYPE_PRINTING),
+            'selectedPaymentStatuses' => $this->selectedStatuses($request, 'payment_status', OrderStatusRegistry::TYPE_PAYMENT),
             'assignmentUsers' => User::query()
                 ->where('role', 'admin')
                 ->where(function (Builder $query): void {
@@ -123,7 +129,45 @@ class AdminOrderGroupService
                     ->whereColumn('order_items.product_id', 'products.id'))
                 ->orderBy('name_ar')
                 ->get(['id', 'name_ar', 'slug']),
+            'filterTags' => $this->tagOptions(),
+            'activeTags' => $activeTags,
         ];
+    }
+
+    /** @return Collection<int, OrderTag> */
+    private function activeTagCounts(
+        Request $request,
+        bool $includeDeleted,
+        string $catalogType,
+        string $lifecycle,
+    ): Collection {
+        $matchingCheckoutKeys = $this->groupedFilteredQuery(
+            $request,
+            $includeDeleted,
+            $catalogType,
+            $lifecycle,
+            applyTagFilter: false,
+        )->select('checkout_group_key')->distinct();
+
+        return OrderTag::query()
+            ->join('order_checkout_reference_tag as active_tag_assignments', 'active_tag_assignments.order_tag_id', '=', 'order_tags.id')
+            ->join('order_checkout_references as active_tag_references', 'active_tag_references.id', '=', 'active_tag_assignments.order_checkout_reference_id')
+            ->whereIn('active_tag_references.checkout_group_key', $matchingCheckoutKeys)
+            ->select(['order_tags.id', 'order_tags.name'])
+            ->selectRaw('COUNT(DISTINCT active_tag_references.checkout_group_key) as checkouts_count')
+            ->groupBy(['order_tags.id', 'order_tags.name'])
+            ->orderByDesc('checkouts_count')
+            ->orderBy('order_tags.name')
+            ->get();
+    }
+
+    /** @return Collection<int, OrderTag> */
+    public function tagOptions(): Collection
+    {
+        return OrderTag::query()
+            ->whereHas('checkoutReferences')
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     public function export(Request $request): Collection
@@ -167,10 +211,15 @@ class AdminOrderGroupService
             ->keyBy('status');
 
         $checkouts = [
-            'total' => Order::query()->distinct()->count('checkout_group_key'),
+            'total' => Order::withTrashed()
+                ->whereNotNull('checkout_group_key')
+                ->distinct()
+                ->count('checkout_group_key'),
         ];
         $records = [
-            'total' => (int) $byStatus->sum('record_count'),
+            'total' => Order::withTrashed()
+                ->whereNotNull('checkout_group_key')
+                ->count(),
         ];
 
         foreach (self::DASHBOARD_STATUSES as $status) {
@@ -191,7 +240,7 @@ class AdminOrderGroupService
             ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->distinct()
             ->pluck('checkout_group_key');
-        $todayFinancial = $this->financialStats($this->ordersForStats($todayKeys, false));
+        $todayFinancial = app(OrderFinancialStatistics::class)->summarize($todayKeys, false);
         $todayPayments = $this->paymentActivityBetween($todayStart, $todayEnd);
 
         $yesterday = OrderDateTime::display(now())->subDay()->toDateString();
@@ -208,7 +257,7 @@ class AdminOrderGroupService
             ->whereIn('checkout_group_key', $this->unfinishedCheckoutKeys())
             ->distinct()
             ->pluck('checkout_group_key');
-        $activeFinancial = $this->financialStats($this->ordersForStats($activeKeys, false));
+        $activeFinancial = app(OrderFinancialStatistics::class)->summarize($activeKeys, false);
         $unassignedCheckouts = $activeKeys->isEmpty()
             ? 0
             : Order::query()
@@ -278,10 +327,7 @@ class AdminOrderGroupService
             return [(string) $checkout->checkout_group_key => OrderDateTime::display($createdAt)->toDateString()];
         });
         $checkoutKeys = $checkoutDates->keys();
-        $ordersByCheckout = $this->visibleOrdersForStats(
-            $this->ordersForStats($checkoutKeys, true),
-            true,
-        )->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+        $ordersByCheckout = app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, true)->get()->keyBy('checkout_group_key');
 
         $paymentActivity = $this->paymentEventsBetween($start, $end)
             ->map(function (OrderPaymentEvent $event): array {
@@ -319,16 +365,11 @@ class AdminOrderGroupService
             $dayKeys = $checkoutDates
                 ->filter(fn (string $createdDate): bool => $createdDate === $dateString)
                 ->keys();
-            $dayOrders = $dayKeys
-                ->flatMap(fn (string $key): Collection => $ordersByCheckout->get($key, collect()))
-                ->values();
-            $storyKeys = $dayOrders
-                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
-                ->filter(fn (Collection $orders): bool => $orders->contains(fn (Order $order): bool => $this->isStoryOrder($order)))
-                ->keys();
+            $dayOrders = $ordersByCheckout->only($dayKeys->all());
+            $storyKeys = $dayOrders->filter(fn ($checkout) => $checkout->stories > 0)->keys();
             $productKeys = $dayKeys->diff($storyKeys)->values();
-            $storyFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $storyKeys)->values());
-            $productFinancial = $this->financialStats($dayOrders->whereIn('checkout_group_key', $productKeys)->values());
+            $storyFinancial = ['total_value_cents' => (int) $dayOrders->only($storyKeys->all())->sum('total_cents')];
+            $productFinancial = ['total_value_cents' => (int) $dayOrders->only($productKeys->all())->sum('total_cents')];
             $totalValueCents = $storyFinancial['total_value_cents'] + $productFinancial['total_value_cents'];
             $newCheckouts = $dayKeys->count();
 
@@ -477,10 +518,16 @@ class AdminOrderGroupService
             ? $first->payment_status
             : OrderPaymentStatus::UNPAID;
         $paidAmountCents = min($totalCents, max(0, (int) $first->paid_amount_cents));
+        $customerRating = $orders
+            ->flatMap(fn (Order $order): Collection => $order->submittedServiceRatings)
+            ->sortByDesc('id')
+            ->first()?->qualityRating();
 
         return [
             'key' => $first->checkoutGroupKey(),
             'short_reference' => $first->checkoutReference?->short_reference,
+            'tags' => $first->checkoutReference?->tags?->sortBy('name')->values() ?? collect(),
+            'customer_rating' => $customerRating,
             'representative_id' => (int) $first->id,
             'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
@@ -545,30 +592,17 @@ class AdminOrderGroupService
         bool $includeDeleted,
         string $catalogType,
         string $lifecycle,
+        bool $applyTagFilter = true,
     ): Builder {
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
         $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
         $this->applyLifecycleFilter($query, $lifecycle);
-        $status = (string) $request->query('status', '');
 
-        if ($status !== '' && $status !== 'mixed') {
-            $query->where('status', $status);
-        }
-
-        if ($request->filled('payment_status')) {
-            $paymentStatus = (string) $request->query('payment_status');
-
-            if (in_array($paymentStatus, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)) {
-                $query->where('payment_status', $paymentStatus);
+        foreach (['payment_status' => OrderStatusRegistry::TYPE_PAYMENT, 'printing_status' => OrderStatusRegistry::TYPE_PRINTING, 'shipping_status' => OrderStatusRegistry::TYPE_SHIPPING] as $field => $type) {
+            $selected = $this->selectedStatuses($request, $field, $type);
+            if ($selected !== []) {
+                $query->whereIn($field, $selected);
             }
-        }
-
-        if ($request->filled('printing_status') && in_array($request->query('printing_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PRINTING, false), true)) {
-            $query->where('printing_status', $request->query('printing_status'));
-        }
-
-        if ($request->filled('shipping_status') && in_array($request->query('shipping_status'), OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false), true)) {
-            $query->where('shipping_status', $request->query('shipping_status'));
         }
 
         if ($request->filled('order_source') && array_key_exists((string) $request->query('order_source'), OrderSource::options())) {
@@ -614,6 +648,15 @@ class AdminOrderGroupService
             }
         }
 
+        if ($applyTagFilter && $request->filled('tag_id')) {
+            $tagId = $request->integer('tag_id');
+
+            $query->whereHas(
+                'checkoutReference.tags',
+                fn (Builder $tags): Builder => $tags->whereKey($tagId),
+            );
+        }
+
         $this->applyEventFilter($query, $request);
 
         if ($request->filled('q')) {
@@ -630,6 +673,8 @@ class AdminOrderGroupService
                     ->where('checkout_group_key', 'like', '%'.$term.'%')
                     ->orWhereHas('checkoutReference', fn (Builder $reference): Builder => $reference
                         ->where('short_reference', 'like', '%'.$term.'%'))
+                    ->orWhereHas('checkoutReference.tags', fn (Builder $tags): Builder => $tags
+                        ->where('name', 'like', '%'.$term.'%'))
                     ->orWhere('order_number', 'like', '%'.$term.'%')
                     ->orWhere('parent_name', 'like', '%'.$term.'%')
                     ->orWhere('child_name', 'like', '%'.$term.'%')
@@ -777,20 +822,42 @@ class AdminOrderGroupService
         bool $includeDeleted,
         string $catalogType,
         string $lifecycle,
+        bool $applyTagFilter = true,
     ): Builder {
-        $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
+        $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle, $applyTagFilter);
 
-        if ($request->query('status') === 'mixed') {
-            $mixedKeys = (clone $query)
-                ->get(['checkout_group_key', 'status'])
-                ->groupBy('checkout_group_key')
-                ->filter(fn (Collection $orders): bool => $orders->pluck('status')->unique()->count() > 1)
-                ->keys();
-
-            $query->whereIn('checkout_group_key', $mixedKeys);
+        $statuses = $this->selectedStatuses($request);
+        if ($statuses !== []) {
+            // Compute mixed groups before applying the selected status union.
+            $mixedKeys = (clone $query)->select('checkout_group_key')
+                ->groupBy('checkout_group_key')->havingRaw('COUNT(DISTINCT status) > 1');
+            $query->where(function (Builder $matches) use ($statuses, $mixedKeys): void {
+                $matches->whereIn('status', array_values(array_diff($statuses, ['mixed'])));
+                if (in_array('mixed', $statuses, true)) {
+                    $matches->orWhereIn('checkout_group_key', $mixedKeys);
+                }
+            });
         }
 
         return $query;
+    }
+
+    private function selectedStatuses(Request $request, string $field = 'status', string $type = OrderStatusRegistry::TYPE_ORDER): array
+    {
+        // Keep existing bookmarked ?status=new links compatible with status[].
+        $values = $request->query($field, []);
+        $values = is_array($values) ? $values : [$values];
+        $values = array_values(array_filter($values, fn ($value): bool => $value !== '' && $value !== null));
+        $allowed = OrderStatusRegistry::keys($type, false);
+        if ($field === 'status') {
+            $allowed[] = 'mixed';
+        }
+        Validator::make([$field => $values], [
+            $field => ['array', 'max:100'],
+            $field.'.*' => ['string', Rule::in($allowed)],
+        ])->validate();
+
+        return array_values(array_unique($values));
     }
 
     private function ordersForKeys(Collection $keys, bool $includeDeleted): Collection
@@ -1039,7 +1106,14 @@ class AdminOrderGroupService
     private function unfinishedCheckoutKeys(): \Illuminate\Database\Query\Builder
     {
         $doneOrderKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'delivered');
-        $donePaymentKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, 'paid_in_full');
+        $donePaymentKeys = collect(OrderLifecycle::completePaymentBehaviors())
+            ->flatMap(fn (string $behavior): array => OrderStatusRegistry::keysForBehavior(
+                OrderStatusRegistry::TYPE_PAYMENT,
+                $behavior,
+            ))
+            ->unique()
+            ->values()
+            ->all();
         $donePrintingKeys = array_values(array_unique(array_merge(
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'completed'),
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PRINTING, 'not_required'),

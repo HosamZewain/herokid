@@ -13,4 +13,7 @@ return [
     'timeout' => (int) env('BOSTA_TIMEOUT', 30),
     'connect_timeout' => (int) env('BOSTA_CONNECT_TIMEOUT', 10),
     'retries' => (int) env('BOSTA_RETRIES', 2),
+    'pickup_sync_enabled' => env('BOSTA_PICKUP_SYNC_ENABLED', true),
+    'pickup_sync_interval_minutes' => (int) env('BOSTA_PICKUP_SYNC_INTERVAL_MINUTES', 5),
+    'pickup_sync_pages' => (int) env('BOSTA_PICKUP_SYNC_PAGES', 5),
 ];

@@ -24,7 +24,7 @@
                             <th class="px-6 py-4 font-bold text-gray-600">الاسم</th>
                             <th class="px-6 py-4 font-bold text-gray-600">البريد الإلكتروني</th>
                             <th class="px-6 py-4 font-bold text-gray-600">الحالة</th>
-                            <th class="px-6 py-4 font-bold text-gray-600">الصلاحيات</th>
+                            <th class="px-6 py-4 font-bold text-gray-600">الدور والصلاحيات</th>
                             <th class="px-6 py-4 font-bold text-gray-600">تاريخ الإضافة</th>
                             <th class="px-6 py-4 text-center font-bold text-gray-600">الإجراءات</th>
                         </tr>
@@ -32,7 +32,8 @@
                     <tbody class="divide-y divide-gray-50">
                         @foreach($admins as $admin)
                             @php
-                                $permissionKeys = $admin->permissions->pluck('key')->sort()->values();
+                                $permissionKeys = $admin->permissionKeys()->sort()->values();
+                                $roleNames = $admin->adminRoles->pluck('name_ar');
                             @endphp
                             <tr class="transition hover:bg-gray-50 {{ $admin->id === auth()->id() ? 'bg-indigo-50/40' : '' }}">
                                 <td class="px-6 py-4">
@@ -57,6 +58,15 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-4">
+                                    @if($roleNames->isNotEmpty())
+                                        <div class="mb-1 flex flex-wrap gap-1">
+                                            @foreach($roleNames as $roleName)
+                                                <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-700">{{ $roleName }}</span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <p class="mb-1 text-xs font-bold text-amber-600">صلاحيات مخصصة</p>
+                                    @endif
                                     <p class="font-black text-gray-900">{{ $permissionKeys->count() }} صلاحية</p>
                                     <p class="mt-1 max-w-xs truncate text-xs text-gray-400" dir="ltr">{{ $permissionKeys->take(5)->implode(', ') }}{{ $permissionKeys->count() > 5 ? '...' : '' }}</p>
                                 </td>

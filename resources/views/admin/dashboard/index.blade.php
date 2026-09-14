@@ -304,7 +304,7 @@
                             <h3 class="mt-1 text-xl font-black text-gray-900">ملخص Google Analytics</h3>
                             <p class="mt-1 text-sm text-gray-500">بيانات مختصرة من GA4. التفاصيل الكاملة داخل صفحة التحليلات.</p>
                         </div>
-                        <div class="grid grid-cols-3 gap-3 text-center">
+                        <div class="grid grid-cols-3 gap-3 text-center" data-analytics-widget="{{ route('admin.analytics.widget') }}">
                             @if(($analyticsWidget['status'] ?? null) === 'ready')
                                 <div class="rounded-2xl bg-indigo-50 px-4 py-3">
                                     <p class="text-xs font-bold text-indigo-500">نشطون الآن</p>
@@ -320,7 +320,7 @@
                                 </div>
                             @else
                                 <div class="col-span-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-                                    {{ ($analyticsWidget['status'] ?? null) === 'setup_required' ? 'تحليلات GA4 تحتاج إعداد credentials.' : 'تعذر تحميل ملخص التحليلات حالياً.' }}
+                                    {{ ($analyticsWidget['status'] ?? null) === 'setup_required' ? 'تحليلات GA4 تحتاج إعداد credentials.' : 'جارٍ تحميل ملخص التحليلات…' }}
                                 </div>
                             @endif
                         </div>

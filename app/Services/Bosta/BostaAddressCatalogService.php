@@ -9,6 +9,16 @@ class BostaAddressCatalogService
 {
     public function __construct(private BostaClient $client) {}
 
+    public function cachedCities(): array
+    {
+        return Cache::get('bosta.address-catalog.v2.cities.'.config('bosta.country_id'), []);
+    }
+
+    public function cachedDistricts(string $cityId): array
+    {
+        return Cache::get('bosta.address-catalog.v2.districts.'.$cityId, []);
+    }
+
     /** @return array<int, array{id:string,name:string,other_name:string,label:string}> */
     public function cities(): array
     {
@@ -64,11 +74,12 @@ class BostaAddressCatalogService
         return collect($this->cities())->firstWhere('id', $cityId);
     }
 
-    public function findCityByName(string $name): ?array
+    /** @param array<int, array{id:string,name:string,other_name:string,label:string}>|null $cities */
+    public function findCityByName(string $name, ?array $cities = null): ?array
     {
         $normalized = $this->normalize($name);
 
-        return collect($this->cities())->first(fn (array $city): bool => in_array($normalized, [
+        return collect($cities ?? $this->cities())->first(fn (array $city): bool => in_array($normalized, [
             $this->normalize($city['name']),
             $this->normalize($city['other_name']),
         ], true));

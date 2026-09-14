@@ -8,6 +8,13 @@ function isHeic(file) {
         || name.endsWith('.heif');
 }
 
+function isAvif(file) {
+    const type = String(file?.type || '').toLowerCase();
+    const name = String(file?.name || '').toLowerCase();
+
+    return type === 'image/avif' || name.endsWith('.avif');
+}
+
 function withTimeout(promise, timeoutMs) {
     let timeoutId;
     const timeout = new Promise((_, reject) => {
@@ -24,11 +31,11 @@ export async function prepareImageForUpload(file, options = {}) {
 
     if (isHeic(file)) {
         try {
-            const { default: heic2any } = await import('heic2any');
+            const { heicTo } = await import('heic-to/csp');
             const converted = await withTimeout(
-                heic2any({
+                heicTo({
                     blob: file,
-                    toType: 'image/jpeg',
+                    type: 'image/jpeg',
                     quality: jpegQuality,
                 }),
                 conversionTimeoutMs,
@@ -39,17 +46,21 @@ export async function prepareImageForUpload(file, options = {}) {
                 throw new Error('empty_conversion');
             }
 
-            return new File(
+            const normalized = new File(
                 [jpeg],
                 String(file.name || 'child-photo.heic').replace(/\.(heic|heif)$/i, '.jpg'),
                 { type: 'image/jpeg', lastModified: file.lastModified || Date.now() },
             );
+            return prepareImageForUpload(normalized, options);
         } catch {
             throw new Error('تعذر تجهيز إحدى الصور. جرّب مرة أخرى أو اختر نسخة JPG من الصورة.');
         }
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(String(file.type || '').toLowerCase())) {
+    const inputType = String(file.type || '').toLowerCase();
+    const shouldNormalize = isAvif(file);
+
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(inputType) && !shouldNormalize) {
         return file;
     }
 
@@ -61,13 +72,13 @@ export async function prepareImageForUpload(file, options = {}) {
         const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
         const longEdge = Math.max(bitmap.width, bitmap.height);
 
-        if (longEdge <= maxLongEdge) {
+        if (longEdge <= maxLongEdge && !shouldNormalize) {
             bitmap.close?.();
 
             return file;
         }
 
-        const scale = maxLongEdge / longEdge;
+        const scale = Math.min(1, maxLongEdge / longEdge);
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(bitmap.width * scale);
         canvas.height = Math.round(bitmap.height * scale);
@@ -75,7 +86,7 @@ export async function prepareImageForUpload(file, options = {}) {
         bitmap.close?.();
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', jpegQuality));
 
-        if (!blob || blob.size > file.size) {
+        if (!blob || (blob.size > file.size && !shouldNormalize)) {
             return file;
         }
 

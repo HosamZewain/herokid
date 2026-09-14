@@ -20,7 +20,7 @@ class OrderApprovedChildIdentityUploadService
         private readonly OrderChildIdentityPromptService $identityPrompts,
     ) {}
 
-    public function upload(Order $order, UploadedFile $file, User $admin): ChildIdentityGenerationAttempt
+    public function upload(Order $order, UploadedFile $file, User $admin, string $source = 'admin_manual_upload'): ChildIdentityGenerationAttempt
     {
         $contents = file_get_contents($file->getRealPath());
         if ($contents === false) {
@@ -38,7 +38,7 @@ class OrderApprovedChildIdentityUploadService
         $storedPath = null;
 
         try {
-            return DB::transaction(function () use ($order, $file, $admin, $contents, $mimeType, $extension, $dimensions, &$storedPath): ChildIdentityGenerationAttempt {
+            return DB::transaction(function () use ($order, $file, $admin, $source, $contents, $mimeType, $extension, $dimensions, &$storedPath): ChildIdentityGenerationAttempt {
                 $lockedOrder = Order::query()->with(['story', 'user', 'childIdentityRequest'])->lockForUpdate()->findOrFail($order->id);
                 if (! $lockedOrder->story_id) {
                     throw new RuntimeException('Approved child identities can only be attached to story orders.');
@@ -81,7 +81,7 @@ class OrderApprovedChildIdentityUploadService
                     'cost_calculation_method' => 'calculated',
                     'billing_status' => 'not_billable',
                     'request_metadata' => [
-                        'source' => 'admin_manual_upload',
+                        'source' => $source,
                         'original_filename' => Str::limit(basename($file->getClientOriginalName()), 255, ''),
                     ],
                     'response_metadata' => [

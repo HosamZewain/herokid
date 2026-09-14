@@ -25,6 +25,9 @@ class AdminOrderGroupMergeTest extends TestCase
         $sourceShortReference = $source->checkoutReference()->value('short_reference');
         $targetShortReference = $target->checkoutReference()->value('short_reference');
 
+        $this->actingAs($admin)->patch(route('admin.orders.groups.tags', $target), ['tags' => 'أولوية']);
+        $this->actingAs($admin)->patch(route('admin.orders.groups.tags', $source), ['tags' => 'هدية']);
+
         $this->actingAs($admin)
             ->get(route('admin.orders.groups.show', $target))
             ->assertOk()
@@ -52,6 +55,10 @@ class AdminOrderGroupMergeTest extends TestCase
         $this->assertSame(15_000, $target->paid_amount_cents);
         $this->assertSame(15_000, $source->paid_amount_cents);
         $this->assertSame(2, Order::query()->where('checkout_group_key', 'CHECKOUT-TARGET')->withCount('items')->get()->sum('items_count'));
+        $this->assertSame(
+            ['أولوية', 'هدية'],
+            $target->checkoutReference->fresh()->tags()->orderBy('name')->pluck('name')->all(),
+        );
 
         $alias = OrderGroupMergeAlias::query()->firstOrFail();
         $this->assertSame('CHECKOUT-SOURCE', $alias->source_checkout_group_key);

@@ -160,7 +160,7 @@
                                         </div>
                                         <label for="package-child-name-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">اسم الطفل</span><input id="package-child-name-{{ $slot }}" name="stories[{{ $slot }}][child_name]" value="{{ old("stories.$slot.child_name") }}" required autocomplete="given-name" class="min-h-11 w-full rounded-xl border-slate-300" data-package-required></label>
                                         <div class="grid grid-cols-2 gap-3"><label for="package-child-age-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">العمر</span><select id="package-child-age-{{ $slot }}" name="stories[{{ $slot }}][child_age]" required class="min-h-11 w-full rounded-xl border-slate-300" data-package-required><option value="">اختر</option>@foreach(\App\Support\StoryAgeOptions::forPersonalization() as $age)<option value="{{ $age }}" @selected((string) old("stories.$slot.child_age") === (string) $age)>{{ $age }} سنوات</option>@endforeach</select></label><label for="package-child-gender-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">الجنس</span><select id="package-child-gender-{{ $slot }}" name="stories[{{ $slot }}][child_gender]" required class="min-h-11 w-full rounded-xl border-slate-300" data-package-required><option value="">اختر</option><option value="boy" @selected(old("stories.$slot.child_gender") === 'boy')>ولد</option><option value="girl" @selected(old("stories.$slot.child_gender") === 'girl')>بنت</option></select></label></div>
-                                        <div class="sm:col-span-2" data-package-uploader data-slot="{{ $slot }}"><label for="package-photos-{{ $slot }}" class="block rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-3"><span class="flex items-center justify-between gap-3"><span><strong class="block text-xs font-black text-slate-800 sm:text-sm">صور الطفل</strong><span class="mt-0.5 block text-[11px] text-slate-500">اختر صورتين أو ٣ صور واضحة للوجه</span></span><span class="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700 shadow-sm">اختيار الصور</span></span><input id="package-photos-{{ $slot }}" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="sr-only" data-package-photo-input><span class="mt-1 hidden text-xs font-bold text-red-600" data-package-photo-error></span></label><div class="mt-2 flex flex-wrap gap-2" data-package-photo-previews></div><div data-package-photo-hidden></div></div>
+                                        <div class="sm:col-span-2" data-package-uploader data-slot="{{ $slot }}"><label for="package-photos-{{ $slot }}" class="block rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-3"><span class="flex items-center justify-between gap-3"><span><strong class="block text-xs font-black text-slate-800 sm:text-sm">صور الطفل</strong><span class="mt-0.5 block text-[11px] text-slate-500">اختر صورتين أو ٣ صور واضحة للوجه</span></span><span class="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700 shadow-sm">اختيار الصور</span></span><input id="package-photos-{{ $slot }}" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,.heic,.heif,.avif" class="sr-only" data-package-photo-input><span class="mt-1 hidden text-xs font-bold text-red-600" data-package-photo-error></span></label><div class="mt-2 flex flex-wrap gap-2" data-package-photo-previews></div><div data-package-photo-hidden></div></div>
                                     </div>
                                 </fieldset>
                             @endfor
@@ -215,7 +215,7 @@
 
     @push('scripts')
     <script>
-    (() => {
+    document.addEventListener('DOMContentLoaded', () => {
         const config = @json($photoUploadConfig ?? []);
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const form = document.querySelector('[data-package-order-form]');
@@ -235,7 +235,7 @@
             cards.forEach(card => {
                 const slot = card.querySelector('[data-package-story-slot]');
                 const uploader = card.querySelector('[data-package-uploader]');
-                const uploaded = states.get(Number(uploader?.dataset.slot))?.filter(item => item.status === 'done').length || 0;
+                const uploaded = states.get(Number(uploader?.dataset.slot))?.filter(item => item.status === 'uploaded').length || 0;
                 const fieldsReady = [...card.querySelectorAll('[data-package-required]')].every(field => Boolean(field.value));
                 const ready = Boolean(slot?.querySelector('[data-package-story-select]')?.value) && fieldsReady && uploaded >= 2;
                 if (ready) complete += 1;
@@ -312,6 +312,8 @@
 
         document.querySelectorAll('[data-package-uploader]').forEach(uploader => {
             const slot = Number(uploader.dataset.slot);
+            const uploadConfig = { ...config, batchToken: config.batchTokens[slot] };
+            let activeUploads = 0;
             const input = uploader.querySelector('[data-package-photo-input]');
             const previews = uploader.querySelector('[data-package-photo-previews]');
             const hidden = uploader.querySelector('[data-package-photo-hidden]');
@@ -320,34 +322,44 @@
             states.set(slot, items);
 
             const render = () => {
-                previews.innerHTML = items.map((item, index) => `<div class="relative w-20 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm"><div class="aspect-square overflow-hidden rounded-lg bg-slate-100">${item.preview ? `<img src="${item.preview}" class="h-full w-full object-cover" alt="معاينة الصورة">` : ''}</div><button type="button" data-remove="${index}" class="absolute -start-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-sm font-black text-white shadow" aria-label="حذف الصورة">×</button><p class="mt-1 truncate text-center text-[9px] font-bold text-slate-600">${escape(item.name)}</p><p class="text-center text-[9px] font-black ${item.status === 'done' ? 'text-emerald-600' : item.status === 'failed' ? 'text-red-600' : 'text-indigo-600'}">${item.status === 'done' ? 'تم الرفع' : item.status === 'failed' ? 'فشل' : 'يرفع...'}</p></div>`).join('');
-                hidden.innerHTML = items.filter(item => item.status === 'done').map(item => `<input type="hidden" name="stories[${slot}][photo_upload_ids][]" value="${item.id}">`).join('');
+                previews.innerHTML = items.map((item, index) => `<div class="relative w-20 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm"><div class="aspect-square overflow-hidden rounded-lg bg-slate-100">${item.preview ? `<img src="${item.preview}" class="h-full w-full object-cover" alt="معاينة الصورة">` : ''}</div><button type="button" data-remove="${index}" class="absolute -start-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-sm font-black text-white shadow" aria-label="حذف الصورة">×</button><p class="mt-1 truncate text-center text-[9px] font-bold text-slate-600">${escape(item.name)}</p><p class="text-center text-[9px] font-black ${item.status === 'uploaded' ? 'text-emerald-600' : item.status === 'failed' ? 'text-red-600' : 'text-indigo-600'}">${item.status === 'uploaded' ? 'تم الرفع' : item.status === 'failed' ? 'فشل' : 'يرفع...'}</p></div>`).join('');
+                hidden.innerHTML = items.filter(item => item.status === 'uploaded').map(item => `<input type="hidden" name="stories[${slot}][photo_upload_ids][]" value="${item.id}">`).join('');
                 previews.querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
                     const [removed] = items.splice(Number(button.dataset.remove), 1);
+                    removed?.controller?.abort();
                     if (removed?.id) fetch(config.deleteUrlTemplate.replace('__ID__', removed.id), { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' } }).catch(() => {});
                     render();
                 }));
                 updateProgress();
             };
 
-            const upload = async file => {
-                const item = { name: file.name, preview: URL.createObjectURL(file), status: 'uploading', id: null };
-                items.push(item); render();
+            const upload = async item => {
+                const file = item.file;
+                item.controller = new AbortController(); item.status = 'uploading'; activeUploads++;
+                render();
                 try {
                     const prepared = window.HeroKidImageUpload?.prepare ? await window.HeroKidImageUpload.prepare(file, { maxLongEdge: config.maxLongEdge, jpegQuality: Number(config.jpegQuality || 90) / 100 }) : file;
-                    const body = new FormData(); body.append('photo', prepared); body.append('upload_session_token', config.sessionToken); body.append('upload_batch_token', config.batchTokens[slot]);
-                    const response = await fetch(config.uploadUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }, body });
-                    const result = await response.json();
-                    if (!response.ok || !result.id) throw new Error(result.message || 'فشل رفع الصورة.');
-                    item.id = result.id; item.preview = result.preview_url || item.preview; item.status = 'done'; error.classList.add('hidden');
-                } catch (exception) { item.status = 'failed'; error.textContent = exception.message || 'فشل رفع الصورة.'; error.classList.remove('hidden'); }
-                render();
+                    if (item.controller.signal.aborted || !items.includes(item)) return;
+                    const body = new FormData(); body.append('photo', prepared);
+                    const result = await window.HeroKidImageUpload.upload(uploadConfig, body, { signal: item.controller.signal });
+                    item.id = result.id; item.uploadId = result.id; item.preview = result.preview_url || item.preview; item.status = 'uploaded'; error.classList.add('hidden');
+                } catch (exception) { if (exception.name !== 'AbortError') { item.status = 'failed'; error.textContent = exception.message || 'فشل رفع الصورة.'; error.classList.remove('hidden'); } }
+                finally { activeUploads = Math.max(0, activeUploads - 1); render(); pump(); }
             };
 
+            function pump() {
+                while (activeUploads < 2) {
+                    const item = items.find(item => item.status === 'waiting');
+                    if (!item) break;
+                    upload(item);
+                }
+            }
+            window.HeroKidImageUpload.observeSession(uploadConfig, items, render, pump);
             input.addEventListener('change', () => {
                 const available = Math.max(0, 3 - items.length);
                 const selected = Array.from(input.files);
-                selected.slice(0, available).forEach(upload);
+                selected.slice(0, available).forEach(file => items.push({ file, name: file.name, preview: URL.createObjectURL(file), status: 'waiting', id: null }));
+                render(); pump();
                 input.value = '';
                 if (selected.length > available) { error.textContent = 'الحد الأقصى ٣ صور.'; error.classList.remove('hidden'); }
             });
@@ -363,14 +375,14 @@
                 missingStory.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
-            const incomplete = [...states.values()].some(items => items.filter(item => item.status === 'done').length < 2 || items.some(item => item.status === 'uploading'));
+            const incomplete = [...states.values()].some(items => items.filter(item => item.status === 'uploaded').length < 2 || items.some(item => item.status === 'uploading'));
             if (!incomplete) return;
             event.preventDefault();
-            const first = [...document.querySelectorAll('[data-package-uploader]')].find(element => states.get(Number(element.dataset.slot)).filter(item => item.status === 'done').length < 2 || states.get(Number(element.dataset.slot)).some(item => item.status === 'uploading'));
+            const first = [...document.querySelectorAll('[data-package-uploader]')].find(element => states.get(Number(element.dataset.slot)).filter(item => item.status === 'uploaded').length < 2 || states.get(Number(element.dataset.slot)).some(item => item.status === 'uploading'));
             const error = first?.querySelector('[data-package-photo-error]'); if (error) { error.textContent = 'انتظر اكتمال الرفع وتأكد من وجود صورتين على الأقل.'; error.classList.remove('hidden'); }
             first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
-    })();
+    });
     </script>
     @endpush
 </x-front-layout>

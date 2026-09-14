@@ -3,6 +3,7 @@
     $canManagePermissions = auth()->user()->hasPermission('admin_users.permissions.manage');
     $canDelete = auth()->user()->hasPermission('admin_users.delete');
     $selectedPermissions = $user->permissions->pluck('key')->all();
+    $selectedRole = $user->adminRoles->first()?->key;
 @endphp
 
 <x-admin-layout>
@@ -92,10 +93,17 @@
                         </label>
                         <x-input-error :messages="$errors->get('is_active')" class="mt-2" />
 
+                        @include('admin.users._role-picker', [
+                            'roleOptions' => $roleOptions,
+                            'selected' => $selectedRole,
+                        ])
+
+                        <div class="mt-6">
                         @include('admin.users._permissions-matrix', [
                             'permissionGroups' => $permissionGroups,
                             'selected' => $selectedPermissions,
                         ])
+                        </div>
                     </div>
                 @endif
 

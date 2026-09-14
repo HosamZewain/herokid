@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Support\AppDateTime;
+use App\Support\OrderLifecycle;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
@@ -42,6 +43,7 @@ class AdminOrderReportService
                 'shipping_statuses' => OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_SHIPPING, false),
                 'sources' => OrderSource::options(),
                 'payment_methods' => OrderPaymentStatus::paymentMethods(),
+                'tags' => $this->groups->tagOptions(),
             ],
         ];
     }
@@ -75,7 +77,7 @@ class AdminOrderReportService
             && collect($row['statuses'])->every(
                 fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered'
             );
-        $paymentDone = OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $row['payment_status']) === 'paid_in_full';
+        $paymentDone = OrderLifecycle::isPaymentComplete($row['payment_status']);
         $printingDone = in_array(
             OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PRINTING, $row['printing_status']),
             ['completed', 'not_required'],

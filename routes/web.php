@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
@@ -22,15 +23,17 @@ use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\NotificationCenterController;
-use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderActivityController;
+use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderApprovedChildIdentityController;
 use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
+use App\Http\Controllers\Admin\OrderBulkActionController;
 use App\Http\Controllers\Admin\OrderChildIdentityPromptController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
+use App\Http\Controllers\Admin\OrderGroupTagController;
 use App\Http\Controllers\Admin\OrderPhotoController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderProductPreviewController as AdminOrderProductPreviewController;
@@ -42,6 +45,7 @@ use App\Http\Controllers\Admin\PricingPackageController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductionAutomationController;
+use App\Http\Controllers\Admin\ProductionSceneSnapshotController;
 use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
@@ -54,12 +58,14 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
+use App\Http\Controllers\Front\CheckoutAddressController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
 use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
 use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\FootballStoriesController;
+use App\Http\Controllers\Front\OrderCustomerRatingController;
 use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
@@ -167,6 +173,15 @@ Route::get('/order-preview/{token}/images/{preview}', [PublicOrderProductPreview
     ->middleware('throttle:300,1')
     ->name('order-product-previews.image');
 
+Route::get('/order-rating/{order}', [OrderCustomerRatingController::class, 'show'])
+    ->whereNumber('order')
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('order-ratings.show');
+Route::post('/order-rating/{order}', [OrderCustomerRatingController::class, 'store'])
+    ->whereNumber('order')
+    ->middleware(['signed', 'throttle:10,1'])
+    ->name('order-ratings.store');
+
 // Public Store Routes
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
 Route::get('/shop/package/{pricingPackage:slug}', [PackageController::class, 'show'])->name('shop.package.show');
@@ -238,19 +253,39 @@ Route::prefix('s')->name('child-identity-shares.')->group(function (): void {
 // Cart and checkout routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::get('/photo-uploads/session', [TemporaryPhotoUploadController::class, 'session'])->name('photo-uploads.session');
-Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:20,1')->name('photo-uploads.store');
+Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:photo-uploads')->name('photo-uploads.store');
 Route::get('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'show'])->name('photo-uploads.show');
 Route::delete('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'destroy'])->name('photo-uploads.destroy');
 Route::post('/cart/stories/{story:slug}', [CartController::class, 'store'])->name('cart.store');
 Route::post('/cart/products/{product:slug}', [ProductCartController::class, 'store'])->name('cart.products.store');
 Route::post('/cart/packages/{pricingPackage:slug}', [PackageCartController::class, 'store'])->name('cart.packages.store');
 Route::delete('/cart/{key}', [CartController::class, 'destroy'])->name('cart.destroy');
-Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+Route::get('/checkout/address-districts', [CheckoutAddressController::class, 'districts'])
+    ->middleware('throttle:60,1')
+    ->name('checkout.address-districts');
+Route::post('/checkout', [CheckoutController::class, 'store'])->block(120, 120)->name('checkout.store');
 Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
 
 // Order Tracking
 Route::get('/track-order', [TrackOrderController::class, 'index'])->name('track.index');
-Route::post('/track-order', [TrackOrderController::class, 'track'])->name('track.search');
+Route::post('/track-order', [TrackOrderController::class, 'track'])
+    ->middleware('throttle:30,1')
+    ->name('track.search');
+Route::post('/checkout/active-orders', [TrackOrderController::class, 'activeOrders'])
+    ->middleware('throttle:30,1')
+    ->name('checkout.active-orders');
+Route::get('/track-order/{reference}', [TrackOrderController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('track.show');
+Route::get('/track-order/{reference}/edit', [TrackOrderController::class, 'edit'])
+    ->middleware('throttle:30,1')
+    ->name('track.edit');
+Route::put('/track-order/{reference}', [TrackOrderController::class, 'update'])
+    ->middleware('throttle:20,1')
+    ->name('track.update');
+Route::post('/track-order/{reference}/cancel', [TrackOrderController::class, 'cancel'])
+    ->middleware('throttle:10,1')
+    ->name('track.cancel');
 
 // Preview Approval (customer)
 Route::post('/orders/{order}/approve-preview', [CustomerPreviewDecisionController::class, 'approve'])
@@ -390,6 +425,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
         ->name('dashboard.index');
+    Route::get('analytics/widget', [AnalyticsController::class, 'widget'])->middleware(['permission:dashboard.view', 'permission:dashboard.statistics.view', 'permission:analytics.view'])->name('analytics.widget');
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')
         ->name('analytics.index');
@@ -399,6 +435,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('agent-api-tokens', [AgentApiTokenController::class, 'store'])
         ->middleware(['permission:agent_api.tokens.manage', 'throttle:10,1'])
         ->name('agent-api-tokens.store');
+    Route::get('agent-api-tokens/{token}/edit', [AgentApiTokenController::class, 'edit'])
+        ->whereNumber('token')
+        ->middleware('permission:agent_api.tokens.manage')
+        ->name('agent-api-tokens.edit');
+    Route::patch('agent-api-tokens/{token}', [AgentApiTokenController::class, 'update'])
+        ->whereNumber('token')
+        ->middleware(['permission:agent_api.tokens.manage', 'throttle:20,1'])
+        ->name('agent-api-tokens.update');
     Route::delete('agent-api-tokens/{token}', [AgentApiTokenController::class, 'destroy'])
         ->whereNumber('token')
         ->middleware(['permission:agent_api.tokens.manage', 'throttle:20,1'])
@@ -594,6 +638,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor(['create', 'store'], 'permission:store.categories.create')
         ->middlewareFor(['edit', 'update'], 'permission:store.categories.update')
         ->middlewareFor('destroy', 'permission:store.categories.delete');
+    Route::get('products/{product}/duplicate', [ProductController::class, 'duplicate'])
+        ->middleware(['permission:store.products.view', 'permission:store.products.create'])
+        ->name('products.duplicate');
     Route::resource('products', ProductController::class)->except(['show'])
         ->middlewareFor('index', 'permission:store.products.view')
         ->middlewareFor(['create', 'store'], 'permission:store.products.create')
@@ -625,22 +672,36 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('attachments/{attachment}', [StoryAttachmentController::class, 'destroy'])->middleware('permission:story_attachments.delete')->name('attachments.destroy');
 
     Route::get('orders', [OrderController::class, 'index'])->middleware('permission:orders.view')->name('orders.index');
+    Route::post('orders/bulk-actions', OrderBulkActionController::class)
+        ->middleware('permission:orders.view')
+        ->name('orders.bulk-actions');
     Route::get('bosta', [BostaController::class, 'index'])->middleware('permission:bosta.view')->name('bosta.index');
+    Route::get('product-previews/{preview}/thumbnail', [AdminOrderProductPreviewController::class, 'thumbnail'])->middleware('permission:orders.view')->name('orders.product-previews.thumbnail');
+    Route::get('orders/{order}/approved-child-identity-thumbnail', [OrderController::class, 'serveApprovedChildIdentity'])->middleware('permission:orders.photos.view')->name('orders.approved-child-identity-thumbnail');
+    Route::get('bosta/cities', [BostaController::class, 'cities'])->middleware('permission:bosta.view')->name('bosta.cities');
     Route::get('bosta/districts', [BostaController::class, 'districts'])->middleware('permission:bosta.view')->name('bosta.districts');
     Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
     Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');
     Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');
     Route::get('orders/create', [OrderController::class, 'create'])->middleware('permission:orders.create')->name('orders.create');
+    Route::get('orders/existing-customers/search', [OrderController::class, 'searchExistingCustomers'])
+        ->middleware(['permission:orders.create', 'throttle:60,1'])
+        ->name('orders.existing-customers.search');
     Route::post('orders', [OrderController::class, 'store'])->middleware('permission:orders.create')->name('orders.store');
     Route::get('orders/groups/{representative}', [OrderGroupController::class, 'show'])->whereNumber('representative')->middleware('permission:orders.view')->name('orders.groups.show');
     Route::get('orders/groups/{representative}/edit', [OrderEditController::class, 'edit'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.edit');
     Route::put('orders/groups/{representative}', [OrderEditController::class, 'update'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.update');
     Route::patch('orders/groups/{representative}/status', [OrderGroupController::class, 'updateStatus'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.status');
     Route::patch('orders/groups/{representative}/payment', [OrderGroupController::class, 'updatePayment'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.payment');
+    Route::patch('orders/groups/{representative}/discount', [OrderGroupController::class, 'updateDiscount'])->whereNumber('representative')->middleware('permission:orders.discount.manage')->name('orders.groups.discount');
     Route::patch('orders/groups/{representative}/workflow-statuses', [OrderGroupController::class, 'updateWorkflowStatuses'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.workflow-statuses');
+    Route::post('orders/groups/{representative}/tags', [OrderGroupTagController::class, 'store'])->whereNumber('representative')->middleware('permission:orders.view')->name('orders.groups.tags.store');
+    Route::patch('orders/groups/{representative}/tags', [OrderGroupTagController::class, 'update'])->whereNumber('representative')->middleware('permission:orders.tags.delete')->name('orders.groups.tags');
+    Route::delete('orders/groups/{representative}/tags/{tag}', [OrderGroupTagController::class, 'destroy'])->whereNumber(['representative', 'tag'])->middleware('permission:orders.tags.delete')->name('orders.groups.tags.destroy');
     Route::post('orders/groups/{representative}/merge', [OrderGroupController::class, 'merge'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.merge');
     Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');
+    Route::delete('orders/groups/{representative}/product-previews', [AdminOrderProductPreviewController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy-many');
     Route::delete('orders/{order}/product-previews/{preview}', [AdminOrderProductPreviewController::class, 'destroy'])->whereNumber(['order', 'preview'])->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy');
     Route::post('orders/groups/{representative}/assignment/acquire', [OrderAssignmentController::class, 'acquire'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.acquire');
     Route::post('orders/groups/{representative}/assignment/takeover', [OrderAssignmentController::class, 'takeover'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.takeover');
@@ -666,12 +727,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::delete('orders/{order}/notes/{note}', [OrderAdminNoteController::class, 'destroy'])->whereNumber(['order', 'note'])->middleware('permission:orders.notes.delete')->name('orders.notes.destroy');
     Route::post('orders/{order}/activity/prompt-copied', [OrderActivityController::class, 'promptCopied'])->whereNumber('order')->middleware('permission:orders.view')->name('orders.activity.prompt-copied');
     Route::patch('orders/{order}/details', [OrderController::class, 'updateDetails'])->middleware('permission:orders.update')->name('orders.details.update');
+    Route::post('orders/{order}/scene-snapshots/refresh', ProductionSceneSnapshotController::class)->middleware('permission:orders.update')->name('orders.scene-snapshots.refresh');
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->middleware('permission:orders.delete')->name('orders.destroy');
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');
     Route::delete('orders/{order}/photos/{index}', [OrderPhotoController::class, 'destroy'])->whereNumber(['order', 'index'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.destroy');
     Route::post('orders/{order}/approved-child-identity', OrderApprovedChildIdentityController::class)->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.approved-child-identity.store');
     Route::post('orders/{order}/attachments', [OrderAttachmentController::class, 'store'])->middleware('permission:orders.update')->name('orders.attachments.store');
+    Route::delete('orders/groups/{representative}/attachments', [OrderAttachmentController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.attachments.destroy-many');
     Route::get('order-attachments/{attachment}', [OrderAttachmentController::class, 'show'])->middleware('permission:orders.view')->name('orders.attachments.show');
     Route::get('order-attachments/{attachment}/download', [OrderAttachmentController::class, 'download'])->middleware('permission:orders.view')->name('orders.attachments.download');
     Route::delete('order-attachments/{attachment}', [OrderAttachmentController::class, 'destroy'])->middleware('permission:orders.update')->name('orders.attachments.destroy');
@@ -819,6 +882,11 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor('index', 'permission:admin_users.view')
         ->middlewareFor(['create', 'store'], 'permission:admin_users.create,admin_users.permissions.manage')
         ->middlewareFor('destroy', 'permission:admin_users.delete');
+    Route::post('roles/{role}/duplicate', [AdminRoleController::class, 'duplicate'])
+        ->middleware('permission:admin_users.roles.manage')
+        ->name('roles.duplicate');
+    Route::resource('roles', AdminRoleController::class)->except(['show'])
+        ->middleware('permission:admin_users.roles.manage');
 
     // Pricing Packages
     Route::patch('pricing/{pricing}/homepage-visibility', [PricingPackageController::class, 'updateHomepageVisibility'])
