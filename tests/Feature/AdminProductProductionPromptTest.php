@@ -300,11 +300,14 @@ PROMPT);
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('data-inline-production-prompt', false)
-            ->assertDontSee('href="'.$productionUrl.'"', false);
+            ->assertSee('href="'.$productionUrl.'#prompt-management"', false)
+            ->assertSee('إدارة البرومبت / التحديث من المنتج');
 
         $this->actingAs($this->admin())
             ->get($productionUrl)
             ->assertOk()
+            ->assertSee('تحديث هذا الطلب من المنتج الحالي')
+            ->assertSee(route('admin.orders.products.production-prompt.use-current', [$order, $item]), false)
             ->assertSee('إنتاج ستيكر المدرسة')
             ->assertSee('سليم محمد')
             ->assertSee('مدرسة النور')

@@ -515,6 +515,7 @@
                                             'promptType' => 'product_production',
                                             'orderItemId' => $product->id,
                                         ])
+                                        <a href="{{ route('admin.orders.products.production', [$productOrder, $product]) }}#prompt-management" class="mt-2 inline-flex rounded-lg border border-fuchsia-200 bg-white px-3 py-2 text-xs font-bold text-fuchsia-700">إدارة البرومبت / التحديث من المنتج</a>
                                     @endif
                                 @endcan
                             </div>

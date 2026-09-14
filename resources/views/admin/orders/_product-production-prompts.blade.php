@@ -39,6 +39,11 @@
                 <div class="mb-4 flex flex-col gap-3 border-b pb-3 md:flex-row md:items-center md:justify-between">
                     <div class="text-right">
                         <h4 class="text-lg font-bold">{{ $productPrompt['item']->title }}</h4>
+                        @can('orders.production_prompt.manage')
+                            @if($productPrompt['item']->item_type === 'product')
+                                <a href="{{ route('admin.orders.products.production', [$productPrompt['item']->order_id, $productPrompt['item']->id]) }}#prompt-management" class="mt-2 inline-flex text-xs font-bold text-fuchsia-700">إدارة البرومبت / التحديث من المنتج</a>
+                            @endif
+                        @endcan
                         <p class="mt-1 text-xs font-bold text-gray-500">{{ $productPrompt['component_name'] }} · الكمية المطلوبة {{ $productPrompt['quantity'] }}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
