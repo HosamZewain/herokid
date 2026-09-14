@@ -44,11 +44,13 @@ class ExistingCustomerOrderLookupService
                 $order = $checkoutOrders->sortByDesc('created_at')->first();
                 $delivery = (array) ($order->delivery_details ?? []);
                 $country = $countries->firstWhere('id', (int) data_get($delivery, 'delivery_country_id'))
-                    ?? $countries->first(fn (DeliveryCountry $candidate): bool => trim((string) $candidate->name) === trim((string) data_get($delivery, 'country'))
+                    ?? $countries->first(fn (DeliveryCountry $candidate): bool =>
+                        trim((string) $candidate->name) === trim((string) data_get($delivery, 'country'))
                     );
                 $governorate = $country?->activeGovernorates
                     ->firstWhere('id', (int) data_get($delivery, 'delivery_governorate_id'))
-                    ?? $country?->activeGovernorates->first(fn ($candidate): bool => trim((string) $candidate->name) === trim((string) data_get($delivery, 'governorate'))
+                    ?? $country?->activeGovernorates->first(fn ($candidate): bool =>
+                        trim((string) $candidate->name) === trim((string) data_get($delivery, 'governorate'))
                     );
 
                 return [
