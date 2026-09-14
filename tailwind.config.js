@@ -22,6 +22,9 @@ export default {
         'bg-cyan-100', 'text-cyan-800',
         'bg-emerald-100', 'text-emerald-800',
         'bg-gray-100', 'text-gray-600',
+        'bg-sky-100', 'text-sky-800',
+        'bg-fuchsia-100', 'text-fuchsia-800',
+        'bg-purple-100', 'text-purple-800',
     ],
 
     theme: {

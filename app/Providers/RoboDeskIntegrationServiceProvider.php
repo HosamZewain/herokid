@@ -3,13 +3,23 @@
 namespace App\Providers;
 
 use App\Http\Middleware\VerifyRoboDeskSignature;
-use App\Models\BookletPreview;
+use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\Order;
-use App\Services\RoboDesk\RoboDeskOutbox;
+use App\Services\RoboDesk\RoboDeskDispatcher;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
+/**
+ * The single place every RoboDesk trigger lives.
+ *
+ * A trigger only detects a change and hands off to RoboDeskDispatcher, which
+ * decides whether the integration is on and what its payload looks like.
+ *
+ * Today there are two: a new order calls Order Confirmation, and a generated
+ * child identity awaiting a decision calls Identity Confirmation. The next ones
+ * — item confirmation, CSAT — each add a config entry and one closure here.
+ */
 class RoboDeskIntegrationServiceProvider extends ServiceProvider
 {
     public function boot(): void
@@ -24,57 +34,40 @@ class RoboDeskIntegrationServiceProvider extends ServiceProvider
             ->as('admin.robodesk.')
             ->group(base_path('routes/robodesk-admin.php'));
 
+        // Trigger: order created → Order Confirmation integration.
         Order::created(function (Order $order): void {
-            if (! Schema::hasTable('robodesk_integration_events')) {
+            if (! $this->ready()) {
                 return;
             }
 
-            app(RoboDeskOutbox::class)->queue(
-                'order.pending_confirmation',
-                'order.pending_confirmation:'.$order->checkoutGroupKey(),
-                $order->checkoutGroupKey(),
-                $order->id,
-            );
+            app(RoboDeskDispatcher::class)->confirmOrder($order);
         });
 
-        Order::updated(function (Order $order): void {
-            if (! Schema::hasTable('robodesk_integration_events') || ! $order->wasChanged(['status', 'payment_status', 'printing_status', 'shipping_status'])) {
+        // Trigger: identity generated and still undecided → Identity Confirmation.
+        ChildIdentityGenerationAttempt::updated(function (ChildIdentityGenerationAttempt $attempt): void {
+            if (! $this->ready() || ! $attempt->wasChanged('status') || $attempt->status !== 'succeeded') {
                 return;
             }
 
-            $fingerprint = collect(['status', 'payment_status', 'printing_status', 'shipping_status'])
-                ->map(fn (string $field): string => $field.'='.(string) $order->{$field})
-                ->implode('|');
-            app(RoboDeskOutbox::class)->queue(
-                'order.workflow_updated',
-                'order.workflow_updated:'.$order->id.':'.sha1($fingerprint),
-                $order->checkoutGroupKey(),
-                $order->id,
-                ['changed_order_id' => $order->id],
-            );
+            $identity = $attempt->identityRequest;
+
+            // An attempt that approved itself was auto-approved, which means the
+            // identity gate is closed and there is nothing to ask the parent.
+            if (! $identity || $identity->approved_attempt_id === $attempt->id) {
+                return;
+            }
+
+            app(RoboDeskDispatcher::class)->confirmIdentity($identity, $attempt);
         });
+    }
 
-        BookletPreview::updated(function (BookletPreview $preview): void {
-            if (! $preview->order_id || ! $preview->wasChanged('current_version_id') || ! Schema::hasTable('robodesk_integration_events')) {
-                return;
-            }
-
-            $order = $preview->order;
-            if (! $order) {
-                return;
-            }
-
-            app(RoboDeskOutbox::class)->queue(
-                'preview.ready_for_review',
-                'preview.ready_for_review:'.$preview->id.':'.$preview->current_version_id,
-                $order->checkoutGroupKey(),
-                $order->id,
-                [
-                    'order_number' => $order->order_number,
-                    'preview_version_id' => $preview->current_version_id,
-                    'preview_url' => $preview->publicUrl(),
-                ],
-            );
-        });
+    /**
+     * Migrations and a fresh install must not try to write integration rows
+     * before the tables exist.
+     */
+    private function ready(): bool
+    {
+        return Schema::hasTable('robodesk_integration_events')
+            && Schema::hasTable('robodesk_integration_settings');
     }
 }

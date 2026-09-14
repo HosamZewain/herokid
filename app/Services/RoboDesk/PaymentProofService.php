@@ -28,7 +28,7 @@ class PaymentProofService
         $extension = strtolower($file->guessExtension() ?: 'bin');
         $path = $file->storeAs('robodesk/payment-proofs/'.$uuid, 'proof.'.$extension, 'local');
 
-        return OrderPaymentProof::query()->create([
+        $proof = OrderPaymentProof::query()->create([
             'uuid' => $uuid,
             'checkout_group_key' => $checkoutGroupKey,
             'source' => 'robodesk',
@@ -44,5 +44,7 @@ class PaymentProofService
             'status' => 'pending',
             'metadata' => ['received_via' => 'robodesk_webhook'],
         ]);
+
+        return $proof;
     }
 }

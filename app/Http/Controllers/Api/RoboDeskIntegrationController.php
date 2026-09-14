@@ -7,6 +7,8 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Services\RoboDesk\PaymentProofService;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Services\RoboDesk\RoboDeskInboundEventHandler;
+use App\Services\RoboDesk\RoboDeskSettings;
+use App\Services\RoboDesk\RoboDeskTestRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,7 +21,7 @@ class RoboDeskIntegrationController extends Controller
             'status' => 'ready',
             'integration' => 'herokid-robodesk',
             'version' => 'v1',
-            'whatsapp_number' => config('robodesk.whatsapp_number'),
+            'whatsapp_number' => app(RoboDeskSettings::class)->whatsAppNumber(),
         ]);
     }
 
@@ -37,19 +39,22 @@ class RoboDeskIntegrationController extends Controller
                 'order.confirmed', 'order.rejected',
                 'identity.approved', 'identity.changes_requested',
                 'preview.approved', 'preview.changes_requested',
+                'csat.submitted',
             ])],
             'occurred_at' => ['nullable', 'date'],
             'data' => ['required', 'array'],
         ]);
 
-        abort_unless(hash_equals((string) $request->header('X-RoboDesk-Event-Id'), (string) $data['id']), 422, 'Event id mismatch.');
+        $reference = collect(['checkout_reference', 'identity_uuid', 'reference'])
+            ->map(fn (string $key): mixed => data_get($data, 'data.'.$key))
+            ->first(fn (mixed $value): bool => RoboDeskTestRunner::isTestReference($value));
 
         $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
             'direction' => 'inbound',
             'event_type' => $data['type'],
-            'aggregate_type' => 'checkout',
-            'aggregate_id' => data_get($data, 'data.checkout_reference'),
-            'checkout_group_key' => data_get($data, 'data.checkout_reference'),
+            'aggregate_type' => $reference ? 'test' : 'checkout',
+            'aggregate_id' => $reference ?: data_get($data, 'data.checkout_reference'),
+            'checkout_group_key' => $reference ? null : data_get($data, 'data.checkout_reference'),
             'status' => 'processing',
             'attempts' => 1,
             'payload' => $data['data'],
@@ -83,7 +88,7 @@ class RoboDeskIntegrationController extends Controller
     {
         $validated = $request->validate([
             'checkout_reference' => ['required', 'string', 'max:255'],
-            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.(max(1, (int) config('robodesk.payment_proof_max_mb')) * 1024)],
+            'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.(app(RoboDeskSettings::class)->paymentProofMaxMb() * 1024)],
             'message_id' => ['required', 'string', 'max:255'],
             'conversation_id' => ['nullable', 'string', 'max:255'],
             'sender_phone' => ['nullable', 'string', 'max:50'],

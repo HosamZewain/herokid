@@ -8,6 +8,8 @@ use App\Support\Phone;
 
 class RoboDeskCheckoutPayload
 {
+    public function __construct(private readonly RoboDeskSettings $settings) {}
+
     public function build(string $checkoutGroupKey): array
     {
         $representative = Order::query()->where('checkout_group_key', $checkoutGroupKey)->orderBy('id')->firstOrFail();
@@ -38,8 +40,8 @@ class RoboDeskCheckoutPayload
                 'printing' => $group['printing_status'],
                 'shipping' => $group['shipping_status'],
             ],
-            'instapay_url' => config('robodesk.instapay_url'),
-            'whatsapp_number' => config('robodesk.whatsapp_number'),
+            'instapay_url' => $this->settings->instaPayUrl(),
+            'whatsapp_number' => $this->settings->whatsAppNumber(),
         ];
     }
 }

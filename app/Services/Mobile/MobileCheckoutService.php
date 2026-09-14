@@ -19,6 +19,7 @@ use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
+use App\Services\RoboDesk\OrderConfirmationGate;
 use App\Support\OrderPaymentStatus;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +39,7 @@ class MobileCheckoutService
         private readonly ChildIdentityEventLogger $identityEvents,
         private readonly AdminNotificationDispatcher $notifications,
         private readonly MobileNotificationService $mobileNotifications,
+        private readonly OrderConfirmationGate $confirmationGate,
     ) {}
 
     public function checkout(User $user, array $data): array
@@ -255,13 +257,13 @@ class MobileCheckoutService
                 'parent_notes' => data_get($cartItem->personalization, 'additional_instructions'),
                 'delivery_details' => $delivery,
                 'uploaded_photos' => [],
-                'status' => 'new',
+                'status' => $this->confirmationGate->initialStatus(),
             ]);
 
             $photoIds = data_get($cartItem->personalization, 'photo_ids', []);
             $storedPhotos = $this->copyPhotosForOrder($user, $child->id, $photoIds, $order);
             $order->update(['uploaded_photos' => $storedPhotos]);
-            $order->statusLogs()->create(['status' => 'new', 'notes' => 'تم إنشاء الطلب من تطبيق HeroKid وسيتم مراجعته قريباً.']);
+            $order->statusLogs()->create(['status' => $order->status, 'notes' => 'تم إنشاء الطلب من تطبيق HeroKid وسيتم مراجعته قريباً.']);
             $storyOrderItem = $order->items()->create([
                 'item_type' => 'story',
                 'story_id' => $story->id,
@@ -339,9 +341,9 @@ class MobileCheckoutService
                 'parent_name' => $address->recipient_name ?: $user->name,
                 'delivery_details' => $this->deliverySnapshot($cart, $address, $country, $governorate, $checkoutGroup, 1, $itemCount, $data['payment_method']),
                 'uploaded_photos' => [],
-                'status' => 'new',
+                'status' => $this->confirmationGate->initialStatus(),
             ]);
-            $firstOrder->statusLogs()->create(['status' => 'new', 'notes' => 'تم إنشاء طلب المتجر من تطبيق HeroKid وسيتم مراجعته قريباً.']);
+            $firstOrder->statusLogs()->create(['status' => $firstOrder->status, 'notes' => 'تم إنشاء طلب المتجر من تطبيق HeroKid وسيتم مراجعته قريباً.']);
             $orders[] = $firstOrder;
         }
 

@@ -2,10 +2,9 @@
 
 namespace App\Jobs;
 
-use App\Models\CheckoutCustomerWorkflow;
 use App\Models\RoboDeskIntegrationEvent;
-use App\Services\RoboDesk\RoboDeskCheckoutPayload;
-use App\Services\RoboDesk\RoboDeskSignature;
+use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
+use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,64 +26,77 @@ class SendRoboDeskEventJob implements ShouldQueue
         return [30, 120, 600, 1800];
     }
 
-    public function handle(RoboDeskSignature $signatures, RoboDeskCheckoutPayload $checkouts): void
+    public function handle(RoboDeskSettings $settings, RoboDeskIntegrationRegistry $integrations): void
     {
         $event = RoboDeskIntegrationEvent::query()->find($this->eventId);
+
         if (! $event || $event->direction !== 'outbound' || $event->status === 'succeeded') {
             return;
         }
 
-        if (! config('robodesk.enabled') || blank(config('robodesk.outbound_secret'))) {
-            $event->update(['status' => 'held', 'last_error' => 'Integration is disabled or missing its outbound secret.']);
+        $integration = $integrations->find((string) $event->event_type);
+
+        if (! $settings->enabled() || ! $integration?->enabled()) {
+            $event->update(['status' => 'held', 'last_error' => 'RoboDesk integration is disabled.']);
 
             return;
         }
 
-        $data = $event->payload ?? [];
-        if ($event->checkout_group_key) {
-            $data = array_merge($checkouts->build($event->checkout_group_key), $data);
+        if (! $integration->configured()) {
+            $event->update(['status' => 'held', 'last_error' => 'No API URL is configured for this integration.']);
+
+            return;
         }
 
-        $envelope = [
-            'id' => $event->event_id,
-            'type' => $event->event_type,
-            'occurred_at' => $event->created_at?->toIso8601String(),
-            'data' => $data,
-        ];
-        $body = json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        $timestamp = (string) now()->timestamp;
+        $body = $event->payload ?? [];
 
         $event->increment('attempts');
-        $event->update(['status' => 'processing', 'payload' => $data]);
+        $event->update(['status' => 'processing']);
+
+        // Simulation mode stops here. The body recorded is byte-for-byte what a
+        // live send would have used, so the simulator shows the real message
+        // rather than a mock-up of one.
+        if ($settings->simulating()) {
+            $event->update([
+                'status' => 'succeeded',
+                'processed_at' => now(),
+                'last_error' => null,
+                'response_payload' => [
+                    'simulated' => true,
+                    'would_have_sent' => [
+                        'method' => 'POST',
+                        'url' => $integration->apiUrl(),
+                        'body' => $body,
+                    ],
+                ],
+            ]);
+
+            return;
+        }
+
+        $headers = ['Content-Type' => 'application/json'];
+
+        if ($integration->token() !== '') {
+            $headers['Authorization'] = $integration->token();
+        }
 
         try {
-            $response = Http::timeout(max(5, (int) config('robodesk.timeout_seconds')))
+            $response = Http::timeout($settings->timeoutSeconds())
                 ->acceptJson()
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                    'X-RoboDesk-Timestamp' => $timestamp,
-                    'X-RoboDesk-Event-Id' => $event->event_id,
-                    'X-RoboDesk-Signature' => $signatures->sign($body, $timestamp, $event->event_id, (string) config('robodesk.outbound_secret')),
-                ])
-                ->send('POST', config('robodesk.base_url').config('robodesk.events_path'), ['body' => $body]);
+                ->withHeaders($headers)
+                ->post($integration->apiUrl(), $body);
 
             $response->throw();
+
             $event->update([
                 'status' => 'succeeded',
                 'processed_at' => now(),
                 'last_error' => null,
                 'response_payload' => $response->json() ?: ['status' => $response->status()],
             ]);
-            if ($event->event_type === 'payment.requested' && $event->checkout_group_key) {
-                CheckoutCustomerWorkflow::query()
-                    ->where('checkout_group_key', $event->checkout_group_key)
-                    ->update([
-                        'payment_request_status' => 'sent',
-                        'payment_requested_at' => now(),
-                    ]);
-            }
         } catch (Throwable $exception) {
             $event->update(['status' => 'failed', 'last_error' => mb_substr($exception->getMessage(), 0, 2000)]);
+
             throw $exception;
         }
     }

@@ -41,9 +41,14 @@ class OrderCustomerRatingService
     }
 
     /** @return array{review: OrderCustomerReview, created: bool} */
-    public function submit(Order $order, int $qualityRating, ?string $comment): array
-    {
-        return DB::transaction(function () use ($order, $qualityRating, $comment): array {
+    public function submit(
+        Order $order,
+        int $qualityRating,
+        ?string $comment,
+        string $source = OrderCustomerReview::SOURCE_PUBLIC_LINK,
+        array $metadata = [],
+    ): array {
+        return DB::transaction(function () use ($order, $qualityRating, $comment, $source, $metadata): array {
             $canonicalOrder = Order::query()
                 ->where('checkout_group_key', $order->checkoutGroupKey())
                 ->orderBy('id')
@@ -62,12 +67,12 @@ class OrderCustomerRatingService
                 'version_reference' => OrderCustomerReview::VERSION_CHECKOUT,
                 'decision' => OrderCustomerReview::DECISION_SUBMITTED,
                 'customer_comment' => filled($comment) ? trim((string) $comment) : null,
-                'source' => OrderCustomerReview::SOURCE_PUBLIC_LINK,
+                'source' => $source,
                 'decided_at' => now(),
-                'metadata' => [
+                'metadata' => array_merge($metadata, [
                     'quality_rating' => $qualityRating,
                     'checkout_group_key' => $canonicalOrder->checkoutGroupKey(),
-                ],
+                ]),
             ]);
 
             return ['review' => $review, 'created' => true];

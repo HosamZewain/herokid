@@ -21,6 +21,7 @@ use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
+use App\Services\RoboDesk\OrderConfirmationGate;
 use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\Phone;
@@ -135,6 +136,12 @@ class CheckoutController extends Controller
             return ((int) ($item['line_total_cents'] ?? 0)) / 100;
         });
         $deliveryFee = $this->deliveryFee($country, $governorate);
+        // Resolved once per checkout so every order row in the group starts in
+        // the same state, whatever the RoboDesk gate is set to.
+        $initialStatus = app(OrderConfirmationGate::class)->initialStatus();
+        $initialStatusNote = $initialStatus === OrderConfirmationGate::PENDING_STATUS
+            ? 'تم إنشاء الطلب وبانتظار تأكيد العميل عبر واتساب.'
+            : null;
         $checkoutGroup = 'CHK-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
         $checkoutSessionId = $request->session()->getId();
         $attribution = $this->attributionSnapshot($request);
@@ -148,7 +155,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds, &$replayed): void {
+            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, $initialStatus, $initialStatusNote, &$orderIds, &$replayed): void {
                 $submission = $submissions->claim($request, $sessionCart);
                 if ($submission['order_ids']) {
                     $orderIds = $submission['order_ids'];
@@ -241,12 +248,12 @@ class CheckoutController extends Controller
                             'marketing_attribution' => $attribution,
                         ],
                         'uploaded_photos' => $uploadedPhotos,
-                        'status' => 'new',
+                        'status' => $initialStatus,
                     ]);
 
                     $order->statusLogs()->create([
-                        'status' => 'new',
-                        'notes' => 'تم إنشاء الطلب بنجاح وسيتم مراجعته قريباً.',
+                        'status' => $initialStatus,
+                        'notes' => $initialStatusNote ?? 'تم إنشاء الطلب بنجاح وسيتم مراجعته قريباً.',
                     ]);
 
                     $photoUploads->markOrderAttached($identity ? [] : $uploadedPhotos, $order);
@@ -347,12 +354,12 @@ class CheckoutController extends Controller
                         'parent_notes' => null,
                         'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $attribution),
                         'uploaded_photos' => [],
-                        'status' => 'new',
+                        'status' => $initialStatus,
                     ]);
 
                     $firstOrder->statusLogs()->create([
-                        'status' => 'new',
-                        'notes' => 'تم إنشاء طلب متجر بنجاح وسيتم مراجعته قريباً.',
+                        'status' => $initialStatus,
+                        'notes' => $initialStatusNote ?? 'تم إنشاء طلب متجر بنجاح وسيتم مراجعته قريباً.',
                     ]);
 
                     $orderIds[] = $firstOrder->id;
@@ -411,12 +418,12 @@ class CheckoutController extends Controller
                                 $attribution,
                             ),
                             'uploaded_photos' => $uploadedPhotos,
-                            'status' => 'new',
+                            'status' => $initialStatus,
                         ]);
 
                         $targetOrder->statusLogs()->create([
-                            'status' => 'new',
-                            'notes' => 'تم إنشاء طلب منتج مخصص بنجاح وسيتم مراجعته قريباً.',
+                            'status' => $initialStatus,
+                            'notes' => $initialStatusNote ?? 'تم إنشاء طلب منتج مخصص بنجاح وسيتم مراجعته قريباً.',
                         ]);
 
                         $photoUploads->markOrderAttached($uploadedPhotos, $targetOrder);

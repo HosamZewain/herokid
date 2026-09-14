@@ -55,6 +55,9 @@ class OrderStatusRegistry
         'cyan' => 'bg-cyan-100 text-cyan-800',
         'emerald' => 'bg-emerald-100 text-emerald-800',
         'gray' => 'bg-gray-100 text-gray-600',
+        'sky' => 'bg-sky-100 text-sky-800',
+        'fuchsia' => 'bg-fuchsia-100 text-fuchsia-800',
+        'purple' => 'bg-purple-100 text-purple-800',
     ];
 
     public static function typeLabels(): array
@@ -170,7 +173,9 @@ class OrderStatusRegistry
     public static function fallbackDefinitions(): array
     {
         return [
+            [self::TYPE_ORDER, 'pending_confirmation', 'بانتظار تأكيد العميل', 'sky', 'standard'],
             [self::TYPE_ORDER, 'new', 'طلب جديد', 'blue', 'standard'],
+            [self::TYPE_ORDER, 'identity_pending_confirmation', 'بانتظار اعتماد الهوية', 'fuchsia', 'standard'],
             [self::TYPE_ORDER, 'under_review', 'قيد المراجعة', 'amber', 'standard'],
             [self::TYPE_ORDER, 'generating', 'جاري التوليد', 'violet', 'standard'],
             [self::TYPE_ORDER, 'ready_preview', 'جاهز للمعاينة', 'purple', 'standard'],

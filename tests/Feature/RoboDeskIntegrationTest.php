@@ -2,230 +2,473 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\SendRoboDeskEventJob;
 use App\Models\Order;
+use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
-use App\Models\Story;
-use App\Services\RoboDesk\PaymentProofService;
-use App\Services\RoboDesk\RoboDeskCheckoutPayload;
-use App\Services\RoboDesk\RoboDeskOutbox;
-use App\Services\RoboDesk\RoboDeskSignature;
+use App\Models\User;
+use App\Services\RoboDesk\RoboDeskIntegrationRegistry;
+use App\Services\RoboDesk\RoboDeskSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
+/**
+ * The Order Confirmation integration: three fields, one trigger.
+ */
 class RoboDeskIntegrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_integration_is_fail_closed_and_new_orders_are_held_without_credentials(): void
+    private const URL = 'https://robodesk.test/conversation/start/sendMsg';
+
+    // ── Happy paths ──────────────────────────────────────────────────────
+
+    public function test_a_new_order_posts_the_configured_payload_to_the_configured_url(): void
     {
-        config()->set('robodesk.enabled', false);
-        config()->set('robodesk.outbound_secret', '');
+        Http::fake([self::URL => Http::response(['ok' => true], 200)]);
+        $this->enable();
+        $this->configure('{"to":"{{ customer_phone }}","name":"{{ customer_name }}","total":"{{ total }}"}');
 
-        $order = $this->order('CHK-ROBODESK-HELD');
+        $order = $this->order('CHK-OK-1');
 
-        $this->assertDatabaseHas('robodesk_integration_events', [
-            'direction' => 'outbound',
-            'event_type' => 'order.pending_confirmation',
-            'checkout_group_key' => $order->checkout_group_key,
-            'status' => 'held',
-        ]);
+        $event = $this->eventFor($order);
+        $this->assertSame('succeeded', $event->status);
 
-        $this->getJson('/api/integrations/robodesk/v1/health')->assertStatus(503);
+        Http::assertSent(function ($request): bool {
+            return $request->url() === self::URL
+                && $request->method() === 'POST'
+                && $request['to'] === '201501188884'
+                && $request['name'] === 'ولي الأمر'
+                && $request['total'] === 50
+                && $request->hasHeader('Authorization', 'static-token');
+        });
     }
 
-    public function test_signed_confirmation_updates_the_checkout_once_and_duplicate_delivery_is_idempotent(): void
+    public function test_the_saved_payload_is_the_entire_body(): void
     {
-        config()->set('robodesk.enabled', true);
-        config()->set('robodesk.inbound_secret', 'inbound-test-secret');
-        config()->set('robodesk.outbound_secret', '');
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('{"only":"{{ customer_name }}"}');
 
-        $order = $this->order('CHK-ROBODESK-CONFIRM');
-        $eventId = (string) Str::uuid();
-        $payload = [
-            'id' => $eventId,
-            'type' => 'order.confirmed',
-            'occurred_at' => now()->toIso8601String(),
-            'data' => [
-                'checkout_reference' => $order->checkout_group_key,
-                'contact_id' => 'contact-test',
-                'conversation_id' => 'conversation-test',
-                'comment' => 'تم التأكيد',
-            ],
-        ];
+        $this->order('CHK-OK-2');
 
-        $first = $this->signedJson('/api/integrations/robodesk/v1/events', $payload);
-        $first->assertAccepted()->assertJson(['accepted' => true]);
-
-        $this->assertSame('under_review', $order->refresh()->status);
-        $this->assertDatabaseHas('checkout_customer_workflows', [
-            'checkout_group_key' => $order->checkout_group_key,
-            'confirmation_status' => 'confirmed',
-            'robodesk_contact_id' => 'contact-test',
-        ]);
-        $this->assertDatabaseHas('order_status_logs', [
-            'order_id' => $order->id,
-            'status_type' => 'order',
-            'status' => 'under_review',
-        ]);
-
-        $this->signedJson('/api/integrations/robodesk/v1/events', $payload)
-            ->assertOk()
-            ->assertJson(['accepted' => true, 'duplicate' => true]);
-
-        $this->assertSame(1, RoboDeskIntegrationEvent::query()->where('event_id', $eventId)->count());
-        $this->assertSame(1, $order->statusLogs()->where('status', 'under_review')->count());
+        Http::assertSent(fn ($request): bool => array_keys($request->data()) === ['only']);
     }
 
-    public function test_payment_proof_is_private_and_never_marks_the_checkout_paid_automatically(): void
+    public function test_an_empty_payload_sends_every_available_variable(): void
     {
-        Storage::fake('local');
-        $order = $this->order('CHK-ROBODESK-PROOF');
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('');
 
-        $proof = app(PaymentProofService::class)->store(
-            $order->checkout_group_key,
-            UploadedFile::fake()->image('instapay-proof.jpg'),
-            ['message_id' => 'message-proof-1', 'conversation_id' => 'conversation-proof-1'],
+        $this->order('CHK-OK-3');
+
+        Http::assertSent(function ($request): bool {
+            $data = $request->data();
+
+            return isset($data['checkout_reference'], $data['customer_name'], $data['delivery_address']);
+        });
+    }
+
+    public function test_one_checkout_produces_one_message_however_many_orders_it_holds(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('{"ref":"{{ checkout_reference }}"}');
+
+        $this->order('CHK-OK-4');
+        $this->order('CHK-OK-4');
+
+        $this->assertSame(1, RoboDeskIntegrationEvent::query()->where('checkout_group_key', 'CHK-OK-4')->count());
+        Http::assertSentCount(1);
+    }
+
+    // ── Common exceptions ────────────────────────────────────────────────
+
+    public function test_a_disabled_integration_records_nothing_and_sends_nothing(): void
+    {
+        Http::fake();
+        $order = $this->order('CHK-OFF');
+
+        $this->assertDatabaseMissing('robodesk_integration_events', [
+            'checkout_group_key' => $order->checkout_group_key,
+        ]);
+        Http::assertNothingSent();
+    }
+
+    public function test_an_enabled_integration_without_an_api_url_holds_rather_than_sending(): void
+    {
+        Http::fake();
+        $this->enable();
+        app(RoboDeskIntegrationRegistry::class)->save(
+            RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, true, '', 'static-token', '',
         );
 
-        $this->assertSame('pending', $proof->status);
-        Storage::disk('local')->assertExists($proof->file_path);
-        $this->assertStringStartsWith('robodesk/payment-proofs/', $proof->file_path);
-        $this->assertSame('unpaid', $order->refresh()->payment_status);
+        $order = $this->order('CHK-NO-URL');
 
-        $duplicate = app(PaymentProofService::class)->store(
-            $order->checkout_group_key,
-            UploadedFile::fake()->image('duplicate.jpg'),
-            ['message_id' => 'message-proof-1'],
+        $event = $this->eventFor($order);
+        $this->assertSame('held', $event->status);
+        $this->assertStringContainsString('No API URL', (string) $event->last_error);
+        Http::assertNothingSent();
+    }
+
+    public function test_a_failing_remote_records_the_error_and_leaves_the_event_retryable(): void
+    {
+        Http::fake([self::URL => Http::response(['error' => 'boom'], 500)]);
+        $this->enable();
+        $this->configure('{"ref":"{{ checkout_reference }}"}');
+
+        try {
+            // The queue runs inline under test and the job rethrows so it can
+            // be retried, so the failure surfaces here at creation time.
+            $this->order('CHK-FAIL');
+        } catch (\Throwable) {
+            // Expected.
+        }
+
+        $event = RoboDeskIntegrationEvent::query()->where('checkout_group_key', 'CHK-FAIL')->firstOrFail();
+        $this->assertSame('failed', $event->status);
+        $this->assertStringContainsString('500', (string) $event->last_error);
+    }
+
+    public function test_a_held_event_can_be_released_once_the_integration_is_configured(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        app(RoboDeskIntegrationRegistry::class)->save(
+            RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, true, '', 'static-token', '',
         );
-        $this->assertTrue($proof->is($duplicate));
-        $this->assertDatabaseCount('order_payment_proofs', 1);
-    }
 
-    public function test_approved_preview_queues_payment_request_but_does_not_mark_payment_as_paid(): void
-    {
-        config()->set('robodesk.enabled', true);
-        config()->set('robodesk.inbound_secret', 'inbound-test-secret');
-        config()->set('robodesk.outbound_secret', '');
-
-        $story = Story::query()->create([
-            'title' => 'قصة المعاينة',
-            'slug' => 'robodesk-preview-story',
-            'language' => 'ar',
-            'gender' => 'both',
-            'price' => 349,
-            'active' => true,
-        ]);
-        $order = $this->order('CHK-ROBODESK-PREVIEW');
-        $order->forceFill(['story_id' => $story->id])->saveQuietly();
-
-        $payload = [
-            'id' => (string) Str::uuid(),
-            'type' => 'preview.approved',
-            'occurred_at' => now()->toIso8601String(),
-            'data' => [
-                'order_number' => $order->order_number,
-                'version_reference' => 'booklet-preview:1:v1',
-                'message_id' => 'preview-approved-message',
-            ],
-        ];
-
-        $this->signedJson('/api/integrations/robodesk/v1/events', $payload)->assertAccepted();
-
-        $this->assertDatabaseHas('order_customer_reviews', [
-            'order_id' => $order->id,
-            'review_type' => 'preview',
-            'decision' => 'approved',
-        ]);
-        $this->assertDatabaseHas('checkout_customer_workflows', [
-            'checkout_group_key' => $order->checkout_group_key,
-            'payment_request_status' => 'pending',
-        ]);
-        $this->assertDatabaseHas('robodesk_integration_events', [
-            'direction' => 'outbound',
-            'event_type' => 'payment.requested',
-            'checkout_group_key' => $order->checkout_group_key,
-            'status' => 'held',
-        ]);
-        $this->assertSame('unpaid', $order->refresh()->payment_status);
-    }
-
-    public function test_held_outbound_event_can_be_released_with_the_exact_signed_json_body(): void
-    {
-        config()->set('robodesk.enabled', false);
-        config()->set('robodesk.outbound_secret', 'outbound-test-secret');
-        config()->set('robodesk.base_url', 'https://herokid.robodesk.ai');
-        Http::fake(['https://herokid.robodesk.ai/*' => Http::response(['accepted' => true], 202)]);
-
-        $order = $this->order('CHK-ROBODESK-OUTBOUND');
-        $event = RoboDeskIntegrationEvent::query()
-            ->where('event_type', 'order.pending_confirmation')
-            ->where('checkout_group_key', $order->checkout_group_key)
-            ->firstOrFail();
+        $order = $this->order('CHK-RELEASE');
+        $event = $this->eventFor($order);
         $this->assertSame('held', $event->status);
 
-        config()->set('robodesk.enabled', true);
-        app(RoboDeskOutbox::class)->release($event);
-        (new SendRoboDeskEventJob($event->id))->handle(
-            app(RoboDeskSignature::class),
-            app(RoboDeskCheckoutPayload::class),
-        );
+        $this->configure('{"ref":"{{ checkout_reference }}"}');
+
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::query()->whereIn('key', ['robodesk.view', 'robodesk.retry'])->pluck('id'));
+        $admin->unsetRelation('permissions');
+
+        $this->actingAs($admin)
+            ->post(route('admin.robodesk.events.retry', $event))
+            ->assertRedirect();
 
         $this->assertSame('succeeded', $event->refresh()->status);
-        Http::assertSent(function ($request) use ($event): bool {
-            $timestamp = $request->header('X-RoboDesk-Timestamp')[0] ?? '';
-            $eventId = $request->header('X-RoboDesk-Event-Id')[0] ?? '';
-            $signature = $request->header('X-RoboDesk-Signature')[0] ?? '';
+    }
 
-            return $request->url() === 'https://herokid.robodesk.ai/api/integrations/herokid/v1/events'
-                && $eventId === $event->event_id
-                && app(RoboDeskSignature::class)->valid(
-                    $request->body(),
-                    $timestamp,
-                    $eventId,
-                    $signature,
-                    'outbound-test-secret',
-                );
-        });
+    // ── Admin screens ────────────────────────────────────────────────────
+
+    public function test_the_settings_screens_render(): void
+    {
+        $this->enable();
+        $this->configure('{"ref":"{{ checkout_reference }}"}');
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.robodesk.settings.index'))
+            ->assertOk()
+            ->assertSee('تأكيد الطلب');
+
+        // Renders the raw {{ variable }} help, which is where a Blade escaping
+        // mistake previously crashed the page with a ParseError.
+        $this->actingAs($admin)
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertSee('{{ customer_name }}', false)
+            ->assertSee('{{ total }}', false)
+            // Each variable renders its own name, not the literal Blade source.
+            ->assertSee('{{ delivery_address }}', false)
+            ->assertDontSee('$name');
+    }
+
+    public function test_the_three_fields_save_and_the_token_is_never_rendered_back(): void
+    {
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => 'super-secret-token',
+                'payload_template' => '{"ref":"{{ checkout_reference }}"}',
+            ])
+            ->assertRedirect();
+
+        $integration = app(RoboDeskIntegrationRegistry::class)->orderConfirmation();
+        $this->assertTrue($integration->enabled());
+        $this->assertSame(self::URL, $integration->apiUrl());
+        $this->assertSame('super-secret-token', $integration->token());
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertDontSee('super-secret-token');
+    }
+
+    public function test_a_blank_token_keeps_the_saved_one(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => '',
+                'payload_template' => '',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('static-token', app(RoboDeskIntegrationRegistry::class)->orderConfirmation()->token());
+    }
+
+    public function test_an_invalid_payload_or_unknown_variable_is_rejected(): void
+    {
+        $this->enable();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'api_url' => self::URL,
+                'payload_template' => '{"broken": ',
+            ])
+            ->assertSessionHasErrors('payload_template');
+
+        $this->actingAs($admin)
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'api_url' => self::URL,
+                'payload_template' => '{"x":"{{ not_a_real_variable }}"}',
+            ])
+            ->assertSessionHasErrors('payload_template');
+    }
+
+    public function test_enabling_without_an_api_url_is_rejected(): void
+    {
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => '',
+            ])
+            ->assertSessionHasErrors('api_url');
+    }
+
+    public function test_changing_the_token_needs_the_credentials_permission(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin(['robodesk.configure', 'robodesk.view']))
+            ->post(route('admin.robodesk.settings.update', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION), [
+                'is_enabled' => '1',
+                'api_url' => self::URL,
+                'token' => 'a-new-secret',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('static-token', app(RoboDeskIntegrationRegistry::class)->orderConfirmation()->token());
+    }
+
+    public function test_the_screen_documents_the_webhook_robodesk_calls_back(): void
+    {
+        $this->enable();
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.robodesk.settings.edit', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk()
+            ->assertSee('/api/integrations/robodesk/v1/events', false)
+            ->assertSee('order.confirmed')
+            ->assertSee('order.rejected')
+            ->assertSee('checkout_reference');
+    }
+
+    public function test_settings_require_the_configure_permission(): void
+    {
+        $this->actingAs($this->admin(['robodesk.view']))
+            ->get(route('admin.robodesk.settings.index'))
+            ->assertForbidden();
+    }
+
+    // ── Live test button ─────────────────────────────────────────────────
+
+    public function test_the_test_button_sends_the_real_payload_with_sample_values(): void
+    {
+        Http::fake([self::URL => Http::response(['accepted' => true], 200)]);
+        $this->enable();
+        $this->configure('{"to":"{{ customer_phone }}","ref":"{{ checkout_reference }}","total":"{{ total }}"}');
+
+        $response = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        $reference = $response->json('reference');
+        $this->assertStringStartsWith('TEST-', $reference);
+        $this->assertSame('succeeded', $response->json('sent.status'));
+        $this->assertSame(200, $response->json('sent.http_status'));
+
+        Http::assertSent(fn ($request): bool => $request['ref'] === $reference && $request['total'] === 300.0);
+    }
+
+    public function test_a_test_run_creates_no_order_and_its_callback_changes_nothing(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('');
+
+        $reference = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->json('reference');
+
+        $this->assertSame(0, Order::query()->count());
+
+        $this->withHeader('X-RoboDesk-Token', 'static-token')
+            ->postJson('/api/integrations/robodesk/v1/events', [
+                'id' => (string) Str::uuid(),
+                'type' => 'order.confirmed',
+                'data' => ['checkout_reference' => $reference],
+            ])->assertAccepted();
+
+        // Recorded against the test run, with nothing filed under a checkout.
+        $this->assertDatabaseHas('robodesk_integration_events', [
+            'direction' => 'inbound',
+            'aggregate_type' => 'test',
+            'aggregate_id' => $reference,
+            'checkout_group_key' => null,
+        ]);
+        $this->assertSame(0, Order::query()->count());
+    }
+
+    public function test_the_status_endpoint_reports_what_came_back(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        $this->configure('');
+        $admin = $this->admin();
+
+        $reference = $this->actingAs($admin)
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->json('reference');
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.robodesk.settings.test.status', [RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, $reference]))
+            ->assertOk()
+            ->assertJsonPath('received', []);
+
+        $this->withHeader('X-RoboDesk-Token', 'static-token')
+            ->postJson('/api/integrations/robodesk/v1/events', [
+                'id' => (string) Str::uuid(),
+                'type' => 'order.confirmed',
+                'data' => ['checkout_reference' => $reference, 'comment' => 'تم'],
+            ])->assertAccepted();
+
+        $this->actingAs($admin)
+            ->getJson(route('admin.robodesk.settings.test.status', [RoboDeskIntegrationRegistry::ORDER_CONFIRMATION, $reference]))
+            ->assertOk()
+            ->assertJsonPath('received.0.type', 'order.confirmed')
+            ->assertJsonPath('received.0.body.comment', 'تم');
+    }
+
+    public function test_a_test_run_sends_even_while_simulation_mode_is_on(): void
+    {
+        Http::fake([self::URL => Http::response([], 200)]);
+        $this->enable();
+        app(RoboDeskSettings::class)->save(['robodesk_simulation_mode' => '1']);
+        $this->configure('');
+
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        // A test that never leaves the server would prove nothing.
+        Http::assertSentCount(1);
+    }
+
+    public function test_testing_an_unconfigured_integration_is_refused(): void
+    {
+        Http::fake();
+        $this->enable();
+
+        $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertStatus(422);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_a_failing_remote_is_reported_rather_than_thrown(): void
+    {
+        Http::fake([self::URL => Http::response(['error' => 'nope'], 500)]);
+        $this->enable();
+        $this->configure('');
+
+        $response = $this->actingAs($this->admin())
+            ->postJson(route('admin.robodesk.settings.test', RoboDeskIntegrationRegistry::ORDER_CONFIRMATION))
+            ->assertOk();
+
+        $this->assertSame('failed', $response->json('sent.status'));
+        $this->assertSame(500, $response->json('sent.http_status'));
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private function admin(array $permissions = ['robodesk.configure', 'robodesk.manage_credentials', 'robodesk.view']): User
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::query()->whereIn('key', $permissions)->pluck('id'));
+        $admin->unsetRelation('permissions');
+
+        return $admin;
+    }
+
+    private function enable(): void
+    {
+        app(RoboDeskSettings::class)->save(['robodesk_enabled' => '1']);
+    }
+
+    private function configure(string $payload): void
+    {
+        app(RoboDeskIntegrationRegistry::class)->save(
+            RoboDeskIntegrationRegistry::ORDER_CONFIRMATION,
+            true,
+            self::URL,
+            'static-token',
+            $payload,
+        );
+    }
+
+    private function eventFor(Order $order): RoboDeskIntegrationEvent
+    {
+        return RoboDeskIntegrationEvent::query()
+            ->where('checkout_group_key', $order->checkout_group_key)
+            ->where('direction', 'outbound')
+            ->firstOrFail();
     }
 
     private function order(string $checkout): Order
     {
-        return Order::query()->create([
+        return Order::query()->create($this->attributes($checkout));
+    }
+
+    private function attributes(string $checkout): array
+    {
+        return [
             'order_number' => 'HK-'.Str::upper(Str::random(10)),
             'checkout_group_key' => $checkout,
             'parent_name' => 'ولي الأمر',
+            'status' => 'new',
+            'uploaded_photos' => [],
             'delivery_details' => [
-                'checkout_group' => $checkout,
                 'phone' => '01501188884',
+                'country' => 'مصر',
+                'governorate' => 'القاهرة',
+                'city' => 'مدينة نصر',
+                'street' => 'شارع 1',
+                'address_details' => 'الدور الثالث',
                 'delivery_fee' => 50,
             ],
-            'uploaded_photos' => [],
-            'status' => 'new',
-        ]);
-    }
-
-    private function signedJson(string $uri, array $payload)
-    {
-        $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-        $timestamp = (string) now()->timestamp;
-        $signature = app(RoboDeskSignature::class)->sign(
-            $body,
-            $timestamp,
-            $payload['id'],
-            (string) config('robodesk.inbound_secret'),
-        );
-
-        return $this->call('POST', $uri, [], [], [], [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_ACCEPT' => 'application/json',
-            'HTTP_X_ROBODESK_TIMESTAMP' => $timestamp,
-            'HTTP_X_ROBODESK_EVENT_ID' => $payload['id'],
-            'HTTP_X_ROBODESK_SIGNATURE' => $signature,
-        ], $body);
+        ];
     }
 }
