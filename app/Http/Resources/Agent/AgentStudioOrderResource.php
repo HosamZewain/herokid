@@ -18,7 +18,12 @@ class AgentStudioOrderResource extends JsonResource
         $orders = $this->resource['orders'];
         /** @var Order $matched */
         $matched = $this->resource['matched_order'];
-        $storyOrders = $orders->filter(fn (Order $order): bool => $order->story_id !== null && $order->story !== null)->values();
+        $productionUnits = collect($this->resource['production_units'] ?? []);
+        $authorizedStoryOrderIds = $productionUnits->where('type', 'story')->pluck('order_id')->map(fn ($id): int => (int) $id);
+        $storyOrders = $orders
+            ->filter(fn (Order $order): bool => $order->story_id !== null && $order->story !== null)
+            ->when($this->resource['inventory_visibility'] ?? null, fn (Collection $items): Collection => $items->whereIn('id', $authorizedStoryOrderIds))
+            ->values();
         $productionStories = $storyOrders->map(fn (Order $order): array => $this->story($order))->all();
 
         return [
@@ -29,9 +34,15 @@ class AgentStudioOrderResource extends JsonResource
                 'checkout_reference' => $this->resource['checkout_reference'],
                 'status' => $matched->status,
                 'created_at' => $orders->min('created_at')?->toIso8601String(),
-                'source_revision' => $this->revision($storyOrders, $productionStories),
+                'source_revision' => $this->revision(
+                    $orders->whereIn('id', $productionUnits->pluck('order_id')->map(fn ($id): int => (int) $id))->values(),
+                    $productionStories,
+                    $productionUnits->all(),
+                ),
             ],
             'production_stories' => $productionStories,
+            'production_units' => $productionUnits->values()->all(),
+            'inventory_visibility' => $this->resource['inventory_visibility'] ?? null,
         ];
     }
 
@@ -108,10 +119,10 @@ class AgentStudioOrderResource extends JsonResource
         ];
     }
 
-    /** @param Collection<int, Order> $storyOrders */
-    private function revision(Collection $storyOrders, array $productionStories): string
+    /** @param Collection<int, Order> $orders */
+    private function revision(Collection $orders, array $productionStories, array $productionUnits): string
     {
-        $parts = $storyOrders->flatMap(function (Order $order): array {
+        $parts = $orders->flatMap(function (Order $order): array {
             return [
                 'order:'.$order->id.':'.$order->updated_at?->format('U.u'),
                 'story:'.$order->story_id.':'.$order->story?->updated_at?->format('U.u'),
@@ -122,7 +133,9 @@ class AgentStudioOrderResource extends JsonResource
         })->sort()->values()->all();
 
         // Include returned content: timestamps alone can miss same-second updates.
-        return 'sha256:'.hash('sha256', implode('|', $parts).'|'.json_encode($productionStories, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        $returned = ['production_stories' => $productionStories, 'production_units' => $productionUnits];
+
+        return 'sha256:'.hash('sha256', implode('|', $parts).'|'.json_encode($returned, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     private function language(Order $order): string

@@ -603,6 +603,25 @@ class AgentCheckoutProductionService
         return $units;
     }
 
+    /** Build and filter the canonical inventory without assignment checks. */
+    public function readOnlyInventory(Collection $orders, User $agent): array
+    {
+        $orders->loadMissing($this->relations());
+        $allUnits = $this->units($orders);
+        $authorized = AgentCatalogScope::filterUnits($agent, $allUnits);
+
+        return [
+            'units' => $authorized,
+            'visibility' => [
+                'catalog_scope' => AgentCatalogScope::forUser($agent),
+                'product_restricted' => AgentProductScope::forUser($agent) !== [],
+                'filtered' => $authorized->count() !== $allUnits->count(),
+                'returned_unit_count' => $authorized->count(),
+            ],
+            'has_any_units' => $allUnits->isNotEmpty(),
+        ];
+    }
+
     /** @return Collection<int, Order> */
     private function authorizedOrders(string $reference, User $agent, bool $lock = false): Collection
     {
@@ -669,6 +688,8 @@ class AgentCheckoutProductionService
             'title' => $order->story->title,
             'language' => $order->language ?: $order->story->language,
             'production_prompt' => $this->agentSafePrompt(StoryProductionPrompt::forOrder($order), $order),
+            'quantity' => 1,
+            'personalization' => [],
             'child' => [
                 'name' => $order->child_name,
                 'age' => $order->child_age,

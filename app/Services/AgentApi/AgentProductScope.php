@@ -64,4 +64,17 @@ class AgentProductScope
             return in_array((int) ($unit['product_id'] ?? 0), $allowedProductIds, true);
         });
     }
+
+    /** Product restrictions never hide story units; catalog type scope handles those. */
+    public static function allowsUnit(User $user, array $unit): bool
+    {
+        if (($unit['type'] ?? null) !== 'product') {
+            return true;
+        }
+
+        $allowedProductIds = self::forUser($user);
+
+        return $allowedProductIds === []
+            || in_array((int) ($unit['product_id'] ?? 0), $allowedProductIds, true);
+    }
 }

@@ -89,7 +89,9 @@ curl https://hero-kid.com/api/agent/studio/connection \
 
 ### Read an order for Studio
 
-The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads every personalized story row in the same persisted `checkout_group_key`. Ready-made and custom product rows are not serialized as stories.
+The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads the checkout without creating or checking an assignment. `production_stories` remains the authoritative detailed story/scene payload. `production_units` contains the same story, standalone-product, and product-component shapes used by the acquisition-protected production-context endpoint.
+
+Catalog restrictions are filters for this read-only lookup: a stories-only token receives story units, a products-only token receives product units, and a product-ID-restricted token receives only permitted products. A mixed checkout is not rejected merely because some units are outside scope. Legacy tokens without catalog abilities retain story-and-product access. If the checkout has units but none are visible to the token, the endpoint returns `403 FORBIDDEN`. `inventory_visibility` reports the effective catalog scope, whether product restrictions exist, whether filtering occurred, and the number of returned units without describing hidden products.
 
 ```bash
 curl https://hero-kid.com/api/agent/studio/orders/HK-2026-XXXXXX \
@@ -141,7 +143,30 @@ curl https://hero-kid.com/api/agent/studio/orders/HK-2026-XXXXXX \
         "updated_at": "2026-09-09T10:05:00+03:00"
       }
     }
-  ]
+  ],
+  "production_units": [
+    {
+      "unit_key": "story:456",
+      "type": "story",
+      "order_id": 456,
+      "order_number": "HK-2026-XXXXXX",
+      "status": "generating",
+      "title": "المخترع الصغير",
+      "language": "ar",
+      "production_prompt": "...",
+      "child": {"name": "ياسين", "age": 7, "gender": "boy", "interests": "العلوم"},
+      "notes": {},
+      "reference_files": [],
+      "attachments": [],
+      "preview": {"type": "booklet", "available": false, "version": null}
+    }
+  ],
+  "inventory_visibility": {
+    "catalog_scope": "all",
+    "product_restricted": false,
+    "filtered": false,
+    "returned_unit_count": 1
+  }
 }
 ```
 
@@ -180,7 +205,7 @@ php artisan orders:refresh-production-scenes story:734 --story=77 --admin=ADMIN_
 
 The per-order Admin "تحديث نصوص هذه القصة من القالب الحالي" action provides the same targeted service with CSRF, permission and explicit confirmation. CLI defaults to dry-run; completed orders require `--allow-completed` on targeted repairs. No migration performs a backfill. The history table is private and is never included in Agent responses or activity-log payloads. Deployment alone does not repair snapshots created before the synchronization feature.
 
-A checkout with no personalized stories returns HTTP 200 with `production_stories: []`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, or a missing `orders.view` permission return `FORBIDDEN`. Phone, email, delivery address, payment data, storage paths, product rows, and unrelated Admin notes are never returned.
+A product-only checkout returns HTTP 200 with `production_stories: []` and its authorized product inventory in `production_units`. Unknown order numbers return HTTP 404 with `ORDER_NOT_FOUND`. Missing/invalid credentials return `UNAUTHORIZED`; disabled Agent access, a missing `agent:orders.read` ability, a missing `orders.view` permission, or zero catalog-visible units return `FORBIDDEN`. A checkout with no representable production units returns 422. Phone, email, delivery/billing addresses, payment data, raw storage paths, secrets, unauthorized products, and unrelated order data are never returned.
 
 ## Upload a story preview from HeroKid Studio
 

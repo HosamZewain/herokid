@@ -10,6 +10,7 @@ use App\Models\ProductionProject;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
+use App\Services\AgentApi\AgentProductScope;
 use App\Services\AgentApi\AgentStudioOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -82,13 +83,13 @@ class AgentStudioApiTest extends TestCase
             ->assertJsonPath('error', 'FORBIDDEN');
     }
 
-    public function test_studio_lookup_returns_all_story_units_without_acquisition_and_excludes_products_and_private_data(): void
+    public function test_studio_lookup_returns_complete_mixed_inventory_without_acquisition_or_private_data(): void
     {
         $firstStory = $this->story('المخترع الصغير', 'little-inventor');
         $secondStory = $this->story('صائدة النجوم', 'star-hunter');
         $first = $this->storyOrder('STUDIO-GROUP', 'HK-2026-STUDIO-1', $firstStory, 'ياسين', 'إلى ياسين، بطلنا الصغير.');
         $second = $this->storyOrder('STUDIO-GROUP', 'HK-2026-STUDIO-2', $secondStory, 'مريم', 'إلى مريم، نجمتنا المضيئة.');
-        $this->readyProductOrder('STUDIO-GROUP', 'HK-2026-STUDIO-PRODUCT');
+        $productOrder = $this->readyProductOrder('STUDIO-GROUP', 'HK-2026-STUDIO-PRODUCT');
 
         $sceneTwo = $firstStory->sceneTemplates()->create([
             'scene_number' => 2,
@@ -144,7 +145,15 @@ class AgentStudioApiTest extends TestCase
             ->assertJsonPath('production_stories.1.child.name', 'مريم')
             ->assertJsonPath('production_stories.1.dedication', 'إلى مريم، نجمتنا المضيئة.')
             ->assertJsonPath('production_stories.1.scenes.0.id', 'order_scene_snapshot:'.$secondScene->id)
-            ->assertJsonPath('production_stories.1.scenes.0.text', 'رأت مريم نجمة تلمع في السماء.');
+            ->assertJsonPath('production_stories.1.scenes.0.text', 'رأت مريم نجمة تلمع في السماء.')
+            ->assertJsonCount(3, 'production_units')
+            ->assertJsonPath('production_units.0.unit_key', 'story:'.$first->id)
+            ->assertJsonPath('production_units.0.quantity', 1)
+            ->assertJsonCount(0, 'production_units.0.personalization')
+            ->assertJsonPath('production_units.1.unit_key', 'story:'.$second->id)
+            ->assertJsonPath('production_units.2.unit_key', 'product:'.$productOrder->items()->firstOrFail()->id)
+            ->assertJsonPath('inventory_visibility.filtered', false)
+            ->assertJsonPath('inventory_visibility.returned_unit_count', 3);
 
         $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'STUDIO-GROUP']);
         $payload = $response->json();
@@ -152,7 +161,8 @@ class AgentStudioApiTest extends TestCase
         $this->assertArrayNotHasKey('payment_status', $payload['order']);
         $this->assertStringNotContainsString('201099999999', $response->getContent());
         $this->assertStringNotContainsString('عنوان خاص', $response->getContent());
-        $this->assertStringNotContainsString('جاهز بدون تخصيص', $response->getContent());
+        $this->assertSame('new', $first->fresh()->status);
+        $this->assertSame('new', $productOrder->fresh()->status);
     }
 
     public function test_lookup_accepts_short_checkout_reference_and_identifiers_are_stable(): void
@@ -255,7 +265,74 @@ class AgentStudioApiTest extends TestCase
         $this->withToken($token)->getJson('/api/agent/studio/orders/'.$product->order_number)
             ->assertOk()
             ->assertJsonPath('order.id', 'PRODUCT-GROUP')
-            ->assertJsonCount(0, 'production_stories');
+            ->assertJsonCount(0, 'production_stories')
+            ->assertJsonCount(1, 'production_units')
+            ->assertJsonPath('production_units.0.type', 'product');
+    }
+
+    public function test_catalog_scopes_filter_units_instead_of_rejecting_a_mixed_checkout(): void
+    {
+        $story = $this->story('قصة مرئية', 'visible-story');
+        $storyOrder = $this->storyOrder('HK09-218-GROUP', 'HK09-218', $story, 'طفل اختبار', null);
+        $firstProductOrder = $this->readyProductOrder('HK09-218-GROUP', 'HK09-218-P1');
+        $secondProductOrder = $this->readyProductOrder('HK09-218-GROUP', 'HK09-218-P2');
+        $firstProduct = $firstProductOrder->items()->firstOrFail()->product;
+        $secondProduct = $secondProductOrder->items()->firstOrFail()->product;
+
+        $cases = [
+            'story-only' => [[...AgentCatalogScope::abilities(AgentCatalogScope::STORIES)], ['story']],
+            'product-only' => [[...AgentCatalogScope::abilities(AgentCatalogScope::PRODUCTS)], ['product', 'product']],
+            'both' => [[...AgentCatalogScope::abilities(AgentCatalogScope::ALL)], ['story', 'product', 'product']],
+            'legacy' => [[], ['story', 'product', 'product']],
+        ];
+        foreach ($cases as $name => [$catalogAbilities, $types]) {
+            $agent = $this->agent();
+            $token = $agent->createToken($name, ['agent', 'agent:orders.read', ...$catalogAbilities])->plainTextToken;
+            $response = $this->withToken($token)->getJson('/api/agent/studio/orders/HK09-218')->assertOk();
+            $this->assertSame($types, array_column($response->json('production_units'), 'type'));
+            $this->assertCount(in_array('story', $types, true) ? 1 : 0, $response->json('production_stories'));
+            $this->app['auth']->forgetGuards();
+        }
+
+        $restrictedAgent = $this->agent();
+        $restrictedToken = $restrictedAgent->createToken('restricted', [
+            'agent', 'agent:orders.read', ...AgentCatalogScope::abilities(AgentCatalogScope::ALL),
+            ...AgentProductScope::abilities([$firstProduct->id]),
+        ])->plainTextToken;
+        $restricted = $this->withToken($restrictedToken)->getJson('/api/agent/studio/orders/HK09-218')->assertOk()
+            ->assertJsonPath('inventory_visibility.filtered', true)
+            ->assertJsonPath('inventory_visibility.product_restricted', true);
+        $this->assertSame([$firstProduct->id], collect($restricted->json('production_units'))->where('type', 'product')->pluck('product_id')->all());
+        $this->assertStringNotContainsString($secondProduct->name_ar, $restricted->getContent());
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'HK09-218-GROUP']);
+        $this->assertSame('new', $storyOrder->fresh()->status);
+
+        $this->withToken($restrictedToken)
+            ->getJson('/api/agent/checkouts/'.$storyOrder->checkoutReference->short_reference.'/production-context')
+            ->assertForbidden()
+            ->assertJsonPath('error', 'ORDER_NOT_ACQUIRED_BY_AGENT');
+    }
+
+    public function test_bundle_components_keep_stable_keys_quantities_and_revision_tracks_product_inventory(): void
+    {
+        $product = Product::create(['name_ar' => 'باقة إنتاج', 'slug' => 'studio-bundle', 'sku' => 'BUNDLE',
+            'price_cents' => 10000, 'is_active' => true, 'personalization_mode' => 'none']);
+        $product->productionComponents()->createMany([
+            ['stable_key' => 'large', 'name' => 'Large', 'prompt_template' => 'Large x {{component_quantity}}', 'quantity_per_item' => 2, 'sort_order' => 1, 'is_active' => true],
+            ['stable_key' => 'small', 'name' => 'Small', 'prompt_template' => 'Small x {{component_quantity}}', 'quantity_per_item' => 5, 'sort_order' => 2, 'is_active' => true],
+        ]);
+        $order = Order::create(['order_number' => 'HK-BUNDLE-STUDIO', 'checkout_group_key' => 'BUNDLE-GROUP', 'status' => 'new', 'uploaded_photos' => []]);
+        $item = $order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'title' => $product->name_ar,
+            'sku' => 'BUNDLE', 'quantity' => 3, 'unit_price_cents' => 10000, 'total_price_cents' => 30000, 'personalization_mode' => 'none']);
+        $token = $this->token($this->agent());
+        $first = $this->withToken($token)->getJson('/api/agent/studio/orders/HK-BUNDLE-STUDIO')->assertOk();
+        $this->assertSame(['product:'.$item->id.':component:large', 'product:'.$item->id.':component:small'], array_column($first->json('production_units'), 'unit_key'));
+        $this->assertSame([6, 15], array_column($first->json('production_units'), 'quantity'));
+        $this->assertSame([3, 3], array_column($first->json('production_units'), 'product_quantity'));
+        $item->productionComponents()->where('stable_key', 'large')->update(['prompt_template' => 'Updated large x {{component_quantity}}']);
+        $this->app['auth']->forgetGuards();
+        $second = $this->withToken($token)->getJson('/api/agent/studio/orders/HK-BUNDLE-STUDIO')->assertOk();
+        $this->assertNotSame($first->json('order.source_revision'), $second->json('order.source_revision'));
     }
 
     public function test_studio_lookup_query_count_does_not_grow_with_story_units(): void
@@ -346,6 +423,7 @@ class AgentStudioApiTest extends TestCase
             'price_cents' => 10_000,
             'is_active' => true,
             'personalization_mode' => 'none',
+            'production_prompt_template' => 'Produce {{product_name}} x {{product_quantity}}',
         ]);
         $order = Order::query()->create([
             'order_number' => $number,
