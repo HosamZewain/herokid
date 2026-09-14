@@ -688,8 +688,6 @@ class AgentCheckoutProductionService
             'title' => $order->story->title,
             'language' => $order->language ?: $order->story->language,
             'production_prompt' => $this->agentSafePrompt(StoryProductionPrompt::forOrder($order), $order),
-            'quantity' => 1,
-            'personalization' => [],
             'child' => [
                 'name' => $order->child_name,
                 'age' => $order->child_age,

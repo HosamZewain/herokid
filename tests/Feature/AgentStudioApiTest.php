@@ -148,8 +148,6 @@ class AgentStudioApiTest extends TestCase
             ->assertJsonPath('production_stories.1.scenes.0.text', 'رأت مريم نجمة تلمع في السماء.')
             ->assertJsonCount(3, 'production_units')
             ->assertJsonPath('production_units.0.unit_key', 'story:'.$first->id)
-            ->assertJsonPath('production_units.0.quantity', 1)
-            ->assertJsonCount(0, 'production_units.0.personalization')
             ->assertJsonPath('production_units.1.unit_key', 'story:'.$second->id)
             ->assertJsonPath('production_units.2.unit_key', 'product:'.$productOrder->items()->firstOrFail()->id)
             ->assertJsonPath('inventory_visibility.filtered', false)
