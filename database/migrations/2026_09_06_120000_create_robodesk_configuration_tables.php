@@ -30,25 +30,10 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('order_csat_responses', function (Blueprint $table): void {
-            $table->id();
-            $table->string('checkout_group_key')->index();
-            $table->foreignId('order_id')->nullable()->constrained()->nullOnDelete();
-            $table->unsignedTinyInteger('score')->nullable()->index();
-            $table->text('comment')->nullable();
-            $table->string('source', 30)->default('robodesk');
-            $table->string('external_message_id')->nullable()->unique();
-            $table->string('external_conversation_id')->nullable()->index();
-            $table->timestamp('requested_at')->nullable();
-            $table->timestamp('responded_at')->nullable();
-            $table->json('metadata')->nullable();
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('order_csat_responses');
         Schema::dropIfExists('robodesk_action_settings');
         Schema::dropIfExists('robodesk_credentials');
     }

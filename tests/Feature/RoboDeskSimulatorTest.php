@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderCustomerReview;
 use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
@@ -104,7 +105,7 @@ class RoboDeskSimulatorTest extends TestCase
         $this->assertSame('unpaid', $order->refresh()->payment_status);
     }
 
-    public function test_simulated_csat_is_recorded_with_its_score(): void
+    public function test_a_simulated_rating_lands_in_the_shared_customer_review_store(): void
     {
         $this->simulate();
         $order = $this->order('CHK-SIM-4');
@@ -117,10 +118,31 @@ class RoboDeskSimulatorTest extends TestCase
             ])
             ->assertRedirect();
 
-        $this->assertDatabaseHas('order_csat_responses', [
-            'checkout_group_key' => $order->checkout_group_key,
-            'score' => 4,
-        ]);
+        // Same table and shape as a rating left on the public link, so both
+        // channels are one dataset rather than two.
+        $review = OrderCustomerReview::query()
+            ->where('order_id', $order->id)
+            ->where('review_type', OrderCustomerReview::TYPE_SERVICE_RATING)
+            ->firstOrFail();
+
+        $this->assertSame('robodesk', $review->source);
+        $this->assertSame(4, $review->qualityRating());
+        $this->assertSame('جيد', $review->customer_comment);
+    }
+
+    public function test_a_rating_outside_one_to_five_is_rejected(): void
+    {
+        $this->simulate();
+        $order = $this->order('CHK-SIM-4B');
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.robodesk.simulator.reply', $order->checkout_group_key), [
+                'type' => 'csat.submitted',
+                'score' => 9,
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertSame(0, OrderCustomerReview::query()->count());
     }
 
     public function test_the_thread_screen_renders_both_directions(): void

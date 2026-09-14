@@ -6,11 +6,11 @@ use App\Models\CheckoutCustomerWorkflow;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityRequest;
 use App\Models\Order;
-use App\Models\OrderCsatResponse;
 use App\Models\OrderCustomerReview;
 use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
+use App\Services\Orders\OrderCustomerRatingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +21,7 @@ class RoboDeskInboundEventHandler
         private readonly ChildIdentityApprovalService $approvals,
         private readonly ChildIdentityAttemptService $attempts,
         private readonly ChildIdentityEventLogger $identityEvents,
+        private readonly OrderCustomerRatingService $ratings,
     ) {}
 
     public function handle(string $type, array $data): void
@@ -176,24 +177,32 @@ class RoboDeskInboundEventHandler
         }
     }
 
+    /**
+     * A satisfaction score from RoboDesk is the same thing as a rating left on
+     * the public link, so it goes through the same service and lands in
+     * `order_customer_reviews` rather than a parallel table. The service owns
+     * deduplication: one rating per checkout, whichever channel it arrived on.
+     */
     private function recordCsat(array $data): void
     {
         $key = $this->checkoutKey($data);
-        $order = Order::query()->where('checkout_group_key', $key)->orderBy('id')->first();
+        $score = (int) ($data['score'] ?? 0);
 
-        OrderCsatResponse::query()->updateOrCreate(
-            ['external_message_id' => $data['message_id'] ?? ($key.':csat')],
-            [
-                'checkout_group_key' => $key,
-                'order_id' => $order?->id,
-                'score' => isset($data['score']) ? (int) $data['score'] : null,
-                'comment' => $data['comment'] ?? null,
-                'source' => 'robodesk',
-                'external_conversation_id' => $data['conversation_id'] ?? null,
-                'responded_at' => now(),
-                'metadata' => ['contact_id' => $data['contact_id'] ?? null],
+        if ($score < 1 || $score > 5) {
+            throw ValidationException::withMessages([
+                'score' => 'A satisfaction score between 1 and 5 is required.',
+            ]);
+        }
+
+        $order = Order::query()->where('checkout_group_key', $key)->orderBy('id')->firstOrFail();
+
+        $this->ratings->submit($order, $score, $data['comment'] ?? null, 'robodesk', [
+            'robodesk' => [
+                'contact_id' => $data['contact_id'] ?? null,
+                'conversation_id' => $data['conversation_id'] ?? null,
+                'message_id' => $data['message_id'] ?? null,
             ],
-        );
+        ]);
     }
 
     private function recordDecision(
