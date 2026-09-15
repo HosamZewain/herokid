@@ -86,6 +86,7 @@ use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\Testimonial;
 use App\Services\Catalog\CatalogSalesRankingService;
+use App\Services\Catalog\UnifiedStorefrontService;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 
@@ -112,7 +113,7 @@ Route::get('/storage/{path}', function (string $path) {
 // Homepage
 Route::get('/', function () {
     $featuredStories = collect();
-    if (homepage_section_enabled('hero') || homepage_section_enabled('stories')) {
+    if (homepage_section_enabled('hero') || homepage_section_enabled('catalog')) {
         $activeStories = Story::where('active', true)->with('categories')->get();
         $salesCounts = app(CatalogSalesRankingService::class)
             ->counts($activeStories->pluck('id'), collect())['stories'];
@@ -128,7 +129,7 @@ Route::get('/', function () {
 
     $homeProductCount = $shopEnabled ? Product::publiclyVisible()->count() : 0;
     $featuredProducts = collect();
-    if ($shopEnabled && (homepage_section_enabled('hero') || homepage_section_enabled('store'))) {
+    if ($shopEnabled && (homepage_section_enabled('hero') || homepage_section_enabled('catalog'))) {
         $featuredProducts = Product::publiclyVisible()
             ->with('category')
             ->orderByDesc('is_featured')
@@ -136,6 +137,15 @@ Route::get('/', function () {
             ->latest()
             ->take(8)
             ->get();
+    }
+
+    $homeCatalogItems = collect();
+    if (homepage_section_enabled('catalog')) {
+        $storefront = app(UnifiedStorefrontService::class);
+        $homeCatalogItems = $featuredStories
+            ->map(fn (Story $story) => $storefront->storyItem($story))
+            ->concat($featuredProducts->map(fn (Product $product) => $storefront->productItem($product)))
+            ->values();
     }
 
     $homeCategories = collect();
@@ -169,12 +179,6 @@ Route::get('/', function () {
             ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty())
         : collect();
 
-    // When no homepage store section is configured yet, still show products so the
-    // storefront never loses its product presence on the homepage.
-    $storeFallbackProducts = homepage_section_enabled('store') && $shopEnabled && $storeSections->isEmpty()
-        ? $featuredProducts->take(4)
-        : collect();
-
     return view('welcome', compact(
         'featuredStories',
         'featuredProducts',
@@ -184,7 +188,7 @@ Route::get('/', function () {
         'testimonials',
         'packages',
         'storeSections',
-        'storeFallbackProducts',
+        'homeCatalogItems',
     ));
 })->name('home');
 

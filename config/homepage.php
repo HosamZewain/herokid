@@ -20,10 +20,10 @@ return [
             'description_ar' => 'تعريف الزائر بميزة هوية الطفل وربطه بصفحة البدء.',
             'default' => true,
         ],
-        'stories' => [
-            'setting' => 'home_section_stories_enabled',
-            'label_ar' => 'القصص المميزة',
-            'description_ar' => 'شبكة القصص المخصصة المختارة للصفحة الرئيسية.',
+        'catalog' => [
+            'setting' => 'home_section_catalog_enabled',
+            'label_ar' => 'المتجر المميز',
+            'description_ar' => 'شبكة موحدة بتبويبات تعرض القصص وكتب الأنشطة والهدايا معًا.',
             'default' => true,
         ],
         'store' => [

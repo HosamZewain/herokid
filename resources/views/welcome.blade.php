@@ -511,192 +511,13 @@
         @include('front.child-identity._home-section')
     @endif
 
-    {{-- FEATURED STORIES --}}
-    @if(homepage_section_enabled('stories'))
-    <section data-home-section="stories" class="py-20 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(160deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);">
-        <div class="absolute inset-0 pointer-events-none opacity-20"
-            style="background-image: radial-gradient(circle, #f59e0b 1px, transparent 1px); background-size: 32px 32px;"></div>
-        <div class="absolute -top-10 -left-10 w-52 h-52 rounded-full border-[14px] border-amber-200/50 pointer-events-none"></div>
-        <div class="absolute -bottom-8 -right-8 w-40 h-40 rounded-full border-[10px] border-orange-200/50 pointer-events-none"></div>
-        {{-- Small deco stars --}}
-        <svg class="absolute top-12 right-20 text-amber-300/50 fill-current pointer-events-none" width="20" height="20" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-        <svg class="absolute bottom-16 left-24 text-orange-300/40 fill-current pointer-events-none" width="16" height="16" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-
-        <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
-            {{-- Section header --}}
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 mb-12">
-                <div class="text-right">
-                    <span class="inline-flex items-center gap-2 bg-amber-100 text-amber-800 font-black text-xs px-4 py-2 rounded-full border border-amber-300 mb-3">📚 مكتبة القصص</span>
-                    <h2 class="text-4xl font-extrabold text-slate-900">{{ setting('home_story_section_title', $settings['home_story_section_title'] ?? '') }}</h2>
-                    <div class="w-24 h-1.5 mt-2 mb-3 rounded-full" style="background: linear-gradient(90deg, #f97316, #fbbf24);"></div>
-                    <p class="text-slate-600">{{ setting('home_story_section_subtitle', $settings['home_story_section_subtitle'] ?? '') }}</p>
-                </div>
-                <div class="flex flex-col items-end gap-3 flex-shrink-0">
-                    {{-- Quick stats --}}
-                    <div class="flex flex-wrap items-center gap-2">
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-amber-200 rounded-2xl px-3 py-2 shadow-sm">
-                            <span class="text-base">📖</span>
-                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeStoryCount) }} قصة</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-orange-200 rounded-2xl px-3 py-2 shadow-sm">
-                            <span class="text-base">🌐</span>
-                            <span class="text-xs font-black text-slate-700">{{ $homeLanguageCount === 1 ? 'لغة واحدة' : arabic_number($homeLanguageCount).' لغات' }}</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-white/80 backdrop-blur-sm border border-yellow-200 rounded-2xl px-3 py-2 shadow-sm">
-                            <span class="text-base">🎯</span>
-                            <span class="text-xs font-black text-slate-700">{{ arabic_number($homeAgeRangeCount) }} فئات عمرية</span>
-                        </div>
-                    </div>
-                    <a href="{{ route('stories.index') }}"
-                        class="flex items-center gap-2 bg-white text-orange-600 font-bold px-6 py-3 rounded-xl border-2 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all duration-200 group shadow-md">
-                        عرض الكل
-                        <svg class="w-4 h-4 group-hover:-translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
-                    </a>
-                </div>
-            </div>
-
-            {{-- 4-col × 2-row story grid --}}
-            @php
-                $cardAccents = [
-                    ['bar' => 'from-orange-400 to-yellow-400',   'badge' => 'bg-orange-50 text-orange-700 border-orange-200',   'price' => 'text-orange-600',  'shadow' => 'hover:shadow-orange-200/60'],
-                    ['bar' => 'from-pink-400 to-rose-500',       'badge' => 'bg-pink-50 text-pink-700 border-pink-200',         'price' => 'text-pink-600',    'shadow' => 'hover:shadow-pink-200/60'],
-                    ['bar' => 'from-violet-500 to-indigo-500',   'badge' => 'bg-violet-50 text-violet-700 border-violet-200',   'price' => 'text-violet-600',  'shadow' => 'hover:shadow-violet-200/60'],
-                    ['bar' => 'from-emerald-400 to-teal-500',    'badge' => 'bg-emerald-50 text-emerald-700 border-emerald-200','price' => 'text-emerald-600', 'shadow' => 'hover:shadow-emerald-200/60'],
-                    ['bar' => 'from-sky-400 to-blue-500',        'badge' => 'bg-sky-50 text-sky-700 border-sky-200',            'price' => 'text-sky-600',     'shadow' => 'hover:shadow-sky-200/60'],
-                    ['bar' => 'from-fuchsia-400 to-pink-500',    'badge' => 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200','price' => 'text-fuchsia-600', 'shadow' => 'hover:shadow-fuchsia-200/60'],
-                    ['bar' => 'from-amber-400 to-orange-500',    'badge' => 'bg-amber-50 text-amber-700 border-amber-200',      'price' => 'text-amber-600',   'shadow' => 'hover:shadow-amber-200/60'],
-                    ['bar' => 'from-cyan-400 to-sky-500',        'badge' => 'bg-cyan-50 text-cyan-700 border-cyan-200',         'price' => 'text-cyan-600',    'shadow' => 'hover:shadow-cyan-200/60'],
-                ];
-                $fallbackImgs = [
-                    \App\Support\SiteImages::url('img_hero_main'),
-                    \App\Support\SiteImages::url('img_hero_mini1'),
-                    \App\Support\SiteImages::url('img_hero_mini2'),
-                    \App\Support\SiteImages::url('img_home_step1'),
-                    \App\Support\SiteImages::url('img_home_step2'),
-                    \App\Support\SiteImages::url('img_home_step3'),
-                    \App\Support\SiteImages::url('img_stat_books'),
-                    \App\Support\SiteImages::url('img_stat_rating'),
-                ];
-            @endphp
-
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
-                @forelse($featuredStories as $story)
-                    @php
-                        $accent = $cardAccents[$loop->index % 8];
-                        $storyCardPrice = $storyPricing->effectivePrice($story);
-                        $storyCardRegularPrice = $storyPricing->regularPrice($story);
-                        $storyCardHasOffer = $storyPricing->hasActiveOffer($story);
-                    @endphp
-                    <div class="group bg-white rounded-[1.75rem] overflow-hidden hover:shadow-2xl {{ $accent['shadow'] }} transition-all duration-500 hover:-translate-y-2 flex flex-col border border-orange-100/80">
-                        {{-- Colorful top stripe --}}
-                        <div class="h-1.5 w-full bg-gradient-to-r {{ $accent['bar'] }}"></div>
-
-                        {{-- Image --}}
-                        <a href="{{ route('stories.show', $story->slug) }}" class="aspect-[4/3] overflow-hidden relative bg-amber-50 block">
-                            @if($story->cover_image)
-                                <x-story-cover-image :src="$story->cover_url" :alt="$story->title" loading="lazy"
-                                    class="w-full h-full object-cover transition duration-700 group-hover:scale-110" />
-                            @else
-                                <img src="{{ $fallbackImgs[$loop->index % count($fallbackImgs)] }}"
-                                    alt="{{ $story->title }}" class="w-full h-full object-cover transition duration-700 group-hover:scale-110" loading="lazy">
-                            @endif
-
-                            {{-- Age badge top-right --}}
-                            <div class="absolute top-3 right-3">
-                                <span class="bg-white/92 backdrop-blur-sm text-[10px] font-black px-2.5 py-1 rounded-full shadow border {{ $accent['badge'] }}">{{ $story->age_range }}</span>
-                            </div>
-
-                            {{-- NEW badge for first 2 stories --}}
-                            @if($storyCardHasOffer)
-                                <div class="absolute top-3 left-3">
-                                    <span class="text-[10px] font-black px-2.5 py-1 rounded-full bg-amber-300 text-amber-950 shadow">{{ $storyPricing->offerLabel() }}</span>
-                                </div>
-                            @elseif($loop->index < 2)
-                                <div class="absolute top-3 left-3">
-                                    <span class="text-[10px] font-black px-2.5 py-1 rounded-full text-white shadow"
-                                        style="background: linear-gradient(135deg, #f97316, #ec4899);">✨ جديد</span>
-                                </div>
-                            @endif
-
-                            {{-- Overlay on hover --}}
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end pb-4 justify-center">
-                                <span class="text-white text-xs font-black bg-white/20 backdrop-blur-sm border border-white/30 px-4 py-1.5 rounded-full">
-                                    🔍 معاينة سريعة
-                                </span>
-                            </div>
-                        </a>
-
-                        {{-- Card body --}}
-                        <div class="p-3 sm:p-4 flex flex-col flex-grow">
-                            {{-- Category tags (hidden on mobile to save space) --}}
-                            @if($story->categories->count())
-                                <div class="hidden sm:flex flex-wrap gap-1 mb-2">
-                                    @foreach($story->categories->take(2) as $cat)
-                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{{ $cat->name }}</span>
-                                    @endforeach
-                                </div>
-                            @endif
-
-                            <h3 class="text-[13px] sm:text-[15px] font-extrabold text-slate-900 mb-1 line-clamp-2 leading-snug">
-                                <a href="{{ route('stories.show', $story->slug) }}" class="hover:text-indigo-600 transition-colors">{{ $story->title }}</a>
-                            </h3>
-                            <p class="hidden sm:block text-slate-400 text-xs leading-relaxed mb-3 flex-grow line-clamp-2">{{ $story->short_desc }}</p>
-
-                            @if($story->lesson_value)
-                                <div class="hidden sm:block mb-3">
-                                    <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">💡 {{ $story->lesson_value }}</span>
-                                </div>
-                            @endif
-
-                            {{-- Price + CTA --}}
-                            <div class="flex items-center justify-between pt-2 sm:pt-3 border-t border-slate-100 mt-auto gap-1">
-                                <div class="text-right">
-                                    @if($storyCardHasOffer)
-                                        <span class="block text-[10px] font-bold text-slate-400 line-through">{{ format_money($storyCardRegularPrice) }}</span>
-                                    @endif
-                                    <span class="text-sm sm:text-base font-extrabold {{ $accent['price'] }}">{{ format_money($storyCardPrice) }}</span>
-                                </div>
-                                <a href="{{ route('stories.show', $story->slug) }}"
-                                    class="text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition hover:scale-105 whitespace-nowrap flex-shrink-0"
-                                    style="background: linear-gradient(135deg, #f97316, #ec4899);">اصنعها ✨</a>
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <div class="col-span-4 text-center py-20">
-                        <div class="w-24 h-24 bg-amber-100 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-5">📚</div>
-                        <p class="text-slate-500 font-bold text-lg">جاري إضافة قصص رائعة قريباً!</p>
-                        <p class="text-slate-400 text-sm mt-1">ترقّبوا مكتبتنا المتنوعة من القصص الشخصية</p>
-                    </div>
-                @endforelse
-            </div>
-
-            {{-- Bottom CTA --}}
-            @if($featuredStories->count() >= 8)
-                <div class="text-center mt-10">
-                    <a href="{{ route('stories.index') }}"
-                        class="inline-flex items-center gap-3 text-white font-black py-4 px-10 rounded-2xl shadow-xl transition hover:-translate-y-1 hover:shadow-2xl"
-                        style="background: linear-gradient(135deg, #f97316, #ec4899); box-shadow: 0 8px 25px rgba(249,115,22,.35);">
-                        <span>استعرض المكتبة الكاملة</span>
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
-                    </a>
-                </div>
-            @endif
-        </div>
-    </section>
+    {{-- FEATURED CATALOGUE (stories + products, tabbed) --}}
+    @if(homepage_section_enabled('catalog'))
+        @include('front._home-catalog')
     @endif
 
-    @php
-        $hasStoreSections = isset($storeSections) && $storeSections->isNotEmpty();
-        $hasStoreFallback = isset($storeFallbackProducts) && $storeFallbackProducts->isNotEmpty();
-    @endphp
-    @if(homepage_section_enabled('store') && ($hasStoreSections || $hasStoreFallback))
+    {{-- Admin-curated product rows, shown below the unified catalogue. --}}
+    @if(homepage_section_enabled('store') && isset($storeSections) && $storeSections->isNotEmpty())
         <section data-home-section="store" class="py-24 relative overflow-hidden" dir="rtl"
             style="background: linear-gradient(155deg, #eef2ff 0%, #e0e7ff 45%, #f5f3ff 100%);">
             <div class="absolute inset-0 pointer-events-none opacity-20"
@@ -712,7 +533,7 @@
                     <p class="text-slate-500 leading-8">{{ setting('home_store_section_subtitle', $settings['home_store_section_subtitle'] ?? '') }}</p>
                 </div>
 
-                @foreach($storeSections ?? [] as $section)
+                @foreach($storeSections as $section)
                     @php
                         $sectionProducts = $section->category->activeProducts->take($section->max_products);
                     @endphp
@@ -737,25 +558,6 @@
                         </div>
                     @endif
                 @endforeach
-
-                @if($hasStoreFallback)
-                    <div>
-                        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                            <div class="text-right">
-                                <h3 class="text-2xl font-black text-slate-950">منتجات مختارة لطفلك</h3>
-                                <p class="mt-2 text-slate-500">كتب أنشطة وهدايا يمكن شراؤها مباشرة أو إضافتها مع قصة مخصصة.</p>
-                            </div>
-                            <a href="{{ route('shop.index', ['type' => 'products']) }}" class="inline-flex items-center justify-center rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-black text-indigo-700 shadow-sm hover:bg-indigo-50">
-                                عرض كل المنتجات
-                            </a>
-                        </div>
-                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                            @foreach($storeFallbackProducts as $product)
-                                @include('front.shop._product-card', ['product' => $product])
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
             </div>
         </section>
     @endif

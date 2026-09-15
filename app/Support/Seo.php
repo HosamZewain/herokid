@@ -18,9 +18,20 @@ class Seo
             $host = substr($host, 4);
         }
 
-        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
 
-        return 'https://' . $host . $port;
+        // Canonical URLs are always https in production. Local hosts are served over
+        // plain http, so forcing https there breaks every generated image and link.
+        $isLocalHost = $host === 'localhost'
+            || $host === '127.0.0.1'
+            || str_ends_with($host, '.test')
+            || str_ends_with($host, '.localhost');
+
+        $scheme = ($isLocalHost && strtolower((string) ($parts['scheme'] ?? '')) === 'http')
+            ? 'http'
+            : 'https';
+
+        return $scheme.'://'.$host.$port;
     }
 
     public static function url(?string $path = '/'): string
@@ -28,23 +39,23 @@ class Seo
         $path = trim((string) ($path ?: '/'));
 
         if (str_starts_with($path, '//')) {
-            $path = 'https:' . $path;
+            $path = 'https:'.$path;
         }
 
         if (preg_match('#^https?://#i', $path)) {
             $parts = parse_url($path) ?: [];
             $relativePath = $parts['path'] ?? '/';
-            $query = isset($parts['query']) ? '?' . $parts['query'] : '';
-            $fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+            $query = isset($parts['query']) ? '?'.$parts['query'] : '';
+            $fragment = isset($parts['fragment']) ? '#'.$parts['fragment'] : '';
 
-            return self::canonicalBase() . self::normalizePath($relativePath) . $query . $fragment;
+            return self::canonicalBase().self::normalizePath($relativePath).$query.$fragment;
         }
 
         if (! str_starts_with($path, '/')) {
-            $path = '/' . $path;
+            $path = '/'.$path;
         }
 
-        return self::canonicalBase() . self::normalizePath($path);
+        return self::canonicalBase().self::normalizePath($path);
     }
 
     public static function canonicalForRequest(Request $request): string
@@ -61,7 +72,7 @@ class Seo
         }
 
         if (str_starts_with($url, '//')) {
-            $url = 'https:' . $url;
+            $url = 'https:'.$url;
         }
 
         if (preg_match('#^https?://#i', $url)) {
@@ -93,6 +104,6 @@ class Seo
             return '/';
         }
 
-        return '/' . ltrim($path, '/');
+        return '/'.ltrim($path, '/');
     }
 }
