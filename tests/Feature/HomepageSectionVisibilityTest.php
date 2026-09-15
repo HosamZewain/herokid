@@ -27,7 +27,7 @@ class HomepageSectionVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('data-home-section="child_identity"', false)
             ->assertSee(route('child-identity.index'), false)
-            ->assertSee('اصنع هوية طفلك قبل اختيار القصة')
+            ->assertSee('هوية واحدة لطفلك… تستخدمها في كل منتجاته')
             ->assertSee(SiteImages::path('img_home_child_identity'), false)
             ->assertSee('صورتان حقيقيتان لنفس الطفل تتحولان إلى هوية متناسقة من زوايا وتعبيرات متعددة')
             ->assertSee('من صورتين إلى هوية واحدة')

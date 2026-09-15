@@ -19,6 +19,14 @@
     $storyPricing = app(\App\Services\Pricing\StoryPricingService::class);
     $homePricingStory = $featuredStories->first() ?? new \App\Models\Story(['price' => setting('price_soft_cover', 0)]);
     $homeStoryPrice = $storyPricing->effectivePrice($homePricingStory);
+
+    // Cheapest entry point across the whole catalogue, not just the story library.
+    $homeProductPrices = collect($featuredProducts ?? [])
+        ->map(fn ($product) => $product->effectivePrice())
+        ->filter(fn ($price) => $price > 0);
+    $homeStartingPrice = $homeProductPrices->push($homeStoryPrice)->filter(fn ($price) => $price > 0)->min() ?: $homeStoryPrice;
+    $homeProductCount = $homeProductCount ?? 0;
+    $homeCatalogCount = $homeStoryCount + $homeProductCount;
 @endphp
 
 @if($faqs->count())
@@ -39,6 +47,72 @@
 @endphp
 <script type="application/ld+json">
 @json($homeFaqSchema, \App\Support\Seo::jsonFlags())
+</script>
+@endpush
+@endif
+
+{{-- ══ Catalogue structured data: tells search engines the homepage lists
+     personalized products, of which stories are one line ══ --}}
+@php
+    $homeCatalogEntries = collect();
+
+    foreach ($featuredStories as $story) {
+        $homeCatalogEntries->push([
+            'name' => $story->title,
+            'url' => route('stories.show', $story->slug),
+            'image' => $story->cover_image ? \App\Support\Seo::imageUrl($story->cover_url) : null,
+            'description' => $story->short_desc,
+            'price' => $storyPricing->effectivePrice($story),
+            'category' => 'قصص مخصصة',
+        ]);
+    }
+
+    foreach ($featuredProducts as $product) {
+        $homeCatalogEntries->push([
+            'name' => $product->name_ar,
+            'url' => route('shop.product.show', $product),
+            'image' => $product->featured_image_url,
+            'description' => $product->short_description_ar,
+            'price' => $product->effectivePrice(),
+            'category' => $product->category?->name_ar ?: 'منتجات مخصصة',
+        ]);
+    }
+
+    $homeCatalogEntries = $homeCatalogEntries->take(12)->values();
+@endphp
+
+@if($homeCatalogEntries->isNotEmpty())
+@push('schema')
+@php
+    $homeCatalogSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'name' => 'منتجات HeroKid المخصصة',
+        'numberOfItems' => $homeCatalogEntries->count(),
+        'itemListElement' => $homeCatalogEntries->map(fn (array $entry, int $index) => array_filter([
+            '@type' => 'ListItem',
+            'position' => $index + 1,
+            'item' => array_filter([
+                '@type' => 'Product',
+                'name' => $entry['name'],
+                'url' => $entry['url'],
+                'image' => $entry['image'],
+                'description' => $entry['description'] ?: null,
+                'category' => $entry['category'],
+                'brand' => ['@type' => 'Brand', 'name' => 'HeroKid'],
+                'offers' => $entry['price'] > 0 ? [
+                    '@type' => 'Offer',
+                    'price' => number_format((float) $entry['price'], 2, '.', ''),
+                    'priceCurrency' => 'EGP',
+                    'availability' => 'https://schema.org/InStock',
+                    'url' => $entry['url'],
+                ] : null,
+            ]),
+        ]))->values()->all(),
+    ];
+@endphp
+<script type="application/ld+json">
+@json($homeCatalogSchema, \App\Support\Seo::jsonFlags())
 </script>
 @endpush
 @endif
@@ -190,7 +264,9 @@
                 {{-- Subtitle --}}
                 <p class="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed mb-8">
                     {{ setting('hero_subtitle', $settings['hero_subtitle'] ?? '') }}
-                    <strong class="text-orange-600">{{ delivery_range() }}</strong>.
+                    @if(delivery_range())
+                        ويصلك خلال <strong class="text-orange-600">{{ delivery_range() }}</strong>.
+                    @endif
                 </p>
 
                 {{-- Colorful feature pills --}}
@@ -204,17 +280,21 @@
 
                 {{-- CTA buttons --}}
                 <div class="flex flex-wrap gap-4 justify-center">
-                    <a href="{{ route('stories.index') }}"
+                    <a href="{{ route('shop.index') }}"
                         class="group inline-flex items-center gap-3 text-white font-black py-5 px-12 rounded-2xl shadow-2xl text-lg transition hover:-translate-y-1 active:scale-95"
                         style="background:linear-gradient(135deg,#f97316,#ec4899); box-shadow: 0 8px 30px rgba(249,115,22,.4);">
-                        <span class="text-xl">📚</span>
-                        <span>تصفح مكتبتنا الآن</span>
+                        <span class="text-xl">🎁</span>
+                        <span>تسوّق كل المنتجات</span>
                         <svg class="w-5 h-5 transform group-hover:-translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                         </svg>
                     </a>
+                    <a href="{{ route('shop.index', ['type' => 'stories']) }}"
+                        class="inline-flex items-center gap-2 bg-white/90 backdrop-blur-sm text-slate-700 font-bold py-5 px-10 rounded-2xl border-2 border-slate-200 hover:border-orange-300 hover:shadow-xl transition hover:-translate-y-1 text-lg">
+                        📚 القصص المخصصة
+                    </a>
                     <a href="{{ route('how-it-works') }}"
-                        class="inline-flex items-center gap-2 bg-white/90 backdrop-blur-sm text-slate-700 font-bold py-5 px-10 rounded-2xl border-2 border-slate-200 hover:border-pink-300 hover:shadow-xl transition hover:-translate-y-1 text-lg">
+                        class="inline-flex items-center gap-2 text-slate-500 font-bold py-5 px-6 rounded-2xl hover:text-slate-800 transition text-lg">
                         كيف يعمل؟ 🎬
                     </a>
                 </div>
@@ -233,11 +313,19 @@
                             <p class="text-2xl font-black text-slate-900 leading-none">{{ arabic_number($homeStoryCount) }}</p>
                             <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">قصة</p>
                         </div>
-                        <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
-                            <div class="text-3xl mb-1">⭐</div>
-                            <p class="text-2xl font-black text-slate-900 leading-none">{{ setting('stat_rating', $settings['stat_rating'] ?? '') }}</p>
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">تقييم</p>
-                        </div>
+                        @if($homeProductCount > 0)
+                            <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
+                                <div class="text-3xl mb-1">🎁</div>
+                                <p class="text-2xl font-black text-slate-900 leading-none">{{ arabic_number($homeProductCount) }}</p>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">منتج</p>
+                            </div>
+                        @else
+                            <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
+                                <div class="text-3xl mb-1">⭐</div>
+                                <p class="text-2xl font-black text-slate-900 leading-none">{{ setting('stat_rating', $settings['stat_rating'] ?? '') }}</p>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">تقييم</p>
+                            </div>
+                        @endif
                         <div class="stat-card bg-white/85 backdrop-blur-sm rounded-2xl p-4 text-center shadow-md border border-white">
                             <div class="text-3xl mb-1">👨‍👩‍👧</div>
                             <p class="text-2xl font-black text-slate-900 leading-none">{{ setting('stat_orders', $settings['stat_orders'] ?? '') }}</p>
@@ -267,7 +355,7 @@
                     <div class="flex gap-3">
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#f97316,#ec4899);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">ابتداءً من</p>
-                            <p class="text-xl">{{ format_money($homeStoryPrice) }}</p>
+                            <p class="text-xl">{{ format_money($homeStartingPrice) }}</p>
                         </div>
                         <div class="flex-1 rounded-2xl p-4 text-white text-center font-black shadow-lg" style="background:linear-gradient(135deg,#8b5cf6,#3b82f6);">
                             <p class="text-[10px] opacity-80 uppercase tracking-wider mb-0.5">تصلك خلال</p>
@@ -285,9 +373,22 @@
 
                     {{-- MAIN CARD --}}
                     @php
+                        // The main card stays the flagship story; the two satellite cards show
+                        // products first so the hero visual reads "personalized products", not "books".
                         $heroCard = $featuredStories->first();
-                        $card2    = $featuredStories->skip(1)->first();
-                        $card3    = $featuredStories->skip(2)->first();
+                        $heroProducts = collect($featuredProducts ?? []);
+                        $card2 = $heroProducts->first();
+                        $card3 = $heroProducts->skip(1)->first();
+                        $card2IsProduct = (bool) $card2;
+                        $card3IsProduct = (bool) $card3;
+                        $card2 = $card2 ?: $featuredStories->skip(1)->first();
+                        $card3 = $card3 ?: $featuredStories->skip(2)->first();
+                        $card2Title = $card2IsProduct ? $card2?->name_ar : $card2?->title;
+                        $card3Title = $card3IsProduct ? $card3?->name_ar : $card3?->title;
+                        $card2Image = $card2IsProduct ? $card2?->featured_image_url : ($card2?->cover_image ? $card2->cover_url : null);
+                        $card3Image = $card3IsProduct ? $card3?->featured_image_url : ($card3?->cover_image ? $card3->cover_url : null);
+                        $card2Meta = $card2IsProduct ? $card2?->ageLabel() : ($card2?->age_range ? $card2->age_range.' سنة' : null);
+                        $card3Meta = $card3IsProduct ? $card3?->ageLabel() : ($card3?->age_range ? $card3->age_range.' سنة' : null);
                     @endphp
                     <div class="h-float absolute z-20" style="top:20px;left:50%;transform:translateX(-50%);">
                         <div class="w-[220px] rounded-[2rem] overflow-hidden bg-white" style="box-shadow:0 24px 64px rgba(249,115,22,.25),0 8px 24px rgba(0,0,0,.12);">
@@ -304,9 +405,9 @@
                                 <div class="absolute bottom-0 right-0 left-0 p-4 text-right">
                                     @if($heroCard)
                                         <p class="text-orange-300 text-[9px] font-black uppercase tracking-widest mb-0.5">{{ $heroCard->categories->first()->name ?? 'مغامرة' }}</p>
-                                        <h3 class="text-white font-black text-base leading-snug">{{ $heroCard->title }}</h3>
+                                        <p class="text-white font-black text-base leading-snug">{{ $heroCard->title }}</p>
                                     @else
-                                        <h3 class="text-white font-black text-base">قصة طفلك المخصصة</h3>
+                                        <p class="text-white font-black text-base">قصة طفلك المخصصة</p>
                                     @endif
                                 </div>
                             </div>
@@ -323,15 +424,15 @@
                     <div class="absolute top-10 right-4 lg:right-8 z-10 hero-stat" style="animation-delay:.6s">
                         <div class="w-[125px] rounded-[1.5rem] overflow-hidden bg-white transform rotate-[-8deg] hover:rotate-[-3deg] transition-transform duration-700 opacity-90" style="box-shadow:0 10px 35px rgba(236,72,153,.2);">
                             <div class="h-[80px] overflow-hidden bg-gradient-to-br from-pink-100 to-rose-100">
-                                @if($card2 && $card2->cover_image)
-                                    <x-story-cover-image :src="$card2->cover_url" :alt="$card2->title" class="w-full h-full object-cover" />
+                                @if($card2Image)
+                                    <img src="{{ $card2Image }}" alt="{{ $card2Title }}" class="w-full h-full object-cover" loading="lazy">
                                 @else
-                                    <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini1'] ?? \App\Support\SiteImages::url('img_hero_mini1')) }}" class="w-full h-full object-cover" alt="قصة مغامرات">
+                                    <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini1'] ?? \App\Support\SiteImages::url('img_hero_mini1')) }}" class="w-full h-full object-cover" alt="منتج مخصص" loading="lazy">
                                 @endif
                             </div>
                             <div class="p-2.5 text-right">
-                                <p class="text-[9px] font-black text-pink-500 truncate">{{ $card2 ? $card2->title : 'قصة مغامرات' }}</p>
-                                @if($card2)<p class="text-[8px] text-slate-400 font-bold">{{ $card2->age_range }} سنة</p>@endif
+                                <p class="text-[9px] font-black text-pink-500 truncate">{{ $card2Title ?: 'كتاب أنشطة مخصص' }}</p>
+                                @if($card2Meta)<p class="text-[8px] text-slate-400 font-bold">{{ $card2Meta }}</p>@endif
                             </div>
                         </div>
                     </div>
@@ -340,14 +441,14 @@
                     <div class="absolute top-20 left-4 lg:left-8 z-10 hero-stat" style="animation-delay:.9s">
                         <div class="w-[115px] rounded-[1.5rem] overflow-hidden bg-white transform rotate-[7deg] hover:rotate-[2deg] transition-transform duration-700 opacity-80" style="box-shadow:0 10px 35px rgba(139,92,246,.2);">
                             <div class="h-[75px] overflow-hidden bg-gradient-to-br from-violet-100 to-indigo-100">
-                                @if($card3 && $card3->cover_image)
-                                    <x-story-cover-image :src="$card3->cover_url" :alt="$card3->title" class="w-full h-full object-cover" />
+                                @if($card3Image)
+                                    <img src="{{ $card3Image }}" alt="{{ $card3Title }}" class="w-full h-full object-cover" loading="lazy">
                                 @else
-                                    <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini2'] ?? \App\Support\SiteImages::url('img_hero_mini2')) }}" class="w-full h-full object-cover" alt="قصة خيالية">
+                                    <img src="{{ \App\Support\Seo::imageUrl($settings['img_hero_mini2'] ?? \App\Support\SiteImages::url('img_hero_mini2')) }}" class="w-full h-full object-cover" alt="هدية مخصصة" loading="lazy">
                                 @endif
                             </div>
                             <div class="p-2 text-right">
-                                <p class="text-[8px] font-black text-violet-500 truncate">{{ $card3 ? $card3->title : 'قصة للجميع' }}</p>
+                                <p class="text-[8px] font-black text-violet-500 truncate">{{ $card3Title ?: 'هدية مخصصة' }}</p>
                             </div>
                         </div>
                     </div>
@@ -380,7 +481,7 @@
                             <span class="text-lg leading-none">🎁</span>
                             <div>
                                 <p class="text-[8px] text-white/70 font-bold uppercase tracking-wider leading-none">ابتداءً من</p>
-                                <p class="text-[11px] font-black leading-tight">{{ format_money($homeStoryPrice) }}</p>
+                                <p class="text-[11px] font-black leading-tight">{{ format_money($homeStartingPrice) }}</p>
                             </div>
                         </div>
                     </div>
@@ -399,6 +500,11 @@
         </div>
 
     </div>
+    @endif
+
+    {{-- PRODUCT FAMILIES --}}
+    @if(homepage_section_enabled('categories'))
+        @include('front._home-categories')
     @endif
 
     @if(homepage_section_enabled('child_identity') && setting('child_identity_enabled', '1') === '1')
@@ -586,16 +692,27 @@
     </section>
     @endif
 
-    @if(homepage_section_enabled('store') && isset($storeSections) && $storeSections->isNotEmpty())
-        <section data-home-section="store" class="py-20 bg-slate-50" dir="rtl">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+    @php
+        $hasStoreSections = isset($storeSections) && $storeSections->isNotEmpty();
+        $hasStoreFallback = isset($storeFallbackProducts) && $storeFallbackProducts->isNotEmpty();
+    @endphp
+    @if(homepage_section_enabled('store') && ($hasStoreSections || $hasStoreFallback))
+        <section data-home-section="store" class="py-24 relative overflow-hidden" dir="rtl"
+            style="background: linear-gradient(155deg, #eef2ff 0%, #e0e7ff 45%, #f5f3ff 100%);">
+            <div class="absolute inset-0 pointer-events-none opacity-20"
+                style="background-image: radial-gradient(circle, #6366f1 1px, transparent 1px); background-size: 32px 32px;"></div>
+            <div class="absolute -top-14 -right-14 w-56 h-56 rounded-full border-[14px] border-indigo-200/50 pointer-events-none"></div>
+            <div class="absolute -bottom-10 -left-10 w-44 h-44 rounded-full border-[10px] border-violet-200/50 pointer-events-none"></div>
+
+            <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
                 <div class="text-center max-w-2xl mx-auto">
-                    <span class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 font-black text-xs px-4 py-2 rounded-full border border-indigo-100 mb-4">المتجر</span>
+                    <span class="inline-flex items-center gap-2 bg-indigo-100 text-indigo-800 font-black text-xs px-4 py-2 rounded-full border border-indigo-300 mb-4">🛍️ المتجر</span>
                     <h2 class="text-3xl sm:text-4xl font-black text-slate-950">{{ setting('home_store_section_title', $settings['home_store_section_title'] ?? '') }}</h2>
-                    <p class="mt-3 text-slate-500 leading-8">{{ setting('home_store_section_subtitle', $settings['home_store_section_subtitle'] ?? '') }}</p>
+                    <div class="w-20 h-1.5 mx-auto mt-3 mb-4 rounded-full" style="background: linear-gradient(90deg, #6366f1, #a855f7);"></div>
+                    <p class="text-slate-500 leading-8">{{ setting('home_store_section_subtitle', $settings['home_store_section_subtitle'] ?? '') }}</p>
                 </div>
 
-                @foreach($storeSections as $section)
+                @foreach($storeSections ?? [] as $section)
                     @php
                         $sectionProducts = $section->category->activeProducts->take($section->max_products);
                     @endphp
@@ -620,6 +737,25 @@
                         </div>
                     @endif
                 @endforeach
+
+                @if($hasStoreFallback)
+                    <div>
+                        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div class="text-right">
+                                <h3 class="text-2xl font-black text-slate-950">منتجات مختارة لطفلك</h3>
+                                <p class="mt-2 text-slate-500">كتب أنشطة وهدايا يمكن شراؤها مباشرة أو إضافتها مع قصة مخصصة.</p>
+                            </div>
+                            <a href="{{ route('shop.index', ['type' => 'products']) }}" class="inline-flex items-center justify-center rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-black text-indigo-700 shadow-sm hover:bg-indigo-50">
+                                عرض كل المنتجات
+                            </a>
+                        </div>
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                            @foreach($storeFallbackProducts as $product)
+                                @include('front.shop._product-card', ['product' => $product])
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
         </section>
     @endif
@@ -640,9 +776,9 @@
         <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center max-w-2xl mx-auto mb-16">
                 <span class="inline-flex items-center gap-2 bg-violet-500/20 text-violet-300 font-black text-xs px-4 py-2 rounded-full border border-violet-500/30 mb-4">⚡ العملية</span>
-                <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">٣ خطوات وقصتك في الطريق!</h2>
+                <h2 class="text-4xl font-extrabold text-white mt-1 mb-2">٣ خطوات وطلبك في الطريق!</h2>
                 <div class="w-20 h-1 mx-auto rounded-full mb-4" style="background: linear-gradient(90deg, #a78bfa, #ec4899);"></div>
-                <p class="text-lg text-violet-300">بضع دقائق منك، وكتاب لا يُنسى لهم.</p>
+                <p class="text-lg text-violet-300">بضع دقائق منك، ومنتج لا يُنسى لهم.</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
@@ -654,17 +790,17 @@
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-violet-900/60 border border-violet-500/20">
                         <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step1'] ?? \App\Support\SiteImages::url('img_home_step1')) }}"
-                            alt="اختر القصة" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
+                            alt="اختر المنتج" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(109,40,217,.92) 0%, rgba(109,40,217,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
                             style="background: linear-gradient(135deg, #f97316, #fbbf24); box-shadow: 0 4px 15px rgba(249,115,22,.5);">١</div>
                         <div class="absolute bottom-4 inset-x-0 text-center">
-                            <p class="text-white font-extrabold text-lg drop-shadow-lg">اختر القصة</p>
+                            <p class="text-white font-extrabold text-lg drop-shadow-lg">اختر المنتج</p>
                         </div>
                     </div>
                     <div class="bg-violet-500/10 backdrop-blur-sm border border-violet-500/20 rounded-2xl p-5 text-right">
                         <span class="inline-block bg-violet-500/20 text-violet-300 font-black text-xs px-3 py-1 rounded-full mb-2">خطوة ١</span>
-                        <p class="text-violet-200 leading-relaxed text-sm">تصفح مكتبتنا واختر القصة التي تناسب عمر طفلك واهتماماته.</p>
+                        <p class="text-violet-200 leading-relaxed text-sm">تصفح المتجر واختر ما يناسب طفلك: قصة مخصصة، كتاب أنشطة، أو هدية.</p>
                     </div>
                 </div>
 
@@ -672,7 +808,7 @@
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-pink-900/60 border border-pink-500/20">
                         <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step2'] ?? \App\Support\SiteImages::url('img_home_step2')) }}"
-                            alt="خصص وأرسل" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
+                            alt="خصّص وأرسل" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(190,24,93,.92) 0%, rgba(190,24,93,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
                             style="background: linear-gradient(135deg, #ec4899, #f43f5e); box-shadow: 0 4px 15px rgba(236,72,153,.5);">٢</div>
@@ -682,7 +818,7 @@
                     </div>
                     <div class="bg-pink-500/10 backdrop-blur-sm border border-pink-500/20 rounded-2xl p-5 text-right">
                         <span class="inline-block bg-pink-500/20 text-pink-300 font-black text-xs px-3 py-1 rounded-full mb-2">خطوة ٢</span>
-                        <p class="text-pink-200 leading-relaxed text-sm">أضف اسم طفلك وارفع صورته. نحن نحوله إلى بطل الأحداث.</p>
+                        <p class="text-pink-200 leading-relaxed text-sm">أضف اسم طفلك وارفع صورته مرة واحدة، ونستخدمها في كل منتج تختاره.</p>
                     </div>
                 </div>
 
@@ -690,12 +826,12 @@
                 <div class="group relative text-center">
                     <div class="relative rounded-3xl overflow-hidden h-52 mb-5 shadow-2xl shadow-amber-900/60 border border-amber-500/20">
                         <img src="{{ \App\Support\Seo::imageUrl($settings['img_home_step3'] ?? \App\Support\SiteImages::url('img_home_step3')) }}"
-                            alt="استلم الكتاب" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
+                            alt="استلم طلبك" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(161,90,0,.92) 0%, rgba(161,90,0,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
                             style="background: linear-gradient(135deg, #f59e0b, #10b981); box-shadow: 0 4px 15px rgba(245,158,11,.5);">٣</div>
                         <div class="absolute bottom-4 inset-x-0 text-center">
-                            <p class="text-white font-extrabold text-lg drop-shadow-lg">استلم الكتاب</p>
+                            <p class="text-white font-extrabold text-lg drop-shadow-lg">استلم طلبك</p>
                         </div>
                     </div>
                     <div class="bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-2xl p-5 text-right">
@@ -705,7 +841,14 @@
                 </div>
             </div>
 
-            <div class="text-center mt-14">
+            <div class="text-center mt-10">
+                <p class="inline-flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-bold text-violet-200 backdrop-blur-sm">
+                    <span class="text-base">⚡</span>
+                    منتجات جاهزة لا تحتاج تخصيص؟ اشترِها مباشرة بدون أي خطوات إضافية.
+                </p>
+            </div>
+
+            <div class="text-center mt-8">
                 <a href="{{ route('how-it-works') }}"
                     class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white font-bold border border-white/20 py-3 px-8 rounded-xl hover:bg-white/20 transition">
                     اعرف أكثر عن العملية
@@ -731,23 +874,23 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                 <div class="text-right order-2 lg:order-1">
                     <span class="inline-flex items-center gap-2 bg-emerald-100 text-emerald-800 font-black text-xs px-4 py-2 rounded-full border border-emerald-300 mb-4">💚 لماذا HeroKid؟</span>
-                    <h2 class="text-4xl font-extrabold text-slate-900 mt-1 mb-2 leading-snug">لأن طفلك يستحق<br>أكثر من مجرد كتاب.</h2>
+                    <h2 class="text-4xl font-extrabold text-slate-900 mt-1 mb-2 leading-snug">لأن طفلك يستحق <br>أكثر من مجرد كتاب.</h2>
                     <div class="w-24 h-1.5 mb-8 rounded-full" style="background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
                     <div class="space-y-4">
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
                             <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl shadow-md"
                                 style="background: linear-gradient(135deg, #f97316, #fbbf24);">🎨</div>
                             <div>
-                                <h3 class="font-bold text-slate-900 text-lg mb-1">وجه طفلك في الرسومات</h3>
-                                <p class="text-slate-500 text-sm leading-relaxed">رسومات مخصصة بالذكاء الاصطناعي تضع وجه طفلك في كل مشهد.</p>
+                                <h3 class="font-bold text-slate-900 text-lg mb-1">وجه طفلك في كل منتج</h3>
+                                <p class="text-slate-500 text-sm leading-relaxed">رسومات مخصصة بالذكاء الاصطناعي تضع وجه طفلك في القصص وكتب الأنشطة والهدايا.</p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
                             <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl shadow-md"
                                 style="background: linear-gradient(135deg, #ec4899, #f43f5e);">📖</div>
                             <div>
-                                <h3 class="font-bold text-slate-900 text-lg mb-1">قصص ذات معنى</h3>
-                                <p class="text-slate-500 text-sm leading-relaxed">كل قصة تحمل درساً تربوياً أصيلاً يترسخ في ذهن طفلك.</p>
+                                <h3 class="font-bold text-slate-900 text-lg mb-1">منتجات بعيدًا عن الشاشات</h3>
+                                <p class="text-slate-500 text-sm leading-relaxed">قصص بقيم تربوية أصيلة، وكتب أنشطة تنمّي مهارات طفلك بعيدًا عن الشاشات.</p>
                             </div>
                         </div>
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
@@ -763,7 +906,7 @@
                                 style="background: linear-gradient(135deg, #8b5cf6, #ec4899);">🎁</div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-lg mb-1">هدية مثالية للمناسبات</h3>
-                                <p class="text-slate-500 text-sm leading-relaxed">عيد ميلاد، نهاية سنة دراسية — كتاب شخصي لا يُنسى.</p>
+                                <p class="text-slate-500 text-sm leading-relaxed">عيد ميلاد، نهاية سنة دراسية — هدية شخصية تحمل اسمه ووجهه.</p>
                             </div>
                         </div>
                     </div>
@@ -774,8 +917,8 @@
                             alt="قصص" class="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy">
                         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(4,120,87,.92) 0%,rgba(4,120,87,.3) 60%,transparent 100%);"></div>
                         <div class="absolute inset-0 flex flex-col items-center justify-end pb-6 text-center">
-                            <p class="font-extrabold text-3xl text-white">{{ arabic_number($homeStoryCount) }}</p>
-                            <p class="text-emerald-200 text-sm mt-0.5">قصص متاحة</p>
+                            <p class="font-extrabold text-3xl text-white">{{ arabic_number($homeProductCount > 0 ? $homeCatalogCount : $homeStoryCount) }}</p>
+                            <p class="text-emerald-200 text-sm mt-0.5">{{ $homeProductCount > 0 ? 'منتجات وقصص متاحة' : 'قصص متاحة' }}</p>
                         </div>
                         <div class="absolute top-3 right-3 w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-xl">📚</div>
                     </div>
@@ -979,7 +1122,7 @@
                         <div class="flex items-center gap-5 p-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-green-100 border-r-4 border-r-green-500 shadow-sm hover:shadow-md hover:shadow-green-100/50 transition group">
                             <div class="w-14 h-14 bg-green-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-green-200 group-hover:scale-110 transition flex-shrink-0">💬</div>
                             <div class="text-right">
-                                <h4 class="font-bold text-slate-900">واتساب</h4>
+                                <h3 class="font-bold text-slate-900">واتساب</h3>
                                 <p class="text-slate-500 text-sm">رد سريع خلال ساعات العمل</p>
                                 @if(!empty($settings['whatsapp_url']))
                                 <a href="{{ $settings['whatsapp_url'] }}" target="_blank" rel="noopener"
@@ -993,7 +1136,7 @@
                         <div class="flex items-center gap-5 p-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-indigo-100 border-r-4 border-r-indigo-500 shadow-sm hover:shadow-md hover:shadow-indigo-100/50 transition group">
                             <div class="w-14 h-14 bg-indigo-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition flex-shrink-0">📧</div>
                             <div class="text-right">
-                                <h4 class="font-bold text-slate-900">البريد الإلكتروني</h4>
+                                <h3 class="font-bold text-slate-900">البريد الإلكتروني</h3>
                                 <p class="text-slate-500 text-sm">للاستفسارات الرسمية والطلبات الخاصة</p>
                                 <a href="mailto:{{ $settings['site_email'] ?? '' }}"
                                     class="text-indigo-600 font-bold mt-1 block hover:underline">{{ $settings['site_email'] ?? '' }}</a>
@@ -1003,7 +1146,7 @@
                         <div class="flex items-center gap-5 p-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-sky-100 border-r-4 border-r-sky-500 shadow-sm hover:shadow-md hover:shadow-sky-100/50 transition group">
                             <div class="w-14 h-14 bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-sky-200 group-hover:scale-110 transition flex-shrink-0">📍</div>
                             <div class="text-right">
-                                <h4 class="font-bold text-slate-900">المقر الرئيسي</h4>
+                                <h3 class="font-bold text-slate-900">المقر الرئيسي</h3>
                                 <p class="text-slate-500 text-sm">{{ $settings['address_city'] ?? '' }}{{ !empty($settings['address_street']) ? '، ' . $settings['address_street'] : '' }}</p>
                                 <span class="text-slate-400 text-xs font-bold mt-1 block">نشحن لجميع المحافظات</span>
                             </div>
@@ -1086,12 +1229,12 @@
             </h2>
             <p class="text-white/85 text-xl mb-10 leading-relaxed">
                 انضم لأكثر من <strong class="text-yellow-300">{{ setting('stat_orders', $settings['stat_orders'] ?? '') }} عائلة</strong> تصنع السحر مع HeroKid.<br>
-                قصتك المخصصة جاهزة خلال <strong class="text-yellow-300">{{ delivery_range() }}</strong>.
+                طلبك المخصص جاهز خلال <strong class="text-yellow-300">{{ delivery_range() }}</strong>.
             </p>
             <div class="flex flex-wrap justify-center gap-4">
-                <a href="{{ route('stories.index') }}"
+                <a href="{{ route('shop.index') }}"
                     class="bg-white font-extrabold py-5 px-12 rounded-2xl text-xl shadow-2xl hover:shadow-white/30 transition hover:-translate-y-1"
-                    style="color: #7c3aed;">اختر قصتك الآن ✨</a>
+                    style="color: #7c3aed;">تسوّق منتجات طفلك ✨</a>
                 <a href="{{ route('how-it-works') }}"
                     class="border-2 border-white/50 text-white font-bold py-5 px-10 rounded-2xl text-xl hover:bg-white/15 transition hover:-translate-y-1 backdrop-blur-sm">
                     كيف يعمل؟ 🎬

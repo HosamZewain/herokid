@@ -124,6 +124,33 @@ Route::get('/', function () {
             ->take(8)
             ->values();
     }
+    $shopEnabled = setting('shop_enabled', '1') === '1';
+
+    $homeProductCount = $shopEnabled ? Product::publiclyVisible()->count() : 0;
+    $featuredProducts = collect();
+    if ($shopEnabled && (homepage_section_enabled('hero') || homepage_section_enabled('store'))) {
+        $featuredProducts = Product::publiclyVisible()
+            ->with('category')
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->latest()
+            ->take(8)
+            ->get();
+    }
+
+    $homeCategories = collect();
+    if ($shopEnabled && homepage_section_enabled('categories')) {
+        $homeCategories = ProductCategory::query()
+            ->where('is_active', true)
+            ->where('show_in_store', true)
+            ->withCount(['activeProducts'])
+            ->orderBy('sort_order')
+            ->orderBy('name_ar')
+            ->get()
+            ->filter(fn (ProductCategory $category): bool => $category->active_products_count > 0)
+            ->values();
+    }
+
     $faqs = homepage_section_enabled('faq')
         ? FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get()
         : collect();
@@ -133,7 +160,7 @@ Route::get('/', function () {
     $packages = homepage_section_enabled('pricing')
         ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase()->take(5)->values()
         : collect();
-    $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
+    $storeSections = homepage_section_enabled('store') && $shopEnabled
         ? HomepageStoreSection::query()
             ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
             ->where('is_active', true)
@@ -142,7 +169,23 @@ Route::get('/', function () {
             ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty())
         : collect();
 
-    return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages', 'storeSections'));
+    // When no homepage store section is configured yet, still show products so the
+    // storefront never loses its product presence on the homepage.
+    $storeFallbackProducts = homepage_section_enabled('store') && $shopEnabled && $storeSections->isEmpty()
+        ? $featuredProducts->take(4)
+        : collect();
+
+    return view('welcome', compact(
+        'featuredStories',
+        'featuredProducts',
+        'homeProductCount',
+        'homeCategories',
+        'faqs',
+        'testimonials',
+        'packages',
+        'storeSections',
+        'storeFallbackProducts',
+    ));
 })->name('home');
 
 // Public Story Routes

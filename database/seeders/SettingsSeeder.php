@@ -50,8 +50,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'maintenance_mode',   'value' => '0'],
 
             // Editable page SEO and marketing copy
-            ['key' => 'seo_home_title', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي'],
-            ['key' => 'seo_home_description', 'value' => 'HeroKid يحول طفلك إلى بطل قصة مطبوعة بوجهه واسمه. اختر القصة، أرسل صورة طفلك، واستلم كتاباً فاخراً.'],
+            ['key' => 'seo_home_title', 'value' => 'منتجات أطفال مخصصة بوجه طفلك واسمه — قصص وكتب أنشطة وهدايا'],
+            ['key' => 'seo_home_description', 'value' => 'HeroKid يصنع منتجات مخصصة بوجه طفلك واسمه: قصص مطبوعة، كتب أنشطة، وهدايا. ارفع صور طفلك مرة واحدة واستخدمها في كل طلب.'],
             ['key' => 'seo_stories_title', 'value' => 'مكتبة قصص الأطفال المخصصة'],
             ['key' => 'seo_stories_description', 'value' => 'استعرض مكتبة HeroKid من قصص الأطفال المخصصة المطبوعة بوجه طفلك واسمه، واختر القصة المناسبة لعمره واهتماماته.'],
             ['key' => 'seo_pricing_title', 'value' => 'باقات قصص الأطفال المخصصة | HeroKid'],
@@ -84,8 +84,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'home_section_faq_enabled', 'value' => '1'],
             ['key' => 'home_section_contact_enabled', 'value' => '1'],
             ['key' => 'home_section_final_cta_enabled', 'value' => '1'],
-            ['key' => 'home_child_identity_title', 'value' => 'اصنع هوية طفلك قبل اختيار القصة'],
-            ['key' => 'home_child_identity_subtitle', 'value' => 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة لتختار بعدها القصة المناسبة له.'],
+            ['key' => 'home_child_identity_title', 'value' => 'هوية واحدة لطفلك… تستخدمها في كل منتجاته'],
+            ['key' => 'home_child_identity_subtitle', 'value' => 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة تستخدمها في القصص المخصصة وكتب الأنشطة والهدايا — بدون رفع الصور من جديد في كل طلب.'],
             ['key' => 'home_child_identity_cta', 'value' => 'ابدأ مجانًا'],
             ['key' => 'child_identity_processing_heading', 'value' => 'نجهز هوية :child'],
             ['key' => 'child_identity_processing_description', 'value' => 'تم حفظ البيانات والصور. لا تحتاج إلى تنفيذ أي خطوة أخرى الآن؛ ستظهر النتيجة هنا تلقائيًا.'],
@@ -121,7 +121,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'child_identity_share_feed_quality', 'value' => '90'],
             ['key' => 'child_identity_share_story_quality', 'value' => '88'],
             ['key' => 'child_identity_share_template_version', 'value' => 'identity-share-v1'],
-            ['key' => 'footer_brand_description', 'value' => 'قصص أطفال مخصصة تجعل طفلك بطل القصة بوجهه الحقيقي. نهدف لنشر الحب والقيم الجميلة عبر القصص المطبوعة.'],
+            ['key' => 'footer_brand_description', 'value' => 'منتجات أطفال مخصصة بوجه طفلك واسمه الحقيقي: قصص، كتب أنشطة، وهدايا. نهدف لنشر الحب والقيم الجميلة بعيدًا عن الشاشات.'],
 
         ];
 

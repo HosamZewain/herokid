@@ -351,18 +351,18 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">عنوان Hero الرئيسي (السطر الأول)</label>
-                        <input type="text" name="settings[hero_title_1]" value="{{ $s('hero_title_1', 'طفلك ليس قارئاً…') }}"
+                        <input type="text" name="settings[hero_title_1]" value="{{ $s('hero_title_1', 'كل حاجة لطفلك') }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">عنوان Hero المميز (السطر الثاني)</label>
-                        <input type="text" name="settings[hero_title_2]" value="{{ $s('hero_title_2', 'هو البطل الحقيقي!') }}"
+                        <input type="text" name="settings[hero_title_2]" value="{{ $s('hero_title_2', 'بوجهه واسمه الحقيقي') }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">الوصف تحت العنوان</label>
                         <textarea name="settings[hero_subtitle]" rows="2"
-                                  class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ $s('hero_subtitle', 'نحوّل خيال طفلك إلى كتاب مطبوع يحمل اسمه ووجهه الحقيقي في كل صفحة.') }}</textarea>
+                                  class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ $s('hero_subtitle', 'قصص مخصصة، كتب أنشطة، وهدايا تحمل وجه طفلك واسمه. ارفع صوره مرة واحدة واستخدمها في كل منتج تطلبه له.') }}</textarea>
                     </div>
                     <div class="grid grid-cols-3 gap-4">
                         <div>

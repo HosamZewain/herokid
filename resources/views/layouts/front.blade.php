@@ -13,7 +13,7 @@
         $seoImage = \App\Support\Seo::imageUrl(isset($pageImage) ? (string) $pageImage : '/images/og-cover.jpg');
         $seoImageWidth = isset($ogImageWidth) ? (int) trim((string) $ogImageWidth) : 1200;
         $seoImageHeight = isset($ogImageHeight) ? (int) trim((string) $ogImageHeight) : 630;
-        $seoImageAlt = isset($pageImageAlt) ? (string) $pageImageAlt : 'HeroKid — قصص أطفال مخصصة';
+        $seoImageAlt = isset($pageImageAlt) ? (string) $pageImageAlt : 'HeroKid — منتجات أطفال مخصصة';
         $canonicalUrl = isset($canonical) ? \App\Support\Seo::url((string) $canonical) : \App\Support\Seo::canonicalForRequest(request());
         $fullTitle = $seoTitle . ' | HeroKid';
         $siteUrl = \App\Support\Seo::url('/');
@@ -23,7 +23,7 @@
             '@context' => 'https://schema.org',
             '@graph' => [
                 [
-                    '@type' => 'Organization',
+                    '@type' => ['Organization', 'OnlineStore'],
                     '@id' => $organizationId,
                     'name' => 'HeroKid',
                     'url' => $siteUrl,
@@ -73,7 +73,7 @@
     <!-- ══ Core SEO ══ -->
     <meta name="description" content="{{ $seoDescription }}">
     <meta name="keywords"
-        content="قصص أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, هدايا أطفال, بطل القصة, قصص شخصية مطبوعة, قصص باسم الطفل">
+        content="منتجات أطفال مخصصة, قصص أطفال مخصصة, كتب أنشطة أطفال, هدايا أطفال مخصصة, هيرو كيد, HeroKid, كتب أطفال مصر, بطل القصة, منتجات باسم الطفل">
     <meta name="author" content="HeroKid">
     <meta name="robots" content="{{ isset($robots) ? (string) $robots : 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1' }}">
     <link rel="canonical" href="{{ $canonicalUrl }}">
@@ -468,7 +468,7 @@
 
                     <!-- Quick Links -->
                     <div class="text-right">
-                        <h4 class="font-bold mb-4 text-white">روابط سريعة</h4>
+                        <h3 class="font-bold mb-4 text-white">روابط سريعة</h3>
                         <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('home') }}" class="hover:text-white transition">الرئيسية</a></li>
                             <li><a href="{{ route('shop.index') }}" class="hover:text-white transition">متجر القصص والمنتجات</a></li>
@@ -489,7 +489,7 @@
 
                     <!-- Policies -->
                     <div class="text-right">
-                        <h4 class="font-bold mb-4 text-white">قانوني</h4>
+                        <h3 class="font-bold mb-4 text-white">قانوني</h3>
                         <ul class="space-y-2 text-slate-300 text-sm">
                             <li><a href="{{ route('privacy') }}" class="hover:text-white transition">سياسة الخصوصية</a>
                             </li>

@@ -11,10 +11,10 @@
                 ميزة جديدة • مجانية
             </span>
             <h2 class="mt-5 text-3xl font-black leading-tight text-slate-950 sm:text-4xl lg:text-5xl">
-                {{ setting('home_child_identity_title', 'اصنع هوية طفلك قبل اختيار القصة') }}
+                {{ setting('home_child_identity_title', 'هوية واحدة لطفلك… تستخدمها في كل منتجاته') }}
             </h2>
             <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                {{ setting('home_child_identity_subtitle', 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة لتختار بعدها القصة المناسبة له.') }}
+                {{ setting('home_child_identity_subtitle', 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة تستخدمها في القصص المخصصة وكتب الأنشطة والهدايا — بدون رفع الصور من جديد في كل طلب.') }}
             </p>
 
             <div class="mt-8 lg:hidden">
@@ -34,8 +34,8 @@
                 </div>
                 <div class="rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur">
                     <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 font-black text-orange-700">٣</span>
-                    <p class="mt-3 text-sm font-black text-slate-900">اختر القصة</p>
-                    <p class="mt-1 text-xs leading-5 text-slate-500">استخدم الهوية في قصة طفلك.</p>
+                    <p class="mt-3 text-sm font-black text-slate-900">اختر أي منتج</p>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">قصة، كتاب أنشطة، أو هدية مخصصة.</p>
                 </div>
             </div>
 

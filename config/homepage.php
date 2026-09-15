@@ -8,6 +8,12 @@ return [
             'description_ar' => 'العنوان الرئيسي، أزرار البداية، وصور القصص.',
             'default' => true,
         ],
+        'categories' => [
+            'setting' => 'home_section_categories_enabled',
+            'label_ar' => 'أقسام المنتجات',
+            'description_ar' => 'شريط أقسام المنتجات أسفل القسم الرئيسي: قصص، أنشطة، هدايا، باقات.',
+            'default' => true,
+        ],
         'child_identity' => [
             'setting' => 'home_section_child_identity_enabled',
             'label_ar' => 'اصنع هوية طفلك',
