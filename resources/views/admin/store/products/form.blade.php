@@ -166,7 +166,6 @@
                                     <input type="checkbox" name="production_components[{{ $componentIndex }}][is_active]" value="1" @checked(filter_var(data_get($component, 'is_active', true), FILTER_VALIDATE_BOOL))>
                                     فعال للطلبات الجديدة
                                 </label>
-                                @include('admin.store.products.partials.studio-production-fields', ['componentIndex' => $componentIndex, 'component' => $component])
                                 <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.name')" class="mt-2" />
                                 <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.prompt_template')" class="mt-2" />
                             </article>
@@ -199,7 +198,6 @@
                                 <input type="checkbox" name="production_components[__INDEX__][is_active]" value="1" checked>
                                 فعال للطلبات الجديدة
                             </label>
-                            @include('admin.store.products.partials.studio-production-fields', ['componentIndex' => '__INDEX__', 'component' => []])
                         </article>
                     </template>
 
@@ -383,19 +381,6 @@
             if (!section || !list || !template || !addButton) return;
 
             const syncEmpty = () => empty?.classList.toggle('hidden', list.children.length !== 0);
-            const bindStudio = (row) => {
-                const enabled = row.querySelector('[data-studio-enabled]');
-                const settings = row.querySelector('[data-studio-settings]');
-                const workflow = row.querySelector('[name$="[studio_workflow]"]');
-                const recipeWorkflow = row.querySelector('[data-studio-recipe-workflow]');
-                if (!enabled || !settings) return;
-                const sync = () => settings.classList.toggle('hidden', !enabled.checked);
-                enabled.addEventListener('change', sync);
-                workflow?.addEventListener('change', () => { if (recipeWorkflow) recipeWorkflow.value = workflow.value; });
-                sync();
-            };
-
-            list.querySelectorAll('[data-production-component-row]').forEach(bindStudio);
 
             addButton.addEventListener('click', () => {
                 const wrapper = document.createElement('div');
@@ -403,7 +388,6 @@
                 const row = wrapper.firstElementChild;
                 if (!row) return;
                 list.appendChild(row);
-                bindStudio(row);
                 row.querySelector('input[name$="[name]"]')?.focus();
                 syncEmpty();
             });

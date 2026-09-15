@@ -180,51 +180,6 @@ Stable identifier semantics:
 
 Scene text precedence is evaluated independently for every scene number: a populated latest Production Studio scene wins, otherwise a populated order-owned snapshot wins, otherwise a populated current story template is rendered as fallback. An empty or missing snapshot for one scene does not suppress that scene's template fallback, while a populated historical snapshot is never replaced implicitly. The read path does not write or refresh snapshots. Scenes are explicitly sorted by scene number and Arabic Unicode is returned unchanged. The dedication is read from the individual story order's `gift_note`.
 
-### Optional product Studio production recipe
-
-Product production units always include `studio_production.enabled`. It is `false` for existing/disabled components and no recipe is returned. An enabled order-item component snapshot returns the additive object below; story units are unchanged:
-
-```json
-{
-  "production_fields": [
-    {"key": "child_name", "label": "اسم الطفل", "type": "text", "value": "محمد أحمد", "source": "order_item_personalization"}
-  ],
-  "studio_production": {
-    "enabled": true,
-    "workflow": "personalized-card",
-    "recipe_version": 1,
-    "recipe_source": "order-item-snapshot",
-    "recipe": {
-      "version": 1,
-      "workflow": "personalized-card",
-      "template_key": "child-id-v1",
-      "canvas": {"width_mm": 60, "height_mm": 90, "allowed_orientations": ["portrait", "landscape"], "default_orientation": "portrait"},
-      "sides": {"allowed": [1, 2], "default": 1},
-      "output": {"type": "single-item-pdf", "default_copies": 1, "scale_percent": 100},
-      "cut": {"show_border": true, "border_color": "#000000", "border_width_mm": 0.5, "border_inset_mm": 0.5, "bleed_mm": 0},
-      "required_inputs": [],
-      "optional_inputs": ["child_photo", "child_name"],
-      "template_variants": [{"key": "boy", "label": "Boy", "gender": "male"}]
-    }
-  }
-}
-```
-
-Recipe version 1 supports `personalized-card`, `image-sticker-sheet`, `text-sticker-sheet`, and `coloring-book`. Recipes are strictly validated data only: they never contain executable HTML, JavaScript, or arbitrary code. Unknown workflow/version IDs, output types, keys, unsafe dimensions, negative cut values, invalid colors, and HTML-like variant labels are rejected.
-
-The product component is the configuration source for future orders. At checkout, the complete Studio configuration is copied to `order_item_production_components`; that snapshot is the sole recipe authority returned to Studio. Later product edits do not change an existing order. Existing orders remain disabled until an explicit reviewed backfill is applied; ordinary GET requests never write snapshots:
-
-```bash
-# Counts only; changes nothing.
-php artisan studio:backfill-production-recipes
-
-# Optional product restriction, then explicit write after review.
-php artisan studio:backfill-production-recipes --product=42
-php artisan studio:backfill-production-recipes --product=42 --apply
-```
-
-Backfill only fills completely empty Studio metadata when the source component still exists and its `stable_key` matches. It never overwrites a non-null recipe. `production_fields` only maps supported exact keys stored in the order-item personalization snapshot (`child_name`, `school_name`, `class_name`, two separate parent phone keys, and `special_notes`; legacy `parent_notes` may be exposed verbatim as `special_notes`). It never infers phones or returns addresses, payment data, or unrelated customer data. Missing optional fields are valid. Recipe/field changes in an authorized returned snapshot participate in the deterministic `source_revision` hash.
-
 ### Gender-specific production text synchronization
 
 An explicit Admin story save now synchronizes that story's existing order snapshots, **including completed/printed orders**, as approved for text corrections/reprinting. The previous snapshot is archived in private `order_scene_text_snapshot_revisions` records inside the same transaction. The existing snapshot and production-unit IDs stay unchanged. GET remains read-only; "Refresh from Hero Kid" reads the newly synchronized snapshot after the Admin save completes. No Studio change is required.

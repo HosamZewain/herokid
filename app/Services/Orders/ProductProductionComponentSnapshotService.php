@@ -24,11 +24,6 @@ class ProductProductionComponentSnapshotService
         }
 
         foreach ($components as $component) {
-            $existing = $item->productionComponents()->where('stable_key', $component->stable_key)->first();
-            $studioSnapshot = $existing
-                ? $existing->only(['studio_enabled', 'studio_workflow', 'studio_recipe_version', 'studio_recipe'])
-                : $component->only(['studio_enabled', 'studio_workflow', 'studio_recipe_version', 'studio_recipe']);
-
             $item->productionComponents()->updateOrCreate(
                 ['stable_key' => $component->stable_key],
                 [
@@ -37,7 +32,6 @@ class ProductProductionComponentSnapshotService
                     'prompt_template' => $component->prompt_template,
                     'quantity_per_item' => $component->quantity_per_item,
                     'sort_order' => $component->sort_order,
-                    ...$studioSnapshot,
                 ],
             );
         }
