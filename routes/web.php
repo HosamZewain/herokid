@@ -425,6 +425,12 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
         ->name('dashboard.index');
+    Route::post('dashboard/management-notes', [DashboardController::class, 'storeManagementNote'])
+        ->middleware(['permission:dashboard.view', 'throttle:20,1'])
+        ->name('dashboard.management-notes.store');
+    Route::get('dashboard/management-notes/attachments/{attachment}', [DashboardController::class, 'downloadManagementNoteAttachment'])
+        ->middleware(['permission:dashboard.view', 'throttle:60,1'])
+        ->name('dashboard.management-notes.attachments.download');
     Route::get('analytics/widget', [AnalyticsController::class, 'widget'])->middleware(['permission:dashboard.view', 'permission:dashboard.statistics.view', 'permission:analytics.view'])->name('analytics.widget');
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')

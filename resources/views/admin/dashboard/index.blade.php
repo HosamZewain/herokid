@@ -410,6 +410,61 @@
                 @endif
             </div>
 
+            <section id="management-notes" class="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm sm:p-6">
+                <div class="mb-5 text-right">
+                    <p class="text-xs font-black text-amber-600">مساحة مشتركة لفريق الإدارة</p>
+                    <h3 class="mt-1 text-xl font-black text-slate-950">ملاحظات الإدارة</h3>
+                    <p class="mt-1 text-sm text-slate-500">أضف ملاحظة مستقلة ومعها حتى 5 مرفقات. تظهر الملاحظات لكل مستخدم لديه صلاحية مشاهدة الداشبورد.</p>
+                </div>
+
+                <form action="{{ route('admin.dashboard.management-notes.store') }}" method="POST" enctype="multipart/form-data" class="space-y-4 rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
+                    @csrf
+                    <label class="block text-right">
+                        <span class="mb-2 block text-sm font-black text-slate-700">ملاحظة جديدة</span>
+                        <textarea name="body" rows="4" maxlength="20000" class="block w-full rounded-2xl border-amber-200 bg-white text-right leading-7 focus:border-amber-500 focus:ring-amber-500" placeholder="اكتب الملاحظة هنا...">{{ old('body') }}</textarea>
+                    </label>
+                    <x-input-error :messages="$errors->get('body')" />
+
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <button class="rounded-xl bg-amber-500 px-6 py-3 text-sm font-black text-white transition hover:bg-amber-600">إضافة الملاحظة</button>
+                        <label class="block flex-1 text-right sm:max-w-xl">
+                            <span class="mb-2 block text-sm font-black text-slate-700">المرفقات</span>
+                            <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx" class="block w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-600 file:ml-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-black file:text-indigo-700">
+                            <span class="mt-1 block text-xs text-slate-400">حتى 5 ملفات، 20 ميجابايت للملف، و50 ميجابايت إجماليًا.</span>
+                        </label>
+                    </div>
+                    <x-input-error :messages="$errors->get('attachments')" />
+                    <x-input-error :messages="$errors->get('attachments.*')" />
+                </form>
+
+                <div class="mt-5 space-y-3">
+                    @forelse($managementNotes as $note)
+                        <article class="rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 text-xs font-bold text-slate-400">
+                                <time dir="ltr">{{ app_datetime($note->created_at, 'd/m/Y h:i A') }}</time>
+                                <span>{{ $note->author?->name ?? 'مستخدم إدارة سابق' }}</span>
+                            </div>
+                            @if(filled($note->body))
+                                <p class="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{{ $note->body }}</p>
+                            @endif
+                            @if($note->attachments->isNotEmpty())
+                                <div class="mt-3 flex flex-wrap justify-end gap-2">
+                                    @foreach($note->attachments as $attachment)
+                                        <a href="{{ route('admin.dashboard.management-notes.attachments.download', $attachment) }}" class="inline-flex max-w-full items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 hover:border-indigo-300 hover:bg-indigo-100">
+                                            <span class="truncate" dir="auto">{{ $attachment->original_name }}</span>
+                                            <span class="shrink-0 text-[10px] text-slate-500">{{ number_format($attachment->size / 1024, 1) }} KB</span>
+                                            <span aria-hidden="true">📎</span>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </article>
+                    @empty
+                        <p class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm font-bold text-slate-400">لا توجد ملاحظات إدارية حتى الآن.</p>
+                    @endforelse
+                </div>
+            </section>
+
         </div>
     </div>
 </x-admin-layout>
