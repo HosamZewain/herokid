@@ -3,9 +3,7 @@
     $accents = [
         ['from' => '#f97316', 'to' => '#ec4899', 'tint' => 'bg-orange-50',  'ring' => 'border-orange-200',  'text' => 'text-orange-700'],
         ['from' => '#8b5cf6', 'to' => '#6366f1', 'tint' => 'bg-violet-50',  'ring' => 'border-violet-200',  'text' => 'text-violet-700'],
-        ['from' => '#10b981', 'to' => '#06b6d4', 'tint' => 'bg-emerald-50', 'ring' => 'border-emerald-200', 'text' => 'text-emerald-700'],
-        ['from' => '#f59e0b', 'to' => '#f97316', 'tint' => 'bg-amber-50',   'ring' => 'border-amber-200',   'text' => 'text-amber-700'],
-        ['from' => '#3b82f6', 'to' => '#0ea5e9', 'tint' => 'bg-sky-50',     'ring' => 'border-sky-200',     'text' => 'text-sky-700'],
+        ['from' => '#fbbf24', 'to' => '#f59e0b', 'tint' => 'bg-amber-50',  'ring' => 'border-amber-200',  'text' => 'text-amber-700'],
     ];
 
     $slugIcons = [
@@ -61,7 +59,7 @@
 @if($tiles->isNotEmpty())
 <section data-home-section="categories" class="py-14 sm:py-16 bg-white relative overflow-hidden" dir="rtl">
     <div class="absolute inset-0 pointer-events-none opacity-[0.07]"
-        style="background-image: radial-gradient(circle, #6366f1 1px, transparent 1px); background-size: 30px 30px;"></div>
+        style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 30px 30px;"></div>
 
     <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center max-w-2xl mx-auto mb-9">

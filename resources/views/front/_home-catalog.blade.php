@@ -23,9 +23,9 @@
 
 @if($homeCatalogItems->isNotEmpty())
 <section data-home-section="catalog" class="py-20 sm:py-24 relative overflow-hidden" dir="rtl"
-    style="background: linear-gradient(160deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);">
+    style="background: #ffffff;">
     <div class="absolute inset-0 pointer-events-none opacity-20"
-        style="background-image: radial-gradient(circle, #f59e0b 1px, transparent 1px); background-size: 32px 32px;"></div>
+        style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 32px 32px;"></div>
     <div class="absolute -top-10 -left-10 w-52 h-52 rounded-full border-[14px] border-amber-200/50 pointer-events-none"></div>
     <div class="absolute -bottom-8 -right-8 w-40 h-40 rounded-full border-[10px] border-orange-200/50 pointer-events-none"></div>
 

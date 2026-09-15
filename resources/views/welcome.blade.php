@@ -178,7 +178,7 @@
     ═══════════════════════════════════════════ --}}
     @if(homepage_section_enabled('hero'))
     <div data-home-section="hero" class="relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(145deg, #fffbeb 0%, #fdf4ff 28%, #eff6ff 58%, #f0fdf4 100%);">
+        style="background: linear-gradient(150deg, #fff7ed 0%, #fef3c7 38%, #f5f3ff 100%);">
 
         {{-- ── BACKGROUND LAYER ── --}}
         <div class="absolute inset-0 pointer-events-none overflow-hidden">
@@ -193,35 +193,35 @@
 
             {{-- Dot grid --}}
             <div class="absolute inset-0 opacity-20"
-                style="background-image: radial-gradient(circle, #a78bfa 1px, transparent 1px); background-size: 32px 32px;"></div>
+                style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 32px 32px;"></div>
 
             {{-- Large decorative spinning ring (top-left) --}}
-            <div class="absolute -top-16 -left-16 w-64 h-64 rounded-full border-[16px] border-yellow-200/40 opacity-60"
+            <div class="absolute -top-16 -left-16 w-64 h-64 rounded-full border-[16px] border-orange-200/40 opacity-60"
                 style="animation: slow-spin 25s linear infinite;"></div>
-            <div class="absolute bottom-20 right-10 w-40 h-40 rounded-full border-[10px] border-pink-200/40 opacity-50"
+            <div class="absolute bottom-20 right-10 w-40 h-40 rounded-full border-[10px] border-violet-200/40 opacity-50"
                 style="animation: slow-spin 18s linear infinite reverse;"></div>
 
             {{-- Confetti: circles --}}
-            <div class="absolute w-4 h-4 rounded-full bg-yellow-400/70" style="top:11%;right:14%;animation:confetti-float 4s ease-in-out infinite;"></div>
-            <div class="absolute w-2.5 h-2.5 rounded-full bg-pink-400/70" style="top:22%;right:6%;animation:confetti-float 5.2s ease-in-out infinite .5s;"></div>
-            <div class="absolute w-3.5 h-3.5 rounded-full bg-sky-400/60" style="top:7%;left:18%;animation:confetti-float 6s ease-in-out infinite 1s;"></div>
-            <div class="absolute w-2 h-2 rounded-full bg-emerald-400/70" style="top:38%;right:4%;animation:confetti-float 4.5s ease-in-out infinite 1.5s;"></div>
+            <div class="absolute w-4 h-4 rounded-full bg-amber-400/70" style="top:11%;right:14%;animation:confetti-float 4s ease-in-out infinite;"></div>
+            <div class="absolute w-2.5 h-2.5 rounded-full bg-violet-400/70" style="top:22%;right:6%;animation:confetti-float 5.2s ease-in-out infinite .5s;"></div>
+            <div class="absolute w-3.5 h-3.5 rounded-full bg-orange-400/60" style="top:7%;left:18%;animation:confetti-float 6s ease-in-out infinite 1s;"></div>
+            <div class="absolute w-2 h-2 rounded-full bg-amber-400/70" style="top:38%;right:4%;animation:confetti-float 4.5s ease-in-out infinite 1.5s;"></div>
             <div class="absolute w-3 h-3 rounded-full bg-violet-400/60" style="bottom:28%;left:8%;animation:confetti-float 5.5s ease-in-out infinite .8s;"></div>
-            <div class="absolute w-2 h-2 rounded-full bg-rose-400/60" style="bottom:18%;right:18%;animation:confetti-float 4s ease-in-out infinite 2s;"></div>
+            <div class="absolute w-2 h-2 rounded-full bg-orange-400/60" style="bottom:18%;right:18%;animation:confetti-float 4s ease-in-out infinite 2s;"></div>
             <div class="absolute w-5 h-5 rounded-full bg-amber-300/40" style="top:58%;left:22%;animation:confetti-float 7s ease-in-out infinite .3s;"></div>
-            <div class="absolute w-2 h-2 rounded-full bg-cyan-400/60" style="top:14%;left:38%;animation:confetti-float 5s ease-in-out infinite 1.2s;"></div>
+            <div class="absolute w-2 h-2 rounded-full bg-violet-400/60" style="top:14%;left:38%;animation:confetti-float 5s ease-in-out infinite 1.2s;"></div>
 
             {{-- Confetti: diamonds --}}
             <div class="absolute w-3.5 h-3.5 bg-amber-300/50 rotate-45" style="top:43%;right:26%;animation:confetti-float 6s ease-in-out infinite 1.8s;"></div>
             <div class="absolute w-3 h-3 bg-violet-300/50 rotate-45" style="bottom:38%;left:28%;animation:confetti-float 5s ease-in-out infinite .4s;"></div>
-            <div class="absolute w-2.5 h-2.5 bg-rose-300/50 rotate-12" style="top:68%;right:20%;animation:confetti-float 4.5s ease-in-out infinite 1.1s;"></div>
-            <div class="absolute w-4 h-4 bg-sky-200/50 rotate-45" style="top:30%;left:12%;animation:confetti-float 6.5s ease-in-out infinite 2.3s;"></div>
+            <div class="absolute w-2.5 h-2.5 bg-orange-300/50 rotate-12" style="top:68%;right:20%;animation:confetti-float 4.5s ease-in-out infinite 1.1s;"></div>
+            <div class="absolute w-4 h-4 bg-amber-200/50 rotate-45" style="top:30%;left:12%;animation:confetti-float 6.5s ease-in-out infinite 2.3s;"></div>
 
             {{-- Confetti: stars --}}
-            <svg class="absolute fill-current text-yellow-400/60" style="top:17%;right:23%;animation:confetti-float 5s ease-in-out infinite .7s;" width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-            <svg class="absolute fill-current text-pink-400/50" style="bottom:33%;left:16%;animation:confetti-float 6s ease-in-out infinite 1.4s;" width="14" height="14" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            <svg class="absolute fill-current text-amber-400/60" style="top:17%;right:23%;animation:confetti-float 5s ease-in-out infinite .7s;" width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            <svg class="absolute fill-current text-violet-400/50" style="bottom:33%;left:16%;animation:confetti-float 6s ease-in-out infinite 1.4s;" width="14" height="14" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
             <svg class="absolute fill-current text-violet-400/40" style="top:48%;right:10%;animation:confetti-float 4s ease-in-out infinite .9s;" width="16" height="16" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-            <svg class="absolute fill-current text-emerald-400/50" style="top:28%;left:6%;animation:confetti-float 5s ease-in-out infinite 2.1s;" width="12" height="12" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            <svg class="absolute fill-current text-orange-400/50" style="top:28%;left:6%;animation:confetti-float 5s ease-in-out infinite 2.1s;" width="12" height="12" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
         </div>
 
         {{-- SVG gradient defs --}}
@@ -519,10 +519,10 @@
     {{-- Admin-curated product rows, shown below the unified catalogue. --}}
     @if(homepage_section_enabled('store') && isset($storeSections) && $storeSections->isNotEmpty())
         <section data-home-section="store" class="py-24 relative overflow-hidden" dir="rtl"
-            style="background: linear-gradient(155deg, #eef2ff 0%, #e0e7ff 45%, #f5f3ff 100%);">
+            style="background: linear-gradient(155deg, #fff7ed 0%, #ffedd5 50%, #fef3c7 100%);">
             <div class="absolute inset-0 pointer-events-none opacity-20"
-                style="background-image: radial-gradient(circle, #6366f1 1px, transparent 1px); background-size: 32px 32px;"></div>
-            <div class="absolute -top-14 -right-14 w-56 h-56 rounded-full border-[14px] border-indigo-200/50 pointer-events-none"></div>
+                style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 32px 32px;"></div>
+            <div class="absolute -top-14 -right-14 w-56 h-56 rounded-full border-[14px] border-violet-200/50 pointer-events-none"></div>
             <div class="absolute -bottom-10 -left-10 w-44 h-44 rounded-full border-[10px] border-violet-200/50 pointer-events-none"></div>
 
             <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
@@ -565,7 +565,7 @@
     {{-- HOW IT WORKS --}}
     @if(homepage_section_enabled('how_it_works'))
     <section id="how-it-works" data-home-section="how_it_works" class="py-24 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(145deg, #0f0a1e 0%, #1e1b4b 50%, #2e1065 100%);">
+        style="background: linear-gradient(150deg, #1a1030 0%, #2e1065 55%, #1a1030 100%);">
         {{-- Star dot grid --}}
         <div class="absolute inset-0 pointer-events-none"
             style="background-image: radial-gradient(circle, rgba(167,139,250,.15) 1px, transparent 1px); background-size: 24px 24px;"></div>
@@ -631,7 +631,7 @@
                             alt="استلم طلبك" class="w-full h-full object-cover transition duration-700 group-hover:scale-105 opacity-55" loading="lazy">
                         <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(161,90,0,.92) 0%, rgba(161,90,0,.4) 60%, transparent 100%);"></div>
                         <div class="absolute top-3 right-3 w-11 h-11 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-lg"
-                            style="background: linear-gradient(135deg, #f59e0b, #10b981); box-shadow: 0 4px 15px rgba(245,158,11,.5);">٣</div>
+                            style="background: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: 0 4px 15px rgba(245,158,11,.5);">٣</div>
                         <div class="absolute bottom-4 inset-x-0 text-center">
                             <p class="text-white font-extrabold text-lg drop-shadow-lg">استلم طلبك</p>
                         </div>
@@ -666,11 +666,11 @@
     {{-- WHY PARENTS LOVE IT --}}
     @if(homepage_section_enabled('benefits'))
     <section data-home-section="benefits" class="py-24 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(155deg, #ecfdf5 0%, #d1fae5 35%, #cffafe 70%, #e0f2fe 100%);">
+        style="background: #ffffff;">
         <div class="absolute inset-0 pointer-events-none opacity-20"
-            style="background-image: radial-gradient(circle, #10b981 1px, transparent 1px); background-size: 36px 36px;"></div>
-        <div class="absolute -top-16 -left-16 w-56 h-56 rounded-full border-[14px] border-emerald-200/50 pointer-events-none"></div>
-        <div class="absolute -bottom-12 -right-12 w-44 h-44 rounded-full border-[10px] border-teal-200/50 pointer-events-none"></div>
+            style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 36px 36px;"></div>
+        <div class="absolute -top-16 -left-16 w-56 h-56 rounded-full border-[14px] border-orange-200/50 pointer-events-none"></div>
+        <div class="absolute -bottom-12 -right-12 w-44 h-44 rounded-full border-[10px] border-violet-200/50 pointer-events-none"></div>
 
         <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -689,7 +689,7 @@
                         </div>
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
                             <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl shadow-md"
-                                style="background: linear-gradient(135deg, #ec4899, #f43f5e);">📖</div>
+                                style="background: linear-gradient(135deg, #fbbf24, #f97316);">📖</div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-lg mb-1">منتجات بعيدًا عن الشاشات</h3>
                                 <p class="text-slate-500 text-sm leading-relaxed">قصص بقيم تربوية أصيلة، وكتب أنشطة تنمّي مهارات طفلك بعيدًا عن الشاشات.</p>
@@ -697,7 +697,7 @@
                         </div>
                         <div class="flex items-start gap-4 bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/60 transition">
                             <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl shadow-md"
-                                style="background: linear-gradient(135deg, #10b981, #06b6d4);">🛡️</div>
+                                style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">🛡️</div>
                             <div>
                                 <h3 class="font-bold text-slate-900 text-lg mb-1">خصوصية محمية</h3>
                                 <p class="text-slate-500 text-sm leading-relaxed">صور طفلك تُحفظ في تخزين خاص وتُستخدم فقط لتنفيذ الخدمة والطلب، ويمكنك ممارسة حقوق الحذف وفق سياسة الخصوصية.</p>
@@ -763,9 +763,9 @@
     {{-- TESTIMONIALS (dynamic from DB) --}}
     @if(homepage_section_enabled('testimonials') && $testimonials->count())
         <section data-home-section="testimonials" class="py-24 relative overflow-hidden" dir="rtl"
-            style="background: linear-gradient(155deg, #fff1f2 0%, #fce7f3 45%, #fdf4ff 100%);">
+            style="background: linear-gradient(155deg, #faf5ff 0%, #f3e8ff 50%, #fdf2f8 100%);">
             <div class="absolute inset-0 pointer-events-none opacity-20"
-                style="background-image: radial-gradient(circle, #f43f5e 1px, transparent 1px); background-size: 30px 30px;"></div>
+                style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 30px 30px;"></div>
             {{-- Large decorative quote --}}
             <div class="absolute top-4 right-12 text-[160px] leading-none font-serif text-rose-100/70 select-none pointer-events-none" aria-hidden="true">❝</div>
             <div class="absolute bottom-4 left-12 text-[120px] leading-none font-serif text-pink-100/60 select-none pointer-events-none" aria-hidden="true">❞</div>
@@ -817,9 +817,9 @@
     {{-- PRICING TEASER --}}
     @if(homepage_section_enabled('pricing'))
     <section data-home-section="pricing" class="py-24 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);">
+        style="background: linear-gradient(150deg, #1a1030 0%, #2e1065 55%, #1a1030 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-10"
-            style="background-image: radial-gradient(circle, #818cf8 1px, transparent 1px); background-size: 28px 28px;"></div>
+            style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 28px 28px;"></div>
         <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-[500px] h-56 blur-3xl opacity-20 rounded-full pointer-events-none"
             style="background: radial-gradient(circle, #6366f1, transparent);"></div>
         <div class="absolute bottom-0 left-0 w-80 h-80 blur-3xl opacity-10 rounded-full pointer-events-none"
@@ -847,11 +847,11 @@
     {{-- FAQ SNIPPET --}}
     @if(homepage_section_enabled('faq') && $faqs->count())
         <section data-home-section="faq" class="py-24 relative overflow-hidden" dir="rtl"
-            style="background: linear-gradient(155deg, #fefce8 0%, #fef9c3 40%, #fef3c7 100%);">
+            style="background: #ffffff;">
             <div class="absolute inset-0 pointer-events-none opacity-20"
-                style="background-image: radial-gradient(circle, #ca8a04 1px, transparent 1px); background-size: 28px 28px;"></div>
-            <div class="absolute top-8 left-16 w-24 h-24 rounded-full border-4 border-yellow-300/50 pointer-events-none"></div>
-            <div class="absolute bottom-10 right-12 w-16 h-16 rounded-full border-4 border-amber-300/50 pointer-events-none"></div>
+                style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 28px 28px;"></div>
+            <div class="absolute top-8 left-16 w-24 h-24 rounded-full border-4 border-orange-200/50 pointer-events-none"></div>
+            <div class="absolute bottom-10 right-12 w-16 h-16 rounded-full border-4 border-violet-200/50 pointer-events-none"></div>
             <div class="absolute top-1/2 -translate-y-1/2 right-4 w-10 h-10 bg-amber-200/40 rotate-45 rounded-md pointer-events-none"></div>
 
             <div class="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -902,9 +902,9 @@
     {{-- CONTACT US SECTION --}}
     @if(homepage_section_enabled('contact'))
     <section id="contact-us" data-home-section="contact" class="py-16 md:py-24 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(155deg, #f0f9ff 0%, #e0f2fe 40%, #eff6ff 100%);">
+        style="background: linear-gradient(155deg, #fffbeb 0%, #fef3c7 60%, #fff7ed 100%);">
         <div class="absolute inset-0 pointer-events-none opacity-20"
-            style="background-image: radial-gradient(circle, #0ea5e9 1px, transparent 1px); background-size: 32px 32px;"></div>
+            style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 32px 32px;"></div>
         <div class="absolute -top-16 -right-16 w-64 h-64 rounded-full border-[14px] border-sky-200/50 pointer-events-none"></div>
         <div class="absolute -bottom-12 -left-12 w-48 h-48 rounded-full border-[10px] border-blue-200/50 pointer-events-none"></div>
 
@@ -1009,7 +1009,7 @@
     {{-- FINAL CTA --}}
     @if(homepage_section_enabled('final_cta'))
     <div data-home-section="final_cta" class="py-24 relative overflow-hidden" dir="rtl"
-        style="background: linear-gradient(135deg, #f97316 0%, #ec4899 35%, #8b5cf6 65%, #3b82f6 100%);">
+        style="background: linear-gradient(135deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%);">
         {{-- Dot pattern --}}
         <div class="absolute inset-0 opacity-15 pointer-events-none"
             style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 24px 24px;"></div>

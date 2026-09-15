@@ -1,5 +1,5 @@
 <section data-home-section="child_identity" class="relative overflow-hidden py-16 sm:py-20" dir="rtl"
-         style="background: linear-gradient(145deg, #eef2ff 0%, #faf5ff 48%, #fff7ed 100%);">
+         style="background: linear-gradient(150deg, #f5f3ff 0%, #ede9fe 55%, #fff7ed 100%);">
     <div class="pointer-events-none absolute inset-0 opacity-25"
          style="background-image: radial-gradient(circle, #8b5cf6 1px, transparent 1px); background-size: 28px 28px;"></div>
     <div class="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-200/50 blur-3xl"></div>
