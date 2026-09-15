@@ -144,7 +144,7 @@ class OrderEditController extends Controller
                 'delivery_governorate_id' => data_get($delivery, 'delivery_governorate_id'),
                 'city' => data_get($delivery, 'city'),
                 'street' => data_get($delivery, 'street'),
-                'address_details' => data_get($delivery, 'address_details'),
+                'address_details' => data_get($delivery, 'address_details') ?: data_get($delivery, 'address'),
                 'discount_amount' => $group['discount_cents'] / 100,
                 'discount_reason' => $group['discount_reason'],
                 'admin_notes' => $first?->notes,

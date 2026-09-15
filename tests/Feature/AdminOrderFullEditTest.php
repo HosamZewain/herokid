@@ -58,6 +58,21 @@ class AdminOrderFullEditTest extends TestCase
             ->assertSee('لن تُحذف عند الحفظ');
     }
 
+    public function test_full_editor_prefills_legacy_customer_address_details(): void
+    {
+        [$first] = $this->createCheckout();
+        $delivery = $first->delivery_details;
+        unset($delivery['address_details']);
+        $delivery['address'] = 'شارع 1 - الدور الأول - شقة 4';
+        $first->forceFill(['delivery_details' => $delivery])->save();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.edit', $first->id))
+            ->assertOk()
+            ->assertSee('name="address_details"', false)
+            ->assertSee('شارع 1 - الدور الأول - شقة 4');
+    }
+
     public function test_full_editor_changes_each_story_language_and_refreshes_its_scene_snapshot(): void
     {
         [$first, $second] = $this->createCheckout();
