@@ -111,6 +111,7 @@ class AdminOrderCreationService
                 foreach ($storyInputs as $position => $input) {
                     $index = (int) $position;
                     $story = $stories->get($input['story_id']);
+                    $language = $input['language'] ?? $story->language ?? 'ar';
                     $price = $storyPrices->get($position);
                     $storyPriceCents = (int) round($price['effective_price'] * 100);
                     $delivery = [
@@ -163,7 +164,7 @@ class AdminOrderCreationService
                         'child_name' => $input['child_name'],
                         'child_age' => $input['child_age'],
                         'child_gender' => $input['child_gender'],
-                        'language' => $story->language,
+                        'language' => $language,
                         'lesson' => $story->lesson_value,
                         'interests' => $input['interests'] ?? null,
                         'gift_note' => $input['gift_note'] ?? null,
@@ -190,7 +191,7 @@ class AdminOrderCreationService
                         'personalization_mode' => 'collect_child_details',
                         'item_snapshot' => [
                             'story_slug' => $story->slug,
-                            'story_language' => $story->language,
+                            'story_language' => $language,
                             'lesson' => $story->lesson_value,
                             'regular_price' => $price['regular_price'],
                             'offer_applied' => $price['offer_applied'],

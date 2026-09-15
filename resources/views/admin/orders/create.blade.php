@@ -5,7 +5,7 @@
         $formValue = fn (string $key, mixed $default = null): mixed => old($key, data_get($orderForm, $key, $default));
         $initialProducts = old('products', $initialProducts ?? []);
         $initialStories = old('stories', $initialStories ?? [[
-            'story_id' => '', 'child_name' => '', 'child_age' => '', 'child_gender' => '',
+            'story_id' => '', 'child_name' => '', 'child_age' => '', 'child_gender' => '', 'language' => 'ar',
             'interests' => '', 'gift_note' => '', 'parent_notes' => '',
         ]]);
     @endphp

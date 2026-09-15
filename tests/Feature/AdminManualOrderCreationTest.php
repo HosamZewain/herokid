@@ -173,6 +173,7 @@ class AdminManualOrderCreationTest extends TestCase
                     'child_name' => 'ليلى',
                     'child_age' => 6,
                     'child_gender' => 'girl',
+                    'language' => 'en',
                     'photos' => $this->photos('layla'),
                 ],
                 2 => [
@@ -180,6 +181,7 @@ class AdminManualOrderCreationTest extends TestCase
                     'child_name' => 'عمر',
                     'child_age' => 8,
                     'child_gender' => 'boy',
+                    'language' => 'ar',
                     'photos' => $this->photos('omar'),
                 ],
             ],
@@ -200,6 +202,11 @@ class AdminManualOrderCreationTest extends TestCase
         $this->assertCount(2, $orders);
         $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
         $this->assertSame(['ليلى', 'عمر'], $orders->pluck('child_name')->all());
+        $this->assertSame(['en', 'ar'], $orders->pluck('language')->all());
+        $this->assertSame(
+            ['en', 'ar'],
+            $orders->map(fn (Order $order): string => $order->items()->where('item_type', 'story')->firstOrFail()->item_snapshot['story_language'])->all(),
+        );
         $this->assertSame(['whatsapp'], $orders->pluck('order_source')->unique()->values()->all());
         $this->assertSame([$this->admin->id], $orders->pluck('created_by_admin_id')->unique()->values()->all());
         $this->assertSame([2, 2], $orders->map(fn (Order $order): int => count($order->uploaded_photos ?? []))->all());

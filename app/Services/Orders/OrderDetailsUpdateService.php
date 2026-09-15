@@ -170,7 +170,13 @@ class OrderDetailsUpdateService
             $snapshot['child_age_range'] ?? $order->story?->age_range,
         );
 
-        $storyItem->forceFill(['personalization_snapshot' => $snapshot])->save();
+        $itemSnapshot = $storyItem->item_snapshot ?? [];
+        $itemSnapshot['story_language'] = $order->language ?? $order->story?->language ?? 'ar';
+
+        $storyItem->forceFill([
+            'personalization_snapshot' => $snapshot,
+            'item_snapshot' => $itemSnapshot,
+        ])->save();
     }
 
     private function resolveAgeRange(int $age, ?string $fallback): ?string

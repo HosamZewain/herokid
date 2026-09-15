@@ -111,6 +111,7 @@ class AdminOrderUpdateService
                     if ($existingId > 0) {
                         $order = $existingStoryOrders->get($existingId);
                         $oldStoryId = (int) $order->story_id;
+                        $language = $input['language'] ?? $order->language ?? $story->language ?? 'ar';
                         $order->forceFill(['story_id' => $story->id])->save();
                         $order->unsetRelation('story');
                         $order->setRelation('story', $story);
@@ -119,7 +120,7 @@ class AdminOrderUpdateService
                             ...$input,
                             'parent_name' => $data['parent_name'],
                             'phone' => $data['phone'],
-                            'language' => $story->language,
+                            'language' => $language,
                             'lesson' => $story->lesson_value,
                             'change_reason' => $data['change_reason'],
                             '_previous_story_id' => $oldStoryId,
@@ -416,6 +417,7 @@ class AdminOrderUpdateService
     ): Order {
         $price = $this->storyPricing->snapshot($story);
         $storyPriceCents = (int) round($price['effective_price'] * 100);
+        $language = $input['language'] ?? $story->language ?? 'ar';
         $order = Order::create([
             'order_number' => $this->newOrderNumber(),
             'checkout_group_key' => $groupKey,
@@ -428,7 +430,7 @@ class AdminOrderUpdateService
             'child_name' => $input['child_name'],
             'child_age' => $input['child_age'],
             'child_gender' => $input['child_gender'],
-            'language' => $story->language,
+            'language' => $language,
             'lesson' => $story->lesson_value,
             'interests' => $input['interests'] ?? null,
             'gift_note' => $input['gift_note'] ?? null,
@@ -486,7 +488,7 @@ class AdminOrderUpdateService
             'item_snapshot' => [
                 ...($item->item_snapshot ?? []),
                 'story_slug' => $story->slug,
-                'story_language' => $story->language,
+                'story_language' => $order->language ?? $story->language,
                 'lesson' => $story->lesson_value,
                 'regular_price' => $price['regular_price'],
                 'offer_applied' => $price['offer_applied'],
@@ -508,7 +510,7 @@ class AdminOrderUpdateService
             'personalization_mode' => 'collect_child_details',
             'item_snapshot' => [
                 'story_slug' => $story->slug,
-                'story_language' => $story->language,
+                'story_language' => $order->language ?? $story->language,
                 'lesson' => $story->lesson_value,
                 'regular_price' => $price['regular_price'],
                 'offer_applied' => $price['offer_applied'],

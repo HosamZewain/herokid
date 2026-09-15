@@ -13,6 +13,7 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminOrderUpdateService;
+use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -55,6 +56,59 @@ class AdminOrderFullEditTest extends TestCase
             ->assertSee('حفظ كل تعديلات الطلب')
             ->assertSee($first->order_number)
             ->assertSee('لن تُحذف عند الحفظ');
+    }
+
+    public function test_full_editor_changes_each_story_language_and_refreshes_its_scene_snapshot(): void
+    {
+        [$first, $second] = $this->createCheckout();
+        $first->story->sceneTemplates()->create([
+            'scene_number' => 1,
+            'text_template' => 'ابتسمت {{child_name}}',
+            'alternate_text_template' => 'ابتسم {{child_name}}',
+            'english_male_text_template' => 'He smiled, {{child_name}}.',
+            'english_female_text_template' => 'She smiled, {{child_name}}.',
+        ]);
+        app(OrderSceneTextService::class)->refreshForOrder($first, $first->story);
+        $snapshotId = $first->sceneTextSnapshots()->where('scene_number', 1)->value('id');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.edit', $first->id))
+            ->assertOk()
+            ->assertSee('لغة القصة')
+            ->assertSee('name="stories[0][language]"', false);
+
+        $payload = $this->editBasePayload($first);
+        $payload['stories'][0]['language'] = 'en';
+        $payload['change_reason'] = 'طلب العميل تحويل القصة إلى الإنجليزية.';
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.orders.groups.update', $first->id), $payload)
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $first->refresh();
+        $snapshot = $first->sceneTextSnapshots()->where('scene_number', 1)->firstOrFail();
+        $storyItem = $first->items()->where('item_type', 'story')->firstOrFail();
+
+        $this->assertSame('en', $first->language);
+        $this->assertSame($snapshotId, $snapshot->id);
+        $this->assertSame('She smiled, ليلى.', $snapshot->rendered_text);
+        $this->assertSame('female', $snapshot->render_context_snapshot['resolved_text_variant']);
+        $this->assertSame('en', $storyItem->item_snapshot['story_language']);
+        $this->assertSame('ar', $second->fresh()->language);
+    }
+
+    public function test_full_editor_rejects_an_unknown_story_language(): void
+    {
+        [$first] = $this->createCheckout();
+        $payload = $this->editBasePayload($first);
+        $payload['stories'][0]['language'] = 'fr';
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.orders.groups.update', $first->id), $payload)
+            ->assertSessionHasErrors('stories.0.language');
+
+        $this->assertSame('ar', $first->fresh()->language);
     }
 
     public function test_full_editor_requires_orders_update_permission(): void
@@ -806,6 +860,7 @@ class AdminOrderFullEditTest extends TestCase
                 'child_name' => $order->child_name,
                 'child_age' => $order->child_age,
                 'child_gender' => $order->child_gender,
+                'language' => $order->language,
             ])->all(),
             'discount_amount' => 0,
             'payment_status' => 'unpaid',

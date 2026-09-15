@@ -236,6 +236,7 @@ class OrderController extends Controller
             'stories.*.child_name' => ['required', 'string', 'max:100'],
             'stories.*.child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
             'stories.*.child_gender' => ['required', Rule::in(['boy', 'girl'])],
+            'stories.*.language' => ['nullable', Rule::in(['ar', 'en'])],
             'stories.*.interests' => ['nullable', 'string', 'max:1000'],
             'stories.*.gift_note' => ['nullable', 'string', 'max:1000'],
             'stories.*.parent_notes' => ['nullable', 'string', 'max:2000'],

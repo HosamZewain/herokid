@@ -60,6 +60,15 @@
             </div>
         </div>
 
+        <div>
+            <label for="story-language-{{ $index }}" class="mb-1.5 block text-xs font-black text-gray-700">لغة القصة *</label>
+            <select id="story-language-{{ $index }}" name="stories[{{ $index }}][language]" required class="w-full rounded-xl border-gray-200 bg-white text-right text-sm">
+                <option value="ar" @selected(($row['language'] ?? 'ar') === 'ar')>العربية</option>
+                <option value="en" @selected(($row['language'] ?? 'ar') === 'en')>English</option>
+            </select>
+            @if(is_numeric($index)) @error("stories.$index.language")<p class="mt-1 text-xs font-bold text-red-600">{{ $message }}</p>@enderror @endif
+        </div>
+
         <div class="md:col-span-2">
             <label for="child-photos-{{ $index }}" class="mb-1.5 block text-xs font-black text-gray-700">
                 {{ $existingOrderId ? 'إضافة صور جديدة للطفل (اختياري — حتى 3 صور)' : 'صور الطفل — صورتان أو 3 صور *' }}
