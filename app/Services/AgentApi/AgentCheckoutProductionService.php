@@ -9,6 +9,7 @@ use App\Models\OrderAdminNote;
 use App\Models\OrderCheckoutReference;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
+use App\Models\OrderItemProductionComponent;
 use App\Models\User;
 use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderStatusService;
@@ -18,6 +19,7 @@ use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use App\Support\ProductProductionPrompt;
 use App\Support\StoryProductionPrompt;
+use App\Support\StudioProductionRecipe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -707,6 +709,8 @@ class AgentCheckoutProductionService
 
     private function productUnit(Order $order, OrderItem $item, array $prompt): array
     {
+        $component = $prompt['component'] instanceof OrderItemProductionComponent ? $prompt['component'] : null;
+
         return [
             'unit_key' => $prompt['unit_key'],
             'type' => 'product',
@@ -730,11 +734,85 @@ class AgentCheckoutProductionService
             'production_prompt' => $this->agentSafePrompt($prompt['prompt'], $order),
             'prompt_source' => $prompt['prompt_source'],
             'personalization' => $item->personalizationDisplayValues(),
+            'production_fields' => $this->productionFields($item),
+            'studio_production' => $this->studioProduction($component),
             'notes' => array_filter(['parent' => $order->parent_notes, 'order' => $order->notes]),
             'reference_files' => $this->references($order),
             'attachments' => $this->attachments($order),
             'preview' => $this->preview($order, 'product_images'),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function studioProduction(?OrderItemProductionComponent $component): array
+    {
+        if (! $component?->studio_enabled) {
+            return ['enabled' => false];
+        }
+
+        if (! $component->studio_workflow || ! $component->studio_recipe_version || ! is_array($component->studio_recipe)) {
+            throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'The Studio production recipe snapshot is incomplete.', 422);
+        }
+
+        try {
+            $recipe = StudioProductionRecipe::normalize(
+                $component->studio_workflow,
+                $component->studio_recipe_version,
+                $component->studio_recipe,
+            );
+        } catch (ValidationException) {
+            throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'The Studio production recipe snapshot is invalid.', 422);
+        }
+
+        return [
+            'enabled' => true,
+            'workflow' => $component->studio_workflow,
+            'recipe_version' => $component->studio_recipe_version,
+            'recipe_source' => 'order-item-snapshot',
+            'recipe' => $recipe,
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function productionFields(OrderItem $item): array
+    {
+        $snapshot = is_array($item->personalization_snapshot) ? $item->personalization_snapshot : [];
+        $definitions = [
+            'child_name' => 'اسم الطفل',
+            'school_name' => 'اسم المدرسة',
+            'class_name' => 'الفصل أو المرحلة',
+            'parent_phone_primary' => 'رقم ولي الأمر الأساسي',
+            'parent_phone_secondary' => 'رقم ولي الأمر الإضافي',
+            'special_notes' => 'ملاحظات خاصة',
+        ];
+
+        return collect($definitions)->map(function (string $label, string $key) use ($snapshot): ?array {
+            $value = $this->productionFieldValue($snapshot, $key);
+            if ($key === 'special_notes' && $value === null) {
+                $value = $this->productionFieldValue($snapshot, 'parent_notes');
+            }
+
+            if (! is_scalar($value) || $value === '') {
+                return null;
+            }
+
+            return [
+                'key' => $key,
+                'label' => $label,
+                'type' => 'text',
+                'value' => $value,
+                'source' => 'order_item_personalization',
+            ];
+        })->filter()->values()->all();
+    }
+
+    private function productionFieldValue(array $snapshot, string $key): mixed
+    {
+        $field = data_get($snapshot, 'fields.'.$key);
+
+        return is_array($field) && array_key_exists('value', $field)
+            ? $field['value']
+            : ($snapshot[$key] ?? null);
     }
 
     private function references(Order $order): array

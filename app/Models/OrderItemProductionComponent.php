@@ -11,6 +11,9 @@ class OrderItemProductionComponent extends Model
     protected $casts = [
         'quantity_per_item' => 'integer',
         'sort_order' => 'integer',
+        'studio_enabled' => 'boolean',
+        'studio_recipe_version' => 'integer',
+        'studio_recipe' => 'array',
     ];
 
     public function orderItem()

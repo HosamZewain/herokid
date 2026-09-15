@@ -12,6 +12,9 @@ class ProductProductionComponent extends Model
         'quantity_per_item' => 'integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
+        'studio_enabled' => 'boolean',
+        'studio_recipe_version' => 'integer',
+        'studio_recipe' => 'array',
     ];
 
     public function product()

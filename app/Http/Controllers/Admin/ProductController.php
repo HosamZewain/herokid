@@ -8,6 +8,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductUpsellRule;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
+use App\Support\StudioProductionRecipe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -193,6 +194,10 @@ class ProductController extends Controller
                 'production_components.*.prompt_template' => ['required', 'string', 'max:'.ProductProductionPrompt::MAX_TEMPLATE_LENGTH],
                 'production_components.*.quantity_per_item' => ['required', 'integer', 'min:1', 'max:1000'],
                 'production_components.*.is_active' => ['nullable', 'boolean'],
+                'production_components.*.studio_enabled' => ['nullable', 'boolean'],
+                'production_components.*.studio_workflow' => ['nullable', 'string', 'max:80'],
+                'production_components.*.studio_recipe_version' => ['nullable', 'integer'],
+                'production_components.*.studio_recipe' => ['nullable', 'array'],
             ],
             [
                 'production_components.max' => 'لا يمكن إضافة أكثر من 20 جزء إنتاج للمنتج.',
@@ -225,6 +230,26 @@ class ProductController extends Controller
             }
             $usedKeys[] = $key;
 
+            $studioEnabled = (bool) ($row['studio_enabled'] ?? false);
+            $studioRecipe = null;
+            if ($studioEnabled) {
+                $workflow = (string) ($row['studio_workflow'] ?? '');
+                $version = (int) ($row['studio_recipe_version'] ?? 0);
+                try {
+                    $studioRecipe = StudioProductionRecipe::normalize(
+                        $workflow,
+                        $version,
+                        (array) ($row['studio_recipe'] ?? []),
+                        "production_components.{$index}.studio_recipe",
+                    );
+                } catch (ValidationException $exception) {
+                    throw ValidationException::withMessages([
+                        "production_components.{$index}.studio_recipe" => collect($exception->errors())->flatten()->first()
+                            ?: 'إعدادات HeroKid Studio غير صالحة.',
+                    ]);
+                }
+            }
+
             return [
                 'stable_key' => $key,
                 'name' => trim($row['name']),
@@ -232,6 +257,10 @@ class ProductController extends Controller
                 'quantity_per_item' => (int) $row['quantity_per_item'],
                 'is_active' => (bool) ($row['is_active'] ?? false),
                 'sort_order' => $index,
+                'studio_enabled' => $studioEnabled,
+                'studio_workflow' => $studioEnabled ? (string) $row['studio_workflow'] : null,
+                'studio_recipe_version' => $studioEnabled ? (int) $row['studio_recipe_version'] : null,
+                'studio_recipe' => $studioRecipe,
             ];
         })->all();
     }
@@ -281,6 +310,10 @@ class ProductController extends Controller
                 'quantity_per_item',
                 'sort_order',
                 'is_active',
+                'studio_enabled',
+                'studio_workflow',
+                'studio_recipe_version',
+                'studio_recipe',
             ]));
         }
     }
@@ -297,6 +330,10 @@ class ProductController extends Controller
                 'prompt_template',
                 'quantity_per_item',
                 'is_active',
+                'studio_enabled',
+                'studio_workflow',
+                'studio_recipe_version',
+                'studio_recipe',
             ]))->values()->all();
         }
 
@@ -307,6 +344,10 @@ class ProductController extends Controller
                 'prompt_template' => $product->production_prompt_template,
                 'quantity_per_item' => 1,
                 'is_active' => true,
+                'studio_enabled' => false,
+                'studio_workflow' => null,
+                'studio_recipe_version' => null,
+                'studio_recipe' => null,
             ]];
         }
 
