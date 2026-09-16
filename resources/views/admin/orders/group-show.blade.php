@@ -250,6 +250,9 @@
                             <div class="rounded-xl bg-white/70 p-3"><p class="text-gray-400">المدفوع</p><p class="mt-1 text-emerald-700">{{ format_money($group['paid_amount_cents'] / 100) }}</p></div>
                             <div class="rounded-xl bg-white/70 p-3"><p class="text-gray-400">المتبقي عند الاستلام</p><p class="mt-1 text-rose-700">{{ format_money($group['remaining_amount_cents'] / 100) }}</p></div>
                         </div>
+                        @if(($group['overpaid_amount_cents'] ?? 0) > 0)
+                            <p class="mt-3 rounded-xl bg-amber-100 px-3 py-2 text-xs font-black text-amber-900">مدفوع زيادة عن قيمة الطلب: {{ format_money($group['overpaid_amount_cents'] / 100) }} — راجع استرداد الفرق مع العميل.</p>
+                        @endif
                         @if($group['payment_method'])<p class="mt-3 text-xs font-bold text-indigo-800">طريقة الدفع: {{ $group['payment_method'] }}</p>@endif
                     </div>
                     @include('admin.orders._discount-form')

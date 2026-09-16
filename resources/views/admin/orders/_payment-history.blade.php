@@ -70,7 +70,7 @@
                 @elseif($event->event_type === 'merge_reconciliation')
                     <p class="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800">تسوية إدارية فقط؛ المبلغ المدفوع نُقل من الطلب المدموج ولا يُحتسب كتحصيل جديد.</p>
                 @elseif($event->event_type === 'payment_balance_adjusted')
-                    <p class="mt-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">تغير المبلغ تلقائياً بسبب تعديل قيمة الطلب مع بقاء حالة الدفع كما هي؛ يُحفظ للتدقيق ولا يُحتسب كدفعة نقدية جديدة.</p>
+                    <p class="mt-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">تغيرت قيمة الطلب مع الحفاظ على المبلغ المدفوع فعليًا؛ هذه حركة للتدقيق وليست دفعة نقدية جديدة.</p>
                 @endif
             </article>
         @empty

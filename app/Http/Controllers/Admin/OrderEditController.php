@@ -225,6 +225,7 @@ class OrderEditController extends Controller
             'payment_status' => ['required', Rule::in(OrderPaymentStatus::statuses(false))],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
             'payment_method' => ['nullable', Rule::in(OrderPaymentStatus::paymentMethods())],
+            'payment_edit_intent' => ['nullable', Rule::in(['preserve', 'override'])],
             'change_reason' => ['required', 'string', 'min:5', 'max:500'],
         ], [
             'change_reason.required' => 'اكتب سبب تعديل الطلب لحفظه في سجل النشاط.',

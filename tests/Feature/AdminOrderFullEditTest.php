@@ -54,6 +54,8 @@ class AdminOrderFullEditTest extends TestCase
             ->assertOk()
             ->assertSee('تعديل الطلب بالكامل')
             ->assertSee('حفظ كل تعديلات الطلب')
+            ->assertSee('data-edit-save-bar', false)
+            ->assertSee('name="payment_edit_intent"', false)
             ->assertSee($first->order_number)
             ->assertSee('لن تُحذف عند الحفظ');
     }
@@ -245,7 +247,7 @@ class AdminOrderFullEditTest extends TestCase
         ]);
     }
 
-    public function test_recalculating_a_fully_paid_total_during_order_edit_is_a_non_cash_adjustment(): void
+    public function test_recalculating_a_fully_paid_total_preserves_cash_received_and_flags_overpayment(): void
     {
         [$first, $second] = $this->createCheckout();
 
@@ -272,14 +274,98 @@ class AdminOrderFullEditTest extends TestCase
             'event_type' => 'payment_balance_adjusted',
             'source' => 'admin_full_order_update',
             'previous_paid_amount_cents' => 95_000,
-            'new_paid_amount_cents' => 75_000,
-            'amount_delta_cents' => -20_000,
+            'new_paid_amount_cents' => 95_000,
+            'amount_delta_cents' => 0,
             'affects_collection_stats' => false,
         ]);
+
+        $group = app(AdminOrderGroupService::class)->findByRepresentative($first->id);
+        $this->assertSame(95_000, $group['paid_amount_cents']);
+        $this->assertSame(20_000, $group['overpaid_amount_cents']);
+        $this->actingAs($this->admin)->get(route('admin.orders.groups.show', $first->id))
+            ->assertOk()->assertSee('راجع استرداد الفرق مع العميل');
 
         $dashboard = app(AdminOrderGroupService::class)->dashboardStats();
         $this->assertSame(0, $dashboard['today']['payment_checkouts']);
         $this->assertSame(0, $dashboard['today']['payments_cents']);
+    }
+
+    public function test_adding_a_product_preserves_the_real_payment_and_creates_an_outstanding_balance(): void
+    {
+        $firstProduct = Product::create([
+            'name_ar' => 'المنتج الأول', 'slug' => 'paid-edit-first', 'price_cents' => 30_000,
+            'production_prompt_template' => 'Produce the first product.', 'is_active' => true,
+        ]);
+        $addedProduct = Product::create(['name_ar' => 'المنتج المضاف', 'slug' => 'paid-edit-added', 'price_cents' => 20_000, 'is_active' => true]);
+        $order = $this->productOrder('HK-PAID-EDIT', 'CHK-PAID-EDIT', $firstProduct, 30_000);
+        $originalItem = $order->items()->firstOrFail();
+        Storage::disk('local')->put('order-attachments/'.$order->id.'/stable.pdf', 'existing production file');
+        $attachment = $order->attachments()->create([
+            'production_unit_key' => 'product:'.$originalItem->id,
+            'disk' => 'local', 'path' => 'order-attachments/'.$order->id.'/stable.pdf',
+            'original_name' => 'stable.pdf', 'mime_type' => 'application/pdf', 'size' => 24,
+            'expires_at' => now()->addDays(30),
+        ]);
+        $order->forceFill(['payment_status' => 'paid_in_full', 'paid_amount_cents' => 30_000, 'payment_method' => 'انستاباي'])->save();
+
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order->id),
+            $this->productEditPayload([
+                $firstProduct->id => ['quantity' => 1],
+                $addedProduct->id => ['quantity' => 1],
+            ]))->assertRedirect()->assertSessionHasNoErrors();
+
+        $group = app(AdminOrderGroupService::class)->findByRepresentative($order->id);
+        $this->assertSame(50_000, $group['total_cents']);
+        $this->assertSame(30_000, $group['paid_amount_cents']);
+        $this->assertSame(20_000, $group['remaining_amount_cents']);
+        $this->assertSame('partially_paid', $group['payment_status']);
+        $this->assertSame(30_000, $order->fresh()->paid_amount_cents);
+        $this->assertDatabaseHas('order_items', ['id' => $originalItem->id, 'order_id' => $order->id, 'product_id' => $firstProduct->id]);
+        $this->assertDatabaseHas('order_attachments', ['id' => $attachment->id, 'production_unit_key' => 'product:'.$originalItem->id]);
+        Storage::disk('local')->assertExists($attachment->path);
+        $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
+        $token = $agent->createToken('edit-regression', ['agent', 'agent:orders.read', 'agent:catalog.products'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/agent/studio/orders/'.$order->order_number)
+            ->assertOk()
+            ->assertJsonPath('production_units.0.unit_key', 'product:'.$originalItem->id)
+            ->assertJsonCount(1, 'production_units.0.attachments');
+        $this->assertDatabaseHas('order_payment_events', [
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'source' => 'admin_full_order_update',
+            'event_type' => 'payment_balance_adjusted',
+            'previous_paid_amount_cents' => 30_000,
+            'new_paid_amount_cents' => 30_000,
+            'amount_delta_cents' => 0,
+            'affects_collection_stats' => false,
+        ]);
+    }
+
+    public function test_removed_product_order_attachments_remain_visible_and_downloadable_as_history(): void
+    {
+        $removedProduct = Product::create(['name_ar' => 'منتج محذوف', 'slug' => 'attachment-removed-product', 'price_cents' => 10_000, 'is_active' => true]);
+        $keptProduct = Product::create(['name_ar' => 'منتج باقٍ', 'slug' => 'attachment-kept-product', 'price_cents' => 10_000, 'is_active' => true]);
+        $removedOrder = $this->productOrder('HK-ARCHIVED-ASSET', 'CHK-ARCHIVED-ASSET', $removedProduct, 10_000);
+        $keptOrder = $this->productOrder('HK-KEPT-ASSET', 'CHK-ARCHIVED-ASSET', $keptProduct, 10_000);
+        Storage::disk('local')->put('order-attachments/'.$removedOrder->id.'/original.pdf', 'historical attachment');
+        $attachment = $removedOrder->attachments()->create([
+            'disk' => 'local', 'path' => 'order-attachments/'.$removedOrder->id.'/original.pdf',
+            'original_name' => 'original.pdf', 'mime_type' => 'application/pdf', 'size' => 21,
+            'expires_at' => now()->addDays(30),
+        ]);
+
+        $payload = $this->productEditPayload([$keptProduct->id => ['quantity' => 1]]);
+        $payload['payment_status'] = 'unpaid';
+        $payload['payment_method'] = null;
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $removedOrder->id), $payload)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted('orders', ['id' => $removedOrder->id]);
+        $this->assertDatabaseHas('order_attachments', ['id' => $attachment->id, 'order_id' => $removedOrder->id]);
+        Storage::disk('local')->assertExists($attachment->path);
+        $this->actingAs($this->admin)->get(route('admin.orders.groups.show', $keptOrder->id))
+            ->assertOk()->assertSee('original.pdf')->assertSee('من سجل مؤرشف');
+        $this->actingAs($this->admin)->get(route('admin.orders.attachments.download', $attachment))->assertOk();
     }
 
     public function test_new_story_requires_two_photos_but_existing_story_does_not(): void
@@ -805,6 +891,42 @@ class AdminOrderFullEditTest extends TestCase
         foreach (['city', 'district', 'zone'] as $part) {
             $this->assertArrayNotHasKey('bosta_'.$part.'_id', $delivery);
         }
+    }
+
+    private function productOrder(string $number, string $groupKey, Product $product, int $priceCents): Order
+    {
+        $order = Order::create([
+            'order_number' => $number,
+            'checkout_group_key' => $groupKey,
+            'parent_name' => 'ولي أمر',
+            'order_source' => 'whatsapp',
+            'status' => 'new',
+            'delivery_details' => [
+                'phone' => '01012345678',
+                'delivery_country_id' => $this->country->id,
+                'delivery_governorate_id' => $this->governorate->id,
+                'city' => 'القاهرة', 'street' => 'شارع 1', 'address_details' => 'الدور الأول',
+                'delivery_fee' => 0,
+            ],
+        ]);
+        $order->items()->create([
+            'item_type' => 'product', 'product_id' => $product->id, 'title' => $product->name_ar,
+            'quantity' => 1, 'unit_price_cents' => $priceCents, 'total_price_cents' => $priceCents,
+        ]);
+
+        return $order;
+    }
+
+    private function productEditPayload(array $products): array
+    {
+        return [
+            'parent_name' => 'ولي أمر', 'phone' => '01012345678', 'order_source' => 'whatsapp',
+            'delivery_country_id' => $this->country->id, 'delivery_governorate_id' => $this->governorate->id,
+            'city' => 'القاهرة', 'street' => 'شارع 1', 'address_details' => 'الدور الأول',
+            'stories' => [], 'products' => $products, 'discount_amount' => 0,
+            'payment_status' => 'paid_in_full', 'payment_method' => 'انستاباي',
+            'change_reason' => 'تعديل المنتجات مع الحفاظ على المدفوع والمرفقات.',
+        ];
     }
 
     private function createCheckout(): array
