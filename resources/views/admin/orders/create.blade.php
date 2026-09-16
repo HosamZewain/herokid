@@ -20,7 +20,7 @@
         </div>
     </x-slot>
 
-    <div class="py-6" data-admin-order-form data-edit-mode="{{ $isEditing ? '1' : '0' }}" data-restored-package="{{ old('pricing_package_id') ? '1' : '0' }}">
+    <div class="py-6" data-admin-order-form data-edit-mode="{{ $isEditing ? '1' : '0' }}" data-original-paid-cents="{{ $isEditing ? (int) $editingGroup['paid_amount_cents'] : 0 }}" data-original-payment-status="{{ $isEditing ? $editingGroup['payment_status'] : 'unpaid' }}" data-restored-package="{{ old('pricing_package_id') ? '1' : '0' }}">
         <div class="mx-auto max-w-7xl space-y-5 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between gap-3">
                 <a href="{{ route('admin.orders.index') }}" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-black text-gray-600 hover:bg-gray-50">العودة إلى الطلبات</a>
@@ -39,6 +39,19 @@
             <form method="POST" action="{{ $isEditing ? route('admin.orders.groups.update', $representative->id) : route('admin.orders.store') }}" enctype="multipart/form-data" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-form>
                 @csrf
                 @if($isEditing) @method('PUT') @endif
+
+                @if($isEditing)
+                    <div class="sticky top-0 z-30 rounded-2xl border border-amber-200 bg-amber-50/95 p-3 shadow-lg backdrop-blur xl:col-span-2" data-edit-save-bar>
+                        <input type="hidden" name="payment_edit_intent" value="{{ old('payment_edit_intent', 'preserve') }}" data-payment-edit-intent>
+                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                            <div>
+                                <label for="change-reason" class="mb-1 block text-xs font-black text-amber-900">سبب تعديل الطلب *</label>
+                                <input id="change-reason" name="change_reason" value="{{ old('change_reason') }}" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل إضافة منتج آخر" class="w-full rounded-xl border-amber-200 bg-white text-right text-sm">
+                            </div>
+                            <button type="submit" class="min-h-11 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-black text-white hover:bg-indigo-700">حفظ كل التعديلات</button>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="space-y-5">
                     @if(! $isEditing)
@@ -299,11 +312,7 @@
                                 <textarea id="admin-notes" name="admin_notes" rows="3" class="w-full rounded-xl border-gray-200 text-right text-sm">{{ $formValue('admin_notes') }}</textarea>
                             </div>
                             @if($isEditing)
-                                <div class="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                                    <label for="change-reason" class="mb-1.5 block text-xs font-black text-amber-900">سبب تعديل الطلب *</label>
-                                    <textarea id="change-reason" name="change_reason" rows="2" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل تغيير القصة وإضافة كتاب متاهات" class="w-full rounded-xl border-amber-200 bg-white text-right text-sm">{{ old('change_reason') }}</textarea>
-                                    <p class="mt-2 text-[11px] font-bold text-amber-700">سيُحفظ السبب مع تفاصيل ما أُضيف أو حُذف أو تغيّر في سجل النشاط.</p>
-                                </div>
+                                <p class="md:col-span-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900" data-payment-preservation-note>المبلغ المدفوع فعليًا سيظل كما هو عند تعديل المنتجات؛ المتبقي وحالة الدفع يُعاد حسابهما فقط.</p>
                             @endif
                         </div>
                     </section>
@@ -346,6 +355,9 @@
                 const country = root.querySelector('[data-country-select]');
                 const governorate = root.querySelector('[data-governorate-select]');
                 const existingCustomerLookup = root.querySelector('[data-existing-customer-lookup]');
+                const paymentIntent = root.querySelector('[data-payment-edit-intent]');
+                const originalPaidCents = Number(root.dataset.originalPaidCents || 0);
+                const originalPaymentStatus = root.dataset.originalPaymentStatus || 'unpaid';
                 let restoringPackage = root.dataset.restoredPackage === '1';
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
@@ -524,6 +536,15 @@
                     root.querySelector('[data-package-saving]').textContent = money(packageDiscountCents);
                     root.querySelector('[data-grand-total]').textContent = money(totalCents);
                     const paymentSelect = root.querySelector('[data-payment-status]');
+                    if (paymentIntent?.value === 'preserve') {
+                        const originalBehavior = Array.from(paymentSelect.options).find(option => option.value === originalPaymentStatus)?.dataset.behavior;
+                        const preservedBehavior = originalPaidCents === 0 ? 'unpaid'
+                            : originalPaidCents >= totalCents ? 'paid_in_full'
+                            : originalBehavior === 'paid_without_shipping' && originalPaidCents === Math.max(0, totalCents - deliveryCents)
+                                ? 'paid_without_shipping' : 'partially_paid';
+                        const option = Array.from(paymentSelect.options).find(option => option.dataset.behavior === preservedBehavior);
+                        if (option) paymentSelect.value = option.value;
+                    }
                     const paymentStatus = paymentSelect?.value || 'unpaid';
                     const paymentBehavior = paymentSelect?.selectedOptions[0]?.dataset.behavior || paymentStatus;
                     const paidInput = root.querySelector('[data-paid-amount]');
@@ -531,9 +552,14 @@
                     const partialField = root.querySelector('[data-partial-payment-field]');
                     const methodField = root.querySelector('[data-payment-method-field]');
                     let paidCents = 0;
-                    if (paymentBehavior === 'partially_paid') paidCents = Math.round(Math.max(0, Number(paidInput?.value || 0)) * 100);
-                    if (paymentBehavior === 'paid_without_shipping') paidCents = Math.max(0, totalCents - deliveryCents);
-                    if (paymentBehavior === 'paid_in_full') paidCents = totalCents;
+                    if (paymentIntent?.value === 'preserve') {
+                        paidCents = originalPaidCents;
+                        if (paymentBehavior === 'partially_paid' && paidInput) paidInput.value = String(originalPaidCents / 100);
+                    } else {
+                        if (paymentBehavior === 'partially_paid') paidCents = Math.round(Math.max(0, Number(paidInput?.value || 0)) * 100);
+                        if (paymentBehavior === 'paid_without_shipping') paidCents = Math.max(0, totalCents - deliveryCents);
+                        if (paymentBehavior === 'paid_in_full') paidCents = totalCents;
+                    }
                     partialField.hidden = paymentBehavior !== 'partially_paid';
                     methodField.hidden = paymentBehavior === 'unpaid';
                     paidInput.required = paymentBehavior === 'partially_paid';
@@ -542,6 +568,14 @@
                     methodInput.disabled = paymentBehavior === 'unpaid';
                     root.querySelector('[data-paid-total]').textContent = money(paidCents);
                     root.querySelector('[data-remaining-total]').textContent = money(totalCents - paidCents);
+                    const preservationNote = root.querySelector('[data-payment-preservation-note]');
+                    if (preservationNote) {
+                        preservationNote.textContent = paymentIntent.value === 'preserve'
+                            ? paidCents > totalCents
+                                ? `المدفوع الفعلي ${money(paidCents)} لن يتغير. يوجد فرق ${money(paidCents - totalCents)} يحتاج مراجعة استرداد للعميل.`
+                                : `المدفوع الفعلي ${money(paidCents)} لن يتغير عند تعديل قيمة الطلب. المتبقي ${money(Math.max(0, totalCents - paidCents))}.`
+                            : 'أنت تعدّل بيانات الدفع صراحةً؛ راجع المبلغ والطريقة قبل الحفظ.';
+                    }
                 };
 
                 const bindRow = row => {
@@ -760,9 +794,16 @@
                     calculate();
                 });
                 governorate?.addEventListener('change', calculate);
-                root.querySelectorAll('[data-product-quantity], [data-product-variant], [data-discount-input], [data-paid-amount]').forEach(input => input.addEventListener('input', calculate));
+                root.querySelectorAll('[data-product-quantity], [data-product-variant], [data-discount-input]').forEach(input => input.addEventListener('input', calculate));
+                root.querySelector('[data-paid-amount]')?.addEventListener('input', () => {
+                    if (paymentIntent) paymentIntent.value = 'override';
+                    calculate();
+                });
                 root.querySelectorAll('[data-product-variant]').forEach(input => input.addEventListener('change', calculate));
-                root.querySelector('[data-payment-status]')?.addEventListener('change', calculate);
+                root.querySelector('[data-payment-status]')?.addEventListener('change', () => {
+                    if (paymentIntent) paymentIntent.value = 'override';
+                    calculate();
+                });
 
                 country?.dispatchEvent(new Event('change'));
                 refreshStoryLinks();

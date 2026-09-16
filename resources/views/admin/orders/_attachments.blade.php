@@ -118,6 +118,7 @@
                             <div class="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] font-bold text-gray-500">
                                 <span>{{ $attachment->human_size }}</span>
                                 <span dir="ltr">{{ $attachmentOrder->order_number }}</span>
+                                @if($attachmentOrder->trashed())<span class="rounded-full bg-amber-100 px-2 py-0.5 font-black text-amber-800">من سجل مؤرشف</span>@endif
                                 <span>{{ $attachment->uploader?->name ?: 'مشرف' }}</span>
                                 <span title="رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}" class="inline-flex rounded-full bg-sky-100 px-2 py-0.5 font-black text-sky-700">{{ app_datetime_human($attachment->created_at) }}</span>
                                 <span>رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}</span>

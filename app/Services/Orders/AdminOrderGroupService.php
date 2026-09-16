@@ -517,7 +517,7 @@ class AdminOrderGroupService
         $paymentStatus = in_array($first->payment_status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)
             ? $first->payment_status
             : OrderPaymentStatus::UNPAID;
-        $paidAmountCents = min($totalCents, max(0, (int) $first->paid_amount_cents));
+        $paidAmountCents = max(0, (int) $first->paid_amount_cents);
         $customerRating = $orders
             ->flatMap(fn (Order $order): Collection => $order->submittedServiceRatings)
             ->sortByDesc('id')
@@ -580,6 +580,7 @@ class AdminOrderGroupService
             'payment_status_label' => OrderPaymentStatus::label($paymentStatus),
             'paid_amount_cents' => $paidAmountCents,
             'remaining_amount_cents' => max(0, $totalCents - $paidAmountCents),
+            'overpaid_amount_cents' => max(0, $paidAmountCents - $totalCents),
             'payment_method' => $first->payment_method,
             'payment_updated_at' => $first->payment_updated_at,
             'payment_updated_by' => $first->paymentUpdatedBy,
@@ -935,7 +936,7 @@ class AdminOrderGroupService
 
                 return [
                     'total_cents' => $totalCents,
-                    'paid_amount_cents' => min($totalCents, max(0, (int) $first->paid_amount_cents)),
+                    'paid_amount_cents' => max(0, (int) $first->paid_amount_cents),
                     'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
                     'payment_status' => $paymentStatus,
                     'shipping_status' => $shippingStatuses->count() === 1 ? $shippingStatuses->first() : 'mixed',

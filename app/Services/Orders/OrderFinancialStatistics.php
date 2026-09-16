@@ -52,13 +52,13 @@ class OrderFinancialStatistics
         $totals = DB::query()->fromSub($base, 'b')->select('b.*')->selectRaw('CASE WHEN raw_total > 0 THEN raw_total ELSE 0 END as total_cents');
 
         return DB::query()->fromSub($totals, 't')->select('t.*')
-            ->selectRaw('CASE WHEN raw_paid < 0 THEN 0 WHEN raw_paid > total_cents THEN total_cents ELSE raw_paid END as paid_amount_cents');
+            ->selectRaw('CASE WHEN raw_paid < 0 THEN 0 ELSE raw_paid END as paid_amount_cents');
     }
 
     public function summarize($keys, bool $includeDeleted, bool $preferActive = true): array
     {
         $query = DB::query()->fromSub($this->checkouts($keys, $includeDeleted, $preferActive), 'c')
-            ->selectRaw('COUNT(*) as checkouts, COALESCE(SUM(stories), 0) as stories, COALESCE(SUM(products), 0) as products, COALESCE(SUM(total_cents), 0) as total_value_cents, COALESCE(ROUND(AVG(total_cents)), 0) as average_order_cents, COALESCE(SUM(paid_amount_cents), 0) as collected_cents, COALESCE(SUM(total_cents - paid_amount_cents), 0) as outstanding_cents, COALESCE(SUM(CASE WHEN paid_amount_cents > 0 THEN 1 ELSE 0 END), 0) as payment_checkouts');
+            ->selectRaw('COUNT(*) as checkouts, COALESCE(SUM(stories), 0) as stories, COALESCE(SUM(products), 0) as products, COALESCE(SUM(total_cents), 0) as total_value_cents, COALESCE(ROUND(AVG(total_cents)), 0) as average_order_cents, COALESCE(SUM(paid_amount_cents), 0) as collected_cents, COALESCE(SUM(CASE WHEN total_cents > paid_amount_cents THEN total_cents - paid_amount_cents ELSE 0 END), 0) as outstanding_cents, COALESCE(SUM(CASE WHEN paid_amount_cents > 0 THEN 1 ELSE 0 END), 0) as payment_checkouts');
         foreach ([
             ['status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'), 'cancelled'],
             ['payment_status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, 'paid_in_full'), 'paid'],

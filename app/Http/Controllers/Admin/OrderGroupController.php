@@ -76,9 +76,9 @@ class OrderGroupController extends Controller
         }
 
         $attachmentTarget = $group['active_orders']->first() ?: $group['orders']->first();
-        $attachmentOrders = $group['active_orders']->isNotEmpty()
-            ? $group['active_orders']
-            : $group['orders'];
+        // Full-order edits can archive an empty product carrier. Its files remain
+        // attached to that historical order and must stay visible in the checkout.
+        $attachmentOrders = $group['orders'];
         $productPreviewGallery = OrderProductPreviewGallery::query()
             ->with(['previews.order:id,order_number'])
             ->where('checkout_group_key', $group['key'])

@@ -15,6 +15,7 @@ use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderDeliveryAddress;
 use App\Support\OrderPaymentStatus;
+use App\Support\OrderStatusRegistry;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
@@ -165,7 +166,10 @@ class AdminOrderUpdateService
                     ->lockForUpdate()
                     ->get();
 
-                $oldProductPrices = $this->releaseAndRemoveProductItems($activeOrders, $admin);
+                $oldProductItemIds = $activeOrders->flatMap->items
+                    ->whereIn('item_type', ['product', 'product_add_on'])
+                    ->pluck('id');
+                $oldProductPrices = $this->releaseProductItems($activeOrders, $admin);
                 $productLines = $this->resolveProductLines(
                     $data['products'] ?? [],
                     $ordersByInput->keys(),
@@ -190,6 +194,7 @@ class AdminOrderUpdateService
 
                 $activeOrdersById = $activeOrders->keyBy('id');
 
+                $reusedProductItemIds = [];
                 foreach ($productLines as $line) {
                     $linkedIndex = $line['linked_story_index'];
                     $targetOrder = $linkedIndex !== null
@@ -210,7 +215,24 @@ class AdminOrderUpdateService
                         throw ValidationException::withMessages(['products' => 'تعذر تحديد سجل الطلب الذي سيحمل المنتج.']);
                     }
 
-                    $this->createProductItem($targetOrder, $linkedStoryItem, $line, $linkedIndex);
+                    $existingItem = isset($line['existing_item_id'])
+                        ? OrderItem::query()->find($line['existing_item_id'])
+                        : null;
+                    $expectedType = $linkedStoryItem ? 'product_add_on' : 'product';
+                    if ($existingItem
+                        && ((int) $existingItem->order_id !== (int) $targetOrder->id
+                            || (int) $existingItem->product_id !== (int) $line['product']->id
+                            || (int) $existingItem->product_variant_id !== (int) ($line['variant']?->id ?? 0)
+                            || $existingItem->item_type !== $expectedType
+                            || ($line['product']->personalization_mode === 'collect_child_details'
+                                && (int) $existingItem->quantity !== (int) $line['quantity'])
+                            || in_array($existingItem->id, $reusedProductItemIds, true))) {
+                        $existingItem = null;
+                    }
+                    $this->createProductItem($targetOrder, $linkedStoryItem, $line, $linkedIndex, $existingItem);
+                    if ($existingItem) {
+                        $reusedProductItemIds[] = $existingItem->id;
+                    }
                     if (! empty($line['reuse_source_order_id'])) {
                         $sourceOrder = $activeOrdersById->get((int) $line['reuse_source_order_id']);
                         $targetOrder->forceFill(['uploaded_photos' => array_values($sourceOrder?->uploaded_photos ?? [])])->save();
@@ -221,6 +243,11 @@ class AdminOrderUpdateService
                         });
                     }
                     $this->decrementStock($line['product'], $line['variant'], $line['quantity']);
+                }
+
+                $obsoleteProductItemIds = $oldProductItemIds->diff($reusedProductItemIds);
+                if ($obsoleteProductItemIds->isNotEmpty()) {
+                    OrderItem::query()->whereKey($obsoleteProductItemIds)->delete();
                 }
 
                 $prunedOrderIds = [];
@@ -265,16 +292,16 @@ class AdminOrderUpdateService
                     ]);
                 }
 
-                $payment = $this->payments->resolve(
-                    (string) ($data['payment_status'] ?? OrderPaymentStatus::UNPAID),
-                    $data['paid_amount'] ?? null,
-                    $data['payment_method'] ?? null,
+                [$payment, $paymentWasExplicitlyChanged] = $this->resolveEditedPayment(
+                    $beforeGroup,
+                    $data,
                     $grossCents - $discountCents,
                     $deliveryCents,
                 );
                 $paymentChanged = $beforeGroup['payment_status'] !== $payment['payment_status']
                     || (int) $beforeGroup['paid_amount_cents'] !== $payment['paid_amount_cents']
                     || $beforeGroup['payment_method'] !== $payment['payment_method'];
+                $totalChanged = (int) $beforeGroup['total_cents'] !== $grossCents - $discountCents;
                 $lineCount = $ordersByInput->count() + $productLines->count();
 
                 foreach ($activeOrders as $position => $order) {
@@ -369,11 +396,7 @@ class AdminOrderUpdateService
                     request: $request,
                 );
 
-                if ($paymentChanged) {
-                    $paymentStateWasExplicitlyChanged = $beforeGroup['payment_status'] !== $payment['payment_status']
-                        || $beforeGroup['payment_method'] !== $payment['payment_method']
-                        || OrderPaymentStatus::behavior($payment['payment_status']) === OrderPaymentStatus::PARTIALLY_PAID;
-
+                if ($paymentChanged || $totalChanged) {
                     $this->paymentLedger->recordTransition(
                         representative: $representativeOrder,
                         before: [
@@ -390,8 +413,8 @@ class AdminOrderUpdateService
                         actor: $admin,
                         request: $request,
                         metadata: ['change_reason' => $data['change_reason']],
-                        forcedEventType: $paymentStateWasExplicitlyChanged ? null : 'payment_balance_adjusted',
-                        affectsCollectionStats: $paymentStateWasExplicitlyChanged ? null : false,
+                        forcedEventType: $paymentWasExplicitlyChanged ? null : ($totalChanged ? 'payment_balance_adjusted' : 'payment_status_changed'),
+                        affectsCollectionStats: $paymentWasExplicitlyChanged ? null : false,
                     );
                 }
 
@@ -406,6 +429,56 @@ class AdminOrderUpdateService
         }
 
         return $result;
+    }
+
+    /** @return array{0: array{payment_status:string,paid_amount_cents:int,payment_method:?string,remaining_amount_cents:int}, 1: bool} */
+    private function resolveEditedPayment(array $before, array $data, int $totalCents, int $deliveryCents): array
+    {
+        $originalStatus = (string) $before['payment_status'];
+        $requestedStatus = (string) ($data['payment_status'] ?? OrderPaymentStatus::UNPAID);
+        $originalPaid = max(0, (int) $before['paid_amount_cents']);
+        $requestedPaid = (int) round(max(0, (float) ($data['paid_amount'] ?? 0)) * 100);
+        $explicit = ($data['payment_edit_intent'] ?? null) === 'override'
+            || (($data['payment_edit_intent'] ?? null) !== 'preserve'
+                && ($requestedStatus !== $originalStatus
+                    || (OrderPaymentStatus::behavior($originalStatus) === OrderPaymentStatus::PARTIALLY_PAID
+                        && $requestedPaid !== $originalPaid)));
+
+        if ($explicit) {
+            return [$this->payments->resolve(
+                $requestedStatus,
+                $data['paid_amount'] ?? null,
+                $data['payment_method'] ?? null,
+                $totalCents,
+                $deliveryCents,
+            ), true];
+        }
+
+        $behavior = match (true) {
+            $originalPaid === 0 => OrderPaymentStatus::UNPAID,
+            $originalPaid >= $totalCents => OrderPaymentStatus::PAID_IN_FULL,
+            OrderPaymentStatus::behavior($originalStatus) === OrderPaymentStatus::PAID_WITHOUT_SHIPPING
+                && $originalPaid === max(0, $totalCents - $deliveryCents) => OrderPaymentStatus::PAID_WITHOUT_SHIPPING,
+            default => OrderPaymentStatus::PARTIALLY_PAID,
+        };
+        $status = OrderPaymentStatus::behavior($originalStatus) === $behavior
+            ? $originalStatus
+            : collect(OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, $behavior, true))->first();
+
+        if (! $status) {
+            throw ValidationException::withMessages([
+                'payment_status' => 'لا توجد حالة دفع مفعّلة تناسب المبلغ المدفوع بعد تعديل قيمة الطلب.',
+            ]);
+        }
+
+        return [[
+            'payment_status' => $status,
+            'paid_amount_cents' => $originalPaid,
+            'payment_method' => $originalPaid > 0 && filled($data['payment_method'] ?? null)
+                ? $data['payment_method']
+                : ($originalPaid > 0 ? $before['payment_method'] : null),
+            'remaining_amount_cents' => max(0, $totalCents - $originalPaid),
+        ], false];
     }
 
     private function createStoryOrder(
@@ -527,13 +600,14 @@ class AdminOrderUpdateService
         ]);
     }
 
-    private function releaseAndRemoveProductItems(Collection $orders, User $admin): array
+    private function releaseProductItems(Collection $orders, User $admin): array
     {
         $items = $orders->flatMap->items->whereIn('item_type', ['product', 'product_add_on']);
         $prices = [];
 
         foreach ($items as $item) {
             $prices[(int) $item->product_id][] = [
+                'item_id' => (int) $item->id,
                 'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
                 'order_id' => (int) $item->order_id,
@@ -541,10 +615,6 @@ class AdminOrderUpdateService
                 'personalization_snapshot' => $item->personalization_snapshot,
             ];
             $this->incrementStock($item, $admin);
-        }
-
-        if ($items->isNotEmpty()) {
-            OrderItem::query()->whereKey($items->pluck('id'))->delete();
         }
 
         return $prices;
@@ -648,6 +718,7 @@ class AdminOrderUpdateService
                         'unit_price_cents' => $unitPriceCents, 'total_price_cents' => $unitPriceCents,
                         'linked_story_index' => null,
                         'existing_order_id' => $oldUnit ? (int) $oldUnit['order_id'] : null,
+                        'existing_item_id' => $oldUnit['item_id'] ?? null,
                         'variant_snapshot' => $oldUnit && $oldUnit['variant_id'] === $variant?->id
                             ? $oldUnit['variant_snapshot']
                             : ProductVariantSnapshot::make($product, $variant),
@@ -666,6 +737,7 @@ class AdminOrderUpdateService
                 'total_price_cents' => $unitPriceCents * $quantity,
                 'linked_story_index' => $linkedIndex,
                 'existing_order_id' => $old ? (int) $old['order_id'] : null,
+                'existing_item_id' => $old['item_id'] ?? null,
                 'variant_snapshot' => $old && $old['variant_id'] === $variant?->id
                     ? $old['variant_snapshot']
                     : ProductVariantSnapshot::make($product, $variant),
@@ -675,11 +747,11 @@ class AdminOrderUpdateService
         });
     }
 
-    private function createProductItem(Order $order, ?OrderItem $linkedStoryItem, array $line, ?int $linkedIndex): void
+    private function createProductItem(Order $order, ?OrderItem $linkedStoryItem, array $line, ?int $linkedIndex, ?OrderItem $existingItem = null): void
     {
         $product = $line['product'];
         $variant = $line['variant'];
-        $order->items()->create([
+        $values = [
             'item_type' => $linkedStoryItem ? 'product_add_on' : 'product',
             'product_id' => $product->id,
             'product_variant_id' => $variant?->id,
@@ -690,8 +762,11 @@ class AdminOrderUpdateService
             'unit_price_cents' => $line['unit_price_cents'],
             'quantity' => $line['quantity'],
             'total_price_cents' => $line['total_price_cents'],
+            'stock_released_at' => null,
+            'stock_released_by_user_id' => null,
             'personalization_mode' => $product->personalization_mode,
             'item_snapshot' => [
+                ...($existingItem?->item_snapshot ?? []),
                 'product_slug' => $product->slug,
                 'name_ar' => $product->name_ar,
                 'name_en' => $product->name_en,
@@ -705,7 +780,12 @@ class AdminOrderUpdateService
                 'child_age' => $order->child_age,
                 'child_gender' => $order->child_gender,
             ] : $line['personalization_snapshot'],
-        ]);
+        ];
+        if ($existingItem) {
+            $existingItem->forceFill($values)->save();
+        } else {
+            $order->items()->create($values);
+        }
 
         if (! $linkedStoryItem && is_array($line['personalization_snapshot'])) {
             $snapshot = $line['personalization_snapshot'];
