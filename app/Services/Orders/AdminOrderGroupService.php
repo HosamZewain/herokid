@@ -598,11 +598,26 @@ class AdminOrderGroupService
         $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
         $this->applyLifecycleFilter($query, $lifecycle);
 
+        $hasStatusFilter = $this->selectedStatuses($request) !== [];
         foreach (['payment_status' => OrderStatusRegistry::TYPE_PAYMENT, 'printing_status' => OrderStatusRegistry::TYPE_PRINTING, 'shipping_status' => OrderStatusRegistry::TYPE_SHIPPING] as $field => $type) {
             $selected = $this->selectedStatuses($request, $field, $type);
             if ($selected !== []) {
+                $hasStatusFilter = true;
                 $query->whereIn($field, $selected);
             }
+        }
+
+        if ($includeDeleted && $hasStatusFilter) {
+            // Status filters must match the rows present() displays. Keep
+            // unfiltered searches able to find superseded historical IDs.
+            $query->where(function (Builder $visible): void {
+                $visible->whereNull('orders.deleted_at')
+                    ->orWhereNotExists(fn ($live) => $live
+                        ->selectRaw('1')
+                        ->from('orders as visible_live_orders')
+                        ->whereColumn('visible_live_orders.checkout_group_key', 'orders.checkout_group_key')
+                        ->whereNull('visible_live_orders.deleted_at'));
+            });
         }
 
         if ($request->filled('order_source') && array_key_exists((string) $request->query('order_source'), OrderSource::options())) {

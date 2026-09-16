@@ -120,4 +120,81 @@ class AdminOrderMultiStatusFilterTest extends TestCase
         $this->assertStringContainsString('MULTI-B', $csv);
         $this->assertStringNotContainsString('MULTI-A', $csv);
     }
+
+    public function test_status_filters_use_visible_rows_instead_of_superseded_deleted_rows(): void
+    {
+        $cancelled = $this->fixtureOrder('VISIBLE-CANCELLED', 'cancelled');
+        $finished = $this->fixtureOrder('VISIBLE-FINISHED', 'delivered');
+        $finished->update([
+            'payment_status' => 'paid_in_full',
+            'printing_status' => 'completed',
+            'shipping_status' => 'delivered',
+        ]);
+
+        $this->fixtureOrder($finished->checkout_group_key, 'ready_preview')->delete();
+        $historicalOrder = $this->fixtureOrder($cancelled->checkout_group_key, 'ready_preview');
+        $historicalOrder->delete();
+
+        $fullyDeleted = $this->fixtureOrder('VISIBLE-DELETED', 'ready_preview');
+        $fullyDeleted->delete();
+
+        $this->listing(['q' => $historicalOrder->order_number])->assertOk()
+            ->assertViewHas('groups', fn ($groups) => collect($groups->items())->pluck('key')->all() === ['VISIBLE-CANCELLED']);
+
+        $matching = $this->listing(['status' => 'ready_preview'])->assertOk()->viewData('groups');
+        $this->assertSame(['VISIBLE-DELETED'], collect($matching->items())->pluck('key')->all());
+
+        $cancelledMatches = $this->listing(['lifecycle' => 'cancelled', 'status' => 'ready_preview'])
+            ->assertOk()->viewData('groups');
+        $this->assertSame(['VISIBLE-DELETED'], collect($cancelledMatches->items())->pluck('key')->all());
+
+        $this->listing(['lifecycle' => 'finished', 'status' => 'ready_preview'])->assertOk()
+            ->assertViewHas('groups', fn ($groups) => $groups->total() === 0);
+        $this->listing(['lifecycle' => 'active', 'status' => 'ready_preview'])->assertOk()
+            ->assertViewHas('groups', fn ($groups) => $groups->total() === 0);
+        $this->listing(['lifecycle' => 'cancelled', 'status' => 'cancelled'])->assertOk()
+            ->assertViewHas('groups', fn ($groups) => collect($groups->items())->pluck('key')->contains('VISIBLE-CANCELLED'));
+        $this->listing(['lifecycle' => 'finished'])->assertOk()
+            ->assertViewHas('groups', fn ($groups) => collect($groups->items())->pluck('key')->all() === ['VISIBLE-FINISHED']);
+
+        $csv = $this->get(route('admin.orders.export', [
+            'catalog_type' => 'all', 'lifecycle' => 'all', 'status' => 'ready_preview',
+        ]))->assertOk()->streamedContent();
+        $this->assertStringContainsString('VISIBLE-DELETED', $csv);
+        $this->assertStringNotContainsString('VISIBLE-CANCELLED', $csv);
+        $this->assertStringNotContainsString('VISIBLE-FINISHED', $csv);
+    }
+
+    public function test_every_lifecycle_has_a_visible_tab_and_current_indicator(): void
+    {
+        foreach (['all', 'active', 'finished', 'cancelled'] as $lifecycle) {
+            $response = $this->listing(['lifecycle' => $lifecycle])->assertOk()
+                ->assertSee('كل الطلبات')
+                ->assertSee('الطلبات النشطة')
+                ->assertSee('الطلبات المنتهية')
+                ->assertSee('ملغاة / محذوفة');
+
+            $this->assertMatchesRegularExpression(
+                '/<a href="[^"]*lifecycle='.$lifecycle.'[^"]*"[^>]*aria-current="page"[^>]*>/u',
+                $response->getContent(),
+            );
+        }
+    }
+
+    private function fixtureOrder(string $group, string $status): Order
+    {
+        $order = Order::create([
+            'order_number' => $group.'-'.str()->random(6),
+            'checkout_group_key' => $group,
+            'parent_name' => 'Filter fixture',
+            'status' => $status,
+            'shipping_status' => 'not_ready',
+        ]);
+        $order->items()->create([
+            'item_type' => 'product', 'title' => 'Filter fixture', 'quantity' => 1,
+            'unit_price_cents' => 10000, 'total_price_cents' => 10000,
+        ]);
+
+        return $order;
+    }
 }

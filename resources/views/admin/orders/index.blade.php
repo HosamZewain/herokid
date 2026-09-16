@@ -43,6 +43,7 @@
             || request('direction', 'desc') !== 'desc';
         $tabQuery = request()->except(['view', 'page', 'catalog_type', 'lifecycle']);
         $emptyState = match($lifecycle) {
+            'all' => 'لا توجد طلبات تطابق الفلاتر.',
             'finished' => 'لا توجد طلبات منتهية تطابق الفلاتر.',
             'cancelled' => 'لا توجد طلبات ملغاة أو محذوفة تطابق الفلاتر.',
             default => 'لا توجد طلبات نشطة تطابق الفلاتر.',
@@ -79,16 +80,28 @@
                         </a>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
-                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => 'active'])) }}"
-                           class="rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'active' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType, 'lifecycle' => 'all'])) }}"
+                           @if($lifecycle === 'all') aria-current="page" @endif
+                           class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                            @if($lifecycle === 'all')<span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25"></span>@endif
+                            كل الطلبات
+                        </a>
+                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType, 'lifecycle' => 'active'])) }}"
+                           @if($lifecycle === 'active') aria-current="page" @endif
+                           class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'active' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                            @if($lifecycle === 'active')<span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25"></span>@endif
                             الطلبات النشطة
                         </a>
-                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => 'finished'])) }}"
-                           class="rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'finished' ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType, 'lifecycle' => 'finished'])) }}"
+                           @if($lifecycle === 'finished') aria-current="page" @endif
+                           class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'finished' ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                            @if($lifecycle === 'finished')<span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25"></span>@endif
                             الطلبات المنتهية
                         </a>
-                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType === 'all' ? 'stories' : $catalogType, 'lifecycle' => 'cancelled'])) }}"
-                           class="rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'cancelled' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100' }}">
+                        <a href="{{ route('admin.orders.index', array_merge($tabQuery, ['catalog_type' => $catalogType, 'lifecycle' => 'cancelled'])) }}"
+                           @if($lifecycle === 'cancelled') aria-current="page" @endif
+                           class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black {{ $lifecycle === 'cancelled' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100' }}">
+                            @if($lifecycle === 'cancelled')<span aria-hidden="true" class="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-400/25"></span>@endif
                             ملغاة / محذوفة
                         </a>
                         <a href="{{ route('admin.orders.export', request()->except('page')) }}"
@@ -96,6 +109,9 @@
                             تصدير Excel (CSV)
                         </a>
                     </div>
+                    @if($selectedStatuses !== [])
+                        <p class="text-xs font-bold text-gray-500">فلتر حالة الطلب يظل مطبقًا عند التنقل بين التبويبات؛ امسحه لعرض كل حالات التبويب.</p>
+                    @endif
                 </div>
 
                 @if($showBulkActions)
