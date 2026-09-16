@@ -11,6 +11,14 @@ use Illuminate\Http\Request;
 
 class AgentCheckoutController extends Controller
 {
+    public function partialProductWork(Request $request, AgentCheckoutProductionService $production): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'partial_product_work' => $production->partialProductWork($request->user()),
+        ]);
+    }
+
     public function acquireNextIdentity(
         Request $request,
         AgentStoryIdentityService $identities,

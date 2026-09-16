@@ -37,6 +37,8 @@ Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(fun
         ->middleware('agent_api:ability:orders.read,permission:orders.view');
     Route::get('studio/orders/{orderNumber}', [AgentStudioController::class, 'show'])
         ->middleware('agent_api:ability:orders.read,permission:orders.view');
+    Route::get('checkouts/partial-product-work', [AgentCheckoutController::class, 'partialProductWork'])
+        ->middleware('agent_api:ability:orders.read,permission:orders.view');
 
     Route::post('checkouts/acquire-next-identity', [AgentCheckoutController::class, 'acquireNextIdentity'])
         ->middleware('agent_api:ability:orders.identity,permission:orders.assign');

@@ -79,9 +79,14 @@ class AgentStudioOrderService
             throw new AgentApiException('FORBIDDEN', 'This checkout has no production units allowed by the Agent token catalog scope.', 403);
         }
 
+        $matched = $orders->firstWhere('id', $matchedOrder->id) ?? $orders->first();
+        if ($agent && ! $productionUnits->contains('order_id', $matched->id)) {
+            $matched = $orders->firstWhere('id', $productionUnits->first()['order_id']);
+        }
+
         return [
             'orders' => $orders,
-            'matched_order' => $orders->firstWhere('id', $matchedOrder->id) ?? $orders->first(),
+            'matched_order' => $matched,
             'checkout_reference' => $checkoutReference?->short_reference
                 ?? $orders->first()?->checkoutReference?->short_reference,
             'production_units' => $productionUnits,
