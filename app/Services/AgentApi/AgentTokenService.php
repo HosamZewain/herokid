@@ -47,7 +47,7 @@ class AgentTokenService
         'agent:orders.upload-attachment' => [
             'label' => 'رفع ملفات الإنتاج',
             'short_label' => 'ملفات الإنتاج',
-            'description' => 'رفع مرفقات الإنتاج للطلب بعد الاستحواذ عليه.',
+            'description' => 'رفع مرفقات الإنتاج بعد الاستحواذ، أو لمنتج مسموح داخل طلب مختلط.',
             'permissions' => ['orders.update'],
             'mode' => 'operation',
             'default' => true,

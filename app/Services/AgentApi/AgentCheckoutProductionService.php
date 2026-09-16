@@ -6,6 +6,7 @@ use App\Exceptions\AgentApiException;
 use App\Models\AgentApiIdempotencyKey;
 use App\Models\Order;
 use App\Models\OrderAdminNote;
+use App\Models\OrderAttachment;
 use App\Models\OrderCheckoutReference;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
@@ -180,7 +181,71 @@ class AgentCheckoutProductionService
             }
         }
 
+        $summary['partial_product_work'] = $this->partialProductWork($agent);
+
         return $summary;
+    }
+
+    /** Discover permitted products in mixed checkouts without acquiring them. */
+    public function partialProductWork(User $agent): array
+    {
+        $groupKeys = Order::query()
+            ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at, MIN(id) as first_order_id')
+            ->whereIn('status', ['new', 'generating'])
+            ->whereNotNull('checkout_group_key')
+            ->groupBy('checkout_group_key')
+            ->orderBy('first_created_at')
+            ->orderBy('first_order_id')
+            ->pluck('checkout_group_key');
+        $candidates = [];
+        $count = 0;
+
+        foreach ($groupKeys->chunk(100) as $chunk) {
+            $assignedTo = OrderGroupAssignment::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->pluck('assigned_to_user_id', 'checkout_group_key');
+            $ordersByGroup = Order::query()
+                ->whereIn('checkout_group_key', $chunk)
+                ->with($this->relations())
+                ->orderBy('id')
+                ->get()
+                ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+
+            foreach ($chunk as $groupKey) {
+                if ($assignedTo->has($groupKey) && (int) $assignedTo->get($groupKey) !== $agent->id) {
+                    continue;
+                }
+
+                $allUnits = $this->units($ordersByGroup->get($groupKey, collect()));
+                $authorized = AgentCatalogScope::filterUnits($agent, $allUnits);
+                if ($authorized->count() === $allUnits->count()) {
+                    continue;
+                }
+
+                $products = $authorized
+                    ->where('type', 'product')
+                    ->filter(fn (array $unit): bool => in_array($unit['status'], ['new', 'generating'], true)
+                        && filled($unit['production_prompt']))
+                    ->values();
+                if ($products->isEmpty()) {
+                    continue;
+                }
+
+                $count++;
+                if (count($candidates) < 25) {
+                    $candidates[] = [
+                        'order_number' => $products->first()['order_number'],
+                        'production_unit_keys' => $products->pluck('unit_key')->all(),
+                    ];
+                }
+            }
+        }
+
+        return [
+            'checkout_count' => $count,
+            'checkouts' => $candidates,
+            'has_more' => $count > count($candidates),
+        ];
     }
 
     /** @return array<string, mixed>|null */
@@ -543,6 +608,27 @@ class AgentCheckoutProductionService
         return $order;
     }
 
+    public function authorizeAttachmentUpload(Order $order, User $agent, ?string $unitKey): string
+    {
+        $selection = $this->allowedUnitForOrder($order, $agent, $unitKey);
+        if ($selection['partial_product']) {
+            if (! in_array($order->status, ['new', 'generating'], true)) {
+                throw new AgentApiException('FORBIDDEN', 'Production attachments are not accepted for this order status.', 403);
+            }
+            $assignedTo = OrderGroupAssignment::query()
+                ->where('checkout_group_key', $order->checkoutGroupKey())
+                ->value('assigned_to_user_id');
+            if ($assignedTo !== null && (int) $assignedTo !== $agent->id) {
+                throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is acquired by another Agent.', 403);
+            }
+        } else {
+            $this->authorizedOrder($order, $agent);
+        }
+
+        return $selection['unit']['unit_key'];
+    }
+
+    /** Validate a unit key after the caller has enforced whole-checkout authorization. */
     public function validateUnitForOrder(Order $order, ?string $unitKey): string
     {
         $orders = Order::query()->where('checkout_group_key', $order->checkoutGroupKey())->with($this->relations())->get();
@@ -562,25 +648,71 @@ class AgentCheckoutProductionService
         return $unitKey;
     }
 
-    public function authorizePreviewUpload(Order $order, User $agent, string $type): void
+    public function authorizeReferenceRead(Order $order, User $agent, ?string $unitKey): void
+    {
+        if ($unitKey !== null && $this->allowedUnitForOrder($order, $agent, $unitKey)['partial_product']) {
+            return;
+        }
+
+        $this->authorizedOrder($order, $agent);
+    }
+
+    public function authorizeAttachmentRead(Order $order, User $agent, OrderAttachment $attachment): void
+    {
+        if (filled($attachment->production_unit_key)
+            && $this->allowedUnitForOrder($order, $agent, $attachment->production_unit_key)['partial_product']) {
+            return;
+        }
+
+        $this->authorizedOrder($order, $agent);
+    }
+
+    public function authorizePreviewUpload(Order $order, User $agent, string $type, ?string $unitKey = null): string
+    {
+        $unitType = $type === 'booklet' ? 'story' : 'product';
+
+        return $this->allowedUnitForOrder($order, $agent, $unitKey, $unitType)['unit']['unit_key'];
+    }
+
+    /** @return array{unit: array<string, mixed>, partial_product: bool} */
+    private function allowedUnitForOrder(Order $order, User $agent, ?string $unitKey, ?string $type = null): array
     {
         if ($order->trashed()) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Order not found.', 404);
         }
 
-        $units = $this->units(collect([$order]));
-        $unitType = $type === 'booklet' ? 'story' : 'product';
-        $previewUnits = $units->where('type', $unitType)->values();
+        $orders = Order::query()->where('checkout_group_key', $order->checkoutGroupKey())->with($this->relations())->get();
+        $allUnits = $this->units($orders);
+        $orderUnits = $allUnits->where('order_id', $order->id)
+            ->when($type !== null, fn (Collection $units): Collection => $units->where('type', $type))
+            ->values();
 
-        if ($type === 'booklet' && $previewUnits->isEmpty()) {
-            throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no story production unit.', 422);
+        if ($orderUnits->isEmpty()) {
+            throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no production unit of the requested type.', 422);
         }
 
-        if ($type === 'product_images' && $previewUnits->isEmpty()) {
-            throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This order has no product production unit.', 422);
+        $allowedUnits = AgentCatalogScope::filterUnits($agent, $orderUnits);
+        if ($unitKey === null && $orderUnits->count() > 1 && $allowedUnits->count() !== 1) {
+            throw new AgentApiException('INVALID_ATTACHMENT', 'A valid production_unit_key is required for this order.', 422);
         }
 
-        $this->assertUnitsAllowed($agent, $previewUnits);
+        $unit = $unitKey === null
+            ? ($orderUnits->count() === 1 ? $orderUnits->first() : $allowedUnits->first())
+            : $orderUnits->firstWhere('unit_key', $unitKey);
+
+        if (! $unit) {
+            throw new AgentApiException('INVALID_ATTACHMENT', 'A valid production_unit_key is required for this order.', 422);
+        }
+
+        if (! $allowedUnits->contains('unit_key', $unit['unit_key'])) {
+            throw new AgentApiException('FORBIDDEN', 'This production unit is outside the Agent token catalog scope.', 403);
+        }
+
+        return [
+            'unit' => $unit,
+            'partial_product' => $unit['type'] === 'product'
+                && AgentCatalogScope::filterUnits($agent, $allUnits)->count() !== $allUnits->count(),
+        ];
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -590,13 +722,16 @@ class AgentCheckoutProductionService
 
         foreach ($orders as $order) {
             $order->loadMissing($this->relations());
+            $productPrompts = ProductProductionPrompt::forOrder($order);
+            $hasStoryUnit = (bool) ($order->story_id && $order->story);
+            $orderUnitCount = $productPrompts->count() + (int) $hasStoryUnit;
 
-            if ($order->story_id && $order->story) {
-                $units->push($this->storyUnit($order));
+            if ($hasStoryUnit) {
+                $units->push($this->storyUnit($order, $orderUnitCount));
             }
 
-            foreach (ProductProductionPrompt::forOrder($order) as $prompt) {
-                $units->push($this->productUnit($order, $prompt['item'], $prompt));
+            foreach ($productPrompts as $prompt) {
+                $units->push($this->productUnit($order, $prompt['item'], $prompt, $orderUnitCount));
             }
         }
 
@@ -677,17 +812,19 @@ class AgentCheckoutProductionService
         return $orders->whereIn('id', $ids)->values();
     }
 
-    private function storyUnit(Order $order): array
+    private function storyUnit(Order $order, int $orderUnitCount): array
     {
+        $unitKey = 'story:'.$order->id;
+
         return [
-            'unit_key' => 'story:'.$order->id,
+            'unit_key' => $unitKey,
             'type' => 'story',
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'status' => $order->status,
             'title' => $order->story->title,
             'language' => $order->language ?: $order->story->language,
-            'production_prompt' => $this->agentSafePrompt(StoryProductionPrompt::forOrder($order), $order),
+            'production_prompt' => $this->agentSafePrompt(StoryProductionPrompt::forOrder($order), $order, $unitKey),
             'child' => [
                 'name' => $order->child_name,
                 'age' => $order->child_age,
@@ -699,13 +836,13 @@ class AgentCheckoutProductionService
                 'order' => $order->notes,
                 'dedication' => $order->gift_note,
             ]),
-            'reference_files' => $this->references($order),
-            'attachments' => $this->attachments($order),
+            'reference_files' => $this->references($order, $unitKey),
+            'attachments' => $this->attachments($order, $unitKey, $orderUnitCount),
             'preview' => $this->preview($order, 'booklet'),
         ];
     }
 
-    private function productUnit(Order $order, OrderItem $item, array $prompt): array
+    private function productUnit(Order $order, OrderItem $item, array $prompt, int $orderUnitCount): array
     {
         return [
             'unit_key' => $prompt['unit_key'],
@@ -727,23 +864,23 @@ class AgentCheckoutProductionService
                 'quantity_per_item' => $prompt['quantity_per_item'],
             ],
             'language' => $order->language,
-            'production_prompt' => $this->agentSafePrompt($prompt['prompt'], $order),
+            'production_prompt' => $this->agentSafePrompt($prompt['prompt'], $order, $prompt['unit_key']),
             'prompt_source' => $prompt['prompt_source'],
             'personalization' => $item->personalizationDisplayValues(),
             'notes' => array_filter(['parent' => $order->parent_notes, 'order' => $order->notes]),
-            'reference_files' => $this->references($order),
-            'attachments' => $this->attachments($order),
-            'preview' => $this->preview($order, 'product_images'),
+            'reference_files' => $this->references($order, $prompt['unit_key']),
+            'attachments' => $this->attachments($order, $prompt['unit_key'], $orderUnitCount),
+            'preview' => $this->preview($order, 'product_images', $prompt['unit_key'], $orderUnitCount),
         ];
     }
 
-    private function references(Order $order): array
+    private function references(Order $order, string $unitKey): array
     {
         $photos = collect($order->uploaded_photos ?? [])->filter(fn ($path): bool => is_string($path))->values()
             ->map(fn (string $path, int $index): array => [
                 'type' => 'child_photo',
                 'name' => 'child-photo-'.($index + 1),
-                'url' => route('agent.orders.references.child-photo', ['order' => $order, 'index' => $index]),
+                'url' => route('agent.orders.references.child-photo', ['order' => $order, 'index' => $index, 'production_unit_key' => $unitKey]),
             ])->all();
 
         $attempt = $order->childIdentityApprovedAttempt;
@@ -751,21 +888,21 @@ class AgentCheckoutProductionService
             $photos[] = [
                 'type' => 'approved_child_identity',
                 'name' => 'approved-child-identity',
-                'url' => route('agent.orders.references.approved-identity', $order),
+                'url' => route('agent.orders.references.approved-identity', ['order' => $order, 'production_unit_key' => $unitKey]),
             ];
         }
 
         return $photos;
     }
 
-    private function agentSafePrompt(string $prompt, Order $order): string
+    private function agentSafePrompt(string $prompt, Order $order, string $unitKey): string
     {
         $photos = array_values(array_filter($order->uploaded_photos ?? [], 'is_string'));
 
         foreach (array_keys($photos) as $index) {
             $prompt = str_replace(
                 URL::signedRoute('orders.production-photo', ['order' => $order, 'index' => $index]),
-                route('agent.orders.references.child-photo', ['order' => $order, 'index' => $index]),
+                route('agent.orders.references.child-photo', ['order' => $order, 'index' => $index, 'production_unit_key' => $unitKey]),
                 $prompt,
             );
         }
@@ -773,10 +910,12 @@ class AgentCheckoutProductionService
         return $prompt;
     }
 
-    private function attachments(Order $order): array
+    private function attachments(Order $order, string $unitKey, int $orderUnitCount): array
     {
         return $order->attachments
             ->reject->isExpired()
+            ->filter(fn ($attachment): bool => $attachment->production_unit_key === $unitKey
+                || ($orderUnitCount === 1 && blank($attachment->production_unit_key)))
             ->filter(fn ($attachment): bool => Storage::disk($attachment->disk ?: 'local')->exists($attachment->path))
             ->map(fn ($attachment): array => [
                 'id' => $attachment->id,
@@ -808,7 +947,7 @@ class AgentCheckoutProductionService
             ->all();
     }
 
-    private function preview(Order $order, string $type): array
+    private function preview(Order $order, string $type, ?string $unitKey = null, int $orderUnitCount = 1): array
     {
         if ($type === 'booklet') {
             $preview = $order->bookletPreview;
@@ -821,11 +960,14 @@ class AgentCheckoutProductionService
         }
 
         $gallery = $order->productPreviewGallery;
+        $previews = $gallery?->previews?->filter(fn ($preview): bool => (int) $preview->order_id === (int) $order->id
+            && ($preview->production_unit_key === $unitKey
+                || ($orderUnitCount === 1 && blank($preview->production_unit_key))));
 
         return [
             'type' => 'product_images',
-            'available' => (bool) ($gallery?->previews?->isNotEmpty()),
-            'images_count' => $gallery?->previews?->count() ?? 0,
+            'available' => (bool) ($previews?->isNotEmpty()),
+            'images_count' => $previews?->count() ?? 0,
         ];
     }
 

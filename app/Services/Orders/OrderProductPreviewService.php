@@ -19,12 +19,12 @@ class OrderProductPreviewService
     public function __construct(private readonly OrderProductPreviewImageService $imageService) {}
 
     /** @param array<int, UploadedFile> $files */
-    public function upload(Order $order, array $files, ?string $note, ?User $actor): OrderProductPreviewGallery
+    public function upload(Order $order, array $files, ?string $note, ?User $actor, ?string $productionUnitKey = null): OrderProductPreviewGallery
     {
         $storedPaths = [];
 
         try {
-            return DB::transaction(function () use ($order, $files, $note, $actor, &$storedPaths): OrderProductPreviewGallery {
+            return DB::transaction(function () use ($order, $files, $note, $actor, $productionUnitKey, &$storedPaths): OrderProductPreviewGallery {
                 $gallery = OrderProductPreviewGallery::query()
                     ->lockForUpdate()
                     ->where('checkout_group_key', $order->checkoutGroupKey())
@@ -55,6 +55,7 @@ class OrderProductPreviewService
 
                     $preview = OrderPreview::create([
                         'order_id' => $order->id,
+                        'production_unit_key' => $productionUnitKey,
                         'product_gallery_id' => $gallery->id,
                         'file_path' => $path,
                         'disk' => 'local',
@@ -77,6 +78,7 @@ class OrderProductPreviewService
                         'gallery_id' => $gallery->id,
                         'preview_ids' => $created->pluck('id')->all(),
                         'file_names' => $created->pluck('original_name')->all(),
+                        'production_unit_key' => $productionUnitKey,
                     ],
                 );
 

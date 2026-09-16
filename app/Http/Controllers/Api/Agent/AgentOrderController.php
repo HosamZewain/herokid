@@ -135,14 +135,13 @@ class AgentOrderController extends Controller
         AgentIdempotencyService $idempotency,
         OrderAttachmentService $attachments,
     ): JsonResponse {
-        $production->authorizedOrder($order, $request->user());
         $validated = $this->validate($request, [
             'attachments' => ['required', 'array', 'min:1', 'max:10'],
             'attachments.*' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp,heic,heif', 'max:51200'],
             'note' => ['nullable', 'string', 'max:1000'],
             'production_unit_key' => ['nullable', 'string', 'max:120'],
         ], 'INVALID_ATTACHMENT');
-        $unitKey = $production->validateUnitForOrder($order, $validated['production_unit_key'] ?? null);
+        $unitKey = $production->authorizeAttachmentUpload($order, $request->user(), $validated['production_unit_key'] ?? null);
 
         $result = $idempotency->execute($request->user(), 'orders.attachments:'.$order->id, $request, function () use ($request, $order, $attachments, $validated, $unitKey): array {
             $created = $attachments->upload(
@@ -182,22 +181,27 @@ class AgentOrderController extends Controller
     ): JsonResponse {
         $type = (string) $request->input('type');
         $rules = match ($type) {
-            'booklet' => ['type' => ['required', 'in:booklet'], 'preview_files' => ['required', 'array', 'size:1'], 'preview_files.*' => ['required', 'file', 'mimes:pdf', 'max:51200'], 'note' => ['nullable', 'string', 'max:1000']],
-            'product_images' => ['type' => ['required', 'in:product_images'], 'preview_files' => ['required', 'array', 'min:1', 'max:10'], 'preview_files.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:20480'], 'note' => ['nullable', 'string', 'max:1000']],
+            'booklet' => ['type' => ['required', 'in:booklet'], 'preview_files' => ['required', 'array', 'size:1'], 'preview_files.*' => ['required', 'file', 'mimes:pdf', 'max:51200'], 'note' => ['nullable', 'string', 'max:1000'], 'production_unit_key' => ['nullable', 'string', 'max:120']],
+            'product_images' => ['type' => ['required', 'in:product_images'], 'preview_files' => ['required', 'array', 'min:1', 'max:10'], 'preview_files.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:20480'], 'note' => ['nullable', 'string', 'max:1000'], 'production_unit_key' => ['nullable', 'string', 'max:120']],
             default => throw new AgentApiException('INVALID_ATTACHMENT', 'Preview type must be booklet or product_images.', 422),
         };
         $validated = $this->validate($request, $rules, 'INVALID_ATTACHMENT');
 
-        $production->authorizePreviewUpload($order, $request->user(), $type);
+        $unitKey = $production->authorizePreviewUpload($order, $request->user(), $type, $validated['production_unit_key'] ?? null);
 
-        $result = $idempotency->execute($request->user(), 'orders.previews:'.$order->id.':'.$type, $request, function () use ($request, $order, $type, $validated, $booklets, $productPreviews): array {
+        $result = $idempotency->execute($request->user(), 'orders.previews:'.$order->id.':'.$type, $request, function () use ($request, $order, $type, $validated, $unitKey, $booklets, $productPreviews): array {
             try {
                 if ($type === 'booklet') {
                     $preview = $booklets->createOrReplaceForOrder($order, $request->file('preview_files')[0], $validated['note'] ?? null, $request->user());
                     $payload = ['type' => 'booklet', 'preview_id' => $preview->id, 'version' => $preview->currentVersion?->version_number];
                 } else {
-                    $gallery = $productPreviews->upload($order, $request->file('preview_files', []), $validated['note'] ?? null, $request->user());
-                    $payload = ['type' => 'product_images', 'gallery_id' => $gallery->id, 'images_count' => $gallery->previews->count()];
+                    $gallery = $productPreviews->upload($order, $request->file('preview_files', []), $validated['note'] ?? null, $request->user(), $unitKey);
+                    $payload = [
+                        'type' => 'product_images',
+                        'gallery_id' => $gallery->id,
+                        'images_count' => $gallery->previews->where('production_unit_key', $unitKey)->count(),
+                        'production_unit_key' => $unitKey,
+                    ];
                 }
             } catch (ValidationException $exception) {
                 throw new AgentApiException('INVALID_ATTACHMENT', 'The preview file is invalid.', 422, [
@@ -225,7 +229,7 @@ class AgentOrderController extends Controller
 
     public function childPhoto(Request $request, Order $order, int $index, AgentCheckoutProductionService $production)
     {
-        $production->authorizedOrder($order, $request->user());
+        $production->authorizeReferenceRead($order, $request->user(), $this->referenceUnitKey($request));
         $photos = array_values(array_filter($order->uploaded_photos ?? [], 'is_string'));
         $path = $photos[$index] ?? null;
         if (! $path || str_contains($path, '..')) {
@@ -237,7 +241,7 @@ class AgentOrderController extends Controller
 
     public function approvedIdentity(Request $request, Order $order, AgentCheckoutProductionService $production)
     {
-        $production->authorizedOrder($order, $request->user());
+        $production->authorizeReferenceRead($order, $request->user(), $this->referenceUnitKey($request));
         $attempt = $order->childIdentityApprovedAttempt;
         if (! $attempt || $attempt->status !== 'succeeded' || blank($attempt->output_storage_path)) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Approved identity not found.', 404);
@@ -248,10 +252,11 @@ class AgentOrderController extends Controller
 
     public function attachment(Request $request, Order $order, OrderAttachment $attachment, AgentCheckoutProductionService $production, OrderAttachmentService $attachments)
     {
-        $production->authorizedOrder($order, $request->user());
         if ($attachment->order_id !== $order->id) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Attachment not found.', 404);
         }
+
+        $production->authorizeAttachmentRead($order, $request->user(), $attachment);
 
         if ($attachment->isExpired()) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Attachment has expired.', 410);
@@ -262,6 +267,16 @@ class AgentOrderController extends Controller
         }
 
         return $attachments->response($attachment, 'inline');
+    }
+
+    private function referenceUnitKey(Request $request): ?string
+    {
+        $unitKey = $request->query('production_unit_key');
+        if ($unitKey !== null && (! is_string($unitKey) || strlen($unitKey) > 120)) {
+            throw new AgentApiException('INVALID_ATTACHMENT', 'A valid production_unit_key is required.', 422);
+        }
+
+        return $unitKey;
     }
 
     private function validate(Request $request, array $rules, string $code): array

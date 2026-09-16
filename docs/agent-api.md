@@ -17,7 +17,7 @@ For a dedicated worker that must process one product (or a small allowed set), c
 - Existing product tokens without selected product IDs remain allowed to process all production products for backward compatibility.
 - A restricted token skips a complete checkout if any production unit is a story or a different personalized product.
 - Ready-made items without a Production Prompt are not production units and do not block an otherwise eligible checkout.
-- Product restrictions apply to acquisition, context, uploads, previews, rework, and completion.
+- Product restrictions apply to acquisition, context, uploads, previews, rework, and completion. In a mixed checkout, the separately documented unit-scoped attachment and product-preview uploads can target only a permitted product; they do not acquire or complete the checkout.
 
 Enable **السماح بتعديل وإعادة إنتاج الطلبات السابقة** only for an Agent that must correct existing orders. This adds two narrowly scoped abilities:
 
@@ -92,6 +92,8 @@ curl https://hero-kid.com/api/agent/studio/connection \
 The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads the checkout without creating or checking an assignment. `production_stories` remains the authoritative detailed story/scene payload. `production_units` contains the same story, standalone-product, and product-component shapes used by the acquisition-protected production-context endpoint.
 
 Catalog restrictions are filters for this read-only lookup: a stories-only token receives story units, a products-only token receives product units, and a product-ID-restricted token receives only permitted products. A mixed checkout is not rejected merely because some units are outside scope. Legacy tokens without catalog abilities retain story-and-product access. If the checkout has units but none are visible to the token, the endpoint returns `403 FORBIDDEN`. `inventory_visibility` reports the effective catalog scope, whether product restrictions exist, whether filtering occurred, and the number of returned units without describing hidden products.
+
+For a token allowed to produce only some products in a mixed checkout, use this lookup to obtain the permitted `production_units` and their stable `unit_key` values. The returned attachment lists and product-preview counts are scoped to each unit; sibling products and their files are not included. Production reference URLs carry `production_unit_key` so the permitted unit can read its order-level references without acquiring the entire checkout. A lookup never acquires the checkout or changes its status.
 
 ```bash
 curl https://hero-kid.com/api/agent/studio/orders/HK-2026-XXXXXX \
@@ -344,6 +346,18 @@ Empty queue:
 The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope; and `already_acquired` means another assignment already exists.
 
 For a product-restricted token, `queue.token_product_ids` lists the enforced product IDs. The normal workflow and endpoints do not change: acquire with `POST /checkouts/acquire-next`, execute every returned product prompt, upload at least one production attachment for every unit, optionally upload previews, then call `POST /checkouts/{reference}/complete-production`. Successful completion changes the production orders to `ready_preview`.
+
+`acquire-next` remains a **whole-checkout** workflow: it skips checkouts containing any unit outside the token scope. Its empty-queue diagnostics include `partial_product_work` for this case. The same read-only discovery is available at `GET /checkouts/partial-product-work` with `agent:orders.read` and `orders.view`; it returns at most 25 authorized checkout pointers (`order_number` plus permitted `production_unit_keys`), the total checkout count, and `has_more`. It never returns sibling product details or acquires a checkout. A listed product may already have attachments, so inspect its Studio inventory before producing again. When a permitted product shares a checkout with a different product, use the unit-scoped mixed-checkout workflow below instead of whole-checkout acquisition. Do not treat a partial product as acquisition or completion of the whole checkout.
+
+### Permitted product inside a mixed checkout
+
+1. Use a known order number or discover permitted mixed checkouts with `GET /checkouts/partial-product-work`. Then read `GET /studio/orders/{orderNumber}` with `agent:orders.read` and `orders.view`. It returns only the token's permitted production units, including their prompts, stable unit keys, and authorized reference URLs.
+2. Upload an attachment to `POST /orders/{orderId}/attachments` with `production_unit_key={unit_key}`, `attachments[]`, and `Idempotency-Key`. A product-scoped token may upload to its permitted product unit without acquiring a checkout that contains out-of-scope units. The endpoint still requires `agent:orders.upload-attachment` and `orders.update`.
+3. Upload product preview images to `POST /orders/{orderId}/previews` with `type=product_images`, `production_unit_key={unit_key}`, `preview_files[]`, and `Idempotency-Key`. This retains the existing `agent:orders.upload-preview` and `orders.preview.upload` checks. The gallery remains checkout-level for the customer, but each new preview records its production unit and the Agent response reports only that unit's image count.
+
+Always send the returned `production_unit_key`. For backward compatibility, the server can infer it when there is exactly one applicable product unit (or one permitted unit among several). Ambiguous requests return `422`; a key for another product returns `403`. Old product previews without a unit key remain visible for a single-unit order, but are not attributed to any unit when multiple units share the order. Repeating the same idempotency key does not create duplicate files.
+
+This mixed-checkout path does **not** create `OrderGroupAssignment`, update status, or mark the checkout complete. Partial production attachment uploads are limited to `new`/`generating` orders and cannot bypass a checkout assignment held by another Agent. `production-context`, `complete-production`, rework, and whole-checkout status changes retain their acquisition/whole-scope requirements. Those actions must be performed separately by an operator or an Agent authorized for the entire checkout. This is intentional: order status is currently stored on the order, not independently on each product item.
 
 ### Production context
 
