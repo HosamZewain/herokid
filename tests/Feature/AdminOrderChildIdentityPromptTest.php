@@ -131,6 +131,33 @@ class AdminOrderChildIdentityPromptTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_update_global_story_identity_prompt_and_default_orders_use_it(): void
+    {
+        $admin = $this->adminUser();
+        $defaultOrder = $this->orderWithStory();
+        $customOrder = $this->orderWithStory();
+        $this->actingAs($admin)
+            ->post(route('admin.orders.child-identity-prompt.override', $customOrder), [
+                'prompt_text' => 'CUSTOM ORDER IDENTITY INSTRUCTIONS',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->get(route('admin.settings.story-child-identity-prompt.edit'))
+            ->assertOk()
+            ->assertSee('قالب برومبت إنتاج هوية القصة')
+            ->assertSee('Create ONLY the reusable child hero identity');
+
+        $updatedTemplate = 'GLOBAL STORY IDENTITY TEMPLATE. Preserve the child identity exactly.';
+        $this->actingAs($admin)
+            ->put(route('admin.settings.story-child-identity-prompt.update'), ['template' => $updatedTemplate])
+            ->assertRedirect(route('admin.settings.story-child-identity-prompt.edit'));
+
+        $this->assertStringContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($defaultOrder->fresh()));
+        $this->assertStringNotContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($customOrder->fresh()));
+        $this->assertStringContainsString('CUSTOM ORDER IDENTITY INSTRUCTIONS', app(OrderChildIdentityPromptService::class)->forOrder($customOrder->fresh()));
+    }
+
     public function test_admin_can_snapshot_and_reset_identity_prompt_without_changing_production_prompt(): void
     {
         $admin = $this->adminUser();

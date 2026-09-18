@@ -3,11 +3,14 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Models\Setting;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class OrderChildIdentityPromptService
 {
+    public const SETTING_KEY = 'story_child_identity_production_prompt_template';
+
     public const MAX_LENGTH = 65000;
 
     public const VERSION = '1.0';
@@ -25,7 +28,7 @@ class OrderChildIdentityPromptService
         $order->loadMissing(['story.sceneTemplates', 'sceneTextSnapshots', 'childIdentityPromptOverride']);
         $instructions = $useOverride && $order->childIdentityPromptOverride
             ? trim((string) $order->childIdentityPromptOverride->prompt_text)
-            : $this->defaultInstructions();
+            : $this->activeTemplate();
 
         return $this->withCurrentContext($instructions, $order);
     }
@@ -61,6 +64,16 @@ OUTPUT REQUIREMENTS:
 WORKFLOW NOTE:
 This identity will be reviewed and approved first. Only after approval will it be supplied as the primary visual identity reference together with the existing Story Production Prompt to generate the 13 story scenes.
 PROMPT;
+    }
+
+    public function activeTemplate(): string
+    {
+        return (string) setting(self::SETTING_KEY, $this->defaultInstructions());
+    }
+
+    public function templateSetting(): ?Setting
+    {
+        return Setting::query()->with('editor')->where('key', self::SETTING_KEY)->first();
     }
 
     private function contextBlock(Order $order): string

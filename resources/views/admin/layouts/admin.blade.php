@@ -275,6 +275,7 @@
                         @endcan
                         @can('settings.production_prompt.view')
                             <a href="{{ route('admin.settings.story-production-prompt.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.story-production-prompt.*') ? $activeLink : $idleLink }}">قالب برومبت الإنتاج</a>
+                            <a href="{{ route('admin.settings.story-child-identity-prompt.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.story-child-identity-prompt.*') ? $activeLink : $idleLink }}">قالب برومبت هوية القصة</a>
                         @endcan
                         @can('settings.ai_providers.view')
                             <a href="{{ route('admin.settings.ai-providers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.ai-providers.*') ? $activeLink : $idleLink }}">مزودو الذكاء الاصطناعي</a>
