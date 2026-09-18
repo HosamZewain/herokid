@@ -218,7 +218,10 @@ class AgentCheckoutProductionService
 
                 $allUnits = $this->units($ordersByGroup->get($groupKey, collect()));
                 $authorized = AgentCatalogScope::filterUnits($agent, $allUnits);
-                if ($authorized->count() === $allUnits->count()) {
+                $allUnitsAllowed = $authorized->count() === $allUnits->count();
+                $hasFinishedSibling = $this->targetOrders($ordersByGroup->get($groupKey, collect()), $allUnits)
+                    ->contains(fn (Order $order): bool => ! in_array($order->status, ['new', 'generating'], true));
+                if ($allUnitsAllowed && (! $hasFinishedSibling || AgentProductScope::forUser($agent) === [])) {
                     continue;
                 }
 
@@ -711,7 +714,9 @@ class AgentCheckoutProductionService
         return [
             'unit' => $unit,
             'partial_product' => $unit['type'] === 'product'
-                && AgentCatalogScope::filterUnits($agent, $allUnits)->count() !== $allUnits->count(),
+                && (AgentCatalogScope::filterUnits($agent, $allUnits)->count() !== $allUnits->count()
+                    || (AgentProductScope::forUser($agent) !== []
+                        && $this->targetOrders($orders, $allUnits)->contains(fn (Order $target): bool => ! in_array($target->status, ['new', 'generating'], true)))),
         ];
     }
 

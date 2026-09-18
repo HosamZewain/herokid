@@ -121,6 +121,100 @@ class AgentPartialProductProductionTest extends TestCase
         $this->assertSame($agent->id, $order->attachments()->findOrFail($upload->json('attachments.0.id'))->uploaded_by_user_id);
     }
 
+    public function test_new_permitted_product_is_discoverable_after_sibling_product_is_finished(): void
+    {
+        Storage::fake('local');
+        [$finishedOrder, $sticker, $otherProduct] = $this->mixedOrder();
+        $finishedOrder->update(['status' => 'ready_preview']);
+
+        $newOrder = Order::create([
+            'order_number' => 'HK-PARTIAL-NEW-PRODUCT',
+            'checkout_group_key' => $finishedOrder->checkoutGroupKey(),
+            'status' => 'new',
+            'uploaded_photos' => [],
+        ]);
+        $otherProduct->update(['order_id' => $newOrder->id]);
+        // Both product IDs are permitted: it is the mixed status, not catalog scope,
+        // that prevents whole-checkout acquisition.
+        $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
+        $token = $agent->createToken('both-products', [
+            'agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.upload-attachment',
+            'agent:catalog.products', 'agent:catalog.product.'.$sticker->product_id,
+            'agent:catalog.product.'.$otherProduct->product_id,
+        ])->plainTextToken;
+
+        $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'mixed-status-queue'])
+            ->assertOk()->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS')
+            ->assertJsonPath('queue.mixed_production_status', 1)
+            ->assertJsonPath('queue.partial_product_work.checkout_count', 1);
+
+        $discovery = $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
+            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 1)
+            ->assertJsonPath('partial_product_work.checkouts.0.order_number', $newOrder->order_number)
+            ->assertJsonPath('partial_product_work.checkouts.0.production_unit_keys.0', 'product:'.$otherProduct->id);
+        $this->assertCount(1, $discovery->json('partial_product_work.checkouts.0.production_unit_keys'));
+
+        $this->withToken($token)->getJson('/api/agent/studio/orders/'.$newOrder->order_number)
+            ->assertOk()->assertJsonPath('production_units.1.unit_key', 'product:'.$otherProduct->id);
+        $this->post('/api/agent/orders/'.$newOrder->id.'/attachments', [
+            'production_unit_key' => 'product:'.$otherProduct->id,
+            'attachments' => [UploadedFile::fake()->create('new-product.pdf', 100, 'application/pdf')],
+        ], $this->headers($token, 'mixed-status-attachment'))->assertCreated();
+
+        $this->assertSame('ready_preview', $finishedOrder->fresh()->status);
+        $this->assertSame('new', $newOrder->fresh()->status);
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => $newOrder->checkoutGroupKey()]);
+    }
+
+    public function test_restricted_token_with_all_new_products_still_uses_whole_checkout_acquisition(): void
+    {
+        Storage::fake('local');
+        [$order, $first, $second] = $this->mixedOrder();
+        $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
+        $token = $agent->createToken('both-new-products', [
+            'agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.upload-attachment',
+            'agent:catalog.products', 'agent:catalog.product.'.$first->product_id,
+            'agent:catalog.product.'.$second->product_id,
+        ])->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
+            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 0);
+        $this->post('/api/agent/orders/'.$order->id.'/attachments', [
+            'production_unit_key' => 'product:'.$first->id,
+            'attachments' => [UploadedFile::fake()->create('before-acquisition.pdf', 100, 'application/pdf')],
+        ], $this->headers($token, 'both-new-before-acquisition'))->assertForbidden();
+
+        $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'both-new-acquire'])
+            ->assertOk()->assertJsonPath('checkout.orders.0.id', $order->id);
+        $this->assertSame('generating', $order->fresh()->status);
+    }
+
+    public function test_unrestricted_token_cannot_use_partial_upload_for_mixed_status_checkout(): void
+    {
+        Storage::fake('local');
+        [$finishedOrder, , $newItem] = $this->mixedOrder();
+        $newOrder = Order::create([
+            'order_number' => 'HK-PARTIAL-UNRESTRICTED',
+            'checkout_group_key' => $finishedOrder->checkoutGroupKey(),
+            'status' => 'new',
+            'uploaded_photos' => [],
+        ]);
+        $newItem->update(['order_id' => $newOrder->id]);
+        $finishedOrder->update(['status' => 'ready_preview']);
+        $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
+        $token = $agent->createToken('unrestricted-products', [
+            'agent', 'agent:orders.read', 'agent:orders.upload-attachment', 'agent:catalog.products',
+        ])->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
+            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 0);
+        $this->post('/api/agent/orders/'.$newOrder->id.'/attachments', [
+            'production_unit_key' => 'product:'.$newItem->id,
+            'attachments' => [UploadedFile::fake()->create('unrestricted.pdf', 100, 'application/pdf')],
+        ], $this->headers($token, 'mixed-status-unrestricted'))->assertForbidden();
+        $this->assertSame('new', $newOrder->fresh()->status);
+    }
+
     public function test_restricted_preview_upload_is_unit_scoped_idempotent_and_does_not_replace_sibling_images(): void
     {
         Storage::fake('local');
