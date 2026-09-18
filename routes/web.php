@@ -53,6 +53,7 @@ use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
+use App\Http\Controllers\Admin\StoryChildIdentityPromptTemplateController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
@@ -903,6 +904,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('settings/story-production-prompt', [StoryProductionPromptTemplateController::class, 'update'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.update');
     Route::post('settings/story-production-prompt/preview', [StoryProductionPromptTemplateController::class, 'preview'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.preview');
     Route::post('settings/story-production-prompt/reset', [StoryProductionPromptTemplateController::class, 'reset'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-production-prompt.reset');
+    Route::get('settings/story-child-identity-prompt', [StoryChildIdentityPromptTemplateController::class, 'edit'])->middleware('permission:settings.production_prompt.view')->name('settings.story-child-identity-prompt.edit');
+    Route::put('settings/story-child-identity-prompt', [StoryChildIdentityPromptTemplateController::class, 'update'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-child-identity-prompt.update');
+    Route::post('settings/story-child-identity-prompt/reset', [StoryChildIdentityPromptTemplateController::class, 'reset'])->middleware('permission:settings.production_prompt.manage')->name('settings.story-child-identity-prompt.reset');
     Route::get('settings/ai-providers', [AiProviderSettingsController::class, 'index'])->middleware('permission:settings.ai_providers.view')->name('settings.ai-providers.index');
     Route::get('settings/ai-providers/{provider}', [AiProviderSettingsController::class, 'edit'])->middleware('permission:settings.ai_providers.view')->name('settings.ai-providers.edit');
     Route::put('settings/ai-providers/{provider}', [AiProviderSettingsController::class, 'update'])->middleware('permission:settings.ai_providers.manage')->name('settings.ai-providers.update');
