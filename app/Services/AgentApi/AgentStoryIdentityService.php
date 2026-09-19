@@ -308,7 +308,7 @@ class AgentStoryIdentityService
 
         return $query->with([
             'checkoutReference', 'groupAssignment', 'story.sceneTemplates', 'sceneTextSnapshots',
-            'childIdentityPromptOverride', 'childIdentityApprovedAttempt', 'items.product',
+            'childIdentityApprovedAttempt', 'items.product',
         ])->get();
     }
 

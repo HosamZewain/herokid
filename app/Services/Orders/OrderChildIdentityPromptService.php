@@ -23,14 +23,11 @@ class OrderChildIdentityPromptService
         private readonly OrderSceneTextService $sceneTexts,
     ) {}
 
-    public function forOrder(Order $order, bool $useOverride = true): string
+    public function forOrder(Order $order): string
     {
-        $order->loadMissing(['story.sceneTemplates', 'sceneTextSnapshots', 'childIdentityPromptOverride']);
-        $instructions = $useOverride && $order->childIdentityPromptOverride
-            ? trim((string) $order->childIdentityPromptOverride->prompt_text)
-            : $this->activeTemplate();
+        $order->loadMissing(['story.sceneTemplates', 'sceneTextSnapshots']);
 
-        return $this->withCurrentContext($instructions, $order);
+        return $this->withCurrentContext($this->activeTemplate(), $order);
     }
 
     public function withCurrentContext(string $prompt, Order $order): string

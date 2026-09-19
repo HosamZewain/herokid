@@ -395,8 +395,6 @@ class OrderController extends Controller
             'items.linkedAddOns.product',
             'productionPromptOverride.editor',
             'productionPromptSnapshots.creator',
-            'childIdentityPromptOverride.editor',
-            'childIdentityPromptSnapshots.creator',
             'productionProject.assignedTo',
             'productionProject.scenes',
             'childIdentityRequest.photos',

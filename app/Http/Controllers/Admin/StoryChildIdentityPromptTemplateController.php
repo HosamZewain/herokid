@@ -52,21 +52,26 @@ class StoryChildIdentityPromptTemplateController extends Controller
         );
 
         return redirect()->route('admin.settings.story-child-identity-prompt.edit')
-            ->with('success', 'تم حفظ قالب برومبت هوية القصص. سيظهر في الطلبات التي تستخدم القالب الافتراضي.');
+            ->with('success', 'تم حفظ قالب برومبت هوية القصص. ظهر التحديث تلقائيًا في كل طلبات القصص القديمة والجديدة.');
     }
 
     public function reset(Request $request, OrderChildIdentityPromptService $prompts): RedirectResponse
     {
+        $before = $prompts->activeTemplate();
         $template = $prompts->defaultInstructions();
-        Setting::query()->updateOrCreate(
-            ['key' => OrderChildIdentityPromptService::SETTING_KEY],
-            ['value' => $template, 'updated_by' => $request->user()->id],
-        );
+        Setting::query()
+            ->where('key', OrderChildIdentityPromptService::SETTING_KEY)
+            ->first()
+            ?->delete();
 
         AdminActivityLogger::log(
             action: 'story_child_identity_prompt_template.reset',
             description: 'استعادة قالب برومبت إنتاج هوية القصص الافتراضي.',
-            properties: ['new_hash' => hash('sha256', $template)],
+            properties: [
+                'changed' => $before !== $template,
+                'previous_hash' => hash('sha256', $before),
+                'new_hash' => hash('sha256', $template),
+            ],
             request: $request,
         );
 

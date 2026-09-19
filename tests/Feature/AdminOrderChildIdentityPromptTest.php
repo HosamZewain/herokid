@@ -108,21 +108,25 @@ class AdminOrderChildIdentityPromptTest extends TestCase
             ->assertSee('فتح الهوية المعتمدة');
     }
 
-    public function test_identity_prompt_override_keeps_managed_order_context_current(): void
+    public function test_legacy_identity_prompt_override_does_not_pin_an_order_to_old_instructions(): void
     {
         $admin = $this->adminUser();
         $order = $this->orderWithStory();
-
-        $this->actingAs($admin)
-            ->post(route('admin.orders.child-identity-prompt.override', $order), [
-                'prompt_text' => 'CUSTOM IDENTITY DIRECTIONS: keep the hero outfit blue and silver.',
-            ])
-            ->assertRedirect();
+        $order->childIdentityPromptOverride()->create([
+            'prompt_text' => 'LEGACY ORDER-SPECIFIC IDENTITY INSTRUCTIONS',
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+        ]);
+        Setting::query()->updateOrCreate(
+            ['key' => OrderChildIdentityPromptService::SETTING_KEY],
+            ['value' => 'CURRENT GLOBAL IDENTITY TEMPLATE', 'updated_by' => $admin->id],
+        );
 
         $order->update(['child_name' => 'سليم', 'child_age' => 9]);
         $prompt = app(OrderChildIdentityPromptService::class)->forOrder($order->fresh());
 
-        $this->assertStringContainsString('CUSTOM IDENTITY DIRECTIONS', $prompt);
+        $this->assertStringContainsString('CURRENT GLOBAL IDENTITY TEMPLATE', $prompt);
+        $this->assertStringNotContainsString('LEGACY ORDER-SPECIFIC IDENTITY INSTRUCTIONS', $prompt);
         $this->assertStringContainsString('- Child name: سليم', $prompt);
         $this->assertStringContainsString('- Child age: 9', $prompt);
         $this->assertDatabaseHas('order_child_identity_prompt_overrides', [
@@ -131,16 +135,10 @@ class AdminOrderChildIdentityPromptTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_update_global_story_identity_prompt_and_default_orders_use_it(): void
+    public function test_admin_global_identity_prompt_update_reaches_old_and_new_orders_immediately(): void
     {
         $admin = $this->adminUser();
-        $defaultOrder = $this->orderWithStory();
-        $customOrder = $this->orderWithStory();
-        $this->actingAs($admin)
-            ->post(route('admin.orders.child-identity-prompt.override', $customOrder), [
-                'prompt_text' => 'CUSTOM ORDER IDENTITY INSTRUCTIONS',
-            ])
-            ->assertRedirect();
+        $oldOrder = $this->orderWithStory();
 
         $this->actingAs($admin)
             ->get(route('admin.settings.story-child-identity-prompt.edit'))
@@ -153,41 +151,53 @@ class AdminOrderChildIdentityPromptTest extends TestCase
             ->put(route('admin.settings.story-child-identity-prompt.update'), ['template' => $updatedTemplate])
             ->assertRedirect(route('admin.settings.story-child-identity-prompt.edit'));
 
-        $this->assertStringContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($defaultOrder->fresh()));
-        $this->assertStringNotContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($customOrder->fresh()));
-        $this->assertStringContainsString('CUSTOM ORDER IDENTITY INSTRUCTIONS', app(OrderChildIdentityPromptService::class)->forOrder($customOrder->fresh()));
+        $newOrder = $this->orderWithStory();
+        $this->assertStringContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($oldOrder->fresh()));
+        $this->assertStringContainsString($updatedTemplate, app(OrderChildIdentityPromptService::class)->forOrder($newOrder->fresh()));
+
+        $secondTemplate = 'SECOND GLOBAL IDENTITY TEMPLATE. Apply it to every story order.';
+        $this->actingAs($admin)
+            ->put(route('admin.settings.story-child-identity-prompt.update'), ['template' => $secondTemplate])
+            ->assertRedirect(route('admin.settings.story-child-identity-prompt.edit'));
+
+        $oldOrderPrompt = app(OrderChildIdentityPromptService::class)->forOrder($oldOrder->fresh());
+        $this->assertStringContainsString($secondTemplate, $oldOrderPrompt);
+        $this->assertStringNotContainsString($updatedTemplate, $oldOrderPrompt);
     }
 
-    public function test_admin_can_snapshot_and_reset_identity_prompt_without_changing_production_prompt(): void
+    public function test_reset_removes_custom_global_value_and_does_not_change_production_prompt(): void
     {
         $admin = $this->adminUser();
         $order = $this->orderWithStory();
         $productionPromptBefore = StoryProductionPrompt::forOrder($order);
+        Setting::query()->updateOrCreate(
+            ['key' => OrderChildIdentityPromptService::SETTING_KEY],
+            ['value' => 'TEMPORARY GLOBAL IDENTITY TEMPLATE', 'updated_by' => $admin->id],
+        );
 
         $this->actingAs($admin)
-            ->post(route('admin.orders.child-identity-prompt.override', $order), [
-                'prompt_text' => 'Identity-only custom prompt.',
-            ])
-            ->assertRedirect();
+            ->post(route('admin.settings.story-child-identity-prompt.reset'))
+            ->assertRedirect(route('admin.settings.story-child-identity-prompt.edit'));
 
-        $this->actingAs($admin)
-            ->post(route('admin.orders.child-identity-prompt.snapshot', $order), [
-                'prompt_text' => app(OrderChildIdentityPromptService::class)->forOrder($order->fresh()),
-                'snapshot_reason' => 'before-customer-review',
-            ])
-            ->assertRedirect();
-
-        $snapshot = $order->childIdentityPromptSnapshots()->firstOrFail();
-        $this->assertSame('1.0', $snapshot->prompt_version);
-        $this->assertSame('before-customer-review', $snapshot->snapshot_reason);
-        $this->assertStringContainsString('Identity-only custom prompt.', $snapshot->prompt_text);
-
-        $this->actingAs($admin)
-            ->delete(route('admin.orders.child-identity-prompt.override-reset', $order))
-            ->assertRedirect();
-
-        $this->assertFalse($order->childIdentityPromptOverride()->exists());
+        $this->assertDatabaseMissing('settings', ['key' => OrderChildIdentityPromptService::SETTING_KEY]);
+        $this->assertStringContainsString(
+            app(OrderChildIdentityPromptService::class)->defaultInstructions(),
+            app(OrderChildIdentityPromptService::class)->forOrder($order->fresh()),
+        );
         $this->assertSame($productionPromptBefore, StoryProductionPrompt::forOrder($order->fresh()));
+    }
+
+    public function test_order_page_exposes_current_prompt_as_read_only_without_override_or_snapshot_actions(): void
+    {
+        $response = $this->actingAs($this->adminUser())
+            ->get(route('admin.orders.show', $this->orderWithStory()));
+
+        $response->assertOk()
+            ->assertSee('القالب العام الحالي')
+            ->assertSee('readonly', false)
+            ->assertDontSee('حفظ كبرومبت خاص')
+            ->assertDontSee('حفظ نسخة الهوية')
+            ->assertDontSee('الرجوع للقالب الافتراضي');
     }
 
     public function test_product_only_order_does_not_show_identity_prompt(): void

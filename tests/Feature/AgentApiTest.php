@@ -10,10 +10,12 @@ use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
 use App\Services\AgentApi\AgentProductScope;
+use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderSceneTextService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -607,6 +609,47 @@ class AgentApiTest extends TestCase
             ->postJson("/api/agent/checkouts/{$reference}/complete-identity", [], ['Idempotency-Key' => 'identity-complete-repeat'])
             ->assertOk()
             ->assertJsonPath('already_completed', true);
+    }
+
+    public function test_identity_context_refreshes_old_orders_from_the_current_global_template(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $token = $this->identityToken($agent);
+        $order = $this->storyOrder('IDENTITY-DYNAMIC-PROMPT', 'HK-IDENTITY-DYNAMIC', true);
+        $order->childIdentityPromptOverride()->create([
+            'prompt_text' => 'LEGACY ORDER-SPECIFIC PROMPT',
+            'created_by' => $agent->id,
+            'updated_by' => $agent->id,
+        ]);
+        Setting::query()->updateOrCreate(
+            ['key' => OrderChildIdentityPromptService::SETTING_KEY],
+            ['value' => 'FIRST GLOBAL IDENTITY TEMPLATE', 'updated_by' => $agent->id],
+        );
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next-identity', [], ['Idempotency-Key' => 'identity-dynamic-prompt'])
+            ->assertOk();
+        $reference = $acquired->json('checkout.reference');
+
+        $firstPrompt = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/identity-context")
+            ->assertOk()
+            ->json('identity_units.0.identity_prompt');
+        $this->assertStringContainsString('FIRST GLOBAL IDENTITY TEMPLATE', $firstPrompt);
+        $this->assertStringNotContainsString('LEGACY ORDER-SPECIFIC PROMPT', $firstPrompt);
+
+        Setting::query()->updateOrCreate(
+            ['key' => OrderChildIdentityPromptService::SETTING_KEY],
+            ['value' => 'SECOND GLOBAL IDENTITY TEMPLATE', 'updated_by' => $agent->id],
+        );
+
+        $secondPrompt = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/identity-context")
+            ->assertOk()
+            ->json('identity_units.0.identity_prompt');
+        $this->assertStringContainsString('SECOND GLOBAL IDENTITY TEMPLATE', $secondPrompt);
+        $this->assertStringNotContainsString('FIRST GLOBAL IDENTITY TEMPLATE', $secondPrompt);
     }
 
     public function test_identity_queue_rejects_product_token_and_skips_story_without_photos(): void
