@@ -157,6 +157,24 @@ return [
             'sensitive' => true,
         ],
 
+        'media_library.view' => [
+            'group_key' => 'content',
+            'name_ar' => 'عرض مكتبة الوسائط',
+            'name_en' => 'View media library',
+            'description_ar' => 'عرض الملفات وروابط المشاركة العامة وبيانات من رفعها.',
+            'description_en' => 'View files, public share links, and uploader metadata.',
+            'sort_order' => 5,
+        ],
+        'media_library.upload' => [
+            'group_key' => 'content',
+            'name_ar' => 'رفع ملفات إلى مكتبة الوسائط',
+            'name_en' => 'Upload media library files',
+            'description_ar' => 'رفع صور وملفات PDF وTXT وإنشاء روابط عامة دائمة لها.',
+            'description_en' => 'Upload images, PDF, and TXT files and create permanent public links.',
+            'sort_order' => 6,
+            'sensitive' => true,
+        ],
+
         'orders.view' => [
             'group_key' => 'orders',
             'name_ar' => 'عرض الطلبات',

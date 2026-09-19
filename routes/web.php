@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\AdminMediaLibraryController;
+use App\Http\Controllers\Admin\AdminMediaUploadController;
 use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
@@ -77,6 +79,7 @@ use App\Http\Controllers\Front\StoryController;
 use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PublicMediaController;
 use App\Models\FaqItem;
 use App\Models\HomepageStoreSection;
 use App\Models\Order;
@@ -108,6 +111,11 @@ Route::get('/storage/{path}', function (string $path) {
         'Cache-Control' => 'public, max-age=31536000, immutable',
     ]);
 })->where('path', '.*')->name('storage.serve');
+
+Route::get('/media/{media}', PublicMediaController::class)
+    ->whereUuid('media')
+    ->middleware('throttle:120,1')
+    ->name('media-library.public');
 
 // Homepage
 Route::get('/', function () {
@@ -425,6 +433,24 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
         ->name('dashboard.index');
+    Route::get('media-library', [AdminMediaLibraryController::class, 'index'])
+        ->middleware('permission:media_library.view')
+        ->name('media-library.index');
+    Route::post('media-library/uploads', [AdminMediaUploadController::class, 'store'])
+        ->middleware(['permission:media_library.upload', 'throttle:30,1'])
+        ->name('media-library.uploads.store');
+    Route::post('media-library/uploads/{upload}/chunks', [AdminMediaUploadController::class, 'chunk'])
+        ->whereUuid('upload')
+        ->middleware(['permission:media_library.upload', 'throttle:600,1'])
+        ->name('media-library.uploads.chunks.store');
+    Route::post('media-library/uploads/{upload}/complete', [AdminMediaUploadController::class, 'complete'])
+        ->whereUuid('upload')
+        ->middleware(['permission:media_library.upload', 'throttle:30,1'])
+        ->name('media-library.uploads.complete');
+    Route::delete('media-library/uploads/{upload}', [AdminMediaUploadController::class, 'destroy'])
+        ->whereUuid('upload')
+        ->middleware(['permission:media_library.upload', 'throttle:30,1'])
+        ->name('media-library.uploads.destroy');
     Route::post('dashboard/management-notes', [DashboardController::class, 'storeManagementNote'])
         ->middleware(['permission:dashboard.view', 'throttle:20,1'])
         ->name('dashboard.management-notes.store');

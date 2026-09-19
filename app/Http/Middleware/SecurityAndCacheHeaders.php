@@ -33,15 +33,15 @@ class SecurityAndCacheHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
-        $isBookletPreview = $request->routeIs('booklet-previews.*');
+        $isIsolatedMedia = $request->routeIs(['booklet-previews.*', 'media-library.public']);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('Referrer-Policy', $isBookletPreview ? 'no-referrer' : 'strict-origin-when-cross-origin');
+        $response->headers->set('Referrer-Policy', $isIsolatedMedia ? 'no-referrer' : 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        $response->headers->set('X-Frame-Options', $isBookletPreview ? 'DENY' : 'SAMEORIGIN');
+        $response->headers->set('X-Frame-Options', $isIsolatedMedia ? 'DENY' : 'SAMEORIGIN');
         $response->headers->set(
             'Content-Security-Policy',
-            $isBookletPreview
+            $isIsolatedMedia
                 ? "default-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
                 : "default-src 'self'; img-src 'self' https: data: blob:; worker-src 'self' blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
         );

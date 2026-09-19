@@ -144,7 +144,7 @@
                     'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view', 'settings.pricing.view',
                 ]);
                 $canContent = auth()->user()->hasAnyPermission([
-                    'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
+                    'media_library.view', 'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
                 $canSettings = auth()->user()->hasAnyPermission([
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
@@ -225,6 +225,9 @@
                 @if($canContent)
                     <div class="pt-4">
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">إدارة المحتوى</p>
+                        @can('media_library.view')
+                            <a href="{{ route('admin.media-library.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.media-library.*') ? $activeLink : $idleLink }}">مكتبة الوسائط</a>
+                        @endcan
                         @can('content.testimonials.view')
                             <a href="{{ route('admin.testimonials.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.testimonials.*') ? $activeLink : $idleLink }}">آراء العملاء</a>
                         @endcan

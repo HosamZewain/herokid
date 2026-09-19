@@ -6,6 +6,7 @@ use App\Models\ProductionAutomationRun;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
+use App\Services\MediaLibrary\AdminMediaLibraryService;
 use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationStuckChecker;
 use App\Services\Orders\OrderAttachmentService;
@@ -163,6 +164,15 @@ Artisan::command('photo-uploads:cleanup {--batch=100 : Number of uploads to proc
 })->purpose('Expire and delete unattached temporary child photo uploads');
 
 Schedule::command('photo-uploads:cleanup')->hourly();
+
+Artisan::command('media-library:cleanup-incomplete-uploads {--hours=24 : Minimum age of abandoned upload sessions}', function (AdminMediaLibraryService $mediaLibrary) {
+    $deleted = $mediaLibrary->cleanupAbandonedUploads((int) $this->option('hours'));
+    $this->info('Abandoned incomplete media uploads removed: '.$deleted.'. Completed library files were untouched.');
+
+    return Command::SUCCESS;
+})->purpose('Remove abandoned media upload fragments without deleting completed library files');
+
+Schedule::command('media-library:cleanup-incomplete-uploads')->daily()->withoutOverlapping(10);
 
 Artisan::command('order-thumbnails:cleanup', function () {
     $disk = Storage::disk('local');
