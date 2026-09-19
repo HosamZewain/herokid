@@ -36,7 +36,7 @@
         @endunless
 
         @can('orders.update')
-            <form method="POST" action="{{ route('admin.orders.attachments.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-5 grid gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-end" data-order-attachment-form>
+            <form method="POST" action="{{ route('admin.orders.attachments.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-5 grid gap-3 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-end" data-order-attachment-form data-async-admin-file-upload>
                 @csrf
                 <div>
                     <label for="order-attachments-files-{{ $attachmentTarget->id }}" class="mb-1.5 block text-xs font-black text-gray-700">الملفات</label>

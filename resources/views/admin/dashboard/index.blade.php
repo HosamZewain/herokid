@@ -426,7 +426,7 @@
                     <x-input-error :messages="$errors->get('body')" />
 
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                        <button class="rounded-xl bg-amber-500 px-6 py-3 text-sm font-black text-white transition hover:bg-amber-600">إضافة الملاحظة</button>
+                        <button type="submit" class="rounded-xl bg-amber-500 px-6 py-3 text-sm font-black text-white transition hover:bg-amber-600">إضافة الملاحظة</button>
                         <label class="block flex-1 text-right sm:max-w-xl">
                             <span class="mb-2 block text-sm font-black text-slate-700">المرفقات</span>
                             <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx" class="block w-full rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-600 file:ml-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-black file:text-indigo-700">

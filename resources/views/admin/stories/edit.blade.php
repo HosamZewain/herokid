@@ -224,7 +224,7 @@
 
                 {{-- Upload New Attachments --}}
                 @can('story_attachments.create')
-                <form action="{{ route('admin.stories.attachments.store', $story) }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.stories.attachments.store', $story) }}" method="POST" enctype="multipart/form-data" data-async-admin-file-upload>
                     @csrf
                     <div id="attachment-drop-zone"
                          class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer"
