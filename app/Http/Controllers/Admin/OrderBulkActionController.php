@@ -40,6 +40,7 @@ class OrderBulkActionController extends Controller
 
         abort_if($changesStatus && ! $request->user()->hasPermission('orders.update'), 403);
         abort_if($releasesAssignments && ! $request->user()->hasPermission('orders.assignment.manage'), 403);
+        abort_if($releasesAssignments && $request->user()->agent_api_enabled, 403);
 
         if ($changesStatus && blank($validated['status'] ?? null)) {
             return back()->withErrors(['status' => 'اختر الحالة الجديدة للطلبات المحددة.'])->withInput();

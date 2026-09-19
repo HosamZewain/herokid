@@ -12,7 +12,7 @@
         </span>
 
         @can('orders.assign')
-            @if($isMine && !($group['trashed'] ?? false))
+            @if(!auth()->user()->agent_api_enabled && $isMine && !($group['trashed'] ?? false))
                 <form method="POST" action="{{ route('admin.orders.groups.assignment.release', $group['representative_id']) }}" class="inline">
                     @csrf
                     @method('DELETE')
@@ -22,7 +22,7 @@
         @endcan
 
         @can('orders.assignment.manage')
-            @if(!$isMine && !($group['trashed'] ?? false))
+            @if(!auth()->user()->agent_api_enabled && !$isMine && !($group['trashed'] ?? false))
                 <form method="POST" action="{{ route('admin.orders.groups.assignment.takeover', $group['representative_id']) }}" class="inline" onsubmit="return confirm('الطلب مستلم بواسطة {{ addslashes($assignedAdmin->name) }}. هل تريد نقل المسؤولية إليك؟')">
                     @csrf
                     <button class="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-black text-amber-800 hover:bg-amber-100">نقل إليّ</button>
@@ -32,7 +32,7 @@
     @else
         <span class="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-500">غير مستلم</span>
         @can('orders.assign')
-            @if(!($group['trashed'] ?? false))
+            @if(!auth()->user()->agent_api_enabled && !($group['trashed'] ?? false))
                 <form method="POST" action="{{ route('admin.orders.groups.assignment.acquire', $group['representative_id']) }}" class="inline">
                     @csrf
                     <button class="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm hover:bg-indigo-700">استلام الطلب</button>

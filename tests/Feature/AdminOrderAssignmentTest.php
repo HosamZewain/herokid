@@ -144,6 +144,39 @@ class AdminOrderAssignmentTest extends TestCase
         $this->assertDatabaseCount('order_group_assignments', 0);
     }
 
+    public function test_agent_api_accounts_cannot_acquire_take_over_or_release_employee_assignments(): void
+    {
+        $employee = User::factory()->create(['role' => 'admin', 'name' => 'موظف الإنتاج']);
+        $agent = User::factory()->create([
+            'role' => 'admin',
+            'name' => 'AI Agent',
+            'agent_api_enabled' => true,
+        ]);
+        [$assigned, $sibling] = $this->group();
+        $unassigned = $this->order('AGENT-BLOCKED-GROUP', 'AGENT-BLOCKED-ORDER');
+
+        $this->actingAs($employee)->post(route('admin.orders.groups.assignment.acquire', $assigned));
+
+        $this->actingAs($agent)
+            ->post(route('admin.orders.groups.assignment.acquire', $unassigned))
+            ->assertSessionHasErrors('assignment');
+        $this->actingAs($agent)
+            ->post(route('admin.orders.groups.assignment.takeover', $sibling))
+            ->assertSessionHasErrors('assignment');
+        $this->actingAs($agent)
+            ->delete(route('admin.orders.groups.assignment.release', $sibling))
+            ->assertSessionHasErrors('assignment');
+
+        $this->assertDatabaseCount('order_group_assignments', 1);
+        $this->assertDatabaseHas('order_group_assignments', [
+            'checkout_group_key' => $assigned->checkoutGroupKey(),
+            'assigned_to_user_id' => $employee->id,
+        ]);
+        $this->assertDatabaseMissing('order_group_assignments', [
+            'checkout_group_key' => $unassigned->checkoutGroupKey(),
+        ]);
+    }
+
     private function group(): array
     {
         return [

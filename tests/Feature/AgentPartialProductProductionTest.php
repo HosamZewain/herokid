@@ -112,7 +112,10 @@ class AgentPartialProductProductionTest extends TestCase
             ->assertJsonPath('production_units.0.attachments.0.production_unit_key', $allowedKey);
 
         $this->withToken($token)->getJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/production-context')
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonCount(1, 'production_units')
+            ->assertJsonPath('production_units.0.unit_key', $allowedKey)
+            ->assertJsonMissing(['unit_key' => $blockedKey]);
         $this->withToken($token)->postJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/complete-production', [], ['Idempotency-Key' => 'partial-complete'])
             ->assertForbidden();
         $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => $order->checkoutGroupKey()]);
@@ -138,7 +141,7 @@ class AgentPartialProductProductionTest extends TestCase
         // that prevents whole-checkout acquisition.
         $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
         $token = $agent->createToken('both-products', [
-            'agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.upload-attachment',
+            'agent', 'agent:orders.read', 'agent:orders.update-status', 'agent:orders.upload-attachment',
             'agent:catalog.products', 'agent:catalog.product.'.$sticker->product_id,
             'agent:catalog.product.'.$otherProduct->product_id,
         ])->plainTextToken;
@@ -166,13 +169,13 @@ class AgentPartialProductProductionTest extends TestCase
         $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => $newOrder->checkoutGroupKey()]);
     }
 
-    public function test_restricted_token_with_all_new_products_still_uses_whole_checkout_acquisition(): void
+    public function test_restricted_token_can_upload_new_units_and_start_whole_checkout_without_assignment(): void
     {
         Storage::fake('local');
         [$order, $first, $second] = $this->mixedOrder();
         $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
         $token = $agent->createToken('both-new-products', [
-            'agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.upload-attachment',
+            'agent', 'agent:orders.read', 'agent:orders.update-status', 'agent:orders.upload-attachment',
             'agent:catalog.products', 'agent:catalog.product.'.$first->product_id,
             'agent:catalog.product.'.$second->product_id,
         ])->plainTextToken;
@@ -182,14 +185,14 @@ class AgentPartialProductProductionTest extends TestCase
         $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'production_unit_key' => 'product:'.$first->id,
             'attachments' => [UploadedFile::fake()->create('before-acquisition.pdf', 100, 'application/pdf')],
-        ], $this->headers($token, 'both-new-before-acquisition'))->assertForbidden();
+        ], $this->headers($token, 'both-new-before-acquisition'))->assertCreated();
 
         $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'both-new-acquire'])
             ->assertOk()->assertJsonPath('checkout.orders.0.id', $order->id);
         $this->assertSame('generating', $order->fresh()->status);
     }
 
-    public function test_unrestricted_token_cannot_use_partial_upload_for_mixed_status_checkout(): void
+    public function test_unrestricted_token_can_upload_new_unit_in_mixed_status_checkout_without_assignment(): void
     {
         Storage::fake('local');
         [$finishedOrder, , $newItem] = $this->mixedOrder();
@@ -211,7 +214,7 @@ class AgentPartialProductProductionTest extends TestCase
         $this->post('/api/agent/orders/'.$newOrder->id.'/attachments', [
             'production_unit_key' => 'product:'.$newItem->id,
             'attachments' => [UploadedFile::fake()->create('unrestricted.pdf', 100, 'application/pdf')],
-        ], $this->headers($token, 'mixed-status-unrestricted'))->assertForbidden();
+        ], $this->headers($token, 'mixed-status-unrestricted'))->assertCreated();
         $this->assertSame('new', $newOrder->fresh()->status);
     }
 
@@ -268,7 +271,7 @@ class AgentPartialProductProductionTest extends TestCase
         $this->assertSame('product:'.$allowedItem->id, $lookup->json('production_units.0.unit_key'));
     }
 
-    public function test_unrestricted_agent_still_requires_acquisition_for_attachments(): void
+    public function test_unrestricted_agent_can_upload_new_order_attachments_without_assignment(): void
     {
         Storage::fake('local');
         [$order, $allowedItem] = $this->mixedOrder();
@@ -281,8 +284,8 @@ class AgentPartialProductProductionTest extends TestCase
         $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'production_unit_key' => 'product:'.$allowedItem->id,
             'attachments' => [UploadedFile::fake()->create('file.pdf', 100, 'application/pdf')],
-        ], $this->headers($token, 'unrestricted-no-acquire'))->assertForbidden();
-        $this->assertDatabaseCount('order_attachments', 0);
+        ], $this->headers($token, 'unrestricted-no-acquire'))->assertCreated();
+        $this->assertDatabaseCount('order_attachments', 1);
     }
 
     public function test_restricted_agent_cannot_upload_production_attachments_after_order_is_finished(): void
@@ -298,7 +301,7 @@ class AgentPartialProductProductionTest extends TestCase
         $this->assertDatabaseCount('order_attachments', 0);
     }
 
-    public function test_restricted_agent_cannot_upload_when_another_agent_owns_the_checkout(): void
+    public function test_restricted_agent_upload_preserves_employee_assignment(): void
     {
         Storage::fake('local');
         [$order, $allowedItem, , , $token] = $this->mixedOrder();
@@ -311,12 +314,16 @@ class AgentPartialProductProductionTest extends TestCase
         ]);
 
         $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
-            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 0);
+            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 1);
         $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'production_unit_key' => 'product:'.$allowedItem->id,
             'attachments' => [UploadedFile::fake()->create('conflict.pdf', 100, 'application/pdf')],
-        ], $this->headers($token, 'conflicting-attachment'))->assertForbidden();
-        $this->assertDatabaseCount('order_attachments', 0);
+        ], $this->headers($token, 'conflicting-attachment'))->assertCreated();
+        $this->assertDatabaseCount('order_attachments', 1);
+        $this->assertDatabaseHas('order_group_assignments', [
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'assigned_to_user_id' => $other->id,
+        ]);
     }
 
     public function test_partial_product_discovery_requires_agent_read_authorization(): void
@@ -384,7 +391,7 @@ class AgentPartialProductProductionTest extends TestCase
         ]);
         $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
         $token = $agent->createToken('partial-product', [
-            'agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.update-status',
+            'agent', 'agent:orders.read', 'agent:orders.update-status',
             'agent:orders.upload-attachment', 'agent:orders.upload-preview',
             'agent:catalog.products', 'agent:catalog.product.'.$allowed->id,
         ])->plainTextToken;

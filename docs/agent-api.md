@@ -1,6 +1,6 @@
 # HeroKid Agent API
 
-The Agent API lets a dedicated production agent acquire and process one complete HeroKid checkout without using the Admin UI. It reuses the existing order assignment, status, prompt, private attachment, booklet preview, product preview, and activity-log services.
+The Agent API lets a dedicated production agent process HeroKid production work without using the Admin UI. Agent work is assignment-free: `OrderGroupAssignment` is reserved for human employees, while Agent authorization comes from Sanctum abilities, application permissions, catalog scope, production-unit scope, and order workflow status.
 
 ## Authentication
 
@@ -17,7 +17,7 @@ For a dedicated worker that must process one product (or a small allowed set), c
 - Existing product tokens without selected product IDs remain allowed to process all production products for backward compatibility.
 - A restricted token skips a complete checkout if any production unit is a story or a different personalized product.
 - Ready-made items without a Production Prompt are not production units and do not block an otherwise eligible checkout.
-- Product restrictions apply to acquisition, context, uploads, previews, rework, and completion. In a mixed checkout, the separately documented unit-scoped attachment and product-preview uploads can target only a permitted product; they do not acquire or complete the checkout.
+- Product restrictions apply to work selection, context, uploads, previews, rework, and completion. In a mixed checkout, unit-scoped reads and uploads return or mutate only permitted products; they do not complete the checkout.
 
 Enable **السماح بتعديل وإعادة إنتاج الطلبات السابقة** only for an Agent that must correct existing orders. This adds two narrowly scoped abilities:
 
@@ -26,7 +26,13 @@ Enable **السماح بتعديل وإعادة إنتاج الطلبات الس
 
 Existing tokens do not receive these abilities automatically. Reissue the token when rework access is required.
 
-A limited Agent skips a complete checkout when that checkout contains any production unit outside its scope. HeroKid never partially acquires a checkout. Ready products that do not require production do not affect this decision.
+A limited Agent skips the whole-checkout queue when that checkout contains any production unit outside its scope, but can still discover and work permitted units through the read-only Studio inventory and unit-scoped endpoints. No Agent operation creates, transfers, or releases employee assignment records.
+
+### Employee ownership versus Agent work
+
+Human employees keep the existing Admin assignment controls: acquire, takeover, release, assignment filters, and bulk release. Accounts with `agent_api_enabled=true` cannot use those controls even if they also hold an assignment permission. Existing employee assignments are not a lock on Agent work and are never changed by Agent API requests.
+
+The legacy endpoint names containing `acquire` remain unchanged for Studio compatibility. They now mean **select/start Agent work**, not employee ownership. Queue starts use atomic status transitions to prevent two Agents from starting the same `new` checkout. Read-only order lookup never changes status. Mutations still require their explicit ability, application permission, permitted unit, and a safe workflow status.
 
 The same operation is available from Artisan:
 
@@ -89,7 +95,7 @@ curl https://hero-kid.com/api/agent/studio/connection \
 
 ### Read an order for Studio
 
-The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads the checkout without creating or checking an assignment. `production_stories` remains the authoritative detailed story/scene payload. `production_units` contains the same story, standalone-product, and product-component shapes used by the acquisition-protected production-context endpoint.
+The lookup accepts either an exact internal `orders.order_number` such as `HK-2026-XXXXXX` or the public short checkout reference such as `HK09-236`. It loads the checkout without creating or checking an assignment. `production_stories` remains the authoritative detailed story/scene payload. `production_units` contains the same story, standalone-product, and product-component shapes used by the catalog-filtered production-context endpoint.
 
 Catalog restrictions are filters for this read-only lookup: a stories-only token receives story units, a products-only token receives product units, and a product-ID-restricted token receives only permitted products. A mixed checkout is not rejected merely because some units are outside scope. Legacy tokens without catalog abilities retain story-and-product access. If the checkout has units but none are visible to the token, the endpoint returns `403 FORBIDDEN`. `inventory_visibility` reports the effective catalog scope, whether product restrictions exist, whether filtering occurred, and the number of returned units without describing hidden products.
 
@@ -252,7 +258,7 @@ All `POST` requests require a unique `Idempotency-Key` header. Retrying an opera
 ## Workflow
 
 ```text
-POST /checkouts/acquire-next
+POST /checkouts/acquire-next (legacy URL: atomically start next work item)
        ↓
 GET /checkouts/{HK08-151}/production-context
        ↓
@@ -267,7 +273,7 @@ POST /checkouts/{HK08-151}/complete-production
 repeat
 ```
 
-Acquisition is atomic for the complete `checkout_group`. Every production order in it is assigned to the same Agent and moved from `new` to `generating`. Ready products remain part of the checkout but are not production units and do not block completion.
+Starting work is atomic for the complete `checkout_group`. Every targeted production order moves from `new` to `generating`; no `OrderGroupAssignment` is created or changed. The endpoint requires both `agent:orders.read` and `agent:orders.update-status`, plus `orders.view` and `orders.update`. Ready products remain part of the checkout but are not production units and do not block completion.
 
 ## Story identity-only workflow
 
@@ -287,7 +293,7 @@ POST /checkouts/{reference}/complete-identity
 repeat with a fresh Idempotency-Key
 ```
 
-Acquisition remains atomic for the complete checkout. A checkout containing multiple stories returns one `identity_units[]` entry per story. Products in a mixed checkout are returned only as `deferred_units[]` with `DEFERRED_DO_NOT_PROCESS_IN_IDENTITY_WORKFLOW`; no product or story-production prompt is exposed. After every story has an uploaded identity, completion moves every row in that checkout from `new` to `waiting_customer` so the checkout cannot split into conflicting statuses.
+Identity work selection is atomic for the complete checkout and moves it from `new` to `under_review`, without creating or changing an employee assignment. A checkout containing multiple stories returns one `identity_units[]` entry per story. Products in a mixed checkout are returned only as `deferred_units[]` with `DEFERRED_DO_NOT_PROCESS_IN_IDENTITY_WORKFLOW`; no product or story-production prompt is exposed. After every story has an uploaded identity, completion moves every row to `waiting_customer` so the checkout cannot split into conflicting statuses.
 
 ```bash
 curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next-identity \
@@ -315,7 +321,7 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-236/complete-identity
 
 ## Endpoints
 
-### Acquire next checkout
+### Start the next checkout (legacy `acquire-next` URL)
 
 ```bash
 curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next \
@@ -335,7 +341,7 @@ Empty queue:
     "token_catalog_scope": "products",
     "new_checkout_groups": 12,
     "eligible_now": 0,
-    "already_acquired": 2,
+    "already_acquired": 0,
     "without_production_units": 3,
     "outside_token_scope": 7,
     "mixed_production_status": 0
@@ -343,11 +349,11 @@ Empty queue:
 }
 ```
 
-The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope; and `already_acquired` means another assignment already exists.
+The `queue` object contains counts only and never customer data. It explains why checkouts that appear as New in the Admin Panel may not be production-eligible for this token. `without_production_units` means the checkout contains no story or product with a current/historical production prompt; `outside_token_scope` means its complete production set is outside the token's stories/products scope. `already_acquired` is retained as a backward-compatible response field and is always `0`; employee assignments do not remove work from the Agent queue.
 
-For a product-restricted token, `queue.token_product_ids` lists the enforced product IDs. The normal workflow and endpoints do not change: acquire with `POST /checkouts/acquire-next`, execute every returned product prompt, upload at least one production attachment for every unit, optionally upload previews, then call `POST /checkouts/{reference}/complete-production`. Successful completion changes the production orders to `ready_preview`.
+For a product-restricted token, `queue.token_product_ids` lists the enforced product IDs. Start with `POST /checkouts/acquire-next`, execute every returned product prompt, upload at least one production attachment for every unit, optionally upload previews, then call `POST /checkouts/{reference}/complete-production`. Successful completion changes the production orders to `ready_preview`.
 
-`acquire-next` remains a **whole-checkout** workflow: it skips checkouts containing any unit outside the token scope, and checkouts whose production orders have mixed statuses (for example, a finished sticker order alongside a new product order). Its empty-queue diagnostics include `partial_product_work` for these cases. The same read-only discovery is available at `GET /checkouts/partial-product-work` with `agent:orders.read` and `orders.view`; it returns at most 25 authorized checkout pointers (`order_number` plus permitted `production_unit_keys`), the total checkout count, and `has_more`. It never returns sibling product details or acquires a checkout. A listed product may already have attachments, so inspect its Studio inventory before producing again. When a permitted product shares a checkout with an out-of-scope unit or a finished production order, use the unit-scoped workflow below instead of whole-checkout acquisition. Adding product IDs to a token alone does not make the old `acquire-next` loop consume this queue: the Agent must call the discovery endpoint when `checkout` is null, then process only the returned unit keys. Do not treat a partial product as acquisition or completion of the whole checkout.
+`acquire-next` remains a **whole-checkout start** workflow: it skips checkouts containing any unit outside the token scope, and checkouts whose production orders have mixed statuses (for example, a finished sticker order alongside a new product order). Its empty-queue diagnostics include `partial_product_work` for these cases. The same read-only discovery is available at `GET /checkouts/partial-product-work` with `agent:orders.read` and `orders.view`; it returns at most 25 authorized checkout pointers (`order_number` plus permitted `production_unit_keys`), the total checkout count, and `has_more`. It never returns sibling product details or changes status. A listed product may already have attachments, so inspect its Studio inventory before producing again. When a permitted product shares a checkout with an out-of-scope unit or a finished production order, use the unit-scoped workflow below. Adding product IDs to a token alone does not make the `acquire-next` loop consume this queue: the Agent must call the discovery endpoint when `checkout` is null, then process only the returned unit keys.
 
 ### Permitted product inside a mixed checkout
 
@@ -357,7 +363,7 @@ For a product-restricted token, `queue.token_product_ids` lists the enforced pro
 
 Always send the returned `production_unit_key`. For backward compatibility, the server can infer it when there is exactly one applicable product unit (or one permitted unit among several). Ambiguous requests return `422`; a key for another product returns `403`. Old product previews without a unit key remain visible for a single-unit order, but are not attributed to any unit when multiple units share the order. Repeating the same idempotency key does not create duplicate files.
 
-This mixed-checkout path does **not** create `OrderGroupAssignment`, update status, or mark the checkout complete. Partial production attachment uploads are limited to `new`/`generating` orders and cannot bypass a checkout assignment held by another Agent. `production-context`, `complete-production`, rework, and whole-checkout status changes retain their acquisition/whole-scope requirements. Those actions must be performed separately by an operator or an Agent authorized for the entire checkout. This is intentional: order status is currently stored on the order, not independently on each product item.
+This mixed-checkout path does **not** create `OrderGroupAssignment`, update status, or mark the checkout complete. Production attachment uploads are limited to `new`/`generating` orders and do not alter any employee assignment. `production-context` filters to authorized units. `complete-production`, rework starts, and whole-checkout status changes still require authorization for the complete production set. This is intentional: order status is currently stored on the order, not independently on each product item.
 
 ### Production context
 
@@ -367,7 +373,7 @@ curl https://hero-kid.com/api/agent/checkouts/HK08-151/production-context \
   -H 'Authorization: Bearer TOKEN'
 ```
 
-The response contains a compact `production_units` list. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. The top-level `team_notes` list contains the checkout's permanent staff notes in newest-first order, including writer and Cairo timestamp. Customer address and payment data are not returned.
+The response contains a compact, catalog-filtered `production_units` list and does not require assignment. Each unit has a stable `unit_key`, rendered prompt, required child/product fields, secure reference links, current production attachments, and preview state. The top-level `team_notes` list contains the checkout's permanent staff notes in newest-first order, including writer and Cairo timestamp. Customer address and payment data are not returned.
 
 A store product can define multiple independently produced components. In that case, each component is returned as its own production unit using `product:{orderItemId}:component:{stableKey}` and includes `production_component.key`, `production_component.name`, `production_component.quantity_per_item`, the purchased `product_quantity`, and the final component `quantity`. A product with exactly one production prompt keeps the backward-compatible `product:{orderItemId}` unit key.
 
@@ -435,9 +441,9 @@ generate and upload replacement files/previews
 POST /checkouts/{reference}/complete-production
 ```
 
-Selecting a specific checkout does not release or modify another checkout already assigned to the same Agent. It is rejected when another user owns the requested checkout, when the token catalog scope does not cover every production unit, or when the checkout is cancelled or has reached shipment creation/shipping/delivery/return.
+Selecting a specific checkout validates and audits the requested work without assigning it. It never creates, releases, or transfers an employee assignment. It is rejected when the token catalog scope does not cover every production unit, or when the checkout is cancelled or has reached shipment creation/shipping/delivery/return.
 
-### Acquire the exact existing checkout
+### Open the exact existing checkout (legacy `acquire` URL)
 
 ```bash
 curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-82/acquire \
@@ -446,7 +452,7 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/HK09-82/acquire \
   -H 'Idempotency-Key: hk09-82-acquire-v1'
 ```
 
-This operation assigns the whole `checkout_group` but does not change its status. Repeating it for an assignment already owned by the same Agent is safe.
+This operation does not assign the checkout and does not change its status. Repeating it with the same idempotency key is safe. The response keeps legacy fields such as `already_acquired=false` and adds `assignment_changed=false` for compatibility.
 
 ### Correct one production unit
 
@@ -498,7 +504,7 @@ curl -X POST https://hero-kid.com/api/agent/checkouts/acquire-next-revision \
   -H 'Idempotency-Key: revision-queue-20260905-001'
 ```
 
-It selects the oldest eligible checkout whose complete production set is still in `revision_requested` (طلب تعديلات). The checkout is assigned atomically but remains in `revision_requested` so the Agent can read `team_notes` before starting the replacement run. A checkout owned by another user is skipped; an existing assignment to the requesting Agent is reused safely. Catalog scope still applies to the complete checkout.
+It selects the oldest eligible checkout whose complete production set is still in `revision_requested` (طلب تعديلات), atomically moves its production rows to `generating`, and records attachment cutoffs so historical files cannot satisfy the replacement completion. This status transition prevents two Agents from selecting the same revision work. Selection neither checks nor changes an employee assignment. Catalog scope still applies to the complete checkout.
 
 Empty queue:
 
@@ -506,7 +512,7 @@ Empty queue:
 {"success":true,"checkout":null,"reason":"NO_AVAILABLE_REVISIONS"}
 ```
 
-For every returned checkout: get `production-context`, read the newest `team_notes`, apply only the requested personalization corrections when needed, call `start-rework`, generate and upload replacement attachments/previews, call `complete-production`, then call `acquire-next-revision` again with a fresh idempotency key. The same Agent may hold multiple checkout assignments; an unfinished assignment does not prevent this explicit revision queue from selecting another eligible checkout.
+For every returned checkout: get `production-context`, read the newest `team_notes`, apply only the requested personalization corrections when needed, call `start-rework`, generate and upload replacement attachments/previews, call `complete-production`, then call `acquire-next-revision` again with a fresh idempotency key. Employee ownership remains independent from this Agent workflow.
 
 ### Repairing completions created before `ready_preview`
 
@@ -532,13 +538,13 @@ Errors use a stable JSON shape:
 {"success":false,"error":"PRODUCTION_FILES_MISSING","message":"Required production files have not been uploaded for every production unit.","details":{}}
 ```
 
-Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_ACQUIRED`, `CHECKOUT_NOT_REWORKABLE`, `INVALID_ORDER_STATUS`, `ORDER_NOT_ACQUIRED_BY_AGENT`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_PERSONALIZATION`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
+Codes include `CHECKOUT_NOT_FOUND`, `ORDER_NOT_FOUND`, `CHECKOUT_NOT_REWORKABLE`, `INVALID_ORDER_STATUS`, `PRODUCTION_CONTEXT_INCOMPLETE`, `INVALID_PERSONALIZATION`, `INVALID_ATTACHMENT`, `PRODUCTION_FILES_MISSING`, `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `REQUEST_IN_PROGRESS`, `UNAUTHORIZED`, and `FORBIDDEN`.
 
-Reference and attachment URLs require the same Bearer token and only work for the Agent currently assigned to that checkout. They never expose private storage paths.
+Reference and attachment URLs require the same Bearer token, matching read ability/application permission, and an authorized production unit. Multi-unit reference reads require an explicit `production_unit_key`. They never expose private storage paths.
 # Story languages and reprints
 
 Story orders now select Arabic or English independently. English scene text uses
 explicit male/female templates. Studio can request a safe language-only change
 through the existing personalization endpoint, retaining its write permission,
-acquisition and idempotency requirements. See [story languages](story-languages.md)
+active production/revision status and idempotency requirements. See [story languages](story-languages.md)
 for the request contract, safeguards, and Admin controls.
