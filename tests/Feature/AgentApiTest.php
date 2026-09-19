@@ -558,7 +558,7 @@ class AgentApiTest extends TestCase
         $this->assertSame('generating', $productionOrder->refresh()->status);
     }
 
-    public function test_story_only_token_skips_product_and_mixed_checkouts(): void
+    public function test_story_only_token_starts_a_mixed_checkout_and_defers_the_product_unit(): void
     {
         $agent = $this->agent();
         $token = $this->scopedToken($agent, AgentCatalogScope::STORIES);
@@ -571,11 +571,13 @@ class AgentApiTest extends TestCase
             ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'stories-scope'])
             ->assertOk();
 
-        $this->assertSame($story->checkoutReference->short_reference, $response->json('checkout.reference'));
+        $this->assertSame($mixedStory->checkoutReference->short_reference, $response->json('checkout.reference'));
+        $response->assertJsonPath('checkout.production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('checkout.production_scope.deferred_unit_count', 1);
         $this->assertSame('new', $product->refresh()->status);
-        $this->assertSame('new', $mixedStory->refresh()->status);
-        $this->assertSame('new', $mixedProduct->refresh()->status);
-        $this->assertSame('generating', $story->refresh()->status);
+        $this->assertSame('generating', $mixedStory->refresh()->status);
+        $this->assertSame('generating', $mixedProduct->refresh()->status);
+        $this->assertSame('new', $story->refresh()->status);
     }
 
     public function test_identity_only_workflow_handles_multiple_stories_and_defers_mixed_products(): void
@@ -739,7 +741,7 @@ class AgentApiTest extends TestCase
         $this->assertSame('generating', $product->refresh()->status);
     }
 
-    public function test_specific_product_token_only_acquires_complete_eligible_checkouts_and_finishes_ready_preview(): void
+    public function test_specific_product_token_acquires_mixed_checkout_and_defers_unselected_product(): void
     {
         Storage::fake('local');
         $agent = $this->agent();
@@ -780,11 +782,13 @@ class AgentApiTest extends TestCase
         $acquired = $this->withToken($token)
             ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'specific-product-acquire'])
             ->assertOk()
-            ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
+            ->assertJsonPath('checkout.reference', $mixed->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('checkout.production_scope.deferred_unit_count', 1);
 
         $this->assertSame('new', $blocked->refresh()->status);
-        $this->assertSame('new', $mixed->refresh()->status);
-        $this->assertSame('generating', $eligible->refresh()->status);
+        $this->assertSame('generating', $mixed->refresh()->status);
+        $this->assertSame('new', $eligible->refresh()->status);
 
         $reference = $acquired->json('checkout.reference');
         $context = $this->withToken($token)->getJson("/api/agent/checkouts/{$reference}/production-context")
@@ -793,7 +797,7 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('production_units.0.product_id', $allowedProduct->id);
         $unitKey = $context->json('production_units.0.unit_key');
 
-        $this->withToken($token)->post("/api/agent/orders/{$eligible->id}/attachments", [
+        $this->withToken($token)->post("/api/agent/orders/{$mixed->id}/attachments", [
             'production_unit_key' => $unitKey,
             'attachments' => [UploadedFile::fake()->create('finished.pdf', 100, 'application/pdf')],
         ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'specific-product-file'])
@@ -802,8 +806,100 @@ class AgentApiTest extends TestCase
         $this->withToken($token)
             ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'specific-product-complete'])
             ->assertOk()
-            ->assertJsonPath('status', 'ready_preview');
-        $this->assertSame('ready_preview', $eligible->refresh()->status);
+            ->assertJsonPath('status', 'ready_preview')
+            ->assertJsonPath('production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('production_scope.deferred_unit_count', 1);
+        $this->assertSame('ready_preview', $mixed->refresh()->status);
+        $this->assertSame('new', $eligible->refresh()->status);
+    }
+
+    public function test_story_and_selected_product_agent_completes_preview_work_while_thermal_product_is_deferred(): void
+    {
+        Storage::fake('local');
+        $agent = $this->agent();
+        $sticker = Product::create([
+            'name_ar' => 'استيكر ينفذه Agent',
+            'slug' => 'agent-preview-sticker',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Create the approved sticker for {{child_full_name}}.',
+        ]);
+        $thermal = Product::create([
+            'name_ar' => 'ملصق حراري مؤجل للطباعة',
+            'slug' => 'deferred-thermal-label',
+            'price_cents' => 10000,
+            'is_active' => true,
+            'production_prompt_template' => 'Physical printing-stage instructions.',
+        ]);
+        $story = $this->storyOrder('STORY-STICKER-THERMAL', 'HK-MIXED-STORY', true);
+        $stickerOrder = $this->productOrder('STORY-STICKER-THERMAL', 'HK-MIXED-STICKER', null, $sticker);
+        $thermalOrder = $this->productOrder('STORY-STICKER-THERMAL', 'HK-MIXED-THERMAL', null, $thermal);
+        $token = $agent->createToken('story-and-sticker-worker', [
+            ...$this->abilities(),
+            ...AgentCatalogScope::abilities(AgentCatalogScope::ALL),
+            ...AgentProductScope::abilities([$sticker->id]),
+        ])->plainTextToken;
+
+        $acquired = $this->withToken($token)
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'story-sticker-acquire'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $story->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.production_scope.authorized_unit_count', 2)
+            ->assertJsonPath('checkout.production_scope.deferred_unit_count', 1)
+            ->assertJsonCount(2, 'checkout.orders');
+        $this->assertStringNotContainsString($thermalOrder->order_number, $acquired->getContent());
+
+        $this->assertSame('generating', $story->fresh()->status);
+        $this->assertSame('generating', $stickerOrder->fresh()->status);
+        $this->assertSame('generating', $thermalOrder->fresh()->status);
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'STORY-STICKER-THERMAL']);
+
+        $reference = $acquired->json('checkout.reference');
+        $context = $this->withToken($token)
+            ->getJson("/api/agent/checkouts/{$reference}/production-context")
+            ->assertOk()
+            ->assertJsonCount(2, 'production_units')
+            ->assertJsonPath('production_scope.authorized_unit_count', 2)
+            ->assertJsonPath('production_scope.deferred_unit_count', 1);
+        $this->assertSame(
+            ['story:'.$story->id, 'product:'.$stickerOrder->items()->firstOrFail()->id],
+            collect($context->json('production_units'))->pluck('unit_key')->all(),
+        );
+        $this->assertStringNotContainsString($thermalOrder->order_number, $context->getContent());
+        $this->assertStringNotContainsString('Physical printing-stage instructions.', $context->getContent());
+
+        $missing = $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'story-sticker-incomplete'])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'PRODUCTION_FILES_MISSING')
+            ->json('details.production_units');
+        $this->assertSame(
+            ['story:'.$story->id, 'product:'.$stickerOrder->items()->firstOrFail()->id],
+            $missing,
+        );
+
+        foreach ($context->json('production_units') as $index => $unit) {
+            $this->withToken($token)->post('/api/agent/orders/'.$unit['order_id'].'/attachments', [
+                'production_unit_key' => $unit['unit_key'],
+                'attachments' => [UploadedFile::fake()->create("authorized-output-{$index}.pdf", 100, 'application/pdf')],
+            ], [
+                'Accept' => 'application/json',
+                'Authorization' => 'Bearer '.$token,
+                'Idempotency-Key' => "story-sticker-file-{$index}",
+            ])->assertCreated();
+        }
+
+        $this->withToken($token)
+            ->postJson("/api/agent/checkouts/{$reference}/complete-production", [], ['Idempotency-Key' => 'story-sticker-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview')
+            ->assertJsonPath('production_scope.authorized_unit_count', 2)
+            ->assertJsonPath('production_scope.deferred_unit_count', 1);
+
+        $this->assertSame('ready_preview', $story->fresh()->status);
+        $this->assertSame('ready_preview', $stickerOrder->fresh()->status);
+        $this->assertSame('ready_preview', $thermalOrder->fresh()->status);
+        $this->assertSame(0, $thermalOrder->attachments()->count());
     }
 
     public function test_multi_component_product_is_returned_and_completed_as_independent_production_units(): void

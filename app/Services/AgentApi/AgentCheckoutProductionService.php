@@ -54,16 +54,20 @@ class AgentCheckoutProductionService
                     return null;
                 }
 
-                $units = $this->units($orders);
-                if ($units->isEmpty()) {
+                $allUnits = $this->units($orders);
+                if ($allUnits->isEmpty()) {
                     return null;
                 }
 
-                if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                $authorizedUnits = AgentCatalogScope::filterUnits($agent, $allUnits);
+                if ($authorizedUnits->isEmpty()) {
                     return null;
                 }
 
-                $targets = $this->targetOrders($orders, $units);
+                // Status is checkout production state, not per-token inventory state. Lock and
+                // transition the complete production set atomically, while exposing and later
+                // requiring files only for the units explicitly authorized by this token.
+                $targets = $this->targetOrders($orders, $allUnits);
                 if ($targets->contains(fn (Order $order): bool => $order->status !== 'new')) {
                     return null;
                 }
@@ -82,13 +86,23 @@ class AgentCheckoutProductionService
                         'previous_status' => 'new',
                         'new_status' => 'generating',
                         'assignment_changed' => false,
+                        'authorized_production_unit_keys' => $authorizedUnits->pluck('unit_key')->all(),
+                        'deferred_production_unit_count' => $allUnits->count() - $authorizedUnits->count(),
                         'request_identifier' => $this->requestIdentifier($request),
                     ],
                     admin: $agent,
                     request: $request,
                 );
 
-                return $this->summary($orders->map(fn (Order $order): Order => $order->fresh()));
+                $visibleOrderIds = $authorizedUnits->pluck('order_id')->unique()->all();
+                $visibleOrders = $orders
+                    ->whereIn('id', $visibleOrderIds)
+                    ->map(fn (Order $order): Order => $order->fresh())
+                    ->values();
+                $summary = $this->summary($visibleOrders);
+                $summary['production_scope'] = $this->productionScope($allUnits, $authorizedUnits);
+
+                return $summary;
             }, 3);
 
             if ($result !== null) {
@@ -118,6 +132,7 @@ class AgentCheckoutProductionService
             'already_acquired' => 0,
             'without_production_units' => 0,
             'outside_token_scope' => 0,
+            'partially_authorized' => 0,
             'mixed_production_status' => 0,
         ];
 
@@ -138,10 +153,15 @@ class AgentCheckoutProductionService
                     continue;
                 }
 
-                if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                $authorizedUnits = AgentCatalogScope::filterUnits($agent, $units);
+                if ($authorizedUnits->isEmpty()) {
                     $summary['outside_token_scope']++;
 
                     continue;
+                }
+
+                if ($authorizedUnits->count() !== $units->count()) {
+                    $summary['partially_authorized']++;
                 }
 
                 $targets = $this->targetOrders($orders, $units);
@@ -185,10 +205,9 @@ class AgentCheckoutProductionService
             foreach ($chunk as $groupKey) {
                 $allUnits = $this->units($ordersByGroup->get($groupKey, collect()));
                 $authorized = AgentCatalogScope::filterUnits($agent, $allUnits);
-                $allUnitsAllowed = $authorized->count() === $allUnits->count();
                 $hasFinishedSibling = $this->targetOrders($ordersByGroup->get($groupKey, collect()), $allUnits)
                     ->contains(fn (Order $order): bool => ! in_array($order->status, ['new', 'generating'], true));
-                if ($allUnitsAllowed && (! $hasFinishedSibling || AgentProductScope::forUser($agent) === [])) {
+                if (! $hasFinishedSibling) {
                     continue;
                 }
 
@@ -377,6 +396,7 @@ class AgentCheckoutProductionService
             'checkout' => $this->summary($visibleOrders),
             'team_notes' => $this->teamNotes($orders->first()->checkoutGroupKey()),
             'production_units' => $units->values()->all(),
+            'production_scope' => $this->productionScope($allUnits, $units),
         ];
     }
 
@@ -388,13 +408,18 @@ class AgentCheckoutProductionService
 
         return DB::transaction(function () use ($reference, $agent, $request): array {
             $orders = $this->authorizedOrders($reference, $agent, true);
-            $units = $this->units($orders);
-            $this->assertUnitsAllowed($agent, $units);
-            $targets = $this->targetOrders($orders, $units);
+            $allUnits = $this->units($orders);
+            $authorizedUnits = AgentCatalogScope::filterUnits($agent, $allUnits);
+            $targets = $this->targetOrders($orders, $allUnits);
 
-            if ($units->isEmpty()) {
+            if ($allUnits->isEmpty()) {
                 throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This checkout has no production units.', 422);
             }
+            if ($authorizedUnits->isEmpty()) {
+                throw new AgentApiException('FORBIDDEN', 'This checkout has no production units inside the Agent token catalog scope.', 403);
+            }
+
+            $productionScope = $this->productionScope($allUnits, $authorizedUnits);
 
             if ($targets->every(fn (Order $order): bool => $order->status === self::COMPLETED_STATUS)) {
                 return [
@@ -402,6 +427,7 @@ class AgentCheckoutProductionService
                     'checkout_reference' => $reference,
                     'status' => self::COMPLETED_STATUS,
                     'already_completed' => true,
+                    'production_scope' => $productionScope,
                 ];
             }
 
@@ -410,16 +436,16 @@ class AgentCheckoutProductionService
             }
 
             $reworkCutoffs = $this->latestReworkAttachmentCutoffs($reference, $orders->first()->checkoutGroupKey());
-            $missing = $units->filter(fn (array $unit): bool => ! $this->hasProductionAttachment(
+            $missing = $authorizedUnits->filter(fn (array $unit): bool => ! $this->hasProductionAttachment(
                 $unit,
-                $units,
+                $allUnits,
                 (int) ($reworkCutoffs[$unit['unit_key']] ?? 0),
             ))
                 ->pluck('unit_key')->values()->all();
             if ($missing !== []) {
                 throw new AgentApiException(
                     'PRODUCTION_FILES_MISSING',
-                    'Required production files have not been uploaded for every production unit.',
+                    'Required production files have not been uploaded for every authorized production unit.',
                     422,
                     ['production_units' => $missing],
                 );
@@ -437,7 +463,8 @@ class AgentCheckoutProductionService
                     'agent_user_id' => $agent->id,
                     'previous_statuses' => $before,
                     'new_status' => self::COMPLETED_STATUS,
-                    'production_unit_keys' => $units->pluck('unit_key')->all(),
+                    'production_unit_keys' => $authorizedUnits->pluck('unit_key')->all(),
+                    'deferred_production_unit_count' => $productionScope['deferred_unit_count'],
                     'request_identifier' => $this->requestIdentifier($request),
                 ],
                 admin: $agent,
@@ -450,6 +477,7 @@ class AgentCheckoutProductionService
                 'checkout_group_key' => $orders->first()->checkoutGroupKey(),
                 'status' => self::COMPLETED_STATUS,
                 'already_completed' => false,
+                'production_scope' => $productionScope,
             ];
         }, 3);
     }
@@ -736,6 +764,25 @@ class AgentCheckoutProductionService
         $ids = $units->pluck('order_id')->unique()->all();
 
         return $orders->whereIn('id', $ids)->values();
+    }
+
+    /**
+     * Return counts only: callers must not learn identifiers or details for units outside
+     * their catalog scope.
+     *
+     * @param  Collection<int, array<string, mixed>>  $allUnits
+     * @param  Collection<int, array<string, mixed>>  $authorizedUnits
+     * @return array{authorized_unit_count: int, deferred_unit_count: int, filtered: bool}
+     */
+    private function productionScope(Collection $allUnits, Collection $authorizedUnits): array
+    {
+        $deferredCount = max(0, $allUnits->count() - $authorizedUnits->count());
+
+        return [
+            'authorized_unit_count' => $authorizedUnits->count(),
+            'deferred_unit_count' => $deferredCount,
+            'filtered' => $deferredCount > 0,
+        ];
     }
 
     private function storyUnit(Order $order, int $orderUnitCount): array
