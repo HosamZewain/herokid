@@ -540,7 +540,7 @@
 
                     @can('orders.preview.upload')
                         @if(!$group['trashed'])
-                            <form method="POST" action="{{ route('admin.orders.product-previews.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-4 grid gap-3 rounded-2xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                            <form method="POST" action="{{ route('admin.orders.product-previews.store', $attachmentTarget) }}" enctype="multipart/form-data" class="mt-4 grid gap-3 rounded-2xl border border-dashed border-fuchsia-200 bg-fuchsia-50/60 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end" data-async-admin-file-upload>
                                 @csrf
                                 <label class="block text-xs font-black text-gray-700">
                                     صور المعاينة

@@ -26,7 +26,8 @@ class AdminDashboardManagementNotesTest extends TestCase
             ->assertSee('ملاحظات الإدارة')
             ->assertSee('مراجعة طلبات الطباعة غدًا')
             ->assertSee($author->name)
-            ->assertSee('name="attachments[]"', false);
+            ->assertSee('name="attachments[]"', false)
+            ->assertDontSee('data-async-admin-file-upload', false);
     }
 
     public function test_admin_adds_multiple_independent_notes_without_overwriting_previous_notes(): void

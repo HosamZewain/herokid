@@ -2,6 +2,7 @@ export function initializeAdminFileUploads() {
     // Delegate so replacing the attachment/preview section does not lose handlers.
     document.addEventListener('submit', async (event) => {
         const form = event.target;
+        if (!form.matches?.('[data-async-admin-file-upload]')) return;
         const input = form.querySelector?.('input[type="file"][name="attachments[]"], input[type="file"][name="preview_images[]"]');
         if (!input || !window.location.pathname.startsWith('/admin/')) return;
         event.preventDefault();

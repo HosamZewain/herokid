@@ -135,7 +135,7 @@ test('session replacement requeues local files and discards stale restored refer
 test('partial admin batches retain only unsuccessful files for retry', async t => {
     const page = await pageFor(t);
     await page.goto(origin + '/admin/orders/1');
-    await page.setContent('<form action="/admin/upload" method="POST"><input type="file" name="attachments[]" multiple><button type="submit">Upload</button></form>');
+    await page.setContent('<form action="/admin/upload" method="POST" data-async-admin-file-upload><input type="file" name="attachments[]" multiple><button type="submit">Upload</button></form>');
     await page.evaluate(async () => (await import('/admin-uploads.js')).initializeAdminFileUploads());
     let requests = 0;
     await page.route('**/admin/upload', route => {
@@ -153,4 +153,19 @@ test('partial admin batches retain only unsuccessful files for retry', async t =
     await page.waitForFunction(() => document.querySelector('form').dataset.uploading !== '1');
     assert.equal(requests, 3);
     assert.equal(await page.locator('input').evaluate(input => input.files.length), 0);
+});
+
+test('ordinary multipart forms are not intercepted by the async admin uploader', async t => {
+    const page = await pageFor(t);
+    await page.goto(origin + '/admin/dashboard');
+    await page.setContent('<form action="/admin/notes" method="POST"><textarea name="body">Team note</textarea><input type="file" name="attachments[]" multiple><button type="submit">Save</button></form>');
+    await page.evaluate(async () => (await import('/admin-uploads.js')).initializeAdminFileUploads());
+
+    const defaultPrevented = await page.locator('form').evaluate((form) => {
+        const event = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        return event.defaultPrevented;
+    });
+
+    assert.equal(defaultPrevented, false);
 });
