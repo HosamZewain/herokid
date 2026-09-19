@@ -36,7 +36,7 @@ class AgentPartialProductProductionTest extends TestCase
             ->assertJsonPath('production_units.0.preview.images_count', 1);
     }
 
-    public function test_restricted_agent_can_read_and_upload_only_its_product_in_a_mixed_order_without_acquiring_it(): void
+    public function test_restricted_agent_can_start_complete_and_upload_only_its_product_in_a_mixed_order_without_assignment(): void
     {
         Storage::fake('local');
         [$order, $allowedItem, $blockedItem, $agent, $token] = $this->mixedOrder();
@@ -70,14 +70,16 @@ class AgentPartialProductProductionTest extends TestCase
 
         $discovery = $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
             ->assertOk()
-            ->assertJsonPath('partial_product_work.checkout_count', 1)
-            ->assertJsonPath('partial_product_work.checkouts.0.order_number', $order->order_number)
-            ->assertJsonPath('partial_product_work.checkouts.0.production_unit_keys.0', $allowedKey);
+            ->assertJsonPath('partial_product_work.checkout_count', 0);
         $this->assertStringNotContainsString($blockedKey, $discovery->getContent());
 
-        $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'partial-queue'])
-            ->assertOk()->assertJsonPath('checkout', null)
-            ->assertJsonPath('queue.partial_product_work.checkout_count', 1);
+        $acquired = $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'partial-queue'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('checkout.production_scope.deferred_unit_count', 1)
+            ->assertJsonPath('checkout.production_scope.filtered', true);
+        $this->assertSame('generating', $order->fresh()->status);
 
         $upload = $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'production_unit_key' => $allowedKey,
@@ -115,11 +117,16 @@ class AgentPartialProductProductionTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'production_units')
             ->assertJsonPath('production_units.0.unit_key', $allowedKey)
+            ->assertJsonPath('production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('production_scope.deferred_unit_count', 1)
             ->assertJsonMissing(['unit_key' => $blockedKey]);
-        $this->withToken($token)->postJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/complete-production', [], ['Idempotency-Key' => 'partial-complete'])
-            ->assertForbidden();
+        $this->withToken($token)->postJson('/api/agent/checkouts/'.$acquired->json('checkout.reference').'/complete-production', [], ['Idempotency-Key' => 'partial-complete'])
+            ->assertOk()
+            ->assertJsonPath('status', 'ready_preview')
+            ->assertJsonPath('production_scope.authorized_unit_count', 1)
+            ->assertJsonPath('production_scope.deferred_unit_count', 1);
         $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => $order->checkoutGroupKey()]);
-        $this->assertSame('new', $order->fresh()->status);
+        $this->assertSame('ready_preview', $order->fresh()->status);
         $this->assertSame(2, $order->items()->count());
         $this->assertSame($agent->id, $order->attachments()->findOrFail($upload->json('attachments.0.id'))->uploaded_by_user_id);
     }
@@ -138,7 +145,7 @@ class AgentPartialProductProductionTest extends TestCase
         ]);
         $otherProduct->update(['order_id' => $newOrder->id]);
         // Both product IDs are permitted: it is the mixed status, not catalog scope,
-        // that prevents whole-checkout acquisition.
+        // that keeps this historical checkout out of the new-order queue.
         $agent = User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => true]);
         $token = $agent->createToken('both-products', [
             'agent', 'agent:orders.read', 'agent:orders.update-status', 'agent:orders.upload-attachment',
@@ -192,7 +199,7 @@ class AgentPartialProductProductionTest extends TestCase
         $this->assertSame('generating', $order->fresh()->status);
     }
 
-    public function test_unrestricted_token_can_upload_new_unit_in_mixed_status_checkout_without_assignment(): void
+    public function test_unrestricted_token_discovers_and_uploads_new_unit_in_mixed_status_checkout_without_assignment(): void
     {
         Storage::fake('local');
         [$finishedOrder, , $newItem] = $this->mixedOrder();
@@ -210,7 +217,9 @@ class AgentPartialProductProductionTest extends TestCase
         ])->plainTextToken;
 
         $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
-            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 0);
+            ->assertOk()
+            ->assertJsonPath('partial_product_work.checkout_count', 1)
+            ->assertJsonPath('partial_product_work.checkouts.0.production_unit_keys.0', 'product:'.$newItem->id);
         $this->post('/api/agent/orders/'.$newOrder->id.'/attachments', [
             'production_unit_key' => 'product:'.$newItem->id,
             'attachments' => [UploadedFile::fake()->create('unrestricted.pdf', 100, 'application/pdf')],
@@ -314,7 +323,7 @@ class AgentPartialProductProductionTest extends TestCase
         ]);
 
         $this->withToken($token)->getJson('/api/agent/checkouts/partial-product-work')
-            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 1);
+            ->assertOk()->assertJsonPath('partial_product_work.checkout_count', 0);
         $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'production_unit_key' => 'product:'.$allowedItem->id,
             'attachments' => [UploadedFile::fake()->create('conflict.pdf', 100, 'application/pdf')],
