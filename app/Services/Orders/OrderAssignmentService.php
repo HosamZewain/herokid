@@ -15,6 +15,12 @@ class OrderAssignmentService
 {
     public function acquire(Order $representative, User $admin, Request $request, bool $force = false): OrderGroupAssignment
     {
+        if ($admin->agent_api_enabled) {
+            throw ValidationException::withMessages([
+                'assignment' => 'الاستحواذ على الطلبات متاح للموظفين فقط، وليس لحسابات Agent API.',
+            ]);
+        }
+
         $key = $representative->checkoutGroupKey();
 
         try {
@@ -74,6 +80,12 @@ class OrderAssignmentService
 
     public function release(Order $representative, User $admin, Request $request, bool $force = false): void
     {
+        if ($admin->agent_api_enabled) {
+            throw ValidationException::withMessages([
+                'assignment' => 'إدارة استحواذ الطلبات متاحة للموظفين فقط، وليس لحسابات Agent API.',
+            ]);
+        }
+
         DB::transaction(function () use ($representative, $admin, $request, $force): void {
             $assignment = OrderGroupAssignment::query()
                 ->with('assignee:id,name')

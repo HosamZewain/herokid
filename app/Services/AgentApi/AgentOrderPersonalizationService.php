@@ -55,8 +55,7 @@ class AgentOrderPersonalizationService
         User $agent,
         Request $request,
     ): array {
-        $this->production->authorizedOrder($order, $agent);
-        $this->production->validateUnitForOrder($order, $unitKey);
+        $this->production->authorizePersonalizationMutation($order, $agent, $unitKey);
 
         $unit = $this->productionUnitsForOrder($order)
             ->firstWhere('unit_key', $unitKey);

@@ -41,7 +41,7 @@ Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(fun
         ->middleware('agent_api:ability:orders.read,permission:orders.view');
 
     Route::post('checkouts/acquire-next-identity', [AgentCheckoutController::class, 'acquireNextIdentity'])
-        ->middleware('agent_api:ability:orders.identity,permission:orders.assign');
+        ->middleware('agent_api:ability:orders.identity,permission:orders.view,permission:orders.update,permission:orders.photos.view');
     Route::get('checkouts/{reference}/identity-context', [AgentCheckoutController::class, 'identityContext'])
         ->middleware('agent_api:ability:orders.identity,permission:orders.view,permission:orders.photos.view');
     Route::post('checkouts/{reference}/complete-identity', [AgentCheckoutController::class, 'completeIdentity'])
@@ -56,11 +56,11 @@ Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(fun
         ->name('agent.orders.identity-references.image');
 
     Route::post('checkouts/acquire-next', [AgentCheckoutController::class, 'acquireNext'])
-        ->middleware('agent_api:ability:orders.acquire,permission:orders.assign');
+        ->middleware('agent_api:ability:orders.read,ability:orders.update-status,permission:orders.view,permission:orders.update');
     Route::post('checkouts/acquire-next-revision', [AgentCheckoutController::class, 'acquireNextRevision'])
-        ->middleware('agent_api:ability:orders.rework,permission:orders.assign');
+        ->middleware('agent_api:ability:orders.rework,permission:orders.update');
     Route::post('checkouts/{reference}/acquire', [AgentCheckoutController::class, 'acquire'])
-        ->middleware('agent_api:ability:orders.rework,permission:orders.assign');
+        ->middleware('agent_api:ability:orders.rework,permission:orders.update');
     Route::get('checkouts/{reference}/production-context', [AgentCheckoutController::class, 'context'])
         ->middleware('agent_api:ability:orders.read,permission:orders.view');
     Route::post('checkouts/{reference}/start-rework', [AgentCheckoutController::class, 'startRework'])

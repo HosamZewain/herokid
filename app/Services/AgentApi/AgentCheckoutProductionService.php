@@ -8,10 +8,8 @@ use App\Models\Order;
 use App\Models\OrderAdminNote;
 use App\Models\OrderAttachment;
 use App\Models\OrderCheckoutReference;
-use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
 use App\Models\User;
-use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderStatusService;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
@@ -24,14 +22,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Validation\ValidationException;
 
 class AgentCheckoutProductionService
 {
     public const COMPLETED_STATUS = 'ready_preview';
 
     public function __construct(
-        private readonly OrderAssignmentService $assignments,
         private readonly OrderStatusService $statuses,
     ) {}
 
@@ -52,63 +48,51 @@ class AgentCheckoutProductionService
 
         foreach ($candidates as $candidate) {
             $groupKey = (string) $candidate->checkout_group_key;
-            try {
-                $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
-                    $orders = $this->lockedOrdersForKey((string) $groupKey);
-                    if ($orders->isEmpty()) {
-                        return null;
-                    }
-
-                    $existing = OrderGroupAssignment::query()
-                        ->where('checkout_group_key', $groupKey)
-                        ->lockForUpdate()
-                        ->first();
-                    if ($existing) {
-                        return null;
-                    }
-
-                    $units = $this->units($orders);
-                    if ($units->isEmpty()) {
-                        return null;
-                    }
-
-                    if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
-                        return null;
-                    }
-
-                    $targets = $this->targetOrders($orders, $units);
-                    if ($targets->contains(fn (Order $order): bool => $order->status !== 'new')) {
-                        return null;
-                    }
-
-                    $representative = $orders->first();
-                    $this->assignments->acquire($representative, $agent, $request);
-                    $this->statuses->updateGroup($targets, 'generating', 'تم الاستحواذ على عملية الشراء بواسطة Agent API.', $request);
-
-                    AdminActivityLogger::log(
-                        action: 'agent.checkout_acquired',
-                        description: 'استحوذ Agent API على عملية الشراء كاملة.',
-                        subject: $representative,
-                        properties: [
-                            'checkout_group_key' => $groupKey,
-                            'agent_user_id' => $agent->id,
-                            'target_order_ids' => $targets->pluck('id')->all(),
-                            'previous_status' => 'new',
-                            'new_status' => 'generating',
-                            'request_identifier' => $this->requestIdentifier($request),
-                        ],
-                        admin: $agent,
-                        request: $request,
-                    );
-
-                    return $this->summary($orders->map(fn (Order $order): Order => $order->fresh()));
-                }, 3);
-
-                if ($result !== null) {
-                    return $result;
+            $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
+                $orders = $this->lockedOrdersForKey((string) $groupKey);
+                if ($orders->isEmpty()) {
+                    return null;
                 }
-            } catch (ValidationException) {
-                // A concurrent agent won this group. Continue to the next candidate.
+
+                $units = $this->units($orders);
+                if ($units->isEmpty()) {
+                    return null;
+                }
+
+                if (! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                    return null;
+                }
+
+                $targets = $this->targetOrders($orders, $units);
+                if ($targets->contains(fn (Order $order): bool => $order->status !== 'new')) {
+                    return null;
+                }
+
+                $representative = $orders->first();
+                $this->statuses->updateGroup($targets, 'generating', 'بدأ Agent API تنفيذ عملية الشراء دون تغيير مسؤول الموظف.', $request);
+
+                AdminActivityLogger::log(
+                    action: 'agent.checkout_work_started',
+                    description: 'بدأ Agent API تنفيذ عملية الشراء دون استحواذ.',
+                    subject: $representative,
+                    properties: [
+                        'checkout_group_key' => $groupKey,
+                        'agent_user_id' => $agent->id,
+                        'target_order_ids' => $targets->pluck('id')->all(),
+                        'previous_status' => 'new',
+                        'new_status' => 'generating',
+                        'assignment_changed' => false,
+                        'request_identifier' => $this->requestIdentifier($request),
+                    ],
+                    admin: $agent,
+                    request: $request,
+                );
+
+                return $this->summary($orders->map(fn (Order $order): Order => $order->fresh()));
+            }, 3);
+
+            if ($result !== null) {
+                return $result;
             }
         }
 
@@ -138,10 +122,6 @@ class AgentCheckoutProductionService
         ];
 
         foreach ($groupKeys->chunk(100) as $chunk) {
-            $assigned = OrderGroupAssignment::query()
-                ->whereIn('checkout_group_key', $chunk)
-                ->pluck('checkout_group_key')
-                ->mapWithKeys(fn ($key): array => [(string) $key => true]);
             $ordersByGroup = Order::query()
                 ->whereIn('checkout_group_key', $chunk)
                 ->with($this->relations())
@@ -150,12 +130,6 @@ class AgentCheckoutProductionService
                 ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
             foreach ($chunk as $groupKey) {
-                if ($assigned->has($groupKey)) {
-                    $summary['already_acquired']++;
-
-                    continue;
-                }
-
                 $orders = $ordersByGroup->get($groupKey, collect());
                 $units = $this->units($orders);
                 if ($units->isEmpty()) {
@@ -201,9 +175,6 @@ class AgentCheckoutProductionService
         $count = 0;
 
         foreach ($groupKeys->chunk(100) as $chunk) {
-            $assignedTo = OrderGroupAssignment::query()
-                ->whereIn('checkout_group_key', $chunk)
-                ->pluck('assigned_to_user_id', 'checkout_group_key');
             $ordersByGroup = Order::query()
                 ->whereIn('checkout_group_key', $chunk)
                 ->with($this->relations())
@@ -212,10 +183,6 @@ class AgentCheckoutProductionService
                 ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
             foreach ($chunk as $groupKey) {
-                if ($assignedTo->has($groupKey) && (int) $assignedTo->get($groupKey) !== $agent->id) {
-                    continue;
-                }
-
                 $allUnits = $this->units($ordersByGroup->get($groupKey, collect()));
                 $authorized = AgentCatalogScope::filterUnits($agent, $allUnits);
                 $allUnitsAllowed = $authorized->count() === $allUnits->count();
@@ -255,6 +222,7 @@ class AgentCheckoutProductionService
     public function acquireNextRevision(User $agent, Request $request): ?array
     {
         $this->assertStatusAvailable('revision_requested');
+        $this->assertStatusAvailable('generating');
 
         $candidates = Order::query()
             ->selectRaw('checkout_group_key, MIN(updated_at) as revision_requested_at, MIN(id) as first_order_id')
@@ -267,75 +235,62 @@ class AgentCheckoutProductionService
             ->pluck('checkout_group_key');
 
         foreach ($candidates as $groupKey) {
-            try {
-                $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
-                    $orders = $this->lockedOrdersForKey((string) $groupKey);
-                    if ($orders->isEmpty()) {
-                        return null;
-                    }
-
-                    $units = $this->units($orders);
-                    if ($units->isEmpty() || ! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
-                        return null;
-                    }
-
-                    $targets = $this->targetOrders($orders, $units);
-                    if ($targets->contains(fn (Order $order): bool => $order->status !== 'revision_requested')) {
-                        return null;
-                    }
-
-                    $assignment = OrderGroupAssignment::query()
-                        ->where('checkout_group_key', $groupKey)
-                        ->lockForUpdate()
-                        ->first();
-                    if ($assignment && (int) $assignment->assigned_to_user_id !== (int) $agent->id) {
-                        return null;
-                    }
-
-                    $alreadyAcquired = $assignment !== null;
-                    if (! $assignment) {
-                        try {
-                            $this->assignments->acquire($orders->first(), $agent, $request);
-                        } catch (ValidationException) {
-                            $winner = OrderGroupAssignment::query()
-                                ->where('checkout_group_key', $groupKey)
-                                ->first();
-
-                            if (! $winner || (int) $winner->assigned_to_user_id !== (int) $agent->id) {
-                                return null;
-                            }
-
-                            $alreadyAcquired = true;
-                        }
-                    }
-
-                    AdminActivityLogger::log(
-                        action: 'agent.revision_checkout_acquired',
-                        description: 'استحوذ Agent API على عملية شراء من قائمة طلبات التعديل.',
-                        subject: $orders->first(),
-                        properties: [
-                            'checkout_group_key' => $groupKey,
-                            'agent_user_id' => $agent->id,
-                            'already_acquired' => $alreadyAcquired,
-                            'target_order_ids' => $targets->pluck('id')->all(),
-                            'status' => 'revision_requested',
-                            'request_identifier' => $this->requestIdentifier($request),
-                        ],
-                        admin: $agent,
-                        request: $request,
-                    );
-
-                    return [
-                        ...$this->summary($orders->map(fn (Order $order): Order => $order->fresh())),
-                        'already_acquired' => $alreadyAcquired,
-                    ];
-                }, 3);
-
-                if ($result !== null) {
-                    return $result;
+            $result = DB::transaction(function () use ($groupKey, $agent, $request): ?array {
+                $orders = $this->lockedOrdersForKey((string) $groupKey);
+                if ($orders->isEmpty()) {
+                    return null;
                 }
-            } catch (ValidationException) {
-                // A concurrent agent won this checkout. Continue to the next candidate.
+
+                $units = $this->units($orders);
+                if ($units->isEmpty() || ! AgentCatalogScope::allowsEveryUnit($agent, $units)) {
+                    return null;
+                }
+
+                $targets = $this->targetOrders($orders, $units);
+                if ($targets->contains(fn (Order $order): bool => $order->status !== 'revision_requested')) {
+                    return null;
+                }
+
+                $attachmentCutoffs = $units->mapWithKeys(fn (array $unit): array => [
+                    $unit['unit_key'] => (int) (collect($unit['attachments'])->max('id') ?? 0),
+                ])->all();
+                $this->statuses->updateGroup(
+                    $targets,
+                    'generating',
+                    'بدأ Agent API تنفيذ طلب التعديل دون تغيير مسؤول الموظف.',
+                    $request,
+                );
+
+                AdminActivityLogger::log(
+                    action: 'agent.revision_work_selected',
+                    description: 'اختار Agent API عملية شراء من قائمة طلبات التعديل دون استحواذ.',
+                    subject: $orders->first(),
+                    properties: [
+                        'checkout_group_key' => $groupKey,
+                        'agent_user_id' => $agent->id,
+                        'assignment_changed' => false,
+                        'target_order_ids' => $targets->pluck('id')->all(),
+                        'previous_status' => 'revision_requested',
+                        'new_status' => 'generating',
+                        'attachment_cutoffs' => $attachmentCutoffs,
+                        'request_identifier' => $this->requestIdentifier($request),
+                    ],
+                    admin: $agent,
+                    request: $request,
+                );
+
+                return [
+                    ...$this->summary($orders->map(fn (Order $order): Order => $order->fresh())),
+                    'already_acquired' => false,
+                    'assignment_changed' => false,
+                    'rework_run' => [
+                        'attachment_cutoffs' => $attachmentCutoffs,
+                    ],
+                ];
+            }, 3);
+
+            if ($result !== null) {
+                return $result;
             }
         }
 
@@ -357,49 +312,16 @@ class AgentCheckoutProductionService
             $this->assertReworkable($orders);
 
             $groupKey = $orders->first()->checkoutGroupKey();
-            $assignment = OrderGroupAssignment::query()
-                ->where('checkout_group_key', $groupKey)
-                ->lockForUpdate()
-                ->first();
-
-            if ($assignment && (int) $assignment->assigned_to_user_id !== (int) $agent->id) {
-                throw new AgentApiException(
-                    'ORDER_ALREADY_ACQUIRED',
-                    'This checkout is already acquired by another user.',
-                    409,
-                );
-            }
-
-            $alreadyAcquired = $assignment !== null;
-            if (! $assignment) {
-                try {
-                    $this->assignments->acquire($orders->first(), $agent, $request);
-                } catch (ValidationException) {
-                    $winner = OrderGroupAssignment::query()
-                        ->where('checkout_group_key', $groupKey)
-                        ->first();
-
-                    if (! $winner || (int) $winner->assigned_to_user_id !== (int) $agent->id) {
-                        throw new AgentApiException(
-                            'ORDER_ALREADY_ACQUIRED',
-                            'This checkout was acquired by another user at the same time.',
-                            409,
-                        );
-                    }
-
-                    $alreadyAcquired = true;
-                }
-            }
 
             AdminActivityLogger::log(
-                action: 'agent.checkout_acquired_for_rework',
-                description: 'استحوذ Agent API على عملية شراء محددة لإعادة العمل.',
+                action: 'agent.checkout_opened_for_rework',
+                description: 'فتح Agent API عملية شراء محددة لإعادة العمل دون استحواذ.',
                 subject: $orders->first(),
                 properties: [
                     'checkout_group_key' => $groupKey,
                     'checkout_reference' => $reference,
                     'agent_user_id' => $agent->id,
-                    'already_acquired' => $alreadyAcquired,
+                    'assignment_changed' => false,
                     'order_ids' => $orders->pluck('id')->all(),
                     'request_identifier' => $this->requestIdentifier($request),
                 ],
@@ -410,7 +332,8 @@ class AgentCheckoutProductionService
             return [
                 'success' => true,
                 'checkout' => $this->summary($orders->map(fn (Order $order): Order => $order->fresh())),
-                'already_acquired' => $alreadyAcquired,
+                'already_acquired' => false,
+                'assignment_changed' => false,
             ];
         }, 3);
     }
@@ -419,13 +342,18 @@ class AgentCheckoutProductionService
     public function context(string $reference, User $agent): array
     {
         $orders = $this->authorizedOrders($reference, $agent);
-        $units = $this->units($orders);
+        $allUnits = $this->units($orders);
+        $units = AgentCatalogScope::filterUnits($agent, $allUnits);
 
-        $this->assertUnitsAllowed($agent, $units);
-
-        if ($units->isEmpty()) {
+        if ($allUnits->isEmpty()) {
             throw new AgentApiException('PRODUCTION_CONTEXT_INCOMPLETE', 'This checkout has no production units.', 422);
         }
+        if ($units->isEmpty()) {
+            throw new AgentApiException('FORBIDDEN', 'This checkout has no production units inside the Agent token catalog scope.', 403);
+        }
+
+        $visibleOrderIds = $units->pluck('order_id')->unique()->all();
+        $visibleOrders = $orders->whereIn('id', $visibleOrderIds)->values();
 
         $missing = $units->filter(function (array $unit): bool {
             if (blank($unit['production_prompt'])) {
@@ -446,7 +374,7 @@ class AgentCheckoutProductionService
 
         return [
             'success' => true,
-            'checkout' => $this->summary($orders),
+            'checkout' => $this->summary($visibleOrders),
             'team_notes' => $this->teamNotes($orders->first()->checkoutGroupKey()),
             'production_units' => $units->values()->all(),
         ];
@@ -595,13 +523,6 @@ class AgentCheckoutProductionService
             throw new AgentApiException('ORDER_NOT_FOUND', 'Order not found.', 404);
         }
 
-        $assignment = OrderGroupAssignment::query()
-            ->where('checkout_group_key', $order->checkoutGroupKey())
-            ->first();
-        if (! $assignment || $assignment->assigned_to_user_id !== $agent->id) {
-            throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is not acquired by this Agent.', 403);
-        }
-
         $orders = Order::query()
             ->where('checkout_group_key', $order->checkoutGroupKey())
             ->with($this->relations())
@@ -614,21 +535,25 @@ class AgentCheckoutProductionService
     public function authorizeAttachmentUpload(Order $order, User $agent, ?string $unitKey): string
     {
         $selection = $this->allowedUnitForOrder($order, $agent, $unitKey);
-        if ($selection['partial_product']) {
-            if (! in_array($order->status, ['new', 'generating'], true)) {
-                throw new AgentApiException('FORBIDDEN', 'Production attachments are not accepted for this order status.', 403);
-            }
-            $assignedTo = OrderGroupAssignment::query()
-                ->where('checkout_group_key', $order->checkoutGroupKey())
-                ->value('assigned_to_user_id');
-            if ($assignedTo !== null && (int) $assignedTo !== $agent->id) {
-                throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is acquired by another Agent.', 403);
-            }
-        } else {
-            $this->authorizedOrder($order, $agent);
+        if (! in_array($order->status, ['new', 'generating'], true)) {
+            throw new AgentApiException('FORBIDDEN', 'Production attachments are not accepted for this order status.', 403);
         }
 
         return $selection['unit']['unit_key'];
+    }
+
+    /** Authorize an explicit correction without relying on checkout ownership. */
+    public function authorizePersonalizationMutation(Order $order, User $agent, string $unitKey): void
+    {
+        $this->allowedUnitForOrder($order, $agent, $unitKey);
+
+        if (! in_array($order->status, ['generating', 'revision_requested'], true)) {
+            throw new AgentApiException(
+                'INVALID_ORDER_STATUS',
+                'Production personalization can only be changed while production or revision work is active.',
+                409,
+            );
+        }
     }
 
     /** Validate a unit key after the caller has enforced whole-checkout authorization. */
@@ -653,21 +578,26 @@ class AgentCheckoutProductionService
 
     public function authorizeReferenceRead(Order $order, User $agent, ?string $unitKey): void
     {
-        if ($unitKey !== null && $this->allowedUnitForOrder($order, $agent, $unitKey)['partial_product']) {
-            return;
+        if ($unitKey === null) {
+            $orderUnitCount = $this->units(
+                Order::query()->where('checkout_group_key', $order->checkoutGroupKey())->with($this->relations())->get(),
+            )->where('order_id', $order->id)->count();
+
+            if ($orderUnitCount > 1) {
+                throw new AgentApiException(
+                    'FORBIDDEN',
+                    'A production_unit_key is required to read references for a multi-unit order.',
+                    403,
+                );
+            }
         }
 
-        $this->authorizedOrder($order, $agent);
+        $this->allowedUnitForOrder($order, $agent, $unitKey);
     }
 
     public function authorizeAttachmentRead(Order $order, User $agent, OrderAttachment $attachment): void
     {
-        if (filled($attachment->production_unit_key)
-            && $this->allowedUnitForOrder($order, $agent, $attachment->production_unit_key)['partial_product']) {
-            return;
-        }
-
-        $this->authorizedOrder($order, $agent);
+        $this->allowedUnitForOrder($order, $agent, $attachment->production_unit_key);
     }
 
     public function authorizePreviewUpload(Order $order, User $agent, string $type, ?string $unitKey = null): string
@@ -678,7 +608,7 @@ class AgentCheckoutProductionService
     }
 
     /** @return array{unit: array<string, mixed>, partial_product: bool} */
-    private function allowedUnitForOrder(Order $order, User $agent, ?string $unitKey, ?string $type = null): array
+    public function allowedUnitForOrder(Order $order, User $agent, ?string $unitKey, ?string $type = null): array
     {
         if ($order->trashed()) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Order not found.', 404);
@@ -766,15 +696,6 @@ class AgentCheckoutProductionService
     private function authorizedOrders(string $reference, User $agent, bool $lock = false): Collection
     {
         $orders = $this->ordersForReference($reference, $lock);
-        $checkoutGroupKey = $orders->first()->checkoutGroupKey();
-
-        $assignment = OrderGroupAssignment::query()
-            ->where('checkout_group_key', $checkoutGroupKey)
-            ->when($lock, fn ($query) => $query->lockForUpdate())
-            ->first();
-        if (! $assignment || $assignment->assigned_to_user_id !== $agent->id) {
-            throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is not acquired by this Agent.', 403);
-        }
 
         return $orders;
     }
@@ -998,12 +919,18 @@ class AgentCheckoutProductionService
     {
         $record = AgentApiIdempotencyKey::query()
             ->where('checkout_group_key', $groupKey)
-            ->where('action', 'checkouts.start-rework:'.$reference)
+            ->whereIn('action', [
+                'checkouts.start-rework:'.$reference,
+                'checkouts.acquire-next-revision',
+            ])
             ->where('status', 'completed')
             ->latest('id')
             ->first();
 
-        return collect(data_get($record?->response_body, 'rework_run.attachment_cutoffs', []))
+        $cutoffs = data_get($record?->response_body, 'rework_run.attachment_cutoffs')
+            ?? data_get($record?->response_body, 'checkout.rework_run.attachment_cutoffs', []);
+
+        return collect($cutoffs)
             ->map(fn (mixed $id): int => (int) $id)
             ->all();
     }
@@ -1017,8 +944,8 @@ class AgentCheckoutProductionService
         return [
             'reference' => $reference,
             'checkout_group' => $representative->checkoutGroupKey(),
-            'assigned_to_agent_id' => $representative->groupAssignment?->assigned_to_user_id
-                ?: OrderGroupAssignment::query()->where('checkout_group_key', $representative->checkoutGroupKey())->value('assigned_to_user_id'),
+            'assigned_to_agent_id' => null,
+            'assignment_changed' => false,
             'orders' => $orders->map(fn (Order $order): array => [
                 'id' => $order->id,
                 'order_number' => $order->order_number,

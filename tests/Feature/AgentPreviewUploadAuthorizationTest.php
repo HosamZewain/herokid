@@ -203,8 +203,9 @@ class AgentPreviewUploadAuthorizationTest extends TestCase
         $this->assertDatabaseHas('booklet_previews', ['order_id' => $order->id]);
     }
 
-    public function test_attachment_upload_still_requires_checkout_acquisition(): void
+    public function test_attachment_upload_uses_ability_and_active_status_without_checkout_acquisition(): void
     {
+        Storage::fake('local');
         $order = $this->storyOrder('ATTACHMENT-STILL-LOCKED', 'HK-ATTACHMENT-STILL-LOCKED');
         $agent = $this->agent();
         $token = $agent->createToken('attachment-writer', [
@@ -216,8 +217,10 @@ class AgentPreviewUploadAuthorizationTest extends TestCase
         $this->post('/api/agent/orders/'.$order->id.'/attachments', [
             'attachments' => [UploadedFile::fake()->create('production.pdf', 10, 'application/pdf')],
         ], $this->headers('attachment-without-acquisition', $token))
-            ->assertForbidden()
-            ->assertJsonPath('error', 'ORDER_NOT_ACQUIRED_BY_AGENT');
+            ->assertCreated();
+        $this->assertDatabaseMissing('order_group_assignments', [
+            'checkout_group_key' => $order->checkoutGroupKey(),
+        ]);
     }
 
     public function test_current_studio_multipart_contract_is_accepted(): void

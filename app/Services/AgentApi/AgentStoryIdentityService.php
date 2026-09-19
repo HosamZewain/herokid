@@ -5,9 +5,7 @@ namespace App\Services\AgentApi;
 use App\Exceptions\AgentApiException;
 use App\Models\Order;
 use App\Models\OrderCheckoutReference;
-use App\Models\OrderGroupAssignment;
 use App\Models\User;
-use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderStatusService;
 use App\Support\AdminActivityLogger;
@@ -17,14 +15,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Validation\ValidationException;
 
 class AgentStoryIdentityService
 {
     public const COMPLETED_STATUS = 'waiting_customer';
 
     public function __construct(
-        private readonly OrderAssignmentService $assignments,
         private readonly OrderStatusService $statuses,
         private readonly OrderChildIdentityPromptService $identityPrompts,
     ) {}
@@ -33,6 +29,7 @@ class AgentStoryIdentityService
     public function acquireNext(User $agent, Request $request): ?array
     {
         $this->assertStoryScope($agent);
+        $this->assertStatusAvailable('under_review');
 
         $candidates = Order::query()
             ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at, MIN(id) as first_order_id')
@@ -45,48 +42,51 @@ class AgentStoryIdentityService
             ->lazy(50);
 
         foreach ($candidates as $candidate) {
-            try {
-                $result = DB::transaction(function () use ($candidate, $agent, $request): ?array {
-                    $orders = $this->ordersForKey((string) $candidate->checkout_group_key, true);
-                    $stories = $this->storyOrders($orders);
-                    if ($stories->isEmpty() || $orders->contains(fn (Order $order): bool => $order->status !== 'new')) {
-                        return null;
-                    }
-
-                    $missingIdentities = $stories->reject(fn (Order $order): bool => $this->hasIdentity($order));
-                    if ($missingIdentities->isEmpty() || $missingIdentities->contains(fn (Order $order): bool => $this->photoPaths($order) === [])) {
-                        return null;
-                    }
-
-                    if (OrderGroupAssignment::query()->where('checkout_group_key', $candidate->checkout_group_key)->lockForUpdate()->exists()) {
-                        return null;
-                    }
-
-                    $this->assignments->acquire($orders->first(), $agent, $request);
-                    AdminActivityLogger::log(
-                        action: 'agent.story_identity_checkout_acquired',
-                        description: 'استحوذ Agent API على عملية شراء لتنفيذ هويات القصص فقط.',
-                        subject: $orders->first(),
-                        properties: [
-                            'checkout_group_key' => $orders->first()->checkoutGroupKey(),
-                            'agent_user_id' => $agent->id,
-                            'story_order_ids' => $stories->pluck('id')->all(),
-                            'identity_order_ids' => $missingIdentities->pluck('id')->all(),
-                            'deferred_order_ids' => $orders->whereNull('story_id')->pluck('id')->all(),
-                            'request_identifier' => $this->requestIdentifier($request),
-                        ],
-                        admin: $agent,
-                        request: $request,
-                    );
-
-                    return $this->summary($orders, $missingIdentities);
-                }, 3);
-
-                if ($result !== null) {
-                    return $result;
+            $result = DB::transaction(function () use ($candidate, $agent, $request): ?array {
+                $orders = $this->ordersForKey((string) $candidate->checkout_group_key, true);
+                $stories = $this->storyOrders($orders);
+                if ($stories->isEmpty() || $orders->contains(fn (Order $order): bool => $order->status !== 'new')) {
+                    return null;
                 }
-            } catch (ValidationException) {
-                // Another Agent won this checkout. Continue to the next candidate.
+
+                $missingIdentities = $stories->reject(fn (Order $order): bool => $this->hasIdentity($order));
+                if ($missingIdentities->isEmpty() || $missingIdentities->contains(fn (Order $order): bool => $this->photoPaths($order) === [])) {
+                    return null;
+                }
+
+                $this->statuses->updateGroup(
+                    $orders,
+                    'under_review',
+                    'بدأ Agent API تجهيز هويات القصص دون تغيير مسؤول الموظف.',
+                    $request,
+                );
+                AdminActivityLogger::log(
+                    action: 'agent.story_identity_work_started',
+                    description: 'بدأ Agent API تنفيذ هويات القصص دون استحواذ.',
+                    subject: $orders->first(),
+                    properties: [
+                        'checkout_group_key' => $orders->first()->checkoutGroupKey(),
+                        'agent_user_id' => $agent->id,
+                        'story_order_ids' => $stories->pluck('id')->all(),
+                        'identity_order_ids' => $missingIdentities->pluck('id')->all(),
+                        'deferred_order_ids' => $orders->whereNull('story_id')->pluck('id')->all(),
+                        'previous_status' => 'new',
+                        'new_status' => 'under_review',
+                        'assignment_changed' => false,
+                        'request_identifier' => $this->requestIdentifier($request),
+                    ],
+                    admin: $agent,
+                    request: $request,
+                );
+
+                return $this->summary(
+                    $orders->map(fn (Order $order): Order => $order->fresh()),
+                    $missingIdentities,
+                );
+            }, 3);
+
+            if ($result !== null) {
+                return $result;
             }
         }
 
@@ -125,16 +125,15 @@ class AgentStoryIdentityService
         ];
     }
 
-    public function authorizedStoryOrder(Order $order, User $agent): Order
+    public function authorizedStoryOrder(Order $order, User $agent, bool $forMutation = false): Order
     {
         $this->assertStoryScope($agent);
         if ($order->trashed() || ! $order->story_id) {
             throw new AgentApiException('ORDER_NOT_FOUND', 'Story order not found.', 404);
         }
 
-        $assignment = OrderGroupAssignment::query()->where('checkout_group_key', $order->checkoutGroupKey())->first();
-        if (! $assignment || (int) $assignment->assigned_to_user_id !== (int) $agent->id) {
-            throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is not acquired by this Agent.', 403);
+        if ($forMutation && ! in_array($order->status, ['new', 'under_review'], true)) {
+            throw new AgentApiException('INVALID_ORDER_STATUS', 'Story identity files can only be changed while identity work is active.', 409);
         }
 
         return $order;
@@ -156,8 +155,8 @@ class AgentStoryIdentityService
                 return $this->completionResponse($reference, $orders, true);
             }
 
-            if ($orders->contains(fn (Order $order): bool => $order->status !== 'new')) {
-                throw new AgentApiException('INVALID_ORDER_STATUS', 'Every checkout order must still be in new status.', 409);
+            if ($orders->contains(fn (Order $order): bool => ! in_array($order->status, ['new', 'under_review'], true))) {
+                throw new AgentApiException('INVALID_ORDER_STATUS', 'Every checkout order must be in new or identity-review status.', 409);
             }
 
             $missing = $stories->reject(fn (Order $order): bool => $this->hasIdentity($order))->pluck('id')->all();
@@ -287,16 +286,7 @@ class AgentStoryIdentityService
             throw new AgentApiException('CHECKOUT_NOT_FOUND', 'Checkout not found.', 404);
         }
 
-        $orders = $this->ordersForKey($checkout->checkout_group_key, $lock);
-        $assignment = OrderGroupAssignment::query()
-            ->where('checkout_group_key', $checkout->checkout_group_key)
-            ->when($lock, fn ($query) => $query->lockForUpdate())
-            ->first();
-        if (! $assignment || (int) $assignment->assigned_to_user_id !== (int) $agent->id) {
-            throw new AgentApiException('ORDER_NOT_ACQUIRED_BY_AGENT', 'The checkout is not acquired by this Agent.', 403);
-        }
-
-        return $orders;
+        return $this->ordersForKey($checkout->checkout_group_key, $lock);
     }
 
     private function ordersForKey(string $groupKey, bool $lock = false): Collection
@@ -320,7 +310,8 @@ class AgentStoryIdentityService
         return [
             'reference' => $first->checkoutReference?->short_reference,
             'checkout_group' => $first->checkoutGroupKey(),
-            'assigned_to_agent_id' => OrderGroupAssignment::query()->where('checkout_group_key', $first->checkoutGroupKey())->value('assigned_to_user_id'),
+            'assigned_to_agent_id' => null,
+            'assignment_changed' => false,
             'story_orders_count' => $this->storyOrders($orders)->count(),
             'identities_required' => $missingIdentities->count(),
             'deferred_products_count' => count($this->deferredUnits($orders)),

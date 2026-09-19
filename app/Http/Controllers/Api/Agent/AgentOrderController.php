@@ -30,7 +30,7 @@ class AgentOrderController extends Controller
         AgentIdempotencyService $idempotency,
         OrderApprovedChildIdentityUploadService $uploads,
     ): JsonResponse {
-        $identities->authorizedStoryOrder($order, $request->user());
+        $identities->authorizedStoryOrder($order, $request->user(), true);
         $this->validate($request, [
             'identity' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp', 'max:15360'],
         ], 'INVALID_ATTACHMENT');

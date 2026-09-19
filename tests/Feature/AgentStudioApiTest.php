@@ -15,6 +15,7 @@ use App\Services\AgentApi\AgentStudioOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AgentStudioApiTest extends TestCase
@@ -270,8 +271,11 @@ class AgentStudioApiTest extends TestCase
 
     public function test_catalog_scopes_filter_units_instead_of_rejecting_a_mixed_checkout(): void
     {
+        Storage::fake('local');
         $story = $this->story('قصة مرئية', 'visible-story');
         $storyOrder = $this->storyOrder('HK09-218-GROUP', 'HK09-218', $story, 'طفل اختبار', null);
+        Storage::disk('local')->put('orders/hk09-218/child.jpg', 'child-photo');
+        $storyOrder->update(['uploaded_photos' => ['orders/hk09-218/child.jpg']]);
         $firstProductOrder = $this->readyProductOrder('HK09-218-GROUP', 'HK09-218-P1');
         $secondProductOrder = $this->readyProductOrder('HK09-218-GROUP', 'HK09-218-P2');
         $firstProduct = $firstProductOrder->items()->firstOrFail()->product;
@@ -305,10 +309,12 @@ class AgentStudioApiTest extends TestCase
         $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'HK09-218-GROUP']);
         $this->assertSame('new', $storyOrder->fresh()->status);
 
-        $this->withToken($restrictedToken)
+        $productionContext = $this->withToken($restrictedToken)
             ->getJson('/api/agent/checkouts/'.$storyOrder->checkoutReference->short_reference.'/production-context')
-            ->assertForbidden()
-            ->assertJsonPath('error', 'ORDER_NOT_ACQUIRED_BY_AGENT');
+            ->assertOk()
+            ->assertJsonCount(2, 'production_units');
+        $this->assertSame(['story', 'product'], array_column($productionContext->json('production_units'), 'type'));
+        $this->assertStringNotContainsString($secondProduct->name_ar, $productionContext->getContent());
     }
 
     public function test_bundle_components_keep_stable_keys_quantities_and_revision_tracks_product_inventory(): void

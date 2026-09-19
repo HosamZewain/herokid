@@ -15,6 +15,7 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\AgentApi\AgentCatalogScope;
 use App\Services\AgentApi\AgentProductScope;
+use App\Services\AgentApi\AgentTokenService;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderSceneTextService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,7 +44,7 @@ class AgentApiTest extends TestCase
             ->assertForbidden()->assertJsonPath('error', 'FORBIDDEN');
     }
 
-    public function test_post_requests_require_idempotency_and_the_exact_token_ability(): void
+    public function test_work_queue_requires_idempotency_read_and_status_update_abilities(): void
     {
         $agent = $this->agent();
 
@@ -53,6 +54,20 @@ class AgentApiTest extends TestCase
         $limited = $agent->createToken('limited-agent', ['agent', 'agent:orders.read'])->plainTextToken;
         $this->app['auth']->forgetGuards();
         $this->withToken($limited)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'limited-acquire'])
+            ->assertForbidden()->assertJsonPath('error', 'FORBIDDEN');
+
+        $legacyAcquire = $agent->createToken('legacy-acquire', [
+            'agent',
+            'agent:orders.read',
+            'agent:orders.acquire',
+        ])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($legacyAcquire)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'legacy-acquire'])
+            ->assertForbidden()->assertJsonPath('error', 'FORBIDDEN');
+
+        $noRead = $agent->createToken('status-only', ['agent', 'agent:orders.update-status'])->plainTextToken;
+        $this->app['auth']->forgetGuards();
+        $this->withToken($noRead)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'status-only'])
             ->assertForbidden()->assertJsonPath('error', 'FORBIDDEN');
     }
 
@@ -104,6 +119,8 @@ class AgentApiTest extends TestCase
         $this->assertTrue($agent->refresh()->agent_api_enabled);
         $this->assertContains('agent:catalog.products', $token->abilities);
         $this->assertNotContains('agent:catalog.stories', $token->abilities);
+        $this->assertNotContains('agent:orders.acquire', $token->abilities);
+        $this->assertNotContains('orders.assign', AgentTokenService::requiredPermissions());
         $this->assertNotSame($plainTextToken, $token->token);
 
         $this->actingAs($manager)->get(route('admin.agent-api-tokens.index'))
@@ -230,7 +247,7 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('error', 'ORDER_NOT_FOUND');
     }
 
-    public function test_acquire_next_atomically_assigns_complete_checkout_and_is_retry_safe(): void
+    public function test_acquire_next_atomically_starts_complete_checkout_without_assignment_and_is_retry_safe(): void
     {
         $agent = $this->agent();
         $token = $this->token($agent);
@@ -248,12 +265,14 @@ class AgentApiTest extends TestCase
         $this->assertSame('generating', $first->refresh()->status);
         $this->assertSame('generating', $second->refresh()->status);
         $this->assertSame('new', $later->refresh()->status);
-        $this->assertDatabaseHas('order_group_assignments', ['checkout_group_key' => 'AGENT-ONE', 'assigned_to_user_id' => $agent->id]);
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'AGENT-ONE']);
+        $response->assertJsonPath('checkout.assigned_to_agent_id', null)
+            ->assertJsonPath('checkout.assignment_changed', false);
 
         $retry = $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'acquire-run-1'])
             ->assertOk();
         $this->assertSame($reference, $retry->json('checkout.reference'));
-        $this->assertSame(1, OrderGroupAssignment::count());
+        $this->assertSame(0, OrderGroupAssignment::count());
 
         $this->withToken($token)->postJson('/api/agent/checkouts/acquire-next', ['different' => true], ['Idempotency-Key' => 'acquire-run-1'])
             ->assertStatus(409)->assertJsonPath('error', 'IDEMPOTENCY_KEY_REUSED');
@@ -280,6 +299,31 @@ class AgentApiTest extends TestCase
             ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'polling-key'])
             ->assertOk()
             ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference);
+    }
+
+    public function test_agent_starting_new_work_preserves_an_existing_employee_assignment(): void
+    {
+        $employee = $this->agent(false);
+        $agent = $this->agent();
+        $order = $this->storyOrder('EMPLOYEE-OWNED-NEW', 'HK-EMPLOYEE-OWNED-NEW');
+        OrderGroupAssignment::query()->create([
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'assigned_to_user_id' => $employee->id,
+            'assigned_by_user_id' => $employee->id,
+            'assigned_at' => now(),
+        ]);
+
+        $this->withToken($this->token($agent))
+            ->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'employee-owned-new'])
+            ->assertOk()
+            ->assertJsonPath('checkout.reference', $order->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.assignment_changed', false);
+
+        $this->assertSame('generating', $order->fresh()->status);
+        $this->assertDatabaseHas('order_group_assignments', [
+            'checkout_group_key' => $order->checkoutGroupKey(),
+            'assigned_to_user_id' => $employee->id,
+        ]);
     }
 
     public function test_previous_cached_empty_queue_response_is_refreshed_after_deployment(): void
@@ -366,7 +410,7 @@ class AgentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('checkout.reference', $first->checkoutReference->short_reference)
             ->assertJsonPath('checkout.already_acquired', false);
-        $this->assertSame('revision_requested', $first->fresh()->status);
+        $this->assertSame('generating', $first->fresh()->status);
 
         $context = $this->withToken($token)
             ->getJson('/api/agent/checkouts/'.$acquired->json('checkout.reference').'/production-context')
@@ -379,7 +423,7 @@ class AgentApiTest extends TestCase
             ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-queue-first'])
             ->assertOk()
             ->assertJsonPath('checkout.reference', $first->checkoutReference->short_reference);
-        $this->assertDatabaseCount('order_group_assignments', 1);
+        $this->assertDatabaseCount('order_group_assignments', 0);
 
         $this->withToken($token)
             ->postJson('/api/agent/checkouts/'.$first->checkoutReference->short_reference.'/start-rework', [], ['Idempotency-Key' => 'revision-first-start'])
@@ -391,7 +435,7 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('checkout.reference', $second->checkoutReference->short_reference);
     }
 
-    public function test_revision_queue_skips_another_users_assignment_and_returns_empty_cleanly(): void
+    public function test_revision_queue_ignores_and_preserves_employee_assignment(): void
     {
         $agent = $this->agent();
         $other = $this->agent();
@@ -409,8 +453,13 @@ class AgentApiTest extends TestCase
             ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-empty'])
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('checkout', null)
-            ->assertJsonPath('reason', 'NO_AVAILABLE_REVISIONS');
+            ->assertJsonPath('checkout.reference', $blocked->checkoutReference->short_reference)
+            ->assertJsonPath('checkout.assignment_changed', false);
+        $this->assertSame('generating', $blocked->fresh()->status);
+        $this->assertDatabaseHas('order_group_assignments', [
+            'checkout_group_key' => $blocked->checkoutGroupKey(),
+            'assigned_to_user_id' => $other->id,
+        ]);
     }
 
     public function test_context_upload_and_checkout_completion_cover_every_production_unit(): void
@@ -547,13 +596,10 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('checkout.deferred_products_count', 1);
 
         $reference = $acquired->json('checkout.reference');
-        $this->assertDatabaseHas('order_group_assignments', [
-            'checkout_group_key' => 'IDENTITY-MIXED',
-            'assigned_to_user_id' => $agent->id,
-        ]);
-        $this->assertSame('new', $first->fresh()->status);
-        $this->assertSame('new', $second->fresh()->status);
-        $this->assertSame('new', $product->fresh()->status);
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'IDENTITY-MIXED']);
+        $this->assertSame('under_review', $first->fresh()->status);
+        $this->assertSame('under_review', $second->fresh()->status);
+        $this->assertSame('under_review', $product->fresh()->status);
 
         $context = $this->withToken($token)
             ->getJson("/api/agent/checkouts/{$reference}/identity-context")
@@ -673,7 +719,8 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('checkout.reference', $eligible->checkoutReference->short_reference);
 
         $this->assertNull($missingPhotos->fresh()->groupAssignment);
-        $this->assertNotNull($eligible->fresh()->groupAssignment);
+        $this->assertNull($eligible->fresh()->groupAssignment);
+        $this->assertSame('under_review', $eligible->fresh()->status);
     }
 
     public function test_product_only_token_skips_story_checkouts(): void
@@ -911,7 +958,7 @@ class AgentApiTest extends TestCase
         $this->assertDatabaseCount('order_attachments', 0);
     }
 
-    public function test_a_second_agent_cannot_acquire_the_same_checkout(): void
+    public function test_status_transition_prevents_a_second_agent_from_starting_the_same_checkout(): void
     {
         $firstAgent = $this->agent();
         $secondAgent = $this->agent();
@@ -923,7 +970,7 @@ class AgentApiTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->withToken($this->token($secondAgent))->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'second-agent'])
             ->assertOk()->assertJsonPath('checkout', null)->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS');
-        $this->assertDatabaseCount('order_group_assignments', 1);
+        $this->assertDatabaseCount('order_group_assignments', 0);
     }
 
     public function test_agent_can_select_correct_and_rework_a_specific_existing_product_checkout(): void
@@ -936,7 +983,7 @@ class AgentApiTest extends TestCase
             'HK-PRODUCT-REWORK',
             'Sticker for {{child_full_name}} at {{school_name}} in {{class_name}} ({{name_language}}).',
         );
-        $order->update(['status' => 'ready_preview']);
+        $order->update(['status' => 'revision_requested']);
         $reference = $order->checkoutReference->short_reference;
         $item = $order->items()->firstOrFail();
         $queueOrder = $this->productOrder('OTHER-ACTIVE-WORK', 'HK-OTHER-ACTIVE-WORK', 'Create {{product_name}}.');
@@ -951,7 +998,7 @@ class AgentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('checkout.reference', $reference)
             ->assertJsonPath('already_acquired', false);
-        $this->assertDatabaseCount('order_group_assignments', 2);
+        $this->assertDatabaseCount('order_group_assignments', 0);
 
         $this->withToken($token)
             ->patchJson("/api/agent/orders/{$order->id}/personalization", [
@@ -983,11 +1030,18 @@ class AgentApiTest extends TestCase
         $this->assertStringContainsString('School sky light', $prompt);
         $this->assertStringContainsString('kg2', $prompt);
 
-        $this->withToken($token)->post("/api/agent/orders/{$order->id}/attachments", [
+        Storage::disk('local')->put('orders/'.$order->id.'/old-production.pdf', 'previous production file');
+        $order->attachments()->create([
             'production_unit_key' => 'product:'.$item->id,
-            'attachments' => [UploadedFile::fake()->create('old-production.pdf', 100, 'application/pdf')],
-        ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$token, 'Idempotency-Key' => 'old-production-file'])
-            ->assertCreated();
+            'uploaded_by_user_id' => $agent->id,
+            'disk' => 'local',
+            'path' => 'orders/'.$order->id.'/old-production.pdf',
+            'original_name' => 'old-production.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'validity_days' => 30,
+            'expires_at' => now()->addDays(30),
+        ]);
 
         $this->withToken($token)
             ->postJson("/api/agent/checkouts/{$reference}/start-rework", [], ['Idempotency-Key' => 'specific-rework-start'])
@@ -1018,7 +1072,7 @@ class AgentApiTest extends TestCase
         ]);
     }
 
-    public function test_specific_rework_requires_new_token_ability_and_respects_existing_assignment(): void
+    public function test_specific_rework_requires_ability_but_does_not_create_exclusive_assignment(): void
     {
         $owner = $this->agent();
         $other = $this->agent();
@@ -1038,8 +1092,9 @@ class AgentApiTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->withToken($this->reworkToken($other))
             ->postJson("/api/agent/checkouts/{$reference}/acquire", [], ['Idempotency-Key' => 'other-specific-acquire'])
-            ->assertStatus(409)
-            ->assertJsonPath('error', 'ORDER_ALREADY_ACQUIRED');
+            ->assertOk()
+            ->assertJsonPath('assignment_changed', false);
+        $this->assertDatabaseCount('order_group_assignments', 0);
     }
 
     public function test_specific_rework_updates_every_production_order_in_a_mixed_checkout(): void
@@ -1108,7 +1163,9 @@ class AgentApiTest extends TestCase
         app(OrderSceneTextService::class)->snapshotForOrder($order, $order->story);
         $payload = ['production_unit_key' => 'story:'.$order->id, 'personalization' => ['language' => 'en'], 'change_reason' => 'Customer requested English'];
         $url = "/api/agent/orders/{$order->id}/personalization";
-        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'unacquired-language'])->assertForbidden();
+        $this->withToken($token)->patchJson($url, $payload, ['Idempotency-Key' => 'inactive-language'])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'INVALID_ORDER_STATUS');
         $order->update(['status' => 'revision_requested']);
         $this->withToken($token)->postJson('/api/agent/checkouts/'.$order->checkoutReference->short_reference.'/acquire', [], ['Idempotency-Key' => 'language-acquire'])->assertOk();
         $ids = $order->sceneTextSnapshots()->pluck('id')->all();
@@ -1145,7 +1202,7 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('error', 'CHECKOUT_NOT_REWORKABLE');
     }
 
-    public function test_another_agent_cannot_read_or_upload_to_acquired_checkout(): void
+    public function test_authorized_agent_can_read_and_upload_without_assignment(): void
     {
         $owner = $this->agent();
         $other = $this->agent();
@@ -1153,19 +1210,16 @@ class AgentApiTest extends TestCase
         $acquired = $this->withToken($this->token($owner))->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'private-acquire']);
         $reference = $acquired->json('checkout.reference');
         $this->assertNotSame($owner->id, $other->id);
-        $this->assertDatabaseHas('order_group_assignments', [
-            'checkout_group_key' => 'AGENT-PRIVATE',
-            'assigned_to_user_id' => $owner->id,
-        ]);
+        $this->assertDatabaseMissing('order_group_assignments', ['checkout_group_key' => 'AGENT-PRIVATE']);
 
         $otherToken = $this->token($other);
         $this->app['auth']->forgetGuards();
         $this->withToken($otherToken)->getJson("/api/agent/checkouts/{$reference}/production-context")
-            ->assertForbidden()->assertJsonPath('error', 'ORDER_NOT_ACQUIRED_BY_AGENT');
+            ->assertOk();
         $this->withToken($otherToken)->post("/api/agent/orders/{$order->id}/attachments", [
             'attachments' => [UploadedFile::fake()->create('forbidden.pdf', 10, 'application/pdf')],
         ], ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$otherToken, 'Idempotency-Key' => 'forbidden-file'])
-            ->assertForbidden()->assertJsonPath('error', 'ORDER_NOT_ACQUIRED_BY_AGENT');
+            ->assertCreated();
     }
 
     private function agent(bool $enabled = true): User
@@ -1204,7 +1258,7 @@ class AgentApiTest extends TestCase
 
     private function abilities(): array
     {
-        return ['agent', 'agent:orders.read', 'agent:orders.acquire', 'agent:orders.update-status', 'agent:orders.upload-attachment', 'agent:orders.upload-preview'];
+        return ['agent', 'agent:orders.read', 'agent:orders.update-status', 'agent:orders.upload-attachment', 'agent:orders.upload-preview'];
     }
 
     private function storyOrder(string $group, string $number, bool $withPhoto = false): Order
