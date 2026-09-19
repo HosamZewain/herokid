@@ -117,18 +117,19 @@ class GenerateChildIdentityAttemptJob implements ShouldQueue
                 clientRequestId: 'child-identity-'.$identity->uuid.'-'.$attempt->attempt_number,
             ));
             $outputPath = 'child-identities/'.$identity->uuid.'/attempts/'.$attempt->attempt_number.'/output.'.$result->extension;
-            Storage::disk('local')->put($outputPath, $result->contents);
+            $outputDisk = (string) config('media.private_disk', 'local');
+            Storage::disk($outputDisk)->put($outputPath, $result->contents);
             $cost = $pricing->calculate($model, $attempt->image_size, $attempt->image_quality, $result->usage);
             $duration = (int) round((hrtime(true) - $started) / 1_000_000);
 
-            DB::transaction(function () use ($attempt, $identity, $result, $outputPath, $cost, $duration, $aggregates, $events): void {
+            DB::transaction(function () use ($attempt, $identity, $result, $outputDisk, $outputPath, $cost, $duration, $aggregates, $events): void {
                 $locked = ChildIdentityGenerationAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
                 $locked->forceFill([
                     'status' => 'succeeded',
                     'api_request_id' => $result->providerRequestId,
                     'completed_at' => now(),
                     'duration_ms' => $duration,
-                    'output_disk' => 'local',
+                    'output_disk' => $outputDisk,
                     'output_storage_path' => $outputPath,
                     'output_checksum' => hash('sha256', $result->contents),
                     'cost_usd' => $cost['cost_usd'],

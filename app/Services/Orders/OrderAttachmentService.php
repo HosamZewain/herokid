@@ -41,17 +41,18 @@ class OrderAttachmentService
     ): Collection {
         $created = collect();
         $storedPaths = collect();
+        $diskName = (string) config('media.private_disk', 'local');
 
         try {
             foreach ($files as $file) {
-                $path = $file->store("order-attachments/{$order->id}", 'local');
+                $path = $file->store("order-attachments/{$order->id}", $diskName);
                 abort_unless($path, 422, 'تعذر حفظ ملف الإنتاج في التخزين الخاص.');
                 $storedPaths->push($path);
 
                 $created->push($order->attachments()->create([
                     'uploaded_by_user_id' => $actor?->id,
                     'production_unit_key' => $productionUnitKey,
-                    'disk' => 'local',
+                    'disk' => $diskName,
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
                     'mime_type' => (string) $file->getMimeType(),
@@ -63,7 +64,7 @@ class OrderAttachmentService
             }
         } catch (\Throwable $exception) {
             $created->each->delete();
-            $storedPaths->each(fn (string $path): bool => Storage::disk('local')->delete($path));
+            $storedPaths->each(fn (string $path): bool => Storage::disk($diskName)->delete($path));
             throw $exception;
         }
 

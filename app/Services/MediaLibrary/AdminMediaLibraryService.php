@@ -5,6 +5,7 @@ namespace App\Services\MediaLibrary;
 use App\Models\AdminMediaFile;
 use App\Models\AdminMediaUploadSession;
 use App\Models\User;
+use App\Services\Storage\MediaStorage;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,8 @@ class AdminMediaLibraryService
         'gif' => 'image/gif',
         'webp' => 'image/webp',
     ];
+
+    public function __construct(private readonly MediaStorage $mediaStorage) {}
 
     public function start(
         User $admin,
@@ -100,7 +103,7 @@ class AdminMediaLibraryService
 
             $path = $locked->temp_directory.'/chunks/'.sprintf('%06d.part', $index);
             $stream = fopen($chunk->getRealPath(), 'rb');
-            if ($stream === false || ! Storage::disk('local')->put($path, $stream)) {
+            if ($stream === false || ! $this->mediaStorage->processingDisk()->put($path, $stream)) {
                 if (is_resource($stream)) {
                     fclose($stream);
                 }
@@ -135,13 +138,15 @@ class AdminMediaLibraryService
             return $locked->fresh();
         });
 
-        $disk = Storage::disk('local');
+        $processingDisk = $this->mediaStorage->processingDisk();
+        $destinationDiskName = $this->mediaStorage->privateDiskName();
+        $destinationDisk = Storage::disk($destinationDiskName);
         $assembledPath = $upload->temp_directory.'/assembled.tmp';
         $finalPath = null;
 
         try {
-            $disk->makeDirectory($upload->temp_directory);
-            $output = fopen($disk->path($assembledPath), 'wb');
+            $processingDisk->makeDirectory($upload->temp_directory);
+            $output = fopen($processingDisk->path($assembledPath), 'wb');
             if ($output === false) {
                 throw new RuntimeException('تعذر تجهيز الملف النهائي.');
             }
@@ -150,7 +155,7 @@ class AdminMediaLibraryService
             $assembledSize = 0;
             for ($index = 0; $index < $upload->total_chunks; $index++) {
                 $partPath = $upload->temp_directory.'/chunks/'.sprintf('%06d.part', $index);
-                $input = fopen($disk->path($partPath), 'rb');
+                $input = fopen($processingDisk->path($partPath), 'rb');
                 if ($input === false) {
                     fclose($output);
                     throw new RuntimeException('أحد أجزاء الملف مفقود. أعد محاولة الرفع.');
@@ -182,20 +187,24 @@ class AdminMediaLibraryService
                 throw ValidationException::withMessages(['file' => 'حجم الملف النهائي لا يطابق الملف المرفوع.']);
             }
 
-            $absolutePath = $disk->path($assembledPath);
+            $absolutePath = $processingDisk->path($assembledPath);
             $mime = $this->validateCompletedFile($absolutePath, $upload->extension);
             $sha256 = hash_final($hash);
             $finalPath = 'admin/media-library/files/'.now()->format('Y/m').'/'.$upload->public_id.'.'.$upload->extension;
 
-            $disk->makeDirectory(dirname($finalPath));
-            if (! $disk->move($assembledPath, $finalPath)) {
+            $finalStream = fopen($absolutePath, 'rb');
+            if ($finalStream === false || ! $destinationDisk->put($finalPath, $finalStream)) {
+                if (is_resource($finalStream)) {
+                    fclose($finalStream);
+                }
                 throw new RuntimeException('تعذر نقل الملف إلى المكتبة الدائمة.');
             }
+            fclose($finalStream);
 
-            $media = DB::transaction(function () use ($upload, $admin, $mime, $sha256, $finalPath): AdminMediaFile {
+            $media = DB::transaction(function () use ($upload, $admin, $mime, $sha256, $finalPath, $destinationDiskName): AdminMediaFile {
                 $media = AdminMediaFile::create([
                     'public_id' => $upload->public_id,
-                    'disk' => 'local',
+                    'disk' => $destinationDiskName,
                     'path' => $finalPath,
                     'original_name' => $upload->original_name,
                     'title' => $upload->title,
@@ -212,7 +221,7 @@ class AdminMediaLibraryService
                 return $media;
             });
 
-            $disk->deleteDirectory($upload->temp_directory);
+            $processingDisk->deleteDirectory($upload->temp_directory);
 
             AdminActivityLogger::log(
                 'media_library.file_uploaded',
@@ -230,9 +239,9 @@ class AdminMediaLibraryService
             return $media;
         } catch (Throwable $exception) {
             if ($finalPath !== null) {
-                $disk->delete($finalPath);
+                $destinationDisk->delete($finalPath);
             }
-            $disk->delete($assembledPath);
+            $processingDisk->delete($assembledPath);
             AdminMediaUploadSession::query()
                 ->whereKey($upload->id)
                 ->where('status', 'assembling')
@@ -245,7 +254,7 @@ class AdminMediaLibraryService
     public function cancel(AdminMediaUploadSession $upload, User $admin): void
     {
         $this->authorizeOwner($upload, $admin);
-        Storage::disk('local')->deleteDirectory($upload->temp_directory);
+        $this->mediaStorage->processingDisk()->deleteDirectory($upload->temp_directory);
         $upload->delete();
     }
 
@@ -306,7 +315,7 @@ class AdminMediaLibraryService
             ->orderBy('id')
             ->chunkById(100, function ($uploads) use (&$deleted): void {
                 foreach ($uploads as $upload) {
-                    Storage::disk('local')->deleteDirectory($upload->temp_directory);
+                    $this->mediaStorage->processingDisk()->deleteDirectory($upload->temp_directory);
                     $upload->delete();
                     $deleted++;
                 }

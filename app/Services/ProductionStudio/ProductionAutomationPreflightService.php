@@ -183,11 +183,11 @@ class ProductionAutomationPreflightService
                     return [];
                 }
 
-                if (Storage::disk('local')->exists($path)) {
+                if (Storage::disk((string) config('media.private_disk', 'local'))->exists($path)) {
                     return [$index => [
                         'index' => $index,
                         'path_hash' => hash('sha256', $path),
-                        'content_hash' => hash('sha256', Storage::disk('local')->get($path)),
+                        'content_hash' => hash('sha256', Storage::disk((string) config('media.private_disk', 'local'))->get($path)),
                     ]];
                 }
 
@@ -209,8 +209,8 @@ class ProductionAutomationPreflightService
     {
         try {
             $path = 'production-studio/automation-preflight-'.uniqid('', true).'.tmp';
-            Storage::disk('local')->put($path, 'ok');
-            Storage::disk('local')->delete($path);
+            Storage::disk((string) config('media.private_disk', 'local'))->put($path, 'ok');
+            Storage::disk((string) config('media.private_disk', 'local'))->delete($path);
 
             return true;
         } catch (\Throwable) {

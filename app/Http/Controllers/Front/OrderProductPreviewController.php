@@ -40,7 +40,7 @@ class OrderProductPreviewController extends Controller
         $customerImage = $this->imageService->customerImage($preview);
         $disk = Storage::disk($customerImage['disk']);
 
-        return response()->file($disk->path($customerImage['path']), [
+        return $disk->response($customerImage['path'], null, [
             'Content-Type' => $customerImage['mime_type'],
             'Content-Disposition' => 'inline; filename="herokid-protected-preview-'.$preview->id.'.jpg"',
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',

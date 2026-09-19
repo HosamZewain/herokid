@@ -96,7 +96,7 @@ class ChildIdentityShareManager
             if ($reusedDraft) {
                 $share->forceFill([
                     'status' => 'ready',
-                    'card_disk' => 'local',
+                    'card_disk' => (string) config('media.private_disk', 'local'),
                     'feed_card_path' => $attempt->share_feed_card_path,
                     'story_card_path' => $attempt->share_story_card_path,
                     'og_card_path' => $attempt->share_og_card_path,
@@ -255,7 +255,7 @@ class ChildIdentityShareManager
         return collect(ChildIdentityShare::VARIANTS)->every(function (string $variant) use ($attempt): bool {
             $path = $attempt->getAttribute("share_{$variant}_card_path");
 
-            return filled($path) && Storage::disk('local')->exists($path);
+            return filled($path) && Storage::disk((string) config('media.private_disk', 'local'))->exists($path);
         });
     }
 

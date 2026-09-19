@@ -316,7 +316,7 @@ class ProductionAutomationFinalProofService
     {
         $proof->loadMissing(['run.project.order', 'layout', 'reviewer']);
 
-        if ($proof->hasReport() && Storage::disk('local')->exists((string) $proof->report_path)) {
+        if ($proof->hasReport() && Storage::disk((string) config('media.private_disk', 'local'))->exists((string) $proof->report_path)) {
             return $proof;
         }
 
@@ -367,7 +367,7 @@ class ProductionAutomationFinalProofService
 
         $path = "production-studio/projects/{$proof->run->production_project_id}/automation/proofs/run-{$proof->automation_run_id}/proof-v{$proof->proof_version}.json";
         $contents = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        Storage::disk('local')->put($path, $contents);
+        Storage::disk((string) config('media.private_disk', 'local'))->put($path, $contents);
 
         $proof->update([
             'report_status' => 'ready',

@@ -506,8 +506,8 @@ class ProductionAutomationPhase4Service
         $path = "production-studio/projects/{$projectId}/layout/.automation-write-test";
 
         try {
-            Storage::disk('local')->put($path, 'ok');
-            Storage::disk('local')->delete($path);
+            Storage::disk((string) config('media.private_disk', 'local'))->put($path, 'ok');
+            Storage::disk((string) config('media.private_disk', 'local'))->delete($path);
 
             return true;
         } catch (\Throwable) {
@@ -519,7 +519,7 @@ class ProductionAutomationPhase4Service
     {
         return is_string($asset->file_path)
             && ! str_contains($asset->file_path, '..')
-            && Storage::disk('local')->exists($asset->file_path);
+            && Storage::disk((string) config('media.private_disk', 'local'))->exists($asset->file_path);
     }
 
     private function assetFingerprintInput(ProductionProjectAsset $asset): array
@@ -529,7 +529,7 @@ class ProductionAutomationPhase4Service
             'version_number' => $asset->version_number,
             'asset_type' => $asset->asset_type,
             'output_fingerprint' => $asset->output_fingerprint,
-            'content_hash' => $this->assetReadable($asset) ? hash('sha256', Storage::disk('local')->get($asset->file_path)) : null,
+            'content_hash' => $this->assetReadable($asset) ? hash('sha256', Storage::disk((string) config('media.private_disk', 'local'))->get($asset->file_path)) : null,
         ];
     }
 

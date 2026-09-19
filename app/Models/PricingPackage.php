@@ -87,7 +87,7 @@ class PricingPackage extends Model
             return asset($this->image_path);
         }
 
-        return Storage::disk('public')->url($this->image_path);
+        return Storage::disk((string) config('media.public_disk', 'public'))->url($this->image_path);
     }
 
     public function discountPercentage(): ?int

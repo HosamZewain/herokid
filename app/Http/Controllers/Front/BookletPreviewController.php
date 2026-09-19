@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Front;
 
 use App\Http\Controllers\Controller;
 use App\Models\BookletPreview;
+use App\Services\Storage\PersistentMediaResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -40,7 +41,7 @@ class BookletPreviewController extends Controller
         );
     }
 
-    public function document(Request $request, string $bookletPreview)
+    public function document(Request $request, string $bookletPreview, PersistentMediaResponse $mediaResponse)
     {
         $bookletPreview = BookletPreview::withTrashed()
             ->with(['currentVersion', 'order'])
@@ -60,9 +61,8 @@ class BookletPreviewController extends Controller
         $version = $bookletPreview->currentVersion;
         abort_unless($version && Storage::disk($version->disk)->exists($version->file_path), 404);
 
-        return response()->file(Storage::disk($version->disk)->path($version->file_path), [
+        return $mediaResponse->inline($version->disk, $version->file_path, 'herokid-preview.pdf', [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="herokid-preview.pdf"',
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',

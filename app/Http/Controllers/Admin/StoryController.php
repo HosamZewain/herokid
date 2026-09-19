@@ -119,7 +119,7 @@ class StoryController extends Controller
         unset($validated['scenes']);
 
         if ($request->hasFile('cover_image')) {
-            $validated['cover_image'] = $request->file('cover_image')->store('stories', 'public');
+            $validated['cover_image'] = $request->file('cover_image')->store('stories', (string) config('media.public_disk', 'public'));
         }
 
         [$story, $sceneChanges] = DB::transaction(function () use ($validated, $request, $sceneInput, $sceneTemplates): array {
@@ -204,10 +204,10 @@ class StoryController extends Controller
 
         if ($request->hasFile('cover_image')) {
             // Delete old image if exists
-            if ($story->cover_image && Storage::disk('public')->exists($story->cover_image)) {
-                Storage::disk('public')->delete($story->cover_image);
+            if ($story->cover_image && Storage::disk((string) config('media.public_disk', 'public'))->exists($story->cover_image)) {
+                Storage::disk((string) config('media.public_disk', 'public'))->delete($story->cover_image);
             }
-            $validated['cover_image'] = $request->file('cover_image')->store('stories', 'public');
+            $validated['cover_image'] = $request->file('cover_image')->store('stories', (string) config('media.public_disk', 'public'));
         }
 
         // Handle checkbox since unchecked is not sent in payload
@@ -258,8 +258,8 @@ class StoryController extends Controller
     {
         $storyDetails = $story->only(['id', 'title', 'slug', 'language', 'age_range', 'gender', 'price', 'active']);
 
-        if ($story->cover_image && Storage::disk('public')->exists($story->cover_image)) {
-            Storage::disk('public')->delete($story->cover_image);
+        if ($story->cover_image && Storage::disk((string) config('media.public_disk', 'public'))->exists($story->cover_image)) {
+            Storage::disk((string) config('media.public_disk', 'public'))->delete($story->cover_image);
         }
         $story->delete();
 

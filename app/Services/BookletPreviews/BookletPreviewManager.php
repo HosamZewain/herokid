@@ -7,6 +7,7 @@ use App\Models\BookletPreviewVersion;
 use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Models\User;
+use App\Services\Storage\MediaStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,8 @@ use Throwable;
 
 class BookletPreviewManager
 {
+    public function __construct(private readonly MediaStorage $mediaStorage) {}
+
     public function create(array $attributes, UploadedFile $file, ?User $actor): BookletPreview
     {
         $inspection = $this->inspectUploadedPdf($file);
@@ -113,26 +116,28 @@ class BookletPreviewManager
     public function promoteLegacy(OrderPreview $legacy, ?User $actor): BookletPreview
     {
         $legacy->loadMissing('order.story');
-        $disk = Storage::disk('local');
+        $legacyDisk = $legacy->disk ?: 'local';
+        $disk = Storage::disk($legacyDisk);
         abort_unless($disk->exists($legacy->file_path), 404, 'ملف المعاينة القديم غير موجود.');
 
-        $absolutePath = $disk->path($legacy->file_path);
-        abort_unless(strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION)) === 'pdf', 422, 'يمكن ترقية ملفات PDF فقط.');
+        abort_unless(strtolower(pathinfo($legacy->file_path, PATHINFO_EXTENSION)) === 'pdf', 422, 'يمكن ترقية ملفات PDF فقط.');
 
-        $uploaded = new UploadedFile(
-            $absolutePath,
-            basename($absolutePath),
-            'application/pdf',
-            null,
-            true,
-        );
+        return $this->mediaStorage->withLocalCopy($legacyDisk, $legacy->file_path, function (string $absolutePath) use ($legacy, $actor): BookletPreview {
+            $uploaded = new UploadedFile(
+                $absolutePath,
+                basename($legacy->file_path),
+                'application/pdf',
+                null,
+                true,
+            );
 
-        return $this->createOrReplaceForOrder(
-            $legacy->order,
-            $uploaded,
-            $legacy->note ?: 'تمت الترقية من معاينة قديمة.',
-            $actor,
-        );
+            return $this->createOrReplaceForOrder(
+                $legacy->order,
+                $uploaded,
+                $legacy->note ?: 'تمت الترقية من معاينة قديمة.',
+                $actor,
+            );
+        });
     }
 
     public function updateMetadata(BookletPreview $preview, array $attributes, ?User $actor): BookletPreview

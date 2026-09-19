@@ -540,11 +540,13 @@ class OrderController extends Controller
         ]);
 
         $oldStatus = $order->status;
-        $path = $request->file('preview_file')->store('orders/previews/'.$order->id, 'local');
+        $diskName = (string) config('media.private_disk', 'local');
+        $path = $request->file('preview_file')->store('orders/previews/'.$order->id, $diskName);
 
         $preview = OrderPreview::create([
             'order_id' => $order->id,
             'file_path' => $path,
+            'disk' => $diskName,
             'note' => $request->preview_note,
             'uploaded_by' => auth()->id(),
         ]);
@@ -650,10 +652,10 @@ class OrderController extends Controller
         abort_unless($disk->exists($attempt->output_storage_path), 404);
 
         if (request()->routeIs('admin.orders.approved-child-identity-thumbnail')) {
-            return app(PrivateOrderThumbnail::class)->response($disk->path($attempt->output_storage_path));
+            return app(PrivateOrderThumbnail::class)->response($attempt->output_disk ?: 'local', $attempt->output_storage_path);
         }
 
-        return response()->file($disk->path($attempt->output_storage_path), [
+        return $disk->response($attempt->output_storage_path, null, [
             'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             'X-Content-Type-Options' => 'nosniff',
         ]);
@@ -673,25 +675,27 @@ class OrderController extends Controller
             abort(404);
         }
 
-        $disk = Storage::disk('local');
+        $privateDiskName = (string) config('media.private_disk', 'local');
+        $disk = Storage::disk($privateDiskName);
 
         if ($disk->exists($photoPath)) {
             if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
-                return app(PrivateOrderThumbnail::class)->response($disk->path($photoPath));
+                return app(PrivateOrderThumbnail::class)->response($privateDiskName, $photoPath);
             }
 
-            return response()->file($disk->path($photoPath), [
+            return $disk->response($photoPath, null, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
         }
 
-        $publicDisk = Storage::disk('public');
+        $publicDiskName = (string) config('media.public_disk', 'public');
+        $publicDisk = Storage::disk($publicDiskName);
         if ($publicDisk->exists($photoPath)) {
             if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
-                return app(PrivateOrderThumbnail::class)->response($publicDisk->path($photoPath));
+                return app(PrivateOrderThumbnail::class)->response($publicDiskName, $photoPath);
             }
 
-            return response()->file($publicDisk->path($photoPath), [
+            return $publicDisk->response($photoPath, null, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);
         }
@@ -699,10 +703,6 @@ class OrderController extends Controller
         // Backward compatibility for files saved before Laravel's local disk moved to storage/app/private.
         $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
         if (file_exists($legacyPath) && is_file($legacyPath)) {
-            if (request()->routeIs('admin.orders.photo') && request()->boolean('thumbnail')) {
-                return app(PrivateOrderThumbnail::class)->response($legacyPath);
-            }
-
             return response()->file($legacyPath, [
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
             ]);

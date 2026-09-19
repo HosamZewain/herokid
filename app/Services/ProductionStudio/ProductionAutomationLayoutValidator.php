@@ -4,8 +4,8 @@ namespace App\Services\ProductionStudio;
 
 use App\Models\ProductionPrintLayout;
 use App\Models\ProductionProjectAsset;
+use App\Services\Storage\MediaStorage;
 use Composer\InstalledVersions;
-use Illuminate\Support\Facades\Storage;
 
 class ProductionAutomationLayoutValidator
 {
@@ -17,6 +17,7 @@ class ProductionAutomationLayoutValidator
 
     public function __construct(
         private readonly ProductionAutomationFingerprint $fingerprints,
+        private readonly MediaStorage $mediaStorage,
     ) {}
 
     public function validate(ProductionPrintLayout $layout): array
@@ -220,14 +221,14 @@ class ProductionAutomationLayoutValidator
             'font_embedded' => null,
         ];
 
-        if (! is_string($path) || $path === '' || str_contains($path, '..') || ! Storage::disk('local')->exists($path)) {
+        if (! is_string($path) || $path === '' || str_contains($path, '..') || ! $this->mediaStorage->privateDisk()->exists($path)) {
             $result['ok'] = false;
             $result['errors'][] = "{$key} file is missing from private storage.";
 
             return $result;
         }
 
-        $contents = Storage::disk('local')->get($path);
+        $contents = $this->mediaStorage->privateDisk()->get($path);
         $result['sha256'] = hash('sha256', $contents);
         $result['bytes'] = strlen($contents);
 
@@ -376,13 +377,17 @@ class ProductionAutomationLayoutValidator
             ->values();
 
         foreach ($assets as $asset) {
-            if (! is_string($asset->file_path) || str_contains($asset->file_path, '..') || ! Storage::disk('local')->exists($asset->file_path)) {
+            if (! is_string($asset->file_path) || str_contains($asset->file_path, '..') || ! $this->mediaStorage->privateDisk()->exists($asset->file_path)) {
                 $errors[] = "Asset {$asset->id} is not readable from private storage.";
 
                 continue;
             }
 
-            $size = @getimagesize(Storage::disk('local')->path($asset->file_path));
+            $size = $this->mediaStorage->withLocalCopy(
+                $this->mediaStorage->privateDiskName(),
+                $asset->file_path,
+                fn (string $path): array|false => @getimagesize($path),
+            );
             if (! $size) {
                 $errors[] = "Asset {$asset->id} image dimensions could not be read.";
 
@@ -431,8 +436,8 @@ class ProductionAutomationLayoutValidator
             'version_number' => $asset->version_number,
             'asset_type' => $asset->asset_type,
             'output_fingerprint' => $asset->output_fingerprint,
-            'sha256' => is_string($asset->file_path) && ! str_contains($asset->file_path, '..') && Storage::disk('local')->exists($asset->file_path)
-                ? hash('sha256', Storage::disk('local')->get($asset->file_path))
+            'sha256' => is_string($asset->file_path) && ! str_contains($asset->file_path, '..') && $this->mediaStorage->privateDisk()->exists($asset->file_path)
+                ? $this->mediaStorage->checksum($this->mediaStorage->privateDiskName(), $asset->file_path)
                 : null,
         ];
     }

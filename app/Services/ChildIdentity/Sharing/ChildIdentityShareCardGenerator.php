@@ -78,7 +78,7 @@ class ChildIdentityShareCardGenerator
                 $logoContents,
                 $globeContents,
             );
-            Storage::disk('local')->put($path, $jpeg);
+            Storage::disk((string) config('media.private_disk', 'local'))->put($path, $jpeg);
             $paths[$variant] = $path;
         }
 

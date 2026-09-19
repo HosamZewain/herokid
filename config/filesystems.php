@@ -60,6 +60,26 @@ return [
             'report' => false,
         ],
 
+        's3_private' => [
+            'driver' => 'scoped',
+            'disk' => 's3',
+            'prefix' => 'private',
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
+        's3_public' => [
+            'driver' => 'scoped',
+            'disk' => 's3',
+            'prefix' => 'public',
+            // The bucket stays private. CloudFront (when configured) is the
+            // public delivery layer; Laravel must not write public-read ACLs.
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

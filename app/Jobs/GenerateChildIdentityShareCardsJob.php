@@ -60,7 +60,7 @@ class GenerateChildIdentityShareCardsJob implements ShouldBeUnique, ShouldQueue
                 $locked = ChildIdentityShare::query()->lockForUpdate()->find($this->shareId);
                 if (! $locked || $locked->generation_version !== $this->generationVersion) {
                     foreach ($paths as $path) {
-                        Storage::disk('local')->delete($path);
+                        Storage::disk((string) config('media.private_disk', 'local'))->delete($path);
                     }
 
                     return;

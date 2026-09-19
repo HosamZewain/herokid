@@ -114,19 +114,19 @@ class ChildIdentityDeletionService
                     'kind' => 'preview',
                 ] : null,
                 $attempt->share_feed_card_path ? [
-                    'disk' => 'local',
+                    'disk' => (string) config('media.private_disk', 'local'),
                     'path' => $attempt->share_feed_card_path,
                     'checksum' => null,
                     'kind' => 'share_feed',
                 ] : null,
                 $attempt->share_story_card_path ? [
-                    'disk' => 'local',
+                    'disk' => (string) config('media.private_disk', 'local'),
                     'path' => $attempt->share_story_card_path,
                     'checksum' => null,
                     'kind' => 'share_story',
                 ] : null,
                 $attempt->share_og_card_path ? [
-                    'disk' => 'local',
+                    'disk' => (string) config('media.private_disk', 'local'),
                     'path' => $attempt->share_og_card_path,
                     'checksum' => null,
                     'kind' => 'share_og',

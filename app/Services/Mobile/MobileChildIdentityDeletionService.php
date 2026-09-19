@@ -21,9 +21,9 @@ class MobileChildIdentityDeletionService
         ])->merge($identity->attempts->flatMap(fn ($attempt) => [
             $attempt->output_storage_path ? ['disk' => $attempt->output_disk ?: 'local', 'path' => $attempt->output_storage_path] : null,
             $attempt->preview_storage_path ? ['disk' => $attempt->output_disk ?: 'local', 'path' => $attempt->preview_storage_path] : null,
-            $attempt->share_feed_card_path ? ['disk' => 'local', 'path' => $attempt->share_feed_card_path] : null,
-            $attempt->share_story_card_path ? ['disk' => 'local', 'path' => $attempt->share_story_card_path] : null,
-            $attempt->share_og_card_path ? ['disk' => 'local', 'path' => $attempt->share_og_card_path] : null,
+            $attempt->share_feed_card_path ? ['disk' => (string) config('media.private_disk', 'local'), 'path' => $attempt->share_feed_card_path] : null,
+            $attempt->share_story_card_path ? ['disk' => (string) config('media.private_disk', 'local'), 'path' => $attempt->share_story_card_path] : null,
+            $attempt->share_og_card_path ? ['disk' => (string) config('media.private_disk', 'local'), 'path' => $attempt->share_og_card_path] : null,
         ]))->merge($identity->share ? collect(ChildIdentityShare::VARIANTS)->map(fn (string $variant) => $identity->share->cardPath($variant) ? [
             'disk' => $identity->share->card_disk,
             'path' => $identity->share->cardPath($variant),

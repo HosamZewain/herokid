@@ -226,7 +226,7 @@ class ExpenseLedgerService
         $path = $file->storeAs(
             'expenses/transactions/'.$transaction->id,
             Str::uuid().'.'.$extension,
-            'local',
+            (string) config('media.private_disk', 'local'),
         );
 
         if (! $path) {
@@ -247,7 +247,7 @@ class ExpenseLedgerService
         $this->storeAttachment($transaction, $file);
 
         if ($oldPath && $oldPath !== $transaction->attachment_path) {
-            Storage::disk('local')->delete($oldPath);
+            Storage::disk((string) config('media.private_disk', 'local'))->delete($oldPath);
         }
     }
 

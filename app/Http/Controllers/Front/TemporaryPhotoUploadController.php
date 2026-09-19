@@ -114,7 +114,7 @@ class TemporaryPhotoUploadController extends Controller
             abort(404);
         }
 
-        return response()->file($disk->path($path), [
+        return $disk->response($path, null, [
             'Content-Type' => $mimeType,
             'Cache-Control' => 'private, max-age=300',
         ]);

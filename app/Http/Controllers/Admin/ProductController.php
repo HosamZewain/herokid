@@ -99,7 +99,7 @@ class ProductController extends Controller
                 return $product;
             });
         } catch (Throwable $exception) {
-            Storage::disk('public')->delete($newFiles);
+            Storage::disk((string) config('media.public_disk', 'public'))->delete($newFiles);
 
             throw $exception;
         }
@@ -366,7 +366,7 @@ class ProductController extends Controller
             return $sourcePath;
         }
 
-        $disk = Storage::disk('public');
+        $disk = Storage::disk((string) config('media.public_disk', 'public'));
         if (! $disk->exists($sourcePath)) {
             return null;
         }
@@ -538,10 +538,10 @@ class ProductController extends Controller
 
         if ($request->hasFile('featured_image')) {
             if ($product?->featured_image) {
-                Storage::disk('public')->delete($product->featured_image);
+                Storage::disk((string) config('media.public_disk', 'public'))->delete($product->featured_image);
             }
 
-            $validated['featured_image'] = $request->file('featured_image')->store('store/products', 'public');
+            $validated['featured_image'] = $request->file('featured_image')->store('store/products', (string) config('media.public_disk', 'public'));
         } else {
             unset($validated['featured_image']);
         }
@@ -551,7 +551,7 @@ class ProductController extends Controller
             $newImages = [];
 
             foreach ($request->file('gallery_images') as $image) {
-                $newImages[] = $image->store('store/products/gallery', 'public');
+                $newImages[] = $image->store('store/products/gallery', (string) config('media.public_disk', 'public'));
             }
 
             $validated['gallery_images'] = array_values(array_merge($existing, $newImages));

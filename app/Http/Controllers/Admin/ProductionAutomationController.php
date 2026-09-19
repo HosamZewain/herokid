@@ -423,7 +423,8 @@ class ProductionAutomationController extends Controller
         abort_unless($proof->hasReport(), 404);
 
         $path = (string) $proof->report_path;
-        abort_unless($path !== '' && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
+        $disk = Storage::disk((string) config('media.private_disk', 'local'));
+        abort_unless($path !== '' && ! str_contains($path, '..') && $disk->exists($path), 404);
 
         ProductionStudio::log($project, 'automation.proof_report_downloaded', 'تم تنزيل تقرير المراجعة النهائية للإنتاج التلقائي.', [
             'run_id' => $run->id,
@@ -432,7 +433,7 @@ class ProductionAutomationController extends Controller
             'report_checksum' => $proof->report_checksum,
         ], auth()->user());
 
-        return Storage::disk('local')->download($path, $project->order?->order_number.'-final-proof-report-v'.$proof->proof_version.'.json', [
+        return $disk->download($path, $project->order?->order_number.'-final-proof-report-v'.$proof->proof_version.'.json', [
             'Content-Type' => 'application/json',
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',
@@ -684,7 +685,8 @@ class ProductionAutomationController extends Controller
 
         abort_unless(isset($paths[$file]), 404);
         [$path, $name] = $paths[$file];
-        abort_unless(is_string($path) && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
+        $disk = Storage::disk((string) config('media.private_disk', 'local'));
+        abort_unless(is_string($path) && ! str_contains($path, '..') && $disk->exists($path), 404);
 
         ProductionStudio::log($project, 'automation.file_downloaded', 'تم تنزيل ملف خاص من دورة الإنتاج التلقائي.', [
             'run_id' => $run->id,
@@ -692,7 +694,7 @@ class ProductionAutomationController extends Controller
             'file' => $file,
         ], auth()->user());
 
-        return Storage::disk('local')->download($path, $project->order?->order_number.'-'.$name, [
+        return $disk->download($path, $project->order?->order_number.'-'.$name, [
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',
         ]);

@@ -69,7 +69,7 @@ class ChildIdentityShareDisplayService
         return collect(ChildIdentityShare::VARIANTS)->every(function (string $variant) use ($share): bool {
             $path = $share->cardPath($variant);
 
-            return filled($path) && Storage::disk($share->card_disk ?: 'local')->exists($path);
+            return filled($path) && Storage::disk($share->card_disk ?: (string) config('media.private_disk', 'local'))->exists($path);
         });
     }
 }

@@ -293,7 +293,7 @@ class AgentOrderController extends Controller
     {
         $storage = Storage::disk($disk);
         if (! $storage->exists($path)) {
-            foreach (['local', 'public'] as $candidate) {
+            foreach (array_unique([(string) config('media.private_disk', 'local'), (string) config('media.public_disk', 'public'), 'local', 'public']) as $candidate) {
                 if (Storage::disk($candidate)->exists($path)) {
                     $storage = Storage::disk($candidate);
                     break;

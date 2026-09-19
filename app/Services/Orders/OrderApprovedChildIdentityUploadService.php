@@ -36,9 +36,10 @@ class OrderApprovedChildIdentityUploadService
         };
         $dimensions = getimagesizefromstring($contents) ?: [];
         $storedPath = null;
+        $diskName = (string) config('media.private_disk', 'local');
 
         try {
-            return DB::transaction(function () use ($order, $file, $admin, $source, $contents, $mimeType, $extension, $dimensions, &$storedPath): ChildIdentityGenerationAttempt {
+            return DB::transaction(function () use ($order, $file, $admin, $source, $contents, $mimeType, $extension, $dimensions, $diskName, &$storedPath): ChildIdentityGenerationAttempt {
                 $lockedOrder = Order::query()->with(['story', 'user', 'childIdentityRequest'])->lockForUpdate()->findOrFail($order->id);
                 if (! $lockedOrder->story_id) {
                     throw new RuntimeException('Approved child identities can only be attached to story orders.');
@@ -52,7 +53,7 @@ class OrderApprovedChildIdentityUploadService
 
                 $attemptNumber = ((int) $identity->attempts()->max('attempt_number')) + 1;
                 $storedPath = 'child-identities/'.$identity->uuid.'/attempts/'.$attemptNumber.'/manual-approved.'.$extension;
-                if (! Storage::disk('local')->put($storedPath, $contents)) {
+                if (! Storage::disk($diskName)->put($storedPath, $contents)) {
                     throw new RuntimeException('Unable to store the approved identity upload.');
                 }
 
@@ -74,7 +75,7 @@ class OrderApprovedChildIdentityUploadService
                     'started_at' => now(),
                     'completed_at' => now(),
                     'duration_ms' => 0,
-                    'output_disk' => 'local',
+                    'output_disk' => $diskName,
                     'output_storage_path' => $storedPath,
                     'output_checksum' => hash('sha256', $contents),
                     'cost_usd' => 0,
@@ -98,7 +99,7 @@ class OrderApprovedChildIdentityUploadService
             });
         } catch (\Throwable $exception) {
             if ($storedPath) {
-                Storage::disk('local')->delete($storedPath);
+                Storage::disk($diskName)->delete($storedPath);
             }
 
             throw $exception;

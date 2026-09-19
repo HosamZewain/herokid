@@ -162,10 +162,8 @@ class ProductionStudioLayoutPrintTest extends TestCase
         foreach ([$layout->reader_pdf_path, $layout->print_pdf_path, $layout->manifest_path, $layout->proof_checklist_path] as $path) {
             Storage::disk('local')->assertExists($path);
         }
-        $rightPageSize = getimagesize(Storage::disk('local')->path("production-studio/projects/{$project->id}/layout/v1/pages/page-02.jpg"));
-        $leftPageSize = getimagesize(Storage::disk('local')->path("production-studio/projects/{$project->id}/layout/v1/pages/page-03.jpg"));
-        $this->assertSame([2481, 3508], [$rightPageSize[0], $rightPageSize[1]]);
-        $this->assertSame([2480, 3508], [$leftPageSize[0], $leftPageSize[1]]);
+        Storage::disk('local')->assertMissing("production-studio/projects/{$project->id}/layout/v1/pages/page-02.jpg");
+        $this->assertSame([], Storage::disk('local')->allFiles('production-layout-work'));
         $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($layout->reader_pdf_path));
         $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($layout->print_pdf_path));
 

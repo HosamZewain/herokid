@@ -53,8 +53,8 @@ class ChildIdentityMediaController extends Controller
         }
 
         if (filled($attempt->share_feed_card_path)
-            && Storage::disk('local')->exists($attempt->share_feed_card_path)) {
-            return $this->privateFile('local', $attempt->share_feed_card_path, 'image/jpeg');
+            && Storage::disk((string) config('media.private_disk', 'local'))->exists($attempt->share_feed_card_path)) {
+            return $this->privateFile((string) config('media.private_disk', 'local'), $attempt->share_feed_card_path, 'image/jpeg');
         }
 
         return $this->privateFile(

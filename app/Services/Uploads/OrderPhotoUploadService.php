@@ -49,8 +49,9 @@ class OrderPhotoUploadService
             ->whereJsonContains('uploaded_photos', $removedPath)
             ->exists();
         if (! $stillReferenced && ! str_contains($removedPath, '..')) {
-            app(PrivateOrderThumbnail::class)->forget(Storage::disk((string) config('photo_uploads.disk', 'local'))->path($removedPath));
-            Storage::disk((string) config('photo_uploads.disk', 'local'))->delete($removedPath);
+            $diskName = (string) config('photo_uploads.disk', config('media.private_disk', 'local'));
+            app(PrivateOrderThumbnail::class)->forget($diskName, $removedPath);
+            Storage::disk($diskName)->delete($removedPath);
         }
 
         return [

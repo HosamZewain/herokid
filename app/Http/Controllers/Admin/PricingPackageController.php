@@ -271,14 +271,14 @@ class PricingPackageController extends Controller
     private function storeImage(Request $request): ?string
     {
         return $request->hasFile('image')
-            ? $request->file('image')->store('packages', 'public')
+            ? $request->file('image')->store('packages', (string) config('media.public_disk', 'public'))
             : null;
     }
 
     private function deleteUploadedImage(?string $path): void
     {
         if ($path && ! str_starts_with($path, 'images/') && ! str_starts_with($path, 'http')) {
-            Storage::disk('public')->delete($path);
+            Storage::disk((string) config('media.public_disk', 'public'))->delete($path);
         }
     }
 }

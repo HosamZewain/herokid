@@ -40,6 +40,6 @@ class ProductCategory extends Model
             return Seo::imageUrl($this->cover_image);
         }
 
-        return Seo::imageUrl(Storage::disk('public')->url($this->cover_image));
+        return Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($this->cover_image));
     }
 }

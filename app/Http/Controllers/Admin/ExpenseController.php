@@ -151,7 +151,7 @@ class ExpenseController extends Controller
     {
         $this->ensureAttachmentExists($expense);
 
-        return Storage::disk('local')->response(
+        return Storage::disk((string) config('media.private_disk', 'local'))->response(
             $expense->attachment_path,
             $expense->attachment_original_name,
             [
@@ -173,7 +173,7 @@ class ExpenseController extends Controller
             admin: $request->user(),
         );
 
-        return Storage::disk('local')->download(
+        return Storage::disk((string) config('media.private_disk', 'local'))->download(
             $expense->attachment_path,
             $expense->attachment_original_name,
             ['Cache-Control' => 'private, no-store, max-age=0', 'X-Content-Type-Options' => 'nosniff'],
@@ -298,7 +298,7 @@ class ExpenseController extends Controller
 
     private function ensureAttachmentExists(ExpenseTransaction $expense): void
     {
-        abort_unless($expense->attachment_path && Storage::disk('local')->exists($expense->attachment_path), 404);
+        abort_unless($expense->attachment_path && Storage::disk((string) config('media.private_disk', 'local'))->exists($expense->attachment_path), 404);
     }
 
     private function csvCell(mixed $value): string

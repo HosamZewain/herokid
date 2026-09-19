@@ -15,7 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RoboDeskIntegrationController extends Controller
 {
@@ -35,11 +35,11 @@ class RoboDeskIntegrationController extends Controller
         return back()->with('success', 'تمت إعادة الحدث إلى قائمة الإرسال.');
     }
 
-    public function proof(OrderPaymentProof $proof): BinaryFileResponse
+    public function proof(OrderPaymentProof $proof): StreamedResponse
     {
         abort_unless(Storage::disk($proof->disk)->exists($proof->file_path), 404);
 
-        return response()->file(Storage::disk($proof->disk)->path($proof->file_path), [
+        return Storage::disk($proof->disk)->response($proof->file_path, $proof->original_filename, [
             'Content-Type' => $proof->mime_type,
             'Content-Disposition' => 'inline; filename="payment-proof"',
             'Cache-Control' => 'no-store, private',

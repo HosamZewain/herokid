@@ -147,6 +147,6 @@ class Product extends Model
             return Seo::imageUrl($this->featured_image);
         }
 
-        return Seo::imageUrl(Storage::disk('public')->url($this->featured_image));
+        return Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($this->featured_image));
     }
 }

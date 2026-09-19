@@ -78,10 +78,10 @@ class ProductCategoryController extends Controller
 
         if ($request->hasFile('cover_image')) {
             if ($category?->cover_image) {
-                Storage::disk('public')->delete($category->cover_image);
+                Storage::disk((string) config('media.public_disk', 'public'))->delete($category->cover_image);
             }
 
-            $validated['cover_image'] = $request->file('cover_image')->store('store/categories', 'public');
+            $validated['cover_image'] = $request->file('cover_image')->store('store/categories', (string) config('media.public_disk', 'public'));
         } else {
             unset($validated['cover_image']);
         }

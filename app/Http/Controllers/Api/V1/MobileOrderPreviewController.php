@@ -7,6 +7,7 @@ use App\Models\BookletPreview;
 use App\Models\Order;
 use App\Services\BookletPreviews\CustomerPreviewDecisionService;
 use App\Services\Mobile\MobileAnalyticsRecorder;
+use App\Services\Storage\PersistentMediaResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -45,15 +46,14 @@ class MobileOrderPreviewController extends Controller
         ]])->header('Cache-Control', 'private, no-store');
     }
 
-    public function document(Request $request, Order $order)
+    public function document(Request $request, Order $order, PersistentMediaResponse $mediaResponse)
     {
         $this->authorizeOrder($request, $order);
         $version = $this->preview($order)->currentVersion;
         abort_unless(Storage::disk($version->disk)->exists($version->file_path), 404);
 
-        return response()->file(Storage::disk($version->disk)->path($version->file_path), [
+        return $mediaResponse->inline($version->disk, $version->file_path, 'herokid-preview-v'.$version->version_number.'.pdf', [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="herokid-preview-v'.$version->version_number.'.pdf"',
             'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',

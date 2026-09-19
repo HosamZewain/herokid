@@ -209,22 +209,24 @@ class ProductionStudioController extends Controller
             abort(404);
         }
 
-        $disk = Storage::disk('local');
+        $privateDiskName = (string) config('media.private_disk', 'local');
+        $disk = Storage::disk($privateDiskName);
 
         if ($disk->exists($photoPath)) {
-            return $this->privateCachedFileResponse($disk->path($photoPath));
+            return $this->privateCachedFileResponse($privateDiskName, $photoPath);
         }
 
-        $publicDisk = Storage::disk('public');
+        $publicDiskName = (string) config('media.public_disk', 'public');
+        $publicDisk = Storage::disk($publicDiskName);
 
         if ($publicDisk->exists($photoPath)) {
-            return $this->privateCachedFileResponse($publicDisk->path($photoPath));
+            return $this->privateCachedFileResponse($publicDiskName, $photoPath);
         }
 
         $legacyPath = storage_path('app/'.ltrim($photoPath, '/'));
 
         if (file_exists($legacyPath) && is_file($legacyPath)) {
-            return $this->privateCachedFileResponse($legacyPath);
+            return response()->file($legacyPath, ['X-Content-Type-Options' => 'nosniff']);
         }
 
         abort(404);
@@ -239,13 +241,14 @@ class ProductionStudioController extends Controller
             abort(404);
         }
 
-        $disk = Storage::disk('local');
+        $diskName = (string) config('media.private_disk', 'local');
+        $disk = Storage::disk($diskName);
 
         if (! $disk->exists($asset->file_path)) {
             abort(404);
         }
 
-        return $this->privateCachedFileResponse($disk->path($asset->file_path));
+        return $this->privateCachedFileResponse($diskName, $asset->file_path);
     }
 
     public function uploadLayoutAsset(Request $request, ProductionProject $project)
@@ -268,7 +271,7 @@ class ProductionStudioController extends Controller
 
         $type = $validated['asset_type'];
         $path = "production-studio/projects/{$project->id}/layout/manual/".Str::uuid().'.'.$extensions[$mime];
-        Storage::disk('local')->put($path, $contents);
+        Storage::disk((string) config('media.private_disk', 'local'))->put($path, $contents);
 
         if ($type === 'cover_image') {
             $project->assets()->where('asset_type', 'cover_image')->update(['is_final' => false]);
@@ -395,20 +398,22 @@ class ProductionStudioController extends Controller
         ];
         abort_unless(isset($paths[$file]), 404);
         [$path, $name] = $paths[$file];
-        abort_unless(is_string($path) && ! str_contains($path, '..') && Storage::disk('local')->exists($path), 404);
+        $disk = Storage::disk((string) config('media.private_disk', 'local'));
+        abort_unless(is_string($path) && ! str_contains($path, '..') && $disk->exists($path), 404);
 
-        return Storage::disk('local')->download($path, $project->order?->order_number.'-'.$name, [
+        return $disk->download($path, $project->order?->order_number.'-'.$name, [
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',
         ]);
     }
 
-    private function privateCachedFileResponse(string $path)
+    private function privateCachedFileResponse(string $diskName, string $path)
     {
-        $lastModified = filemtime($path) ?: time();
-        $etag = sha1($path.'|'.$lastModified.'|'.filesize($path));
+        $disk = Storage::disk($diskName);
+        $lastModified = $disk->lastModified($path);
+        $etag = sha1($diskName.'|'.$path.'|'.$lastModified.'|'.$disk->size($path));
 
-        $response = response()->file($path, [
+        $response = $disk->response($path, null, [
             'X-Content-Type-Options' => 'nosniff',
         ]);
 

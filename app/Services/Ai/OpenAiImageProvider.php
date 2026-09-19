@@ -105,7 +105,7 @@ class OpenAiImageProvider implements AiImageProvider
 
         $path = Str::after($responseUrl, self::LOCAL_RESPONSE_PREFIX);
 
-        if (! Storage::disk('local')->exists($path)) {
+        if (! Storage::disk((string) config('media.processing_disk', 'local'))->exists($path)) {
             throw new RuntimeException('OpenAI generated image was not found in private storage.');
         }
 
@@ -128,19 +128,20 @@ class OpenAiImageProvider implements AiImageProvider
 
         $path = Str::after($result->imageUrl, self::LOCAL_RESPONSE_PREFIX);
 
-        if (str_contains($path, '..') || ! Storage::disk('local')->exists($path)) {
+        $disk = Storage::disk((string) config('media.processing_disk', 'local'));
+        if (str_contains($path, '..') || ! $disk->exists($path)) {
             throw new RuntimeException('OpenAI generated image was not found in private storage.');
         }
 
-        $contents = Storage::disk('local')->get($path);
-        $mimeType = Storage::disk('local')->mimeType($path) ?: 'image/png';
+        $contents = $disk->get($path);
+        $mimeType = $disk->mimeType($path) ?: 'image/png';
         $extension = match (true) {
             Str::contains($mimeType, ['jpeg', 'jpg']) => 'jpg',
             Str::contains($mimeType, 'webp') => 'webp',
             default => 'png',
         };
 
-        Storage::disk('local')->delete($path);
+        $disk->delete($path);
 
         return new GeneratedAssetResult(
             contents: $contents,
@@ -189,7 +190,7 @@ class OpenAiImageProvider implements AiImageProvider
     private function storeTemporaryOutput(GenerationRequest $request, string $contents, string $extension): string
     {
         $path = 'production-studio/projects/'.$request->project->id.'/openai-temp/'.Str::uuid().'.'.$extension;
-        Storage::disk('local')->put($path, $contents);
+        Storage::disk((string) config('media.processing_disk', 'local'))->put($path, $contents);
 
         return $path;
     }

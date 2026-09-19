@@ -5,7 +5,6 @@ namespace App\Services\RoboDesk;
 use App\Models\Order;
 use App\Models\OrderPaymentProof;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -26,7 +25,9 @@ class PaymentProofService
 
         $uuid = (string) Str::uuid();
         $extension = strtolower($file->guessExtension() ?: 'bin');
-        $path = $file->storeAs('robodesk/payment-proofs/'.$uuid, 'proof.'.$extension, 'local');
+        $diskName = (string) config('media.private_disk', 'local');
+        $checksum = hash_file('sha256', $file->getRealPath());
+        $path = $file->storeAs('robodesk/payment-proofs/'.$uuid, 'proof.'.$extension, $diskName);
 
         return OrderPaymentProof::query()->create([
             'uuid' => $uuid,
@@ -35,12 +36,12 @@ class PaymentProofService
             'external_message_id' => $context['message_id'] ?? null,
             'external_conversation_id' => $context['conversation_id'] ?? null,
             'sender_phone' => $context['sender_phone'] ?? null,
-            'disk' => 'local',
+            'disk' => $diskName,
             'file_path' => $path,
             'original_filename' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
             'file_size' => $file->getSize(),
-            'checksum' => hash_file('sha256', Storage::disk('local')->path($path)),
+            'checksum' => $checksum,
             'status' => 'pending',
             'metadata' => ['received_via' => 'robodesk_webhook'],
         ]);

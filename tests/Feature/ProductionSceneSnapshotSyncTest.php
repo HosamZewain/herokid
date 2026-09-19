@@ -57,7 +57,7 @@ class ProductionSceneSnapshotSyncTest extends TestCase
         $token = $admin->createToken('language-test', ['agent', 'agent:orders.read'])->plainTextToken;
         foreach (['boy' => 'male', 'girl' => 'female', 'male' => 'male', 'female' => 'female'] as $gender => $variant) {
             $order = $arabic->replicate();
-            $order->order_number .= '-'.$gender;
+            $order->order_number .= '-'.strtoupper($gender);
             $order->language = 'en';
             $order->child_gender = $gender;
             $order->save();
@@ -118,7 +118,7 @@ class ProductionSceneSnapshotSyncTest extends TestCase
                 'text_template' => 'استيقظت {{child_name}} وفتحت عينيها. '.$number,
                 'alternate_text_template' => 'استيقظ {{child_name}} وفتح عينيه. '.$number]);
         }
-        $order = Order::create(['order_number' => 'HK-SANITIZED-'.uniqid(), 'checkout_group_key' => 'CHK-SYNC',
+        $order = Order::create(['order_number' => 'HK-SANITIZED-'.strtoupper(uniqid()), 'checkout_group_key' => 'CHK-SYNC',
             'story_id' => $story->id, 'child_name' => 'طفل اختبار', 'child_gender' => $gender, 'child_age' => 4,
             'parent_name' => 'Synthetic', 'status' => 'new', 'printing_status' => 'not_started', 'shipping_status' => 'not_ready']);
         app(OrderSceneTextService::class)->snapshotForOrder($order, $story);

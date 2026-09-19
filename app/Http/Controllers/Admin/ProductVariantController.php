@@ -22,7 +22,7 @@ class ProductVariantController extends Controller
         try {
             $product->variants()->create($data);
         } catch (Throwable $exception) {
-            Storage::disk('public')->delete($newFiles);
+            Storage::disk((string) config('media.public_disk', 'public'))->delete($newFiles);
 
             throw $exception;
         }
@@ -37,12 +37,12 @@ class ProductVariantController extends Controller
         try {
             $variant->update($data);
         } catch (Throwable $exception) {
-            Storage::disk('public')->delete($newFiles);
+            Storage::disk((string) config('media.public_disk', 'public'))->delete($newFiles);
 
             throw $exception;
         }
 
-        Storage::disk('public')->delete($obsoleteFiles);
+        Storage::disk((string) config('media.public_disk', 'public'))->delete($obsoleteFiles);
 
         return back()->with('success', 'تم تحديث المتغير.');
     }
@@ -63,7 +63,7 @@ class ProductVariantController extends Controller
             ...($variant->gallery_images ?? []),
         ]));
         $variant->delete();
-        Storage::disk('public')->delete($files);
+        Storage::disk((string) config('media.public_disk', 'public'))->delete($files);
 
         return back()->with('success', 'تم حذف المتغير.');
     }
@@ -117,7 +117,7 @@ class ProductVariantController extends Controller
         }
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('store/products/variants', 'public');
+            $validated['image'] = $request->file('image')->store('store/products/variants', (string) config('media.public_disk', 'public'));
             $newFiles[] = $validated['image'];
             if ($variant?->image) {
                 $obsoleteFiles[] = $variant->image;
@@ -127,7 +127,7 @@ class ProductVariantController extends Controller
         }
 
         $newGallery = $newGalleryFiles
-            ->map(fn ($image) => $image->store('store/products/variants/gallery', 'public'));
+            ->map(fn ($image) => $image->store('store/products/variants/gallery', (string) config('media.public_disk', 'public')));
         $newFiles = [...$newFiles, ...$newGallery->all()];
         $validated['gallery_images'] = $keptGallery->merge($newGallery)->values()->all();
 

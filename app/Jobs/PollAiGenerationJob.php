@@ -93,7 +93,7 @@ class PollAiGenerationJob implements ShouldQueue
 
             $path = 'production-studio/projects/'.$job->production_project_id.'/generated/'.uniqid($job->job_type.'_', true).'.'.$asset->extension;
 
-            Storage::disk('local')->put($path, $asset->contents);
+            Storage::disk((string) config('media.private_disk', 'local'))->put($path, $asset->contents);
 
             $version = ((int) $job->project->assets()
                 ->where('asset_type', $job->job_type)

@@ -67,7 +67,7 @@ class ProductionAutomationFingerprint
 
     private function fileHash(string $path): ?string
     {
-        foreach (['local', 'public'] as $diskName) {
+        foreach (array_unique([(string) config('media.private_disk', 'local'), (string) config('media.public_disk', 'public'), 'local', 'public']) as $diskName) {
             $disk = Storage::disk($diskName);
 
             if ($disk->exists($path)) {

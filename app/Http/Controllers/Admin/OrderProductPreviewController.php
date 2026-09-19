@@ -21,7 +21,7 @@ class OrderProductPreviewController extends Controller
         $disk = Storage::disk($preview->disk ?: 'local');
         abort_unless($disk->exists($preview->file_path), 404);
 
-        return app(PrivateOrderThumbnail::class)->response($disk->path($preview->file_path));
+        return app(PrivateOrderThumbnail::class)->response($preview->disk ?: 'local', $preview->file_path);
     }
 
     public function store(

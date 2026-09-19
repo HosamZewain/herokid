@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Models\OrderPreview;
+use App\Services\Storage\MediaStorage;
 use Illuminate\Support\Facades\Storage;
 use Imagick;
 use ImagickDraw;
@@ -12,6 +13,8 @@ use RuntimeException;
 
 class OrderProductPreviewImageService
 {
+    public function __construct(private readonly MediaStorage $mediaStorage) {}
+
     public function customerImage(OrderPreview $preview): array
     {
         $disk = Storage::disk($preview->disk ?: 'local');
@@ -19,7 +22,11 @@ class OrderProductPreviewImageService
 
         $protectedPath = $this->protectedPath($preview);
         if (! $disk->exists($protectedPath)) {
-            $this->createProtectedImage($disk->path($preview->file_path), $protectedPath, $preview->disk ?: 'local');
+            $this->mediaStorage->withLocalCopy(
+                $preview->disk ?: 'local',
+                $preview->file_path,
+                fn (string $sourcePath) => $this->createProtectedImage($sourcePath, $protectedPath, $preview->disk ?: 'local'),
+            );
         }
 
         return [

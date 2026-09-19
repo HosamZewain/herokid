@@ -87,16 +87,17 @@ class DashboardController extends Controller
         }
 
         $stored = [];
+        $diskName = (string) config('media.private_disk', 'local');
 
         try {
             foreach ($uploads as $upload) {
-                $path = $upload->store('admin/dashboard-management-notes', 'local');
+                $path = $upload->store('admin/dashboard-management-notes', $diskName);
                 if (! $path) {
                     throw ValidationException::withMessages(['attachments' => 'تعذر حفظ أحد المرفقات. حاول مرة أخرى.']);
                 }
 
                 $stored[] = [
-                    'disk' => 'local',
+                    'disk' => $diskName,
                     'path' => $path,
                     'original_name' => Str::limit(basename($upload->getClientOriginalName()), 240, ''),
                     'mime_type' => $upload->getMimeType(),
@@ -125,7 +126,7 @@ class DashboardController extends Controller
 
             });
         } catch (Throwable $exception) {
-            Storage::disk('local')->delete(array_column($stored, 'path'));
+            Storage::disk($diskName)->delete(array_column($stored, 'path'));
 
             throw $exception;
         }

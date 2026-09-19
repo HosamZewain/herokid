@@ -110,7 +110,7 @@ class PackageCartController extends Controller
                     $paths = $uploads->attachIdsToCart($request, $uploadIds, $storyKey)->pluck('path')->all();
                 } else {
                     foreach ($request->file("stories.$index.photos", []) as $photo) {
-                        $paths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$storyKey, 'local');
+                        $paths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$storyKey, (string) config('media.private_disk', 'local'));
                     }
                     $directPhotoPaths = array_merge($directPhotoPaths, $paths);
                 }
@@ -196,7 +196,7 @@ class PackageCartController extends Controller
             session(['cart.items' => $cart]);
             app(CartTrackingService::class)->recordItemAdded($request, $packageKey);
         } catch (\Throwable $exception) {
-            Storage::disk('local')->delete($directPhotoPaths);
+            Storage::disk((string) config('media.private_disk', 'local'))->delete($directPhotoPaths);
             throw $exception;
         }
 

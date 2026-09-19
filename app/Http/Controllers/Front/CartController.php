@@ -170,7 +170,7 @@ class CartController extends Controller
             }
         } elseif ($request->hasFile('photos')) {
             foreach ($request->file('photos', []) as $photo) {
-                $photoPaths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$itemKey, 'local');
+                $photoPaths[] = $photo->store('orders/cart/'.now()->format('Y-m').'/'.$itemKey, (string) config('media.private_disk', 'local'));
             }
         }
 
@@ -218,7 +218,7 @@ class CartController extends Controller
                         if (is_string($photoPath)
                             && ! str_contains($photoPath, '..')
                             && ! in_array($photoPath, $photoPathsStillInUse, true)) {
-                            Storage::disk('local')->delete($photoPath);
+                            Storage::disk((string) config('media.private_disk', 'local'))->delete($photoPath);
                         }
                     }
                 }
@@ -229,7 +229,7 @@ class CartController extends Controller
                     if (is_string($photoPath)
                         && ! str_contains($photoPath, '..')
                         && ! in_array($photoPath, $photoPathsStillInUse, true)) {
-                        Storage::disk('local')->delete($photoPath);
+                        Storage::disk((string) config('media.private_disk', 'local'))->delete($photoPath);
                     }
                 }
             } else {

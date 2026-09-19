@@ -44,7 +44,7 @@ class ChildIdentityShareDraftService
             if ($locked->status !== 'succeeded'
                 || $locked->output_checksum !== $attempt->output_checksum
                 || $locked->share_draft_token !== $attempt->share_draft_token) {
-                collect($paths)->each(fn (string $path) => Storage::disk('local')->delete($path));
+                collect($paths)->each(fn (string $path) => Storage::disk((string) config('media.private_disk', 'local'))->delete($path));
 
                 return $locked;
             }
@@ -66,7 +66,7 @@ class ChildIdentityShareDraftService
         return collect(['feed', 'story', 'og'])->every(function (string $variant) use ($attempt): bool {
             $path = $attempt->getAttribute("share_{$variant}_card_path");
 
-            return filled($path) && Storage::disk('local')->exists($path);
+            return filled($path) && Storage::disk((string) config('media.private_disk', 'local'))->exists($path);
         });
     }
 }

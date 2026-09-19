@@ -28,7 +28,7 @@ class MobileUploadService
             'chunk_size' => self::CHUNK_SIZE,
             'chunks' => [],
             'status' => 'pending',
-            'disk' => 'local',
+            'disk' => (string) config('media.processing_disk', 'local'),
             'expires_at' => now()->addHours(24),
         ]);
     }
@@ -182,7 +182,8 @@ class MobileUploadService
             }
 
             $finalPath = 'mobile-uploads/'.$upload->uuid.'/complete.'.$this->extensionForMime($mime);
-            if (! Storage::disk($upload->disk)->put($finalPath, $contents)) {
+            $finalDisk = (string) config('media.private_disk', 'local');
+            if (! Storage::disk($finalDisk)->put($finalPath, $contents)) {
                 throw ValidationException::withMessages(['upload' => 'The completed image could not be stored.']);
             }
 
@@ -192,6 +193,7 @@ class MobileUploadService
 
             $upload->forceFill([
                 'status' => 'completed',
+                'disk' => $finalDisk,
                 'path' => $finalPath,
                 'verified_mime_type' => $mime,
                 'width' => is_array($imageInfo) ? (int) $imageInfo[0] : null,

@@ -33,7 +33,7 @@ class Story extends Model
 
         // Use Storage::url() so the URL respects the disk driver (local OR S3/cloud)
         // and is always consistent with where the file was actually stored.
-        $url = Seo::imageUrl(Storage::disk('public')->url($this->cover_image));
+        $url = Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($this->cover_image));
 
         return StoryCover::versionedUrl($url, $this->updated_at);
     }

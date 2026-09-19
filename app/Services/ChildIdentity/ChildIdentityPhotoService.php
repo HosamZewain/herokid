@@ -55,11 +55,12 @@ class ChildIdentityPhotoService
         };
         $folder = $isValidImage ? 'originals' : 'quarantine';
         $path = 'child-identities/'.$identity->uuid.'/'.$folder.'/'.Str::uuid().'.'.$extension;
-        Storage::disk('local')->put($path, $contents);
+        $diskName = (string) config('media.private_disk', 'local');
+        Storage::disk($diskName)->put($path, $contents);
 
         try {
             $photo = $identity->photos()->create([
-                'disk' => 'local',
+                'disk' => $diskName,
                 'path' => $path,
                 'original_filename' => Str::limit($file->getClientOriginalName(), 255, ''),
                 'mime_type' => $mime,
@@ -73,7 +74,7 @@ class ChildIdentityPhotoService
                 'validation_notes' => $isValidImage ? null : 'Unsupported or unreadable image upload retained in private quarantine.',
             ]);
         } catch (\Throwable $exception) {
-            Storage::disk('local')->delete($path);
+            Storage::disk($diskName)->delete($path);
             throw $exception;
         }
 
@@ -222,7 +223,7 @@ class ChildIdentityPhotoService
         }
 
         $path = 'child-identities/'.$photo->identityRequest->uuid.'/ai-inputs/'.Str::uuid().'.'.$this->extensionForMime($mime);
-        $diskName = 'local';
+        $diskName = (string) config('media.private_disk', 'local');
         Storage::disk($diskName)->put($path, $contents);
         $previousDisk = $photo->ai_input_disk;
         $previousPath = $photo->ai_input_path;

@@ -2,57 +2,66 @@
 
 namespace App\Services\Orders;
 
+use App\Services\Storage\MediaStorage;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class PrivateOrderThumbnail
 {
-    public function forget(string $source): void
+    public function __construct(private readonly MediaStorage $mediaStorage) {}
+
+    public function forget(string $disk, string $source): void
     {
-        if (is_file($source)) {
-            Storage::disk('local')->delete($this->path($source));
+        if (Storage::disk($disk)->exists($source)) {
+            Storage::disk($this->mediaStorage->processingDiskName())->delete($this->path($disk, $source));
         }
     }
 
-    private function path(string $source): string
+    private function path(string $disk, string $source): string
     {
-        $fingerprint = hash('sha256', $source.'|'.filemtime($source).'|'.filesize($source));
+        $storage = Storage::disk($disk);
+        $fingerprint = hash('sha256', $disk.'|'.$source.'|'.$storage->lastModified($source).'|'.$storage->size($source));
 
         return 'order-thumbnails/'.substr($fingerprint, 0, 2).'/'.$fingerprint.'.jpg';
     }
 
-    public function response(string $source): BinaryFileResponse
+    public function response(string $diskName, string $source): Response
     {
-        $fingerprint = hash('sha256', $source.'|'.filemtime($source).'|'.filesize($source));
-        $disk = Storage::disk('local');
-        $path = $this->path($source);
-        if (! $disk->exists($path)) {
+        $sourceDisk = Storage::disk($diskName);
+        abort_unless($sourceDisk->exists($source), 404);
+
+        $fingerprint = hash('sha256', $diskName.'|'.$source.'|'.$sourceDisk->lastModified($source).'|'.$sourceDisk->size($source));
+        $cacheDisk = $this->mediaStorage->processingDisk();
+        $path = $this->path($diskName, $source);
+        if (! $cacheDisk->exists($path)) {
             try {
-                $image = new \Imagick;
-                $image->pingImage($source);
-                if ($image->getImageWidth() * $image->getImageHeight() > 40000000) {
-                    return response()->file($source, ['Cache-Control' => 'no-cache'])->setPrivate();
-                }
-                $image->clear();
-                $image->readImage($source.'[0]');
-                $image->setIteratorIndex(0);
-                $image->autoOrient();
-                $image->thumbnailImage(400, 400, true, true);
-                $image->setImageBackgroundColor('white');
-                $image = $image->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
-                $image->stripImage();
-                $image->setImageFormat('jpeg');
-                $image->setImageCompressionQuality(78);
-                if (! $disk->put($path, $image->getImageBlob(), ['visibility' => 'private'])) {
-                    throw new \RuntimeException('Thumbnail storage unavailable.');
-                }
-                $image->clear();
+                $this->mediaStorage->withLocalCopy($diskName, $source, function (string $localSource) use ($cacheDisk, $path): void {
+                    $image = new \Imagick;
+                    $image->pingImage($localSource);
+                    if ($image->getImageWidth() * $image->getImageHeight() > 40000000) {
+                        throw new \RuntimeException('Image is too large to thumbnail safely.');
+                    }
+                    $image->clear();
+                    $image->readImage($localSource.'[0]');
+                    $image->setIteratorIndex(0);
+                    $image->autoOrient();
+                    $image->thumbnailImage(400, 400, true, true);
+                    $image->setImageBackgroundColor('white');
+                    $image = $image->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+                    $image->stripImage();
+                    $image->setImageFormat('jpeg');
+                    $image->setImageCompressionQuality(78);
+                    if (! $cacheDisk->put($path, $image->getImageBlob(), ['visibility' => 'private'])) {
+                        throw new \RuntimeException('Thumbnail storage unavailable.');
+                    }
+                    $image->clear();
+                });
             } catch (\Throwable) {
                 // Unsupported hosting decoder: never prevent access to the original.
-                return response()->file($source, ['Cache-Control' => 'no-cache'])->setPrivate();
+                return $sourceDisk->response($source, null, ['Cache-Control' => 'private, no-cache']);
             }
         }
-        $response = response()->file($disk->path($path), ['Cache-Control' => 'private, no-cache', 'Content-Type' => 'image/jpeg']);
+        $response = response()->file($cacheDisk->path($path), ['Cache-Control' => 'private, no-cache', 'Content-Type' => 'image/jpeg']);
         $response->setPrivate();
         $response->setEtag($fingerprint);
         $response->isNotModified(request());

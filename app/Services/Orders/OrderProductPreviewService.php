@@ -22,9 +22,10 @@ class OrderProductPreviewService
     public function upload(Order $order, array $files, ?string $note, ?User $actor, ?string $productionUnitKey = null): OrderProductPreviewGallery
     {
         $storedPaths = [];
+        $diskName = (string) config('media.private_disk', 'local');
 
         try {
-            return DB::transaction(function () use ($order, $files, $note, $actor, $productionUnitKey, &$storedPaths): OrderProductPreviewGallery {
+            return DB::transaction(function () use ($order, $files, $note, $actor, $productionUnitKey, $diskName, &$storedPaths): OrderProductPreviewGallery {
                 $gallery = OrderProductPreviewGallery::query()
                     ->lockForUpdate()
                     ->where('checkout_group_key', $order->checkoutGroupKey())
@@ -47,7 +48,7 @@ class OrderProductPreviewService
                     $path = $file->storeAs(
                         'orders/product-previews/'.$gallery->id,
                         Str::uuid().'.'.$extension,
-                        'local',
+                        $diskName,
                     );
 
                     abort_unless($path, 422, 'تعذر حفظ إحدى صور المعاينة.');
@@ -58,7 +59,7 @@ class OrderProductPreviewService
                         'production_unit_key' => $productionUnitKey,
                         'product_gallery_id' => $gallery->id,
                         'file_path' => $path,
-                        'disk' => 'local',
+                        'disk' => $diskName,
                         'original_name' => Str::limit($file->getClientOriginalName(), 240, ''),
                         'mime_type' => $file->getMimeType(),
                         'file_size' => $file->getSize(),
@@ -85,7 +86,7 @@ class OrderProductPreviewService
                 return $gallery->fresh('previews');
             });
         } catch (Throwable $exception) {
-            Storage::disk('local')->delete($storedPaths);
+            Storage::disk($diskName)->delete($storedPaths);
             throw $exception;
         }
     }
@@ -98,7 +99,7 @@ class OrderProductPreviewService
         DB::transaction(function () use ($preview, $order, $actor): void {
             $fileName = $preview->original_name ?: basename($preview->file_path);
             $this->imageService->deleteCustomerImage($preview);
-            app(PrivateOrderThumbnail::class)->forget(Storage::disk($preview->disk ?: 'local')->path($preview->file_path));
+            app(PrivateOrderThumbnail::class)->forget($preview->disk ?: 'local', $preview->file_path);
             Storage::disk($preview->disk ?: 'local')->delete($preview->file_path);
             $preview->delete();
 

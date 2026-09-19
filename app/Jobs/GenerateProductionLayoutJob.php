@@ -70,13 +70,13 @@ class GenerateProductionLayoutJob implements ShouldQueue
             }
 
             $manifest = $validator->enrichManifest($layout, $result['manifest'], $validation);
-            Storage::disk('local')->put($result['manifest_path'], $validator->manifestCsv($manifest));
-            $manifestContents = Storage::disk('local')->get($result['manifest_path']);
+            Storage::disk((string) config('media.private_disk', 'local'))->put($result['manifest_path'], $validator->manifestCsv($manifest));
+            $manifestContents = Storage::disk((string) config('media.private_disk', 'local'))->get($result['manifest_path']);
             $validation['files']['manifest']['sha256'] = hash('sha256', $manifestContents);
             $validation['files']['manifest']['bytes'] = strlen($manifestContents);
             $validation['output_fingerprint'] = $validator->outputFingerprint($layout, $validation);
             $manifest = $validator->enrichManifest($layout, $result['manifest'], $validation);
-            Storage::disk('local')->put($result['manifest_path'], $validator->manifestCsv($manifest));
+            Storage::disk((string) config('media.private_disk', 'local'))->put($result['manifest_path'], $validator->manifestCsv($manifest));
 
             $layout->update([
                 'status' => 'ready',

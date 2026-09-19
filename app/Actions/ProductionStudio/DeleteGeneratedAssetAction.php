@@ -31,7 +31,7 @@ class DeleteGeneratedAssetAction
             throw new RuntimeException('مسار الصورة المولدة غير صالح للحذف.');
         }
 
-        $disk = Storage::disk('local');
+        $disk = Storage::disk((string) config('media.private_disk', 'local'));
         $bytesFreed = $disk->exists($path) ? (int) $disk->size($path) : 0;
 
         if ($disk->exists($path) && ! $disk->delete($path)) {

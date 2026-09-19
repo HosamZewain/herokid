@@ -6,10 +6,12 @@ use App\Models\ProductionPrintLayout;
 use App\Models\ProductionProject;
 use App\Models\ProductionProjectAsset;
 use App\Models\ProductionScene;
-use Illuminate\Support\Facades\Storage;
+use App\Services\Storage\MediaStorage;
+use Illuminate\Support\Str;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
 use RuntimeException;
+use Throwable;
 
 class ProductionLayoutBuilder
 {
@@ -20,6 +22,8 @@ class ProductionLayoutBuilder
     public const SHEET_COUNT = 7;
 
     public const PAGE_MAP_VERSION = ProductionAutomationLayoutValidator::PAGE_MAP_VERSION;
+
+    public function __construct(private readonly MediaStorage $mediaStorage) {}
 
     public function defaults(ProductionProject $project): array
     {
@@ -107,30 +111,58 @@ class ProductionLayoutBuilder
             throw new RuntimeException(implode(' ', $readiness['errors']));
         }
 
-        $base = "production-studio/projects/{$project->id}/layout/v{$layout->version_number}";
-        Storage::disk('local')->deleteDirectory($base);
-        Storage::disk('local')->makeDirectory($base.'/pages');
+        $destinationBase = "production-studio/projects/{$project->id}/layout/v{$layout->version_number}";
+        $workingBase = 'production-layout-work/'.Str::uuid();
+        $processing = $this->mediaStorage->processingDisk();
+        $persistent = $this->mediaStorage->privateDisk();
+        $persistent->deleteDirectory($destinationBase);
+        $processing->makeDirectory($workingBase.'/pages');
 
-        $pages = $this->buildReaderPages($project, $settings, $base);
-        $manifest = $this->buildManifest($settings);
-        $readerPath = $base.'/reader-order.pdf';
-        $printPath = $base.'/print-ready-a3-booklet.pdf';
-        $manifestPath = $base.'/print-manifest.csv';
-        $proofPath = $base.'/proof-print-checklist.pdf';
+        try {
+            $pages = $this->buildReaderPages($project, $settings, $workingBase);
+            $manifest = $this->buildManifest($settings);
+            $workingReaderPath = $workingBase.'/reader-order.pdf';
+            $workingPrintPath = $workingBase.'/print-ready-a3-booklet.pdf';
+            $workingManifestPath = $workingBase.'/print-manifest.csv';
+            $workingProofPath = $workingBase.'/proof-print-checklist.pdf';
 
-        $this->writeReaderPdf($pages, $settings, $readerPath);
-        $this->writePrintPdf($pages, $settings, $manifest, $printPath);
-        Storage::disk('local')->put($manifestPath, $this->manifestCsv($manifest));
-        $this->writeProofChecklist($project, $layout, $manifest, $proofPath);
+            $this->writeReaderPdf($pages, $settings, $workingReaderPath);
+            $this->writePrintPdf($pages, $settings, $manifest, $workingPrintPath);
+            $processing->put($workingManifestPath, $this->manifestCsv($manifest));
+            $this->writeProofChecklist($project, $layout, $manifest, $workingProofPath);
 
-        return [
-            'settings' => $settings,
-            'manifest' => $manifest,
-            'reader_pdf_path' => $readerPath,
-            'print_pdf_path' => $printPath,
-            'manifest_path' => $manifestPath,
-            'proof_checklist_path' => $proofPath,
-        ];
+            $outputs = [
+                'reader_pdf_path' => [$workingReaderPath, $destinationBase.'/reader-order.pdf'],
+                'print_pdf_path' => [$workingPrintPath, $destinationBase.'/print-ready-a3-booklet.pdf'],
+                'manifest_path' => [$workingManifestPath, $destinationBase.'/print-manifest.csv'],
+                'proof_checklist_path' => [$workingProofPath, $destinationBase.'/proof-print-checklist.pdf'],
+            ];
+
+            foreach ($outputs as [$workingPath, $destinationPath]) {
+                $stream = $processing->readStream($workingPath);
+                if ($stream === false || ! $persistent->put($destinationPath, $stream)) {
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                    throw new RuntimeException('تعذر حفظ ملفات الإخراج في التخزين الخاص الدائم.');
+                }
+                fclose($stream);
+            }
+
+            return [
+                'settings' => $settings,
+                'manifest' => $manifest,
+                'reader_pdf_path' => $outputs['reader_pdf_path'][1],
+                'print_pdf_path' => $outputs['print_pdf_path'][1],
+                'manifest_path' => $outputs['manifest_path'][1],
+                'proof_checklist_path' => $outputs['proof_checklist_path'][1],
+            ];
+        } catch (Throwable $exception) {
+            $persistent->deleteDirectory($destinationBase);
+            throw $exception;
+        } finally {
+            $processing->deleteDirectory($workingBase);
+        }
     }
 
     public function buildManifest(array $settings): array
@@ -240,8 +272,10 @@ class ProductionLayoutBuilder
             throw new RuntimeException("مصدر صورة الصفحة {$number} غير موجود.");
         }
 
-        $source = $this->absolutePrivatePath($sourcePath);
-        $contents = file_get_contents($source);
+        if (str_contains($sourcePath, '..')) {
+            throw new RuntimeException('أحد أصول الإخراج غير متاح في التخزين الخاص.');
+        }
+        $contents = $this->mediaStorage->privateDisk()->get($sourcePath);
         $image = $contents === false ? false : imagecreatefromstring($contents);
 
         if (! $image) {
@@ -295,7 +329,7 @@ class ProductionLayoutBuilder
 
         imagecopyresampled($target, $image, 0, 0, $cropX, $cropY, $targetWidth, $targetHeight, $cropWidth, $cropHeight);
         $path = $base.'/pages/page-'.str_pad((string) $number, 2, '0', STR_PAD_LEFT).'.jpg';
-        $absolute = Storage::disk('local')->path($path);
+        $absolute = $this->mediaStorage->processingDisk()->path($path);
         imagejpeg($target, $absolute, 93);
         imagedestroy($target);
         imagedestroy($image);
@@ -319,7 +353,7 @@ class ProductionLayoutBuilder
             $this->renderPage($pdf, $page, $settings, 0, 210);
         }
 
-        $pdf->Output(Storage::disk('local')->path($path), Destination::FILE);
+        $pdf->Output($this->mediaStorage->processingDisk()->path($path), Destination::FILE);
     }
 
     private function writePrintPdf(array $pages, array $settings, array $manifest, string $path): void
@@ -336,7 +370,7 @@ class ProductionLayoutBuilder
             }
         }
 
-        $pdf->Output(Storage::disk('local')->path($path), Destination::FILE);
+        $pdf->Output($this->mediaStorage->processingDisk()->path($path), Destination::FILE);
     }
 
     private function writeProofChecklist(ProductionProject $project, ProductionPrintLayout $layout, array $manifest, string $path): void
@@ -371,7 +405,7 @@ class ProductionLayoutBuilder
             .'<p>28 صفحة A4 | 13 مشهدًا | '.e((string) $manifest['sheet_count']).' شيت A3 Duplex</p>'
             .$rows
             .'</div>');
-        $pdf->Output(Storage::disk('local')->path($path), Destination::FILE);
+        $pdf->Output($this->mediaStorage->processingDisk()->path($path), Destination::FILE);
     }
 
     private function newPdf(string $format): Mpdf
@@ -402,7 +436,7 @@ class ProductionLayoutBuilder
     {
         if ($page['image_path']) {
             $pdf->Image(
-                Storage::disk('local')->path($page['image_path']),
+                $this->mediaStorage->processingDisk()->path($page['image_path']),
                 $offsetMm,
                 0,
                 $widthMm,
@@ -498,14 +532,5 @@ class ProductionLayoutBuilder
         }
 
         return $project->assets->first(fn (ProductionProjectAsset $asset): bool => $asset->id === (int) $assetId && in_array($asset->asset_type, $types, true));
-    }
-
-    private function absolutePrivatePath(string $path): string
-    {
-        if (str_contains($path, '..') || ! Storage::disk('local')->exists($path)) {
-            throw new RuntimeException('أحد أصول الإخراج غير متاح في التخزين الخاص.');
-        }
-
-        return Storage::disk('local')->path($path);
     }
 }

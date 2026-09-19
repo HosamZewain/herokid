@@ -14,18 +14,18 @@ class StoryAttachmentController extends Controller
     public function store(Request $request, Story $story)
     {
         $request->validate([
-            'attachments'   => 'required|array|min:1',
+            'attachments' => 'required|array|min:1',
             'attachments.*' => 'file|max:20480', // 20 MB per file
         ]);
 
         foreach ($request->file('attachments', []) as $file) {
-            $path = $file->store("story-attachments/{$story->id}", 'local');
+            $path = $file->store("story-attachments/{$story->id}", (string) config('media.private_disk', 'local'));
 
             $story->attachments()->create([
                 'original_name' => $file->getClientOriginalName(),
-                'path'          => $path,
-                'mime_type'     => $file->getMimeType(),
-                'size'          => $file->getSize(),
+                'path' => $path,
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
             ]);
         }
 
@@ -35,11 +35,12 @@ class StoryAttachmentController extends Controller
     /** Download a private attachment (admin only) */
     public function download(StoryAttachment $attachment)
     {
-        if (!Storage::disk('local')->exists($attachment->path)) {
+        $disk = Storage::disk((string) config('media.private_disk', 'local'));
+        if (! $disk->exists($attachment->path)) {
             abort(404);
         }
 
-        return Storage::disk('local')->download($attachment->path, $attachment->original_name);
+        return $disk->download($attachment->path, $attachment->original_name);
     }
 
     /** Delete a single attachment */

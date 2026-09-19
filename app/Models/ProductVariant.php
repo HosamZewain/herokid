@@ -36,7 +36,7 @@ class ProductVariant extends Model
             return Seo::imageUrl($this->image);
         }
 
-        return Seo::imageUrl(Storage::disk('public')->url($this->image));
+        return Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($this->image));
     }
 
     public function getGalleryImageUrlsAttribute(): array
@@ -47,7 +47,7 @@ class ProductVariant extends Model
                     return Seo::imageUrl($image);
                 }
 
-                return Seo::imageUrl(Storage::disk('public')->url($image));
+                return Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($image));
             })
             ->values()
             ->all();

@@ -98,7 +98,7 @@ class CatalogController extends Controller
                     'gallery_images' => $variant->gallery_image_urls !== []
                         ? $variant->gallery_image_urls
                         : collect($product->gallery_images ?? [])
-                            ->map(fn (string $image): string => Seo::imageUrl(Storage::disk('public')->url($image)))
+                            ->map(fn (string $image): string => Seo::imageUrl(Storage::disk((string) config('media.public_disk', 'public'))->url($image)))
                             ->values()
                             ->all(),
                     'attributes' => $variant->attributes ?? [],
