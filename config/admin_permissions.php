@@ -174,6 +174,15 @@ return [
             'sort_order' => 6,
             'sensitive' => true,
         ],
+        'media_library.delete' => [
+            'group_key' => 'content',
+            'name_ar' => 'حذف ملفات مكتبة الوسائط',
+            'name_en' => 'Delete media library files',
+            'description_ar' => 'حذف ملف المكتبة نهائيًا وإيقاف رابط المشاركة العام.',
+            'description_en' => 'Permanently delete a library file and disable its public share link.',
+            'sort_order' => 7,
+            'sensitive' => true,
+        ],
 
         'orders.view' => [
             'group_key' => 'orders',

@@ -60,7 +60,16 @@
                 </div>
 
                 <div class="hidden border-t border-slate-100 px-5 py-5 sm:px-7" data-media-queue-wrap>
-                    <h3 class="mb-3 text-sm font-black text-slate-700">حالة الرفع</h3>
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-black text-slate-700">الملفات المختارة</h3>
+                            <p class="mt-1 text-xs font-bold text-slate-500">يمكنك كتابة عنوان اختياري مختلف لكل ملف قبل بدء الرفع.</p>
+                        </div>
+                        <button type="button" data-media-start-queue
+                            class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                            بدء رفع الملفات
+                        </button>
+                    </div>
                     <div class="space-y-3" data-media-queue></div>
                 </div>
             </section>
@@ -70,7 +79,7 @@
             <form method="GET" class="flex flex-col gap-3 lg:flex-row lg:items-center">
                 <label class="min-w-0 flex-1">
                     <span class="sr-only">بحث في مكتبة الوسائط</span>
-                    <input type="search" name="q" value="{{ $search }}" placeholder="ابحث باسم الملف أو اسم من رفعه..."
+                    <input type="search" name="q" value="{{ $search }}" placeholder="ابحث بالعنوان أو اسم الملف أو اسم من رفعه..."
                         class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500">
                 </label>
                 <select name="type" class="rounded-xl border-slate-200 bg-white text-sm font-bold text-slate-700">
@@ -100,11 +109,14 @@
                         $icon = match($category) { 'image' => '🖼️', 'pdf' => '📕', default => '📝' };
                         $tone = match($category) { 'image' => 'bg-emerald-50 text-emerald-700', 'pdf' => 'bg-rose-50 text-rose-700', default => 'bg-sky-50 text-sky-700' };
                     @endphp
-                    <article class="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md">
+                    <article class="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md" data-media-card>
                         <div class="flex items-start gap-4">
                             <div class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl {{ $tone }}" aria-hidden="true">{{ $icon }}</div>
                             <div class="min-w-0 flex-1 text-right">
-                                <h3 class="truncate font-black text-slate-900" title="{{ $media->original_name }}">{{ $media->original_name }}</h3>
+                                <h3 class="truncate font-black text-slate-900" title="{{ $media->title ?: $media->original_name }}">{{ $media->title ?: $media->original_name }}</h3>
+                                @if($media->title)
+                                    <p class="mt-1 truncate text-xs font-bold text-slate-400" title="{{ $media->original_name }}">{{ $media->original_name }}</p>
+                                @endif
                                 <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-black text-slate-500">
                                     <span class="rounded-full bg-slate-100 px-2.5 py-1">{{ strtoupper($media->extension) }}</span>
                                     <span>{{ $formatBytes($media->size) }}</span>
@@ -117,11 +129,19 @@
                             <p class="mt-1">{{ $media->created_at->timezone(config('app.timezone'))->translatedFormat('d F Y، h:i A') }}</p>
                         </div>
 
-                        <div class="mt-4 grid grid-cols-2 gap-2">
+                        <div class="mt-4 flex flex-wrap gap-2">
                             <button type="button" data-copy-url="{{ $publicUrl }}"
-                                class="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white transition hover:bg-indigo-700">نسخ الرابط</button>
+                                class="min-w-24 flex-1 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white transition hover:bg-indigo-700">نسخ الرابط</button>
                             <a href="{{ $publicUrl }}" target="_blank" rel="noopener noreferrer"
-                                class="rounded-xl bg-slate-100 px-3 py-2.5 text-center text-xs font-black text-slate-700 transition hover:bg-slate-200">فتح الملف</a>
+                                class="min-w-24 flex-1 rounded-xl bg-slate-100 px-3 py-2.5 text-center text-xs font-black text-slate-700 transition hover:bg-slate-200">فتح الملف</a>
+                            @can('media_library.delete')
+                                <button type="button"
+                                    data-delete-media-url="{{ route('admin.media-library.destroy', $media) }}"
+                                    data-delete-media-name="{{ $media->title ?: $media->original_name }}"
+                                    class="rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:opacity-50">
+                                    حذف
+                                </button>
+                            @endcan
                         </div>
                     </article>
                 @empty
@@ -181,8 +201,24 @@
                 };
 
                 document.addEventListener('click', (event) => {
-                    const button = event.target.closest('[data-copy-url]');
-                    if (button) copyUrl(button).catch(() => window.prompt('انسخ الرابط:', button.dataset.copyUrl));
+                    const copyButton = event.target.closest('[data-copy-url]');
+                    if (copyButton) copyUrl(copyButton).catch(() => window.prompt('انسخ الرابط:', copyButton.dataset.copyUrl));
+
+                    const deleteButton = event.target.closest('[data-delete-media-url]');
+                    if (!deleteButton) return;
+
+                    const name = deleteButton.dataset.deleteMediaName || 'هذا الملف';
+                    if (!window.confirm(`حذف «${name}» نهائيًا؟ سيتوقف الرابط العام ولن يمكن استرجاع الملف.`)) return;
+
+                    deleteButton.disabled = true;
+                    deleteButton.textContent = 'جارٍ الحذف...';
+                    jsonRequest(deleteButton.dataset.deleteMediaUrl, { method: 'DELETE' })
+                        .then(() => deleteButton.closest('[data-media-card]')?.remove())
+                        .catch((error) => {
+                            deleteButton.disabled = false;
+                            deleteButton.textContent = 'حذف';
+                            window.alert(error.message);
+                        });
                 });
 
                 if (!uploader) return;
@@ -191,6 +227,7 @@
                 const dropzone = uploader.querySelector('[data-media-dropzone]');
                 const queueWrap = uploader.querySelector('[data-media-queue-wrap]');
                 const queueElement = uploader.querySelector('[data-media-queue]');
+                const startButton = uploader.querySelector('[data-media-start-queue]');
                 const queue = [];
                 let processing = false;
 
@@ -204,6 +241,12 @@
                                     <p class="truncate text-sm font-black text-slate-800" data-name></p>
                                     <span class="shrink-0 text-xs font-black text-slate-500" data-percent>في الانتظار</span>
                                 </div>
+                                <label class="mt-3 block">
+                                    <span class="mb-1 block text-xs font-black text-slate-600">عنوان اختياري</span>
+                                    <input type="text" maxlength="255" placeholder="مثال: كتالوج منتجات سبتمبر"
+                                        class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500"
+                                        data-title>
+                                </label>
                                 <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                                     <div class="h-full w-0 rounded-full bg-indigo-600 transition-all" data-bar></div>
                                 </div>
@@ -213,11 +256,12 @@
                             <button type="button" class="rounded-lg bg-rose-50 px-3 py-2 text-xs font-black text-rose-700" data-cancel>إلغاء</button>
                         </div>`;
                     row.querySelector('[data-name]').textContent = `${item.file.name} · ${humanBytes(item.file.size)}`;
-                    row.querySelector('[data-status]').textContent = 'سيبدأ الرفع تلقائيًا.';
+                    row.querySelector('[data-status]').textContent = 'أضف عنوانًا اختياريًا ثم اضغط «بدء رفع الملفات».';
                     item.row = row;
                     item.bar = row.querySelector('[data-bar]');
                     item.percent = row.querySelector('[data-percent]');
                     item.status = row.querySelector('[data-status]');
+                    item.title = row.querySelector('[data-title]');
                     item.cancel = row.querySelector('[data-cancel]');
                     item.result = row.querySelector('[data-result]');
                     item.cancel.addEventListener('click', () => cancelItem(item));
@@ -286,12 +330,18 @@
                 });
 
                 const uploadItem = async (item) => {
+                    item.title.disabled = true;
                     item.percent.textContent = '0%';
                     item.status.textContent = 'جاري بدء الرفع...';
                     const started = await jsonRequest(uploader.dataset.startUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ file_name: item.file.name, size: item.file.size, mime: item.file.type || null }),
+                        body: JSON.stringify({
+                            file_name: item.file.name,
+                            title: item.title.value.trim() || null,
+                            size: item.file.size,
+                            mime: item.file.type || null,
+                        }),
                     });
                     item.session = started.data;
 
@@ -334,6 +384,8 @@
                 const processQueue = async () => {
                     if (processing) return;
                     processing = true;
+                    startButton.disabled = true;
+                    startButton.textContent = 'جارٍ الرفع...';
                     for (const item of queue) {
                         if (item.done || item.failed || item.cancelled) continue;
                         try { await uploadItem(item); }
@@ -347,6 +399,8 @@
                         }
                     }
                     processing = false;
+                    startButton.disabled = false;
+                    startButton.textContent = 'رفع الملفات المتبقية';
                 };
 
                 const addFiles = (files) => {
@@ -360,10 +414,10 @@
                         else if (file.size < 1) failItem(item, 'الملف فارغ.');
                         else if (file.size > maxBytes) failItem(item, 'حجم الملف أكبر من 300MB.');
                     });
-                    processQueue();
                 };
 
                 input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+                startButton.addEventListener('click', processQueue);
                 ['dragenter', 'dragover'].forEach((name) => dropzone.addEventListener(name, (event) => {
                     event.preventDefault();
                     dropzone.classList.add('border-indigo-500', 'bg-indigo-100');

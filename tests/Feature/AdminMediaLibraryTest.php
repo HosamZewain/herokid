@@ -52,6 +52,7 @@ class AdminMediaLibraryTest extends TestCase
 
         $start = $this->actingAs($admin)->postJson(route('admin.media-library.uploads.store'), [
             'file_name' => 'تعليمات.txt',
+            'title' => 'تعليمات فريق الإنتاج',
             'size' => strlen($contents),
             'mime' => 'text/plain',
         ])->assertCreated()
@@ -69,6 +70,7 @@ class AdminMediaLibraryTest extends TestCase
 
         $media = AdminMediaFile::firstOrFail();
         $this->assertSame($completed['id'], $media->public_id);
+        $this->assertSame('تعليمات فريق الإنتاج', $media->title);
         $this->assertSame($admin->id, $media->uploaded_by);
         $this->assertSame($admin->name, $media->uploaded_by_name);
         $this->assertArrayNotHasKey('expires_at', $media->getAttributes());
@@ -85,6 +87,36 @@ class AdminMediaLibraryTest extends TestCase
         $log = AdminActivityLog::where('action', 'media_library.file_uploaded')->firstOrFail();
         $this->assertSame('تعليمات.txt', $log->properties['file_name']);
         $this->assertArrayNotHasKey('path', $log->properties);
+    }
+
+    public function test_optional_title_is_searchable_and_rendered_without_hiding_original_filename(): void
+    {
+        $admin = $this->admin();
+        AdminMediaFile::create([
+            'public_id' => '0b2b86f6-d6a8-40d6-923d-9600fe721ba5',
+            'disk' => 'local',
+            'path' => 'admin/media-library/files/catalog.pdf',
+            'original_name' => 'original-catalog.pdf',
+            'title' => 'كتالوج سبتمبر',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'sha256' => str_repeat('c', 64),
+            'uploaded_by' => $admin->id,
+            'uploaded_by_name' => $admin->name,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.media-library.index', ['q' => 'سبتمبر']))
+            ->assertOk()
+            ->assertSee('كتالوج سبتمبر')
+            ->assertSee('original-catalog.pdf');
+
+        $start = $this->postJson(route('admin.media-library.uploads.store'), [
+            'file_name' => 'without-title.txt',
+            'title' => '',
+            'size' => 10,
+        ])->assertCreated()->json('data');
+        $this->assertNull(AdminMediaUploadSession::where('public_id', $start['upload_id'])->value('title'));
     }
 
     public function test_image_upload_is_validated_from_actual_content_not_browser_mime(): void
@@ -257,6 +289,65 @@ class AdminMediaLibraryTest extends TestCase
 
         $customer = User::factory()->create(['role' => 'customer', 'is_active' => true]);
         $this->actingAs($customer)->get(route('admin.media-library.index'))->assertForbidden();
+    }
+
+    public function test_authorized_delete_removes_file_and_disables_public_url_with_audit_log(): void
+    {
+        Storage::fake('local');
+        $admin = $this->admin();
+        $media = AdminMediaFile::create([
+            'public_id' => 'd29d66e6-24de-4710-b75e-3d7ed1edab33',
+            'disk' => 'local',
+            'path' => 'admin/media-library/files/delete-me.txt',
+            'original_name' => 'delete-me.txt',
+            'title' => 'ملف قديم',
+            'extension' => 'txt',
+            'mime_type' => 'text/plain',
+            'size' => 9,
+            'sha256' => str_repeat('d', 64),
+            'uploaded_by' => $admin->id,
+            'uploaded_by_name' => $admin->name,
+        ]);
+        Storage::disk('local')->put($media->path, 'delete me');
+        $publicUrl = $media->publicUrl();
+
+        $this->actingAs($admin)->deleteJson(route('admin.media-library.destroy', $media))->assertNoContent();
+
+        $this->assertDatabaseMissing('admin_media_files', ['id' => $media->id]);
+        Storage::disk('local')->assertMissing($media->path);
+        $this->get($publicUrl)->assertNotFound();
+
+        $log = AdminActivityLog::where('action', 'media_library.file_deleted')->firstOrFail();
+        $this->assertSame('ملف قديم', $log->properties['title']);
+        $this->assertArrayNotHasKey('path', $log->properties);
+    }
+
+    public function test_delete_requires_its_own_permission_and_button_is_hidden_without_it(): void
+    {
+        Storage::fake('local');
+        $viewer = $this->admin();
+        $viewer->permissions()->sync([Permission::where('key', 'media_library.view')->value('id')]);
+        $viewer->adminRoles()->detach();
+        $viewer = $viewer->fresh();
+        $media = AdminMediaFile::create([
+            'public_id' => '3bab7ef0-f3ea-42ba-97f7-6db1e65cab58',
+            'disk' => 'local',
+            'path' => 'admin/media-library/files/protected.txt',
+            'original_name' => 'protected.txt',
+            'extension' => 'txt',
+            'mime_type' => 'text/plain',
+            'size' => 9,
+            'sha256' => str_repeat('e', 64),
+            'uploaded_by' => $viewer->id,
+            'uploaded_by_name' => $viewer->name,
+        ]);
+        Storage::disk('local')->put($media->path, 'protected');
+
+        $this->actingAs($viewer)->get(route('admin.media-library.index'))
+            ->assertOk()
+            ->assertDontSee(route('admin.media-library.destroy', $media), false);
+        $this->deleteJson(route('admin.media-library.destroy', $media))->assertForbidden();
+        Storage::disk('local')->assertExists($media->path);
     }
 
     public function test_cancel_removes_temporary_chunks_without_touching_completed_media(): void

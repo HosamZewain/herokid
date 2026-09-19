@@ -32,9 +32,15 @@ class AdminMediaLibraryService
         'webp' => 'image/webp',
     ];
 
-    public function start(User $admin, string $originalName, int $totalSize, ?string $declaredMime): AdminMediaUploadSession
-    {
+    public function start(
+        User $admin,
+        string $originalName,
+        int $totalSize,
+        ?string $declaredMime,
+        ?string $title = null,
+    ): AdminMediaUploadSession {
         $originalName = $this->safeOriginalName($originalName);
+        $title = $this->normalizeTitle($title);
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
         if (! in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
@@ -54,6 +60,7 @@ class AdminMediaLibraryService
         return AdminMediaUploadSession::create([
             'public_id' => $publicId,
             'original_name' => $originalName,
+            'title' => $title,
             'extension' => $extension,
             'declared_mime' => $declaredMime ? Str::limit($declaredMime, 150, '') : null,
             'total_size' => $totalSize,
@@ -191,6 +198,7 @@ class AdminMediaLibraryService
                     'disk' => 'local',
                     'path' => $finalPath,
                     'original_name' => $upload->original_name,
+                    'title' => $upload->title,
                     'extension' => $upload->extension,
                     'mime_type' => $mime,
                     'size' => $upload->total_size,
@@ -239,6 +247,51 @@ class AdminMediaLibraryService
         $this->authorizeOwner($upload, $admin);
         Storage::disk('local')->deleteDirectory($upload->temp_directory);
         $upload->delete();
+    }
+
+    public function delete(AdminMediaFile $media, User $admin): void
+    {
+        $disk = Storage::disk($media->disk);
+        $trashPath = 'admin/media-library/deleting/'.$media->public_id.'.'.$media->extension;
+        $moved = false;
+
+        if ($disk->exists($media->path)) {
+            $disk->makeDirectory(dirname($trashPath));
+            if (! $disk->move($media->path, $trashPath)) {
+                throw new RuntimeException('تعذر تجهيز الملف للحذف. حاول مرة أخرى.');
+            }
+            $moved = true;
+        }
+
+        try {
+            DB::transaction(function () use ($media, $admin): void {
+                AdminActivityLogger::log(
+                    'media_library.file_deleted',
+                    'تم حذف ملف من مكتبة الوسائط.',
+                    $media,
+                    [
+                        'file_name' => $media->original_name,
+                        'title' => $media->title,
+                        'mime_type' => $media->mime_type,
+                        'size' => $media->size,
+                        'public_id' => $media->public_id,
+                    ],
+                    $admin,
+                );
+
+                $media->delete();
+            });
+        } catch (Throwable $exception) {
+            if ($moved) {
+                $disk->move($trashPath, $media->path);
+            }
+
+            throw $exception;
+        }
+
+        if ($moved) {
+            $disk->delete($trashPath);
+        }
     }
 
     /**
@@ -309,6 +362,20 @@ class AdminMediaLibraryService
         }
 
         return $name;
+    }
+
+    private function normalizeTitle(?string $title): ?string
+    {
+        $title = $title === null ? null : trim($title);
+        if ($title === null || $title === '') {
+            return null;
+        }
+
+        if (mb_strlen($title) > 255 || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', $title)) {
+            throw ValidationException::withMessages(['title' => 'عنوان الملف غير صالح.']);
+        }
+
+        return $title;
     }
 
     private function authorizeOwner(AdminMediaUploadSession $upload, User $admin): void

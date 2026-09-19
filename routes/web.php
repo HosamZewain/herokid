@@ -436,6 +436,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('media-library', [AdminMediaLibraryController::class, 'index'])
         ->middleware('permission:media_library.view')
         ->name('media-library.index');
+    Route::delete('media-library/{media}', [AdminMediaLibraryController::class, 'destroy'])
+        ->whereUuid('media')
+        ->middleware(['permission:media_library.delete', 'throttle:30,1'])
+        ->name('media-library.destroy');
     Route::post('media-library/uploads', [AdminMediaUploadController::class, 'store'])
         ->middleware(['permission:media_library.upload', 'throttle:30,1'])
         ->name('media-library.uploads.store');

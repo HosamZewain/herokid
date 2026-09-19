@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminMediaFile;
+use App\Services\MediaLibrary\AdminMediaLibraryService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AdminMediaLibraryController extends Controller
 {
+    public function __construct(private readonly AdminMediaLibraryService $mediaLibrary) {}
+
     public function index(Request $request): View
     {
         $validated = $request->validate([
@@ -21,6 +25,7 @@ class AdminMediaLibraryController extends Controller
         if ($search !== '') {
             $query->where(function ($builder) use ($search): void {
                 $builder->where('original_name', 'like', '%'.$search.'%')
+                    ->orWhere('title', 'like', '%'.$search.'%')
                     ->orWhere('uploaded_by_name', 'like', '%'.$search.'%');
             });
         }
@@ -42,5 +47,12 @@ class AdminMediaLibraryController extends Controller
         ];
 
         return view('admin.media-library.index', compact('files', 'stats', 'search', 'type'));
+    }
+
+    public function destroy(Request $request, AdminMediaFile $media): JsonResponse
+    {
+        $this->mediaLibrary->delete($media, $request->user());
+
+        return response()->json([], 204);
     }
 }

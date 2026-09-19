@@ -16,6 +16,7 @@ class AdminMediaUploadController extends Controller
     {
         $validated = $request->validate([
             'file_name' => ['required', 'string', 'max:255'],
+            'title' => ['nullable', 'string', 'max:255'],
             'size' => ['required', 'integer', 'min:1', 'max:'.AdminMediaLibraryService::MAX_FILE_SIZE],
             'mime' => ['nullable', 'string', 'max:150'],
         ]);
@@ -25,6 +26,7 @@ class AdminMediaUploadController extends Controller
             $validated['file_name'],
             (int) $validated['size'],
             $validated['mime'] ?? null,
+            $validated['title'] ?? null,
         );
 
         return response()->json([

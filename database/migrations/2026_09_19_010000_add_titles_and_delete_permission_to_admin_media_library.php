@@ -1,0 +1,119 @@
+<?php
+
+use App\Support\AdminPermissionRegistry;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    private const PERMISSION = 'media_library.delete';
+
+    public function up(): void
+    {
+        Schema::table('admin_media_files', function (Blueprint $table): void {
+            $table->string('title')->nullable()->after('original_name');
+        });
+
+        Schema::table('admin_media_upload_sessions', function (Blueprint $table): void {
+            $table->string('title')->nullable()->after('original_name');
+        });
+
+        $this->syncPermission();
+    }
+
+    public function down(): void
+    {
+        if (Schema::hasTable('permissions')) {
+            $permissionId = DB::table('permissions')->where('key', self::PERMISSION)->value('id');
+            if ($permissionId) {
+                if (Schema::hasTable('permission_user')) {
+                    DB::table('permission_user')->where('permission_id', $permissionId)->delete();
+                }
+                if (Schema::hasTable('admin_role_permission')) {
+                    DB::table('admin_role_permission')->where('permission_id', $permissionId)->delete();
+                }
+                DB::table('permissions')->where('id', $permissionId)->delete();
+            }
+        }
+
+        Schema::table('admin_media_upload_sessions', function (Blueprint $table): void {
+            $table->dropColumn('title');
+        });
+        Schema::table('admin_media_files', function (Blueprint $table): void {
+            $table->dropColumn('title');
+        });
+    }
+
+    private function syncPermission(): void
+    {
+        if (! Schema::hasTable('permissions')) {
+            return;
+        }
+
+        $definition = AdminPermissionRegistry::metadata(self::PERMISSION);
+        if (! $definition) {
+            return;
+        }
+
+        DB::table('permissions')->updateOrInsert(
+            ['key' => self::PERMISSION],
+            [
+                'group_key' => $definition['group_key'],
+                'name_ar' => $definition['name_ar'],
+                'name_en' => $definition['name_en'],
+                'description_ar' => $definition['description_ar'] ?? null,
+                'description_en' => $definition['description_en'] ?? null,
+                'sort_order' => $definition['sort_order'] ?? 999,
+                'is_system' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        $permissionId = DB::table('permissions')->where('key', self::PERMISSION)->value('id');
+        $managerPermissionId = DB::table('permissions')
+            ->where('key', AdminPermissionRegistry::LAST_MANAGER_PERMISSION)
+            ->value('id');
+
+        if (! $permissionId || ! $managerPermissionId) {
+            return;
+        }
+
+        if (Schema::hasTable('admin_role_permission')) {
+            $managerRoleIds = DB::table('admin_role_permission')
+                ->where('permission_id', $managerPermissionId)
+                ->pluck('admin_role_id');
+
+            foreach ($managerRoleIds as $roleId) {
+                DB::table('admin_role_permission')->insertOrIgnore([
+                    'admin_role_id' => $roleId,
+                    'permission_id' => $permissionId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        if (! Schema::hasTable('permission_user') || ! Schema::hasTable('users')) {
+            return;
+        }
+
+        $managerIds = DB::table('users')
+            ->join('permission_user', 'permission_user.user_id', '=', 'users.id')
+            ->where('users.role', 'admin')
+            ->where('users.is_active', true)
+            ->where('permission_user.permission_id', $managerPermissionId)
+            ->pluck('users.id');
+
+        foreach ($managerIds as $userId) {
+            DB::table('permission_user')->insertOrIgnore([
+                'permission_id' => $permissionId,
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+};
