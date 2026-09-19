@@ -103,13 +103,17 @@ class AdminMediaLibraryService
 
             $path = $locked->temp_directory.'/chunks/'.sprintf('%06d.part', $index);
             $stream = fopen($chunk->getRealPath(), 'rb');
-            if ($stream === false || ! $this->mediaStorage->processingDisk()->put($path, $stream)) {
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
+            if ($stream === false) {
                 throw new RuntimeException('تعذر حفظ جزء الملف.');
             }
-            fclose($stream);
+
+            try {
+                if (! $this->mediaStorage->processingDisk()->put($path, $stream)) {
+                    throw new RuntimeException('تعذر حفظ جزء الملف.');
+                }
+            } finally {
+                fclose($stream);
+            }
 
             $locked->update([
                 'next_chunk_index' => $index + 1,
@@ -193,13 +197,17 @@ class AdminMediaLibraryService
             $finalPath = 'admin/media-library/files/'.now()->format('Y/m').'/'.$upload->public_id.'.'.$upload->extension;
 
             $finalStream = fopen($absolutePath, 'rb');
-            if ($finalStream === false || ! $destinationDisk->put($finalPath, $finalStream)) {
-                if (is_resource($finalStream)) {
-                    fclose($finalStream);
-                }
+            if ($finalStream === false) {
                 throw new RuntimeException('تعذر نقل الملف إلى المكتبة الدائمة.');
             }
-            fclose($finalStream);
+
+            try {
+                if (! $destinationDisk->put($finalPath, $finalStream)) {
+                    throw new RuntimeException('تعذر نقل الملف إلى المكتبة الدائمة.');
+                }
+            } finally {
+                fclose($finalStream);
+            }
 
             $media = DB::transaction(function () use ($upload, $admin, $mime, $sha256, $finalPath, $destinationDiskName): AdminMediaFile {
                 $media = AdminMediaFile::create([

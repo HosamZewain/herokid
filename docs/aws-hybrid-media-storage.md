@@ -24,6 +24,17 @@ PROCESSING_DISK=local
 
 Shared-hosting installations need no new environment values. Their defaults remain `local`, `public`, and `local` respectively.
 
+## Admin Media Library
+
+Media Library upload sessions are deliberately split across two storage classes:
+
+- Incomplete chunks and `assembled.tmp` use `PROCESSING_DISK`. This must remain a local driver because completion performs ordered assembly, MIME inspection, size verification, and SHA-256 hashing through real filesystem paths.
+- A validated completed file is streamed to `PRIVATE_MEDIA_DISK` under `admin/media-library/files/YYYY/MM/`. The database stores the actual configured disk name and logical path.
+
+On AWS, the final object is therefore stored below `private/admin/media-library/files/` in the private bucket. On shared hosting, the absent `PRIVATE_MEDIA_DISK` setting safely falls back to the existing local private disk. Public share links always pass through Laravel; the S3 bucket and object are never made public.
+
+If persistent storage fails, no completed database record is created and the upload session remains retryable. If database creation fails after the object upload, the newly uploaded object is removed. The incomplete-upload cleanup command only scans upload-session paths on `PROCESSING_DISK` and never scans or deletes completed Media Library objects.
+
 ## Deployment order
 
 1. Attach an IAM role to EC2 that can read, write, and delete only the required bucket prefixes.
