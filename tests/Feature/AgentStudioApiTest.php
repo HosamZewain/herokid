@@ -333,9 +333,11 @@ class AgentStudioApiTest extends TestCase
         $this->assertSame(['product:'.$item->id.':component:large', 'product:'.$item->id.':component:small'], array_column($first->json('production_units'), 'unit_key'));
         $this->assertSame([6, 15], array_column($first->json('production_units'), 'quantity'));
         $this->assertSame([3, 3], array_column($first->json('production_units'), 'product_quantity'));
-        $item->productionComponents()->where('stable_key', 'large')->update(['prompt_template' => 'Updated large x {{component_quantity}}']);
+        $this->assertSame(['live_component_template', 'live_component_template'], array_column($first->json('production_units'), 'prompt_source'));
+        $product->productionComponents()->where('stable_key', 'large')->update(['prompt_template' => 'Updated large x {{component_quantity}}']);
         $this->app['auth']->forgetGuards();
         $second = $this->withToken($token)->getJson('/api/agent/studio/orders/HK-BUNDLE-STUDIO')->assertOk();
+        $this->assertSame('Updated large x 6', $second->json('production_units.0.production_prompt'));
         $this->assertNotSame($first->json('order.source_revision'), $second->json('order.source_revision'));
     }
 

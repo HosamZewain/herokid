@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductUpsellRule;
+use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Http\Request;
@@ -121,21 +122,28 @@ class ProductController extends Controller
         return view('admin.store.products.form', $this->formData($product));
     }
 
-    public function update(Request $request, Product $product)
-    {
+    public function update(
+        Request $request,
+        Product $product,
+        ProductProductionPromptSyncService $promptSync,
+    ) {
         $productionComponents = $this->validatedProductionComponents($request);
 
-        DB::transaction(function () use ($request, $product, $productionComponents): void {
+        DB::transaction(function () use ($request, $product, $productionComponents, $promptSync): void {
             $data = $this->withProductionPromptMirror(
                 $this->validatedData($request, $product),
                 $productionComponents,
             );
             $product->update($data);
             $this->syncProductionComponents($product, $productionComponents);
+            $promptSync->syncForProduct($product);
             $this->syncRecommendedProducts($request, $product);
         });
 
-        return redirect()->route('admin.products.edit', $product)->with('success', 'تم تحديث المنتج.');
+        return redirect()->route('admin.products.edit', $product)->with(
+            'success',
+            'تم تحديث المنتج، وأصبحت برومبتات الطلبات المرتبطة تستخدم النص الحالي تلقائيًا.',
+        );
     }
 
     private function formData(Product $product, ?Product $duplicateSource = null): array

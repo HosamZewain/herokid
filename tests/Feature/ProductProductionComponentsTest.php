@@ -80,7 +80,7 @@ class ProductProductionComponentsTest extends TestCase
         $this->assertDatabaseCount('product_production_components', 0);
     }
 
-    public function test_order_snapshots_components_and_only_changes_them_after_explicit_refresh(): void
+    public function test_order_snapshots_component_structure_but_uses_current_product_prompt_automatically(): void
     {
         $product = $this->product();
         $large = $product->productionComponents()->create([
@@ -124,15 +124,16 @@ class ProductProductionComponentsTest extends TestCase
         $this->assertSame([4, 10], $prompts->pluck('quantity')->all());
         $this->assertSame('كبير: ليلى أحمد — 4', $prompts[0]['prompt']);
         $this->assertSame('صغير: ليلى أحمد — 10', $prompts[1]['prompt']);
-        $this->assertSame(['order_component_snapshot', 'order_component_snapshot'], $prompts->pluck('prompt_source')->all());
+        $this->assertSame(['live_component_template', 'live_component_template'], $prompts->pluck('prompt_source')->all());
         $this->assertDatabaseCount('order_item_production_components', 2);
 
         $large->update(['prompt_template' => 'نسخة جديدة: {{child_full_name}}']);
         $small->delete();
         $historicalPrompts = ProductProductionPrompt::forItem($item->fresh());
         $this->assertCount(2, $historicalPrompts);
-        $this->assertSame('كبير: ليلى أحمد — 4', $historicalPrompts[0]['prompt']);
+        $this->assertSame('نسخة جديدة: ليلى أحمد', $historicalPrompts[0]['prompt']);
         $this->assertSame('صغير: ليلى أحمد — 10', $historicalPrompts[1]['prompt']);
+        $this->assertSame(['live_component_template', 'order_component_snapshot'], $historicalPrompts->pluck('prompt_source')->all());
 
         $this->actingAs($this->admin())
             ->get(route('admin.orders.products.production', [$order, $item]))
@@ -151,6 +152,96 @@ class ProductProductionComponentsTest extends TestCase
         $this->assertCount(1, $refreshed);
         $this->assertSame('product:'.$item->id, $refreshed[0]['unit_key']);
         $this->assertSame('نسخة جديدة: ليلى أحمد', $refreshed[0]['prompt']);
+    }
+
+    public function test_admin_product_prompt_edit_updates_all_linked_orders_without_changing_other_order_data(): void
+    {
+        $product = $this->product();
+        $component = $product->productionComponents()->create([
+            'stable_key' => 'main',
+            'name' => 'المنتج الرئيسي',
+            'prompt_template' => 'النسخة القديمة: {{child_full_name}}',
+            'quantity_per_item' => 1,
+            'sort_order' => 0,
+            'is_active' => true,
+        ]);
+        $otherProduct = $this->product();
+        $otherProduct->productionComponents()->create([
+            'stable_key' => 'main',
+            'name' => 'منتج آخر',
+            'prompt_template' => 'برومبت مختلف: {{child_full_name}}',
+            'quantity_per_item' => 1,
+            'sort_order' => 0,
+            'is_active' => true,
+        ]);
+
+        $firstOrder = Order::create([
+            'order_number' => 'HK-PROMPT-SYNC-ONE',
+            'status' => 'new',
+            'payment_status' => 'paid',
+        ]);
+        $firstItem = $firstOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 10000,
+            'total_price_cents' => 10000,
+            'personalization_snapshot' => ['child_name' => 'آدم'],
+        ]);
+        $secondOrder = Order::create([
+            'order_number' => 'HK-PROMPT-SYNC-TWO',
+            'status' => 'ready_preview',
+            'payment_status' => 'unpaid',
+        ]);
+        $secondItem = $secondOrder->items()->create([
+            'item_type' => 'product_add_on',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 2,
+            'unit_price_cents' => 10000,
+            'total_price_cents' => 20000,
+            'personalization_snapshot' => ['child_name' => 'ليلى'],
+        ]);
+        $otherOrder = Order::create(['order_number' => 'HK-PROMPT-SYNC-OTHER', 'status' => 'new']);
+        $otherItem = $otherOrder->items()->create([
+            'item_type' => 'product',
+            'product_id' => $otherProduct->id,
+            'title' => $otherProduct->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 10000,
+            'total_price_cents' => 10000,
+            'personalization_snapshot' => ['child_name' => 'سليم'],
+        ]);
+
+        $this->assertSame('النسخة القديمة: آدم', ProductProductionPrompt::renderForItem($firstItem->fresh()));
+        $this->assertSame('النسخة القديمة: ليلى', ProductProductionPrompt::renderForItem($secondItem->fresh()));
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.products.update', $product), [
+                ...$this->productPayload($product),
+                'production_components_present' => 1,
+                'production_components' => [[
+                    'stable_key' => 'main',
+                    'name' => 'المنتج الرئيسي',
+                    'quantity_per_item' => 1,
+                    'prompt_template' => 'النسخة الجديدة: {{child_full_name}}',
+                    'is_active' => 1,
+                ]],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.products.edit', $product));
+
+        $this->assertSame('النسخة الجديدة: آدم', ProductProductionPrompt::renderForItem($firstItem->fresh()));
+        $this->assertSame('النسخة الجديدة: ليلى', ProductProductionPrompt::renderForItem($secondItem->fresh()));
+        $this->assertSame('برومبت مختلف: سليم', ProductProductionPrompt::renderForItem($otherItem->fresh()));
+        $this->assertSame('النسخة الجديدة: {{child_full_name}}', $component->orderItemSnapshots()->pluck('prompt_template')->unique()->sole());
+        $this->assertSame('new', $firstOrder->fresh()->status);
+        $this->assertSame('paid', $firstOrder->payment_status);
+        $this->assertSame('ready_preview', $secondOrder->fresh()->status);
+        $this->assertSame('unpaid', $secondOrder->payment_status);
+        $this->assertSame(10000, $firstItem->fresh()->total_price_cents);
+        $this->assertSame(20000, $secondItem->fresh()->total_price_cents);
     }
 
     public function test_inactive_components_are_not_snapshotted_for_new_orders(): void

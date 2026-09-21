@@ -175,14 +175,25 @@ class ProductProductionPrompt
         ]);
 
         if ($item->productionComponents->isNotEmpty()) {
-            return $item->productionComponents->map(fn (OrderItemProductionComponent $component): array => [
-                'component' => $component,
-                'stable_key' => $component->stable_key,
-                'name' => $component->name,
-                'prompt_template' => $component->prompt_template,
-                'quantity_per_item' => max(1, (int) $component->quantity_per_item),
-                'source' => 'order_component_snapshot',
-            ])->values();
+            $liveComponents = $item->product?->productionComponents?->keyBy('stable_key') ?? collect();
+
+            return $item->productionComponents->map(function (OrderItemProductionComponent $component) use ($liveComponents): array {
+                $liveComponent = $liveComponents->get($component->stable_key);
+                $hasLiveTemplate = $liveComponent && filled($liveComponent->prompt_template);
+
+                return [
+                    'component' => $component,
+                    'stable_key' => $component->stable_key,
+                    'name' => $component->name,
+                    'prompt_template' => $hasLiveTemplate
+                        ? $liveComponent->prompt_template
+                        : $component->prompt_template,
+                    'quantity_per_item' => max(1, (int) $component->quantity_per_item),
+                    'source' => $hasLiveTemplate
+                        ? 'live_component_template'
+                        : 'order_component_snapshot',
+                ];
+            })->values();
         }
 
         if ($item->product) {
