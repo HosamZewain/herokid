@@ -70,7 +70,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(2, $stats['stories']);
         $this->assertSame(3, $stats['products']);
         $this->assertSame(93_800, $stats['total_value_cents']);
-        $this->assertSame(93_800, $stats['average_order_cents']);
+        $this->assertSame(89_800, $stats['average_order_cents']);
         $this->assertSame(0, $stats['collected_cents']);
         $this->assertSame(0, $stats['payment_checkouts']);
         $this->assertSame(0, $stats['cancelled_checkouts']);
@@ -136,7 +136,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(0, $response->viewData('todayStats')['yesterday_checkouts']);
         $this->assertSame(1, $response->viewData('todayStats')['new_checkouts_difference']);
         $this->assertSame(63_800, $response->viewData('todayStats')['order_value_cents']);
-        $this->assertSame(63_800, $response->viewData('todayStats')['average_order_cents']);
+        $this->assertSame(59_800, $response->viewData('todayStats')['average_order_cents']);
         $this->assertSame(1, $response->viewData('todayStats')['payment_checkouts']);
         $this->assertSame(10_000, $response->viewData('todayStats')['payments_cents']);
         $this->assertCount(1, $response->viewData('todayStats')['payment_events']);
@@ -339,7 +339,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(0, $today['product_value_cents']);
         $this->assertSame(54_000, $today['total_value_cents']);
         $this->assertSame(7_000, $today['payments_cents']);
-        $this->assertSame(54_000, $today['average_order_cents']);
+        $this->assertSame(50_000, $today['average_order_cents']);
 
         $previousDay = $days->get('2026-08-30');
         $this->assertSame(1, $previousDay['new_checkouts']);
@@ -347,7 +347,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $this->assertSame(1, $previousDay['product_checkouts']);
         $this->assertSame(27_000, $previousDay['product_value_cents']);
         $this->assertSame(1, $previousDay['cancelled_checkouts']);
-        $this->assertSame(27_000, $previousDay['average_order_cents']);
+        $this->assertSame(24_000, $previousDay['average_order_cents']);
     }
 
     public function test_search_status_mixed_and_date_filters_match_checkout_contents(): void
@@ -662,7 +662,7 @@ class AdminOrderGroupManagementTest extends TestCase
         $stats = $response->viewData('stats');
         $this->assertSame(2, $stats['checkouts']);
         $this->assertSame(72_900, $stats['total_value_cents']);
-        $this->assertSame(36_450, $stats['average_order_cents']);
+        $this->assertSame(32_450, $stats['average_order_cents']);
         $this->assertSame(43_900, $stats['collected_cents']);
         $this->assertSame(1, $stats['payment_checkouts']);
         $this->assertSame(0, $stats['cancelled_checkouts']);

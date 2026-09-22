@@ -236,7 +236,7 @@
                     <div class="mt-3">{!! $comparisonBadge($comparison['checkouts']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
-                    <p class="text-sm font-black text-gray-500">متوسط المبلغ المحصل</p>
+                    <p class="text-sm font-black text-gray-500">متوسط الطلب بدون الشحن</p>
                     <p class="mt-3 text-3xl font-black text-gray-950">{{ format_money($summary['average_checkout']) }}</p>
                     <div class="mt-3">{!! $comparisonBadge($comparison['average_checkout']) !!}</div>
                 </div>

@@ -123,7 +123,9 @@ class AdminOrderReportService
             'total_cents' => (int) $rows->sum('total_cents'),
             'paid_amount_cents' => (int) $rows->sum('paid_amount_cents'),
             'remaining_amount_cents' => (int) $rows->sum('remaining_amount_cents'),
-            'average_order_cents' => $rows->isEmpty() ? 0 : (int) round($rows->avg('total_cents')),
+            'average_order_cents' => $rows->isEmpty() ? 0 : (int) round($rows->avg(
+                fn (array $row): int => max(0, (int) $row['items_cents'] - (int) $row['discount_cents'])
+            )),
             'active_checkouts' => $active->count(),
             'finished_checkouts' => $finished->count(),
             'cancelled_checkouts' => $cancelled->count(),

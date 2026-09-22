@@ -73,9 +73,9 @@
                         <p class="mt-1 text-xs text-slate-500">دفعات فعلية أضيفت اليوم</p>
                     </div>
                     <div class="rounded-3xl border border-amber-100 bg-white p-5 shadow-sm">
-                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-amber-50 p-3 text-2xl">🧮</span><span class="text-xs font-black text-amber-700">متوسط الطلب</span></div>
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-amber-50 p-3 text-2xl">🧮</span><span class="text-xs font-black text-amber-700">متوسط الطلب بدون الشحن</span></div>
                         <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['average_order_cents'] / 100) }}</p>
-                        <p class="mt-1 text-xs text-slate-500">متوسط قيمة عمليات الشراء الجديدة اليوم</p>
+                        <p class="mt-1 text-xs text-slate-500">قيمة المنتجات بعد الخصم، دون تكلفة الشحن</p>
                     </div>
                 </div>
 
@@ -151,7 +151,7 @@
                                 <th scope="col" class="px-4 py-4">إجمالي قيمة الطلبات</th>
                                 <th scope="col" class="px-4 py-4 text-emerald-700">مدفوع اليوم</th>
                                 <th scope="col" class="px-4 py-4 text-rose-700">ملغي اليوم</th>
-                                <th scope="col" class="px-4 py-4">متوسط الطلب</th>
+                                <th scope="col" class="px-4 py-4">متوسط الطلب بدون الشحن</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -197,7 +197,7 @@
                                 <div><dt class="text-slate-500">قيمة المتجر</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_money($day['product_value_cents'] / 100) }}</dd></div>
                                 <div><dt class="text-emerald-600">مدفوع اليوم</dt><dd class="mt-0.5 font-black text-emerald-800">{{ format_money($day['payments_cents'] / 100) }}</dd></div>
                                 <div><dt class="text-rose-600">ملغي اليوم</dt><dd class="mt-0.5 font-black text-rose-800">{{ arabic_number($day['cancelled_checkouts']) }}</dd></div>
-                                <div class="col-span-2 border-t border-slate-100 pt-2"><dt class="text-slate-500">متوسط الطلب</dt><dd class="mt-0.5 font-black text-slate-900">{{ format_money($day['average_order_cents'] / 100) }}</dd></div>
+                                <div class="col-span-2 border-t border-slate-100 pt-2"><dt class="text-slate-500">متوسط الطلب بدون الشحن</dt><dd class="mt-0.5 font-black text-slate-900">{{ format_money($day['average_order_cents'] / 100) }}</dd></div>
                             </dl>
                         </article>
                     @endforeach

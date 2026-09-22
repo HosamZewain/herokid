@@ -280,9 +280,7 @@ class AdminOrderGroupService
                     ? (int) round(($newCheckoutDifference / $yesterdayCheckouts) * 100)
                     : null,
                 'order_value_cents' => $todayFinancial['total_value_cents'],
-                'average_order_cents' => $todayKeys->isNotEmpty()
-                    ? (int) round($todayFinancial['total_value_cents'] / $todayKeys->count())
-                    : 0,
+                'average_order_cents' => $todayFinancial['average_order_cents'],
                 'payment_checkouts' => $todayPayments['count'],
                 'payments_cents' => $todayPayments['amount_cents'],
                 'payment_events' => $todayPayments['events'],
@@ -371,6 +369,7 @@ class AdminOrderGroupService
             $storyFinancial = ['total_value_cents' => (int) $dayOrders->only($storyKeys->all())->sum('total_cents')];
             $productFinancial = ['total_value_cents' => (int) $dayOrders->only($productKeys->all())->sum('total_cents')];
             $totalValueCents = $storyFinancial['total_value_cents'] + $productFinancial['total_value_cents'];
+            $averageValueCents = (int) $dayOrders->sum('average_value_cents');
             $newCheckouts = $dayKeys->count();
 
             return [
@@ -389,7 +388,7 @@ class AdminOrderGroupService
                     ->unique()
                     ->count(),
                 'average_order_cents' => $newCheckouts > 0
-                    ? (int) round($totalValueCents / $newCheckouts)
+                    ? (int) round($averageValueCents / $newCheckouts)
                     : 0,
             ];
         })->all();
@@ -939,6 +938,7 @@ class AdminOrderGroupService
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
                 $discountCents = (int) $group->max('discount_cents');
                 $totalCents = max(0, $itemsCents + $deliveryCents - $discountCents);
+                $averageValueCents = max(0, $itemsCents - $discountCents);
                 $statuses = $group->pluck('status')->filter()->unique();
                 $shippingStatuses = $group->pluck('shipping_status')
                     ->map(fn (?string $status): string => in_array($status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false), true)
@@ -951,6 +951,7 @@ class AdminOrderGroupService
 
                 return [
                     'total_cents' => $totalCents,
+                    'average_value_cents' => $averageValueCents,
                     'paid_amount_cents' => max(0, (int) $first->paid_amount_cents),
                     'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
                     'payment_status' => $paymentStatus,
@@ -963,11 +964,12 @@ class AdminOrderGroupService
         $paid = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $checkout['payment_status']) === 'paid_in_full');
         $withPayments = $checkouts->filter(fn (array $checkout): bool => $checkout['paid_amount_cents'] > 0);
         $totalValueCents = (int) $checkouts->sum('total_cents');
+        $averageValueCents = (int) $checkouts->sum('average_value_cents');
 
         return [
             'total_value_cents' => $totalValueCents,
             'average_order_cents' => $checkouts->isNotEmpty()
-                ? (int) round($totalValueCents / $checkouts->count())
+                ? (int) round($averageValueCents / $checkouts->count())
                 : 0,
             'collected_cents' => (int) $checkouts->sum('paid_amount_cents'),
             'payment_checkouts' => $withPayments->count(),
