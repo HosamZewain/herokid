@@ -888,6 +888,37 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('المنتجات الموجودة في عملية الشراء');
     }
 
+    public function test_group_story_card_displays_all_saved_story_order_details_without_opening_edit(): void
+    {
+        [$order] = $this->checkoutFixture(singleStory: true);
+        $order->update([
+            'child_gender' => 'girl',
+            'language' => 'en',
+            'lesson' => 'الثقة بالنفس',
+            'interests' => 'كرة القدم والرسم',
+            'gift_note' => 'إلى بطلتنا الجميلة',
+            'parent_notes' => 'يرجى الحفاظ على لون الملابس الأزرق.',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.groups.show', $order))
+            ->assertOk()
+            ->assertSee('data-story-order-details="'.$order->id.'"', false)
+            ->assertSee('تفاصيل القصة المسجلة')
+            ->assertSee('لغة القصة')
+            ->assertSee('English')
+            ->assertSee('جنس الطفل')
+            ->assertSee('بنت')
+            ->assertSee('الدرس أو القيمة')
+            ->assertSee('الثقة بالنفس')
+            ->assertSee('اهتمامات الطفل')
+            ->assertSee('كرة القدم والرسم')
+            ->assertSee('الإهداء')
+            ->assertSee('إلى بطلتنا الجميلة')
+            ->assertSee('ملاحظات ولي الأمر')
+            ->assertSee('يرجى الحفاظ على لون الملابس الأزرق.');
+    }
+
     public function test_bulk_status_update_updates_each_story_with_logs_activity_and_prompt_snapshots(): void
     {
         [$first, $second] = $this->checkoutFixture();
