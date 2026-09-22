@@ -38,6 +38,14 @@ Since this environment might not have native PHP/Composer installed globally:
 - **Password:** `password`
 
 ## Deployment Checklist (Hostinger / Shared Hosting)
+
+### Release branch policy
+
+- `main` is the only production deployment source for both Hostinger and AWS.
+- A feature branch must not replace production directly. Merge every intended feature into a tested release branch, then fast-forward `main` to that exact tested commit before deployment.
+- Production assets in `public/build` must be generated and committed before updating `main`.
+- Deploy with `git pull --ff-only origin main` and verify the expected commit SHA. If `main` cannot fast-forward, stop and reconcile the branch history instead of force-pushing or deploying an incomplete branch.
+
 To migrate this codebase to your Hostinger shared hosting:
 1. Export the MySQL database you generated via Sail locally.
 2. Upload the entire project directory (excluding `.git` and `vendor/...` if you plan to run composer install on the server).
