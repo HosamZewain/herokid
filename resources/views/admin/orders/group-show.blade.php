@@ -289,6 +289,17 @@
                         $linkedAddOns = $order->items->where('item_type', 'product_add_on');
                         $storyPrompt = ($storyProductionPrompts ?? collect())->firstWhere('order_id', $order->id);
                         $linkedProductPrompts = ($productProductionPrompts ?? collect())->filter(fn ($prompt) => (int) $prompt['item']->order_id === (int) $order->id);
+                        $storyLanguage = $order->language ?? $order->story?->language;
+                        $storyLanguageLabel = match ($storyLanguage) {
+                            'ar' => 'العربية',
+                            'en' => 'English',
+                            default => filled($storyLanguage) ? $storyLanguage : 'غير محددة',
+                        };
+                        $childGenderLabel = match ($order->child_gender) {
+                            'boy', 'male' => 'ولد',
+                            'girl', 'female' => 'بنت',
+                            default => filled($order->child_gender) ? $order->child_gender : 'غير محدد',
+                        };
                     @endphp
                     <article class="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
                         <div class="flex flex-col gap-4 border-b border-gray-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
@@ -310,6 +321,39 @@
                                     <a href="{{ route('admin.production-studio.show', $order->productionProject) }}" class="rounded-xl bg-violet-50 px-4 py-2 text-xs font-black text-violet-700 hover:bg-violet-100">استوديو الإنتاج</a>
                                 @endif
                             </div>
+                        </div>
+
+                        <div class="mt-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-4" data-story-order-details="{{ $order->id }}">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-violet-700" dir="ltr">{{ $order->order_number }}</span>
+                                <h5 class="text-sm font-black text-violet-950">تفاصيل القصة المسجلة</h5>
+                            </div>
+                            <dl class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                <div class="rounded-xl bg-white px-3 py-2">
+                                    <dt class="text-[10px] font-bold text-gray-400">لغة القصة</dt>
+                                    <dd class="mt-0.5 text-xs font-black text-gray-900">{{ $storyLanguageLabel }}</dd>
+                                </div>
+                                <div class="rounded-xl bg-white px-3 py-2">
+                                    <dt class="text-[10px] font-bold text-gray-400">جنس الطفل</dt>
+                                    <dd class="mt-0.5 text-xs font-black text-gray-900">{{ $childGenderLabel }}</dd>
+                                </div>
+                                <div class="rounded-xl bg-white px-3 py-2">
+                                    <dt class="text-[10px] font-bold text-gray-400">الدرس أو القيمة</dt>
+                                    <dd class="mt-0.5 break-words whitespace-pre-line text-xs font-bold text-gray-900">{{ filled($order->lesson) ? $order->lesson : 'لا يوجد' }}</dd>
+                                </div>
+                                <div class="rounded-xl bg-white px-3 py-2 sm:col-span-2 lg:col-span-3">
+                                    <dt class="text-[10px] font-bold text-gray-400">اهتمامات الطفل</dt>
+                                    <dd class="mt-0.5 break-words whitespace-pre-line text-xs font-bold leading-5 text-gray-900">{{ filled($order->interests) ? $order->interests : 'لا توجد' }}</dd>
+                                </div>
+                                <div class="rounded-xl bg-white px-3 py-2 sm:col-span-2 lg:col-span-3">
+                                    <dt class="text-[10px] font-bold text-gray-400">الإهداء</dt>
+                                    <dd class="mt-0.5 break-words whitespace-pre-line text-xs font-bold leading-5 text-gray-900">{{ filled($order->gift_note) ? $order->gift_note : 'لا يوجد' }}</dd>
+                                </div>
+                                <div class="rounded-xl bg-white px-3 py-2 sm:col-span-2 lg:col-span-3">
+                                    <dt class="text-[10px] font-bold text-gray-400">ملاحظات ولي الأمر</dt>
+                                    <dd class="mt-0.5 break-words whitespace-pre-line text-xs font-bold leading-5 text-gray-900">{{ filled($order->parent_notes) ? $order->parent_notes : 'لا توجد' }}</dd>
+                                </div>
+                            </dl>
                         </div>
 
                         @if((auth()->user()->hasPermission('orders.photos.view') && count($order->uploaded_photos ?? [])) || $order->previews->isNotEmpty())
