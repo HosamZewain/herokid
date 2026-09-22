@@ -72,6 +72,7 @@ class AdminOrderReportTest extends TestCase
         $summary = $response->viewData('report')['summary'];
         $this->assertSame(2, $summary['checkouts']);
         $this->assertSame(75_000, $summary['total_cents']);
+        $this->assertSame(32_500, $summary['average_order_cents']);
         $this->assertSame(15_000, $summary['paid_amount_cents']);
         $this->assertSame(60_000, $summary['remaining_amount_cents']);
         $this->assertSame(1, $summary['cancelled_checkouts']);

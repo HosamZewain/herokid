@@ -308,6 +308,9 @@ class SalesReportService
         $paidCents = (int) $rows->sum('paid_amount_cents');
         $remainingCents = (int) $rows->sum('remaining_amount_cents');
         $checkouts = $rows->count();
+        $averageOrderValueCents = (int) $rows->sum(
+            fn (array $row): int => max(0, (int) $row['items_total_cents'] - (int) $row['discount_cents'])
+        );
 
         return [
             'total' => round($paidCents / 100, 2),
@@ -319,7 +322,7 @@ class SalesReportService
             'checkouts' => $checkouts,
             'order_records' => (int) $rows->sum('order_records'),
             'items_quantity' => (int) $rows->sum('items_quantity'),
-            'average_checkout' => $checkouts > 0 ? round(($paidCents / 100) / $checkouts, 2) : 0,
+            'average_checkout' => $checkouts > 0 ? round(($averageOrderValueCents / 100) / $checkouts, 2) : 0,
             'unique_customers' => $rows->pluck('customer_key')->unique()->count(),
         ];
     }

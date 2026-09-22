@@ -68,7 +68,7 @@ class AdminSalesReportTest extends TestCase
         $this->assertSame(1, $summary['checkouts']);
         $this->assertSame(2, $summary['order_records']);
         $this->assertSame(3, $summary['items_quantity']);
-        $this->assertSame(798.0, $summary['average_checkout']);
+        $this->assertSame(748.0, $summary['average_checkout']);
     }
 
     public function test_report_filters_status_type_customer_location_source_amount_and_search(): void
@@ -344,6 +344,7 @@ class AdminSalesReportTest extends TestCase
 
         $this->assertSame(200.0, $report['summary']['total']);
         $this->assertSame(200.0, $report['summary']['order_value']);
+        $this->assertSame(200.0, $report['summary']['average_checkout']);
         $this->assertSame(1, $report['summary']['checkouts']);
         $this->assertSame(1, $report['operational_summary']['paid_checkouts']);
         $this->assertSame(200.0, $report['operational_summary']['paid_amount']);

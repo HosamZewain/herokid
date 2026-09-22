@@ -290,7 +290,7 @@
                     <p class="mt-2 text-lg font-black text-slate-950">{{ format_money($stats['total_value_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-                    <p class="text-xs font-black text-amber-700">متوسط الطلب</p>
+                    <p class="text-xs font-black text-amber-700">متوسط الطلب بدون الشحن</p>
                     <p class="mt-2 text-lg font-black text-amber-950">{{ format_money($stats['average_order_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">

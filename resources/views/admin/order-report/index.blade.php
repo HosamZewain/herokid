@@ -163,7 +163,7 @@
                     ['قيمة العناصر', $money($summary['items_cents']), 'border-slate-200 bg-white', 'text-slate-600', 'text-slate-950'],
                     ['إجمالي التوصيل', $money($summary['delivery_cents']), 'border-cyan-100 bg-white', 'text-cyan-700', 'text-cyan-950'],
                     ['الخصومات', $money($summary['discount_cents']), 'border-violet-100 bg-violet-50', 'text-violet-700', 'text-violet-950'],
-                    ['متوسط قيمة الطلب', $money($summary['average_order_cents']), 'border-gray-200 bg-gray-50', 'text-gray-600', 'text-gray-950'],
+                    ['متوسط قيمة الطلب بدون الشحن', $money($summary['average_order_cents']), 'border-gray-200 bg-gray-50', 'text-gray-600', 'text-gray-950'],
                 ] as [$label, $value, $boxClass, $labelClass, $valueClass])
                     <div class="rounded-2xl border p-4 {{ $boxClass }}">
                         <p class="text-xs font-black {{ $labelClass }}">{{ $label }}</p>
