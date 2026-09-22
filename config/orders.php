@@ -2,6 +2,12 @@
 
 return [
     /*
+    | Keep the manual Admin order editor limits centralized so create, edit,
+    | validation, and the personalization UI cannot drift apart.
+    */
+    'admin_max_items' => 20,
+
+    /*
     | Orders remain stored in UTC. This timezone is used only when an
     | administrator views, filters, or exports order dates and times.
     */

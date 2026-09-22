@@ -13,7 +13,7 @@
         <p class="text-xs font-black text-indigo-800">بيانات مستقلة لكل طفل</p>
         <p class="mt-1 text-[11px] font-bold text-indigo-600">سيظهر كارت إنتاج مستقل لكل نسخة، أو استخدم بيانات الطفل الأول.</p>
     </div>
-    @for($unitIndex = 0; $unitIndex < 10; $unitIndex++)
+    @for($unitIndex = 0; $unitIndex < config('orders.admin_max_items', 20); $unitIndex++)
         @php
             $unit = $units[$unitIndex] ?? [];
             $personalization = is_array($unit['personalization'] ?? null) ? $unit['personalization'] : [];

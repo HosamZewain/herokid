@@ -557,6 +557,65 @@ class AdminManualOrderCreationTest extends TestCase
         );
     }
 
+    public function test_admin_can_create_and_edit_twenty_personalized_units(): void
+    {
+        $product = Product::create([
+            'name_ar' => 'منتج مخصص لعشرين طفلًا',
+            'slug' => 'manual-twenty-child-product',
+            'price_cents' => 10_000,
+            'purchase_mode' => 'standalone',
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => [
+                'version' => 1,
+                'fields' => [
+                    'child_name' => ['enabled' => true, 'required' => true, 'label' => 'اسم الطفل', 'type' => 'text'],
+                ],
+            ],
+            'inventory_mode' => 'made_to_order',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.create'))
+            ->assertOk()
+            ->assertSee('max="20"', false)
+            ->assertSee('data-product-personalization-unit="19"', false);
+
+        $payload = $this->basePayload();
+        $payload['stories'] = [];
+        $payload['products'] = [$product->id => [
+            'quantity' => 20,
+            'units' => [
+                ['personalization' => ['child_name' => 'الطفل الأول']],
+                ...array_fill(0, 19, ['reuse_first' => 1]),
+            ],
+        ]];
+        $payload['payment_status'] = 'unpaid';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.orders.store'), $payload)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $orders = Order::query()->orderBy('id')->get();
+        $this->assertCount(20, $orders);
+
+        $payload['products'][$product->id]['units'] = $orders
+            ->map(fn (Order $order, int $index): array => [
+                'existing_order_id' => $order->id,
+                'personalization' => ['child_name' => 'الطفل '.($index + 1)],
+            ])
+            ->all();
+        $payload['change_reason'] = 'تأكيد دعم عشرين وحدة مخصصة في تعديل الطلب.';
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.orders.groups.update', $orders->first()), $payload)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(20, Order::query()->where('checkout_group_key', $orders->first()->checkout_group_key)->count());
+    }
+
     public function test_admin_can_create_regular_product_only_order_without_child_data(): void
     {
         $product = Product::create([

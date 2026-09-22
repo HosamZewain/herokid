@@ -188,7 +188,7 @@
                                         <div class="mt-4 grid gap-3 {{ $product->isPersonalizedAddon() ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }}">
                                             <div>
                                                 <label class="mb-1 block text-[10px] font-black text-gray-500">الكمية</label>
-                                                <input name="products[{{ $product->id }}][quantity]" type="number" min="0" max="{{ $product->personalization_mode === 'collect_child_details' ? 10 : 99 }}" value="{{ $quantity }}" class="w-full rounded-xl border-gray-200 text-center text-sm" data-product-quantity>
+                                                <input name="products[{{ $product->id }}][quantity]" type="number" min="0" max="{{ $product->personalization_mode === 'collect_child_details' ? config('orders.admin_max_items', 20) : 99 }}" value="{{ $quantity }}" class="w-full rounded-xl border-gray-200 text-center text-sm" data-product-quantity>
                                             </div>
                                             @if($product->activeVariants->isNotEmpty())
                                                 <div>
@@ -612,7 +612,7 @@
 
                     const refreshPersonalization = () => {
                         if (!personalization) return;
-                        const count = Math.max(0, Math.min(10, Number(quantity?.value || 0)));
+                        const count = Math.max(0, Math.min(@json(config('orders.admin_max_items', 20)), Number(quantity?.value || 0)));
                         const selected = count > 0;
                         personalization.hidden = !selected;
                         let activeIndex = 0;

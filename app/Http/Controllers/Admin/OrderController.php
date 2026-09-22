@@ -228,7 +228,7 @@ class OrderController extends Controller
             'city' => ['required', 'string', 'max:255'],
             'street' => ['required', 'string', 'max:255'],
             'address_details' => ['required', 'string', 'max:1000'],
-            'stories' => ['array', 'max:10'],
+            'stories' => ['array', 'max:'.config('orders.admin_max_items', 20)],
             'stories.*.story_id' => [
                 'required',
                 Rule::exists('stories', 'id')->where(fn ($query) => $query->where('active', true)),
@@ -245,9 +245,9 @@ class OrderController extends Controller
             'products' => ['nullable', 'array'],
             'products.*.quantity' => ['nullable', 'integer', 'min:0', 'max:99'],
             'products.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
-            'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:9'],
+            'products.*.linked_story_index' => ['nullable', 'integer', 'min:0', 'max:'.(config('orders.admin_max_items', 20) - 1)],
             'products.*.personalization' => ['nullable', 'array'],
-            'products.*.units' => ['nullable', 'array', 'max:10'],
+            'products.*.units' => ['nullable', 'array', 'max:'.config('orders.admin_max_items', 20)],
             'products.*.units.*.reuse_first' => ['nullable', 'boolean'],
             'products.*.units.*.personalization' => ['nullable', 'array'],
             'pricing_package_id' => ['nullable', 'integer', 'exists:pricing_packages,id'],
@@ -300,8 +300,8 @@ class OrderController extends Controller
 
             $schema = ProductPersonalizationSchema::forProduct($product);
             $quantity = (int) ($productInput['quantity'] ?? 1);
-            if ($quantity > 10) {
-                throw ValidationException::withMessages(["products.$productId.quantity" => 'الحد الأقصى للمنتج المخصص هو ١٠ أطفال في الطلب.']);
+            if ($quantity > config('orders.admin_max_items', 20)) {
+                throw ValidationException::withMessages(["products.$productId.quantity" => 'الحد الأقصى للمنتج المخصص هو ٢٠ طفلًا في الطلب.']);
             }
             $hasUnits = is_array($productInput['units'] ?? null);
             $rawUnits = (array) $request->input("products.$productId.units", []);
