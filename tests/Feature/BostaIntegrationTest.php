@@ -333,6 +333,41 @@ class BostaIntegrationTest extends TestCase
         Http::assertNotSent(fn (HttpRequest $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/pickups'));
     }
 
+    public function test_pickup_sync_accepts_a_provider_pickup_without_delivery_identifiers(): void
+    {
+        config()->set('bosta.pickup_sync_enabled', true);
+        Http::fake([
+            '*/pickups/search*' => Http::response(['data' => [
+                'list' => [[
+                    '_id' => 'external-empty-pickup',
+                    'state' => 'Requested',
+                    'scheduledDate' => now()->addDay()->toDateString(),
+                    'businessLocationId' => 'location-123',
+                ]],
+                'pages' => 1,
+            ]]),
+            '*/pickups/external-empty-pickup' => Http::response(['data' => [
+                '_id' => 'external-empty-pickup',
+                'state' => 'Requested',
+                'scheduledDate' => now()->addDay()->toDateString(),
+                'businessLocationId' => 'location-123',
+                'deliveryIds' => [],
+                'deliveryTrackingNumbers' => [],
+            ]]),
+        ]);
+
+        $result = app(BostaPickupSyncService::class)->syncIfDue(true);
+
+        $this->assertSame(1, $result['synced']);
+        $this->assertSame(0, $result['linked_shipments']);
+        $this->assertFalse($result['skipped']);
+        $this->assertDatabaseHas('bosta_pickups', [
+            'bosta_pickup_id' => 'external-empty-pickup',
+            'status' => 'Requested',
+        ]);
+        $this->assertDatabaseCount('bosta_pickup_shipment', 0);
+    }
+
     public function test_provider_progress_prevents_duplicate_pickup_even_without_synced_pickup(): void
     {
         $orders = $this->checkout('BOSTA-PROVIDER-PROGRESS', 20_000);

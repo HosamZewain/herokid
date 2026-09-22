@@ -145,8 +145,11 @@ class BostaPickupSyncService
                     ->get();
             }
 
-            $before = $pickup->shipments()->whereKey($shipments->modelKeys())->count();
-            $pickup->shipments()->syncWithoutDetaching($shipments->modelKeys());
+            // `$shipments` starts as a base collection when Bosta returns no delivery
+            // identifiers, so Eloquent-only helpers such as modelKeys() are unsafe here.
+            $shipmentIds = $shipments->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $before = $pickup->shipments()->whereKey($shipmentIds)->count();
+            $pickup->shipments()->syncWithoutDetaching($shipmentIds);
 
             return [true, max(0, $shipments->count() - $before)];
         });
