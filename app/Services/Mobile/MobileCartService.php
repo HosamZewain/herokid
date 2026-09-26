@@ -348,7 +348,7 @@ class MobileCartService
 
     private function assertPromoAvailable(?MobilePromoCode $promo, MobileCart $cart, User $user): void
     {
-        if (! $promo || ! $promo->is_active || ($promo->starts_at && $promo->starts_at->isFuture()) || ($promo->ends_at && $promo->ends_at->isPast())) {
+        if (! $promo || ! $promo->isAvailableFor('mobile')) {
             throw ValidationException::withMessages(['code' => 'This promotional code is not available.']);
         }
         if ($cart->subtotal_cents < $promo->minimum_subtotal_cents) {

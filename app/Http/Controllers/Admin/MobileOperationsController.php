@@ -129,6 +129,8 @@ class MobileOperationsController extends Controller
             'minimum_subtotal_cents' => (int) round(((float) ($data['minimum_subtotal'] ?? 0)) * 100),
             'maximum_discount_cents' => isset($data['maximum_discount']) ? (int) round(((float) $data['maximum_discount']) * 100) : null,
             'is_active' => true,
+            'website_enabled' => false,
+            'mobile_enabled' => true,
         ];
     }
 }

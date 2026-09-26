@@ -15,6 +15,7 @@ use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
+use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\CheckoutSubmissionService;
@@ -45,6 +46,7 @@ class CheckoutController extends Controller
         CustomerOrderSelfService $customerOrders,
         BostaCheckoutAddressService $checkoutAddresses,
         CheckoutSubmissionService $submissions,
+        WebsitePromoCodeService $promoCodes,
     ) {
         if ($existingIds = $submissions->completed($request)) {
             $request->session()->put('checkout.last_order_ids', $existingIds);
@@ -148,7 +150,7 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds, &$replayed): void {
+            DB::transaction(function () use ($request, $cart, $sessionCart, $submissions, $promoCodes, $storyItems, $productItems, $stories, $products, $validated, $country, $governorate, $subtotal, $deliveryFee, $checkoutGroup, $checkoutSessionId, $attribution, $photoUploads, $storyPricing, $identityEvents, $sceneTexts, $customerOrders, &$orderIds, &$replayed): void {
                 $submission = $submissions->claim($request, $sessionCart);
                 if ($submission['order_ids']) {
                     $orderIds = $submission['order_ids'];
@@ -156,6 +158,14 @@ class CheckoutController extends Controller
 
                     return;
                 }
+                $promotion = $promoCodes->redeemForCheckout(
+                    $request,
+                    (int) round($subtotal * 100),
+                    $validated['phone'],
+                    $checkoutGroup,
+                );
+                $discountCents = $promotion['discount_cents'];
+                $discountReason = $promotion['promo'] ? 'كود خصم: '.$promotion['promo']->code : null;
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
                 $ordersByStoryCartKey = [];
@@ -202,6 +212,8 @@ class CheckoutController extends Controller
                     $order = Order::create([
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
+                        'discount_cents' => $discountCents,
+                        'discount_reason' => $discountReason,
                         'user_id' => auth()->id(),
                         'order_source' => 'website',
                         'referred_by_child_identity_share_id' => $identity?->referred_by_child_identity_share_id,
@@ -236,7 +248,9 @@ class CheckoutController extends Controller
                             'story_offer_label' => $storyOfferLabel,
                             'subtotal' => $subtotal,
                             'delivery_fee' => $deliveryFee,
-                            'total' => $subtotal + $deliveryFee,
+                            'discount' => $discountCents / 100,
+                            'promo_code' => $promotion['promo']?->code,
+                            'total' => max(0, $subtotal - ($discountCents / 100)) + $deliveryFee,
                             'source' => 'website',
                             'marketing_attribution' => $attribution,
                         ],
@@ -332,6 +346,8 @@ class CheckoutController extends Controller
                     $firstOrder = Order::create([
                         'order_number' => $this->newOrderNumber(),
                         'checkout_group_key' => $checkoutGroup,
+                        'discount_cents' => $discountCents,
+                        'discount_reason' => $discountReason,
                         'user_id' => auth()->id(),
                         'order_source' => 'website',
                         'parent_name' => $validated['parent_name'],
@@ -345,7 +361,7 @@ class CheckoutController extends Controller
                         'gift_note' => null,
                         'notes' => null,
                         'parent_notes' => null,
-                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $attribution),
+                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $discountCents, $promotion['promo']?->code, $attribution),
                         'uploaded_photos' => [],
                         'status' => 'new',
                     ]);
@@ -385,6 +401,8 @@ class CheckoutController extends Controller
                         $targetOrder = Order::create([
                             'order_number' => $this->newOrderNumber(),
                             'checkout_group_key' => $checkoutGroup,
+                            'discount_cents' => $discountCents,
+                            'discount_reason' => $discountReason,
                             'user_id' => auth()->id(),
                             'order_source' => 'website',
                             'parent_name' => $validated['parent_name'],
@@ -408,6 +426,8 @@ class CheckoutController extends Controller
                                 $itemCount,
                                 $subtotal,
                                 $deliveryFee,
+                                $discountCents,
+                                $promotion['promo']?->code,
                                 $attribution,
                             ),
                             'uploaded_photos' => $uploadedPhotos,
@@ -498,7 +518,7 @@ class CheckoutController extends Controller
         }
 
         if ($replayed) {
-            session()->forget('cart.items');
+            session()->forget(['cart.items', 'cart.promo_code_id']);
             session(['checkout.last_order_ids' => $orderIds]);
 
             return redirect()->route('checkout.success');
@@ -512,7 +532,7 @@ class CheckoutController extends Controller
             app(AdminNotificationDispatcher::class)->dispatchOrderCreated($representativeOrder);
         }
 
-        session()->forget('cart.items');
+        session()->forget(['cart.items', 'cart.promo_code_id']);
         session(['checkout.last_order_ids' => $orderIds]);
         app(CartTrackingService::class)->recordConverted($request, $orderIds);
         $metaPurchaseEvent = $metaPurchaseTracking->record($request, $orderIds, $checkoutGroup);
@@ -591,7 +611,7 @@ class CheckoutController extends Controller
         return max(0, (float) ($governorate->delivery_fee ?? $country->delivery_fee));
     }
 
-    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee, array $attribution): array
+    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee, int $discountCents, ?string $promoCode, array $attribution): array
     {
         return [
             'phone' => $validated['phone'],
@@ -608,7 +628,9 @@ class CheckoutController extends Controller
             'item_price' => 0,
             'subtotal' => $subtotal,
             'delivery_fee' => $deliveryFee,
-            'total' => $subtotal + $deliveryFee,
+            'discount' => $discountCents / 100,
+            'promo_code' => $promoCode,
+            'total' => max(0, $subtotal - ($discountCents / 100)) + $deliveryFee,
             'source' => 'website',
             'marketing_attribution' => $attribution,
         ];

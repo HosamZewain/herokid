@@ -142,6 +142,7 @@
                 $canCatalog = auth()->user()->hasAnyPermission([
                     'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
                     'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view', 'settings.pricing.view',
+                    'store.discount_codes.view',
                 ]);
                 $canContent = auth()->user()->hasAnyPermission([
                     'media_library.view', 'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
@@ -212,6 +213,9 @@
                         @endif
                         @can('settings.pricing.view')
                             <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">الباقات</a>
+                        @endcan
+                        @can('store.discount_codes.view')
+                            <a href="{{ route('admin.discount-codes.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.discount-codes.*') ? $activeLink : $idleLink }}">أكواد الخصم</a>
                         @endcan
                         @can('customers.view')
                             <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">العملاء</a>

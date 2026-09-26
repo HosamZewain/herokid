@@ -5,7 +5,8 @@
 
 @php
     $cartCount = count($cartItems);
-    $total = $subtotal + $deliveryFee;
+    $discount = $discount ?? 0;
+    $total = max(0, $subtotal - $discount) + $deliveryFee;
     $defaultCountry = $deliveryCountries->firstWhere('code', 'EG') ?? $deliveryCountries->first();
     $savedDeliveryDetails = $savedDeliveryDetails ?? [];
     $selectedCountryId = (string) old('delivery_country_id', data_get($savedDeliveryDetails, 'delivery_country_id', $defaultCountry?->id));
@@ -576,6 +577,8 @@
             let districtRequest = 0;
             let availableDistricts = [];
             let subtotal = Number(@json((float) $subtotal));
+            let discount = Number(@json((float) $discount));
+            const appliedPromoCode = @json($promoCode?->code);
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
 
             function selectedCountryFee() {
@@ -589,8 +592,11 @@
                 document.querySelectorAll('[data-delivery-fee]').forEach((node) => {
                     node.textContent = formatMoney(fee);
                 });
+                document.querySelectorAll('[data-cart-discount]').forEach((node) => {
+                    node.textContent = formatMoney(discount);
+                });
                 document.querySelectorAll('[data-cart-total]').forEach((node) => {
-                    node.textContent = formatMoney(subtotal + Number(fee || 0));
+                    node.textContent = formatMoney(Math.max(0, subtotal - discount) + Number(fee || 0));
                 });
             }
 
@@ -901,7 +907,12 @@
                             throw new Error(payload.message || 'تعذر إضافة المنتج.');
                         }
 
-                        subtotal += Number(payload.added_line_total || 0);
+                        subtotal = Number(payload.subtotal ?? (subtotal + Number(payload.added_line_total || 0)));
+                        discount = Number(payload.discount || 0);
+                        if ((payload.promo_code || null) !== appliedPromoCode) {
+                            window.location.reload();
+                            return;
+                        }
                         document.querySelector('[name="checkout_submission_token"]').value = payload.checkout_submission_token;
                         const selectedFee = governorateSelect?.value
                             ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())
@@ -976,6 +987,11 @@
                     }
 
                     subtotal = Number(payload.subtotal || 0);
+                    discount = Number(payload.discount || 0);
+                    if ((payload.promo_code || null) !== appliedPromoCode) {
+                        window.location.reload();
+                        return;
+                    }
                     document.querySelector('[name="checkout_submission_token"]').value = payload.checkout_submission_token;
                     const selectedFee = governorateSelect?.value
                         ? Number(governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee())

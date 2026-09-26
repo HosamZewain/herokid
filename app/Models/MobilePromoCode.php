@@ -16,9 +16,31 @@ class MobilePromoCode extends Model
         'per_user_limit' => 'integer',
         'used_count' => 'integer',
         'is_active' => 'boolean',
+        'website_enabled' => 'boolean',
+        'mobile_enabled' => 'boolean',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
     ];
+
+    public function websiteRedemptions()
+    {
+        return $this->hasMany(WebsitePromoCodeRedemption::class);
+    }
+
+    public function isAvailableFor(string $channel): bool
+    {
+        $channelEnabled = match ($channel) {
+            'website' => $this->website_enabled,
+            'mobile' => $this->mobile_enabled,
+            default => false,
+        };
+
+        return $this->is_active
+            && $channelEnabled
+            && (! $this->starts_at || $this->starts_at->isPast())
+            && (! $this->ends_at || $this->ends_at->isFuture())
+            && ($this->usage_limit === null || $this->used_count < $this->usage_limit);
+    }
 
     public function discountFor(int $subtotalCents): int
     {

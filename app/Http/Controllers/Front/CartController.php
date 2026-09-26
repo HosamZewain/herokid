@@ -10,6 +10,7 @@ use App\Models\Story;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
+use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Stories\StoryLanguageAvailability;
@@ -46,9 +47,11 @@ class CartController extends Controller
         'image/heif-sequence',
     ];
 
-    public function index(BostaCheckoutAddressService $checkoutAddresses)
+    public function index(BostaCheckoutAddressService $checkoutAddresses, WebsitePromoCodeService $promoCodes)
     {
         $cart = $this->cart();
+        $subtotal = $this->subtotal($cart);
+        $promoQuote = $promoCodes->quote(request(), (int) round($subtotal * 100));
         $cartCollection = collect($cart);
         $storyItems = $cartCollection->filter(fn (array $item) => ($item['item_type'] ?? 'story') === 'story');
         $upsellStoryKey = session('upsell_story_key');
@@ -62,7 +65,9 @@ class CartController extends Controller
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,
-            'subtotal' => $this->subtotal($cart),
+            'subtotal' => $subtotal,
+            'discount' => $promoQuote['discount_cents'] / 100,
+            'promoCode' => $promoQuote['promo'],
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $deliveryCountries,
             'savedDeliveryDetails' => $this->savedDeliveryDetails(),
@@ -202,8 +207,12 @@ class CartController extends Controller
             ->with('cart_added_notice', $cartNotice);
     }
 
-    public function destroy(Request $request, string $key, ChildIdentityEventLogger $identityEvents)
-    {
+    public function destroy(
+        Request $request,
+        string $key,
+        ChildIdentityEventLogger $identityEvents,
+        WebsitePromoCodeService $promoCodes,
+    ) {
         $cart = $this->cart();
         $removedKeys = [];
 
@@ -264,12 +273,17 @@ class CartController extends Controller
         }
 
         if ($request->expectsJson()) {
+            $subtotal = $this->subtotal($cart);
+            $promoQuote = $promoCodes->quote($request, (int) round($subtotal * 100));
+
             return response()->json([
                 'message' => 'تم حذف العنصر من السلة.',
                 'removed_keys' => $removedKeys,
                 'checkout_submission_token' => app(CheckoutSubmissionService::class)->token($request, $cart),
                 'cart_count' => count($cart),
-                'subtotal' => $this->subtotal($cart),
+                'subtotal' => $subtotal,
+                'discount' => $promoQuote['discount_cents'] / 100,
+                'promo_code' => $promoQuote['promo']?->code,
                 'cart_empty' => $cart === [],
             ]);
         }

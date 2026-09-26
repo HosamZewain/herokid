@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DeliveryZoneController;
+use App\Http\Controllers\Admin\DiscountCodeController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
@@ -60,6 +61,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
+use App\Http\Controllers\Front\CartPromoCodeController;
 use App\Http\Controllers\Front\CheckoutAddressController;
 use App\Http\Controllers\Front\CheckoutController;
 use App\Http\Controllers\Front\ChildIdentityController;
@@ -260,6 +262,8 @@ Route::prefix('s')->name('child-identity-shares.')->group(function (): void {
 
 // Cart and checkout routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::post('/cart/promo-code', [CartPromoCodeController::class, 'store'])->middleware('throttle:20,1')->name('cart.promo-code.store');
+Route::delete('/cart/promo-code', [CartPromoCodeController::class, 'destroy'])->name('cart.promo-code.destroy');
 Route::get('/photo-uploads/session', [TemporaryPhotoUploadController::class, 'session'])->name('photo-uploads.session');
 Route::post('/photo-uploads', [TemporaryPhotoUploadController::class, 'store'])->middleware('throttle:photo-uploads')->name('photo-uploads.store');
 Route::get('/photo-uploads/{publicId}', [TemporaryPhotoUploadController::class, 'show'])->name('photo-uploads.show');
@@ -903,6 +907,11 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('mobile-operations/promo-codes', [MobileOperationsController::class, 'storePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.store');
     Route::patch('mobile-operations/promo-codes/{promoCode}', [MobileOperationsController::class, 'updatePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.update');
     Route::patch('mobile-operations/privacy-requests/{privacyRequest}', [MobileOperationsController::class, 'updatePrivacyRequest'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.privacy-requests.update');
+    Route::get('discount-codes', [DiscountCodeController::class, 'index'])->middleware('permission:store.discount_codes.view')->name('discount-codes.index');
+    Route::post('discount-codes', [DiscountCodeController::class, 'store'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.store');
+    Route::get('discount-codes/{discountCode}/edit', [DiscountCodeController::class, 'edit'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.edit');
+    Route::put('discount-codes/{discountCode}', [DiscountCodeController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.update');
+    Route::patch('discount-codes/{discountCode}/toggle', [DiscountCodeController::class, 'toggle'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.toggle');
     Route::get('delivery-zones', [DeliveryZoneController::class, 'index'])->middleware('permission:settings.delivery_zones.view')->name('delivery-zones.index');
     Route::post('delivery-zones/countries', [DeliveryZoneController::class, 'storeCountry'])->middleware('permission:settings.delivery_zones.create')->name('delivery-zones.countries.store');
     Route::put('delivery-zones/countries/{country}', [DeliveryZoneController::class, 'updateCountry'])->middleware('permission:settings.delivery_zones.update')->name('delivery-zones.countries.update');

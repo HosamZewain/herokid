@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
@@ -242,11 +243,19 @@ class ProductCartController extends Controller
         }
 
         if ($request->expectsJson()) {
+            $subtotalCents = (int) collect($cart)->sum(fn (array $cartItem): int => ($cartItem['item_type'] ?? 'story') === 'story'
+                ? (int) round(((float) ($cartItem['story_price'] ?? 0)) * 100)
+                : (int) ($cartItem['line_total_cents'] ?? 0));
+            $promoQuote = app(WebsitePromoCodeService::class)->quote($request, $subtotalCents);
+
             return response()->json([
                 'message' => 'تمت إضافة '.$product->name_ar.' إلى السلة.',
                 'item_key' => $addedKeys[0],
                 'product_name' => $product->name_ar,
                 'added_line_total' => ($unitPriceCents * $quantity) / 100,
+                'subtotal' => $subtotalCents / 100,
+                'discount' => $promoQuote['discount_cents'] / 100,
+                'promo_code' => $promoQuote['promo']?->code,
                 'cart_count' => count($cart),
                 'checkout_submission_token' => app(CheckoutSubmissionService::class)->token($request, $cart),
                 'mobile_item_html' => view('front.cart._mobile_item', [

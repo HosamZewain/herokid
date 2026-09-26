@@ -78,6 +78,7 @@ class AdminPermissionRegistry
             'stories.view' => 'admin.stories.index',
             'store.products.view' => 'admin.products.index',
             'store.categories.view' => 'admin.product-categories.index',
+            'store.discount_codes.view' => 'admin.discount-codes.index',
             'customers.view' => 'admin.customers.index',
             'content.faqs.view' => 'admin.faqs.index',
             'content.testimonials.view' => 'admin.testimonials.index',
