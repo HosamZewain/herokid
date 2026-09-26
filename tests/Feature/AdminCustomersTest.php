@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminActivityLog;
 use App\Models\CustomerStoryView;
 use App\Models\Order;
+use App\Models\Permission;
 use App\Models\Story;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -89,7 +91,7 @@ class AdminCustomersTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('admin.customers.show', 'user-' . $customer->id))
+            ->get(route('admin.customers.show', 'user-'.$customer->id))
             ->assertOk()
             ->assertSee('Customer Two')
             ->assertSee('two@example.test')
@@ -126,7 +128,7 @@ class AdminCustomersTest extends TestCase
             'viewed_at' => now(),
         ]);
 
-        $guestKey = 'guest-' . sha1('201222222222');
+        $guestKey = 'guest-'.sha1('201222222222');
 
         $this->actingAs($admin)
             ->get(route('admin.customers.index'))
@@ -155,20 +157,20 @@ class AdminCustomersTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('admin.customers.edit', 'user-' . $customer->id))
+            ->get(route('admin.customers.edit', 'user-'.$customer->id))
             ->assertOk()
             ->assertSee('تعديل العميل')
             ->assertSee('Old Customer');
 
         $this->actingAs($admin)
-            ->put(route('admin.customers.update', 'user-' . $customer->id), [
+            ->put(route('admin.customers.update', 'user-'.$customer->id), [
                 'name' => 'Updated Customer',
                 'email' => 'updated@example.test',
                 'phone' => '201444444444',
                 'password' => 'new-password-123',
                 'password_confirmation' => 'new-password-123',
             ])
-            ->assertRedirect(route('admin.customers.show', 'user-' . $customer->id))
+            ->assertRedirect(route('admin.customers.show', 'user-'.$customer->id))
             ->assertSessionHas('customer_account_message');
 
         $customer->refresh();
@@ -202,7 +204,7 @@ class AdminCustomersTest extends TestCase
             'viewed_at' => now(),
         ]);
 
-        $guestKey = 'guest-' . sha1('201555555555');
+        $guestKey = 'guest-'.sha1('201555555555');
 
         $this->actingAs($admin)
             ->get(route('admin.customers.edit', $guestKey))
@@ -235,6 +237,92 @@ class AdminCustomersTest extends TestCase
             'session_id' => 'convert-session',
             'user_id' => $user->id,
         ]);
+    }
+
+    public function test_authorized_admin_can_export_previous_customers_as_deduplicated_csv(): void
+    {
+        $admin = $this->admin();
+        $story = $this->story('customer-export', 'قصة التصدير');
+        $registered = User::factory()->create([
+            'name' => 'Registered Account Name',
+            'email' => 'registered-export@example.test',
+            'phone' => '01012345678',
+            'role' => 'customer',
+        ]);
+        User::factory()->create([
+            'name' => 'Never Ordered',
+            'email' => 'never-ordered@example.test',
+            'phone' => '01099999999',
+            'role' => 'customer',
+        ]);
+
+        Order::create([
+            'order_number' => 'HK-2026-EXPORT-OLD',
+            'user_id' => $registered->id,
+            'parent_name' => 'الاسم القديم',
+            'story_id' => $story->id,
+            'delivery_details' => $this->deliveryDetails('+201012345678', 'export-old'),
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+        Order::create([
+            'order_number' => 'HK-2026-EXPORT-LATEST',
+            'user_id' => $registered->id,
+            'parent_name' => 'أحدث اسم للعميل',
+            'story_id' => $story->id,
+            'delivery_details' => $this->deliveryDetails('٠١٠١٢٣٤٥٦٧٨', 'export-latest'),
+            'uploaded_photos' => [],
+            'status' => 'new',
+        ]);
+        $deletedOrder = Order::create([
+            'order_number' => 'HK-2026-EXPORT-DELETED',
+            'parent_name' => 'عميل طلب محذوف',
+            'story_id' => $story->id,
+            'delivery_details' => $this->deliveryDetails('01123456789', 'export-deleted'),
+            'uploaded_photos' => [],
+            'status' => 'cancelled',
+        ]);
+        $deletedOrder->delete();
+
+        $response = $this->actingAs($admin)->get(route('admin.customers.export'));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8')
+            ->assertHeader('cache-control', 'must-revalidate, no-cache, no-store, private');
+
+        $csv = $response->streamedContent();
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
+        $this->assertStringContainsString('الاسم,"رقم الهاتف"', $csv);
+        $this->assertStringContainsString('"أحدث اسم للعميل",01012345678', $csv);
+        $this->assertSame(1, substr_count($csv, '01012345678'));
+        $this->assertStringContainsString('"عميل طلب محذوف",01123456789', $csv);
+        $this->assertStringNotContainsString('الاسم القديم', $csv);
+        $this->assertStringNotContainsString('Never Ordered', $csv);
+        $this->assertStringNotContainsString('never-ordered@example.test', $csv);
+        $this->assertStringNotContainsString('Street 1', $csv);
+        $this->assertDatabaseHas('admin_activity_logs', [
+            'user_id' => $admin->id,
+            'action' => 'customers.exported',
+        ]);
+        $activity = AdminActivityLog::where('action', 'customers.exported')->firstOrFail();
+        $this->assertSame(2, $activity->properties['row_count']);
+    }
+
+    public function test_customer_export_requires_its_dedicated_permission_and_button_is_hidden_without_it(): void
+    {
+        $admin = $this->admin();
+        $exportPermission = Permission::where('key', 'customers.export')->firstOrFail();
+        $admin->permissions()->detach($exportPermission);
+        $admin->unsetRelation('permissions');
+
+        $this->actingAs($admin)
+            ->get(route('admin.customers.export'))
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->get(route('admin.customers.index'))
+            ->assertOk()
+            ->assertDontSee('تصدير العملاء السابقين CSV');
     }
 
     private function admin(): User

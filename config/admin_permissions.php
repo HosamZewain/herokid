@@ -364,6 +364,15 @@ return [
             'description_en' => 'Edit customer details and reset customer passwords where supported.',
             'sort_order' => 20,
         ],
+        'customers.export' => [
+            'group_key' => 'customers',
+            'name_ar' => 'تصدير العملاء',
+            'name_en' => 'Export customers',
+            'description_ar' => 'تصدير أسماء وأرقام هواتف العملاء الذين لديهم طلبات سابقة بصيغة CSV.',
+            'description_en' => 'Export names and phone numbers for customers with previous orders as CSV.',
+            'sort_order' => 30,
+            'sensitive' => true,
+        ],
 
         'stories.view' => ['group_key' => 'stories', 'name_ar' => 'عرض القصص', 'name_en' => 'View stories', 'description_ar' => 'عرض مكتبة القصص.', 'description_en' => 'View story catalog.', 'sort_order' => 10],
         'stories.create' => ['group_key' => 'stories', 'name_ar' => 'إضافة القصص', 'name_en' => 'Create stories', 'description_ar' => 'إنشاء قصص جديدة.', 'description_en' => 'Create new stories.', 'sort_order' => 20],

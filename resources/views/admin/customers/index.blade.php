@@ -5,7 +5,16 @@
                 <h2 class="text-xl font-bold text-gray-800">Customers</h2>
                 <p class="text-xs text-gray-500 mt-1">كل العملاء المسجلين أو الذين أرسلوا طلبات بدون حساب.</p>
             </div>
-            <span class="text-sm text-gray-500">إجمالي: {{ $totalCustomers }} عميل</span>
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                @can('customers.export')
+                    <a href="{{ route('admin.customers.export') }}"
+                        class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100">
+                        <span aria-hidden="true">⇩</span>
+                        تصدير العملاء السابقين CSV
+                    </a>
+                @endcan
+                <span class="text-sm text-gray-500">إجمالي: {{ $totalCustomers }} عميل</span>
+            </div>
         </div>
     </x-slot>
 

@@ -851,6 +851,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('production-studio/{project}/automation/runs/{run}/proofs/{proof}/report', [ProductionAutomationController::class, 'downloadProofReport'])->middleware(['permission:production_studio.final_proof_review', 'signed'])->name('production-studio.automation.proof-report');
 
     Route::get('customers', [CustomerController::class, 'index'])->middleware('permission:customers.view')->name('customers.index');
+    Route::get('customers/export', [CustomerController::class, 'export'])
+        ->middleware(['permission:customers.view', 'permission:customers.export', 'throttle:10,1'])
+        ->name('customers.export');
     Route::get('customers/{customerKey}/edit', [CustomerController::class, 'edit'])->middleware('permission:customers.update')->name('customers.edit');
     Route::put('customers/{customerKey}', [CustomerController::class, 'update'])->middleware('permission:customers.update')->name('customers.update');
     Route::get('customers/{customerKey}', [CustomerController::class, 'show'])->middleware('permission:customers.view')->name('customers.show');

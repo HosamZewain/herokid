@@ -6,15 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerStoryView;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Customers\CustomerCsvExportService;
+use App\Support\AdminActivityLogger;
 use App\Support\Phone;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerController extends Controller
 {
@@ -56,6 +61,41 @@ class CustomerController extends Controller
         return view('admin.customers.index', [
             'customers' => $paginatedCustomers,
             'totalCustomers' => $customers->count(),
+        ]);
+    }
+
+    public function export(Request $request, CustomerCsvExportService $exporter): StreamedResponse
+    {
+        $rows = $exporter->rows();
+
+        AdminActivityLogger::log(
+            action: 'customers.exported',
+            description: 'تم تصدير قائمة العملاء الذين لديهم طلبات سابقة.',
+            properties: [
+                'row_count' => $rows->count(),
+                'columns' => ['name', 'phone'],
+                'includes_deleted_orders' => true,
+            ],
+            request: $request,
+        );
+
+        return response()->streamDownload(function () use ($rows): void {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['الاسم', 'رقم الهاتف'], ',', '"', '');
+
+            foreach ($rows as $row) {
+                fputcsv($output, [
+                    $this->csvCell($row['name']),
+                    $this->csvCell($row['phone']),
+                ], ',', '"', '');
+            }
+
+            fclose($output);
+        }, 'herokid-customers-'.now()->format('Y-m-d-His').'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -122,7 +162,7 @@ class CustomerController extends Controller
 
         $plainPassword = (string) ($validated['password'] ?? '');
 
-        $user = DB::transaction(function () use ($resolved, $customerKey, $isRegistered, $userId, $validated, $plainPassword): User {
+        $user = DB::transaction(function () use ($resolved, $isRegistered, $userId, $validated, $plainPassword): User {
             if ($isRegistered) {
                 $user = User::where('role', '!=', 'admin')->findOrFail($userId);
                 $user->fill([
@@ -171,24 +211,24 @@ class CustomerController extends Controller
         });
 
         $redirect = redirect()
-            ->route('admin.customers.show', 'user-' . $user->id)
+            ->route('admin.customers.show', 'user-'.$user->id)
             ->with('success', $isRegistered ? 'تم تحديث بيانات العميل بنجاح.' : 'تم تحويل العميل إلى حساب مسجل بنجاح.');
 
         if ($plainPassword !== '') {
             $login = $user->phone ?: $user->email;
             $message = implode("\n", [
-                'مرحباً ' . $user->name . '،',
+                'مرحباً '.$user->name.'،',
                 'تم إنشاء حسابك على HeroKid لمتابعة طلبك.',
-                'رابط الدخول: ' . route('login'),
+                'رابط الدخول: '.route('login'),
                 'بيانات الدخول:',
-                'الهاتف/البريد: ' . $login,
-                'كلمة المرور: ' . $plainPassword,
+                'الهاتف/البريد: '.$login,
+                'كلمة المرور: '.$plainPassword,
             ]);
 
             $redirect->with('customer_account_message', $message);
 
             if ($user->phone) {
-                $redirect->with('customer_account_whatsapp_url', 'https://wa.me/' . preg_replace('/[^0-9]/', '', $user->phone) . '?text=' . urlencode($message));
+                $redirect->with('customer_account_whatsapp_url', 'https://wa.me/'.preg_replace('/[^0-9]/', '', $user->phone).'?text='.urlencode($message));
             }
         }
 
@@ -291,7 +331,7 @@ class CustomerController extends Controller
             ->groupBy(function (Order $order): string {
                 $phone = Phone::normalize(data_get($order->delivery_details, 'phone'));
 
-                return $phone ?: 'order-' . $order->id;
+                return $phone ?: 'order-'.$order->id;
             })
             ->map(function (Collection $orders, string $groupKey): array {
                 $latestOrder = $orders->sortByDesc('created_at')->first();
@@ -302,7 +342,7 @@ class CustomerController extends Controller
                 $phone = Phone::normalize(data_get($latestOrder->delivery_details, 'phone'));
 
                 return [
-                    'key' => 'guest-' . sha1($groupKey),
+                    'key' => 'guest-'.sha1($groupKey),
                     'type' => 'guest',
                     'type_label' => 'طلب بدون حساب',
                     'name' => $latestOrder->parent_name ?: 'Not available',
@@ -328,7 +368,7 @@ class CustomerController extends Controller
         $lastStoryView = $storyViews?->max('viewed_at') ?? $user->last_story_viewed_at;
 
         return [
-            'key' => 'user-' . $user->id,
+            'key' => 'user-'.$user->id,
             'type' => 'registered',
             'type_label' => 'حساب مسجل',
             'name' => $user->name ?: 'Not available',
@@ -356,6 +396,13 @@ class CustomerController extends Controller
             })
             ->latest()
             ->get();
+    }
+
+    private function csvCell(mixed $value): string
+    {
+        $value = (string) ($value ?? '');
+
+        return preg_match('/^[=+\-@]/', $value) === 1 ? "'".$value : $value;
     }
 
     private function checkoutSessionIds(Collection $orders): Collection
@@ -390,7 +437,7 @@ class CustomerController extends Controller
     {
         return collect($dates)
             ->filter()
-            ->map(fn ($date) => $date instanceof \Carbon\CarbonInterface ? $date : \Carbon\Carbon::parse($date))
+            ->map(fn ($date) => $date instanceof CarbonInterface ? $date : Carbon::parse($date))
             ->sortByDesc(fn ($date) => $date->timestamp)
             ->first();
     }
