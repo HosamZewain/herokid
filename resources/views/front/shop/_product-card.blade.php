@@ -28,7 +28,7 @@
             @endif
             <div class="mt-4 flex items-end justify-between gap-3">
                 <span class="text-lg font-black text-indigo-700">{{ format_money($price) }}</span>
-                @if($product->sale_price_cents)
+                @if($product->hasActiveSale())
                     <span class="text-sm text-slate-400 line-through">{{ format_money($product->price_cents / 100) }}</span>
                 @endif
             </div>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Seo;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +17,8 @@ class Product extends Model
         'age_groups' => 'array',
         'features' => 'array',
         'personalization_fields' => 'array',
+        'sale_starts_at' => 'datetime',
+        'sale_ends_at' => 'datetime',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
     ];
@@ -93,19 +96,48 @@ class Product extends Model
         });
     }
 
-    public function effectivePriceCents(?ProductVariant $variant = null): int
+    public function hasActiveSale(?CarbonInterface $at = null): bool
     {
-        $base = (int) ($this->sale_price_cents ?? $this->price_cents ?? 0);
-
-        if (! $variant) {
-            return max(0, $base);
+        if ($this->sale_price_cents === null || (int) $this->sale_price_cents >= (int) $this->price_cents) {
+            return false;
         }
 
-        if ($variant->price_override_cents !== null) {
+        $at ??= now();
+
+        return (! $this->sale_starts_at || $this->sale_starts_at->lte($at))
+            && (! $this->sale_ends_at || $this->sale_ends_at->gt($at));
+    }
+
+    public function regularPriceCents(?ProductVariant $variant = null): int
+    {
+        if ($variant?->price_override_cents !== null) {
             return max(0, (int) $variant->price_override_cents);
         }
 
-        return max(0, $base + (int) $variant->price_adjustment_cents);
+        return max(0, (int) ($this->price_cents ?? 0) + (int) ($variant?->price_adjustment_cents ?? 0));
+    }
+
+    public function hasActiveSaleForVariant(?ProductVariant $variant = null, ?CarbonInterface $at = null): bool
+    {
+        if ($variant?->price_override_cents !== null || ! $this->hasActiveSale($at)) {
+            return false;
+        }
+
+        return $this->salePriceCents($variant) < $this->regularPriceCents($variant);
+    }
+
+    public function salePriceCents(?ProductVariant $variant = null): int
+    {
+        return max(0, (int) ($this->sale_price_cents ?? $this->price_cents ?? 0) + (int) ($variant?->price_adjustment_cents ?? 0));
+    }
+
+    public function effectivePriceCents(?ProductVariant $variant = null): int
+    {
+        if ($this->hasActiveSaleForVariant($variant)) {
+            return $this->salePriceCents($variant);
+        }
+
+        return $this->regularPriceCents($variant);
     }
 
     public function effectivePrice(): float

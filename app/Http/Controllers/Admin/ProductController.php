@@ -7,8 +7,10 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductUpsellRule;
 use App\Services\Orders\ProductProductionPromptSyncService;
+use App\Support\AppDateTime;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -477,7 +479,9 @@ class ProductController extends Controller
             'featured_image' => 'nullable|image|max:4096',
             'gallery_images.*' => 'nullable|image|max:4096',
             'price' => 'required|numeric|min:0|max:999999',
-            'sale_price' => 'nullable|numeric|min:0|max:999999',
+            'sale_price' => 'nullable|numeric|min:0|max:999999|lt:price',
+            'sale_starts_at' => 'nullable|date_format:Y-m-d\TH:i|required_with:sale_price',
+            'sale_ends_at' => 'nullable|date_format:Y-m-d\TH:i|required_with:sale_price|after:sale_starts_at',
             'sku' => 'nullable|string|max:255',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'age_groups' => 'nullable|array',
@@ -504,6 +508,13 @@ class ProductController extends Controller
             'seo_description_en' => 'nullable|string|max:1000',
             'is_active' => 'nullable|boolean',
             'is_featured' => 'nullable|boolean',
+        ], [
+            'sale_price.lt' => 'سعر التخفيض يجب أن يكون أقل من السعر الأساسي.',
+            'sale_starts_at.required_with' => 'حدد تاريخ ووقت بداية التخفيض.',
+            'sale_starts_at.date_format' => 'صيغة تاريخ بداية التخفيض غير صحيحة.',
+            'sale_ends_at.required_with' => 'حدد تاريخ ووقت نهاية التخفيض.',
+            'sale_ends_at.date_format' => 'صيغة تاريخ نهاية التخفيض غير صحيحة.',
+            'sale_ends_at.after' => 'نهاية التخفيض يجب أن تكون بعد بدايته.',
         ]);
 
         $validated['slug'] = $validated['slug'] ?: Str::slug($validated['name_en'] ?: $validated['name_ar']);
@@ -512,6 +523,21 @@ class ProductController extends Controller
         $validated['sale_price_cents'] = $salePrice !== null && $salePrice !== ''
             ? (int) round(((float) $salePrice) * 100)
             : null;
+        if ($validated['sale_price_cents'] !== null) {
+            $validated['sale_starts_at'] = CarbonImmutable::createFromFormat(
+                'Y-m-d\TH:i',
+                $validated['sale_starts_at'],
+                AppDateTime::timezone(),
+            )->utc();
+            $validated['sale_ends_at'] = CarbonImmutable::createFromFormat(
+                'Y-m-d\TH:i',
+                $validated['sale_ends_at'],
+                AppDateTime::timezone(),
+            )->utc();
+        } else {
+            $validated['sale_starts_at'] = null;
+            $validated['sale_ends_at'] = null;
+        }
         $validated['sort_order'] = (int) ($validated['sort_order'] ?? 0);
         $validated['production_lead_time_days'] = (int) ($validated['production_lead_time_days'] ?? 0);
         $validated['is_active'] = $request->boolean('is_active');

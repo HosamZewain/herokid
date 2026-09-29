@@ -25,6 +25,11 @@
         $initialVariantImages = $initialVariant?->all_image_urls ?: $productImageUrls;
         $initialDisplayImage = $initialVariantImages[0] ?? null;
         $initialDisplayPrice = $product->effectivePriceCents($initialVariant) / 100;
+        $initialRegularPrice = $product->regularPriceCents($initialVariant) / 100;
+        $initialHasSale = $product->hasActiveSaleForVariant($initialVariant);
+        $initialDiscountPercent = $initialHasSale && $initialRegularPrice > 0
+            ? (int) round((1 - ($initialDisplayPrice / $initialRegularPrice)) * 100)
+            : 0;
         $initialQuantity = max(1, min(10, (int) old('quantity', 1)));
         $productSchema = [
             '@context' => 'https://schema.org',
@@ -102,7 +107,22 @@
                         <div class="mt-5 flex items-end justify-between gap-4 border-y border-slate-100 py-4">
                             <div>
                                 <p class="text-xs font-bold text-slate-500">السعر</p>
-                                <p class="mt-1 text-3xl font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                    <p class="text-3xl font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
+                                    <span class="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700 {{ $initialHasSale ? '' : 'hidden' }}" data-sale-badge>
+                                        خصم <span data-discount-percent>{{ $initialDiscountPercent }}</span>٪
+                                    </span>
+                                </div>
+                                <p class="mt-1 text-sm font-bold text-slate-400 line-through {{ $initialHasSale ? '' : 'hidden' }}" data-regular-price>
+                                    بدلًا من {{ format_money($initialRegularPrice) }}
+                                </p>
+                                @if($product->hasActiveSale() && $product->sale_ends_at)
+                                    <div class="mt-3 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-rose-800 {{ $initialHasSale ? '' : 'hidden' }}"
+                                        data-sale-countdown data-sale-ends-at="{{ $product->sale_ends_at->toIso8601String() }}">
+                                        <p class="text-[11px] font-black">ينتهي العرض خلال</p>
+                                        <p class="mt-0.5 text-sm font-black tabular-nums" dir="ltr" data-countdown-value aria-live="polite">—</p>
+                                    </div>
+                                @endif
                             </div>
                             <div class="text-left">
                                 <p class="text-xs font-bold text-slate-500">العمر المناسب</p>
@@ -118,11 +138,20 @@
                                         @php
                                             $variantImages = $variant->all_image_urls ?: $productImageUrls;
                                             $variantPrice = format_money($product->effectivePriceCents($variant) / 100);
+                                            $variantRegularPriceCents = $product->regularPriceCents($variant);
+                                            $variantHasSale = $product->hasActiveSaleForVariant($variant);
+                                            $variantDiscountPercent = $variantHasSale && $variantRegularPriceCents > 0
+                                                ? (int) round((1 - ($product->effectivePriceCents($variant) / $variantRegularPriceCents)) * 100)
+                                                : 0;
                                         @endphp
                                         <label class="cursor-pointer rounded-xl border-2 border-slate-200 bg-white p-2 transition has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-400">
                                             <input type="radio" name="variant_id" value="{{ $variant->id }}" required
                                                 @checked((string) old('variant_id', $initialVariant?->id) === (string) $variant->id)
-                                                class="sr-only" data-variant-option data-price="{{ $variantPrice }}" data-images='@json($variantImages)' data-name="{{ $variant->name_ar }}">
+                                                class="sr-only" data-variant-option data-price="{{ $variantPrice }}"
+                                                data-regular-price="{{ format_money($variantRegularPriceCents / 100) }}"
+                                                data-on-sale="{{ $variantHasSale ? '1' : '0' }}"
+                                                data-discount-percent="{{ $variantDiscountPercent }}"
+                                                data-images='@json($variantImages)' data-name="{{ $variant->name_ar }}">
                                             @if($variantImages[0] ?? null)
                                                 <img src="{{ $variantImages[0] }}" alt="{{ $variant->name_ar }}" width="180" height="180" class="aspect-square w-full rounded-lg object-cover" loading="lazy">
                                             @endif
@@ -261,6 +290,10 @@
                 const mainImage = document.querySelector('[data-product-main-image]');
                 const prices = Array.from(document.querySelectorAll('[data-product-price]'));
                 const gallery = document.querySelector('[data-product-gallery]');
+                const regularPrice = document.querySelector('[data-regular-price]');
+                const saleBadge = document.querySelector('[data-sale-badge]');
+                const discountPercent = document.querySelector('[data-discount-percent]');
+                const countdown = document.querySelector('[data-sale-countdown]');
 
                 const bindGallery = () => {
                     gallery?.querySelectorAll('[data-gallery-image]').forEach((button) => {
@@ -297,6 +330,14 @@
                 const selectVariant = (option) => {
                     const images = JSON.parse(option.dataset.images || '[]');
                     prices.forEach((price) => price.textContent = option.dataset.price || '');
+                    const onSale = option.dataset.onSale === '1';
+                    if (regularPrice) {
+                        regularPrice.textContent = `بدلًا من ${option.dataset.regularPrice || ''}`;
+                        regularPrice.classList.toggle('hidden', !onSale);
+                    }
+                    saleBadge?.classList.toggle('hidden', !onSale);
+                    countdown?.classList.toggle('hidden', !onSale);
+                    if (discountPercent) discountPercent.textContent = option.dataset.discountPercent || '0';
                     if (mainImage && images[0]) {
                         mainImage.src = images[0];
                         mainImage.alt = option.dataset.name || mainImage.alt;
@@ -307,6 +348,44 @@
                 options.forEach((option) => option.addEventListener('change', () => selectVariant(option)));
                 if (options.length) selectVariant(options.find((option) => option.checked) || options[0]);
                 else bindGallery();
+
+                if (countdown) {
+                    const value = countdown.querySelector('[data-countdown-value]');
+                    const endsAt = Date.parse(countdown.dataset.saleEndsAt || '');
+                    let countdownTimer = null;
+                    const renderCountdown = () => {
+                        const remaining = endsAt - Date.now();
+                        if (!Number.isFinite(endsAt) || remaining <= 0) {
+                            if (countdownTimer) window.clearInterval(countdownTimer);
+                            options.forEach((option) => {
+                                if (option.dataset.onSale === '1') {
+                                    option.dataset.price = option.dataset.regularPrice || option.dataset.price;
+                                    option.dataset.onSale = '0';
+                                    option.dataset.discountPercent = '0';
+                                }
+                            });
+                            const selected = options.find((option) => option.checked);
+                            if (selected) selectVariant(selected);
+                            else {
+                                prices.forEach((price) => price.textContent = @json(format_money($initialRegularPrice)));
+                                regularPrice?.classList.add('hidden');
+                                saleBadge?.classList.add('hidden');
+                                countdown.classList.add('hidden');
+                            }
+                            return false;
+                        }
+
+                        const totalSeconds = Math.floor(remaining / 1000);
+                        const days = Math.floor(totalSeconds / 86400);
+                        const hours = Math.floor((totalSeconds % 86400) / 3600);
+                        const minutes = Math.floor((totalSeconds % 3600) / 60);
+                        const seconds = totalSeconds % 60;
+                        if (value) value.textContent = `${days} يوم · ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                        return true;
+                    };
+
+                    if (renderCountdown()) countdownTimer = window.setInterval(renderCountdown, 1000);
+                }
             })();
         </script>
     @endpush

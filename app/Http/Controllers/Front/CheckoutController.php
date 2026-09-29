@@ -15,6 +15,7 @@ use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackageCartExpander;
+use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
@@ -47,6 +48,7 @@ class CheckoutController extends Controller
         BostaCheckoutAddressService $checkoutAddresses,
         CheckoutSubmissionService $submissions,
         WebsitePromoCodeService $promoCodes,
+        WebsiteCartPricingService $cartPricing,
     ) {
         if ($existingIds = $submissions->completed($request)) {
             $request->session()->put('checkout.last_order_ids', $existingIds);
@@ -89,6 +91,15 @@ class CheckoutController extends Controller
         );
 
         $sessionCart = session('cart.items', []);
+        $currentCart = $cartPricing->refresh($sessionCart);
+        if ($currentCart !== $sessionCart) {
+            session(['cart.items' => $currentCart]);
+
+            return redirect()->route('cart.index')->with(
+                'error',
+                'تم تحديث سعر منتج في السلة بعد انتهاء أو بدء التخفيض. راجع الإجمالي ثم أكد الطلب مرة أخرى.',
+            );
+        }
         $cart = $packageCartExpander->expand($sessionCart);
 
         if ($cart === []) {

@@ -10,6 +10,8 @@
         ->map(fn ($id) => (int) $id)
         ->all();
     $productionComponentRows = collect(old('production_components', $productionComponents ?? []))->values();
+    $savedSaleStartsAt = \App\Support\AppDateTime::display($product->sale_starts_at)?->format('Y-m-d\TH:i');
+    $savedSaleEndsAt = \App\Support\AppDateTime::display($product->sale_ends_at)?->format('Y-m-d\TH:i');
 @endphp
 
 <x-admin-layout>
@@ -49,8 +51,10 @@
                     <div><label class="mb-1 block font-bold">الاسم الإنجليزي</label><input name="name_en" value="{{ old('name_en', $product->name_en) }}" class="w-full rounded-xl border-gray-300 text-left" dir="ltr"></div>
                     <div><label class="mb-1 block font-bold">Slug</label><input name="slug" value="{{ old('slug', $product->slug) }}" class="w-full rounded-xl border-gray-300 text-left" dir="ltr"></div>
                     <div><label class="mb-1 block font-bold">الترتيب</label><input type="number" name="sort_order" value="{{ old('sort_order', $product->sort_order ?? 0) }}" class="w-full rounded-xl border-gray-300"></div>
-                    <div><label class="mb-1 block font-bold">السعر</label><input type="number" step="0.01" name="price" value="{{ old('price', $product->exists ? $product->price_cents / 100 : 0) }}" required class="w-full rounded-xl border-gray-300"></div>
-                    <div><label class="mb-1 block font-bold">سعر التخفيض</label><input type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $product->sale_price_cents !== null ? $product->sale_price_cents / 100 : '') }}" class="w-full rounded-xl border-gray-300"></div>
+                    <div><label class="mb-1 block font-bold">السعر الأساسي</label><input type="number" step="0.01" name="price" value="{{ old('price', $product->exists ? $product->price_cents / 100 : 0) }}" required class="w-full rounded-xl border-gray-300"><x-input-error :messages="$errors->get('price')" /></div>
+                    <div><label class="mb-1 block font-bold">سعر التخفيض</label><input type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $product->sale_price_cents !== null ? $product->sale_price_cents / 100 : '') }}" class="w-full rounded-xl border-gray-300" placeholder="اتركه فارغًا بدون تخفيض"><x-input-error :messages="$errors->get('sale_price')" /></div>
+                    <div><label class="mb-1 block font-bold">بداية التخفيض</label><input type="datetime-local" name="sale_starts_at" value="{{ old('sale_starts_at', $savedSaleStartsAt) }}" class="w-full rounded-xl border-gray-300"><x-input-error :messages="$errors->get('sale_starts_at')" /></div>
+                    <div><label class="mb-1 block font-bold">نهاية التخفيض</label><input type="datetime-local" name="sale_ends_at" value="{{ old('sale_ends_at', $savedSaleEndsAt) }}" class="w-full rounded-xl border-gray-300"><x-input-error :messages="$errors->get('sale_ends_at')" /><p class="mt-1 text-xs font-bold text-gray-500">التوقيت بتوقيت القاهرة. عند انتهاء المدة يعود السعر الأساسي تلقائيًا.</p></div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">

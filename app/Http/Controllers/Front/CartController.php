@@ -10,6 +10,7 @@ use App\Models\Story;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\StoryCartItemBuilder;
+use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Orders\CheckoutSubmissionService;
@@ -47,9 +48,13 @@ class CartController extends Controller
         'image/heif-sequence',
     ];
 
-    public function index(BostaCheckoutAddressService $checkoutAddresses, WebsitePromoCodeService $promoCodes)
-    {
-        $cart = $this->cart();
+    public function index(
+        BostaCheckoutAddressService $checkoutAddresses,
+        WebsitePromoCodeService $promoCodes,
+        WebsiteCartPricingService $cartPricing,
+    ) {
+        $cart = $cartPricing->refresh($this->cart());
+        session(['cart.items' => $cart]);
         $subtotal = $this->subtotal($cart);
         $promoQuote = $promoCodes->quote(request(), (int) round($subtotal * 100));
         $cartCollection = collect($cart);
