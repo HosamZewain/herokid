@@ -121,8 +121,9 @@ class ProductSaleScheduleTest extends TestCase
 
         $response->assertSee('١٩٩ ج.م')
             ->assertSee('بدلًا من ٢٩٠ ج.م')
-            ->assertSee('ينتهي العرض خلال')
-            ->assertSee('data-sale-countdown', false);
+            ->assertSee('العرض ينتهي خلال')
+            ->assertSee('data-sale-countdown', false)
+            ->assertSee('data-mobile-purchase-bar', false);
         $this->assertStringContainsString('no-cache', (string) $response->headers->get('Cache-Control'));
     }
 
@@ -154,7 +155,10 @@ class ProductSaleScheduleTest extends TestCase
         [$country, $governorate] = $this->deliveryLocation();
 
         $this->post(route('cart.products.store', $product), ['quantity' => 2]);
-        $this->get(route('cart.index'))->assertOk()->assertSee('٣٩٨ ج.م');
+        $this->get(route('cart.index'))
+            ->assertOk()
+            ->assertSee('٣٩٨ ج.م')
+            ->assertSee('يرجى إكمال هذا الحقل.');
         $this->post(route('checkout.store'), $this->checkoutPayload($country, $governorate))
             ->assertRedirect(route('checkout.success'));
 

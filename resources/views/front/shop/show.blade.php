@@ -58,9 +58,9 @@
         </script>
     @endpush
 
-    <main class="bg-slate-50/70 py-5 sm:py-8 lg:py-10">
+    <main class="bg-slate-50/70 pb-28 pt-5 sm:py-8 lg:py-10">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <nav aria-label="مسار التنقل" class="mb-5 overflow-hidden text-xs font-bold text-slate-500 sm:text-sm">
+            <nav aria-label="مسار التنقل" class="mb-5 hidden overflow-hidden text-xs font-bold text-slate-500 sm:block sm:text-sm">
                 <ol class="flex items-center gap-2 whitespace-nowrap">
                     <li><a href="{{ route('home') }}" class="hover:text-indigo-700">الرئيسية</a></li>
                     <li aria-hidden="true">/</li>
@@ -69,7 +69,7 @@
                     <li class="truncate text-slate-800" aria-current="page">{{ $product->name_ar }}</li>
                 </ol>
             </nav>
-            <a href="{{ route('shop.index') }}" class="mb-4 inline-flex text-xs font-black text-indigo-700 hover:text-indigo-900 sm:text-sm">العودة إلى متجر القصص والمنتجات</a>
+            <a href="{{ route('shop.index') }}" class="mb-4 inline-flex min-h-11 items-center text-xs font-black text-indigo-700 hover:text-indigo-900 sm:text-sm">العودة إلى متجر القصص والمنتجات</a>
 
             <form action="{{ route('cart.products.store', $product) }}" method="POST" data-product-order-form>
                 @csrf
@@ -104,30 +104,40 @@
                             <p class="mt-3 text-sm font-medium leading-7 text-slate-600 sm:text-base">{{ $product->short_description_ar }}</p>
                         @endif
 
-                        <div class="mt-5 flex items-end justify-between gap-4 border-y border-slate-100 py-4">
-                            <div>
-                                <p class="text-xs font-bold text-slate-500">السعر</p>
-                                <div class="mt-1 flex flex-wrap items-center gap-2">
-                                    <p class="text-3xl font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
-                                    <span class="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700 {{ $initialHasSale ? '' : 'hidden' }}" data-sale-badge>
-                                        خصم <span data-discount-percent>{{ $initialDiscountPercent }}</span>٪
-                                    </span>
-                                </div>
-                                <p class="mt-1 text-sm font-bold text-slate-400 line-through {{ $initialHasSale ? '' : 'hidden' }}" data-regular-price>
-                                    بدلًا من {{ format_money($initialRegularPrice) }}
-                                </p>
-                                @if($product->hasActiveSale() && $product->sale_ends_at)
-                                    <div class="mt-3 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-rose-800 {{ $initialHasSale ? '' : 'hidden' }}"
-                                        data-sale-countdown data-sale-ends-at="{{ $product->sale_ends_at->toIso8601String() }}">
-                                        <p class="text-[11px] font-black">ينتهي العرض خلال</p>
-                                        <p class="mt-0.5 text-sm font-black tabular-nums" dir="ltr" data-countdown-value aria-live="polite">—</p>
+                        <div class="mt-5 border-y border-slate-100 py-4">
+                            <div class="flex items-end justify-between gap-4">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-500">السعر</p>
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                                        <p class="text-3xl font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
+                                        <span class="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-700 {{ $initialHasSale ? '' : 'hidden' }}" data-sale-badge>
+                                            خصم <span data-discount-percent>{{ $initialDiscountPercent }}</span>٪
+                                        </span>
                                     </div>
-                                @endif
+                                    <p class="mt-1 text-sm font-bold text-slate-400 line-through {{ $initialHasSale ? '' : 'hidden' }}" data-regular-price>
+                                        بدلًا من {{ format_money($initialRegularPrice) }}
+                                    </p>
+                                </div>
+                                <div class="text-left">
+                                    <p class="text-xs font-bold text-slate-500">العمر المناسب</p>
+                                    <p class="mt-1 font-black text-slate-900">{{ $product->ageLabel() }}</p>
+                                </div>
                             </div>
-                            <div class="text-left">
-                                <p class="text-xs font-bold text-slate-500">العمر المناسب</p>
-                                <p class="mt-1 font-black text-slate-900">{{ $product->ageLabel() }}</p>
-                            </div>
+                            @if($product->hasActiveSale() && $product->sale_ends_at)
+                                <div class="mt-4 flex items-center gap-3 rounded-2xl border border-rose-200 bg-gradient-to-l from-rose-50 to-white px-4 py-3 text-rose-800 {{ $initialHasSale ? '' : 'hidden' }}"
+                                    data-sale-countdown data-sale-ends-at="{{ $product->sale_ends_at->toIso8601String() }}">
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5">
+                                            <circle cx="12" cy="12" r="9"></circle>
+                                            <path d="M12 7v5l3 2"></path>
+                                        </svg>
+                                    </span>
+                                    <div class="min-w-0 flex-1 text-right">
+                                        <p class="text-xs font-black text-rose-700">العرض ينتهي خلال</p>
+                                        <p class="mt-1 text-base font-black leading-6 text-rose-900 sm:text-lg" dir="rtl" data-countdown-value aria-live="polite">—</p>
+                                    </div>
+                                </div>
+                            @endif
                         </div>
 
                         @if($product->activeVariants->count())
@@ -183,7 +193,7 @@
                                         <p class="mt-1 text-xs font-bold text-indigo-700">سنفتح بيانات مستقلة لكل طفل.</p>
                                     </div>
                                     <input id="personalized-product-quantity" type="number" name="quantity" min="1" max="10" value="{{ $initialQuantity }}"
-                                        aria-label="عدد الأطفال أو النسخ" class="w-20 rounded-xl border-indigo-200 text-center font-black" data-personalized-product-quantity>
+                                        aria-label="عدد الأطفال أو النسخ" class="min-h-11 w-20 rounded-xl border-indigo-200 text-center font-black" data-personalized-product-quantity>
                                 </div>
                             </div>
                             <a href="#personalization-details" class="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700">ابدأ إدخال بيانات الطفل</a>
@@ -203,7 +213,7 @@
                                 <div class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm font-bold">سيتم تخصيصه تلقائيًا لـ <strong>{{ $singleStoryItem['child_name'] ?? 'الطفل' }}</strong></div>
                             @endif
                             <label class="mt-5 block text-sm font-black text-slate-700">الكمية
-                                <input type="number" name="quantity" min="1" value="1" class="mt-2 block w-24 rounded-xl border-slate-200 text-center">
+                                <input type="number" name="quantity" min="1" value="1" class="mt-2 block min-h-11 w-24 rounded-xl border-slate-200 text-center">
                             </label>
                             <button type="submit" @disabled(! $canSubmit) class="mt-5 min-h-12 w-full rounded-xl bg-indigo-600 px-4 py-3 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                                 {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
@@ -230,6 +240,33 @@
                         </button>
                     </section>
                 @endif
+
+                <div class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur transition-transform duration-200 sm:hidden"
+                    data-mobile-purchase-bar>
+                    <div class="mx-auto flex max-w-md items-center gap-3">
+                        <div class="min-w-0 shrink-0 text-right">
+                            <p class="text-[11px] font-bold text-slate-500">السعر</p>
+                            <p class="text-lg font-black text-indigo-700" data-product-price>{{ format_money($initialDisplayPrice) }}</p>
+                        </div>
+
+                        @if($collectsChildDetails)
+                            <a href="#personalization-details"
+                                class="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100">
+                                ابدأ التخصيص
+                            </a>
+                        @elseif($requiresStory && $storyItems->isEmpty())
+                            <a href="{{ route('shop.index', ['type' => 'stories']) }}"
+                                class="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100">
+                                اختيار قصة أولًا
+                            </a>
+                        @else
+                            <button type="submit"
+                                class="min-h-12 flex-1 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-indigo-100">
+                                {{ $requiresStory ? 'إضافة الهدية للسلة' : 'إضافة للسلة' }}
+                            </button>
+                        @endif
+                    </div>
+                </div>
             </form>
 
             @if($relatedProducts->count())
@@ -294,6 +331,15 @@
                 const saleBadge = document.querySelector('[data-sale-badge]');
                 const discountPercent = document.querySelector('[data-discount-percent]');
                 const countdown = document.querySelector('[data-sale-countdown]');
+                const mobilePurchaseBar = document.querySelector('[data-mobile-purchase-bar]');
+                const personalizationDetails = document.getElementById('personalization-details');
+
+                if (mobilePurchaseBar && personalizationDetails && 'IntersectionObserver' in window) {
+                    const personalizationObserver = new IntersectionObserver(([entry]) => {
+                        mobilePurchaseBar.classList.toggle('translate-y-full', entry.isIntersecting);
+                    }, { threshold: 0.05 });
+                    personalizationObserver.observe(personalizationDetails);
+                }
 
                 const bindGallery = () => {
                     gallery?.querySelectorAll('[data-gallery-image]').forEach((button) => {
@@ -375,12 +421,15 @@
                             return false;
                         }
 
-                        const totalSeconds = Math.floor(remaining / 1000);
-                        const days = Math.floor(totalSeconds / 86400);
-                        const hours = Math.floor((totalSeconds % 86400) / 3600);
-                        const minutes = Math.floor((totalSeconds % 3600) / 60);
-                        const seconds = totalSeconds % 60;
-                        if (value) value.textContent = `${days} يوم · ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                        const totalMinutes = Math.max(1, Math.ceil(remaining / 60000));
+                        const days = Math.floor(totalMinutes / 1440);
+                        const hours = Math.floor((totalMinutes % 1440) / 60);
+                        const minutes = totalMinutes % 60;
+                        const parts = [];
+                        if (days > 0) parts.push(`${days} يوم`);
+                        if (hours > 0) parts.push(`${hours} ساعة`);
+                        if (minutes > 0 || parts.length === 0) parts.push(`${minutes} دقيقة`);
+                        if (value) value.textContent = parts.join(' و');
                         return true;
                     };
 

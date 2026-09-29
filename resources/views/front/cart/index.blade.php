@@ -562,6 +562,7 @@
 @if(!empty($cartItems))
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const checkoutForm = document.querySelector('[data-checkout-form]');
             const countrySelect = document.getElementById('delivery_country_id');
             const governorateSelect = document.getElementById('delivery_governorate_id');
             const cityInput = document.getElementById('checkout-city');
@@ -580,6 +581,24 @@
             let discount = Number(@json((float) $discount));
             const appliedPromoCode = @json($promoCode?->code);
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
+            const requiredFieldMessage = 'يرجى إكمال هذا الحقل.';
+
+            checkoutForm?.addEventListener('invalid', (event) => {
+                const field = event.target;
+                if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+                    if (field.validity.valueMissing) field.setCustomValidity(requiredFieldMessage);
+                }
+            }, true);
+
+            ['input', 'change'].forEach((eventName) => {
+                checkoutForm?.addEventListener(eventName, (event) => {
+                    const field = event.target;
+                    if ((field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)
+                        && field.validationMessage === requiredFieldMessage) {
+                        field.setCustomValidity('');
+                    }
+                });
+            });
 
             function selectedCountryFee() {
                 return Number(countrySelect?.selectedOptions?.[0]?.dataset?.fee || 0);
@@ -1037,7 +1056,7 @@
 
             filterGovernorates();
 
-            document.querySelector('[data-checkout-form]')?.addEventListener('submit', () => {
+            checkoutForm?.addEventListener('submit', () => {
                 const checkoutEventKey = 'herokid:analytics:InitiateCheckout:{{ hash('sha256', implode('|', array_keys($cartItems))) }}';
 
                 if (sessionStorage.getItem(checkoutEventKey) === '1') {

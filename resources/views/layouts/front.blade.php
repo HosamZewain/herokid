@@ -266,7 +266,7 @@
                             @endauth
                         </div>
                         <a href="{{ route('cart.index') }}"
-                            class="relative lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+                            class="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100 lg:hidden"
                             aria-label="السلة">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -278,7 +278,7 @@
                         </a>
                         <!-- Mobile Hamburger -->
                         <button type="button" data-front-menu-toggle aria-expanded="false" aria-controls="front-mobile-menu" aria-label="فتح القائمة"
-                            class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition">
+                            class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100 lg:hidden">
                             <svg data-front-menu-open-icon class="w-6 h-6" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
