@@ -95,6 +95,37 @@ PROMPT);
         $this->assertSame('Order: HK-HISTORICAL-STICKER', ProductProductionPrompt::renderForItem($item));
     }
 
+    public function test_empty_parent_notes_render_as_an_empty_optional_value(): void
+    {
+        $product = $this->product('school-sticker', "Parent notes:\n{{special_notes}}");
+        $order = Order::create([
+            'order_number' => 'HK-OPTIONAL-NOTES',
+            'parent_notes' => null,
+            'status' => 'new',
+        ]);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+            'personalization_snapshot' => ['parent_notes' => ''],
+        ]);
+
+        $prompt = ProductProductionPrompt::renderForItem($item);
+
+        $this->assertSame("Parent notes:\n", $prompt);
+        $this->assertStringNotContainsString('[MISSING — CONFIRM BEFORE PRODUCTION]', $prompt);
+
+        $item->update(['personalization_snapshot' => ['parent_notes' => 'Use the blue uniform']]);
+
+        $this->assertSame(
+            "Parent notes:\nUse the blue uniform",
+            ProductProductionPrompt::renderForItem($item->fresh()),
+        );
+    }
+
     public function test_prompt_is_absent_for_products_without_a_template(): void
     {
         $product = $this->product('ready-product', null);

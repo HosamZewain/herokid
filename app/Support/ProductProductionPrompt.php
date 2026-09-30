@@ -159,7 +159,7 @@ class ProductProductionPrompt
             'class_name' => self::value(self::snapshotValue($snapshot, 'class_name')),
             'child_age' => self::value(self::snapshotValue($snapshot, 'child_age') ?? $order->child_age),
             'child_gender' => self::gender(self::snapshotValue($snapshot, 'child_gender') ?? $order->child_gender),
-            'special_notes' => self::value($notes),
+            'special_notes' => self::optionalValue($notes),
             'photos_count' => (string) count(array_values(array_filter($order->uploaded_photos ?? [], 'is_string'))),
             'preferred_photo' => 'Choose the clearest attached photo unless the order notes explicitly identify another photo.',
             'child_image_references' => self::childImageReferences($order),
@@ -273,6 +273,11 @@ class ProductProductionPrompt
         $cleaned = Str::squish(strip_tags((string) ($value ?? '')));
 
         return $cleaned !== '' ? $cleaned : self::NOT_AVAILABLE;
+    }
+
+    private static function optionalValue(mixed $value): string
+    {
+        return Str::squish(strip_tags((string) ($value ?? '')));
     }
 
     private static function gender(mixed $gender): string
