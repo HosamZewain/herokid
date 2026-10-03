@@ -52,7 +52,7 @@ class AdminOrderDetailsUpdateTest extends TestCase
             'child_name' => 'رنا',
             'child_age' => 6,
             'child_gender' => 'girl',
-            'delivery_details' => ['phone' => '201000000001', 'checkout_group' => 'CHECKOUT-EDIT'],
+            'delivery_details' => ['phone' => '201000000001', 'checkout_group' => 'CHECKOUT-EDIT', 'marketing_attribution' => ['utm_source' => 'meta', 'ad_name' => 'Original ad']],
         ]);
         $sibling = $this->order($story, [
             'order_number' => 'HK-DETAIL-SIBLING',
@@ -103,6 +103,7 @@ class AdminOrderDetailsUpdateTest extends TestCase
         $this->assertSame(8, $order->child_age);
         $this->assertSame('boy', $order->child_gender);
         $this->assertSame('ولي أمر جديد', $order->parent_name);
+        $this->assertEquals(['utm_source' => 'meta', 'ad_name' => 'Original ad'], $order->delivery_details['marketing_attribution']);
         $this->assertSame('201111111111', data_get($order->delivery_details, 'phone'));
         $this->assertSame('ولي أمر جديد', $sibling->fresh()->parent_name);
         $this->assertSame('201111111111', data_get($sibling->fresh()->delivery_details, 'phone'));

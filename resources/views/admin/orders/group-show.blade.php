@@ -188,9 +188,14 @@
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الدولة / المحافظة</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}">{{ data_get($group['delivery'], 'country', '—') }} / {{ data_get($group['delivery'], 'governorate', '—') }}</p></div>
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">المدينة / الشارع</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}">{{ data_get($group['delivery'], 'city', '—') }} / {{ data_get($group['delivery'], 'street', '—') }}</p></div>
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-2"><p class="text-[9px] font-bold text-gray-400">تفاصيل العنوان</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}">{{ data_get($group['delivery'], 'address_details', data_get($group['delivery'], 'address', '—')) }}</p></div>
-                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">مصدر الطلب</p><p class="truncate text-[11px] font-black text-gray-900">{{ $sourceLabel }}</p></div>
+                        <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">قناة إنشاء الطلب</p><p class="truncate text-[11px] font-black text-gray-900">{{ $sourceLabel }}</p></div>
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">أُنشئ بواسطة</p><p class="truncate text-[11px] font-bold text-gray-800">{{ $group['created_by_admin']?->name ?? 'العميل عبر الموقع' }}</p></div>
                         @if($group['source_notes'])<div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5 lg:col-span-4"><p class="text-[9px] font-bold text-gray-400">تفاصيل المصدر</p><p class="truncate text-[11px] font-bold text-gray-800" title="{{ $group['source_notes'] }}">{{ $group['source_notes'] }}</p></div>@endif
+                    </div>
+
+                    <div class="mt-3 border-t border-gray-100 pt-3">
+                        <h4 class="mb-2 text-xs font-black text-gray-900">مصدر الزيارة</h4>
+                        @include('admin.orders._marketing-source', ['sources' => $group['marketing_sources'], 'detailed' => true])
                     </div>
 
                     <div class="mt-3 border-t border-gray-100 pt-3" data-order-items-summary>

@@ -95,6 +95,9 @@ class OrderController extends Controller
                 'حالة الطباعة', 'حالة الشحن', 'قيمة العناصر', 'التوصيل', 'الخصم', 'الإجمالي',
                 'المدفوع', 'المتبقي', 'طريقة الدفع', 'الدولة', 'المحافظة', 'المدينة',
                 'الشارع', 'تفاصيل العنوان', 'مسؤول الطلب', 'ملاحظات المصدر',
+                'مصدر الزيارة', 'اسم الحملة', 'اسم مجموعة الإعلانات', 'اسم الإعلان',
+                'معرف الحملة', 'معرف مجموعة الإعلانات', 'معرف الإعلان',
+                'UTM source', 'UTM medium', 'UTM campaign', 'UTM content', 'UTM term',
             ]);
 
             foreach ($rows as $row) {
@@ -134,6 +137,9 @@ class OrderController extends Controller
                     data_get($delivery, 'address_details', data_get($delivery, 'address')),
                     $row['assigned_admin']?->name,
                     $row['source_notes'],
+                    implode(' | ', array_column($row['marketing_sources'], 'label')),
+                    ...collect(['campaign_name', 'adset_name', 'ad_name', 'campaign_id', 'adset_id', 'ad_id', 'source', 'medium', 'campaign', 'content', 'term'])
+                        ->map(fn (string $field): string => implode(' | ', array_filter(array_column($row['marketing_sources'], $field), fn ($value): bool => filled($value))))->all(),
                 ]));
             }
 
@@ -383,6 +389,7 @@ class OrderController extends Controller
     ) {
         $order->load([
             'user',
+            'marketingCart',
             'story.sceneTemplates',
             'sceneTextSnapshots',
             'statusLogs',

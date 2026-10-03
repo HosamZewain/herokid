@@ -171,9 +171,14 @@ class FootballStoriesLandingTest extends TestCase
                 'campaign_id' => 'cmp-10',
                 'adset_id' => 'set-20',
                 'ad_id' => 'ad-30',
+                'ad_name' => 'إعلان أول',
+                'campaign_name' => 'حملة أولى',
+                'adset_name' => 'مجموعة أولى',
                 'fbclid' => 'fb-click-value',
             ]))
             ->assertOk();
+
+        $this->get(route('football-stories.index', ['utm_source' => 'instagram', 'utm_medium' => 'paid_social', 'ad_id' => 'later-ad', 'ad_name' => 'إعلان لاحق']))->assertOk();
 
         [$sessionToken, $photoIds] = $this->uploadedPhotos(2);
         $this->post(route('football-stories.store'), $this->landingPayload(
@@ -205,10 +210,16 @@ class FootballStoriesLandingTest extends TestCase
         $this->assertSame('facebook', $orders->first()->delivery_details['marketing_attribution']['utm_source']);
         $this->assertSame('video_a', $orders->first()->delivery_details['marketing_attribution']['utm_content']);
         $this->assertSame('ad-30', $orders->first()->delivery_details['marketing_attribution']['ad_id']);
+        $this->assertTrue($orders->every(fn (Order $order): bool => $order->delivery_details['marketing_attribution']['ad_name'] === 'إعلان أول'
+            && $order->delivery_details['marketing_attribution']['campaign_name'] === 'حملة أولى'
+            && $order->delivery_details['marketing_attribution']['adset_name'] === 'مجموعة أولى'));
 
         $visitorCart = VisitorCart::query()->sole();
         $this->assertSame('facebook', $visitorCart->utm_source);
         $this->assertSame('video_a', $visitorCart->utm_content);
+        $this->assertSame('إعلان أول', $visitorCart->ad_name);
+        $this->assertSame('حملة أولى', $visitorCart->campaign_name);
+        $this->assertSame('مجموعة أولى', $visitorCart->adset_name);
         $this->assertSame('converted', $visitorCart->status);
     }
 

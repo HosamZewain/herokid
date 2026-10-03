@@ -441,7 +441,7 @@
                                 @if((int) $order->discount_cents > 0)
                                     <div class="text-red-700"><span class="font-bold">الخصم:</span> - {{ format_money($order->discount_cents / 100) }} — {{ $order->discount_reason }}</div>
                                 @endif
-                                <div><span class="font-bold text-gray-600">مصدر الطلب:</span> {{ \App\Support\OrderSource::label($order->order_source) }}</div>
+                                <div><span class="font-bold text-gray-600">قناة إنشاء الطلب:</span> {{ \App\Support\OrderSource::label($order->order_source) }}</div>
                                 <div><span class="font-bold text-gray-600">إجمالي السلة:</span> {{ number_format((float) ($order->delivery_details['total'] ?? 0), 0) }} ج.م</div>
                                 <div><span class="font-bold text-gray-600">حالة الدفع:</span> {{ $checkoutGroup['payment_status_label'] }}</div>
                                 <div><span class="font-bold text-gray-600">المدفوع:</span> {{ format_money($checkoutGroup['paid_amount_cents'] / 100) }}</div>
@@ -449,6 +449,11 @@
                                 @if($checkoutGroup['payment_method'])<div><span class="font-bold text-gray-600">طريقة الدفع:</span> {{ $checkoutGroup['payment_method'] }}</div>@endif
                             </div>
                         @endif
+                    </div>
+
+                    <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <h3 class="mb-3 text-right text-sm font-bold">مصدر الزيارة</h3>
+                        @include('admin.orders._marketing-source', ['sources' => [\App\Support\MarketingAttribution::forOrder($order)], 'detailed' => true])
                     </div>
 
                     @if($order->items->count())

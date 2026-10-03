@@ -25,6 +25,7 @@ use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
+use App\Support\MarketingAttribution;
 use App\Support\Phone;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
@@ -680,25 +681,9 @@ class CheckoutController extends Controller
 
     private function attributionSnapshot(Request $request): array
     {
-        $allowed = [
-            'utm_source',
-            'utm_medium',
-            'utm_campaign',
-            'utm_content',
-            'utm_term',
-            'campaign_id',
-            'adset_id',
-            'ad_id',
-            'fbclid',
-            'landing_url',
-            'referrer',
-        ];
+        $values = $request->session()->get('marketing_attribution', []);
 
-        return collect($request->session()->get('marketing_attribution', []))
-            ->only($allowed)
-            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
-            ->map(fn (string $value): string => Str::limit(trim($value), 2000, ''))
-            ->all();
+        return MarketingAttribution::sanitize(is_array($values) ? $values : []);
     }
 
     private function decrementStock(Product $product, ?ProductVariant $variant, int $quantity): void

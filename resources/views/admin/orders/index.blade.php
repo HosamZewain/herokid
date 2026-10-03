@@ -360,7 +360,6 @@
                                     <a href="{{ $detailsUrl }}" class="block truncate font-mono text-base font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</a>
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
-                                    <p class="mt-2 text-[10px] font-black text-amber-700">المصدر: {{ \App\Support\OrderSource::label($group['order_source']) }}</p>
                                 </div>
                                 <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                     <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
@@ -368,6 +367,8 @@
                                     <span data-workflow-badge="shipping_status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $shippingStatusColors[$group['shipping_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['shipping_status_label'] }}</span>
                                 </div>
                             </div>
+
+                            @include('admin.orders._marketing-source', ['sources' => $group['marketing_sources']])
 
                             <div class="rounded-2xl bg-slate-50 p-4 text-right">
                                 <div class="flex items-start justify-between gap-3">
@@ -507,7 +508,7 @@
                                         </div>
                                     </td>
                                     <td class="px-4 py-4">
-                                        <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">{{ \App\Support\OrderSource::label($group['order_source']) }}</span>
+                                        @include('admin.orders._marketing-source', ['sources' => $group['marketing_sources']])
                                         @if($group['source_notes'])<p class="mt-2 line-clamp-2 max-w-32 text-[10px] leading-4 text-gray-400">{{ $group['source_notes'] }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4">

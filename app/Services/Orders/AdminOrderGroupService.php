@@ -8,6 +8,7 @@ use App\Models\OrderPaymentEvent;
 use App\Models\OrderTag;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\MarketingAttribution;
 use App\Support\OrderDateTime;
 use App\Support\OrderLifecycle;
 use App\Support\OrderPaymentStatus;
@@ -36,6 +37,7 @@ class AdminOrderGroupService
         'user:id,name,role',
         'createdByAdmin:id,name',
         'paymentUpdatedBy:id,name',
+        'marketingCart',
         'groupAssignment.assignee:id,name',
         'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
         'checkoutReference.tags:id,name,normalized_name',
@@ -547,6 +549,7 @@ class AdminOrderGroupService
             'phone' => $phone,
             'delivery' => $first->delivery_details ?? [],
             'order_source' => $first->order_source ?: 'website',
+            'marketing_sources' => $visibleOrders->map(fn (Order $order): array => MarketingAttribution::forOrder($order))->unique(fn (array $source): string => json_encode($source))->values()->all(),
             'source_notes' => $first->source_notes,
             'created_by_admin' => $first->createdByAdmin,
             'assignment' => $first->groupAssignment,

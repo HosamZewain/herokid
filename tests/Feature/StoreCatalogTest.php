@@ -657,6 +657,7 @@ class StoreCatalogTest extends TestCase
 
     public function test_standalone_personalized_product_does_not_overwrite_story_child_in_mixed_checkout(): void
     {
+        $this->get(route('home', ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'campaign_name' => 'Mixed campaign', 'adset_name' => 'Mixed set', 'ad_name' => 'Mixed ad', 'ad_id' => 'mixed-ad-id']))->assertOk();
         $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
         $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
         $story = $this->story('mixed-child-story', 'قصة رينا');
@@ -686,6 +687,10 @@ class StoreCatalogTest extends TestCase
 
         $orders = Order::with('items')->orderBy('id')->get();
         $this->assertCount(2, $orders);
+        $this->assertTrue($orders->every(fn (Order $order): bool => data_get($order->delivery_details, 'marketing_attribution.ad_name') === 'Mixed ad'
+            && data_get($order->delivery_details, 'marketing_attribution.campaign_name') === 'Mixed campaign'
+            && data_get($order->delivery_details, 'marketing_attribution.adset_name') === 'Mixed set'
+            && data_get($order->delivery_details, 'marketing_attribution.ad_id') === 'mixed-ad-id'));
         $this->assertSame('رينا', $orders->firstWhere('story_id', $story->id)->child_name);
 
         $productOrder = $orders->first(fn (Order $order) => $order->items->contains('product_id', $product->id));
@@ -1163,6 +1168,7 @@ class StoreCatalogTest extends TestCase
 
     public function test_regular_product_only_cart_can_checkout_without_story_or_child_data(): void
     {
+        $this->get(route('home', ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'ad_name' => 'Product ad', 'campaign_name' => 'Product campaign']))->assertOk();
         $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
         $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
         $product = $this->product('ready-activity-book', 110);
@@ -1176,6 +1182,8 @@ class StoreCatalogTest extends TestCase
         $order = Order::with('items')->firstOrFail();
         $this->assertNull($order->story_id);
         $this->assertNull($order->child_name);
+        $this->assertSame('Product ad', data_get($order->delivery_details, 'marketing_attribution.ad_name'));
+        $this->assertSame('Product campaign', data_get($order->delivery_details, 'marketing_attribution.campaign_name'));
         $this->assertDatabaseHas('order_items', [
             'order_id' => $order->id,
             'item_type' => 'product',

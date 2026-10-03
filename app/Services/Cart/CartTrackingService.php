@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\VisitorCart;
 use App\Models\VisitorCartActivity;
 use App\Models\VisitorCartItem;
+use App\Support\MarketingAttribution;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -15,21 +16,8 @@ class CartTrackingService
 {
     public function captureAttribution(Request $request): void
     {
-        $attribution = collect([
-            'utm_source',
-            'utm_medium',
-            'utm_campaign',
-            'utm_content',
-            'utm_term',
-            'campaign_id',
-            'adset_id',
-            'ad_id',
-            'fbclid',
-        ])
-            ->mapWithKeys(fn (string $key): array => [$key => $request->query($key)])
-            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
-            ->map(fn (string $value): string => Str::limit(trim($value), 512, ''))
-            ->all();
+        $attribution = MarketingAttribution::sanitize($request->query->all());
+        $attribution = array_intersect_key($attribution, array_flip(MarketingAttribution::QUERY_KEYS));
         $existing = $request->session()->get('marketing_attribution', []);
 
         if (! is_array($existing)) {
@@ -45,7 +33,10 @@ class CartTrackingService
             $existing['referrer'] = $referrer === '' ? null : Str::limit($referrer, 2000, '');
         }
 
-        $request->session()->put('marketing_attribution', $existing + $attribution);
+        // Keep the first tracked touch as a whole: a later ad must not donate its
+        // name/ID to an earlier campaign that happened to omit that field.
+        $hasTrackedTouch = collect($existing)->only(MarketingAttribution::QUERY_KEYS)->contains(fn ($value): bool => is_string($value) && trim($value) !== '');
+        $request->session()->put('marketing_attribution', $hasTrackedTouch ? $existing : $existing + $attribution);
     }
 
     public function recordItemAdded(Request $request, string $cartItemKey): void
@@ -203,7 +194,8 @@ class CartTrackingService
             $request->session()->put('cart.tracking_id', $identifier);
         }
 
-        $attribution = $request->session()->get('marketing_attribution', []);
+        $sessionAttribution = $request->session()->get('marketing_attribution', []);
+        $attribution = MarketingAttribution::sanitize(is_array($sessionAttribution) ? $sessionAttribution : []);
         $cart = VisitorCart::firstOrCreate(
             ['cart_identifier' => $identifier],
             [
@@ -219,6 +211,9 @@ class CartTrackingService
                 'campaign_id' => $attribution['campaign_id'] ?? null,
                 'adset_id' => $attribution['adset_id'] ?? null,
                 'ad_id' => $attribution['ad_id'] ?? null,
+                'ad_name' => $attribution['ad_name'] ?? null,
+                'campaign_name' => $attribution['campaign_name'] ?? null,
+                'adset_name' => $attribution['adset_name'] ?? null,
                 'fbclid' => $attribution['fbclid'] ?? null,
                 'landing_url' => $attribution['landing_url'] ?? null,
                 'referrer' => $attribution['referrer'] ?? null,
@@ -238,6 +233,9 @@ class CartTrackingService
             'campaign_id' => $cart->campaign_id ?: ($attribution['campaign_id'] ?? null),
             'adset_id' => $cart->adset_id ?: ($attribution['adset_id'] ?? null),
             'ad_id' => $cart->ad_id ?: ($attribution['ad_id'] ?? null),
+            'ad_name' => $cart->ad_name ?: ($attribution['ad_name'] ?? null),
+            'campaign_name' => $cart->campaign_name ?: ($attribution['campaign_name'] ?? null),
+            'adset_name' => $cart->adset_name ?: ($attribution['adset_name'] ?? null),
             'fbclid' => $cart->fbclid ?: ($attribution['fbclid'] ?? null),
             'landing_url' => $cart->landing_url ?: ($attribution['landing_url'] ?? null),
             'referrer' => $cart->referrer ?: ($attribution['referrer'] ?? null),

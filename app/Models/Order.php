@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderShortReferenceService;
+use App\Support\MarketingAttribution;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -65,6 +66,12 @@ class Order extends Model
     public function checkoutReference()
     {
         return $this->hasOne(OrderCheckoutReference::class, 'checkout_group_key', 'checkout_group_key');
+    }
+
+    public function marketingCart()
+    {
+        return $this->hasOne(VisitorCart::class, 'related_order_id')->latestOfMany()
+            ->select(array_map(fn (string $column): string => 'visitor_carts.'.$column, ['id', 'related_order_id', ...MarketingAttribution::KEYS]));
     }
 
     public function story()
