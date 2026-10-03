@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Story;
 use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
+use App\Services\Orders\CheckoutIntakeStatistics;
 use App\Support\AppDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
@@ -55,6 +56,7 @@ class SalesReportService
     {
         $orders = $this->orderQuery($filters)->get();
         $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
+        $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($checkoutKeys);
         $checkoutStates = Order::query()
             ->whereIn('checkout_group_key', $checkoutKeys)
             ->get(['id', 'checkout_group_key', 'status', 'payment_status', 'paid_amount_cents', 'payment_method'])
@@ -66,7 +68,7 @@ class SalesReportService
 
         $rows = $orders
             ->groupBy(fn (Order $order): string => $this->checkoutKey($order))
-            ->map(function (Collection $group) use ($filters, $carts, $checkoutStates): ?array {
+            ->map(function (Collection $group) use ($filters, $carts, $checkoutStates, $creationDates): ?array {
                 $orders = $group->sortBy('id')->values();
                 $items = $orders->flatMap(fn (Order $order): array => $this->orderItems($order, $filters))->values();
 
@@ -75,6 +77,7 @@ class SalesReportService
                 }
 
                 $first = $orders->first();
+                $createdAt = CarbonImmutable::parse($creationDates->get($first->checkoutGroupKey()) ?? $first->created_at, 'UTC');
                 $stateOrders = $checkoutStates->get($first->checkoutGroupKey(), $orders);
                 $stateFirst = $stateOrders->sortBy('id')->first() ?? $first;
                 $cart = $carts->first(fn (VisitorCart $cart): bool => $orders->contains('id', $cart->related_order_id));
@@ -98,8 +101,8 @@ class SalesReportService
 
                 return [
                     'key' => $this->checkoutKey($first),
-                    'created_at' => $first->created_at,
-                    'date' => AppDateTime::format($first->created_at, 'Y-m-d H:i'),
+                    'created_at' => $createdAt,
+                    'date' => AppDateTime::format($createdAt, 'Y-m-d H:i'),
                     'order_ids' => $orders->pluck('id')->values()->all(),
                     'order_numbers' => $orders->pluck('order_number')->values()->all(),
                     'first_order_id' => $first->id,
@@ -177,7 +180,7 @@ class SalesReportService
                 'story:id,title,price',
                 'user:id,name',
             ])
-            ->whereBetween('created_at', [$filters->start(), $filters->end()]);
+            ->whereIn('checkout_group_key', app(CheckoutIntakeStatistics::class)->keysBetween($filters->start(), $filters->end()));
 
         if ($filters->status === 'active') {
             $query->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'));
@@ -392,7 +395,7 @@ class SalesReportService
         }
 
         foreach ($rows as $row) {
-            $date = CarbonImmutable::instance($row['created_at']);
+            $date = AppDateTime::display($row['created_at']);
             $key = $this->periodKey($date, $groupBy);
             $periods[$key] ??= [
                 'key' => $key,

@@ -2,8 +2,9 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\Order;
 use App\Models\VisitorCart;
+use App\Services\Orders\CheckoutIntakeStatistics;
+use App\Services\Orders\OrderFinancialStatistics;
 use App\Support\AppDateTime;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -125,24 +126,15 @@ class LocalCartAnalyticsRepository
 
     private function completedOrdersBetween(CarbonInterface $start, CarbonInterface $end): int
     {
-        return Order::whereBetween('created_at', [$start, $end])->count();
+        return app(CheckoutIntakeStatistics::class)->countBetween($start, $end);
     }
 
     private function revenueBetween(CarbonInterface $start, CarbonInterface $end): float
     {
-        $orders = Order::with('items:id,order_id,total_price_cents')
-            ->whereBetween('created_at', [$start, $end])
-            ->get(['id', 'delivery_details', 'created_at']);
+        $keys = app(CheckoutIntakeStatistics::class)->keysBetween($start, $end);
+        $financial = app(OrderFinancialStatistics::class)->summarize($keys, true);
 
-        $itemsTotal = $orders->sum(fn (Order $order): int => (int) $order->items->sum('total_price_cents')) / 100;
-        $deliveryTotal = $orders
-            ->groupBy(fn (Order $order): string => (string) data_get($order->delivery_details, 'checkout_group', 'order-'.$order->id))
-            ->sum(fn (Collection $group): float => (float) data_get($group->first()->delivery_details, 'delivery_fee', 0));
-        $discountTotal = $orders
-            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey())
-            ->sum(fn (Collection $group): float => ((int) $group->max('discount_cents')) / 100);
-
-        return round(max(0, $itemsTotal + $deliveryTotal - $discountTotal), 2);
+        return round($financial['total_value_cents'] / 100, 2);
     }
 
     private function cartsStartedBetween(CarbonInterface $start, CarbonInterface $end): int

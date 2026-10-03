@@ -235,24 +235,18 @@ class AdminOrderGroupService
             $records[$behavior] = (int) $byStatus->only($keys)->sum('record_count');
         }
 
-        $today = OrderDateTime::display(now())->toDateString();
+        $todayDate = OrderDateTime::display(now())->startOfDay();
+        $today = $todayDate->toDateString();
         $todayStart = OrderDateTime::utcStartOfDay($today);
         $todayEnd = OrderDateTime::utcEndOfDay($today);
-        $todayKeys = Order::query()
-            ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->distinct()
-            ->pluck('checkout_group_key');
-        $todayFinancial = app(OrderFinancialStatistics::class)->summarize($todayKeys, false);
+        $dailyStats = $this->lastSevenDaysDashboardStats($todayDate);
+        $daysByDate = collect($dailyStats)->keyBy('date');
+        $todayIntake = $daysByDate->get($today);
         $todayPayments = $this->paymentActivityBetween($todayStart, $todayEnd);
 
-        $yesterday = OrderDateTime::display(now())->subDay()->toDateString();
-        $yesterdayStart = OrderDateTime::utcStartOfDay($yesterday);
-        $yesterdayEnd = OrderDateTime::utcEndOfDay($yesterday);
-        $yesterdayCheckouts = Order::query()
-            ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-            ->distinct()
-            ->count('checkout_group_key');
-        $newCheckoutDifference = $todayKeys->count() - $yesterdayCheckouts;
+        $yesterday = $todayDate->subDay()->toDateString();
+        $yesterdayCheckouts = $daysByDate->get($yesterday)['new_checkouts'];
+        $newCheckoutDifference = $todayIntake['new_checkouts'] - $yesterdayCheckouts;
 
         $activeKeys = Order::query()
             ->whereNotIn('checkout_group_key', $this->cancelledCheckoutKeys())
@@ -275,14 +269,14 @@ class AdminOrderGroupService
             'checkouts' => $checkouts,
             'records' => $records,
             'today' => [
-                'new_checkouts' => $todayKeys->count(),
+                'new_checkouts' => $todayIntake['new_checkouts'],
                 'yesterday_checkouts' => $yesterdayCheckouts,
                 'new_checkouts_difference' => $newCheckoutDifference,
                 'new_checkouts_change_percent' => $yesterdayCheckouts > 0
                     ? (int) round(($newCheckoutDifference / $yesterdayCheckouts) * 100)
                     : null,
-                'order_value_cents' => $todayFinancial['total_value_cents'],
-                'average_order_cents' => $todayFinancial['average_order_cents'],
+                'order_value_cents' => $todayIntake['total_value_cents'],
+                'average_order_cents' => $todayIntake['average_order_cents'],
                 'payment_checkouts' => $todayPayments['count'],
                 'payments_cents' => $todayPayments['amount_cents'],
                 'payment_events' => $todayPayments['events'],
@@ -294,7 +288,7 @@ class AdminOrderGroupService
                 'collected_cents' => $activeFinancial['collected_cents'],
                 'outstanding_cents' => $activeFinancial['outstanding_cents'],
             ],
-            'last_seven_days' => $this->lastSevenDaysDashboardStats(),
+            'last_seven_days' => $dailyStats,
         ];
     }
 
@@ -306,23 +300,18 @@ class AdminOrderGroupService
      *
      * @return array<int, array<string, int|string>>
      */
-    private function lastSevenDaysDashboardStats(): array
+    private function lastSevenDaysDashboardStats(CarbonImmutable $today): array
     {
-        $today = OrderDateTime::display(now())->startOfDay();
         $dates = collect(range(6, 0))
             ->map(fn (int $daysAgo): CarbonImmutable => $today->subDays($daysAgo));
         $start = OrderDateTime::utcStartOfDay($dates->first()->toDateString());
         $end = OrderDateTime::utcEndOfDay($dates->last()->toDateString());
 
-        $createdCheckouts = Order::withTrashed()
-            ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at')
-            ->whereNotNull('checkout_group_key')
-            ->groupBy('checkout_group_key')
-            ->havingRaw('MIN(created_at) >= ? AND MIN(created_at) <= ?', [$start, $end])
-            ->get();
+        $createdCheckouts = app(CheckoutIntakeStatistics::class)->query()
+            ->havingRaw('MIN(created_at) >= ? AND MIN(created_at) <= ?', [$start, $end])->get();
 
-        $checkoutDates = $createdCheckouts->mapWithKeys(function (Order $checkout): array {
-            $createdAt = CarbonImmutable::parse((string) $checkout->getRawOriginal('first_created_at'));
+        $checkoutDates = $createdCheckouts->mapWithKeys(function (object $checkout): array {
+            $createdAt = CarbonImmutable::parse((string) $checkout->first_created_at, 'UTC');
 
             return [(string) $checkout->checkout_group_key => OrderDateTime::display($createdAt)->toDateString()];
         });
@@ -533,7 +522,9 @@ class AdminOrderGroupService
             'direct_order_id' => $storyOrders->isNotEmpty()
                 ? (int) $storyOrders->first()->id
                 : null,
-            'created_at' => $orders->min('created_at'),
+            'created_at' => $first->getAttribute('checkout_first_created_at')
+                ? CarbonImmutable::parse($first->getAttribute('checkout_first_created_at'), 'UTC')
+                : $orders->min('created_at'),
             'latest_at' => $orders->max('created_at'),
             'updated_at' => $orders->max('updated_at'),
             'orders' => $orders,
@@ -631,9 +622,10 @@ class AdminOrderGroupService
             $query->where('payment_method', trim((string) $request->query('payment_method')));
         }
 
+        $createdFrom = $createdTo = null;
         if ($request->filled('from')) {
             try {
-                $query->where('created_at', '>=', OrderDateTime::utcStartOfDay((string) $request->query('from')));
+                $createdFrom = OrderDateTime::utcStartOfDay((string) $request->query('from'));
             } catch (\Throwable) {
                 // Ignore malformed query dates and keep the list usable.
             }
@@ -641,10 +633,14 @@ class AdminOrderGroupService
 
         if ($request->filled('to')) {
             try {
-                $query->where('created_at', '<=', OrderDateTime::utcEndOfDay((string) $request->query('to')));
+                $createdTo = OrderDateTime::utcEndOfDay((string) $request->query('to'));
             } catch (\Throwable) {
                 // Ignore malformed query dates and keep the list usable.
             }
+        }
+
+        if ($createdFrom !== null || $createdTo !== null) {
+            $query->whereIn('checkout_group_key', app(CheckoutIntakeStatistics::class)->keysBetween($createdFrom, $createdTo));
         }
 
         if ($request->filled('product_id')) {
@@ -885,12 +881,15 @@ class AdminOrderGroupService
         }
 
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
+        $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($keys);
 
         return $query
             ->with(self::INDEX_RELATIONS)
             ->whereIn('checkout_group_key', $keys)
             ->orderBy('id')
-            ->get();
+            ->get()->each(fn (Order $order) => $order->setAttribute(
+                'checkout_first_created_at', $creationDates->get($order->checkout_group_key)
+            ));
     }
 
     private function ordersForStats(Collection $keys, bool $includeDeleted): Collection
