@@ -29,7 +29,8 @@
             لا تُضاف المبيعات أو الشحن أو تكاليف الذكاء الاصطناعي تلقائيًا. الرصيد الحالي هو مجموع الوارد المرحّل ناقص مجموع الصادر المرحّل.
         </div>
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <p data-category-feedback role="status" aria-live="polite" class="text-sm font-bold text-indigo-700" hidden></p>
+        <section data-expense-refresh="summary" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             @foreach([
                 ['إجمالي الوارد', $summary['total_income'], 'border-emerald-100', 'text-emerald-700'],
                 ['إجمالي الصادر', $summary['total_expenses'], 'border-rose-100', 'text-rose-700'],
@@ -141,7 +142,7 @@
         </section>
 
         @can('expenses.view_reports')
-            <section class="grid gap-4 lg:grid-cols-2">
+            <section data-expense-refresh="breakdown" class="grid gap-4 lg:grid-cols-2">
                 @foreach(['income' => ['الوارد حسب التصنيف', 'text-emerald-700'], 'expense' => ['الصادر حسب التصنيف', 'text-rose-700']] as $type => [$label, $tone])
                     <div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                         <h3 class="font-black text-gray-900">{{ $label }}</h3>
@@ -160,7 +161,7 @@
             </section>
         @endcan
 
-        <section class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+        <section data-expense-refresh="transactions" class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
             @if($transactions->isEmpty())
                 <div class="px-6 py-16 text-center">
                     <div class="text-4xl">🧾</div>
@@ -182,15 +183,15 @@
                                 <tr class="{{ $transaction->status === 'voided' ? 'bg-gray-50 opacity-70' : '' }}">
                                     <td class="whitespace-nowrap px-4 py-4">{{ $transaction->transaction_date->format('Y-m-d') }}</td>
                                     <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $transaction->type === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700' }}">{{ $typeLabels[$transaction->type] }}</span></td>
-                                    <td class="px-4 py-4 font-bold">{{ $transaction->category?->name }}</td>
+                                    <td class="px-4 py-4 font-bold">@include('admin.expenses._category-select')</td>
                                     <td class="max-w-xs truncate px-4 py-4 text-gray-600">{{ $transaction->description ?: '—' }}</td>
                                     <td class="px-4 py-4">{{ $transaction->vendor_name ?: '—' }}</td>
                                     <td class="px-4 py-4">{{ $paymentMethods[$transaction->payment_method] ?? '—' }}</td>
                                     <td class="whitespace-nowrap px-4 py-4 font-black {{ $transaction->type === 'income' ? 'text-emerald-700' : 'text-rose-700' }}">{{ $transaction->type === 'income' ? '+' : '−' }} {{ $money($transaction->amount) }}</td>
                                     <td class="px-4 py-4">
-                                        @if($transaction->attachment_path)
+                                        @if($transaction->attachment_path || $transaction->attachments_count)
                                             @can('expenses.view_attachments')
-                                                <a href="{{ route('admin.expenses.attachment', $transaction) }}" target="_blank" class="font-black text-indigo-600">عرض</a>
+                                                <a href="{{ route('admin.expenses.show', $transaction) }}" class="font-black text-indigo-600">{{ arabic_number($transaction->attachments_count + ($transaction->attachment_path ? 1 : 0)) }} مرفق</a>
                                             @else
                                                 <span class="text-gray-400">موجود</span>
                                             @endcan
@@ -234,7 +235,7 @@
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <span class="rounded-full px-2.5 py-1 text-xs font-black {{ $transaction->type === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700' }}">{{ $typeLabels[$transaction->type] }}</span>
-                                    <h3 class="mt-2 font-black text-gray-900">{{ $transaction->category?->name }}</h3>
+                                    <div class="mt-2 font-black text-gray-900">@include('admin.expenses._category-select')</div>
                                 </div>
                                 <p class="text-left font-black {{ $transaction->type === 'income' ? 'text-emerald-700' : 'text-rose-700' }}">{{ $transaction->type === 'income' ? '+' : '−' }} {{ $money($transaction->amount) }}</p>
                             </div>
@@ -275,4 +276,58 @@
             @endif
         </section>
     </div>
+    @push('scripts')
+        <script>
+            (() => {
+                let saving = false;
+                const feedback = document.querySelector('[data-category-feedback]');
+                document.addEventListener('change', async (event) => {
+                    const select = event.target.closest('[data-expense-category]');
+                    if (!select) return;
+                    const form = select.closest('form');
+                    if (saving) {
+                        select.value = select.dataset.originalValue;
+                        return;
+                    }
+                    saving = true;
+                    const selected = select.value;
+                    const body = new FormData(form);
+                    document.querySelectorAll('[data-expense-category]').forEach(input => input.disabled = true);
+                    feedback.hidden = false;
+                    feedback.textContent = 'جارٍ حفظ التصنيف…';
+                    let saved = false;
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST', body, credentials: 'same-origin',
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(Object.values(result.errors || {}).flat()[0] || result.message || 'تعذر حفظ التصنيف. حاول مرة أخرى.');
+                        saved = true;
+                        document.querySelectorAll(`[data-transaction-id="${form.dataset.transactionId}"]`).forEach(other => {
+                            const input = other.querySelector('select');
+                            input.value = selected;
+                            input.dataset.originalValue = selected;
+                            other.querySelector('[name="expected_category_id"]').value = selected;
+                        });
+                        // Refresh the server-calculated reports and filtered rows without reloading the page.
+                        const refreshed = await fetch(window.location.href, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'text/html' } });
+                        if (!refreshed.ok || refreshed.redirected) throw new Error('refresh');
+                        const page = new DOMParser().parseFromString(await refreshed.text(), 'text/html');
+                        const regions = [...document.querySelectorAll('[data-expense-refresh]')];
+                        const replacements = regions.map(region => page.querySelector(`[data-expense-refresh="${region.dataset.expenseRefresh}"]`));
+                        if (replacements.some(region => !region)) throw new Error('refresh');
+                        regions.forEach((region, index) => region.replaceWith(replacements[index]));
+                        feedback.textContent = 'تم تحديث التصنيف والتقارير.';
+                    } catch (error) {
+                        if (!saved) select.value = select.dataset.originalValue;
+                        feedback.textContent = saved ? 'تم حفظ التصنيف. حدّث الصفحة لعرض التقارير المحدثة.' : error.message;
+                    } finally {
+                        saving = false;
+                        document.querySelectorAll('[data-expense-category]').forEach(input => input.disabled = false);
+                    }
+                });
+            })();
+        </script>
+    @endpush
 </x-admin-layout>

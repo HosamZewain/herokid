@@ -93,19 +93,18 @@
 
             <div class="rounded-2xl border border-dashed border-gray-300 p-5">
                 <label class="block">
-                    <span class="mb-2 block text-sm font-black text-gray-700">فاتورة أو إيصال (اختياري)</span>
-                    <input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" class="block w-full text-sm">
-                    <span class="mt-2 block text-xs text-gray-500">PDF أو JPG أو PNG أو WEBP — بحد أقصى {{ config('expenses.attachment_max_mb') }} MB. يُحفظ الملف بشكل خاص.</span>
+                    <span class="mb-2 block text-sm font-black text-gray-700">فواتير أو إيصالات (اختياري)</span>
+                    <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" class="block w-full text-sm">
+                    <span class="mt-2 block text-xs text-gray-500">اختر عدة ملفات — حتى 20 ملفًا في المرة الواحدة، {{ config('expenses.attachment_max_mb') }} MB لكل ملف. PDF أو JPG أو PNG أو WEBP. الملفات الجديدة تُضاف بدون حذف المرفقات الحالية.</span>
                 </label>
                 @if($editing && $transaction->attachment_path)
                     <div class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                         المرفق الحالي: <span class="font-black">{{ $transaction->attachment_original_name }}</span>
-                        <label class="mt-2 flex items-center gap-2 font-bold">
-                            <input type="checkbox" name="confirm_replace_attachment" value="1" @checked(old('confirm_replace_attachment')) class="rounded">
-                            أؤكد استبدال المرفق الحالي إذا اخترت ملفًا جديدًا.
-                        </label>
                     </div>
                 @endif
+                @foreach($transaction->attachments as $attachment)
+                    <p class="mt-2 break-words text-sm text-gray-600">مرفق محفوظ: {{ $attachment->original_name }}</p>
+                @endforeach
             </div>
 
             <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

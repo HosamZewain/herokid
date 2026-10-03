@@ -3,13 +3,16 @@
 namespace App\Services\Expenses;
 
 use App\Models\ExpenseActivityLog;
+use App\Models\ExpenseCategory;
 use App\Models\ExpenseTransaction;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
+use App\Support\AppDateTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -45,8 +48,8 @@ class ExpenseLedgerService
         $allTime = ExpenseTransaction::query()->posted();
         $totalIncome = (float) (clone $allTime)->where('type', 'income')->sum('amount');
         $totalExpenses = (float) (clone $allTime)->where('type', 'expense')->sum('amount');
-        $monthStart = CarbonImmutable::now()->startOfMonth()->toDateString();
-        $monthEnd = CarbonImmutable::now()->endOfMonth()->toDateString();
+        $monthStart = CarbonImmutable::now(AppDateTime::timezone())->startOfMonth()->toDateString();
+        $monthEnd = CarbonImmutable::now(AppDateTime::timezone())->endOfMonth()->toDateString();
         $monthQuery = ExpenseTransaction::query()
             ->posted()
             ->whereBetween('transaction_date', [$monthStart, $monthEnd]);
@@ -82,17 +85,18 @@ class ExpenseLedgerService
         ];
     }
 
-    public function create(array $data, User $actor, ?UploadedFile $attachment = null): ExpenseTransaction
+    public function create(array $data, User $actor, ?UploadedFile $attachment = null, array $attachments = []): ExpenseTransaction
     {
-        return DB::transaction(function () use ($data, $actor, $attachment): ExpenseTransaction {
+        return $this->withStoredFiles(function (array &$storedFiles) use ($data, $actor, $attachment, $attachments): ExpenseTransaction {
             $transaction = ExpenseTransaction::create($this->transactionPayload($data) + [
                 'status' => 'posted',
                 'created_by_user_id' => $actor->id,
             ]);
 
             if ($attachment) {
-                $this->storeAttachment($transaction, $attachment);
+                $this->storeAttachment($transaction, $attachment, $storedFiles);
             }
+            $this->appendAttachments($transaction, $attachments, $actor, $storedFiles);
 
             $this->activity(
                 $transaction,
@@ -114,13 +118,13 @@ class ExpenseLedgerService
         });
     }
 
-    public function update(ExpenseTransaction $transaction, array $data, User $actor, ?UploadedFile $attachment = null): ExpenseTransaction
+    public function update(ExpenseTransaction $transaction, array $data, User $actor, ?UploadedFile $attachment = null, array $attachments = []): ExpenseTransaction
     {
         if ($transaction->status === 'voided') {
             throw ValidationException::withMessages(['transaction' => 'لا يمكن تعديل عملية ملغاة.']);
         }
 
-        return DB::transaction(function () use ($transaction, $data, $actor, $attachment): ExpenseTransaction {
+        return $this->withStoredFiles(function (array &$storedFiles) use ($transaction, $data, $actor, $attachment, $attachments): ExpenseTransaction {
             $locked = ExpenseTransaction::query()->lockForUpdate()->findOrFail($transaction->id);
             if ($locked->status === 'voided') {
                 throw ValidationException::withMessages(['transaction' => 'لا يمكن تعديل عملية ملغاة.']);
@@ -130,8 +134,9 @@ class ExpenseLedgerService
             $locked->update($this->transactionPayload($data));
 
             if ($attachment) {
-                $this->replaceAttachment($locked, $attachment);
+                $this->replaceAttachment($locked, $attachment, $storedFiles);
             }
+            $this->appendAttachments($locked, $attachments, $actor, $storedFiles);
 
             $after = $this->auditValues($locked->fresh());
             $changes = AdminActivityLogger::changedValues($before, $after);
@@ -145,6 +150,38 @@ class ExpenseLedgerService
             );
 
             return $locked->fresh(['category', 'createdBy']);
+        });
+    }
+
+    public function updateCategory(ExpenseTransaction $transaction, int $categoryId, int $expectedCategoryId, User $actor): ExpenseTransaction
+    {
+        return DB::transaction(function () use ($transaction, $categoryId, $expectedCategoryId, $actor): ExpenseTransaction {
+            $locked = ExpenseTransaction::query()->lockForUpdate()->findOrFail($transaction->id);
+            if ($locked->status !== 'posted') {
+                throw ValidationException::withMessages(['category_id' => 'لا يمكن تعديل تصنيف عملية ملغاة.']);
+            }
+            abort_if($locked->category_id !== $expectedCategoryId, 409, 'تم تعديل التصنيف بواسطة مستخدم آخر. حدّث الصفحة أولًا.');
+            $category = ExpenseCategory::query()->lockForUpdate()->find($categoryId);
+            if (! $category || $category->type !== $locked->type || (! $category->is_active && $categoryId !== $locked->category_id)) {
+                throw ValidationException::withMessages(['category_id' => 'اختر تصنيفًا فعالًا يطابق نوع العملية.']);
+            }
+            if ($categoryId === $locked->category_id) {
+                return $locked;
+            }
+
+            $before = $this->auditValues($locked);
+            $locked->update(['category_id' => $categoryId]);
+            $after = $this->auditValues($locked);
+            $this->activity($locked, $actor, 'updated', 'تم تعديل تصنيف العملية المالية.', $before, $after);
+            AdminActivityLogger::log(
+                action: 'expenses.transaction.updated',
+                description: 'تم تعديل تصنيف العملية المالية رقم '.$locked->id.'.',
+                subject: $locked,
+                properties: ['changes' => AdminActivityLogger::changedValues($before, $after)],
+                admin: $actor,
+            );
+
+            return $locked;
         });
     }
 
@@ -181,7 +218,7 @@ class ExpenseLedgerService
     public function dateRange(array $filters): array
     {
         $preset = $filters['date_preset'] ?? 'this_month';
-        $today = CarbonImmutable::today();
+        $today = CarbonImmutable::today(AppDateTime::timezone());
 
         return match ($preset) {
             'today' => [$today->toDateString(), $today->toDateString()],
@@ -220,34 +257,86 @@ class ExpenseLedgerService
         ];
     }
 
-    private function storeAttachment(ExpenseTransaction $transaction, UploadedFile $file): void
+    private function storeFile(ExpenseTransaction $transaction, UploadedFile $file, array &$storedFiles): array
     {
         $extension = strtolower($file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'bin');
+        $disk = (string) config('media.private_disk', 'local');
         $path = $file->storeAs(
             'expenses/transactions/'.$transaction->id,
             Str::uuid().'.'.$extension,
-            (string) config('media.private_disk', 'local'),
+            $disk,
         );
 
         if (! $path) {
             throw ValidationException::withMessages(['attachment' => 'تعذر حفظ المرفق. حاول مرة أخرى.']);
         }
 
+        $storedFiles[] = [$disk, $path];
+
+        return [
+            'disk' => $disk,
+            'path' => $path,
+            'original_name' => Str::limit($file->getClientOriginalName(), 250, ''),
+            'mime' => $file->getMimeType(),
+            'size' => $file->getSize(),
+        ];
+    }
+
+    private function storeAttachment(ExpenseTransaction $transaction, UploadedFile $file, array &$storedFiles): void
+    {
+        $stored = $this->storeFile($transaction, $file, $storedFiles);
         $transaction->update([
-            'attachment_path' => $path,
-            'attachment_original_name' => Str::limit($file->getClientOriginalName(), 250, ''),
-            'attachment_mime' => $file->getMimeType(),
-            'attachment_size' => $file->getSize(),
+            'attachment_path' => $stored['path'],
+            'attachment_original_name' => $stored['original_name'],
+            'attachment_mime' => $stored['mime'],
+            'attachment_size' => $stored['size'],
         ]);
     }
 
-    private function replaceAttachment(ExpenseTransaction $transaction, UploadedFile $file): void
+    private function appendAttachments(ExpenseTransaction $transaction, array $files, User $actor, array &$storedFiles): void
+    {
+        foreach ($files as $file) {
+            $transaction->attachments()->create($this->storeFile($transaction, $file, $storedFiles) + [
+                'uploaded_by_user_id' => $actor->id,
+            ]);
+        }
+    }
+
+    private function replaceAttachment(ExpenseTransaction $transaction, UploadedFile $file, array &$storedFiles): void
     {
         $oldPath = $transaction->attachment_path;
-        $this->storeAttachment($transaction, $file);
+        $disk = (string) config('media.private_disk', 'local');
+        $this->storeAttachment($transaction, $file, $storedFiles);
 
         if ($oldPath && $oldPath !== $transaction->attachment_path) {
-            Storage::disk((string) config('media.private_disk', 'local'))->delete($oldPath);
+            // Never remove the original invoice before its replacement and audit are committed.
+            DB::afterCommit(fn () => $this->cleanupFile($disk, $oldPath));
+        }
+    }
+
+    private function withStoredFiles(callable $operation): ExpenseTransaction
+    {
+        $storedFiles = [];
+        try {
+            return DB::transaction(function () use ($operation, &$storedFiles): ExpenseTransaction {
+                return $operation($storedFiles);
+            });
+        } catch (\Throwable $exception) {
+            foreach ($storedFiles as [$disk, $path]) {
+                $this->cleanupFile($disk, $path);
+            }
+            throw $exception;
+        }
+    }
+
+    private function cleanupFile(string $disk, string $path): void
+    {
+        try {
+            if (! Storage::disk($disk)->delete($path)) {
+                Log::warning('Expense attachment cleanup failed.', ['disk' => $disk]);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Expense attachment cleanup failed.', ['disk' => $disk, 'exception_type' => $exception::class]);
         }
     }
 
@@ -265,6 +354,7 @@ class ExpenseLedgerService
             'description' => $transaction->description,
             'notes' => $transaction->notes,
             'attachment_original_name' => $transaction->attachment_original_name,
+            'attachments' => $transaction->attachments()->get(['id', 'original_name', 'mime', 'size'])->toArray(),
             'status' => $transaction->status,
             'void_reason' => $transaction->void_reason,
         ];

@@ -63,6 +63,20 @@
                 </div>
             @endif
 
+            @foreach($transaction->attachments as $attachment)
+                <div class="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                    <p class="break-words text-sm font-black text-indigo-900">المرفق الخاص: {{ $attachment->original_name }}</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @can('expenses.view_attachments')
+                            <a target="_blank" rel="noopener" href="{{ route('admin.expenses.attachments.show', [$transaction, $attachment]) }}" class="rounded-lg bg-white px-4 py-2 text-xs font-black text-indigo-700">عرض المرفق</a>
+                        @endcan
+                        @can('expenses.download_attachments')
+                            <a href="{{ route('admin.expenses.attachments.download', [$transaction, $attachment]) }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-black text-white">تنزيل المرفق</a>
+                        @endcan
+                    </div>
+                </div>
+            @endforeach
+
             @if($transaction->status === 'posted')
                 <div class="mt-7 flex flex-wrap gap-3 border-t border-gray-100 pt-6">
                     @can('expenses.edit')

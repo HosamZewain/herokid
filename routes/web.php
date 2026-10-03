@@ -530,6 +530,15 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('expenses/{expense}', [ExpenseController::class, 'update'])
         ->middleware('permission:expenses.edit')
         ->name('expenses.update');
+    Route::patch('expenses/{expense}/category', [ExpenseController::class, 'updateCategory'])
+        ->middleware('permission:expenses.edit')
+        ->name('expenses.category.update');
+    Route::get('expenses/{expense}/attachments/{attachment}', [ExpenseController::class, 'additionalAttachment'])
+        ->middleware('permission:expenses.view_attachments')
+        ->name('expenses.attachments.show');
+    Route::get('expenses/{expense}/attachments/{attachment}/download', [ExpenseController::class, 'downloadAdditionalAttachment'])
+        ->middleware('permission:expenses.download_attachments')
+        ->name('expenses.attachments.download');
     Route::post('expenses/{expense}/void', [ExpenseController::class, 'void'])
         ->middleware('permission:expenses.void')
         ->name('expenses.void');

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExpenseAttachment;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseTransaction;
 use App\Models\User;
 use App\Services\Expenses\ExpenseLedgerService;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +27,7 @@ class ExpenseController extends Controller
         $transactions = $ledger->filteredQuery($filters)
             ->latest('transaction_date')
             ->latest('id')
+            ->withCount('attachments')
             ->paginate(20)
             ->withQueryString();
 
@@ -50,7 +53,7 @@ class ExpenseController extends Controller
         return view('admin.expenses.form', [
             'transaction' => new ExpenseTransaction([
                 'type' => $type,
-                'transaction_date' => today(),
+                'transaction_date' => now(AppDateTime::timezone())->startOfDay(),
                 'description' => $kind === 'opening' ? 'رصيد افتتاحي' : null,
             ]),
             'kind' => $kind,
@@ -84,7 +87,7 @@ class ExpenseController extends Controller
             'description' => $kind === 'opening' ? ($request->input('description') ?: 'رصيد افتتاحي') : $request->input('description'),
         ]);
         $data = $this->validateTransaction($request, activeCategoryOnly: true);
-        $transaction = $ledger->create($data, $request->user(), $request->file('attachment'));
+        $transaction = $ledger->create($data, $request->user(), $request->file('attachment'), $request->file('attachments', []));
 
         return redirect()
             ->route('admin.expenses.show', $transaction)
@@ -93,7 +96,7 @@ class ExpenseController extends Controller
 
     public function show(ExpenseTransaction $expense): View
     {
-        $expense->load(['category', 'createdBy', 'voidedBy', 'activityLogs.actor']);
+        $expense->load(['category', 'createdBy', 'voidedBy', 'activityLogs.actor', 'attachments']);
 
         return view('admin.expenses.show', ['transaction' => $expense]);
     }
@@ -107,7 +110,7 @@ class ExpenseController extends Controller
             'kind' => $expense->type,
             'categories' => ExpenseCategory::query()
                 ->where('type', $expense->type)
-                ->where(fn ($query) => $query->where('is_active', true)->orWhereKey($expense->category_id))
+                ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $expense->category_id))
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -127,10 +130,58 @@ class ExpenseController extends Controller
             ]);
         }
 
-        $data = $this->validateTransaction($request, activeCategoryOnly: false);
-        $ledger->update($expense, $data, $request->user(), $request->file('attachment'));
+        $data = $this->validateTransaction($request, activeCategoryOnly: false, currentCategoryId: $expense->category_id);
+        $ledger->update($expense, $data, $request->user(), $request->file('attachment'), $request->file('attachments', []));
 
         return redirect()->route('admin.expenses.show', $expense)->with('success', 'تم تحديث العملية بنجاح.');
+    }
+
+    public function updateCategory(Request $request, ExpenseTransaction $expense, ExpenseLedgerService $ledger): JsonResponse|RedirectResponse
+    {
+        $data = $request->validate([
+            'category_id' => ['required', 'integer', 'exists:expense_categories,id'],
+            'expected_category_id' => ['required', 'integer'],
+        ]);
+        $updated = $ledger->updateCategory($expense, (int) $data['category_id'], (int) $data['expected_category_id'], $request->user());
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'تم تحديث التصنيف.', 'category_id' => $updated->category_id]);
+        }
+
+        return redirect()->route('admin.expenses.index')->with('success', 'تم تحديث التصنيف.');
+    }
+
+    public function additionalAttachment(ExpenseTransaction $expense, ExpenseAttachment $attachment)
+    {
+        $this->ensureAdditionalAttachmentExists($expense, $attachment);
+
+        return Storage::disk($attachment->disk)->response($attachment->path, $attachment->original_name, [
+            'Content-Type' => $attachment->mime ?: 'application/octet-stream',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function downloadAdditionalAttachment(Request $request, ExpenseTransaction $expense, ExpenseAttachment $attachment)
+    {
+        $this->ensureAdditionalAttachmentExists($expense, $attachment);
+        AdminActivityLogger::log(
+            action: 'expenses.attachment.downloaded',
+            description: 'تم تنزيل مرفق العملية المالية رقم '.$expense->id.'.',
+            subject: $expense,
+            properties: ['attachment_id' => $attachment->id, 'attachment_name' => $attachment->original_name],
+            admin: $request->user(),
+        );
+
+        return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name, [
+            'Cache-Control' => 'private, no-store, max-age=0', 'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    private function ensureAdditionalAttachmentExists(ExpenseTransaction $expense, ExpenseAttachment $attachment): void
+    {
+        abort_unless($attachment->transaction_id === $expense->id, 404);
+        abort_unless(Storage::disk($attachment->disk)->exists($attachment->path), 404);
     }
 
     public function void(Request $request, ExpenseTransaction $expense, ExpenseLedgerService $ledger): RedirectResponse
@@ -183,7 +234,7 @@ class ExpenseController extends Controller
     public function export(Request $request, ExpenseLedgerService $ledger): StreamedResponse
     {
         $filters = $this->filters($request);
-        $transactions = $ledger->filteredQuery($filters)->latest('transaction_date')->latest('id')->get();
+        $transactions = $ledger->filteredQuery($filters)->with('attachments:id,transaction_id,original_name')->latest('transaction_date')->latest('id')->get();
         AdminActivityLogger::log(
             action: 'expenses.exported',
             description: 'تم تصدير دفتر المصروفات اليدوي.',
@@ -214,7 +265,7 @@ class ExpenseController extends Controller
                     number_format((float) $transaction->amount, 2, '.', ''),
                     $transaction->currency,
                     $transaction->status,
-                    $transaction->attachment_original_name,
+                    collect([$transaction->attachment_original_name])->merge($transaction->attachments->pluck('original_name'))->filter()->implode(' | '),
                     $transaction->createdBy?->name,
                     AppDateTime::format($transaction->created_at, 'Y-m-d H:i:s'),
                 ]));
@@ -227,13 +278,15 @@ class ExpenseController extends Controller
         ]);
     }
 
-    private function validateTransaction(Request $request, bool $activeCategoryOnly): array
+    private function validateTransaction(Request $request, bool $activeCategoryOnly, ?int $currentCategoryId = null): array
     {
         $type = (string) $request->input('type');
-        $categoryRule = Rule::exists('expense_categories', 'id')->where(function ($query) use ($type, $activeCategoryOnly): void {
+        $categoryRule = Rule::exists('expense_categories', 'id')->where(function ($query) use ($type, $activeCategoryOnly, $currentCategoryId): void {
             $query->where('type', $type);
             if ($activeCategoryOnly) {
                 $query->where('is_active', true);
+            } else {
+                $query->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $currentCategoryId));
             }
         });
         $maxKb = max(1, (int) config('expenses.attachment_max_mb', 5)) * 1024;
@@ -241,7 +294,7 @@ class ExpenseController extends Controller
         return $request->validate([
             'type' => ['required', Rule::in(['income', 'expense'])],
             'transaction_date' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'min:0.01', 'max:9999999999.99'],
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999.99'],
             'category_id' => ['required', $categoryRule],
             'payment_method' => ['nullable', Rule::in(array_keys(config('expenses.payment_methods', [])))],
             'vendor_name' => ['nullable', 'string', 'max:255'],
@@ -249,11 +302,17 @@ class ExpenseController extends Controller
             'description' => ['nullable', 'string', 'max:3000'],
             'notes' => ['nullable', 'string', 'max:10000'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:'.$maxKb],
+            'attachments' => ['nullable', 'array', 'max:20'],
+            'attachments.*' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:'.$maxKb],
         ], [
             'amount.min' => 'يجب أن يكون المبلغ أكبر من صفر.',
+            'amount.decimal' => 'أدخل المبلغ بحد أقصى منزلتين عشريتين بدون تقريب تلقائي.',
             'category_id.exists' => 'التصنيف غير صالح أو لا يطابق نوع العملية.',
             'attachment.mimes' => 'المرفق يجب أن يكون PDF أو JPG أو PNG أو WEBP.',
             'attachment.max' => 'حجم المرفق يتجاوز الحد المسموح.',
+            'attachments.max' => 'يمكن إضافة حتى 20 مرفقًا في المرة الواحدة.',
+            'attachments.*.mimes' => 'كل مرفق يجب أن يكون PDF أو JPG أو PNG أو WEBP.',
+            'attachments.*.max' => 'أحد المرفقات يتجاوز الحد المسموح.',
         ]);
     }
 

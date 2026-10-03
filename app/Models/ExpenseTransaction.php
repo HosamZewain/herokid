@@ -41,6 +41,11 @@ class ExpenseTransaction extends Model
         return $this->hasMany(ExpenseActivityLog::class, 'transaction_id')->latest('id');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ExpenseAttachment::class, 'transaction_id')->orderBy('id');
+    }
+
     public function scopePosted(Builder $query): Builder
     {
         return $query->where('status', 'posted');
