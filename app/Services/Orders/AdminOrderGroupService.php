@@ -433,12 +433,13 @@ class AdminOrderGroupService
             ->get();
     }
 
-    public function recent(int $limit = 8): Collection
+    public function recent(int $limit = 20): Collection
     {
-        $groups = Order::query()
-            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at')
-            ->groupBy('checkout_group_key')
-            ->orderByDesc('latest_at')
+        $groups = app(CheckoutIntakeStatistics::class)->query()
+            ->whereIn('checkout_group_key', Order::query()->select('checkout_group_key')->distinct())
+            ->selectRaw('MIN(id) as first_order_id')
+            ->orderByDesc('first_created_at')
+            ->orderByDesc('first_order_id')
             ->limit(max(1, $limit))
             ->get();
 

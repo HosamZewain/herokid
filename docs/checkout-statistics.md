@@ -14,6 +14,12 @@ same seven-day dataset displayed in the daily table. Intake includes cancelled
 and fully soft-deleted purchases. The default order-report lifecycle is `all`;
 active/finished/cancelled catalog, status and permission filters still apply.
 
+Dashboard recent purchases show up to 20 non-deleted checkouts, ordered by their
+original purchase date descending, then original row ID descending for equal
+timestamps. The date column shows that same original date and time in Cairo.
+Deleted original rows still establish the date of a checkout with live rows;
+fully deleted checkouts remain excluded from this operational recent list.
+
 Order-list filters, order-report filters/CSV and sales-report period selection
 use the same original checkout date. Order-report daily breakdown and sales
 trends use that date too. Sales trends group dates in the display timezone, not

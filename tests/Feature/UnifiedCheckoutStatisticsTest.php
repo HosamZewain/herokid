@@ -300,6 +300,87 @@ class UnifiedCheckoutStatisticsTest extends TestCase
         $this->assertSame(2, $invalid->viewData('groups')->total());
     }
 
+    public function test_recent_purchases_use_original_date_not_the_latest_added_row(): void
+    {
+        $original = $this->row('OLDER', 30000, 9500, now()->subDays(2));
+        $this->row('NEWER', 20000, 9500, now()->subDay());
+        $this->row('OLDER', 10000, 9500);
+
+        $recent = app(AdminOrderGroupService::class)->recent();
+        $this->assertSame(['NEWER', 'OLDER'], $recent->pluck('key')->all());
+        $this->assertTrue($original->created_at->equalTo($recent->last()['created_at']));
+        $this->assertSame(2, $recent->last()['orders']->count());
+    }
+
+    public function test_recent_purchases_keep_original_date_when_the_first_row_is_deleted(): void
+    {
+        $original = $this->row('OLDER', 30000, 9500, now()->subDays(2));
+        $this->row('NEWER', 20000, 9500, now()->subDay());
+        $replacement = $this->row('OLDER', 10000, 9500);
+        $original->delete();
+        $this->row('FULLY-DELETED', 5000, 9500)->delete();
+
+        $recent = app(AdminOrderGroupService::class)->recent();
+        $this->assertSame(['NEWER', 'OLDER'], $recent->pluck('key')->all());
+        $this->assertTrue($original->created_at->equalTo($recent->last()['created_at']));
+        $this->assertSame($replacement->id, $recent->last()['representative_id']);
+    }
+
+    public function test_recent_purchases_with_equal_timestamps_have_a_stable_original_id_tiebreaker(): void
+    {
+        $first = $this->row('Z-FIRST', 10000, 9500);
+        $second = $this->row('A-SECOND', 20000, 9500);
+        $this->row('Z-FIRST', 30000, 9500);
+
+        $service = app(AdminOrderGroupService::class);
+        for ($i = 0; $i < 3; $i++) {
+            $this->assertSame(['A-SECOND', 'Z-FIRST'], $service->recent()->pluck('key')->all());
+        }
+        $this->assertGreaterThan($first->id, $second->id);
+    }
+
+    public function test_dashboard_recent_list_contains_twenty_checkouts_not_twenty_item_rows(): void
+    {
+        for ($i = 0; $i < 22; $i++) {
+            $this->row('PURCHASE-'.$i, 10000, 9500, now()->subMinutes(22 - $i));
+            if ($i === 0) {
+                $this->row('PURCHASE-'.$i, 20000, 9500);
+            }
+        }
+        $admin = User::factory()->create(['role' => 'admin']);
+        $response = $this->actingAs($admin)->get(route('admin.dashboard.index'))->assertOk();
+        $recent = $response->viewData('recentOrders');
+        $this->assertCount(20, $recent);
+        $this->assertSame('PURCHASE-21', $recent->first()['key']);
+        $this->assertSame('PURCHASE-2', $recent->last()['key']);
+        $this->assertNotContains('PURCHASE-0', $recent->pluck('key')->all());
+        $this->assertCount(3, app(AdminOrderGroupService::class)->recent(3));
+    }
+
+    public function test_dashboard_displays_original_purchase_date_and_time_in_cairo(): void
+    {
+        $createdAt = CarbonImmutable::parse('2026-10-04 00:05:00', 'Africa/Cairo')->utc();
+        $this->travelTo($createdAt->addHours(2));
+        $original = $this->row('MIDNIGHT-RECENT', 10000, 9500, $createdAt);
+        $this->row('MIDNIGHT-RECENT', 20000, 9500);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->get(route('admin.dashboard.index'))->assertOk();
+        $response->assertSee('تاريخ ووقت الشراء')->assertSee('04/10/2026 12:05 AM');
+        $this->assertTrue($original->created_at->equalTo($response->viewData('recentOrders')->first()['created_at']));
+    }
+
+    public function test_recent_purchase_lookup_is_read_only_and_handles_an_empty_list(): void
+    {
+        $service = app(AdminOrderGroupService::class);
+        $this->assertCount(0, $service->recent());
+        $this->row('RECENT-READ-ONLY', 10000, 9500);
+        $before = DB::table('orders')->get()->toJson();
+        $service->recent();
+        $this->assertSame($before, DB::table('orders')->get()->toJson());
+        $this->assertDatabaseCount('order_group_assignments', 0);
+    }
+
     private function sales(string $range): array
     {
         return app(SalesReportService::class)->report(SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => $range])));
