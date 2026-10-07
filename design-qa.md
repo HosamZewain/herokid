@@ -67,4 +67,20 @@ Build/test environment and screenshot troubleshooting are not counted as visual-
 - P3: future editorial work may update legacy story-focused SEO/footer/page copy through existing settings when approved. No automatic overwrite was introduced in this release.
 - P3: the unchanged build still reports existing large lazy HEIC/PDF chunks and stale Browserslist metadata; those dependency/performance updates need a separate scoped review.
 
+## Footer refinement — 2026-10-07
+
+User requested a focused improvement to the approved footer; the rest of the design remains unchanged. Source state: [original desktop footer](docs/qa/homepage/footer-before-desktop.png) and [original mobile footer](docs/qa/homepage/footer-before-mobile.png). Rendered final state: [desktop](docs/qa/homepage/footer-after-desktop.png) and [mobile](docs/qa/homepage/footer-after-mobile.png). Combined before/after comparisons: [desktop](docs/qa/homepage/footer-comparison-desktop.jpg), [mobile](docs/qa/homepage/footer-comparison-mobile.jpg).
+
+- Logged-out homepage with identical synthetic catalog/contact settings, Arabic RTL. Desktop CSS viewport 1440×900, scale 1; footer crops 1440×312 before and 1440×470 after. Mobile CSS viewport 390×844, scale 1; crops 390×664 before and 390×940 after. Different footer heights are intentional: readable headings and 44px minimum touch targets replace the compact unlabeled links. No pixel rescaling. Footer-only crops are the focused comparison; unrelated page regions were not redesigned.
+- Final mobile evidence uses two overlapping actual viewport captures at observed scroll offsets 5944 and 6113. Combined at footer-relative y=620, omitting repeated floating controls. An offscreen capture showing an invisible skip-link incorrectly painted over the logo was rejected after verifying its real DOM rectangle was above the viewport and it was not focused.
+- Initial P2: unlabeled uneven columns, isolated long help column on mobile and policies mixed with help. Fixed with named discovery/guide/contact groups, two-column mobile navigation, separate policy bar, and contact/social buttons.
+- Second P2: shrinking mobile brand link and floating WhatsApp overlapping the desktop provenance line. Fixed with a non-shrinking logo, reserved desktop clearance and mobile bottom space. Final screenshots show preserved logo proportions and unobscured footer text.
+- Typography: original Cairo fonts retained; 13–14px links and 15–17px group headings provide hierarchy. Layout: balanced four-column desktop, brand plus three columns on tablet, two navigation columns plus full-width contact on mobile. Colors: same navy background, aqua headings and readable light text. Assets: original logo preserved, no generated/replacement artwork. Content: all original routes, visibility flags, configured description and contact values preserved; email/phone isolate LTR direction, and Blade escaping remains intact.
+- Browser checks at 320, 390, 768, 1024 and 1440 CSS pixels: no horizontal page/footer overflow, all non-logo footer links at least 44px tall. Story-detail page renders the same footer, retains its purchase form and has no browser errors/warnings in the inspected state.
+- Current footer regression runs: homepage/shared storefront **42 passed, 379 assertions** (14.95s); cart/checkout **27 passed, 363 assertions** (14.52s). Total **69 passed, 742 assertions**. The earlier full-suite results above belong to the preceding homepage integration, not this footer-only follow-up; full suite was not rerun for this presentation-only change.
+- Changed-test Pint, Blade compilation, production build and diff whitespace checks passed. Build after compiling all templates preserves the prior shared app stylesheet byte-for-byte; only the footer theme asset is replaced. Existing chunk-size/Browserslist warnings remain unrelated.
+- No application handlers, database migrations, payment logic, public contact settings or live deployment changed. Preview remains local; release stays on the integration branch, not main.
+
+Footer follow-up final result: passed
+
 final result: passed

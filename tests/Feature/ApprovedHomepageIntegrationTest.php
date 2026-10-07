@@ -82,6 +82,9 @@ class ApprovedHomepageIntegrationTest extends TestCase
         $html = $this->get(route($route))->assertOk()->getContent();
         $this->assertStringContainsString('hk-site-header', $html);
         $this->assertStringContainsString('hk-site-footer', $html);
+        $this->assertStringContainsString('id="hk-footer-discover"', $html);
+        $this->assertStringContainsString('id="hk-footer-guide"', $html);
+        $this->assertStringContainsString('aria-label="السياسات"', $html);
         $this->assertStringContainsString('herokid-front', $html);
         $this->assertStringContainsString('front-theme-', $html);
         $this->assertStringNotContainsString('fonts.bunny.net', $html);
@@ -110,6 +113,45 @@ class ApprovedHomepageIntegrationTest extends TestCase
             ->assertSee('name="child_name"', false)->assertSee('name="language"', false);
         $this->get(route('shop.product.show', $product))->assertOk()
             ->assertSee(route('cart.products.store', $product), false)->assertSee('name="_token"', false);
+    }
+
+    public function test_footer_preserves_catalog_help_policy_and_configured_contact_links(): void
+    {
+        $this->setting('site_email', 'support+family@example.test');
+        $this->setting('whatsapp_number', '+201000000000');
+        $this->setting('instagram_url', 'https://www.instagram.com/herokid/?a=1&b=2');
+        $this->setting('footer_brand_description', 'عالم كل طفل — وصف محفوظ');
+
+        $html = $this->get(route('home'))->assertOk()->getContent();
+        preg_match('/<footer class="hk-site-footer">.*?<\/footer>/s', $html, $matches);
+        $footer = $matches[0];
+        foreach (['stories.index', 'packages', 'shop.index', 'child-identity.index',
+            'about', 'how-it-works', 'faq', 'track.index', 'contact', 'privacy', 'terms'] as $route) {
+            $this->assertStringContainsString('href="'.route($route).'"', $footer);
+        }
+        $this->assertStringContainsString('href="'.route('shop.index', ['type' => 'products']).'"', $footer);
+        $this->assertStringContainsString('href="'.route('shop.index', ['type' => 'activities']).'"', $footer);
+        $this->assertStringContainsString('href="mailto:support+family@example.test"', $footer);
+        $this->assertStringContainsString('<bdi dir="ltr">+201000000000</bdi>', $footer);
+        $this->assertStringContainsString('href="https://www.instagram.com/herokid/?a=1&amp;b=2"', $footer);
+        $this->assertStringContainsString('aria-label="HeroKid — Instagram"', $footer);
+        $this->assertStringContainsString('rel="noopener noreferrer"', $footer);
+        $this->assertStringContainsString('عالم كل طفل — وصف محفوظ', $footer);
+    }
+
+    public function test_footer_respects_disabled_identity_and_empty_contact_settings(): void
+    {
+        $this->setting('child_identity_enabled', '0');
+        foreach (['site_email', 'whatsapp_number', 'facebook_url', 'instagram_url', 'youtube_url', 'whatsapp_url'] as $key) {
+            $this->setting($key, '');
+        }
+        $html = $this->get(route('home'))->assertOk()->getContent();
+        preg_match('/<footer class="hk-site-footer">.*?<\/footer>/s', $html, $matches);
+        $this->assertStringNotContainsString(route('child-identity.index'), $matches[0]);
+        $this->assertStringNotContainsString('href="mailto:', $matches[0]);
+        $this->assertStringNotContainsString('href="tel:', $matches[0]);
+        $this->assertStringNotContainsString('target="_blank"', $matches[0]);
+        $this->assertStringContainsString(route('contact'), $matches[0]);
     }
 
     private function story(): Story
