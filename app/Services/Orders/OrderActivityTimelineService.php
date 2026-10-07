@@ -100,6 +100,9 @@ class OrderActivityTimelineService
             'checkout.payment_updated' => 'تم تحديث حالة الدفع.',
             'checkout.discount_updated' => 'تم تحديث خصم عملية الشراء.',
             'order.details_updated', 'checkout.full_order_updated' => 'تم تعديل بيانات الطلب.',
+            'checkout.contact_updated' => 'تم تعديل بيانات التواصل.',
+            'checkout.product_added' => 'تمت إضافة منتج إلى الطلب.',
+            'order.product_details_updated' => 'تم تعديل بيانات منتج واحد.',
             'order.note_added' => 'تمت إضافة ملاحظة داخلية.',
             'order.assignment_acquired' => 'تم استلام مسؤولية الطلب.',
             'order.assignment_released' => 'تم ترك مسؤولية الطلب.',
@@ -233,6 +236,12 @@ class OrderActivityTimelineService
             'interests' => 'الاهتمامات',
             'gift_note' => 'الإهداء',
             'parent_notes' => 'ملاحظات العميل',
+            'alternate_phone' => 'الهاتف الإضافي',
+            'school_name' => 'اسم المدرسة',
+            'class_name' => 'الفصل',
+            'uploaded_photos_count' => 'عدد صور الطفل',
+            'items_cents' => 'قيمة العناصر بالقرش',
+            'total_cents' => 'إجمالي الطلب بالقرش',
             default => str_replace('_', ' ', $property),
         };
     }

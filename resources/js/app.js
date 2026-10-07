@@ -12,6 +12,7 @@ import { initializeOrderInvoices } from './order-invoice';
 import { initializeFootballStories, trackHeroKidEvent } from './football-stories';
 import { storyCoverRecovery } from './story-cover-recovery';
 import { initializeHomePackageCarousels } from './home-package-carousel';
+import { initializeOrderQuickEdit } from './order-quick-edit';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -28,6 +29,7 @@ window.HeroKidStoryCover = storyCoverRecovery;
 document.addEventListener('DOMContentLoaded', () => {
     initializeOrderStatusFilters();
     initializeAdminFileUploads();
+    initializeOrderQuickEdit();
     document.querySelectorAll('[data-analytics-widget]').forEach(async (panel) => {
         try {
             const response = await fetch(panel.dataset.analyticsWidget, { headers: { Accept: 'application/json' } });

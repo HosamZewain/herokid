@@ -194,7 +194,7 @@
                                                 <div>
                                                     <label class="mb-1 block text-[10px] font-black text-gray-500">الخيار</label>
                                                     <select name="products[{{ $product->id }}][variant_id]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-product-variant>
-                                                        <option value="" data-price-cents="{{ $basePrice }}">اختر</option>
+                                                        <option value="" data-price-cents="{{ $basePrice }}">{{ $isEditing && isset($productForm['unit_price_cents']) && empty($productForm['variant_id']) ? 'بدون خيار — كما سُجّل في الطلب الأصلي' : 'اختر' }}</option>
                                                         @foreach($product->activeVariants as $variant)
                                                             @php
                                                                 $variantPrice = (string) ($productForm['variant_id'] ?? '') === (string) $variant->id && isset($productForm['unit_price_cents'])

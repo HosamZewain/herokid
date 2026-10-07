@@ -99,6 +99,7 @@
     @endphp
 
     @include('admin.orders._activity-drawer', ['activityTargetOrder' => $attachmentTarget])
+    @include('admin.orders._quick-edit')
 
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
@@ -178,7 +179,12 @@
 
             <section id="order-overview" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-page-section="overview">
                 <div class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <h3 class="mb-2 text-sm font-black text-gray-900">العميل والتوصيل</h3>
+                    <div class="mb-2 flex items-center justify-between gap-2">
+                        <h3 class="text-sm font-black text-gray-900">العميل والتوصيل</h3>
+                        @can('orders.update')
+                            @if(!$group['trashed'])<button type="button" data-quick-open="contact" class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700">تعديل بيانات التواصل</button>@endif
+                        @endcan
+                    </div>
                     <div class="grid grid-cols-2 gap-1.5 lg:grid-cols-4" data-order-compact-customer>
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">اسم ولي الأمر</p><p class="truncate text-xs font-black text-gray-900" title="{{ $group['customer_name'] }}">{{ $group['customer_name'] }}</p></div>
                         <div class="min-w-0 rounded-lg bg-gray-50/70 px-2.5 py-1.5"><p class="text-[9px] font-bold text-gray-400">الهاتف</p><p class="truncate text-xs font-black text-gray-900" dir="ltr">{{ $group['phone'] ?: '—' }}</p></div>
@@ -200,7 +206,12 @@
 
                     <div class="mt-3 border-t border-gray-100 pt-3" data-order-items-summary>
                         <div class="mb-2 flex items-center justify-between gap-3">
-                            <h4 class="text-base font-black text-gray-900">ملخص الطلب</h4>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="text-base font-black text-gray-900">ملخص الطلب</h4>
+                                @can('orders.update')
+                                    @if(!$group['trashed'])<button type="button" data-quick-open="add" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white">+ إضافة منتج</button>@endif
+                                @endcan
+                            </div>
                             <span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-700">{{ $orderSummaryItems->sum('quantity') }} عنصر</span>
                         </div>
                         @if($orderSummaryItems->isNotEmpty())
@@ -312,6 +323,9 @@
                                 <div class="flex flex-wrap items-center gap-2">
                                     <span class="rounded-full px-3 py-1 text-xs font-black {{ $statusColors[$order->status] ?? 'bg-gray-100 text-gray-700' }}">{{ $statusLabels[$order->status] ?? $order->status }}</span>
                                     <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">قصة {{ $loop->iteration }}</span>
+                                    @can('orders.update')
+                                        <button type="button" data-quick-open="story" data-order-id="{{ $order->id }}" class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">تعديل بيانات القصة / الصور</button>
+                                    @endcan
                                 </div>
                                 <h4 class="mt-3 text-lg font-black text-gray-950">{{ $storyItem?->title ?: $order->story?->title ?: 'قصة مخصصة' }}</h4>
                                 @if(data_get($storyItem?->item_snapshot, 'package.name'))
@@ -532,6 +546,11 @@
                             <div class="flex h-full flex-col rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
                                 @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-1.5 text-[10px] font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif
                                 <p class="text-sm font-black leading-6 text-gray-900">{{ $product->title }}</p>
+                                @can('orders.update')
+                                    @if(!$group['trashed'] && $product->personalization_mode === 'collect_child_details')
+                                        <button type="button" data-quick-open="item" data-item-id="{{ $product->id }}" class="mt-2 self-start rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-black text-emerald-700">تعديل بيانات المنتج / الصور</button>
+                                    @endif
+                                @endcan
                                 @if($product->sku)<p class="mt-1 text-xs text-gray-400" dir="ltr">SKU: {{ $product->sku }}</p>@endif
                                 <p class="mt-2 text-xs font-bold text-emerald-800">{{ $product->quantity }} × {{ format_money($product->unit_price_cents / 100) }}</p>
                                 @if($product->personalization_mode === 'collect_child_details')

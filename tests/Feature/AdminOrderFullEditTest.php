@@ -893,6 +893,28 @@ class AdminOrderFullEditTest extends TestCase
         }
     }
 
+    public function test_later_catalog_options_do_not_block_unrelated_edits_of_original_variantless_purchase(): void
+    {
+        $product = Product::create(['name_ar' => 'كتاب تلوين', 'slug' => 'legacy-coloring-variant', 'price_cents' => 40000,
+            'is_active' => true, 'personalization_mode' => 'none']);
+        $order = $this->productOrder('HK-LEGACY-VARIANT', 'CHK-LEGACY-VARIANT', $product, 25000);
+        $oldItem = $order->items()->firstOrFail();
+        $product->variants()->create(['name_ar' => '٢٠ صفحة', 'is_active' => true, 'price_adjustment_cents' => 5000]);
+        $payload = $this->productEditPayload([$product->id => ['quantity' => 1, 'variant_id' => null]]);
+        $payload['parent_name'] = 'الاسم بعد التصحيح';
+        $payload['payment_status'] = 'unpaid';
+        $this->actingAs($this->admin)->get(route('admin.orders.groups.edit', $order))->assertOk()->assertSee('كما سُجّل في الطلب الأصلي');
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('الاسم بعد التصحيح', $order->fresh()->parent_name);
+        $this->assertNull($oldItem->fresh()->product_variant_id);
+        $this->assertSame(25000, $oldItem->fresh()->unit_price_cents);
+        $this->assertSame($oldItem->id, $order->items()->firstOrFail()->id);
+        $payload['products'][$product->id]['quantity'] = 2;
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $order), $payload)
+            ->assertSessionHasErrors('products.'.$product->id.'.variant_id');
+        $this->assertSame(1, $oldItem->fresh()->quantity);
+    }
+
     private function productOrder(string $number, string $groupKey, Product $product, int $priceCents): Order
     {
         $order = Order::create([

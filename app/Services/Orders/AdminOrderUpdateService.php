@@ -38,6 +38,135 @@ class AdminOrderUpdateService
         private readonly OrderPaymentLedgerService $paymentLedger,
     ) {}
 
+    /** Add only the requested product; never rebuild or release existing items. */
+    public function appendProduct(Order $representative, array $data, User $admin, Request $request): OrderItem
+    {
+        return DB::transaction(function () use ($representative, $data, $admin, $request): OrderItem {
+            $orders = Order::query()->with(['items', 'story'])
+                ->where('checkout_group_key', $representative->checkoutGroupKey())
+                ->orderBy('id')->lockForUpdate()->get();
+            abort_if($orders->isEmpty(), 404);
+            $before = $this->groups->present($orders);
+            if ((int) $before['items_cents'] !== (int) $orders->flatMap->items->sum('total_price_cents')) {
+                throw ValidationException::withMessages(['product_id' => 'هذا الطلب القديم لا يحتوي على سجل أسعار العناصر. استخدم تعديل الطلب الكامل أولًا للحفاظ على قيمته الأصلية.']);
+            }
+            $product = Product::query()->where('is_active', true)->lockForUpdate()->findOrFail($data['product_id']);
+            if (! empty($data['variant_id']) && ! $product->variants()->where('is_active', true)->whereKey($data['variant_id'])->exists()) {
+                throw ValidationException::withMessages(['variant_id' => 'اختر خيارًا متاحًا من نفس المنتج.']);
+            }
+            $quantity = (int) $data['quantity'];
+            $source = $orders->first();
+            $linkedOrder = ! empty($data['linked_order_id']) ? $orders->firstWhere('id', (int) $data['linked_order_id']) : null;
+            if ($product->isPersonalizedAddon() && (! $linkedOrder || ! $this->isStoryOrder($linkedOrder))) {
+                throw ValidationException::withMessages(['linked_order_id' => 'اختر القصة / الطفل المرتبط بالمنتج داخل هذا الطلب.']);
+            }
+            $personalized = $product->personalization_mode === 'collect_child_details' && ! $product->isPersonalizedAddon();
+            $addedLines = $personalized ? $quantity : 1;
+            if ($orders->flatMap->items->count() + $addedLines > (int) config('orders.admin_max_items', 20)) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للطلب هو ٢٠ عنصرًا.']);
+            }
+            $inputs = [$product->id => [
+                'quantity' => $quantity,
+                'variant_id' => $data['variant_id'] ?? null,
+                'linked_story_index' => $product->isPersonalizedAddon() ? 0 : null,
+                'personalization_schema' => $data['schema'] ?? [],
+                'units' => $personalized ? array_fill(0, $quantity, [
+                    'personalization' => $data['personalization'],
+                    'existing_photo_count' => count($data['reused_photos'] ?? []),
+                ]) : [],
+            ]];
+            $lines = $this->resolveProductLines($inputs, $linkedOrder ? collect([0]) : collect(), []);
+            $newItems = collect();
+            foreach ($lines as $line) {
+                $target = $linkedOrder ?: $this->createProductCarrier($representative->checkoutGroupKey(), $source, [
+                    'parent_name' => $source->parent_name,
+                    'order_source' => $source->order_source,
+                    'source_notes' => $source->source_notes,
+                ], $admin);
+                $linkedItem = $linkedOrder?->items->firstWhere('item_type', 'story');
+                $this->createProductItem($target, $linkedItem, $line, $linkedOrder ? 0 : null);
+                $item = $target->items()->latest('id')->firstOrFail();
+                if ($personalized) {
+                    $target->forceFill(['uploaded_photos' => $data['reused_photos'] ?? []])->save();
+                    if (($data['photos'] ?? []) !== []) {
+                        $this->photoUploads->append($target, $data['photos'], $data['on_stored'] ?? null);
+                    }
+                    $snapshot = $item->personalization_snapshot ?? [];
+                    $snapshot['uploaded_photos_count'] = count($target->refresh()->uploaded_photos ?? []);
+                    if (isset($snapshot['fields']['photos'])) {
+                        $snapshot['fields']['photos']['value'] = $snapshot['uploaded_photos_count'];
+                    }
+                    $item->forceFill(['personalization_snapshot' => $snapshot])->save();
+                }
+                // resolveProductLines checks the aggregate quantity, not each child separately.
+                $this->decrementStock($line['product'], $line['variant'], $line['quantity']);
+                $newItems->push($item);
+            }
+            $orders = Order::query()->with(['items', 'story'])
+                ->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->get();
+            $subtotal = (int) $orders->flatMap->items->sum('total_price_cents');
+            $total = $subtotal + (int) $before['delivery_cents'] - (int) $before['discount_cents'];
+            [$payment] = $this->resolveEditedPayment($before, ['payment_edit_intent' => 'preserve'], $total, (int) $before['delivery_cents']);
+            foreach ($orders as $position => $order) {
+                $delivery = $order->delivery_details ?? [];
+                $delivery = array_replace($delivery, [
+                    'cart_item_index' => $position + 1,
+                    'cart_items_count' => $orders->flatMap->items->count(),
+                    'item_price' => $order->items->sum('total_price_cents') / 100,
+                    'subtotal' => $subtotal / 100,
+                    'total' => $total / 100,
+                    'paid_amount' => $payment['paid_amount_cents'] / 100,
+                    'remaining_amount' => $payment['remaining_amount_cents'] / 100,
+                    'payment_status' => $payment['payment_status'],
+                ]);
+                $order->forceFill([
+                    'discount_cents' => $before['discount_cents'],
+                    'discount_reason' => $before['discount_reason'],
+                    'paid_amount_cents' => $payment['paid_amount_cents'],
+                    'payment_status' => $payment['payment_status'],
+                    'payment_method' => $payment['payment_method'],
+                    'delivery_details' => $delivery,
+                ])->save();
+            }
+            $this->paymentLedger->recordTransition(
+                representative: $source,
+                before: $before,
+                after: $payment,
+                source: 'admin_product_added',
+                actor: $admin,
+                request: $request,
+                metadata: ['change_reason' => $data['change_reason']],
+                forcedEventType: 'payment_balance_adjusted',
+                affectsCollectionStats: false,
+            );
+            AdminActivityLogger::log(
+                action: 'checkout.product_added',
+                description: 'إضافة منتج إلى الطلب: '.$product->name_ar,
+                subject: $source,
+                properties: [
+                    'reason' => $data['change_reason'],
+                    'checkout_group_key' => $representative->checkoutGroupKey(),
+                    'request_key' => $data['request_key'],
+                    'request_hash' => $data['request_hash'],
+                    'product_title' => $newItems->first()->title,
+                    'added_item_ids' => $newItems->pluck('id')->all(),
+                    'reused_child_order_id' => $data['reuse_child_order_id'] ?? null,
+                    'file_names' => collect($data['photos'] ?? [])->map(fn ($file) => $file->getClientOriginalName())->all(),
+                    'changes' => AdminActivityLogger::changedValues(
+                        ['items_cents' => $before['items_cents'], 'total_cents' => $before['total_cents'], 'payment_status' => $before['payment_status']],
+                        ['items_cents' => $subtotal, 'total_cents' => $total, 'payment_status' => $payment['payment_status']],
+                    ),
+                    'added_items' => $newItems->map(fn (OrderItem $item): array => $item->only([
+                        'id', 'order_id', 'product_id', 'title', 'product_variant_id', 'quantity', 'unit_price_cents', 'personalization_snapshot',
+                    ]))->all(),
+                    'paid_amount_preserved_cents' => $payment['paid_amount_cents'],
+                ], admin: $admin, request: $request,
+            );
+
+            return $newItems->first();
+        });
+    }
+
     /** @return array{representative: Order, orders: Collection<int, Order>} */
     public function update(Order $representative, array $data, User $admin, Request $request): array
     {
@@ -608,6 +737,7 @@ class AdminOrderUpdateService
         foreach ($items as $item) {
             $prices[(int) $item->product_id][] = [
                 'item_id' => (int) $item->id,
+                'quantity' => (int) $item->quantity,
                 'variant_id' => $item->product_variant_id ? (int) $item->product_variant_id : null,
                 'unit_price_cents' => (int) $item->unit_price_cents,
                 'order_id' => (int) $item->order_id,
@@ -658,7 +788,8 @@ class AdminOrderUpdateService
                         'products.'.$product->id.'.variant_id' => 'خيار المنتج المحدد غير صالح.',
                     ]);
                 }
-            } elseif ($product->variants()->where('is_active', true)->exists()) {
+            } elseif ($product->variants()->where('is_active', true)->exists()
+                && ! $this->hasUnchangedLegacyVariant($product, $quantity, $oldPrices)) {
                 throw ValidationException::withMessages([
                     'products.'.$product->id.'.variant_id' => 'اختر خيار المنتج '.$product->name_ar.'.',
                 ]);
@@ -797,6 +928,17 @@ class AdminOrderUpdateService
                 'parent_notes' => $snapshot['parent_notes'] ?? $order->parent_notes,
             ])->save();
         }
+    }
+
+    private function hasUnchangedLegacyVariant(Product $product, int $quantity, array $oldPrices): bool
+    {
+        $existing = collect($oldPrices[$product->id] ?? []);
+
+        // Options added to the catalog later must not invalidate an existing purchase.
+        // Increasing quantity or selecting a different option still requires an explicit choice.
+        return $existing->isNotEmpty()
+            && $existing->every(fn (array $line): bool => $line['variant_id'] === null)
+            && $quantity === (int) $existing->sum('quantity');
     }
 
     private function incrementStock(OrderItem $item, User $admin): void
