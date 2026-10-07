@@ -4,7 +4,7 @@
             <a href="{{ route('shop.package.show', $package) }}" data-package-card-link class="group flex h-full flex-col focus:outline-none" aria-label="عرض باقة {{ $package->name }}">
                 @if($package->image_url)
                     <span class="block aspect-[4/3] overflow-hidden bg-violet-50">
-                        <img src="{{ $package->image_url }}" alt="{{ $package->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                        <x-public-image :src="$package->image_url" :alt="$package->name" sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                     </span>
                 @endif
                 <div class="flex flex-1 flex-col p-5">

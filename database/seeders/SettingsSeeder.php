@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Setting;
 use App\Services\ChildIdentity\Sharing\ChildIdentityShareSettings;
+use App\Support\PublicExperienceCopy;
 use App\Support\SiteImages;
 use Illuminate\Database\Seeder;
 
@@ -174,6 +175,7 @@ class SettingsSeeder extends Seeder
         }
 
         foreach ($settings as $setting) {
+            $setting['value'] = PublicExperienceCopy::DEFAULTS[$setting['key']] ?? $setting['value'];
             Setting::updateOrCreate(['key' => $setting['key']], ['value' => $setting['value']]);
         }
     }

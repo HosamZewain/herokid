@@ -6,7 +6,7 @@
     <a href="{{ route('shop.product.show', $product) }}" class="block">
         <div class="aspect-[4/3] bg-indigo-50 overflow-hidden">
             @if($product->featured_image_url)
-                <img src="{{ $product->featured_image_url }}" alt="{{ $product->name_ar }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy">
+                <x-public-image :src="$product->featured_image_url" :alt="$product->name_ar" sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
             @else
                 <x-product-image-placeholder class="transition duration-300 group-hover:scale-105" />
             @endif

@@ -110,7 +110,7 @@
                         </div>
                     </div>
                     <div class="order-first bg-indigo-900/40 p-3 md:order-last md:p-5">
-                        <img src="{{ $packageImage }}" alt="{{ $pricingPackage->name }}" width="720" height="720" fetchpriority="high" class="mx-auto aspect-[4/3] h-full max-h-72 w-full rounded-2xl object-cover shadow-lg md:max-h-none md:aspect-auto">
+                        <x-public-image :src="$packageImage" :alt="$pricingPackage->name" :preferred-width="960" sizes="(min-width: 1024px) 50vw, 100vw" width="720" height="720" fetchpriority="high" class="mx-auto aspect-[4/3] h-full max-h-72 w-full rounded-2xl object-cover shadow-lg md:max-h-none md:aspect-auto" />
                     </div>
                 </div>
             </header>
@@ -174,7 +174,7 @@
                         <div class="mt-4 grid gap-3 sm:grid-cols-2">
                             @foreach($pricingPackage->items as $item)
                                 <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
-                                    <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">@if($item->product?->featured_image_url)<img src="{{ $item->product->featured_image_url }}" alt="" class="h-full w-full object-cover">@else<span>🎁</span>@endif</div>
+                                    <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">@if($item->product?->featured_image_url)<x-public-image :src="$item->product->featured_image_url" alt="" sizes="56px" :preferred-width="320" loading="lazy" class="h-full w-full object-cover" />@else<span>🎁</span>@endif</div>
                                     <div><p class="font-black text-slate-900">{{ $item->product?->name_ar }}</p><p class="mt-1 text-xs text-slate-500">الكمية: {{ $item->quantity }} @if($item->variant) · {{ $item->variant->name_ar }} @endif</p></div>
                                 </div>
                             @endforeach

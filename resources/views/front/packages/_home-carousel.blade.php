@@ -23,7 +23,7 @@
 
                         @if($pkg->image_url)
                             <span class="mt-3 block aspect-[4/3] overflow-hidden rounded-2xl bg-white/10">
-                                <img src="{{ $pkg->image_url }}" alt="{{ $pkg->name }}" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                                <x-public-image :src="$pkg->image_url" :alt="$pkg->name" sizes="(min-width: 1024px) 360px, 85vw" width="720" height="540" loading="lazy" class="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                             </span>
                         @endif
 

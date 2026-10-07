@@ -97,7 +97,7 @@
                     <div
                         class="aspect-[4/4] bg-gradient-to-br from-indigo-50 to-slate-100 rounded-3xl overflow-hidden shadow-lg mb-8 relative">
                         <x-story-cover-image :src="$story->cover_url" :alt="$story->title"
-                            :fallback="$fallbackStoryCover" width="640" height="640"
+                            :fallback="$fallbackStoryCover" :preferred-width="960" sizes="(min-width: 1024px) 50vw, 100vw" width="640" height="640"
                             fetchpriority="high" class="w-full h-full object-cover" />
                     </div>
 

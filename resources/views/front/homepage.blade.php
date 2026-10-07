@@ -3,6 +3,7 @@
     $productsUrl = route('shop.index', ['type' => 'products']);
     $activitiesUrl = route('shop.index', ['type' => 'activities']);
     $homeImages = asset('images/homepage');
+    $heroDesktop = app(\App\Services\Images\PublicImageVariants::class)->presentation($homeImages.'/hero-banner.webp', 1440);
     $homeCategories = [
         ['title' => 'يعيش الحكاية', 'copy' => 'قصص مخصصة باسمه وصورته، بالعربي أو الإنجليزي.', 'cta' => 'شوف القصص', 'url' => $storiesUrl, 'image' => 'category-story', 'enabled' => true],
         ['title' => 'يحط بصمته', 'copy' => 'منتجات مدرسية وهدايا مخصصة تحمل اسمه وتعبّر عنه.', 'cta' => 'شوف المنتجات', 'url' => $productsUrl, 'image' => 'category-products', 'enabled' => $shopEnabled],
@@ -19,8 +20,8 @@
                 <a href="{{ route('shop.index') }}" class="hero-secondary">تصفّح كل المنتجات <x-front-icon name="arrow-left" /></a>
             </div>
             <picture class="hero-art">
-                <source media="(min-width: 761px)" srcset="{{ $homeImages }}/hero-banner.webp">
-                <img src="{{ $homeImages }}/hero-products.webp" width="1536" height="1024" alt="عالم HeroKid: قصة مخصصة ودفتر وملصقات وكتاب متاهات" fetchpriority="high" decoding="async">
+                <source media="(min-width: 761px)" srcset="{{ $heroDesktop['srcset'] ?: $heroDesktop['src'] }}" sizes="100vw">
+                <x-public-image :src="$homeImages.'/hero-products.webp'" sizes="100vw" width="1536" height="1024" alt="عالم HeroKid: قصة مخصصة ودفتر وملصقات وكتاب متاهات" fetchpriority="high" />
             </picture>
         </section>
     @endif
@@ -33,7 +34,7 @@
                     @foreach($homeCategories as $category)
                         @if($category['enabled'])
                             <article class="category">
-                                <a href="{{ $category['url'] }}" class="category-image-link" aria-label="{{ $category['cta'] }}"><img src="{{ $homeImages }}/{{ $category['image'] }}.webp" alt="{{ $category['title'] }}" width="1586" height="992" loading="lazy" decoding="async"></a>
+                                <a href="{{ $category['url'] }}" class="category-image-link" aria-label="{{ $category['cta'] }}"><x-public-image :src="$homeImages.'/'.$category['image'].'.webp'" :alt="$category['title']" sizes="(min-width: 761px) 33vw, 100vw" width="1586" height="992" loading="lazy" /></a>
                                 <h3>{{ $category['title'] }}</h3><p>{{ $category['copy'] }}</p>
                                 <a href="{{ $category['url'] }}" class="button button--outline">{{ $category['cta'] }} <x-front-icon name="arrow-left" /></a>
                             </article>
@@ -56,9 +57,9 @@
                                 @if($item->type === 'story')
                                     <x-story-cover-image :src="$item->imageUrl" :alt="$item->title" loading="lazy" />
                                 @elseif($item->imageUrl)
-                                    <img src="{{ $item->imageUrl }}" alt="{{ $item->title }}" loading="lazy" decoding="async">
+                                    <x-public-image :src="$item->imageUrl" :alt="$item->title" sizes="(min-width: 1024px) 25vw, 50vw" loading="lazy" />
                                 @else
-                                    <img src="{{ $homeImages }}/category-products.webp" alt="صورة توضيحية لمنتجات HeroKid" loading="lazy" decoding="async">
+                                    <x-public-image :src="$homeImages.'/category-products.webp'" alt="صورة توضيحية لمنتجات HeroKid" sizes="(min-width: 1024px) 25vw, 50vw" loading="lazy" />
                                 @endif
                             </a>
                             <p class="product-label">{{ $item->badgeLabel }}</p>
@@ -76,14 +77,14 @@
         <section data-home-section="stories" class="feature feature--story" aria-labelledby="story-title">
             <div class="feature-inner content-width">
                 <div class="feature-copy"><h2 id="story-title">مش بطل أي قصة.<br>بطل قصته هو.</h2><p>باسمه وصورته، بالعربي أو الإنجليزي.</p><a href="{{ $storiesUrl }}" class="button button--blue">اكتشف القصص <x-front-icon name="arrow-left" /></a></div>
-                <img src="{{ $homeImages }}/story-feature.webp" alt="كتاب مفتوح ببطولة الطفل وصورته" class="feature-image" width="1774" height="887" loading="lazy" decoding="async">
+                <x-public-image :src="$homeImages.'/story-feature.webp'" sizes="(min-width: 761px) 50vw, 100vw" alt="كتاب مفتوح ببطولة الطفل وصورته" class="feature-image" width="1774" height="887" loading="lazy" />
             </div>
         </section>
     @endif
     @if($shopEnabled && homepage_section_enabled('store'))
         <section data-home-section="store" class="feature feature--activities" aria-labelledby="activities-title">
             <div class="feature-inner content-width">
-                <img src="{{ $homeImages }}/activity-feature.webp" alt="كتاب متاهات مع ورقة تلوين وأقلام ملونة" class="feature-image" width="1774" height="887" loading="lazy" decoding="async">
+                <x-public-image :src="$homeImages.'/activity-feature.webp'" sizes="(min-width: 761px) 50vw, 100vw" alt="كتاب متاهات مع ورقة تلوين وأقلام ملونة" class="feature-image" width="1774" height="887" loading="lazy" />
                 <div class="feature-copy"><h2 id="activities-title">إيدين مشغولة.<br>خيال مفتوح.</h2><p>أنشطة مطبوعة تخليه يستمتع ويكتشف<br>من متاهات وتلوين وأنشطة ممتعة.</p><a href="{{ $activitiesUrl }}" class="button button--blue">اكتشف الأنشطة <x-front-icon name="arrow-left" /></a></div>
             </div>
         </section>
@@ -92,7 +93,7 @@
         <section data-home-section="pricing" class="feature feature--bundle" aria-labelledby="bundle-title">
             <div class="feature-inner content-width">
                 <div class="feature-copy"><h2 id="bundle-title">اسمه على تفاصيل يومه.</h2><p>اختار الباقة المناسبة لطفلك<br>وشوف محتوياتها وتفاصيلها قبل الطلب.</p><a href="{{ route('packages') }}" class="button button--blue">تصفّح الباقات <x-front-icon name="arrow-left" /></a></div>
-                <img src="{{ $homeImages }}/bundle-feature.webp" alt="تشكيلة توضيحية من حقيبة ودفتر وملصقات مخصصة" class="feature-image" width="2172" height="724" loading="lazy" decoding="async">
+                <x-public-image :src="$homeImages.'/bundle-feature.webp'" sizes="(min-width: 761px) 50vw, 100vw" alt="تشكيلة توضيحية من حقيبة ودفتر وملصقات مخصصة" class="feature-image" width="2172" height="724" loading="lazy" />
             </div>
             @if($packages->isNotEmpty())
                 <div class="content-width hk-extra-catalog">@include('front.packages._home-carousel', ['packages' => $packages])</div>
@@ -119,7 +120,7 @@
 
     @if(homepage_section_enabled('child_identity') && setting('child_identity_enabled', '1') === '1')
         <section data-home-section="child_identity" class="hk-identity-strip content-width">
-            <img src="{{ \App\Support\SiteImages::path('img_home_child_identity') }}" alt="هوية الطفل" loading="lazy" decoding="async">
+            <x-public-image :src="\App\Support\SiteImages::path('img_home_child_identity')" sizes="150px" :preferred-width="320" alt="هوية الطفل" loading="lazy" />
             <div><h2>{{ setting('home_child_identity_title', 'اصنع هوية طفلك قبل اختيار القصة') }}</h2><p>{{ setting('home_child_identity_subtitle', 'ارفع صور طفلك مرة واحدة، واحصل على هوية بصرية جاهزة لتختار بعدها القصة المناسبة له.') }}</p><details class="hk-identity-explanation"><summary>من صورتين إلى هوية واحدة</summary><p>صورتان حقيقيتان لنفس الطفل تتحولان إلى هوية متناسقة من زوايا وتعبيرات متعددة</p></details></div>
             <a href="{{ route('child-identity.index') }}" class="button button--blue">{{ setting('home_child_identity_cta', 'ابدأ مجانًا') }} <x-front-icon name="arrow-left" /></a>
         </section>
@@ -175,7 +176,7 @@
     @endif
     @if(homepage_section_enabled('final_cta'))
         <section data-home-section="final_cta" class="closing" aria-labelledby="closing-title">
-            <img src="{{ $homeImages }}/closing-art.webp" alt="" class="closing-art" width="1983" height="793" loading="lazy" decoding="async">
+            <x-public-image :src="$homeImages.'/closing-art.webp'" sizes="(min-width: 761px) 40vw, 100vw" alt="" class="closing-art" width="1983" height="793" loading="lazy" />
             <div class="closing-copy"><h2 id="closing-title">نبدأ بحاجة يحبّها؟</h2><a href="{{ route('shop.index') }}" class="button button--yellow">تصفّح المتجر <x-front-icon name="arrow-left" /></a></div>
         </section>
     @endif

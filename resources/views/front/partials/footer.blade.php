@@ -15,7 +15,7 @@
                     </div>
                 @endif
             </div>
-            <p>{{ setting('footer_brand_description', 'كل طفل عنده عالم.') }}</p>
+            <p>{{ \App\Support\PublicExperienceCopy::value('footer_brand_description') }}</p>
         </div>
         <nav aria-labelledby="hk-footer-discover" class="hk-footer-column">
             <h2 id="hk-footer-discover">اكتشف هيروكيد</h2>

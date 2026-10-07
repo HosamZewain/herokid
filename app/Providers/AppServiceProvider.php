@@ -4,11 +4,15 @@ namespace App\Providers;
 
 use App\Contracts\MobileSocialIdentityVerifier;
 use App\Models\Setting;
+use App\Observers\PublicCatalogImageObserver;
+use App\Services\Images\PublicCatalogImageSources;
+use App\Services\Images\PublicImageVariants;
 use App\Services\Mobile\ProviderTokenVerifier;
 use App\Support\AdminPermissionRegistry;
 use App\Support\RequestSettings;
 use App\Support\Seo;
 use App\View\Composers\BostaOrderViewComposer;
+use App\View\Composers\PublicImageViewComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -23,10 +27,15 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(MobileSocialIdentityVerifier::class, ProviderTokenVerifier::class);
+        $this->app->scoped(PublicImageVariants::class);
     }
 
     public function boot(): void
     {
+        foreach (array_keys(PublicCatalogImageSources::FIELDS) as $model) {
+            $model::observe(PublicCatalogImageObserver::class);
+        }
+        View::composer(['welcome', 'front.homepage', 'front.shop.*', 'front.stories.*', 'front.packages.*', 'front.pages.pricing'], PublicImageViewComposer::class);
         RateLimiter::for('photo-uploads', function (Request $request): Limit {
             $sessionToken = (string) $request->session()->get('photo_upload.token', '');
             $key = $sessionToken !== ''

@@ -18,12 +18,16 @@
         $productImageUrls = collect([
             $product->featured_image_url,
             ...collect($product->gallery_images ?? [])->map(
-                fn ($image) => \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk('public')->url($image))
+                fn ($image) => \App\Support\Seo::imageUrl(\Illuminate\Support\Facades\Storage::disk(config('media.public_disk', 'public'))->url($image))
             ),
         ])->filter()->unique()->values()->all();
         $initialVariant = $product->activeVariants->first();
         $initialVariantImages = $initialVariant?->all_image_urls ?: $productImageUrls;
         $initialDisplayImage = $initialVariantImages[0] ?? null;
+        $allDisplayImages = collect($productImageUrls)->merge($product->activeVariants->flatMap(fn ($variant) => $variant->all_image_urls))->unique()->values()->all();
+        $imageVariants = app(\App\Services\Images\PublicImageVariants::class);
+        $imageVariants->prime($allDisplayImages);
+        $imagePresentations = collect($allDisplayImages)->mapWithKeys(fn ($url) => [$url => $imageVariants->presentation($url, 960)])->all();
         $initialDisplayPrice = $product->effectivePriceCents($initialVariant) / 100;
         $initialRegularPrice = $product->regularPriceCents($initialVariant) / 100;
         $initialHasSale = $product->hasActiveSaleForVariant($initialVariant);
@@ -77,8 +81,8 @@
                     <div class="min-w-0 space-y-3 lg:sticky lg:top-32">
                         <div class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-3xl">
                             @if($initialDisplayImage)
-                                <img src="{{ $initialDisplayImage }}" alt="{{ $product->name_ar }}" width="900" height="675"
-                                    class="aspect-[4/3] w-full object-cover" fetchpriority="high" data-product-main-image>
+                                <x-public-image :src="$initialDisplayImage" :alt="$product->name_ar" :preferred-width="960" sizes="(min-width: 1024px) 50vw, 100vw" width="900" height="675"
+                                    class="aspect-[4/3] w-full object-cover" fetchpriority="high" data-product-main-image />
                             @else
                                 <div class="aspect-[4/3]"><x-product-image-placeholder /></div>
                             @endif
@@ -90,7 +94,7 @@
                                     <button type="button" data-gallery-image data-image="{{ $image }}"
                                         class="w-20 shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-white p-1 transition {{ $imageIndex === 0 ? 'border-indigo-500' : 'border-transparent hover:border-indigo-200' }} sm:w-24"
                                         aria-label="عرض صورة المنتج {{ arabic_number($imageIndex + 1) }}">
-                                        <img src="{{ $image }}" alt="صورة {{ arabic_number($imageIndex + 1) }} من {{ $product->name_ar }}" width="160" height="160" class="aspect-square w-full rounded-lg object-cover" loading="lazy">
+                                        <x-public-image :src="$image" :alt="'صورة '.arabic_number($imageIndex + 1).' من '.$product->name_ar" sizes="96px" :preferred-width="320" width="160" height="160" class="aspect-square w-full rounded-lg object-cover" loading="lazy" />
                                     </button>
                                 @endforeach
                             </div>
@@ -163,7 +167,7 @@
                                                 data-discount-percent="{{ $variantDiscountPercent }}"
                                                 data-images='@json($variantImages)' data-name="{{ $variant->name_ar }}">
                                             @if($variantImages[0] ?? null)
-                                                <img src="{{ $variantImages[0] }}" alt="{{ $variant->name_ar }}" width="180" height="180" class="aspect-square w-full rounded-lg object-cover" loading="lazy">
+                                                <x-public-image :src="$variantImages[0]" :alt="$variant->name_ar" sizes="90px" :preferred-width="320" width="180" height="180" class="aspect-square w-full rounded-lg object-cover" loading="lazy" />
                                             @endif
                                             <span class="mt-2 block text-xs font-black text-slate-900">{{ $variant->name_ar }}</span>
                                             <span class="block text-xs font-black text-indigo-700">{{ $variantPrice }}</span>
@@ -323,6 +327,24 @@
     @push('scripts')
         <script>
             (() => {
+                const imagePresentations = @js($imagePresentations);
+                const applyDisplayImage = (image, source, thumbnail = false) => {
+                    if (!image) return;
+                    const display = imagePresentations[source];
+                    image.removeAttribute('srcset');
+                    image.removeAttribute('sizes');
+                    image.dataset.publicImageOriginal = source;
+                    image.onerror = () => {
+                        image.removeAttribute('srcset');
+                        image.onerror = null;
+                        image.src = source;
+                    };
+                    if (display?.srcset) {
+                        image.srcset = display.srcset;
+                        image.sizes = thumbnail ? '96px' : '(min-width: 1024px) 50vw, 100vw';
+                    }
+                    image.src = display ? (thumbnail ? display.thumbnail : display.src) : source;
+                };
                 const options = Array.from(document.querySelectorAll('[data-variant-option]'));
                 const mainImage = document.querySelector('[data-product-main-image]');
                 const prices = Array.from(document.querySelectorAll('[data-product-price]'));
@@ -344,7 +366,7 @@
                 const bindGallery = () => {
                     gallery?.querySelectorAll('[data-gallery-image]').forEach((button) => {
                         button.addEventListener('click', () => {
-                            if (mainImage && button.dataset.image) mainImage.src = button.dataset.image;
+                            if (button.dataset.image) applyDisplayImage(mainImage, button.dataset.image);
                             gallery.querySelectorAll('[data-gallery-image]').forEach((item) => {
                                 item.classList.toggle('border-indigo-500', item === button);
                                 item.classList.toggle('border-transparent', item !== button);
@@ -363,7 +385,7 @@
                         button.className = `w-20 shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-white p-1 transition sm:w-24 ${index === 0 ? 'border-indigo-500' : 'border-transparent hover:border-indigo-200'}`;
                         button.setAttribute('aria-label', `عرض صورة ${index + 1} من ${name}`);
                         const image = document.createElement('img');
-                        image.src = source;
+                        applyDisplayImage(image, source, true);
                         image.alt = name;
                         image.loading = 'lazy';
                         image.className = 'aspect-square w-full rounded-lg object-cover';
@@ -385,7 +407,7 @@
                     countdown?.classList.toggle('hidden', !onSale);
                     if (discountPercent) discountPercent.textContent = option.dataset.discountPercent || '0';
                     if (mainImage && images[0]) {
-                        mainImage.src = images[0];
+                        applyDisplayImage(mainImage, images[0]);
                         mainImage.alt = option.dataset.name || mainImage.alt;
                     }
                     renderGallery(images, option.dataset.name || 'المنتج');

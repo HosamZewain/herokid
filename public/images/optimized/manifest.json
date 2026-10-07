@@ -1,0 +1,330 @@
+{
+    "images/homepage/activity-feature.webp": [
+        {
+            "path": "images/optimized/ea92f14a4ed48ab039f148fd/320.webp",
+            "width": 320,
+            "height": 160,
+            "bytes": 15542
+        },
+        {
+            "path": "images/optimized/ea92f14a4ed48ab039f148fd/640.webp",
+            "width": 640,
+            "height": 320,
+            "bytes": 42948
+        },
+        {
+            "path": "images/optimized/ea92f14a4ed48ab039f148fd/960.webp",
+            "width": 960,
+            "height": 480,
+            "bytes": 75366
+        },
+        {
+            "path": "images/optimized/ea92f14a4ed48ab039f148fd/1440.webp",
+            "width": 1440,
+            "height": 720,
+            "bytes": 127824
+        },
+        {
+            "path": "images/optimized/ea92f14a4ed48ab039f148fd/1774.webp",
+            "width": 1774,
+            "height": 887,
+            "bytes": 162152
+        }
+    ],
+    "images/homepage/bundle-feature.webp": [
+        {
+            "path": "images/optimized/22b4e744bd436075760a3a19/320.webp",
+            "width": 320,
+            "height": 107,
+            "bytes": 9574
+        },
+        {
+            "path": "images/optimized/22b4e744bd436075760a3a19/640.webp",
+            "width": 640,
+            "height": 213,
+            "bytes": 26320
+        },
+        {
+            "path": "images/optimized/22b4e744bd436075760a3a19/960.webp",
+            "width": 960,
+            "height": 320,
+            "bytes": 47758
+        },
+        {
+            "path": "images/optimized/22b4e744bd436075760a3a19/1440.webp",
+            "width": 1440,
+            "height": 480,
+            "bytes": 89058
+        },
+        {
+            "path": "images/optimized/22b4e744bd436075760a3a19/1920.webp",
+            "width": 1920,
+            "height": 640,
+            "bytes": 139914
+        }
+    ],
+    "images/homepage/category-activities.webp": [
+        {
+            "path": "images/optimized/7a9ba0925e602c5f98a4ece6/320.webp",
+            "width": 320,
+            "height": 200,
+            "bytes": 17528
+        },
+        {
+            "path": "images/optimized/7a9ba0925e602c5f98a4ece6/640.webp",
+            "width": 640,
+            "height": 400,
+            "bytes": 47286
+        },
+        {
+            "path": "images/optimized/7a9ba0925e602c5f98a4ece6/960.webp",
+            "width": 960,
+            "height": 600,
+            "bytes": 81716
+        },
+        {
+            "path": "images/optimized/7a9ba0925e602c5f98a4ece6/1440.webp",
+            "width": 1440,
+            "height": 901,
+            "bytes": 135258
+        },
+        {
+            "path": "images/optimized/7a9ba0925e602c5f98a4ece6/1586.webp",
+            "width": 1586,
+            "height": 992,
+            "bytes": 148720
+        }
+    ],
+    "images/homepage/category-products.webp": [
+        {
+            "path": "images/optimized/76a882685d778cd4485e74af/320.webp",
+            "width": 320,
+            "height": 200,
+            "bytes": 16610
+        },
+        {
+            "path": "images/optimized/76a882685d778cd4485e74af/640.webp",
+            "width": 640,
+            "height": 400,
+            "bytes": 47178
+        },
+        {
+            "path": "images/optimized/76a882685d778cd4485e74af/960.webp",
+            "width": 960,
+            "height": 600,
+            "bytes": 86178
+        },
+        {
+            "path": "images/optimized/76a882685d778cd4485e74af/1440.webp",
+            "width": 1440,
+            "height": 901,
+            "bytes": 146622
+        },
+        {
+            "path": "images/optimized/76a882685d778cd4485e74af/1586.webp",
+            "width": 1586,
+            "height": 992,
+            "bytes": 164424
+        }
+    ],
+    "images/homepage/category-story.webp": [
+        {
+            "path": "images/optimized/ba7e4fd8882a70a836f6f50d/320.webp",
+            "width": 320,
+            "height": 200,
+            "bytes": 13938
+        },
+        {
+            "path": "images/optimized/ba7e4fd8882a70a836f6f50d/640.webp",
+            "width": 640,
+            "height": 400,
+            "bytes": 38830
+        },
+        {
+            "path": "images/optimized/ba7e4fd8882a70a836f6f50d/960.webp",
+            "width": 960,
+            "height": 600,
+            "bytes": 69822
+        },
+        {
+            "path": "images/optimized/ba7e4fd8882a70a836f6f50d/1440.webp",
+            "width": 1440,
+            "height": 901,
+            "bytes": 118754
+        },
+        {
+            "path": "images/optimized/ba7e4fd8882a70a836f6f50d/1586.webp",
+            "width": 1586,
+            "height": 992,
+            "bytes": 132094
+        }
+    ],
+    "images/homepage/closing-art.webp": [
+        {
+            "path": "images/optimized/2436aaa91f48e6b50cbe62c7/320.webp",
+            "width": 320,
+            "height": 128,
+            "bytes": 1916
+        },
+        {
+            "path": "images/optimized/2436aaa91f48e6b50cbe62c7/640.webp",
+            "width": 640,
+            "height": 256,
+            "bytes": 4374
+        },
+        {
+            "path": "images/optimized/2436aaa91f48e6b50cbe62c7/960.webp",
+            "width": 960,
+            "height": 384,
+            "bytes": 7120
+        },
+        {
+            "path": "images/optimized/2436aaa91f48e6b50cbe62c7/1440.webp",
+            "width": 1440,
+            "height": 576,
+            "bytes": 11772
+        },
+        {
+            "path": "images/optimized/2436aaa91f48e6b50cbe62c7/1920.webp",
+            "width": 1920,
+            "height": 768,
+            "bytes": 16924
+        }
+    ],
+    "images/homepage/hero-banner.webp": [
+        {
+            "path": "images/optimized/ecdb13d0eb44c7fab3c94991/320.webp",
+            "width": 320,
+            "height": 139,
+            "bytes": 8910
+        },
+        {
+            "path": "images/optimized/ecdb13d0eb44c7fab3c94991/640.webp",
+            "width": 640,
+            "height": 278,
+            "bytes": 27044
+        },
+        {
+            "path": "images/optimized/ecdb13d0eb44c7fab3c94991/960.webp",
+            "width": 960,
+            "height": 417,
+            "bytes": 50522
+        },
+        {
+            "path": "images/optimized/ecdb13d0eb44c7fab3c94991/1440.webp",
+            "width": 1440,
+            "height": 626,
+            "bytes": 88206
+        },
+        {
+            "path": "images/optimized/ecdb13d0eb44c7fab3c94991/1902.webp",
+            "width": 1902,
+            "height": 827,
+            "bytes": 123830
+        }
+    ],
+    "images/homepage/hero-products.webp": [
+        {
+            "path": "images/optimized/8949274032ef40353e925cd0/320.webp",
+            "width": 320,
+            "height": 213,
+            "bytes": 19976
+        },
+        {
+            "path": "images/optimized/8949274032ef40353e925cd0/640.webp",
+            "width": 640,
+            "height": 427,
+            "bytes": 57052
+        },
+        {
+            "path": "images/optimized/8949274032ef40353e925cd0/960.webp",
+            "width": 960,
+            "height": 640,
+            "bytes": 99068
+        },
+        {
+            "path": "images/optimized/8949274032ef40353e925cd0/1440.webp",
+            "width": 1440,
+            "height": 960,
+            "bytes": 164994
+        },
+        {
+            "path": "images/optimized/8949274032ef40353e925cd0/1536.webp",
+            "width": 1536,
+            "height": 1024,
+            "bytes": 179340
+        }
+    ],
+    "images/homepage/story-feature.webp": [
+        {
+            "path": "images/optimized/a9f0f19cc4658a05c39bb536/320.webp",
+            "width": 320,
+            "height": 160,
+            "bytes": 14482
+        },
+        {
+            "path": "images/optimized/a9f0f19cc4658a05c39bb536/640.webp",
+            "width": 640,
+            "height": 320,
+            "bytes": 42540
+        },
+        {
+            "path": "images/optimized/a9f0f19cc4658a05c39bb536/960.webp",
+            "width": 960,
+            "height": 480,
+            "bytes": 80196
+        },
+        {
+            "path": "images/optimized/a9f0f19cc4658a05c39bb536/1440.webp",
+            "width": 1440,
+            "height": 720,
+            "bytes": 136986
+        },
+        {
+            "path": "images/optimized/a9f0f19cc4658a05c39bb536/1774.webp",
+            "width": 1774,
+            "height": 887,
+            "bytes": 175976
+        }
+    ],
+    "images/site/featured_generic_herokid_v2.png": [
+        {
+            "path": "images/optimized/9bc79ef4d2bb6955bd795817/320.webp",
+            "width": 320,
+            "height": 320,
+            "bytes": 16236
+        },
+        {
+            "path": "images/optimized/9bc79ef4d2bb6955bd795817/640.webp",
+            "width": 640,
+            "height": 640,
+            "bytes": 44864
+        }
+    ],
+    "images/site/settings/child-identity-character-sheet.jpg": [
+        {
+            "path": "images/optimized/c7d697e7293514150453f44e/320.webp",
+            "width": 320,
+            "height": 240,
+            "bytes": 7368
+        },
+        {
+            "path": "images/optimized/c7d697e7293514150453f44e/640.webp",
+            "width": 640,
+            "height": 480,
+            "bytes": 18436
+        },
+        {
+            "path": "images/optimized/c7d697e7293514150453f44e/960.webp",
+            "width": 960,
+            "height": 720,
+            "bytes": 32266
+        },
+        {
+            "path": "images/optimized/c7d697e7293514150453f44e/1200.webp",
+            "width": 1200,
+            "height": 900,
+            "bytes": 42912
+        }
+    ]
+}

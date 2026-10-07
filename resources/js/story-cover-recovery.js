@@ -10,6 +10,8 @@ export function withCacheBuster(url, value = Date.now()) {
 }
 
 export function handleStoryCoverError(image, cacheBuster = Date.now()) {
+    image?.removeAttribute?.('srcset');
+    image?.removeAttribute?.('sizes');
     const state = image?.dataset?.coverRetryState || ORIGINAL_STATE;
     const originalSrc = image?.dataset?.originalSrc || '';
     const fallbackSrc = image?.dataset?.fallbackSrc || '';

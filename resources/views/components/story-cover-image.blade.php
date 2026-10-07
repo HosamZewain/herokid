@@ -6,6 +6,8 @@
     'height' => null,
     'loading' => null,
     'fetchpriority' => null,
+    'sizes' => '(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw',
+    'preferredWidth' => 640,
 ])
 
 @php
@@ -14,16 +16,18 @@
     $initialSrc = $originalSrc !== '' ? $originalSrc : $fallbackSrc;
 @endphp
 
-<img
-    src="{{ $initialSrc }}"
-    alt="{{ $alt }}"
-    @if($width) width="{{ $width }}" @endif
-    @if($height) height="{{ $height }}" @endif
-    @if($loading) loading="{{ $loading }}" @endif
-    @if($fetchpriority) fetchpriority="{{ $fetchpriority }}" @endif
+<x-public-image
+    :src="$initialSrc"
+    :alt="$alt"
+    :sizes="$sizes"
+    :preferred-width="$preferredWidth"
+    :width="$width"
+    :height="$height"
+    :loading="$loading"
+    :fetchpriority="$fetchpriority"
     data-story-cover
-    @if($originalSrc !== '') data-original-src="{{ $originalSrc }}" @endif
+    :data-original-src="$originalSrc ?: null"
     data-fallback-src="{{ $fallbackSrc }}"
     data-cover-retry-state="{{ $originalSrc !== '' ? 'original' : 'fallback' }}"
-    @if($originalSrc !== '') onerror="window.HeroKidStoryCover?.handleError(this)" @endif
-    {{ $attributes }}>
+    :onerror="$originalSrc !== '' ? 'window.HeroKidStoryCover?.handleError(this)' : null"
+    {{ $attributes }} />

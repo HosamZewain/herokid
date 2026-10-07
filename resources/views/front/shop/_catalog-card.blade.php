@@ -5,9 +5,9 @@
                 <x-story-cover-image :src="$item->imageUrl" :alt="$item->title" loading="lazy"
                     class="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
             @elseif($item->imageUrl)
-                <img src="{{ $item->imageUrl }}" alt="{{ $item->title }}" loading="lazy"
-                    onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');"
-                    class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
+                <x-public-image :src="$item->imageUrl" :alt="$item->title" loading="lazy" sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
+                    onerror="if(this.dataset.imageRetried){this.onerror=null;this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');}else{this.dataset.imageRetried='1';this.removeAttribute('srcset');this.src=this.dataset.publicImageOriginal;}"
+                    class="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                 <div class="hidden h-full w-full"><x-product-image-placeholder /></div>
             @else
                 <x-product-image-placeholder />

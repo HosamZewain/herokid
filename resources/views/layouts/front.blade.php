@@ -158,7 +158,10 @@
     @vite(['resources/css/app.css', 'resources/css/front-theme.css', 'resources/js/app.js'])
     @if(request()->routeIs('home'))
         @vite('resources/css/homepage.css')
-        <link rel="preload" href="{{ asset('images/homepage/hero-banner.webp') }}" as="image" media="(min-width: 761px)">
+        @php
+            $heroPreload = app(\App\Services\Images\PublicImageVariants::class)->presentation(asset('images/homepage/hero-banner.webp'), 1440);
+        @endphp
+        <link rel="preload" href="{{ $heroPreload['src'] }}" as="image" media="(min-width: 761px)" @if($heroPreload['srcset']) imagesrcset="{{ $heroPreload['srcset'] }}" imagesizes="100vw" @endif>
     @endif
     <style>
         body {
