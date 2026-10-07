@@ -63,7 +63,7 @@
 @endpush
 
     <!-- Header -->
-    <div class="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-fuchsia-900 py-16 sm:py-20">
+    <div data-front-page-hero class="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-fuchsia-900 py-16 sm:py-20">
         <div class="absolute inset-0 opacity-10">
             <div class="absolute top-0 left-0 w-72 h-72 bg-indigo-400 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
         </div>

@@ -60,7 +60,7 @@
     @endpush
 
     <div data-football-landing class="min-h-screen overflow-x-clip bg-slate-50 pb-28 md:pb-12">
-        <section class="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-900 to-violet-900 text-white">
+        <section data-front-page-hero class="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-900 to-violet-900 text-white">
             <div class="absolute inset-0 opacity-20" aria-hidden="true"
                 style="background-image:radial-gradient(circle at 20% 20%,#fff 0 1px,transparent 1.5px);background-size:24px 24px"></div>
             <div class="relative mx-auto grid max-w-7xl items-center gap-8 px-4 py-7 sm:px-6 lg:min-h-[calc(100svh-5rem)] lg:grid-cols-[1.1fr_.9fr] lg:px-8 lg:py-14">

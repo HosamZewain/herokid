@@ -6,7 +6,7 @@
     <main class="min-h-[70vh] bg-slate-50 py-12 sm:py-20">
         <div class="mx-auto max-w-lg px-4 sm:px-6">
             <section class="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-200/50">
-                <div class="bg-gradient-to-l from-indigo-700 to-violet-600 px-6 py-8 text-center text-white sm:px-9">
+                <div data-front-page-hero class="bg-gradient-to-l from-indigo-700 to-violet-600 px-6 py-8 text-center text-white sm:px-9">
                     <span class="inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-black">خدمة آمنة للعملاء</span>
                     <h1 class="mt-4 text-3xl font-black">متابعة وتعديل طلبك</h1>
                     <p class="mt-3 text-sm font-bold leading-6 text-indigo-100">أدخل رقم الطلب ورقم الموبايل المسجل عليه لعرض الحالة، أو تعديل الطلب وإلغائه إذا لم يبدأ التنفيذ.</p>

@@ -1,6 +1,6 @@
 <x-front-layout>
 <x-slot name="pageTitle">سلة الطلب</x-slot>
-<x-slot name="pageDescription">راجع قصص HeroKid المخصصة في السلة وأدخل بيانات ولي الأمر والتوصيل مرة واحدة قبل إرسال الطلب.</x-slot>
+<x-slot name="pageDescription">راجع قصص ومنتجات HeroKid في السلة وأدخل بيانات ولي الأمر والتوصيل مرة واحدة قبل إرسال الطلب.</x-slot>
 <x-slot name="robots">noindex, nofollow</x-slot>
 
 @php
@@ -49,16 +49,16 @@
                 <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px]">
                     <div class="p-8 sm:p-10 text-right">
                         <p class="inline-flex rounded-full bg-amber-50 px-4 py-2 text-xs font-extrabold text-amber-700 mb-5">
-                            لا توجد قصص في السلة
+                            سلة المشتريات فارغة
                         </p>
-                        <h2 class="text-2xl sm:text-3xl font-black text-slate-950">ابدأ باختيار قصة لطفلك</h2>
+                        <h2 class="text-2xl sm:text-3xl font-black text-slate-950">اختار حاجة يحبّها طفلك</h2>
                         <p class="mt-3 text-slate-500 leading-8 max-w-2xl">
-                            من صفحة القصة ستدخل اسم الطفل، العمر، الاهتمامات، وترفع الصور. بعد ذلك ستظهر القصة هنا لإكمال بيانات التوصيل.
+                            اكتشف القصص والمنتجات والأنشطة، وخصّص اللي يحتاج اسم طفلك أو صورته. هتراجع اختياراتك هنا وتكمل بيانات التوصيل مرة واحدة.
                         </p>
                         <div class="mt-7 flex flex-col sm:flex-row gap-3 sm:justify-start">
-                            <a href="{{ route('stories.index') }}"
+                            <a href="{{ route('shop.index') }}"
                                 class="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition">
-                                تصفح القصص
+                                تصفّح المتجر
                             </a>
                             <a href="{{ route('how-it-works') }}"
                                 class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition">

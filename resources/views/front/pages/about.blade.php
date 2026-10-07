@@ -63,7 +63,7 @@
         </ol>
     </nav>
 
-    <section class="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-800 to-violet-700 py-16 sm:py-24">
+    <section data-front-page-hero class="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-800 to-violet-700 py-16 sm:py-24">
         <div class="absolute inset-0 opacity-20" aria-hidden="true">
             <div class="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-pink-400 blur-3xl"></div>
             <div class="absolute -bottom-28 -left-12 h-80 w-80 rounded-full bg-cyan-300 blur-3xl"></div>

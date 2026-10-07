@@ -59,7 +59,7 @@
 
     <div class="min-h-screen bg-slate-50" dir="rtl">
         @unless($isStoriesAlias)
-        <section class="relative overflow-hidden bg-gradient-to-bl from-indigo-950 via-violet-950 to-slate-950 text-white">
+        <section data-front-page-hero class="relative overflow-hidden bg-gradient-to-bl from-indigo-950 via-violet-950 to-slate-950 text-white">
             <div class="absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 26px 26px;"></div>
             <div class="absolute -right-32 -top-40 h-96 w-96 rounded-full bg-fuchsia-500/20 blur-3xl"></div>
             <div class="absolute -bottom-40 left-0 h-96 w-96 rounded-full bg-cyan-400/15 blur-3xl"></div>

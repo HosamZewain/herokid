@@ -70,6 +70,7 @@ use App\Http\Controllers\Front\ChildIdentityMediaController;
 use App\Http\Controllers\Front\ChildIdentityShareController;
 use App\Http\Controllers\Front\CustomerPreviewDecisionController;
 use App\Http\Controllers\Front\FootballStoriesController;
+use App\Http\Controllers\Front\HomeController;
 use App\Http\Controllers\Front\OrderCustomerRatingController;
 use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
 use App\Http\Controllers\Front\PackageCartController;
@@ -83,15 +84,11 @@ use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicMediaController;
-use App\Models\FaqItem;
-use App\Models\HomepageStoreSection;
 use App\Models\Order;
 use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Story;
-use App\Models\Testimonial;
-use App\Services\Catalog\CatalogSalesRankingService;
 use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 
@@ -121,40 +118,7 @@ Route::get('/media/{media}', PublicMediaController::class)
     ->name('media-library.public');
 
 // Homepage
-Route::get('/', function () {
-    $featuredStories = collect();
-    if (homepage_section_enabled('hero') || homepage_section_enabled('stories')) {
-        $activeStories = Story::where('active', true)->with('categories')->get();
-        $salesCounts = app(CatalogSalesRankingService::class)
-            ->counts($activeStories->pluck('id'), collect())['stories'];
-        $featuredStories = $activeStories
-            ->sortBy(fn (Story $story): array => [
-                -($salesCounts[$story->id] ?? 0),
-                $story->title,
-            ])
-            ->take(8)
-            ->values();
-    }
-    $faqs = homepage_section_enabled('faq')
-        ? FaqItem::where('active', true)->orderBy('sort_order')->take(5)->get()
-        : collect();
-    $testimonials = homepage_section_enabled('testimonials')
-        ? Testimonial::where('active', true)->orderBy('sort_order')->get()
-        : collect();
-    $packages = homepage_section_enabled('pricing')
-        ? PricingPackage::active()->purchasable()->where('show_on_homepage', true)->where('show_in_store', true)->with(['items.product', 'items.variant', 'eligibleStories'])->ordered()->get()->filter->availableForPurchase()->take(5)->values()
-        : collect();
-    $storeSections = homepage_section_enabled('store') && setting('shop_enabled', '1') === '1'
-        ? HomepageStoreSection::query()
-            ->with(['category.activeProducts' => fn ($query) => $query->orderByDesc('is_featured')->orderBy('sort_order')->latest()])
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get()
-            ->filter(fn ($section) => $section->category && $section->category->activeProducts->isNotEmpty())
-        : collect();
-
-    return view('welcome', compact('featuredStories', 'faqs', 'testimonials', 'packages', 'storeSections'));
-})->name('home');
+Route::get('/', HomeController::class)->name('home');
 
 // Public Story Routes
 Route::get('/football-stories', [FootballStoriesController::class, 'index'])->name('football-stories.index');

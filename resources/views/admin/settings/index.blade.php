@@ -351,18 +351,18 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">عنوان Hero الرئيسي (السطر الأول)</label>
-                        <input type="text" name="settings[hero_title_1]" value="{{ $s('hero_title_1', 'طفلك ليس قارئاً…') }}"
+                        <input type="text" name="settings[home_workshop_title_1]" maxlength="100" value="{{ $s('home_workshop_title_1', 'كل طفل عنده عالم.') }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">عنوان Hero المميز (السطر الثاني)</label>
-                        <input type="text" name="settings[hero_title_2]" value="{{ $s('hero_title_2', 'هو البطل الحقيقي!') }}"
+                        <input type="text" name="settings[home_workshop_title_2]" maxlength="100" value="{{ $s('home_workshop_title_2', 'خلّيه يسيب بصمته.') }}"
                                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">الوصف تحت العنوان</label>
-                        <textarea name="settings[hero_subtitle]" rows="2"
-                                  class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ $s('hero_subtitle', 'نحوّل خيال طفلك إلى كتاب مطبوع يحمل اسمه ووجهه الحقيقي في كل صفحة.') }}</textarea>
+                        <textarea name="settings[home_workshop_subtitle]" rows="3" maxlength="400"
+                                  class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">{{ $s('home_workshop_subtitle', "حكايات يعيشها.\nحاجات تحمل اسمه.\nوأنشطة يجرب فيها ويكتشف.") }}</textarea>
                     </div>
                     <div class="grid grid-cols-3 gap-4">
                         <div>

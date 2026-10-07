@@ -80,7 +80,7 @@
                 </ol>
             </nav>
 
-            <header class="overflow-hidden rounded-[1.75rem] bg-gradient-to-bl from-indigo-950 via-violet-900 to-fuchsia-800 text-right text-white shadow-xl shadow-indigo-200/70">
+            <header data-front-page-hero class="overflow-hidden rounded-[1.75rem] bg-gradient-to-bl from-indigo-950 via-violet-900 to-fuchsia-800 text-right text-white shadow-xl shadow-indigo-200/70">
                 <div class="grid items-stretch md:grid-cols-[minmax(0,1fr)_360px]">
                     <div class="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
                         <div class="flex flex-wrap items-center gap-2">

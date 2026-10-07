@@ -11,7 +11,7 @@
                 <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-black text-red-700" role="alert">{{ $errors->first() }}</div>
             @endif
 
-            <section class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-700 to-violet-600 p-6 text-white shadow-xl shadow-indigo-100 sm:p-8">
+            <section data-front-page-hero class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-700 to-violet-600 p-6 text-white shadow-xl shadow-indigo-100 sm:p-8">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p class="text-sm font-bold text-indigo-200">رقم الطلب</p>

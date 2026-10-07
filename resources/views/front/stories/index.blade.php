@@ -59,7 +59,7 @@
     <div class="bg-slate-50 min-h-screen flex flex-col">
 
         {{-- ===== HERO SECTION ===== --}}
-        <div class="relative bg-gradient-to-bl from-slate-900 via-indigo-950 to-purple-950 overflow-hidden" dir="rtl">
+        <div data-front-page-hero class="relative bg-gradient-to-bl from-slate-900 via-indigo-950 to-purple-950 overflow-hidden" dir="rtl">
 
             {{-- Background layers --}}
             <div class="absolute inset-0 pointer-events-none overflow-hidden">

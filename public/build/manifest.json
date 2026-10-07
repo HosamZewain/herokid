@@ -1,16 +1,16 @@
 {
-  "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js": {
-    "file": "assets/heic-to-lXPrQE7P.js",
-    "name": "heic-to",
-    "src": "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js",
-    "isDynamicEntry": true
-  },
   "_pdf.worker.min-DQioOMWc.js": {
     "file": "assets/pdf.worker.min-DQioOMWc.js",
     "name": "pdf.worker.min"
   },
+  "node_modules/heic-to/dist/csp/heic-to.js": {
+    "file": "assets/heic-to-lXPrQE7P.js",
+    "name": "heic-to",
+    "src": "node_modules/heic-to/dist/csp/heic-to.js",
+    "isDynamicEntry": true
+  },
   "resources/css/app.css": {
-    "file": "assets/app-SjQ7Qu-n.css",
+    "file": "assets/app-CssfhFSU.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -18,13 +18,31 @@
       "app.css"
     ]
   },
+  "resources/css/front-theme.css": {
+    "file": "assets/front-theme-CFWpf01E.css",
+    "src": "resources/css/front-theme.css",
+    "isEntry": true,
+    "name": "front-theme",
+    "names": [
+      "front-theme.css"
+    ]
+  },
+  "resources/css/homepage.css": {
+    "file": "assets/homepage-D7PAEdAg.css",
+    "src": "resources/css/homepage.css",
+    "isEntry": true,
+    "name": "homepage",
+    "names": [
+      "homepage.css"
+    ]
+  },
   "resources/js/app.js": {
-    "file": "assets/app-rYRdfap8.js",
+    "file": "assets/app-DnMJwTov.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
-      "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js",
+      "node_modules/heic-to/dist/csp/heic-to.js",
       "resources/js/booklet-reader.js",
       "resources/js/scene-reader.js"
     ]

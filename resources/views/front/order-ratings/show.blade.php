@@ -24,7 +24,7 @@
                 <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-black text-emerald-800" role="status">{{ session('success') }}</div>
             @endif
 
-            <section class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-700 to-violet-600 p-6 text-white shadow-xl shadow-indigo-100 sm:p-8">
+            <section data-front-page-hero class="overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-700 to-violet-600 p-6 text-white shadow-xl shadow-indigo-100 sm:p-8">
                 <div class="flex items-center justify-between gap-5">
                     <div class="text-right">
                         <p class="text-sm font-bold text-indigo-100">أهلاً {{ $group['customer_name'] }}</p>

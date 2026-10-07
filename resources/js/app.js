@@ -217,16 +217,25 @@ document.addEventListener('DOMContentLoaded', () => {
             openIcon?.classList.toggle('hidden', isOpen);
             closeIcon?.classList.toggle('hidden', !isOpen);
             toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            toggle.setAttribute('aria-label', isOpen ? 'إغلاق القائمة' : 'فتح القائمة');
+            if (!isOpen) {
+                menu.querySelectorAll('details[open]').forEach((details) => details.removeAttribute('open'));
+            }
         };
 
         toggle.addEventListener('click', () => {
             setOpen(menu.classList.contains('hidden'));
         });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+                setOpen(false);
+                toggle.focus();
+            }
+        });
+        window.matchMedia('(min-width: 1024px)').addEventListener('change', () => setOpen(false));
     }
 
-    const guideMenu = document.querySelector('[data-front-guide-menu]');
-
-    if (guideMenu) {
+    document.querySelectorAll('[data-front-guide-menu], [data-front-guide-menu-mobile]').forEach((guideMenu) => {
         document.addEventListener('click', (event) => {
             if (!guideMenu.contains(event.target)) {
                 guideMenu.removeAttribute('open');
@@ -239,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 guideMenu.querySelector('summary')?.focus();
             }
         });
-    }
+    });
 
     const cartAddedToast = document.querySelector('[data-cart-added-toast]');
 

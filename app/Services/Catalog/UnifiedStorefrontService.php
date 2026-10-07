@@ -223,6 +223,10 @@ class UnifiedStorefrontService
             createdTimestamp: $product->created_at?->timestamp ?? 0,
             salesCount: $salesCount,
             viewsCount: $viewsCount,
+            originalPrice: $product->hasActiveSale() ? $product->regularPriceCents() / 100 : null,
+            originalPriceLabel: $product->hasActiveSale()
+                ? ($english ? number_format($product->regularPriceCents() / 100, 2).' EGP' : format_money($product->regularPriceCents() / 100))
+                : null,
         );
     }
 

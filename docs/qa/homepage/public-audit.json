@@ -1,0 +1,197 @@
+[
+  {
+    "page": "shop",
+    "path": "/shop",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 2,
+    "h1": "متجر القصص والمنتجات",
+    "header": true,
+    "overflow": false,
+    "title": "متجر القصص والمنتجات | HeroKid"
+  },
+  {
+    "page": "stories",
+    "path": "/stories",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 2,
+    "header": true,
+    "overflow": false,
+    "title": "متجر القصص والمنتجات | HeroKid"
+  },
+  {
+    "page": "product",
+    "path": "/shop/product/local-review-maze-activity",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "كتاب المتاهات للأطفال",
+    "header": true,
+    "overflow": false,
+    "title": "كتاب المتاهات للأطفال | HeroKid"
+  },
+  {
+    "page": "personalized-product",
+    "path": "/shop/product/local-review-school-labels",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "ملصقات مدرسية بالاسم",
+    "header": true,
+    "overflow": false,
+    "title": "ملصقات مدرسية بالاسم | HeroKid"
+  },
+  {
+    "page": "story",
+    "path": "/stories/princess-magic-garden",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "أميرة الحديقة السحرية",
+    "header": true,
+    "overflow": false,
+    "title": "أميرة الحديقة السحرية — قصة أطفال مخصصة بوجه طفلك | HeroKid"
+  },
+  {
+    "page": "packages",
+    "path": "/packages",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "قصص وأنشطة أكثر لطفلك بسعر أوفر",
+    "header": true,
+    "overflow": false,
+    "title": "باقات قصص الأطفال المخصصة | HeroKid | HeroKid"
+  },
+  {
+    "page": "package",
+    "path": "/shop/package/local-review-school-bundle",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "باقة المدرسة — اختبار محلي",
+    "header": true,
+    "overflow": false,
+    "title": "باقة المدرسة — اختبار محلي — باقة قصص أطفال مخصصة | HeroKid"
+  },
+  {
+    "page": "about",
+    "path": "/about",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "عن HeroKid",
+    "header": true,
+    "overflow": false,
+    "title": "عن HeroKid — قصص ومنتجات تجعل طفلك بطل الحكاية | HeroKid"
+  },
+  {
+    "page": "how",
+    "path": "/how-it-works",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "رحلة قصتك من الفكرة إلى يدَي طفلك",
+    "header": true,
+    "overflow": false,
+    "title": "كيف يعمل HeroKid؟ | HeroKid"
+  },
+  {
+    "page": "faq",
+    "path": "/faq",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "الأسئلة الشائعة",
+    "header": true,
+    "overflow": false,
+    "title": "الأسئلة الشائعة عن قصص HeroKid المخصصة | HeroKid"
+  },
+  {
+    "page": "contact",
+    "path": "/contact",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "تواصل معنا",
+    "header": true,
+    "overflow": false,
+    "title": "تواصل مع فريق HeroKid — دعم العملاء على مدار الساعة | HeroKid"
+  },
+  {
+    "page": "track",
+    "path": "/track-order",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "متابعة وتعديل طلبك",
+    "header": true,
+    "overflow": false,
+    "title": "متابعة وتعديل طلبك | HeroKid"
+  },
+  {
+    "page": "identity",
+    "path": "/child-identity",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "اصنع هوية طفلك",
+    "header": true,
+    "overflow": false,
+    "title": "اصنع هوية طفلك | HeroKid"
+  },
+  {
+    "page": "football",
+    "path": "/football-stories",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 1,
+    "h1": "خلي طفلك بطل قصة كرة القدم باسمه وصورته",
+    "header": true,
+    "overflow": false,
+    "title": "قصص كرة القدم المخصصة باسم وصورة طفلك | HeroKid"
+  },
+  {
+    "page": "privacy",
+    "path": "/privacy",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "سياسة الخصوصية",
+    "header": true,
+    "overflow": false,
+    "title": "سياسة الخصوصية | HeroKid"
+  },
+  {
+    "page": "terms",
+    "path": "/terms",
+    "font": "Cairo, sans-serif",
+    "footer": true,
+    "forms": 0,
+    "h1": "الشروط والأحكام",
+    "header": true,
+    "overflow": false,
+    "title": "الشروط والأحكام | HeroKid"
+  },
+  {
+    "page": "login",
+    "path": "/login",
+    "font": "Cairo, sans-serif",
+    "footer": false,
+    "forms": 1,
+    "header": false,
+    "overflow": false,
+    "title": "HeroKid — دخول / تسجيل"
+  },
+  {
+    "page": "register",
+    "path": "/register",
+    "font": "Cairo, sans-serif",
+    "footer": false,
+    "forms": 1,
+    "header": false,
+    "overflow": false,
+    "title": "HeroKid — دخول / تسجيل"
+  }
+]
