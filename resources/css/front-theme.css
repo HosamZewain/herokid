@@ -45,8 +45,8 @@
 .hk-site-footer { background: #14284e; color: white; padding: 48px 30px 20px; }
 .hk-footer-inner { max-width: 1280px; margin: auto; display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.2fr; gap: 48px; align-items: start; }
 .hk-footer-inner > * { min-width: 0; }
-.hk-footer-brand > a { flex-shrink: 0; }
-.hk-footer-brand img { width: 120px; height: 102px; object-fit: contain; }
+.hk-footer-brand-media { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.hk-footer-logo { width: 120px; height: 102px; object-fit: contain; }
 .hk-footer-brand p { max-width: 240px; font-size: 14px; line-height: 1.9; margin-top: 12px; color: #d3dff3; }
 .hk-footer-column, .hk-footer-contact { display: flex; flex-direction: column; font-size: 14px; line-height: 1.8; }
 .hk-footer-inner h2 { margin: 0 0 14px; font-size: 17px; font-weight: 800; line-height: 1.7; color: #8ce8e1; }
@@ -54,9 +54,9 @@
 .hk-site-footer a:hover { color: white; text-decoration: underline; text-underline-offset: 5px; }
 .herokid-front .hk-site-footer a:focus-visible { outline-color: #8ce8e1; }
 .hk-footer-address { overflow-wrap: anywhere; }
-.hk-footer-social { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.hk-footer-social:empty { display: none; }
-.hk-footer-social a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border: 1px solid #ffffff30; border-radius: 10px; background: #ffffff08; font-size: 12px; }
+.hk-footer-social { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hk-footer-social a { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid #ffffff30; border-radius: 12px; background: #ffffff08; }
+.hk-footer-social img { width: 22px; height: 22px; object-fit: contain; }
 .hk-footer-social a:hover { background: #ffffff16; }
 .hk-footer-bottom { max-width: 1280px; margin: 32px auto 0; padding-top: 18px; border-top: 1px solid #ffffff26; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; font-size: 12px; line-height: 1.8; color: #c4d2e9; }
 .hk-footer-policies { display: flex; flex-wrap: wrap; gap: 8px 24px; }
@@ -101,9 +101,10 @@
 @media (max-width: 639px) {
     .hk-site-footer { padding: 32px 24px 88px; }
     .hk-footer-inner { grid-template-columns: 1fr 1fr; gap: 28px 24px; }
-    .hk-footer-brand { gap: 20px; }
-    .hk-footer-brand img { width: 96px; height: 82px; }
-    .hk-footer-brand p { font-size: 13px; }
+    .hk-footer-brand { flex-direction: column; gap: 16px; text-align: center; }
+    .hk-footer-brand-media { align-items: center; }
+    .hk-footer-logo { width: 96px; height: 82px; }
+    .hk-footer-brand p { font-size: 13px; max-width: 30ch; }
     .hk-footer-inner h2 { font-size: 15px; margin-bottom: 8px; }
     .hk-footer-column { font-size: 13px; }
     .hk-footer-contact { grid-column: 1 / -1; padding-top: 24px; border-top: 1px solid #ffffff26; }

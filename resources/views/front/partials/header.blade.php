@@ -1,5 +1,6 @@
 @php
     $navItems = [
+        ['label' => 'الرئيسية', 'url' => route('home'), 'active' => request()->routeIs('home')],
         ['label' => 'قصص', 'url' => route('stories.index'), 'active' => request()->routeIs('stories.*') || request('type') === 'stories'],
         ['label' => 'منتجات مخصصة', 'url' => route('shop.index', ['type' => 'products']), 'active' => request()->routeIs('shop.*') && !request()->routeIs('shop.package.*') && !in_array(request('type'), ['stories', 'activities'])],
         ['label' => 'أنشطة وتعلّم', 'url' => route('shop.index', ['type' => 'activities']), 'active' => request('type') === 'activities'],
@@ -40,7 +41,6 @@
         </div>
     </nav>
     <nav id="front-mobile-menu" data-front-mobile-menu class="hidden hk-mobile-menu" aria-label="القائمة الرئيسية للموبايل">
-        <a href="{{ route('home') }}">الرئيسية</a>
         @foreach($navItems as $navItem)
             <a href="{{ $navItem['url'] }}" @if($navItem['active']) aria-current="page" @endif>{{ $navItem['label'] }}</a>
         @endforeach

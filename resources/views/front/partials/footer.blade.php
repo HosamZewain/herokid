@@ -1,7 +1,20 @@
 <footer class="hk-site-footer">
     <div class="hk-footer-inner">
         <div class="hk-footer-brand">
-            <a href="{{ route('home') }}"><img src="{{ asset('images/logo-192.png') }}" width="192" height="164" alt="HeroKid Logo" loading="lazy"></a>
+            <div class="hk-footer-brand-media">
+                <a href="{{ route('home') }}"><img class="hk-footer-logo" src="{{ asset('images/logo-192.png') }}" width="192" height="164" alt="HeroKid Logo" loading="lazy"></a>
+                @if(!empty($settings['facebook_url']) || !empty($settings['instagram_url']) || !empty($settings['youtube_url']) || !empty($settings['whatsapp_url']))
+                    <div class="hk-footer-social" aria-label="تابع هيروكيد">
+                        @foreach(['facebook_url' => 'Facebook', 'instagram_url' => 'Instagram', 'youtube_url' => 'YouTube', 'whatsapp_url' => 'WhatsApp'] as $contactKey => $contactLabel)
+                            @if(!empty($settings[$contactKey]))
+                                <a href="{{ $settings[$contactKey] }}" target="_blank" rel="noopener noreferrer" aria-label="HeroKid — {{ $contactLabel }}" title="{{ $contactLabel }}">
+                                    <img src="{{ asset('images/icons/'.str_replace('_url', '-white.svg', $contactKey)) }}" width="22" height="22" alt="" aria-hidden="true" loading="lazy">
+                                </a>
+                            @endif
+                        @endforeach
+                    </div>
+                @endif
+            </div>
             <p>{{ setting('footer_brand_description', 'كل طفل عنده عالم.') }}</p>
         </div>
         <nav aria-labelledby="hk-footer-discover" class="hk-footer-column">
@@ -24,13 +37,6 @@
             <a href="{{ route('contact') }}">محتاج مساعدة؟ كلّمنا</a>
             @if(!empty($settings['site_email']))<a class="hk-footer-address" href="mailto:{{ $settings['site_email'] }}"><bdi dir="ltr">{{ $settings['site_email'] }}</bdi></a>@endif
             @if(!empty($settings['whatsapp_number']))<a class="hk-footer-address" href="tel:{{ $settings['whatsapp_number'] }}"><bdi dir="ltr">{{ $settings['whatsapp_number'] }}</bdi></a>@endif
-            <div class="hk-footer-social" aria-label="تابع هيروكيد">
-                @foreach(['facebook_url' => 'Facebook', 'instagram_url' => 'Instagram', 'youtube_url' => 'YouTube', 'whatsapp_url' => 'WhatsApp'] as $contactKey => $contactLabel)
-                    @if(!empty($settings[$contactKey]))
-                        <a href="{{ $settings[$contactKey] }}" target="_blank" rel="noopener noreferrer" aria-label="HeroKid — {{ $contactLabel }}"><span dir="ltr">{{ $contactLabel }}</span></a>
-                    @endif
-                @endforeach
-            </div>
         </div>
     </div>
     <div class="hk-footer-bottom">

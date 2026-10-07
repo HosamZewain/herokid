@@ -152,6 +152,35 @@ class ApprovedHomepageIntegrationTest extends TestCase
         $this->assertStringNotContainsString('href="tel:', $matches[0]);
         $this->assertStringNotContainsString('target="_blank"', $matches[0]);
         $this->assertStringContainsString(route('contact'), $matches[0]);
+        $this->assertStringNotContainsString('class="hk-footer-social"', $matches[0]);
+    }
+
+    public function test_social_links_are_accessible_icons_below_the_footer_logo(): void
+    {
+        foreach (['facebook', 'instagram', 'youtube', 'whatsapp'] as $platform) {
+            $this->setting($platform.'_url', 'https://example.test/'.$platform);
+        }
+        $html = $this->get(route('home'))->assertOk()->getContent();
+        preg_match('/<div class="hk-footer-brand-media">.*?<\/div>\s*<\/div>/s', $html, $matches);
+        $this->assertStringContainsString('hk-footer-logo', $matches[0]);
+        $this->assertStringContainsString('hk-footer-social', $matches[0]);
+        foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram', 'youtube' => 'YouTube', 'whatsapp' => 'WhatsApp'] as $platform => $label) {
+            $this->assertStringContainsString('href="https://example.test/'.$platform.'"', $matches[0]);
+            $this->assertStringContainsString('aria-label="HeroKid — '.$label.'"', $matches[0]);
+            $this->assertStringContainsString(asset('images/icons/'.$platform.'-white.svg'), $matches[0]);
+            $this->assertFileExists(public_path('images/icons/'.$platform.'-white.svg'));
+        }
+        $this->assertStringContainsString('alt="" aria-hidden="true"', $matches[0]);
+        $this->assertStringNotContainsString('<span dir="ltr">Facebook</span>', $matches[0]);
+    }
+
+    public function test_home_link_is_present_once_in_each_menu_and_active_only_on_home(): void
+    {
+        $html = $this->get(route('home'))->assertOk()->getContent();
+        $this->assertSame(2, preg_match_all('/<a href="'.preg_quote(route('home'), '/').'"[^>]*aria-current="page"[^>]*>الرئيسية<\/a>/', $html));
+        $html = $this->get(route('stories.index'))->assertOk()->getContent();
+        $this->assertSame(2, preg_match_all('/<a href="'.preg_quote(route('home'), '/').'"[^>]*>الرئيسية<\/a>/', $html));
+        $this->assertSame(0, preg_match_all('/<a href="'.preg_quote(route('home'), '/').'"[^>]*aria-current="page"[^>]*>الرئيسية<\/a>/', $html));
     }
 
     private function story(): Story

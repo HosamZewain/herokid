@@ -83,4 +83,15 @@ User requested a focused improvement to the approved footer; the rest of the des
 
 Footer follow-up final result: passed
 
+## Social icons and home link — 2026-10-07
+
+- User-requested follow-up: move configured social links directly below the footer logo and render them as icons; add a visible home link to the header.
+- Shared desktop/mobile navigation now derives the home link from the same route-aware item list, avoiding duplicate mobile entries. Only the homepage marks it `aria-current="page"`. Browser navigation through the desktop link and the mobile menu was verified.
+- Social links retain exact configured URLs, new-tab security attributes and accessible platform labels. Each icon link is 44×44px. Unconfigured social platforms are omitted, and no blank social container is rendered. Existing Facebook/WhatsApp assets are reused; Instagram/YouTube use the installed Font Awesome Free brand paths with CC BY 4.0 attribution embedded in the SVG files. No runtime icon dependency or external request is added.
+- Desktop icons sit below the existing logo, before the preserved description. Mobile stacks and centers the brand/logo/icon row to fit all four supported platforms without squeezing the description. Checked layout at 320, 390, 768, 1024 and 1440 CSS pixels: no horizontal overflow and social row below the logo. Lazy-loaded visible preview icons loaded successfully; no browser console errors/warnings were returned.
+- Evidence: [desktop footer](docs/qa/homepage/social-footer-desktop.png), [mobile footer](docs/qa/homepage/social-footer-mobile.png), [desktop home navigation](docs/qa/homepage/home-nav-desktop.png). Desktop footer is an actual 1440×470 crop; mobile is an actual 390×844 viewport showing surrounding page context. No screenshot density rescaling.
+- Current regression run: **71 passed, 769 assertions**, 17.70s (homepage integration, unified storefront, cart/checkout). Changed-test Pint, Blade compilation, asset build and `git diff --check` passed. Shared app stylesheet and JavaScript remain unchanged. No full-suite rerun, database schema change, public setting rewrite, main update or live deployment in this follow-up.
+
+Social/home-link follow-up final result: passed
+
 final result: passed
