@@ -181,4 +181,20 @@ class ShippingReportTest extends TestCase
         $this->get('/admin/shipping-report?from=2024-01-01&to=2026-10-08')->assertStatus(422);
         $this->get('/admin/shipping-report?from=2026-10-01&to=2026-10-08&day=2026-09-30')->assertStatus(422);
     }
+
+    public function test_empty_legacy_checkout_keys_remain_separate_with_strict_grouping(): void
+    {
+        $first = $this->order('LEGACY-A', 2);
+        $second = $this->order('LEGACY-B', 3);
+        DB::table('orders')->whereIn('id', [$first->id, $second->id])->update(['checkout_group_key' => '']);
+        $this->log($first);
+        $this->log($second);
+        $this->log($first, '2026-10-08 10:00:00');
+
+        $report = $this->report();
+        $this->assertSame(2, $report['summary']['shipments']);
+        $this->assertSame(5, $report['summary']['products']);
+        $this->assertSame(['order:'.$first->id, 'order:'.$second->id], $report['rows']->getCollection()->pluck('key')->sort()->values()->all());
+        $this->assertSame([2, 3], $report['rows']->getCollection()->pluck('product_quantity')->map(fn ($value) => (int) $value)->sort()->values()->all());
+    }
 }

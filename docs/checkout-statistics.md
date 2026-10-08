@@ -140,3 +140,14 @@ The report is read-only and does not contact Bosta or modify assignments/statuse
 - Migration `2026_10_08_000200_add_shipping_report_permission_and_log_index`
   registers the permission and adds a covering shipping-log index. No new env
   variables or changes to carrier/order business behavior are required.
+
+### Strict grouping compatibility hotfix
+
+The first shipping-report release grouped directly by a normalized
+`COALESCE(NULLIF(checkout_group_key, ''), CONCAT('order:', id))` expression.
+MySQL 8.4 accepted that query, but MariaDB 10.11 with `ONLY_FULL_GROUP_BY`
+reproduces error 1055 on `o.checkout_group_key`, matching the Hostinger report.
+Checkout keys are now normalized in a derived query before aggregating orders
+and historical shipping logs, so both aggregates group by an ordinary column.
+This preserves empty-key legacy isolation, quantities, dispatch dates and
+read-only behavior without disabling strict SQL mode or changing schema/data.

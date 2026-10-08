@@ -79,15 +79,25 @@ class AdminShippingReportService
         return "COALESCE(NULLIF({$alias}.checkout_group_key, ''), CONCAT('order:', {$alias}.id))";
     }
 
+    /** Normalize before aggregating: MariaDB's strict mode rejects the inline
+     * COALESCE/CONCAT expression even when it is repeated verbatim in GROUP BY.
+     */
+    private function keyedOrders(): Builder
+    {
+        return DB::table('orders as source_order')
+            ->select('source_order.id', 'source_order.story_id', 'source_order.shipping_status', 'source_order.deleted_at')
+            ->selectRaw($this->groupKey('source_order').' as checkout_key');
+    }
+
     private function factsQuery(): Builder
     {
         $shipped = array_unique(array_merge(['shipped'], OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'shipped', false)));
         $progress = array_unique(array_merge($shipped, ['delivered', 'returned'],
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'delivered', false),
             OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'returned', false)));
-        $logs = DB::table('order_status_logs as l')->join('orders as historical', 'historical.id', '=', 'l.order_id')
+        $logs = DB::table('order_status_logs as l')->joinSub($this->keyedOrders(), 'historical', 'historical.id', '=', 'l.order_id')
             ->where('l.status_type', 'shipping')->whereIn('l.status', $shipped)
-            ->selectRaw($this->groupKey('historical').' as checkout_key, MIN(l.created_at) as shipped_at')->groupByRaw($this->groupKey('historical'));
+            ->select('historical.checkout_key')->selectRaw('MIN(l.created_at) as shipped_at')->groupBy('historical.checkout_key');
         // These are the same dispatched/in-transit states used by BostaWebhookService.
         // Delivered/returned/cancelled events alone do not establish a dispatch date.
         $events = DB::table('bosta_shipment_events')->whereIn('state_code', [21, 22, 23, 24, 25, 30, 40, 41])
@@ -98,13 +108,13 @@ class AdminShippingReportService
             SUM(CASE WHEN item_type NOT IN ('product', 'story') THEN quantity ELSE 0 END) as add_on_quantity")
             ->groupBy('order_id');
         $placeholders = implode(',', array_fill(0, count($progress), '?'));
-        $groups = DB::table('orders as o')->whereNull('o.deleted_at')->leftJoinSub($itemCounts, 'ic', 'ic.order_id', '=', 'o.id')
-            ->selectRaw($this->groupKey('o').' as checkout_key, MIN(o.id) as representative_id,
+        $groups = DB::query()->fromSub($this->keyedOrders(), 'o')->whereNull('o.deleted_at')->leftJoinSub($itemCounts, 'ic', 'ic.order_id', '=', 'o.id')
+            ->select('o.checkout_key')->selectRaw('MIN(o.id) as representative_id,
                 SUM(COALESCE(ic.product_quantity, 0)) as product_quantity,
                 SUM(CASE WHEN COALESCE(ic.item_count, 0) = 0 AND o.story_id IS NOT NULL THEN 1 ELSE COALESCE(ic.story_quantity, 0) END) as story_quantity,
                 SUM(COALESCE(ic.add_on_quantity, 0)) as add_on_quantity')
             ->selectRaw("MAX(CASE WHEN o.shipping_status IN ({$placeholders}) THEN 1 ELSE 0 END) as has_shipping_progress", $progress)
-            ->groupByRaw($this->groupKey('o'));
+            ->groupBy('o.checkout_key');
 
         return DB::query()->fromSub($groups, 'g')
             ->leftJoinSub($logs, 'logs', 'logs.checkout_key', '=', 'g.checkout_key')
