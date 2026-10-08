@@ -14,6 +14,7 @@ use App\Rules\InternationalMobileNumber;
 use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Cart\CheckoutFormDraft;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
@@ -53,6 +54,7 @@ class CheckoutController extends Controller
     ) {
         if ($existingIds = $submissions->completed($request)) {
             $request->session()->put('checkout.last_order_ids', $existingIds);
+            app(CheckoutFormDraft::class)->complete($request);
 
             return redirect()->route('checkout.success');
         }
@@ -532,6 +534,7 @@ class CheckoutController extends Controller
         if ($replayed) {
             session()->forget(['cart.items', 'cart.promo_code_id']);
             session(['checkout.last_order_ids' => $orderIds]);
+            app(CheckoutFormDraft::class)->complete($request);
 
             return redirect()->route('checkout.success');
         }
@@ -546,6 +549,7 @@ class CheckoutController extends Controller
 
         session()->forget(['cart.items', 'cart.promo_code_id']);
         session(['checkout.last_order_ids' => $orderIds]);
+        app(CheckoutFormDraft::class)->complete($request);
         app(CartTrackingService::class)->recordConverted($request, $orderIds);
         $metaPurchaseEvent = $metaPurchaseTracking->record($request, $orderIds, $checkoutGroup);
         if ($metaPurchaseEvent !== []) {
@@ -579,6 +583,7 @@ class CheckoutController extends Controller
                 ?: $orders->first()?->order_number,
             'metaPurchaseEvent' => session()->pull('meta.purchase_event'),
             'googleAdsPurchaseEvent' => session()->pull('google_ads.purchase_event'),
+            'checkoutCompletedDraftScope' => session('checkout.completed_draft_scope'),
         ]);
     }
 

@@ -110,9 +110,13 @@
                             </div>
                         @endguest
 
-                        <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4" data-checkout-form>
+                        <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4" data-checkout-form
+                            data-checkout-draft-scope="{{ $checkoutDraftScope }}"
+                            data-checkout-draft-old-fields="{{ json_encode(array_keys(session()->getOldInput())) }}">
                             <input type="hidden" name="checkout_submission_token" value="{{ $checkoutSubmissionToken }}">
+                            <input type="hidden" name="checkout_draft_scope" value="{{ $checkoutDraftScope }}">
                             @csrf
+                            <p data-checkout-draft-status hidden class="text-right text-xs font-medium leading-6 text-slate-500" role="status" aria-live="polite"></p>
                             <div>
                                 <label for="checkout-parent-name" class="block text-sm font-bold text-slate-700 mb-1.5 text-right">اسم ولي الأمر <span class="text-red-500">*</span></label>
                                 <input id="checkout-parent-name" type="text" name="parent_name" value="{{ old('parent_name', auth()->user()->name ?? '') }}" required autocomplete="name"
@@ -563,6 +567,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const checkoutForm = document.querySelector('[data-checkout-form]');
+            const checkoutDraft = window.HeroKidCheckoutDraft?.initialize(checkoutForm);
             const countrySelect = document.getElementById('delivery_country_id');
             const governorateSelect = document.getElementById('delivery_governorate_id');
             const cityInput = document.getElementById('checkout-city');
@@ -750,13 +755,17 @@
 
                 if (savedDistrict) {
                     zoneSelect.value = savedDistrict.zone_id || '__other__';
+                } else if (Array.from(zoneSelect.options).some((option) => option.value === zoneSelect.dataset.selectedId)) {
+                    zoneSelect.value = zoneSelect.dataset.selectedId;
                 }
+                zoneSelect.dataset.selectedId = '';
             }
 
             async function updateAddressMode() {
                 if (!districtSelect || !districtWrapper || !cityTextWrapper || !cityInput || !bostaCityInput || !districtSearch || !zoneSelect) return;
 
                 const cityId = governorateSelect?.selectedOptions?.[0]?.dataset?.bostaCityId || '';
+                const requestId = ++districtRequest;
                 const useOfficialDistrict = cityId !== '';
                 districtWrapper.classList.toggle('hidden', !useOfficialDistrict);
                 cityTextWrapper.classList.toggle('hidden', useOfficialDistrict);
@@ -777,7 +786,6 @@
                     return;
                 }
 
-                const requestId = ++districtRequest;
                 const selectedId = districtSelect.dataset.selectedId || '';
                 const selectedName = districtSelect.dataset.selectedName || cityInput.value || '';
                 availableDistricts = [];
@@ -816,9 +824,15 @@
                         selectDistrict(savedDistrict);
                     } else {
                         resetDistrictSearch('اختر المدينة أو المركز أولاً...');
+                        if (zoneSelect.value) {
+                            districtSearch.disabled = false;
+                            districtToggle.disabled = false;
+                            districtSearch.placeholder = 'اكتب اسم المنطقة للبحث...';
+                        }
                     }
                     districtSelect.dataset.selectedId = '';
                     districtSelect.dataset.selectedName = '';
+                    checkoutDraft?.save();
                 } catch (error) {
                     if (requestId !== districtRequest) return;
                     availableDistricts = [];
@@ -883,8 +897,21 @@
                 if (!event.target.closest('[data-bosta-district-combobox]')) closeDistrictOptions();
             });
 
-            countrySelect?.addEventListener('change', filterGovernorates);
+            const resetDraftDistrict = () => {
+                if (districtSelect) {
+                    districtSelect.dataset.selectedId = '';
+                    districtSelect.dataset.selectedName = '';
+                    districtSelect.value = '';
+                }
+                if (zoneSelect) zoneSelect.dataset.selectedId = '';
+                if (cityInput) cityInput.value = '';
+            };
+            countrySelect?.addEventListener('change', () => {
+                resetDraftDistrict();
+                filterGovernorates();
+            });
             governorateSelect?.addEventListener('change', () => {
+                resetDraftDistrict();
                 const fee = governorateSelect.selectedOptions[0]?.dataset?.fee ?? selectedCountryFee();
                 updateTotals(fee);
                 updateAddressMode();

@@ -8,6 +8,9 @@
 @endphp
 
 <x-front-layout :google-ads-purchase-event="$googleAdsPurchasePayload">
+@if(!empty($checkoutCompletedDraftScope))
+    <span hidden data-checkout-draft-completed="{{ $checkoutCompletedDraftScope }}"></span>
+@endif
 
 {{-- ══ SEO ══ --}}
 <x-slot name="pageTitle">تم استلام طلبك بنجاح</x-slot>

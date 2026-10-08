@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Story;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Cart\CheckoutFormDraft;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
@@ -67,6 +68,7 @@ class CartController extends Controller
         return view('front.cart.index', [
             'cartItems' => $cart,
             'checkoutSubmissionToken' => app(CheckoutSubmissionService::class)->token(request(), $cart),
+            'checkoutDraftScope' => app(CheckoutFormDraft::class)->scope(request()),
             'storyItems' => $storyItems,
             'recommendedProducts' => $recommendedProducts,
             'upsellStoryKey' => $upsellStoryKey,

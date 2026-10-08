@@ -14,6 +14,9 @@ import { storyCoverRecovery } from './story-cover-recovery';
 import { initializeHomePackageCarousels } from './home-package-carousel';
 import { initializeOrderQuickEdit } from './order-quick-edit';
 import { initializeAdminOrderForms } from './admin-order-form';
+import { initializeCheckoutDraft, clearCompletedCheckoutDrafts } from './checkout-form-draft';
+
+window.HeroKidCheckoutDraft = Object.freeze({ initialize: initializeCheckoutDraft });
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -28,6 +31,7 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    clearCompletedCheckoutDrafts();
     initializeOrderStatusFilters();
     initializeAdminFileUploads();
     initializeOrderQuickEdit();
