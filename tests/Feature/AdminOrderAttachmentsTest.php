@@ -25,7 +25,7 @@ class AdminOrderAttachmentsTest extends TestCase
         $this->admin = User::factory()->create(['role' => 'admin']);
     }
 
-    public function test_admin_can_upload_private_pdf_and_image_with_thirty_day_default_expiry(): void
+    public function test_admin_can_upload_private_pdf_and_image_without_expiry(): void
     {
         Storage::fake('local');
         $order = $this->productOrder();
@@ -44,15 +44,16 @@ class AdminOrderAttachmentsTest extends TestCase
         $this->assertCount(2, $attachments);
 
         foreach ($attachments as $attachment) {
-            $this->assertSame(30, $attachment->validity_days);
-            $this->assertTrue($attachment->expires_at->between(now()->addDays(29)->addHours(23), now()->addDays(30)->addMinute()));
+            $this->assertNull($attachment->validity_days);
+            $this->assertNull($attachment->expires_at);
+            $this->assertFalse($attachment->isExpired());
             $this->assertSame($this->admin->id, $attachment->uploaded_by_user_id);
             $this->assertSame('نسخة الطباعة', $attachment->note);
             Storage::disk('local')->assertExists($attachment->path);
         }
     }
 
-    public function test_active_attachment_is_private_and_expired_attachment_is_gone(): void
+    public function test_attachment_remains_private_and_legacy_expiry_does_not_block_access(): void
     {
         Storage::fake('local');
         $order = $this->productOrder();
@@ -69,10 +70,10 @@ class AdminOrderAttachmentsTest extends TestCase
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.attachments.show', $attachment))
-            ->assertGone();
+            ->assertOk();
     }
 
-    public function test_cleanup_command_permanently_deletes_expired_files_and_records_only(): void
+    public function test_legacy_cleanup_command_never_deletes_any_completed_attachment(): void
     {
         Storage::fake('local');
         $order = $this->productOrder();
@@ -81,10 +82,11 @@ class AdminOrderAttachmentsTest extends TestCase
 
         $result = app(OrderAttachmentService::class)->cleanupExpired();
 
-        $this->assertSame(['expired' => 1, 'deleted_files' => 1], $result);
-        $this->assertDatabaseMissing('order_attachments', ['id' => $expired->id]);
+        $this->assertSame(['expired' => 0, 'deleted_files' => 0], $result);
+        $this->artisan('order-attachments:cleanup')->expectsOutputToContain('retained permanently')->assertSuccessful();
+        $this->assertDatabaseHas('order_attachments', ['id' => $expired->id]);
         $this->assertDatabaseHas('order_attachments', ['id' => $active->id]);
-        Storage::disk('local')->assertMissing($expired->path);
+        Storage::disk('local')->assertExists($expired->path);
         Storage::disk('local')->assertExists($active->path);
     }
 
@@ -101,7 +103,7 @@ class AdminOrderAttachmentsTest extends TestCase
             ->assertSee('رفع المرفقات الآن')
             ->assertSee('data-order-attachment-form', false)
             ->assertSee('data-order-ajax-delete', false)
-            ->assertSee('تُحذف بعد 30 يومًا');
+            ->assertSee('دون حذف تلقائي')->assertDontSee('تُحذف بعد 30 يومًا');
 
         $this->actingAs($this->admin)
             ->post(route('admin.orders.attachments.store', $order), [
@@ -112,18 +114,19 @@ class AdminOrderAttachmentsTest extends TestCase
         $this->assertDatabaseCount('order_attachments', 0);
     }
 
-    public function test_attachment_expiry_is_displayed_in_cairo_time(): void
+    public function test_attachment_upload_time_is_displayed_in_cairo_without_a_deletion_deadline(): void
     {
         Storage::fake('local');
         config(['display.timezone' => 'Africa/Cairo']);
         $order = $this->productOrder();
-        $this->attachment($order, CarbonImmutable::parse('2026-08-31 12:00:00', 'UTC'));
+        $this->attachment($order, now()->subDays(90))
+            ->forceFill(['created_at' => CarbonImmutable::parse('2026-08-31 12:00:00', 'UTC')])->save();
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order))
             ->assertOk()
             ->assertSee('31/08/2026 03:00 PM')
-            ->assertDontSee('31/08/2026 12:00 PM');
+            ->assertDontSee('31/08/2026 12:00 PM')->assertSee('محفوظ دائمًا')->assertDontSee('انتهت الصلاحية');
     }
 
     public function test_attachment_size_limit_is_fifty_megabytes_per_file(): void

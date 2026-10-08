@@ -31,7 +31,7 @@ class OrderAttachmentController extends Controller
             return response()->json(['success' => true, 'message' => 'تم حفظ المرفق.']);
         }
 
-        return back()->with('success', 'تم رفع '.count($request->file('attachments', [])).' مرفق بنجاح. سيتم حذفه تلقائيًا بعد '.OrderAttachmentService::VALIDITY_DAYS.' يومًا.');
+        return back()->with('success', 'تم رفع '.count($request->file('attachments', [])).' مرفق بنجاح. المرفقات محفوظة دون حذف تلقائي.');
     }
 
     public function show(OrderAttachment $attachment, OrderAttachmentService $attachments)

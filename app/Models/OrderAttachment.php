@@ -27,7 +27,9 @@ class OrderAttachment extends Model
 
     public function isExpired(): bool
     {
-        return ! $this->expires_at || $this->expires_at->isPast();
+        // Legacy deadlines no longer restrict access, even before the metadata migration has run.
+        // Keep the method for existing admin/API clients; deletion remains explicit and authorized.
+        return false;
     }
 
     public function getHumanSizeAttribute(): string

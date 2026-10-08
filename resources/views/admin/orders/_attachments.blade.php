@@ -29,7 +29,7 @@
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h3 id="order-attachments-heading" class="text-lg font-black text-gray-900">📎 مرفقات الطلب</h3>
-                <p class="mt-1 text-xs font-bold leading-6 text-gray-500">ارفع صورًا أو PDF بشكل خاص. الصلاحية الافتراضية 30 يومًا، ثم يُحذف الملف تلقائيًا.</p>
+                <p class="mt-1 text-xs font-bold leading-6 text-gray-500">ارفع صورًا أو PDF بشكل خاص. المرفقات محفوظة دون انتهاء صلاحية أو حذف تلقائي، ويمكن حذفها يدويًا بصلاحية مناسبة.</p>
             </div>
             <span class="w-fit rounded-full bg-sky-50 px-3 py-1.5 text-xs font-black text-sky-700" data-ajax-delete-count data-count-label="مرفق">{{ $orderAttachments->count() }} مرفق</span>
         </div>
@@ -41,7 +41,7 @@
                 <div>
                     <label for="order-attachments-files-{{ $attachmentTarget->id }}" class="mb-1.5 block text-xs font-black text-gray-700">الملفات</label>
                     <input id="order-attachments-files-{{ $attachmentTarget->id }}" name="attachments[]" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" multiple required class="block w-full rounded-xl border border-sky-200 bg-white text-sm file:ml-3 file:border-0 file:bg-sky-600 file:px-4 file:py-2.5 file:font-black file:text-white" data-order-attachment-input>
-                    <p class="mt-1 text-[11px] font-bold text-gray-400">PDF، JPG، PNG، WEBP، HEIC · حتى 50 ميجا للملف · تُحذف بعد 30 يومًا</p>
+                    <p class="mt-1 text-[11px] font-bold text-gray-400">PDF، JPG، PNG، WEBP، HEIC · حتى 50 ميجا للملف · دون حذف تلقائي</p>
                     <p class="mt-2 hidden text-xs font-black text-sky-700" data-order-attachment-selection aria-live="polite"></p>
                     <x-input-error :messages="$errors->get('attachments')" class="mt-2" />
                     <x-input-error :messages="$errors->get('attachments.*')" class="mt-1" />
@@ -102,10 +102,8 @@
                 @php
                     $attachment = $entry['attachment'];
                     $attachmentOrder = $entry['order'];
-                    $expired = $attachment->isExpired();
-                    $remainingDays = $expired ? 0 : max(1, (int) ceil(now()->diffInHours($attachment->expires_at) / 24));
                 @endphp
-                <article class="relative rounded-2xl border p-4 {{ $expired ? 'border-red-100 bg-red-50/60' : 'border-gray-100 bg-gray-50' }}" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
+                <article class="relative rounded-2xl border border-gray-100 bg-gray-50 p-4" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
                     @can('orders.update')
                         <label class="absolute left-3 top-3 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-sm" title="تحديد المرفق للحذف">
                             <input type="checkbox" name="attachment_ids[]" value="{{ $attachment->id }}" form="bulk-attachment-delete-{{ $attachmentTarget->id }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $attachment->original_name }} للحذف">
@@ -124,8 +122,8 @@
                                 <span>رُفع {{ app_datetime($attachment->created_at, 'd/m/Y h:i A') }}</span>
                             </div>
                         </div>
-                        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black {{ $expired ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800' }}">
-                            {{ $expired ? 'انتهت الصلاحية' : 'متبقي '.$remainingDays.' يوم' }}
+                        <span class="ml-9 shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black text-emerald-800">
+                            محفوظ دائمًا
                         </span>
                     </div>
 
@@ -134,12 +132,10 @@
                     @endif
 
                     <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200/70 pt-3">
-                        <p class="text-[11px] font-bold text-gray-400">يُحذف {{ app_datetime($attachment->expires_at) }}</p>
+                        <p class="text-[11px] font-bold text-gray-400">لا يُحذف تلقائيًا</p>
                         <div class="flex flex-wrap gap-2">
-                            @unless($expired)
                                 <a href="{{ route('admin.orders.attachments.show', $attachment) }}" target="_blank" rel="noopener" class="rounded-lg bg-white px-3 py-2 text-xs font-black text-sky-700 shadow-sm hover:bg-sky-50">فتح</a>
                                 <a href="{{ route('admin.orders.attachments.download', $attachment) }}" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-white hover:bg-sky-700">تحميل</a>
-                            @endunless
                             @can('orders.update')
                                 <form method="POST" action="{{ route('admin.orders.attachments.destroy', $attachment) }}" data-order-ajax-delete data-delete-confirm="سيتم حذف المرفق نهائيًا. هل تريد المتابعة؟">
                                     @csrf

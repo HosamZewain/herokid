@@ -897,7 +897,7 @@ class AgentCheckoutProductionService
                 'size' => $attachment->size,
                 'production_unit_key' => $attachment->production_unit_key,
                 'created_at' => $attachment->created_at?->toIso8601String(),
-                'expires_at' => $attachment->expires_at?->toIso8601String(),
+                'expires_at' => null,
                 'url' => route('agent.orders.attachments.download', ['order' => $order, 'attachment' => $attachment]),
             ])->values()->all();
     }

@@ -105,7 +105,7 @@ class AdminOrderAdminNotesTest extends TestCase
             ->assertSee('تم استلام صور الملصق من العميل.');
     }
 
-    public function test_note_can_include_a_private_attachment_with_the_existing_retention_rules(): void
+    public function test_note_can_include_a_private_attachment_with_permanent_retention(): void
     {
         Storage::fake('local');
         $admin = User::factory()->create(['role' => 'admin']);
@@ -122,7 +122,8 @@ class AdminOrderAdminNotesTest extends TestCase
         $note = OrderAdminNote::with('attachment')->sole();
         $this->assertNotNull($note->attachment);
         $this->assertSame('sizes.pdf', $note->attachment->original_name);
-        $this->assertSame(30, $note->attachment->validity_days);
+        $this->assertNull($note->attachment->validity_days);
+        $this->assertNull($note->attachment->expires_at);
         Storage::disk('local')->assertExists($note->attachment->path);
 
         $this->actingAs($admin)

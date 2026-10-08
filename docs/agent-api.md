@@ -394,7 +394,11 @@ curl -X POST https://hero-kid.com/api/agent/orders/123/attachments \
   -F 'note=Final production file'
 ```
 
-Accepted types are PDF, JPG, JPEG, PNG, WebP, HEIC, and HEIF; maximum 50 MB per file. Files use private storage and the existing 30-day validity.
+Accepted types are PDF, JPG, JPEG, PNG, WebP, HEIC, and HEIF; maximum 50 MB per file. Completed files use private storage with permanent retention. `expires_at` remains in the production-context/Studio attachment contract and is now `null`. Legacy dates do not hide or block existing files. Explicit authorized deletion and catalog/unit access restrictions remain enforced.
+
+The `2026_10_08_000000_keep_order_attachments_permanently` migration cancels legacy attachment deadlines in place without touching file paths, IDs, ownership or timestamps. Its rollback intentionally does not recreate deletion deadlines. The old `order-attachments:cleanup` command remains a safe no-op for hosting cron compatibility and is no longer scheduled. It cannot restore files already deleted before this release; recovery requires an existing backup.
+
+Other scheduled cleanup remains limited to unattached temporary photo uploads (24 hours by default), incomplete Media Library uploads (24 hours by default), derived thumbnail caches (7 days), and visitor-cart activity records (60 days by default). Photo uploads attached to orders or child identities, completed Media Library files, previews, child originals and persistent production files are not targets of those cleanup jobs. Storage-provider lifecycle rules or host-level cleanup outside Laravel must be reviewed separately.
 
 ### Upload a preview
 

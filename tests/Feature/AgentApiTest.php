@@ -1318,6 +1318,27 @@ class AgentApiTest extends TestCase
             ->assertCreated();
     }
 
+    public function test_legacy_expired_production_attachments_remain_in_authorized_inventory_and_downloads(): void
+    {
+        Storage::fake('local');
+        $order = $this->productOrder('RETAINED-PRODUCTION', 'HK-RETAINED-PRODUCTION', 'Create synthetic product.');
+        $unit = 'product:'.$order->items()->firstOrFail()->id;
+        $path = 'order-attachments/'.$order->id.'/synthetic-old-production.pdf';
+        Storage::disk('local')->put($path, 'synthetic pdf');
+        $attachment = $order->attachments()->create(['disk' => 'local', 'path' => $path,
+            'original_name' => 'synthetic-old-production.pdf', 'mime_type' => 'application/pdf', 'size' => 13,
+            'production_unit_key' => $unit, 'validity_days' => 30, 'expires_at' => now()->subDays(120)]);
+        $download = route('agent.orders.attachments.download', ['order' => $order, 'attachment' => $attachment]);
+        $this->getJson($download)->assertUnauthorized();
+        $token = $this->scopedToken($this->agent(), AgentCatalogScope::PRODUCTS);
+        $this->withToken($token)->getJson('/api/agent/studio/orders/'.$order->order_number)
+            ->assertOk()->assertJsonPath('production_units.0.attachments.0.id', $attachment->id)
+            ->assertJsonPath('production_units.0.attachments.0.expires_at', null);
+        $this->withToken($token)->get($download)->assertOk();
+        $this->assertSame('new', $order->fresh()->status);
+        $this->assertDatabaseCount('order_group_assignments', 0);
+    }
+
     private function agent(bool $enabled = true): User
     {
         return User::factory()->create(['role' => 'admin', 'is_active' => true, 'agent_api_enabled' => $enabled]);

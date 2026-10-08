@@ -186,18 +186,16 @@ Artisan::command('order-thumbnails:cleanup', function () {
 })->purpose('Remove private thumbnail cache files older than seven days; originals are untouched');
 Schedule::command('order-thumbnails:cleanup')->daily()->withoutOverlapping(10);
 
-Artisan::command('order-attachments:cleanup {--batch=100 : Maximum expired attachments to delete}', function (OrderAttachmentService $attachments) {
+Artisan::command('order-attachments:cleanup {--batch=100 : Legacy compatibility option; no files are deleted}', function (OrderAttachmentService $attachments) {
     $result = $attachments->cleanupExpired((int) $this->option('batch'));
     $this->info(sprintf(
-        'Expired order attachments cleaned. Records: %d, deleted files: %d.',
+        'Order attachments are retained permanently. Records removed: %d, deleted files: %d.',
         $result['expired'] ?? 0,
         $result['deleted_files'] ?? 0,
     ));
 
     return Command::SUCCESS;
-})->purpose('Permanently delete expired private order attachments');
-
-Schedule::command('order-attachments:cleanup')->hourly()->withoutOverlapping(10);
+})->purpose('Compatibility no-op: completed order attachments are retained permanently');
 Schedule::command('notifications:check-stuck-production')
     ->everyTenMinutes()
     ->withoutOverlapping(10);

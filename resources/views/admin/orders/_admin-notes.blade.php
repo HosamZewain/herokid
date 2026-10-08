@@ -35,7 +35,7 @@
             <label class="mt-3 block text-xs font-black text-amber-950">
                 مرفق اختياري
                 <input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" class="mt-2 block w-full rounded-xl border border-amber-200 bg-white text-sm file:ml-3 file:border-0 file:bg-amber-600 file:px-4 file:py-2.5 file:font-black file:text-white">
-                <span class="mt-1 block text-[11px] font-bold text-amber-700">PDF أو صورة حتى 50MB — يُحذف تلقائيًا بعد 30 يومًا.</span>
+                <span class="mt-1 block text-[11px] font-bold text-amber-700">PDF أو صورة حتى 50MB — محفوظ دون حذف تلقائي.</span>
             </label>
             @error('attachment')<p class="mt-2 text-xs font-black text-rose-600" role="alert">{{ $message }}</p>@enderror
             <div class="mt-3 flex justify-end">
@@ -62,7 +62,7 @@
                     <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-100 bg-white p-3" data-order-attachment-id="{{ $note->attachment->id }}">
                         <div class="min-w-0">
                             <p class="truncate text-xs font-black text-gray-900" title="{{ $note->attachment->original_name }}">{{ $note->attachment->icon }} {{ $note->attachment->original_name }}</p>
-                            <p class="mt-1 text-[11px] font-bold text-gray-500">{{ $note->attachment->human_size }} · {{ $note->attachment->isExpired() ? 'انتهت الصلاحية' : 'صالح حتى '.app_datetime($note->attachment->expires_at) }}</p>
+                            <p class="mt-1 text-[11px] font-bold text-gray-500">{{ $note->attachment->human_size }} · محفوظ دائمًا</p>
                         </div>
                         @unless($note->attachment->isExpired())
                             <div class="flex gap-2">
