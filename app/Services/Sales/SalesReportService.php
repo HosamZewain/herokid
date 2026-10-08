@@ -15,14 +15,16 @@ use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 
 class SalesReportService
 {
-    public function report(SalesReportFilters $filters): array
+    public function report(SalesReportFilters $filters, ?int $page = null): array
     {
-        $rows = $this->rows($filters);
-        $previousRows = $this->rows($filters->previousPeriod());
+        $rows = $this->rows($filters, detailed: $page === null);
+        $previousRows = $this->rows($filters->previousPeriod(), detailed: false);
         $recognizedRows = $rows->where('sale_recognized', true)->values();
         $previousRecognizedRows = $previousRows->where('sale_recognized', true)->values();
         $summary = $this->summary($recognizedRows);
@@ -47,14 +49,58 @@ class SalesReportService
             'source_breakdown' => $this->sourceBreakdown($recognizedRows),
             'geography_breakdown' => $this->geographyBreakdown($recognizedRows),
             'customer_breakdown' => $this->customerBreakdown($recognizedRows),
-            'rows' => $rows,
+            'rows' => $page === null ? $rows : $this->page($filters, $rows, $page),
             'options' => $this->options(),
         ];
     }
 
-    public function rows(SalesReportFilters $filters): Collection
+    private function page(SalesReportFilters $filters, Collection $facts, int $page): LengthAwarePaginator
     {
-        $orders = $this->orderQuery($filters)->get();
+        $keys = $facts->forPage($page, $filters->perPage)->pluck('key');
+        $details = $keys->isEmpty() ? collect() : $this->rows($filters, onlyKeys: $keys)->keyBy('key');
+
+        return new LengthAwarePaginator(
+            $keys->map(fn (string $key): ?array => $details->get($key))->filter()->values(),
+            $facts->count(), $filters->perPage, $page,
+            ['path' => route('admin.sales-report.index')],
+        );
+    }
+
+    public function rows(SalesReportFilters $filters, bool $detailed = true, ?Collection $onlyKeys = null): Collection
+    {
+        if ($onlyKeys !== null) {
+            return $this->rowsForKeys($filters, $detailed, $onlyKeys);
+        }
+
+        $keys = $this->orderQuery($filters)->reorder()->select('checkout_group_key')
+            ->groupBy('checkout_group_key')->orderByRaw('MIN(orders.id)')->pluck('checkout_group_key');
+        $rows = $keys->chunk(200)->flatMap(fn (Collection $chunk): Collection => $this->rowsForKeys($filters, $detailed, $chunk));
+
+        return $this->sortRows($rows, $filters);
+    }
+
+    /** Sorted compact facts determine the export; detailed models are hydrated only in bounded batches. */
+    public function export(SalesReportFilters $filters): array
+    {
+        $keys = $this->rows($filters, detailed: false)->pluck('key');
+
+        return ['count' => $keys->count(), 'rows' => LazyCollection::make(function () use ($filters, $keys) {
+            foreach ($keys->chunk(200) as $chunk) {
+                $rows = $this->rowsForKeys($filters, true, $chunk)->keyBy('key');
+                foreach ($chunk as $key) {
+                    if ($rows->has($key)) {
+                        yield $rows->get($key);
+                    }
+                }
+            }
+        })];
+    }
+
+    private function rowsForKeys(SalesReportFilters $filters, bool $detailed, Collection $onlyKeys): Collection
+    {
+        $orders = $this->orderQuery($filters)
+            ->whereIn('checkout_group_key', $onlyKeys)
+            ->get();
         $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($checkoutKeys);
         $checkoutStates = Order::query()
@@ -65,10 +111,12 @@ class SalesReportService
             ->whereIn('related_order_id', $orders->pluck('id'))
             ->get(['related_order_id', 'utm_source', 'utm_medium', 'utm_campaign'])
             ->keyBy('related_order_id');
+        // Preserve the existing first matching cart, without scanning all carts per checkout.
+        $cartRanks = array_flip($carts->keys()->all());
 
         $rows = $orders
             ->groupBy(fn (Order $order): string => $this->checkoutKey($order))
-            ->map(function (Collection $group) use ($filters, $carts, $checkoutStates, $creationDates): ?array {
+            ->map(function (Collection $group) use ($filters, $carts, $cartRanks, $checkoutStates, $creationDates, $detailed): ?array {
                 $orders = $group->sortBy('id')->values();
                 $items = $orders->flatMap(fn (Order $order): array => $this->orderItems($order, $filters))->values();
 
@@ -80,7 +128,15 @@ class SalesReportService
                 $createdAt = CarbonImmutable::parse($creationDates->get($first->checkoutGroupKey()) ?? $first->created_at, 'UTC');
                 $stateOrders = $checkoutStates->get($first->checkoutGroupKey(), $orders);
                 $stateFirst = $stateOrders->sortBy('id')->first() ?? $first;
-                $cart = $carts->first(fn (VisitorCart $cart): bool => $orders->contains('id', $cart->related_order_id));
+                $cart = null;
+                $firstCartRank = PHP_INT_MAX;
+                foreach ($orders as $order) {
+                    $rank = $cartRanks[$order->id] ?? PHP_INT_MAX;
+                    if ($rank < $firstCartRank) {
+                        $cart = $carts->get($order->id);
+                        $firstCartRank = $rank;
+                    }
+                }
                 $itemsTotalCents = (int) $items->sum('total_cents');
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
                 $discountCents = (int) $orders->max('discount_cents');
@@ -102,9 +158,9 @@ class SalesReportService
                 return [
                     'key' => $this->checkoutKey($first),
                     'created_at' => $createdAt,
-                    'date' => AppDateTime::format($createdAt, 'Y-m-d H:i'),
-                    'order_ids' => $orders->pluck('id')->values()->all(),
-                    'order_numbers' => $orders->pluck('order_number')->values()->all(),
+                    'date' => $detailed ? AppDateTime::format($createdAt, 'Y-m-d H:i') : null,
+                    'order_ids' => $detailed ? $orders->pluck('id')->values()->all() : [],
+                    'order_numbers' => $detailed ? $orders->pluck('order_number')->values()->all() : [],
                     'first_order_id' => $first->id,
                     'order_records' => $orders->count(),
                     'statuses' => $statuses->all(),
@@ -123,10 +179,10 @@ class SalesReportService
                         $paidAmountCents,
                         $totalCents,
                     ),
-                    'customer_name' => $first->parent_name ?: $first->user?->name ?: 'زائر',
+                    'customer_name' => $detailed ? ($first->parent_name ?: $first->user?->name ?: 'زائر') : null,
                     'customer_key' => $customerKey,
                     'customer_type' => $first->user_id ? 'registered' : 'guest',
-                    'phone' => $phone,
+                    'phone' => $detailed ? $phone : null,
                     'country' => (string) data_get($first->delivery_details, 'country', 'غير محدد'),
                     'governorate' => (string) data_get($first->delivery_details, 'governorate', 'غير محدد'),
                     'city' => (string) data_get($first->delivery_details, 'city', ''),
@@ -136,7 +192,7 @@ class SalesReportService
                         : (($first->order_source ?: 'website') === 'website' ? 'direct' : $first->order_source),
                     'campaign' => $cart?->utm_campaign,
                     'items' => $items->all(),
-                    'items_summary' => $items->groupBy(fn (array $item): string => $item['type'].'|'.$item['title'])
+                    'items_summary' => ! $detailed ? null : $items->groupBy(fn (array $item): string => $item['type'].'|'.$item['title'])
                         ->map(fn (Collection $same): string => $same->first()['title'].' × '.$same->sum('quantity'))
                         ->values()->implode('، '),
                     'items_quantity' => (int) $items->sum('quantity'),
@@ -164,17 +220,25 @@ class SalesReportService
                 return $rows->filter(fn (array $row): bool => $row['total_cents'] <= (int) round($filters->maximumTotal * 100));
             });
 
+        return $this->sortRows($rows, $filters);
+    }
+
+    private function sortRows(Collection $rows, SalesReportFilters $filters): Collection
+    {
         return match ($filters->sort) {
             'oldest' => $rows->sortBy([['created_at', 'asc'], ['key', 'asc']])->values(),
-            'highest' => $rows->sortByDesc('total_cents')->values(),
-            'lowest' => $rows->sortBy('total_cents')->values(),
-            default => $rows->sortByDesc('created_at')->values(),
+            'highest' => $rows->sortBy([['total_cents', 'desc'], ['created_at', 'desc'], ['key', 'asc']])->values(),
+            'lowest' => $rows->sortBy([['total_cents', 'asc'], ['created_at', 'desc'], ['key', 'asc']])->values(),
+            default => $rows->sortBy([['created_at', 'desc'], ['key', 'asc']])->values(),
         };
     }
 
     private function orderQuery(SalesReportFilters $filters): Builder
     {
         $query = Order::query()
+            ->select(['id', 'checkout_group_key', 'order_number', 'story_id', 'user_id', 'status',
+                'payment_status', 'paid_amount_cents', 'payment_method', 'discount_cents',
+                'delivery_details', 'order_source', 'parent_name', 'created_at'])
             ->with([
                 'items:id,order_id,item_type,story_id,product_id,title,sku,unit_price_cents,quantity,total_price_cents',
                 'story:id,title,price',

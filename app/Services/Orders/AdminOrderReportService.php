@@ -14,17 +14,45 @@ class AdminOrderReportService
 {
     public function __construct(private readonly AdminOrderGroupService $groups) {}
 
-    public function report(Request $request): array
+    public function report(Request $request, bool $paginate = false): array
     {
-        $request->attributes->set('order_report', true);
-        $request->query->set('catalog_type', $this->catalogType($request));
-        $request->query->set('lifecycle', $this->lifecycle($request));
+        $this->prepareRequest($request);
+        // Only scalar checkout facts are needed for statistics, never production models.
+        $rows = $paginate ? $this->groups->reportFacts($request)->map(function (object $fact): array {
+            $statuses = [$fact->status];
 
-        $rows = $this->groups->export($request)
-            ->map(fn (array $row): array => $this->decorate($row));
+            return $this->decorate([
+                'statuses' => $statuses,
+                'status_label' => $fact->status === 'mixed' ? 'حالات متعددة' : OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $fact->status),
+                '_all_cancelled' => (bool) $fact->all_cancelled,
+                '_all_delivered' => (bool) $fact->all_delivered,
+                'trashed' => ! $fact->has_live_orders,
+                'story_count' => (int) $fact->stories,
+                'product_quantity' => (int) $fact->products,
+                'add_on_quantity' => 0,
+                'order_records' => (int) $fact->order_records,
+                'items_cents' => (int) ($fact->item_cents == 0 ? $fact->legacy_cents : $fact->item_cents),
+                'delivery_cents' => (int) $fact->delivery_cents,
+                'discount_cents' => (int) $fact->discount_cents,
+                'total_cents' => (int) $fact->total_cents,
+                'paid_amount_cents' => (int) $fact->paid_amount_cents,
+                'remaining_amount_cents' => max(0, (int) $fact->total_cents - (int) $fact->paid_amount_cents),
+                'payment_status' => $fact->payment_status,
+                'payment_status_label' => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PAYMENT, $fact->payment_status),
+                'printing_status' => $fact->printing_status,
+                'printing_status_label' => $fact->printing_status === 'mixed' ? 'حالات طباعة متعددة' : OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PRINTING, $fact->printing_status),
+                'shipping_status' => $fact->shipping_status,
+                'shipping_status_label' => $fact->shipping_status === 'mixed' ? 'حالات شحن متعددة' : OrderStatusRegistry::label(OrderStatusRegistry::TYPE_SHIPPING, $fact->shipping_status),
+                'order_source' => $fact->order_source ?: 'website',
+                'created_at' => $fact->first_created_at,
+            ]);
+        }) : $this->rows($request);
+
+        $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true) ? $request->integer('per_page', 25) : 25;
 
         return [
-            'rows' => $rows,
+            'rows' => $paginate ? $this->groups->reportPage($request, $perPage)
+                ->through(fn (array $row): array => $this->decorate($row)) : $rows,
             'summary' => $this->summary($rows),
             'breakdowns' => [
                 'catalog' => $this->breakdown($rows, 'catalog_type_label'),
@@ -48,12 +76,35 @@ class AdminOrderReportService
         ];
     }
 
+    public function rows(Request $request): Collection
+    {
+        $this->prepareRequest($request);
+
+        return $this->groups->export($request)->map(fn (array $row): array => $this->decorate($row));
+    }
+
+    public function export(Request $request): array
+    {
+        $this->prepareRequest($request);
+        $export = $this->groups->reportExport($request);
+        $export['rows'] = $export['rows']->map(fn (array $row): array => $this->decorate($row));
+
+        return $export;
+    }
+
+    private function prepareRequest(Request $request): void
+    {
+        $request->attributes->set('order_report', true);
+        $request->query->set('catalog_type', $this->catalogType($request));
+        $request->query->set('lifecycle', $this->lifecycle($request));
+    }
+
     private function decorate(array $row): array
     {
-        $cancelled = (bool) $row['trashed'] || (collect($row['statuses'])->isNotEmpty()
+        $cancelled = (bool) $row['trashed'] || ($row['_all_cancelled'] ?? (collect($row['statuses'])->isNotEmpty()
             && collect($row['statuses'])->every(
                 fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled'
-            ));
+            )));
         $finished = ! $cancelled && $this->isFinished($row);
         $lifecycle = $cancelled ? 'cancelled' : ($finished ? 'finished' : 'active');
 
@@ -73,10 +124,10 @@ class AdminOrderReportService
 
     private function isFinished(array $row): bool
     {
-        $orderDone = collect($row['statuses'])->isNotEmpty()
+        $orderDone = $row['_all_delivered'] ?? (collect($row['statuses'])->isNotEmpty()
             && collect($row['statuses'])->every(
                 fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered'
-            );
+            ));
         $paymentDone = OrderLifecycle::isPaymentComplete($row['payment_status']);
         $printingDone = in_array(
             OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PRINTING, $row['printing_status']),
@@ -114,7 +165,7 @@ class AdminOrderReportService
 
         return [
             'checkouts' => $rows->count(),
-            'order_records' => (int) $rows->sum(fn (array $row): int => count($row['order_numbers'])),
+            'order_records' => (int) $rows->sum(fn (array $row): int => $row['order_records'] ?? count($row['order_numbers'])),
             'stories' => (int) $rows->sum('story_count'),
             'products' => (int) $rows->sum(fn (array $row): int => $row['product_quantity'] + $row['add_on_quantity']),
             'items_cents' => (int) $rows->sum('items_cents'),

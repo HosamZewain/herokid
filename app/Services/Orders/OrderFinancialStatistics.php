@@ -32,20 +32,33 @@ class OrderFinancialStatistics
         $shippingKeys = OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_SHIPPING, false);
         $shippingSlots = implode(',', array_fill(0, count($shippingKeys), '?'));
         $shipping = "CASE WHEN o.shipping_status IN ($shippingSlots) THEN o.shipping_status ELSE ? END";
+        $printingKeys = OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PRINTING, false);
+        $printingSlots = implode(',', array_fill(0, count($printingKeys), '?'));
+        $printing = "CASE WHEN o.printing_status IN ($printingSlots) THEN o.printing_status ELSE ? END";
         $groups = $orders->leftJoinSub($items, 'i', 'i.order_id', '=', 'o.id')
             ->leftJoin('stories as s', 's.id', '=', 'o.story_id')
             ->groupBy('o.checkout_group_key')
             ->select('o.checkout_group_key')
             ->selectRaw('MIN(o.id) as first_id, COALESCE(SUM(i.cents), 0) as item_cents, COALESCE(MAX(o.discount_cents), 0) as discount_cents')
+            ->selectRaw('COUNT(*) as order_records')
             ->selectRaw("ROUND(SUM(COALESCE(CAST(NULLIF($itemPrice, 'null') AS DECIMAL(18,4)), s.price, 0)) * 100) as legacy_cents")
             ->selectRaw('SUM(CASE WHEN o.story_id IS NOT NULL OR i.has_story = 1 THEN 1 ELSE 0 END) as stories, COALESCE(SUM(i.products), 0) as products')
             ->selectRaw("CASE WHEN COUNT(DISTINCT NULLIF(NULLIF(o.status, ''), '0')) = 1 THEN MAX(NULLIF(NULLIF(o.status, ''), '0')) ELSE 'mixed' END as status")
-            ->selectRaw("CASE WHEN COUNT(DISTINCT $shipping) = 1 THEN MAX($shipping) ELSE 'mixed' END as shipping_status", [...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY, ...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY]);
+            ->selectRaw("CASE WHEN COUNT(DISTINCT $shipping) = 1 THEN MAX($shipping) ELSE 'mixed' END as shipping_status", [...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY, ...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY])
+            ->selectRaw("CASE WHEN COUNT(DISTINCT $printing) = 1 THEN MAX($printing) ELSE 'mixed' END as printing_status", [...$printingKeys, OrderWorkflowStatus::PRINTING_NOT_STARTED, ...$printingKeys, OrderWorkflowStatus::PRINTING_NOT_STARTED])
+            ->selectRaw('MAX(CASE WHEN o.deleted_at IS NULL THEN 1 ELSE 0 END) as has_live_orders');
+        foreach (['cancelled', 'delivered'] as $behavior) {
+            $statuses = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, $behavior);
+            $condition = $statuses === [] ? '1 = 0' : 'o.status IN ('.implode(',', array_fill(0, count($statuses), '?')).')';
+            $groups->selectRaw("CASE WHEN COUNT(NULLIF(NULLIF(o.status, ''), '0')) > 0 AND SUM(CASE WHEN $condition THEN 1 ELSE 0 END) = COUNT(NULLIF(NULLIF(o.status, ''), '0')) THEN 1 ELSE 0 END as all_$behavior", $statuses);
+        }
 
         $paymentKeys = OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false);
         $slots = implode(',', array_fill(0, count($paymentKeys), '?'));
         $base = DB::query()->fromSub($groups, 'g')->join('orders as first_order', 'first_order.id', '=', 'g.first_id')
             ->select('g.*')
+            ->addSelect('first_order.order_source')
+            ->selectRaw("ROUND(CASE WHEN CAST(COALESCE(NULLIF($delivery, 'null'), '0') AS DECIMAL(18,4)) > 0 THEN CAST($delivery AS DECIMAL(18,4)) ELSE 0 END * 100) as delivery_cents")
             ->selectRaw("CASE WHEN first_order.payment_status IN ($slots) THEN first_order.payment_status ELSE ? END as payment_status", [...$paymentKeys, OrderPaymentStatus::UNPAID])
             ->selectRaw('COALESCE(first_order.paid_amount_cents, 0) as raw_paid')
             ->selectRaw('(CASE WHEN item_cents = 0 THEN legacy_cents ELSE item_cents END - g.discount_cents) as raw_average_value')

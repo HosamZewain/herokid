@@ -19,9 +19,11 @@ use App\Support\Phone;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\LazyCollection;
 use Illuminate\Validation\Rule;
 
 class AdminOrderGroupService
@@ -64,6 +66,15 @@ class AdminOrderGroupService
         'sceneTextSnapshots',
         'childIdentityPromptOverride',
         'childIdentityApprovedAttempt',
+    ];
+
+    /** Reports must never hydrate production prompts, photos, previews or full story text. */
+    private const REPORT_RELATIONS = [
+        'user:id,name,role',
+        'groupAssignment.assignee:id,name',
+        'checkoutReference:id,checkout_group_key,short_reference',
+        'story:id,title,price',
+        'items:id,order_id,item_type,story_id,product_id,title,quantity,total_price_cents',
     ];
 
     public function paginate(Request $request, bool $includeStatistics = true): array
@@ -183,13 +194,71 @@ class AdminOrderGroupService
             ->groupBy('checkout_group_key');
         $this->applyGroupOrdering($grouped, $request);
         $keys = $grouped->pluck('checkout_group_key');
-        $orders = $this->ordersForKeys($keys, $includeDeleted)
+        $orders = $this->ordersForKeys($keys, $includeDeleted, $request->attributes->getBoolean('order_report'))
             ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
         return $keys
-            ->map(fn (string $key): array => $this->present($orders->get($key, collect()), $includeDeleted))
+            ->map(fn (string $key): array => $this->present($orders->get($key, collect()), $includeDeleted, $request->attributes->getBoolean('order_report')))
             ->filter()
             ->values();
+    }
+
+    public function reportQuery(Request $request): Builder
+    {
+        $type = $this->catalogType($request);
+        $lifecycle = $this->lifecycle($request);
+
+        return $this->groupedFilteredQuery($request, $this->includeDeleted($request, $lifecycle), $type, $lifecycle);
+    }
+
+    public function reportFacts(Request $request): Collection
+    {
+        $keys = $this->reportQuery($request)->select('checkout_group_key')->distinct()->toBase();
+        $includeDeleted = $this->includeDeleted($request, $this->lifecycle($request));
+
+        return app(OrderFinancialStatistics::class)->checkouts($keys, $includeDeleted)
+            ->joinSub(app(CheckoutIntakeStatistics::class)->query(), 'intake', 'intake.checkout_group_key', '=', 't.checkout_group_key')
+            ->addSelect('intake.first_created_at')->get();
+    }
+
+    public function reportPage(Request $request, int $perPage): LengthAwarePaginator
+    {
+        $query = $this->reportQuery($request)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at')
+            ->groupBy('checkout_group_key');
+        $this->applyGroupOrdering($query, $request);
+        $page = $query->paginate($perPage)->withQueryString();
+        $includeDeleted = $this->includeDeleted($request, $this->lifecycle($request));
+        $orders = $this->ordersForKeys($page->getCollection()->pluck('checkout_group_key'), $includeDeleted, true)
+            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+        $page->setCollection($page->getCollection()->map(fn ($key): array => $this->present(
+            $orders->get($key->checkout_group_key, collect()), $includeDeleted, true
+        ))->filter()->values());
+
+        return $page;
+    }
+
+    public function reportExport(Request $request): array
+    {
+        $query = $this->reportQuery($request)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at')
+            ->groupBy('checkout_group_key');
+        $this->applyGroupOrdering($query, $request);
+        $keys = $query->pluck('checkout_group_key');
+        $includeDeleted = $this->includeDeleted($request, $this->lifecycle($request));
+
+        return ['count' => $keys->count(), 'rows' => LazyCollection::make(function () use ($keys, $includeDeleted) {
+            foreach ($keys->chunk(200) as $chunk) {
+                $orders = $this->ordersForKeys($chunk, $includeDeleted, true)
+                    ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+                foreach ($chunk as $key) {
+                    $row = $this->present($orders->get($key, collect()), $includeDeleted, true);
+                    if ($row !== []) {
+                        yield $row;
+                    }
+                }
+            }
+        })];
     }
 
     public function findByRepresentative(int $representativeId): array
@@ -466,7 +535,7 @@ class AdminOrderGroupService
             ->get();
     }
 
-    public function present(Collection $orders, bool $trash = false): array
+    public function present(Collection $orders, bool $trash = false, bool $report = false): array
     {
         if ($orders->isEmpty()) {
             return [];
@@ -509,7 +578,7 @@ class AdminOrderGroupService
             ? $first->payment_status
             : OrderPaymentStatus::UNPAID;
         $paidAmountCents = max(0, (int) $first->paid_amount_cents);
-        $customerRating = $orders
+        $customerRating = $report ? null : $orders
             ->flatMap(fn (Order $order): Collection => $order->submittedServiceRatings)
             ->sortByDesc('id')
             ->first()?->qualityRating();
@@ -517,7 +586,7 @@ class AdminOrderGroupService
         return [
             'key' => $first->checkoutGroupKey(),
             'short_reference' => $first->checkoutReference?->short_reference,
-            'tags' => $first->checkoutReference?->tags?->sortBy('name')->values() ?? collect(),
+            'tags' => $report ? collect() : ($first->checkoutReference?->tags?->sortBy('name')->values() ?? collect()),
             'customer_rating' => $customerRating,
             'representative_id' => (int) $first->id,
             'direct_order_id' => $storyOrders->isNotEmpty()
@@ -541,9 +610,9 @@ class AdminOrderGroupService
             'phone' => $phone,
             'delivery' => $first->delivery_details ?? [],
             'order_source' => $first->order_source ?: 'website',
-            'marketing_sources' => $visibleOrders->map(fn (Order $order): array => MarketingAttribution::forOrder($order))->unique(fn (array $source): string => json_encode($source))->values()->all(),
+            'marketing_sources' => $report ? [] : $visibleOrders->map(fn (Order $order): array => MarketingAttribution::forOrder($order))->unique(fn (array $source): string => json_encode($source))->values()->all(),
             'source_notes' => $first->source_notes,
-            'created_by_admin' => $first->createdByAdmin,
+            'created_by_admin' => $report ? null : $first->createdByAdmin,
             'assignment' => $first->groupAssignment,
             'assigned_admin' => $first->groupAssignment?->assignee,
             'assigned_at' => $first->groupAssignment?->assigned_at,
@@ -577,7 +646,7 @@ class AdminOrderGroupService
             'overpaid_amount_cents' => max(0, $paidAmountCents - $totalCents),
             'payment_method' => $first->payment_method,
             'payment_updated_at' => $first->payment_updated_at,
-            'payment_updated_by' => $first->paymentUpdatedBy,
+            'payment_updated_by' => $report ? null : $first->paymentUpdatedBy,
             'trashed' => $activeOrders->isEmpty(),
         ];
     }
@@ -875,7 +944,7 @@ class AdminOrderGroupService
         return array_values(array_unique($values));
     }
 
-    private function ordersForKeys(Collection $keys, bool $includeDeleted): Collection
+    private function ordersForKeys(Collection $keys, bool $includeDeleted, bool $report = false): Collection
     {
         if ($keys->isEmpty()) {
             return collect();
@@ -885,7 +954,13 @@ class AdminOrderGroupService
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($keys);
 
         return $query
-            ->with(self::INDEX_RELATIONS)
+            ->when($report, fn (Builder $query): Builder => $query->select([
+                'id', 'checkout_group_key', 'order_number', 'user_id', 'story_id', 'child_name', 'parent_name',
+                'status', 'printing_status', 'shipping_status', 'payment_status', 'paid_amount_cents',
+                'discount_cents', 'discount_reason', 'payment_method', 'delivery_details', 'order_source',
+                'source_notes', 'payment_updated_at', 'created_at', 'updated_at', 'deleted_at',
+            ]))
+            ->with($report ? self::REPORT_RELATIONS : self::INDEX_RELATIONS)
             ->whereIn('checkout_group_key', $keys)
             ->orderBy('id')
             ->get()->each(fn (Order $order) => $order->setAttribute(

@@ -133,7 +133,7 @@
                 $activeLink = 'bg-indigo-600 text-white';
                 $canHome = auth()->user()->hasAnyPermission(['dashboard.view']);
                 $canReports = auth()->user()->hasAnyPermission([
-                    'analytics.view', 'sales_reports.view', 'order_reports.view', 'visitor_carts.view', 'child_identities.view_share_report',
+                    'analytics.view', 'sales_reports.view', 'order_reports.view', 'shipping_reports.view', 'visitor_carts.view', 'child_identities.view_share_report',
                 ]);
                 $canFinance = auth()->user()->hasAnyPermission(['expenses.view']);
                 $canFulfillment = auth()->user()->hasAnyPermission([
@@ -255,6 +255,9 @@
                         @endcan
                         @can('order_reports.view')
                             <a href="{{ route('admin.order-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.order-report.*') ? $activeLink : $idleLink }}">تقرير الطلبات</a>
+                        @endcan
+                        @can('shipping_reports.view')
+                            <a href="{{ route('admin.shipping-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.shipping-report.*') ? $activeLink : $idleLink }}">تقرير الشحن</a>
                         @endcan
                         @can('child_identities.view_share_report')
                             <a href="{{ route('admin.child-identities.share-report') }}" class="{{ $navLink }} {{ request()->routeIs('admin.child-identities.share-report') ? $activeLink : $idleLink }}">تقرير مشاركة الهويات</a>

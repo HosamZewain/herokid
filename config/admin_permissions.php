@@ -147,6 +147,15 @@ return [
             'sort_order' => 27,
             'sensitive' => true,
         ],
+        'shipping_reports.view' => [
+            'group_key' => 'dashboard',
+            'name_ar' => 'عرض تقرير الشحن',
+            'name_en' => 'View shipping report',
+            'description_ar' => 'عرض كميات المنتجات المشحونة يوميًا ومحتويات الشحنات ومسؤولي الطلبات.',
+            'description_en' => 'View daily dispatched quantities, shipment contents, and order assignees.',
+            'sort_order' => 28,
+            'sensitive' => true,
+        ],
         'visitor_carts.view' => [
             'group_key' => 'dashboard',
             'name_ar' => 'عرض سلات الزوار',

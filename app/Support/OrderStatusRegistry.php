@@ -12,6 +12,10 @@ class OrderStatusRegistry
 {
     private static ?Collection $runtimeDefinitions = null;
 
+    private static array $runtimeByType = [];
+
+    private static array $runtimeByKey = [];
+
     public const TYPE_ORDER = 'order';
 
     public const TYPE_PAYMENT = 'payment';
@@ -106,11 +110,12 @@ class OrderStatusRegistry
 
     public static function definitions(string $type, bool $activeOnly = true): Collection
     {
-        $definitions = self::all()->where('type', $type);
+        self::$runtimeByType[$type] ??= self::all()->where('type', $type)
+            ->sortBy([['sort_order', 'asc'], ['id', 'asc']])->values();
+        $definitions = self::$runtimeByType[$type];
 
-        return ($activeOnly ? $definitions->where('is_active', true) : $definitions)
-            ->sortBy([['sort_order', 'asc'], ['id', 'asc']])
-            ->values();
+        // Return a fresh container: callers may filter/mutate their collection.
+        return $activeOnly ? $definitions->where('is_active', true)->values() : collect($definitions->all());
     }
 
     public static function keys(string $type, bool $activeOnly = true): array
@@ -164,6 +169,8 @@ class OrderStatusRegistry
     public static function clearCache(): void
     {
         self::$runtimeDefinitions = null;
+        self::$runtimeByType = [];
+        self::$runtimeByKey = [];
         Cache::forget('order-status-definitions.v1');
     }
 
@@ -204,7 +211,9 @@ class OrderStatusRegistry
 
     private static function definition(string $type, ?string $key): mixed
     {
-        return self::all()->first(fn (mixed $definition): bool => $definition->type === $type && $definition->key === $key);
+        self::$runtimeByKey[$type] ??= self::all()->where('type', $type)->keyBy('key')->all();
+
+        return self::$runtimeByKey[$type][$key ?? ''] ?? null;
     }
 
     private static function all(): Collection

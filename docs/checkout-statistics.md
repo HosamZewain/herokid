@@ -59,7 +59,7 @@ added to its current item value.
 
 ## Safety and deployment
 
-This change performs no data rewrite, migration, acquisition, assignment, status
+The original statistics unification performs no data rewrite, migration, acquisition, assignment, status
 change, payment update or asset operation. Existing rows and identities remain
 unchanged. No environment variables or database migrations are required.
 Clear the application/analytics cache when deploying to remove cached local
@@ -70,3 +70,73 @@ with newly added rows, deleted original rows, fully deleted/cancelled purchases,
 multi-story identity, discount and shipping, Cairo midnight, list/report/CSV
 dates, sales recognition/period/trend rules, legacy prices, empty dates,
 open-ended/invalid filters and read-only behavior.
+
+## Report performance release (2026-10-08)
+
+- Order-report statistics reuse `OrderFinancialStatistics` scalar SQL checkout
+  aggregates. Only the selected page hydrates report-specific order/item columns
+  and minimal name/assignment/title relations. SQL pagination still operates on
+  checkout groups, not on individual stories or products.
+- Sales-report facts retain the existing PHP financial/recognition and item
+  allocation rules. Matching checkout keys are processed in batches of 200;
+  production prompts, photos, personalization snapshots and story content are
+  not loaded. Only the selected page formats detailed customer/order rows.
+  Source/amount filters are applied before pagination, and all matching compact
+  facts still contribute to the statistics, not just the visible page.
+- Cart attribution uses keyed lookups instead of a full cart scan per checkout.
+  The existing first-matching-cart rule is preserved, including duplicate carts
+  and multiple order rows for one checkout.
+- Both CSV exports hydrate detailed rows in batches of 200 and avoid calculating
+  unused on-screen breakdowns/options. Existing CSV columns and formula escaping
+  remain unchanged. Exports are not immutable point-in-time snapshots: live
+  edits while a long export is running can still affect later batches.
+- Status definitions are indexed in process memory by type/key and invalidated
+  by the existing status-settings save workflow. No new stale report-result cache
+  is introduced; payment/cancellation changes remain visible on the next read.
+- Equal sales timestamps/amounts now have an explicit stable checkout-key
+  tiebreaker so pages and exports cannot shuffle tied purchases between loads.
+- The additive `2026_10_08_000100_add_checkout_intake_reporting_index` migration
+  adds `(checkout_group_key, created_at, id)` to `orders`. Run `artisan migrate
+  --force` during deployment. It changes no order values or media. No new
+  environment variables are required.
+
+Regression checks compare SQL order aggregates to detailed rows across mixed
+orders, cancelled/deleted/replaced history, custom lifecycle statuses, legacy
+prices, overpayments, discounts, unknown workflow statuses, date/source/status
+filters and empty results. Sales tests compare paginated statistics to complete
+results, assert correct cart attribution and deterministic pages/exports, cross
+the 200-checkout batch boundary, and verify read-only/immediate payment behavior.
+
+## Shipping report (2026-10-08)
+
+`GET /admin/shipping-report` requires `shipping_reports.view`. The new permission
+is granted automatically only to existing active direct permission managers;
+other staff can receive it through the existing permission/role administration.
+The report is read-only and does not contact Bosta or modify assignments/statuses.
+
+- Date filters use Cairo calendar days, including DST, with UTC database bounds.
+  The default period is the last 30 days; the maximum is 366 inclusive days.
+- One checkout is counted once, on its first recorded dispatch, not its creation,
+  last edit, delivery, pickup booking, or airway-bill creation date. A carrier
+  dispatch/in-transit event uses `occurred_at` and takes precedence over a locally
+  synchronized shipping log. Without that event, the earliest shipping-status
+  log whose configured behavior is `shipped` is used, including historical rows
+  retained after an order edit. Repeated shipping updates do not double count.
+- Delivered/returned orders with an earlier dispatch still count on their
+  dispatch date. Current shipped/delivered/returned checkouts with no dispatch
+  evidence appear in an undated warning and are excluded from daily counts.
+  No dates are guessed from `updated_at` or a terminal event.
+- Quantities are purchased order-item quantities, not distinct titles or
+  production-component counts. Products, stories, and add-ons are shown
+  separately; legacy stories without item rows count as one copy.
+- Selecting a day shows shipment contents and aggregates each current order
+  assignee's products/quantities. Unassigned checkouts remain visible. Contents
+  and responsibility reflect current, non-deleted order rows, not historical
+  immutable dispatch snapshots; this limitation is explicitly shown in the UI.
+  Multiple parcels/re-dispatches of the same checkout are not separate purchases.
+- Details are paginated at 25 shipments and item queries are batched by 200 keys.
+  No photos, production prompts, addresses, payment details, or customer contact
+  fields are loaded into the shipping report.
+- Migration `2026_10_08_000200_add_shipping_report_permission_and_log_index`
+  registers the permission and adds a covering shipping-log index. No new env
+  variables or changes to carrier/order business behavior are required.

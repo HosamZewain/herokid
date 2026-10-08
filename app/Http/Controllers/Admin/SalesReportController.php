@@ -7,7 +7,6 @@ use App\Services\Sales\SalesReportFilters;
 use App\Services\Sales\SalesReportService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -16,17 +15,9 @@ class SalesReportController extends Controller
     public function index(Request $request, SalesReportService $sales): View
     {
         $filters = SalesReportFilters::fromRequest($request);
-        $report = $sales->report($filters);
         $page = max(1, $request->integer('page', 1));
-        $rows = $report['rows'];
-
-        $report['rows'] = (new LengthAwarePaginator(
-            items: $rows->forPage($page, $filters->perPage)->values(),
-            total: $rows->count(),
-            perPage: $filters->perPage,
-            currentPage: $page,
-            options: ['path' => route('admin.sales-report.index')],
-        ))->appends($request->query());
+        $report = $sales->report($filters, $page);
+        $report['rows']->appends($request->query());
 
         return view('admin.sales-report.index', [
             'filters' => $filters,
@@ -37,7 +28,8 @@ class SalesReportController extends Controller
     public function export(Request $request, SalesReportService $sales): StreamedResponse
     {
         $filters = SalesReportFilters::fromRequest($request);
-        $rows = $sales->rows($filters);
+        $export = $sales->export($filters);
+        $rows = $export['rows'];
         $filename = 'herokid-sales-'.$filters->startDate.'-'.$filters->endDate.'.csv';
 
         AdminActivityLogger::log(
@@ -46,7 +38,7 @@ class SalesReportController extends Controller
             properties: [
                 'start_date' => $filters->startDate,
                 'end_date' => $filters->endDate,
-                'row_count' => $rows->count(),
+                'row_count' => $export['count'],
                 'status' => $filters->status,
                 'payment_status' => $filters->paymentStatus,
                 'type' => $filters->type,

@@ -7,7 +7,6 @@ use App\Services\Orders\AdminOrderReportService;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -15,35 +14,23 @@ class OrderReportController extends Controller
 {
     public function index(Request $request, AdminOrderReportService $reports): View
     {
-        $report = $reports->report($request);
-        $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
-            ? $request->integer('per_page', 25)
-            : 25;
-        $page = max(1, $request->integer('page', 1));
-        $rows = $report['rows'];
-
-        $report['rows'] = (new LengthAwarePaginator(
-            items: $rows->forPage($page, $perPage)->values(),
-            total: $rows->count(),
-            perPage: $perPage,
-            currentPage: $page,
-            options: ['path' => route('admin.order-report.index')],
-        ))->appends($request->query());
+        $report = $reports->report($request, paginate: true);
 
         return view('admin.order-report.index', compact('report'));
     }
 
     public function export(Request $request, AdminOrderReportService $reports): StreamedResponse
     {
-        $report = $reports->report($request);
-        $rows = $report['rows'];
+        // Export does not need to calculate on-screen breakdowns or load filter options.
+        $export = $reports->export($request);
+        $rows = $export['rows'];
         $filename = 'herokid-orders-report-'.now()->format('Ymd-His').'.csv';
 
         AdminActivityLogger::log(
             action: 'order_report.exported',
             description: 'تصدير تقرير الطلبات الشامل',
             properties: [
-                'row_count' => $rows->count(),
+                'row_count' => $export['count'],
                 'filters' => $request->only([
                     'from', 'to', 'catalog_type', 'lifecycle', 'status', 'payment_status',
                     'printing_status', 'shipping_status', 'order_source', 'payment_method',

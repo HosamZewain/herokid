@@ -54,6 +54,7 @@ use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShippingReportController;
 use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryChildIdentityPromptTemplateController;
 use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
@@ -461,6 +462,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('sales-report/export', [SalesReportController::class, 'export'])
         ->middleware(['permission:sales_reports.view', 'throttle:10,1'])
         ->name('sales-report.export');
+    Route::get('shipping-report', [ShippingReportController::class, 'index'])
+        ->middleware('permission:shipping_reports.view')
+        ->name('shipping-report.index');
     Route::get('order-report', [OrderReportController::class, 'index'])
         ->middleware('permission:order_reports.view')
         ->name('order-report.index');
