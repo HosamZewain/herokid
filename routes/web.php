@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\ChildIdentityShareController as AdminChildIdentit
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DatabaseExportController;
 use App\Http\Controllers\Admin\DeliveryZoneController;
 use App\Http\Controllers\Admin\DiscountCodeController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
@@ -928,6 +929,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middlewareFor('destroy', 'permission:settings.pricing.delete');
 
     // Admin Activity Logs
+    Route::get('database-exports', [DatabaseExportController::class, 'index'])->middleware('permission:database_exports.manage')->name('database-exports.index');
+    Route::post('database-exports', [DatabaseExportController::class, 'store'])->middleware(['permission:database_exports.manage', 'throttle:2,10'])->name('database-exports.store');
+    Route::post('database-exports/{export}/download', [DatabaseExportController::class, 'download'])->middleware(['permission:database_exports.manage', 'throttle:5,10'])->name('database-exports.download');
     Route::get('activity-logs', [AdminActivityLogController::class, 'index'])->middleware('permission:activity_logs.view')->name('activity-logs.index');
     Route::get('activity-logs/{activityLog}', [AdminActivityLogController::class, 'show'])->middleware('permission:activity_logs.view')->name('activity-logs.show');
 });

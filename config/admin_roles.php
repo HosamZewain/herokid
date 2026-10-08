@@ -15,6 +15,7 @@ return [
             'description_ar' => 'إدارة التشغيل والمحتوى والطلبات بدون صلاحيات المالك شديدة الحساسية.',
             'permission_patterns' => ['*'],
             'exclude_patterns' => [
+                'database_exports.manage',
                 'admin_users.permissions.manage',
                 'admin_users.roles.manage',
                 'admin_users.delete',

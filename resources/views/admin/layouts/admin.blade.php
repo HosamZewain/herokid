@@ -156,7 +156,7 @@
                 ]);
                 $canIntegrations = auth()->user()->hasAnyPermission(['robodesk.view', 'robodesk.manage', 'agent_api.tokens.manage']);
                 $canAdministration = auth()->user()->hasAnyPermission([
-                    'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'admin_users.roles.manage', 'activity_logs.view',
+                    'admin_users.view', 'admin_users.create', 'admin_users.permissions.manage', 'admin_users.roles.manage', 'activity_logs.view', 'database_exports.manage',
                 ]);
             @endphp
             <nav class="flex-1 px-4 py-5 space-y-1">
@@ -325,6 +325,9 @@
                         @endcan
                         @can('activity_logs.view')
                             <a href="{{ route('admin.activity-logs.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.activity-logs.*') ? $activeLink : $idleLink }}">سجل النشاط</a>
+                        @endcan
+                        @can('database_exports.manage')
+                            <a href="{{ route('admin.database-exports.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.database-exports.*') ? $activeLink : $idleLink }}">تصدير قاعدة البيانات</a>
                         @endcan
                     </div>
                 @endif

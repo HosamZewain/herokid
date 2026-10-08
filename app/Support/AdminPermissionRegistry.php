@@ -95,6 +95,7 @@ class AdminPermissionRegistry
             'admin_users.view' => 'admin.users.index',
             'admin_users.roles.manage' => 'admin.roles.index',
             'activity_logs.view' => 'admin.activity-logs.index',
+            'database_exports.manage' => 'admin.database-exports.index',
         ];
 
         foreach ($routes as $permission => $routeName) {

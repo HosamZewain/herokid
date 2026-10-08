@@ -6,6 +6,7 @@ use App\Models\ProductionAutomationRun;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Cart\CartTrackingService;
+use App\Services\DatabaseExports\DatabaseExportService;
 use App\Services\MediaLibrary\AdminMediaLibraryService;
 use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationStuckChecker;
@@ -24,6 +25,17 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('database-exports:process', function (DatabaseExportService $exports) {
+    $exports->cleanup();
+    $this->info($exports->processPending() ? 'Database export request processed.' : 'No pending database exports.');
+})->purpose('Process one private database export outside web requests');
+
+Artisan::command('database-exports:cleanup', function (DatabaseExportService $exports) {
+    $this->info('Expired export copies removed: '.$exports->cleanup());
+})->purpose('Remove expired database export copies only');
+
+Schedule::command('database-exports:process')->everyMinute()->withoutOverlapping(30)->runInBackground();
 
 Artisan::command('admin-permissions:sync {--grant-existing-admins : Grant all registry permissions to active legacy admin users}', function (AdminPermissionSyncer $syncer) {
     $syncer->sync(grantExistingAdmins: (bool) $this->option('grant-existing-admins'));
