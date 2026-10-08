@@ -251,6 +251,7 @@
                             <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
                         @endcan
                         @can('sales_reports.view')
+                            <a href="{{ route('admin.advertising-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.advertising-report.*') ? $activeLink : $idleLink }}">تقرير استهداف الإعلانات</a>
                             <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
                         @endcan
                         @can('order_reports.view')

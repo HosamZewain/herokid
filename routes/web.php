@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\AdminMediaLibraryController;
 use App\Http\Controllers\Admin\AdminMediaUploadController;
 use App\Http\Controllers\Admin\AdminRoleController;
+use App\Http\Controllers\Admin\AdvertisingTargetingReportController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
@@ -457,6 +458,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])
         ->middleware(['permission:analytics.view', 'throttle:6,1'])
         ->name('analytics.refresh');
+    Route::get('advertising-report', [AdvertisingTargetingReportController::class, 'index'])
+        ->middleware('permission:sales_reports.view')->name('advertising-report.index');
+    Route::get('advertising-report/export', [AdvertisingTargetingReportController::class, 'export'])
+        ->middleware(['permission:sales_reports.view', 'throttle:10,1'])->name('advertising-report.export');
     Route::get('sales-report', [SalesReportController::class, 'index'])
         ->middleware('permission:sales_reports.view')
         ->name('sales-report.index');
