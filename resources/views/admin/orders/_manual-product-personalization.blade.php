@@ -34,6 +34,14 @@
                 @endif
             </div>
             @if($existingOrderId)<input type="hidden" name="products[{{ $product->id }}][units][{{ $unitIndex }}][existing_order_id]" value="{{ $existingOrderId }}">@endif
+            @unless($isEditing ?? false)
+                <label class="mb-3 block text-xs font-black text-indigo-800">بيانات الطفل
+                    <select name="products[{{ $product->id }}][units][{{ $unitIndex }}][reuse_child_order_id]" class="mt-2 w-full rounded-xl border-indigo-200 bg-white text-sm" data-customer-child-select data-selected-child="{{ $unit['reuse_child_order_id'] ?? '' }}" data-admin-unit-field data-required="0" @disabled($unitIndex >= $quantity)>
+                        <option value="">طفل جديد — إدخال البيانات والصور</option>
+                    </select>
+                </label>
+                <div class="mb-3 flex flex-wrap gap-2" data-reused-child-photos></div>
+            @endunless
             <div class="grid gap-3 sm:grid-cols-2" data-admin-unit-fields>
                 @foreach($fields as $fieldKey => $field)
                     @if($field['type'] === 'photos')
@@ -45,7 +53,7 @@
                                     @can('orders.photos.view')<div class="mt-2 flex flex-wrap gap-2" data-existing-photos>@for($photoIndex=0;$photoIndex<$existingPhotoCount;$photoIndex++)<div class="relative" data-existing-photo data-photo-index="{{ $photoIndex }}"><a href="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" target="_blank"><img src="{{ route('admin.orders.photo', ['order'=>$existingOrderId,'index'=>$photoIndex, 'thumbnail' => 1]) }}" alt="" class="h-14 w-14 rounded-lg object-cover"></a><button type="button" data-delete-order-photo data-delete-url="{{ route('admin.orders.photos.destroy', ['order'=>$existingOrderId,'index'=>$photoIndex]) }}" class="absolute -left-1 -top-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-black text-white">حذف</button></div>@endfor</div>@endcan
                                 </div>
                             @endif
-                            <input type="file" name="products[{{ $product->id }}][units][{{ $unitIndex }}][personalization][photos][]" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="block w-full rounded-xl border border-dashed border-indigo-200 p-3 text-xs" data-product-personalization-input data-admin-unit-field data-product-photo-input data-required="{{ $field['required'] && $existingPhotoCount < $field['min_files'] ? '1' : '0' }}" data-max-files="{{ max(0,$field['max_files']-$existingPhotoCount) }}" @required($quantity>$unitIndex && $field['required'] && $existingPhotoCount<$field['min_files']) @disabled($unitIndex >= $quantity)>
+                            <input type="file" name="products[{{ $product->id }}][units][{{ $unitIndex }}][personalization][photos][]" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="block w-full rounded-xl border border-dashed border-indigo-200 p-3 text-xs" data-product-personalization-input data-admin-unit-field data-product-photo-input data-required="{{ $field['required'] && $existingPhotoCount < $field['min_files'] ? '1' : '0' }}" data-min-files="{{ $field['required'] ? max(0, $field['min_files'] - $existingPhotoCount) : 0 }}" data-photo-max-files="{{ max(0,$field['max_files']-$existingPhotoCount) }}" data-max-files="{{ max(0,$field['max_files']-$existingPhotoCount) }}" @required($quantity>$unitIndex && $field['required'] && $existingPhotoCount<$field['min_files']) @disabled($unitIndex >= $quantity)>
                             <p class="mt-1 text-[10px] font-bold text-gray-500" data-product-photo-names>اختر الصور المطلوبة لهذا الطفل.</p>
                         </div>
                     @else

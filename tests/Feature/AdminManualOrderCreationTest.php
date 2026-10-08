@@ -729,6 +729,245 @@ class AdminManualOrderCreationTest extends TestCase
         $this->assertDatabaseCount('orders', 0);
     }
 
+    public function test_new_order_selects_the_only_active_variant_with_its_price_sku_and_stock(): void
+    {
+        $product = Product::create(['name_ar' => 'كتاب تلوين', 'slug' => 'sole-coloring', 'price_cents' => 20000,
+            'is_active' => true, 'personalization_mode' => 'none', 'inventory_mode' => 'track_stock', 'stock_quantity' => 30]);
+        $product->variants()->create(['name_ar' => 'قديم', 'is_active' => false, 'stock_quantity' => 0]);
+        $variant = $product->variants()->create(['name_ar' => '٢٠ صفحة', 'is_active' => true,
+            'sku' => 'COLOR-20', 'price_override_cents' => 30000, 'stock_quantity' => 5]);
+        $payload = $this->basePayload();
+        $payload['products'] = [$product->id => ['quantity' => 2]];
+        $response = $this->actingAs($this->admin)->withHeader('Accept', 'application/json')
+            ->post(route('admin.orders.store'), $payload)->assertCreated()->assertJsonPath('success', true);
+        $order = Order::sole();
+        $item = $order->items()->sole();
+        $this->assertSame($variant->id, $item->product_variant_id);
+        $this->assertSame(30000, $item->unit_price_cents);
+        $this->assertSame('COLOR-20', $item->sku);
+        $this->assertSame(3, $variant->fresh()->stock_quantity);
+        $this->assertSame(30, $product->fresh()->stock_quantity);
+        $response->assertJsonPath('redirect_url', route('admin.orders.groups.show', $order->id));
+    }
+
+    public function test_new_order_never_guesses_between_multiple_variants_and_retry_accepts_the_selected_option_and_same_photos(): void
+    {
+        $product = Product::create(['name_ar' => 'كتاب تلوين', 'slug' => 'multiple-coloring', 'price_cents' => 20000,
+            'is_active' => true, 'personalization_mode' => 'none']);
+        $product->variants()->create(['name_ar' => '١٠ صفحات', 'is_active' => true]);
+        $variant = $product->variants()->create(['name_ar' => '٢٠ صفحة', 'is_active' => true, 'price_adjustment_cents' => 10000]);
+        $story = $this->story('قصة للاختبار', 400);
+        $photos = $this->photos('retained-story');
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل اختبار', 'child_age' => 6,
+            'child_gender' => 'boy', 'photos' => $photos]];
+        $payload['products'] = [$product->id => ['quantity' => 1]];
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('products.'.$product->id.'.variant_id');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertSame([], Storage::disk('local')->allFiles('orders/photos'));
+        foreach ($photos as $photo) {
+            $this->assertFileExists($photo->getRealPath());
+        }
+        $payload['products'][$product->id]['variant_id'] = $variant->id;
+        $this->post(route('admin.orders.store'), $payload)->assertCreated();
+        $order = Order::where('story_id', $story->id)->sole();
+        $this->assertCount(2, $order->uploaded_photos);
+        $this->assertSame('طفل اختبار', $order->child_name);
+    }
+
+    public function test_explicit_invalid_or_foreign_variant_is_not_replaced_by_the_sole_option(): void
+    {
+        $product = Product::create(['name_ar' => 'منتج اختبار', 'slug' => 'variant-owner', 'price_cents' => 10000, 'is_active' => true]);
+        $product->variants()->create(['name_ar' => 'متاح', 'is_active' => true]);
+        $inactive = $product->variants()->create(['name_ar' => 'غير متاح', 'is_active' => false]);
+        $other = Product::create(['name_ar' => 'منتج آخر', 'slug' => 'foreign-variant-owner', 'price_cents' => 20000, 'is_active' => true]);
+        $foreign = $other->variants()->create(['name_ar' => 'خيار منتج آخر', 'is_active' => true]);
+        foreach ([$inactive->id, $foreign->id] as $variantId) {
+            $payload = $this->basePayload();
+            $payload['products'] = [$product->id => ['quantity' => 1, 'variant_id' => $variantId]];
+            $this->actingAs($this->admin)->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)
+                ->assertUnprocessable()->assertJsonValidationErrors('products.'.$product->id.'.variant_id');
+        }
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_single_variant_stock_shortage_still_blocks_creation_without_creating_an_order(): void
+    {
+        $product = Product::create(['name_ar' => 'منتج مخزون', 'slug' => 'sole-out-of-stock', 'price_cents' => 10000,
+            'is_active' => true, 'inventory_mode' => 'track_stock', 'stock_quantity' => 10]);
+        $product->variants()->create(['name_ar' => 'نسخة واحدة', 'is_active' => true, 'stock_quantity' => 0]);
+        $payload = $this->basePayload();
+        $payload['products'] = [$product->id => ['quantity' => 1]];
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('products.'.$product->id.'.quantity');
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_customer_lookup_returns_only_that_customers_children_with_protected_photos_and_no_storage_paths(): void
+    {
+        $source = $this->previousChild('طفل سابق', '01012345678');
+        $other = $this->previousChild('طفل عميل آخر', '01098765432');
+        $response = $this->actingAs($this->admin)->getJson(route('admin.orders.existing-customers.search', ['phone' => '01012345678']))
+            ->assertOk()->assertJsonCount(1, 'children')
+            ->assertJsonPath('children.0.order_id', $source->id)
+            ->assertJsonPath('children.0.values.child_name', 'طفل سابق')
+            ->assertJsonPath('children.0.photo_count', 2)
+            ->assertJsonPath('children.0.photos.0', route('admin.orders.photo', [$source, 0, 'thumbnail' => 1]))
+            ->assertJsonMissingPath('children.0.payment_status')
+            ->assertJsonMissingPath('children.0.uploaded_photos');
+        $this->assertStringNotContainsString('orders/photos/', $response->getContent());
+        $this->assertStringNotContainsString($other->child_name, $response->getContent());
+        $this->assertStringContainsString('private', $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+    }
+
+    public function test_new_mixed_checkout_can_reuse_different_customer_children_and_copies_their_photos_independently(): void
+    {
+        $first = $this->previousChild('طفل أول', '01012345678');
+        $second = $this->previousChild('طفل ثان', '01012345678');
+        $story = $this->story('قصة جديدة', 400);
+        $product = Product::create(['name_ar' => 'منتج مخصص', 'slug' => 'reuse-personalized', 'price_cents' => 20000,
+            'is_active' => true, 'personalization_mode' => 'collect_child_details', 'personalization_fields' => $this->schoolStickerPersonalizationFields()]);
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل أول', 'child_age' => 6, 'child_gender' => 'girl',
+            'language' => 'en', 'reuse_child_order_id' => $first->id]];
+        $payload['products'] = [$product->id => ['quantity' => 2, 'units' => [
+            ['reuse_child_order_id' => $second->id, 'personalization' => ['child_name' => 'طفل ثان', 'school_name' => 'مدرسة سابقة', 'class_name' => '2A']],
+            ['reuse_first' => 1],
+        ]]];
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)->assertCreated();
+        $newOrders = Order::whereNotIn('id', [$first->id, $second->id])->with('items')->get();
+        $this->assertCount(3, $newOrders);
+        $storyOrder = $newOrders->firstWhere('story_id', $story->id);
+        $this->assertSame('en', $storyOrder->language);
+        $this->assertSame('طفل أول', $storyOrder->child_name);
+        $this->assertSame($first->id, $storyOrder->items->sole()->personalization_snapshot['reused_child_order_id']);
+        $productOrders = $newOrders->whereNull('story_id')->values();
+        foreach ($newOrders as $order) {
+            $source = $order->story_id ? $first : $second;
+            $this->assertCount(2, $order->uploaded_photos);
+            $this->assertNotSame($source->uploaded_photos, $order->uploaded_photos);
+            foreach ($order->uploaded_photos as $index => $path) {
+                $this->assertSame(Storage::disk('local')->get($source->uploaded_photos[$index]), Storage::disk('local')->get($path));
+            }
+        }
+        $this->assertSame($productOrders[0]->uploaded_photos, $productOrders[1]->uploaded_photos);
+        $this->assertSame('طفل ثان', $productOrders[0]->child_name);
+        $this->assertSame('مدرسة سابقة', $productOrders[0]->items->sole()->personalization_snapshot['school_name']);
+        $this->assertSame(2, $productOrders[0]->items->sole()->personalization_snapshot['uploaded_photos_count']);
+        $this->assertSame('delivered', $first->fresh()->status);
+        $this->assertSame('delivered', $second->fresh()->status);
+    }
+
+    public function test_reused_photos_are_copied_on_the_configured_private_disk_without_local_path_assumptions(): void
+    {
+        Storage::fake('s3_private');
+        config()->set('photo_uploads.disk', 's3_private');
+        $source = $this->previousChild('طفل سابق', '01012345678', 's3_private');
+        $story = $this->story('قصة على التخزين الخاص', 400);
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل سابق', 'child_age' => 6,
+            'child_gender' => 'boy', 'reuse_child_order_id' => $source->id]];
+        $this->actingAs($this->admin)->post(route('admin.orders.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $new = Order::where('story_id', $story->id)->sole();
+        foreach ($new->uploaded_photos as $index => $path) {
+            Storage::disk('s3_private')->assertExists($path);
+            $this->assertSame(Storage::disk('s3_private')->get($source->uploaded_photos[$index]), Storage::disk('s3_private')->get($path));
+            Storage::disk('local')->assertMissing($path);
+        }
+    }
+
+    public function test_reuse_cannot_cross_customer_phone_or_exceed_the_story_photo_limit(): void
+    {
+        $source = $this->previousChild('طفل سابق', '01098765432');
+        $story = $this->story('قصة تحقق إعادة الاستخدام', 400);
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل سابق', 'child_age' => 6,
+            'child_gender' => 'boy', 'reuse_child_order_id' => $source->id]];
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('stories.0.reuse_child_order_id');
+        $source->update(['delivery_details' => ['phone' => '01012345678']]);
+        $payload['stories'][0]['photos'] = $this->photos('excess-new');
+        $this->post(route('admin.orders.store'), $payload)->assertUnprocessable()->assertJsonValidationErrors('stories.0.photos');
+        $this->assertDatabaseCount('orders', 1);
+    }
+
+    public function test_reusing_photos_requires_existing_photo_permission_and_lookup_never_exposes_them_without_it(): void
+    {
+        $source = $this->previousChild('طفل سابق', '01012345678');
+        $limited = User::factory()->create(['role' => 'admin']);
+        $limited->permissions()->sync(Permission::where('key', 'orders.create')->pluck('id'));
+        $limited->unsetRelation('permissions');
+        $this->actingAs($limited)->getJson(route('admin.orders.existing-customers.search', ['phone' => '01012345678']))
+            ->assertOk()->assertJsonPath('children.0.photos', [])->assertJsonPath('children.0.photo_count', 0);
+        $story = $this->story('قصة صلاحيات الصور', 400);
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل سابق', 'child_age' => 6,
+            'child_gender' => 'boy', 'reuse_child_order_id' => $source->id]];
+        $this->withHeader('Accept', 'application/json')->post(route('admin.orders.store'), $payload)->assertForbidden();
+        $this->assertDatabaseCount('orders', 1);
+    }
+
+    public function test_failed_photo_reuse_rolls_back_only_new_order_files_and_preserves_source_orders(): void
+    {
+        $source = $this->previousChild('طفل سابق', '01012345678');
+        $paths = $source->uploaded_photos;
+        Storage::disk('local')->delete($paths[1]);
+        $before = Storage::disk('local')->allFiles('orders/photos');
+        $story = $this->story('قصة ملف مفقود', 400);
+        $payload = $this->basePayload();
+        $payload['stories'] = [['story_id' => $story->id, 'child_name' => 'طفل سابق', 'child_age' => 6,
+            'child_gender' => 'boy', 'reuse_child_order_id' => $source->id]];
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($this->admin)->post(route('admin.orders.store'), $payload);
+            $this->fail('Missing source file must not complete an order.');
+        } catch (\RuntimeException) {
+            $this->assertDatabaseCount('orders', 1);
+            $this->assertSame($paths, $source->fresh()->uploaded_photos);
+            $this->assertSame($before, Storage::disk('local')->allFiles('orders/photos'));
+        }
+    }
+
+    public function test_removed_child_slots_preserve_each_remaining_childs_own_uploaded_photos(): void
+    {
+        $product = Product::create(['name_ar' => 'منتج أطفال', 'slug' => 'sparse-new-children', 'price_cents' => 15000,
+            'is_active' => true, 'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields()]);
+        $payload = $this->basePayload();
+        $payload['products'] = [$product->id => ['quantity' => 2, 'units' => [
+            1 => ['personalization' => ['child_name' => 'الطفل الأول', 'school_name' => 'مدرسة أ', 'class_name' => '١',
+                'photos' => [UploadedFile::fake()->image('first-a.jpg', 611, 611), UploadedFile::fake()->image('first-b.jpg', 611, 611)]]],
+            3 => ['personalization' => ['child_name' => 'الطفل الثاني', 'school_name' => 'مدرسة ب', 'class_name' => '٢',
+                'photos' => [UploadedFile::fake()->image('second-a.jpg', 733, 733), UploadedFile::fake()->image('second-b.jpg', 733, 733)]]],
+        ]]];
+        $this->actingAs($this->admin)->postJson(route('admin.orders.store'), $payload)->assertCreated();
+        foreach (['الطفل الأول' => 611, 'الطفل الثاني' => 733] as $name => $width) {
+            $order = Order::where('child_name', $name)->sole();
+            $this->assertCount(2, $order->uploaded_photos);
+            foreach ($order->uploaded_photos as $path) {
+                $this->assertSame($width, getimagesizefromstring(Storage::disk('local')->get($path))[0]);
+            }
+        }
+    }
+
+    private function previousChild(string $name, string $phone, string $disk = 'local'): Order
+    {
+        $order = Order::create(['order_number' => 'HK-SOURCE-'.fake()->unique()->bothify('????##'),
+            'parent_name' => 'عميل سابق', 'status' => 'delivered', 'child_name' => $name, 'child_age' => 6,
+            'child_gender' => 'girl', 'delivery_details' => ['phone' => $phone], 'uploaded_photos' => []]);
+        $paths = [];
+        foreach ($this->photos('source-'.$order->id) as $index => $file) {
+            $path = 'orders/photos/'.$order->id.'/original-'.$index.'.jpg';
+            Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
+            $paths[] = $path;
+        }
+        $order->update(['uploaded_photos' => $paths]);
+
+        return $order;
+    }
+
     private function basePayload(): array
     {
         return [

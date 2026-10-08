@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\AdminProductVariantSelection;
 use App\Support\OrderPaymentStatus;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
@@ -59,7 +60,20 @@ class AdminOrderCreationService
 
                 // Preserve submitted indexes so a personalized add-on always remains
                 // linked to the intended story even after a validation redirect.
-                $storyInputs = collect($data['stories']);
+                $storyInputs = collect($data['stories'])->map(function (array $input, int|string $index) use ($data, $admin): array {
+                    $input['reused_photos'] = [];
+                    if (! empty($input['reuse_child_order_id'])) {
+                        $children = app(AdminCustomerChildService::class);
+                        $source = $children->source((int) $input['reuse_child_order_id'], $data['phone'], $admin, "stories.$index.reuse_child_order_id", true);
+                        $input['reused_photos'] = $children->photos($source, $admin);
+                    }
+                    $count = count($input['photos'] ?? []) + count($input['reused_photos']);
+                    if ($count < 2 || $count > 3) {
+                        throw ValidationException::withMessages(["stories.$index.photos" => 'ارفع أو اختر صورتين أو 3 صور للطفل لكل قصة.']);
+                    }
+
+                    return $input;
+                });
                 $storyIndexes = $storyInputs->keys()->map(fn (string|int $index): int => (int) $index)->values();
                 $stories = Story::query()
                     ->where('active', true)
@@ -72,7 +86,7 @@ class AdminOrderCreationService
                     throw ValidationException::withMessages(['stories' => 'إحدى القصص المختارة لم تعد متاحة.']);
                 }
 
-                $productLines = $this->resolveProductLines($data['products'] ?? [], $storyIndexes);
+                $productLines = $this->resolveProductLines($data['products'] ?? [], $storyIndexes, $data['phone'], $admin);
                 if ($storyInputs->isEmpty() && $productLines->isEmpty()) {
                     throw ValidationException::withMessages([
                         'stories' => 'أضف قصة أو منتجًا واحدًا على الأقل إلى الطلب.',
@@ -203,7 +217,8 @@ class AdminOrderCreationService
                             'child_name' => $input['child_name'],
                             'child_age' => $input['child_age'],
                             'child_gender' => $input['child_gender'],
-                            'uploaded_photos_count' => count($input['photos']),
+                            'uploaded_photos_count' => count($input['photos'] ?? []) + count($input['reused_photos']),
+                            'reused_child_order_id' => $input['reuse_child_order_id'] ?? null,
                             'created_manually' => true,
                         ],
                     ]);
@@ -280,8 +295,13 @@ class AdminOrderCreationService
                             $targetOrder->forceFill([
                                 'uploaded_photos' => array_values($sourceOrder->fresh()->uploaded_photos ?? []),
                             ])->save();
-                        } elseif ($line['photos'] !== []) {
-                            $this->photoUploads->append($targetOrder, $line['photos']);
+                        } else {
+                            if (($line['reused_photos'] ?? []) !== []) {
+                                app(AdminCustomerChildService::class)->copyPhotos($targetOrder, $line['reused_photos']);
+                            }
+                            if ($line['photos'] !== []) {
+                                $this->photoUploads->append($targetOrder, $line['photos']);
+                            }
                         }
 
                         $firstPersonalizedProductOrders[$product->id] ??= $targetOrder;
@@ -328,7 +348,12 @@ class AdminOrderCreationService
                 }
 
                 foreach ($storyInputs as $position => $input) {
-                    $this->photoUploads->append($orders[(int) $position], $input['photos']);
+                    if ($input['reused_photos'] !== []) {
+                        app(AdminCustomerChildService::class)->copyPhotos($orders[(int) $position], $input['reused_photos']);
+                    }
+                    if (($input['photos'] ?? []) !== []) {
+                        $this->photoUploads->append($orders[(int) $position], $input['photos']);
+                    }
                 }
 
                 return [
@@ -374,7 +399,7 @@ class AdminOrderCreationService
         return ['representative' => $result['representative'], 'orders' => $result['orders']];
     }
 
-    private function resolveProductLines(array $inputs, Collection $storyIndexes)
+    private function resolveProductLines(array $inputs, Collection $storyIndexes, string $phone, User $admin)
     {
         $selected = collect($inputs)
             ->map(fn (array $input, string|int $productId): array => $input + ['product_id' => (int) $productId])
@@ -396,7 +421,7 @@ class AdminOrderCreationService
             throw ValidationException::withMessages(['products' => 'أحد المنتجات المختارة لم يعد متاحًا.']);
         }
 
-        return $selected->flatMap(function (array $input) use ($products, $storyIndexes): array {
+        return $selected->flatMap(function (array $input) use ($products, $storyIndexes, $phone, $admin): array {
             $product = $products->get($input['product_id']);
             $quantity = max(1, (int) $input['quantity']);
             $variant = null;
@@ -413,10 +438,8 @@ class AdminOrderCreationService
                         'products.'.$product->id.'.variant_id' => 'اختر خيارًا متاحًا للمنتج '.$product->name_ar.'.',
                     ]);
                 }
-            } elseif ($product->activeVariants()->exists()) {
-                throw ValidationException::withMessages([
-                    'products.'.$product->id.'.variant_id' => 'اختر خيار المنتج '.$product->name_ar.'.',
-                ]);
+            } else {
+                $variant = AdminProductVariantSelection::forNewLine($product);
             }
 
             if (! $product->hasStock($quantity, $variant)) {
@@ -445,16 +468,26 @@ class AdminOrderCreationService
                     ? array_values($input['units'])
                     : [['personalization' => (array) ($input['personalization'] ?? [])]];
 
-                return collect($units)->take($quantity)->map(function (array $unit, int $unitIndex) use ($product, $variant, $unitPriceCents, $personalizationSchema): array {
+                return collect($units)->take($quantity)->map(function (array $unit, int $unitIndex) use ($product, $variant, $unitPriceCents, $personalizationSchema, $phone, $admin): array {
                     $personalization = (array) ($unit['personalization'] ?? []);
                     $reuseFirst = ! empty($unit['reuse_first']);
                     $submittedPhotos = array_values($personalization['photos'] ?? []);
                     $photos = $reuseFirst ? [] : $submittedPhotos;
-                    $snapshot = ProductPersonalizationSchema::snapshot($personalizationSchema, $personalization, count($submittedPhotos));
+                    $reusedPhotos = [];
+                    if (! empty($unit['reuse_child_order_id'])) {
+                        $children = app(AdminCustomerChildService::class);
+                        $source = $children->source((int) $unit['reuse_child_order_id'], $phone, $admin,
+                            'products.'.$product->id.'.units.'.$unitIndex.'.reuse_child_order_id', true);
+                        if (isset(ProductPersonalizationSchema::enabledFields($personalizationSchema)['photos'])) {
+                            $reusedPhotos = $children->photos($source, $admin);
+                        }
+                    }
+                    $snapshot = ProductPersonalizationSchema::snapshot($personalizationSchema, $personalization, count($submittedPhotos) + count($reusedPhotos));
+                    $snapshot['reused_child_order_id'] = $unit['reuse_child_order_id'] ?? null;
 
                     if (! ProductPersonalizationSchema::cartItemIsComplete($personalizationSchema, [
                         ...$personalization,
-                        'uploaded_photos' => $submittedPhotos,
+                        'uploaded_photos' => [...$submittedPhotos, ...$reusedPhotos],
                         'personalization_snapshot' => $snapshot,
                     ])) {
                         throw ValidationException::withMessages([
@@ -467,6 +500,7 @@ class AdminOrderCreationService
                         'unit_price_cents' => $unitPriceCents, 'total_price_cents' => $unitPriceCents,
                         'linked_story_index' => null, 'personalization_schema' => $personalizationSchema,
                         'personalization_snapshot' => $snapshot, 'photos' => $photos,
+                        'reused_photos' => $reusedPhotos,
                         'personalization_unit' => $unitIndex + 1,
                         'reuse_first' => $reuseFirst,
                     ];

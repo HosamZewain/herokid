@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
+use App\Support\AdminProductVariantSelection;
 use App\Support\OrderDeliveryAddress;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
@@ -788,11 +789,8 @@ class AdminOrderUpdateService
                         'products.'.$product->id.'.variant_id' => 'خيار المنتج المحدد غير صالح.',
                     ]);
                 }
-            } elseif ($product->variants()->where('is_active', true)->exists()
-                && ! $this->hasUnchangedLegacyVariant($product, $quantity, $oldPrices)) {
-                throw ValidationException::withMessages([
-                    'products.'.$product->id.'.variant_id' => 'اختر خيار المنتج '.$product->name_ar.'.',
-                ]);
+            } elseif (! $this->hasUnchangedLegacyVariant($product, $quantity, $oldPrices)) {
+                $variant = AdminProductVariantSelection::forNewLine($product, ! empty($oldPrices[$product->id]));
             }
 
             if (! $product->hasStock($quantity, $variant)) {

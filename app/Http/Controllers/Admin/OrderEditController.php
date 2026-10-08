@@ -373,6 +373,15 @@ class OrderEditController extends Controller
 
         $result = $updater->update($representative, $validated, $request->user(), $request);
 
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'تم تحديث عملية الشراء كاملة بنجاح.');
+
+            return response()->json([
+                'success' => true,
+                'redirect_url' => route('admin.orders.groups.show', $result['representative']->id),
+            ]);
+        }
+
         return redirect()
             ->route('admin.orders.groups.show', $result['representative']->id)
             ->with('success', 'تم تحديث عملية الشراء كاملة بنجاح.');

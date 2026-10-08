@@ -915,6 +915,44 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame(1, $oldItem->fresh()->quantity);
     }
 
+    public function test_adding_a_new_single_variant_product_to_an_existing_order_returns_json_and_preserves_the_old_item(): void
+    {
+        $oldProduct = Product::create(['name_ar' => 'منتج قديم', 'slug' => 'json-edit-old', 'price_cents' => 10000,
+            'is_active' => true, 'personalization_mode' => 'none']);
+        $order = $this->productOrder('HK-JSON-EDIT', 'CHK-JSON-EDIT', $oldProduct, 10000);
+        $oldItemId = $order->items()->sole()->id;
+        $newProduct = Product::create(['name_ar' => 'كتاب تلوين جديد', 'slug' => 'json-edit-new', 'price_cents' => 20000,
+            'is_active' => true, 'personalization_mode' => 'none']);
+        $variant = $newProduct->variants()->create(['name_ar' => '٢٠ صفحة', 'is_active' => true, 'price_override_cents' => 25000]);
+        $payload = $this->productEditPayload([$oldProduct->id => ['quantity' => 1], $newProduct->id => ['quantity' => 1]]);
+        $payload['payment_status'] = 'unpaid';
+        $payload['payment_edit_intent'] = 'preserve';
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')
+            ->put(route('admin.orders.groups.update', $order), $payload)
+            ->assertOk()->assertJsonPath('success', true)
+            ->assertJsonPath('redirect_url', route('admin.orders.groups.show', $order->id));
+        $this->assertDatabaseHas('order_items', ['id' => $oldItemId, 'product_id' => $oldProduct->id, 'unit_price_cents' => 10000]);
+        $this->assertDatabaseHas('order_items', ['product_id' => $newProduct->id, 'product_variant_id' => $variant->id, 'unit_price_cents' => 25000]);
+        $this->assertSame(0, $order->fresh()->paid_amount_cents);
+    }
+
+    public function test_json_full_edit_validation_returns_errors_without_changing_existing_photos_items_or_payment(): void
+    {
+        [$first] = $this->createCheckout();
+        $photos = $first->uploaded_photos;
+        $paid = $first->paid_amount_cents;
+        $itemIds = $first->items()->pluck('id')->all();
+        $payload = $this->editBasePayload($first);
+        $payload['parent_name'] = '';
+        $payload['stories'][0]['photos'] = $this->photos('json-edit-new-photos');
+        $this->actingAs($this->admin)->withHeader('Accept', 'application/json')
+            ->put(route('admin.orders.groups.update', $first), $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('parent_name');
+        $this->assertSame($photos, $first->fresh()->uploaded_photos);
+        $this->assertSame($paid, $first->fresh()->paid_amount_cents);
+        $this->assertSame($itemIds, $first->items()->pluck('id')->all());
+    }
+
     private function productOrder(string $number, string $groupKey, Product $product, int $priceCents): Order
     {
         $order = Order::create([

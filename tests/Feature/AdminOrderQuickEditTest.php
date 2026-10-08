@@ -144,10 +144,11 @@ class AdminOrderQuickEditTest extends TestCase
         $this->assertCount(1, $item->order->uploaded_photos);
     }
 
-    public function test_new_product_requires_current_variant_but_rejects_foreign_and_inactive_variants(): void
+    public function test_new_product_with_multiple_options_requires_a_current_variant_and_rejects_foreign_and_inactive_variants(): void
     {
         $product = $this->product();
         $variant = ProductVariant::create(['product_id' => $product->id, 'name_ar' => 'كبير', 'price_adjustment_cents' => 1000, 'is_active' => true]);
+        ProductVariant::create(['product_id' => $product->id, 'name_ar' => 'صغير', 'is_active' => true]);
         $this->add($product)->assertUnprocessable();
         $other = ProductVariant::create(['product_id' => $this->product()->id, 'name_ar' => 'آخر', 'is_active' => true]);
         $this->add($product, ['variant_id' => $other->id])->assertUnprocessable()->assertJsonValidationErrors('variant_id');

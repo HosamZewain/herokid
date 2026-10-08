@@ -3,11 +3,9 @@
         $isEditing = isset($editingGroup);
         $orderForm = $orderForm ?? [];
         $formValue = fn (string $key, mixed $default = null): mixed => old($key, data_get($orderForm, $key, $default));
+        $savedProducts = $initialProducts ?? [];
         $initialProducts = old('products', $initialProducts ?? []);
-        $initialStories = old('stories', $initialStories ?? [[
-            'story_id' => '', 'child_name' => '', 'child_age' => '', 'child_gender' => '', 'language' => 'ar',
-            'interests' => '', 'gift_note' => '', 'parent_notes' => '',
-        ]]);
+        $initialStories = old('stories', $initialStories ?? []);
     @endphp
 
     <x-slot name="header">
@@ -29,16 +27,21 @@
                 </span>
             </div>
 
-            @if($errors->any())
-                <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800" role="alert">
+                <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-800" role="alert" tabindex="-1" data-order-form-errors @if(! $errors->any()) hidden @endif>
                     <p class="mb-2 font-black">راجع البيانات التالية:</p>
                     @foreach($errors->all() as $message)<p>• {{ $message }}</p>@endforeach
                 </div>
-            @endif
 
             <form method="POST" action="{{ $isEditing ? route('admin.orders.groups.update', $representative->id) : route('admin.orders.store') }}" enctype="multipart/form-data" class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]" data-order-form>
                 @csrf
                 @if($isEditing) @method('PUT') @endif
+            @unless($isEditing)
+                    <nav class="flex flex-wrap gap-2 rounded-2xl bg-white p-3 shadow-sm xl:col-span-2" aria-label="خطوات إضافة الطلب" data-order-wizard>
+                        <button type="button" data-go-order-step="1" class="rounded-xl px-4 py-2 text-sm font-black">١. بيانات العميل</button>
+                        <button type="button" data-go-order-step="2" class="rounded-xl px-4 py-2 text-sm font-black">٢. القصص والمنتجات</button>
+                        <button type="button" data-go-order-step="3" class="rounded-xl px-4 py-2 text-sm font-black">٣. التوصيل والدفع</button>
+                    </nav>
+                @endunless
 
                 @if($isEditing)
                     <div class="sticky top-0 z-30 rounded-2xl border border-amber-200 bg-amber-50/95 p-3 shadow-lg backdrop-blur xl:col-span-2" data-edit-save-bar>
@@ -54,6 +57,7 @@
                 @endif
 
                 <div class="space-y-5">
+                    <div class="space-y-5" data-order-step="1">
                     @if(! $isEditing)
                         <section class="rounded-3xl border border-indigo-200 bg-gradient-to-l from-indigo-50 to-white p-5 shadow-sm sm:p-6" data-existing-customer-lookup data-search-url="{{ route('admin.orders.existing-customers.search') }}">
                             <div class="grid items-end gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -142,12 +146,35 @@
                         </div>
                     </section>
 
+                    @unless($isEditing)<button type="button" data-go-order-step="2" class="w-full rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white">التالي: إضافة قصة أو منتج ←</button>@endunless
+                    </div>
+                    <div class="space-y-5" data-order-step="2">
+                    <section class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm" data-order-item-picker>
+                        <h3 class="text-lg font-black text-gray-950">أضف ما يطلبه العميل</h3>
+                        <p class="mt-1 text-xs font-bold text-gray-500">ابحث واختر، ثم أدخل بيانات العناصر المختارة فقط. يمكن زيادة العدد لكل منتج.</p>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <button type="button" data-open-catalog="product" class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white">+ إضافة منتج</button>
+                            <button type="button" data-open-catalog="story" class="rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white">+ إضافة قصة</button>
+                        </div>
+                        <div class="mt-4 rounded-2xl border border-slate-200 p-3" data-catalog-picker hidden>
+                            <label class="block text-xs font-black text-gray-700" for="order-catalog-search">ابحث بالاسم</label>
+                            <input id="order-catalog-search" type="search" placeholder="اكتب اسم المنتج أو القصة" class="mt-2 w-full rounded-xl border-gray-200 text-right text-sm" data-catalog-search>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2" data-catalog-results></div>
+                            <button type="button" class="mt-3 text-xs font-black text-gray-500" data-close-catalog>إغلاق البحث</button>
+                        </div>
+                        <p class="mt-3 text-xs font-bold text-red-600" role="status" data-order-item-message></p>
+                        @php
+                            $orderCatalog = $products->map(fn ($product) => ['id' => $product->id, 'name' => $product->name_ar, 'type' => 'product'])
+                                ->concat($stories->map(fn ($story) => ['id' => $story->id, 'name' => $story->title, 'type' => 'story']))->values();
+                        @endphp
+                        <script type="application/json" data-order-catalog>@json($orderCatalog)</script>
+                    </section>
                     <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                             <button type="button" class="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-700" data-add-story>+ إضافة قصة أخرى</button>
                             <div class="text-right">
                                 <h3 class="text-lg font-black text-gray-950">القصص وبيانات الأطفال <span class="text-xs text-gray-400">(اختياري)</span></h3>
-                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إضافة عدة قصص لنفس الطفل أو لأطفال مختلفين، أو حذف كل القصص وإنشاء طلب منتجات فقط.</p>
+                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إنشاء طلب منتجات فقط، أو إضافة عدة قصص لنفس الطفل أو لأطفال مختلفين.</p>
                             </div>
                         </div>
 
@@ -166,9 +193,9 @@
                         <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                             <div class="mb-5 text-right">
                                 <h3 class="text-lg font-black text-gray-950">منتجات وإضافات</h3>
-                                <p class="mt-1 text-xs font-bold text-gray-500">يمكن إنشاء طلب منتجات فقط. عند اختيار منتج مخصص ستظهر حقوله وصوره المطلوبة تلقائيًا.</p>
+                                <p class="mt-1 text-xs font-bold text-gray-500">هنا المنتجات التي أضفتها فقط. عند اختيار منتج مخصص ستظهر حقوله وصوره المطلوبة تلقائيًا.</p>
                             </div>
-                            <div class="grid gap-3 md:grid-cols-2">
+                            <div class="grid gap-3" data-product-rows>
                                 @foreach($products as $product)
                                     @php
                                         $productForm = $initialProducts[$product->id] ?? [];
@@ -176,10 +203,18 @@
                                         $basePrice = isset($productForm['unit_price_cents'])
                                             ? (int) $productForm['unit_price_cents']
                                             : $product->effectivePriceCents();
+                                        $savedProduct = $savedProducts[$product->id] ?? [];
+                                        $legacyQuantity = $isEditing && ! empty($savedProduct) && empty($savedProduct['variant_id'])
+                                            ? (int) $savedProduct['quantity'] : 0;
+                                        $soleVariant = ! $isEditing || empty($savedProduct)
+                                            ? ($product->activeVariants->count() === 1 ? $product->activeVariants->first()->id : null) : null;
+                                        $selectedVariant = $productForm['variant_id'] ?? ($quantity > 0 ? $soleVariant : null);
                                     @endphp
-                                    <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4" data-product-row data-product-id="{{ $product->id }}" data-base-price-cents="{{ $basePrice }}">
+                                    @if($quantity < 1)<template data-product-template="{{ $product->id }}">@endif
+                                    <article class="rounded-2xl border border-gray-100 bg-slate-50 p-4" data-product-row data-product-id="{{ $product->id }}" data-base-price-cents="{{ $basePrice }}" data-legacy-variantless-quantity="{{ $legacyQuantity }}" data-sole-variant="{{ $soleVariant }}">
+                                        <button type="button" class="mb-3 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-black text-red-600" data-remove-selected-product>إزالة المنتج من الطلب</button>
                                         <div class="flex items-start justify-between gap-3">
-                                            <span class="font-black text-indigo-700">{{ format_money($basePrice / 100) }}</span>
+                                            <span class="font-black text-indigo-700" data-product-current-price>{{ format_money($basePrice / 100) }}</span>
                                             <div class="text-right">
                                                 <h4 class="font-black text-gray-900">{{ $product->name_ar }}</h4>
                                                 @if($product->isPersonalizedAddon())<p class="mt-1 text-[10px] font-black text-violet-600">مرتبط بقصة وطفل</p>@endif
@@ -192,8 +227,8 @@
                                             </div>
                                             @if($product->activeVariants->isNotEmpty())
                                                 <div>
-                                                    <label class="mb-1 block text-[10px] font-black text-gray-500">الخيار</label>
-                                                    <select name="products[{{ $product->id }}][variant_id]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-product-variant>
+                                                    <label for="product-variant-{{ $product->id }}" class="mb-1 block text-[10px] font-black text-gray-500">الخيار <span data-product-variant-required @if($quantity < 1 || $quantity === $legacyQuantity) hidden @endif>* مطلوب</span></label>
+                                                    <select id="product-variant-{{ $product->id }}" name="products[{{ $product->id }}][variant_id]" class="w-full rounded-xl border-gray-200 bg-white text-right text-xs" data-product-variant @required($quantity > 0 && $quantity !== $legacyQuantity)>
                                                         <option value="" data-price-cents="{{ $basePrice }}">{{ $isEditing && isset($productForm['unit_price_cents']) && empty($productForm['variant_id']) ? 'بدون خيار — كما سُجّل في الطلب الأصلي' : 'اختر' }}</option>
                                                         @foreach($product->activeVariants as $variant)
                                                             @php
@@ -201,9 +236,11 @@
                                                                     ? (int) $productForm['unit_price_cents']
                                                                     : $product->effectivePriceCents($variant);
                                                             @endphp
-                                                            <option value="{{ $variant->id }}" data-price-cents="{{ $variantPrice }}" @selected((string) ($productForm['variant_id'] ?? '') === (string) $variant->id)>{{ $variant->name_ar }} — {{ format_money($variantPrice / 100) }}</option>
+                                                            <option value="{{ $variant->id }}" data-price-cents="{{ $variantPrice }}" @selected((string) $selectedVariant === (string) $variant->id)>{{ $variant->name_ar }} — {{ format_money($variantPrice / 100) }}</option>
                                                         @endforeach
                                                     </select>
+                                                    <p class="mt-1 text-[10px] font-bold text-indigo-700" data-product-variant-hint @if($quantity < 1) hidden @endif>اختر النسخة المطلوبة قبل الحفظ. الاختيار الوحيد يُحدد تلقائيًا للمنتج الجديد.</p>
+                                                    @error("products.$product->id.variant_id")<p class="mt-1 text-xs font-bold text-red-600">{{ $message }}</p>@enderror
                                                 </div>
                                             @else
                                                 <div class="hidden"><input type="hidden" name="products[{{ $product->id }}][variant_id]" value=""></div>
@@ -224,11 +261,20 @@
                                             ])
                                         @endif
                                     </article>
+                                    @if($quantity < 1)</template>@endif
                                 @endforeach
                             </div>
                         </section>
                     @endif
 
+                    @unless($isEditing)
+                        <div class="flex gap-3">
+                            <button type="button" data-go-order-step="1" class="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-black">السابق: العميل</button>
+                            <button type="button" data-go-order-step="3" class="flex-1 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white">التالي: التوصيل والدفع ←</button>
+                        </div>
+                    @endunless
+                    </div>
+                    <div class="space-y-5" data-order-step="3">
                     <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
                         <div class="mb-5 text-right">
                             <h3 class="text-lg font-black text-gray-950">بيانات التوصيل</h3>
@@ -316,6 +362,8 @@
                             @endif
                         </div>
                     </section>
+                    @unless($isEditing)<button type="button" data-go-order-step="2" class="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-black">السابق: القصص والمنتجات</button>@endunless
+                    </div>
                 </div>
 
                 <aside class="xl:sticky xl:top-24 xl:self-start">
@@ -332,7 +380,8 @@
                             <div class="flex justify-between gap-3 text-rose-200"><span>المتبقي عند الاستلام</span><span data-remaining-total>٠ ج.م</span></div>
                         </div>
                         <p class="mt-4 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold leading-6 text-indigo-100">السعر النهائي يُعاد حسابه والتحقق منه في الخادم عند الحفظ.</p>
-                        <button class="mt-5 w-full rounded-xl bg-white px-5 py-3.5 text-sm font-black text-indigo-800 transition hover:bg-indigo-50">
+                        <p class="mt-4 text-xs font-bold leading-6 text-indigo-100" role="status" aria-live="polite" data-order-save-status>لو ظهر خطأ عند الحفظ، بياناتك والصور المختارة ستظل في هذه الصفحة لتصحيح الخطأ وإعادة المحاولة.</p>
+                        <button class="mt-5 w-full rounded-xl bg-white px-5 py-3.5 text-sm font-black text-indigo-800 transition hover:bg-indigo-50" data-order-final-save>
                             {{ $isEditing ? 'حفظ كل تعديلات الطلب' : 'حفظ وإنشاء الطلب' }}
                         </button>
                     </div>
@@ -359,6 +408,7 @@
                 const originalPaidCents = Number(root.dataset.originalPaidCents || 0);
                 const originalPaymentStatus = root.dataset.originalPaymentStatus || 'unpaid';
                 let restoringPackage = root.dataset.restoredPackage === '1';
+                let discoveredChildren = [];
                 let nextIndex = Math.max(0, ...Array.from(rows.querySelectorAll('[data-story-row]')).map(row => Number(row.dataset.storyIndex) || 0)) + 1;
 
                 const money = cents => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(Math.max(0, cents) / 100) + ' ج.م';
@@ -380,6 +430,7 @@
                     root.querySelector('#city').value = profile.city || '';
                     root.querySelector('#street').value = profile.street || '';
                     root.querySelector('#address-details').value = profile.address_details || '';
+                    root.dispatchEvent(new CustomEvent('admin:customer-selected', { detail: { profile, children: discoveredChildren } }));
                     setExistingCustomerStatus(`تم اختيار ${profile.parent_name || 'العميل'} من الطلب ${profile.checkout_reference}. راجع البيانات ويمكنك تعديلها قبل الحفظ.`, 'success');
                     root.querySelector('#parent-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 };
@@ -444,6 +495,7 @@
                             throw new Error(validationMessage || payload.message || 'تعذر البحث عن العميل.');
                         }
                         const customers = Array.isArray(payload.customers) ? payload.customers : [];
+                        discoveredChildren = Array.isArray(payload.children) ? payload.children : [];
                         renderExistingCustomers(customers);
                         setExistingCustomerStatus(customers.length ? `تم العثور على ${customers.length} عنوان سابق. اختر البيانات المناسبة.` : 'لا توجد طلبات سابقة مسجلة بهذا الرقم.', customers.length ? 'info' : 'error');
                     } catch (error) {
@@ -506,6 +558,7 @@
                         const quantity = Math.max(0, Number(row.querySelector('[data-product-quantity]')?.value || 0));
                         const variant = row.querySelector('[data-product-variant]');
                         const unit = Number(variant?.selectedOptions[0]?.dataset.priceCents || row.dataset.basePriceCents || 0);
+                        row.querySelector('[data-product-current-price]').textContent = money(unit);
                         return sum + quantity * unit;
                     }, 0);
                     const deliveryCents = Number(governorate?.selectedOptions[0]?.dataset.feeCents || 0);
@@ -607,6 +660,8 @@
                 };
 
                 const bindProductRow = row => {
+                    if (row.dataset.personalizationBound) return;
+                    row.dataset.personalizationBound = '1';
                     const quantity = row.querySelector('[data-product-quantity]');
                     const personalization = row.querySelector('[data-product-personalization]');
 
@@ -650,7 +705,8 @@
                         calculate();
                     }));
 
-                    quantity?.addEventListener('input', refreshPersonalization);
+                    quantity?.addEventListener('input', () => { refreshPersonalization(); calculate(); });
+                    row.querySelector('[data-product-variant]')?.addEventListener('change', calculate);
                     row.querySelectorAll('[data-admin-reuse-first]').forEach(input => input.addEventListener('change', refreshPersonalization));
                     row.querySelectorAll('[data-product-photo-input]').forEach(input => input.addEventListener('change', event => {
                         const files = Array.from(event.target.files || []);
@@ -670,14 +726,23 @@
                     refreshPersonalization();
                 };
 
-                const appendStoryRow = ({ scroll = false } = {}) => {
+                const appendStoryRow = ({ scroll = false, storyId = '' } = {}) => {
+                    const maximum = selectedPackage()?.storyCount ?? @json(config('orders.admin_max_items', 20));
+                    if (rows.querySelectorAll('[data-story-row]').length >= maximum) {
+                        root.querySelector('[data-order-item-message]').textContent = `الحد الأقصى ${maximum} قصة لهذا الطلب/الباقة.`;
+                        return;
+                    }
                     const html = template.innerHTML.replaceAll('__INDEX__', String(nextIndex++));
                     rows.insertAdjacentHTML('beforeend', html);
                     bindRow(rows.lastElementChild);
+                    if (storyId) rows.lastElementChild.querySelector('[data-story-select]').value = String(storyId);
+                    root.dispatchEvent(new CustomEvent('admin:story-added', { detail: { row: rows.lastElementChild } }));
                     refreshStoryLinks();
                     calculate();
                     if (scroll) rows.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 };
+                root.addEventListener('admin:add-story', event => appendStoryRow({ storyId: event.detail.storyId, scroll: true }));
+                root.addEventListener('admin:product-added', event => { bindProductRow(event.detail.row); refreshStoryLinks(); calculate(); });
 
                 const applyPackage = () => {
                     root.querySelectorAll('[data-product-row]').forEach(row => {
@@ -721,7 +786,15 @@
                     });
 
                     activePackage.items.forEach(item => {
-                        const row = root.querySelector(`[data-product-row][data-product-id="${item.product_id}"]`);
+                        let row = root.querySelector(`[data-product-row][data-product-id="${item.product_id}"]`);
+                        if (!row) {
+                            const productTemplate = root.querySelector(`[data-product-template="${item.product_id}"]`);
+                            if (productTemplate) {
+                                root.querySelector('[data-product-rows]').append(productTemplate.content.cloneNode(true));
+                                row = root.querySelector(`[data-product-row][data-product-id="${item.product_id}"]`);
+                                root.dispatchEvent(new CustomEvent('admin:product-added', { detail: { row } }));
+                            }
+                        }
                         const quantity = row?.querySelector('[data-product-quantity]');
                         if (!row || !quantity) return;
                         const minimum = Math.max(1, Number(item.quantity || 1));
@@ -779,7 +852,7 @@
                         button.disabled = false;
                     }
                 }));
-                addButton.addEventListener('click', () => appendStoryRow({ scroll: true }));
+                addButton.addEventListener('click', () => root.dispatchEvent(new CustomEvent('admin:open-story-picker')));
                 packageSelect?.addEventListener('change', applyPackage);
 
                 country?.addEventListener('change', () => {
@@ -794,12 +867,11 @@
                     calculate();
                 });
                 governorate?.addEventListener('change', calculate);
-                root.querySelectorAll('[data-product-quantity], [data-product-variant], [data-discount-input]').forEach(input => input.addEventListener('input', calculate));
+                root.querySelectorAll('[data-discount-input]').forEach(input => input.addEventListener('input', calculate));
                 root.querySelector('[data-paid-amount]')?.addEventListener('input', () => {
                     if (paymentIntent) paymentIntent.value = 'override';
                     calculate();
                 });
-                root.querySelectorAll('[data-product-variant]').forEach(input => input.addEventListener('change', calculate));
                 root.querySelector('[data-payment-status]')?.addEventListener('change', () => {
                     if (paymentIntent) paymentIntent.value = 'override';
                     calculate();

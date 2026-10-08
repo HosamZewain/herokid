@@ -126,7 +126,7 @@ class MediaStorage
         $this->assertSafePath($destinationPath);
 
         $stream = Storage::disk($sourceDisk)->readStream($sourcePath);
-        if ($stream === false) {
+        if (! is_resource($stream)) {
             throw new RuntimeException("Unable to read media object from disk [{$sourceDisk}].");
         }
 
@@ -135,7 +135,9 @@ class MediaStorage
                 throw new RuntimeException("Unable to copy media object to disk [{$destinationDisk}].");
             }
         } finally {
-            fclose($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
     }
 

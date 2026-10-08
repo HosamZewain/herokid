@@ -16,6 +16,14 @@
         </div>
     </div>
 
+    @unless($isEditing ?? false)
+        <label class="mb-4 block text-xs font-black text-indigo-800">بيانات الطفل
+            <select name="stories[{{ $index }}][reuse_child_order_id]" class="mt-2 w-full rounded-xl border-indigo-200 bg-white text-sm" data-customer-child-select data-selected-child="{{ $row['reuse_child_order_id'] ?? '' }}">
+                <option value="">طفل جديد — إدخال البيانات والصور</option>
+            </select>
+        </label>
+        <div class="mb-3 flex flex-wrap gap-2" data-reused-child-photos></div>
+    @endunless
     <div class="grid gap-4 md:grid-cols-2">
         <div class="md:col-span-2">
             <label for="story-{{ $index }}" class="mb-1.5 block text-xs font-black text-gray-700">اختيار القصة *</label>
@@ -73,7 +81,7 @@
             <label for="child-photos-{{ $index }}" class="mb-1.5 block text-xs font-black text-gray-700">
                 {{ $existingOrderId ? 'إضافة صور جديدة للطفل (اختياري — حتى 3 صور)' : 'صور الطفل — صورتان أو 3 صور *' }}
             </label>
-            <input id="child-photos-{{ $index }}" name="stories[{{ $index }}][photos][]" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple @required(! $existingOrderId) class="block w-full rounded-xl border border-dashed border-violet-300 bg-white p-3 text-sm file:ml-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-2 file:font-black file:text-white" data-photo-input>
+            <input id="child-photos-{{ $index }}" name="stories[{{ $index }}][photos][]" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple @required(! $existingOrderId) class="block w-full rounded-xl border border-dashed border-violet-300 bg-white p-3 text-sm file:ml-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-2 file:font-black file:text-white" data-photo-input data-min-files="{{ $existingOrderId ? 0 : 2 }}" data-photo-max-files="3">
             @if($existingOrderId && ! empty($row['photos']))
                 <div class="mt-3 flex flex-wrap gap-3" data-existing-photos>
                     @foreach($row['photos'] as $photoIndex => $photo)

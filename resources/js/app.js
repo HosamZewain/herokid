@@ -13,6 +13,7 @@ import { initializeFootballStories, trackHeroKidEvent } from './football-stories
 import { storyCoverRecovery } from './story-cover-recovery';
 import { initializeHomePackageCarousels } from './home-package-carousel';
 import { initializeOrderQuickEdit } from './order-quick-edit';
+import { initializeAdminOrderForms } from './admin-order-form';
 
 window.HeroKidImageUpload = Object.freeze({
     prepare: prepareImageForUpload,
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeOrderStatusFilters();
     initializeAdminFileUploads();
     initializeOrderQuickEdit();
+    initializeAdminOrderForms();
     document.querySelectorAll('[data-analytics-widget]').forEach(async (panel) => {
         try {
             const response = await fetch(panel.dataset.analyticsWidget, { headers: { Accept: 'application/json' } });

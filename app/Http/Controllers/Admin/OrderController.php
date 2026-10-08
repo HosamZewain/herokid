@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderPreview;
 use App\Models\Product;
 use App\Models\Story;
+use App\Services\Orders\AdminCustomerChildService;
 use App\Services\Orders\AdminOrderCreationService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminPackageOrderService;
@@ -178,7 +179,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function searchExistingCustomers(Request $request, ExistingCustomerOrderLookupService $customers)
+    public function searchExistingCustomers(Request $request, ExistingCustomerOrderLookupService $customers, AdminCustomerChildService $children)
     {
         $request->merge(['phone' => Phone::normalize($request->query('phone'))]);
 
@@ -195,7 +196,8 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'customers' => $customers->search($validated['phone'])->all(),
-        ]);
+            'children' => $children->children($validated['phone'], $request->user()),
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     private function csvCell(mixed $value): string
@@ -209,6 +211,7 @@ class OrderController extends Controller
         Request $request,
         AdminOrderCreationService $creator,
         AdminPackageOrderService $packages,
+        AdminCustomerChildService $children,
     ) {
         $pricingPackage = $packages->prepareRequest($request);
 
@@ -246,7 +249,8 @@ class OrderController extends Controller
             'stories.*.interests' => ['nullable', 'string', 'max:1000'],
             'stories.*.gift_note' => ['nullable', 'string', 'max:1000'],
             'stories.*.parent_notes' => ['nullable', 'string', 'max:2000'],
-            'stories.*.photos' => ['required', 'array', 'min:2', 'max:3'],
+            'stories.*.reuse_child_order_id' => ['nullable', 'integer'],
+            'stories.*.photos' => ['nullable', 'array', 'max:3'],
             'stories.*.photos.*' => ['required', 'file', 'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024)],
             'products' => ['nullable', 'array'],
             'products.*.quantity' => ['nullable', 'integer', 'min:0', 'max:99'],
@@ -255,6 +259,7 @@ class OrderController extends Controller
             'products.*.personalization' => ['nullable', 'array'],
             'products.*.units' => ['nullable', 'array', 'max:'.config('orders.admin_max_items', 20)],
             'products.*.units.*.reuse_first' => ['nullable', 'boolean'],
+            'products.*.units.*.reuse_child_order_id' => ['nullable', 'integer'],
             'products.*.units.*.personalization' => ['nullable', 'array'],
             'pricing_package_id' => ['nullable', 'integer', 'exists:pricing_packages,id'],
             'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:9999999.99'],
@@ -281,6 +286,20 @@ class OrderController extends Controller
             'stories.*.photos.max' => 'الحد الأقصى 3 صور للطفل لكل قصة.',
             'pricing_package_id.exists' => 'الباقة المختارة غير موجودة.',
         ]);
+
+        foreach ($validated['stories'] as $index => &$storyInput) {
+            $reusedPhotos = [];
+            if (! empty($storyInput['reuse_child_order_id'])) {
+                $source = $children->source((int) $storyInput['reuse_child_order_id'], $validated['phone'], $request->user(), "stories.$index.reuse_child_order_id");
+                $reusedPhotos = $children->photos($source, $request->user());
+            }
+            $photoCount = count($storyInput['photos'] ?? []) + count($reusedPhotos);
+            if ($photoCount < 2 || $photoCount > 3) {
+                throw ValidationException::withMessages(["stories.$index.photos" => 'ارفع أو اختر صورتين أو 3 صور للطفل لكل قصة.']);
+            }
+            $storyInput['photos'] ??= [];
+        }
+        unset($storyInput);
 
         $selectedProducts = collect($validated['products'] ?? [])
             ->filter(fn (array $product): bool => (int) ($product['quantity'] ?? 0) > 0);
@@ -314,47 +333,69 @@ class OrderController extends Controller
             if ($hasUnits) {
                 $submittedUnits = $productInput['units'];
                 ksort($submittedUnits, SORT_NUMERIC);
+                $submittedKeys = array_keys($submittedUnits);
                 $submittedUnits = array_values($submittedUnits);
             } else {
+                $submittedKeys = [0];
                 $submittedUnits = [['personalization' => (array) ($productInput['personalization'] ?? [])]];
             }
             $validatedUnits = [];
 
             for ($unitIndex = 0; $unitIndex < $quantity; $unitIndex++) {
+                $submittedKey = $submittedKeys[$unitIndex] ?? $unitIndex;
                 $unit = (array) ($submittedUnits[$unitIndex] ?? []);
-                $rawUnit = (array) ($rawUnits[$unitIndex] ?? []);
+                $rawUnit = (array) ($rawUnits[$submittedKey] ?? []);
                 $reuseFirst = filter_var($unit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL)
                     || filter_var($rawUnit['reuse_first'] ?? false, FILTER_VALIDATE_BOOL);
                 if ($unitIndex > 0 && $reuseFirst) {
-                    $validatedUnits[] = ['personalization' => $validatedUnits[0]['personalization'], 'reuse_first' => true];
+                    $validatedUnits[] = ['personalization' => $validatedUnits[0]['personalization'], 'reuse_first' => true,
+                        'reuse_child_order_id' => $validatedUnits[0]['reuse_child_order_id'] ?? null];
 
                     continue;
                 }
 
                 $personalizationInput = (array) ($unit['personalization'] ?? []);
                 $personalizationInput['photos'] = $request->file(
-                    $hasUnits ? "products.$productId.units.$unitIndex.personalization.photos" : "products.$productId.personalization.photos",
+                    $hasUnits ? "products.$productId.units.$submittedKey.personalization.photos" : "products.$productId.personalization.photos",
                     [],
                 );
+
+                $reusedPhotos = [];
+                $rules = ProductPersonalizationSchema::adminOrderValidationRules($schema);
+                if (! empty($unit['reuse_child_order_id'])) {
+                    $source = $children->source((int) $unit['reuse_child_order_id'], $validated['phone'], $request->user(), "products.$productId.units.$submittedKey.reuse_child_order_id");
+                    if (isset($rules['photos'])) {
+                        $reusedPhotos = $children->photos($source, $request->user());
+                        $photoField = ProductPersonalizationSchema::enabledFields($schema)['photos'];
+                        $remaining = (int) $photoField['max_files'] - count($reusedPhotos);
+                        if ($remaining < 0) {
+                            throw ValidationException::withMessages(["products.$productId.units.$submittedKey.reuse_child_order_id" => 'صور الطفل المختار تتجاوز الحد المسموح لهذا المنتج. اختر طفلًا جديدًا وارفع الصور المطلوبة.']);
+                        }
+                        $needed = $photoField['required'] ? max(0, (int) $photoField['min_files'] - count($reusedPhotos)) : 0;
+                        $rules['photos'] = [$needed > 0 ? 'required' : 'nullable', 'array', 'min:'.$needed, 'max:'.$remaining];
+                    }
+                }
 
                 try {
                     $personalization = Validator::make(
                         $personalizationInput,
-                        ProductPersonalizationSchema::adminOrderValidationRules($schema),
+                        $rules,
                         ProductPersonalizationSchema::adminOrderValidationMessages($schema),
                     )->validate();
                 } catch (ValidationException $exception) {
                     $errors = [];
                     foreach ($exception->errors() as $field => $messages) {
                         $prefix = $hasUnits
-                            ? "products.$productId.units.$unitIndex.personalization"
+                            ? "products.$productId.units.$submittedKey.personalization"
                             : "products.$productId.personalization";
                         $errors[$prefix.'.'.$field] = $messages;
                     }
                     throw ValidationException::withMessages($errors);
                 }
 
-                $validatedUnits[] = ['personalization' => $personalization, 'reuse_first' => false];
+                $validatedUnits[] = ['personalization' => $personalization, 'reuse_first' => false,
+                    'reuse_child_order_id' => $unit['reuse_child_order_id'] ?? null,
+                    'reused_photo_count' => count($reusedPhotos)];
             }
 
             $validated['products'][$productId]['units'] = $validatedUnits;
@@ -370,6 +411,15 @@ class OrderController extends Controller
         }
 
         $result = $creator->create($validated, $request->user(), $request);
+
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'تم إنشاء الطلب بنجاح وإضافته إلى الطلبات الجديدة.');
+
+            return response()->json([
+                'success' => true,
+                'redirect_url' => route('admin.orders.groups.show', $result['representative']->id),
+            ], 201);
+        }
 
         return redirect()
             ->route('admin.orders.groups.show', $result['representative']->id)
