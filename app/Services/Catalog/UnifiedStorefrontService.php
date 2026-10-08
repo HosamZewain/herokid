@@ -237,8 +237,17 @@ class UnifiedStorefrontService
             [$source, $slug] = str_contains((string) $request->category, ':')
                 ? explode(':', (string) $request->category, 2)
                 : [null, (string) $request->category];
-            $items = $items->filter(fn (UnifiedCatalogItem $item) => $item->categorySlug === $slug
-                && ($source === null || $item->categorySource === $source));
+            $items = $items->filter(function (UnifiedCatalogItem $item) use ($source, $slug): bool {
+                if ($source !== null && $item->categorySource !== $source) {
+                    return false;
+                }
+
+                // The card displays one category, but stories can belong to many.
+                // Categories are already eager-loaded; do not add queries per card.
+                return $item->type === 'story'
+                    ? $item->sourceModel->categories->containsStrict('slug', $slug)
+                    : $item->categorySlug === $slug;
+            });
         }
 
         if ($request->filled('age')) {
