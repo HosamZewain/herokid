@@ -141,7 +141,8 @@ class OrderWhatsAppConversationTest extends TestCase
         $messages = [];
         foreach ([['in', 'text', 15], ['out', 'text', 10], ['in', 'image', 1], ['out', 'reaction', 2], ['in', 'reaction', 1]] as [$direction, $type, $count]) {
             for ($i = 0; $i < $count; $i++) {
-                $messages[] = $this->message('synthetic-'.$direction.'-'.$type.'-'.$i, ['direction' => $direction, 'type' => $type]);
+                $messages[] = $this->message('synthetic-'.$direction.'-'.$type.'-'.$i, ['direction' => $direction, 'type' => $type,
+                    'senderType' => $direction === 'out' ? str_repeat('s', 21) : null]);
             }
         }
         for ($i = 0; $i < 4; $i++) {
@@ -155,9 +156,39 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->assertSame(3, WhatsAppConversationMessage::where('kind', 'reaction')->count());
         $this->assertSame(1, WhatsAppConversationMessage::where('kind', 'image')->count());
         $this->assertSame(0, WhatsAppConversationMessage::where('kind', 'systemLog')->count());
+        $this->assertSame(12, WhatsAppConversationMessage::where('sender_type', str_repeat('s', 21))->count());
         $this->assertSame($before, $order->refresh()->getRawOriginal());
         $this->assertDatabaseCount('order_group_assignments', 0);
         $this->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonCount(29, 'messages')->assertDontSee('PRIVATE_SYNTHETIC_SYSTEM_LOG');
+    }
+
+    public function test_sender_type_metadata_up_to_64_characters_is_preserved_verbatim(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $senderType = str_repeat('s', 64);
+        $this->fake([$this->message('long-sender', ['senderType' => $senderType]), $this->message('null-sender', ['senderType' => null])]);
+        $this->sync($order)->assertOk()->assertJsonCount(2, 'messages')
+            ->assertJsonPath('messages.0.sender_type', $senderType)->assertJsonPath('messages.1.sender_type', null);
+        $this->assertSame($senderType, WhatsAppConversationMessage::orderBy('id')->first()->sender_type);
+        $this->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonPath('messages.0.sender_type', $senderType);
+    }
+
+    public function test_invalid_sender_type_preserves_existing_history_and_cursor_atomically(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $this->fake([$this->message()]);
+        $this->sync($order)->assertOk();
+        $existing = WhatsAppConversationMessage::first()->getRawOriginal();
+        foreach ([str_repeat('s', 65), ['invalid'], 123] as $senderType) {
+            $this->travel(15)->seconds();
+            $this->fake([$this->message('valid-new'), $this->message('invalid-new', ['senderType' => $senderType])]);
+            $this->sync($order)->assertStatus(502)->assertJsonPath('reason', 'invalid_provider_response');
+            $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+            $this->assertSame($existing, WhatsAppConversationMessage::first()->getRawOriginal());
+            $this->assertSame('remote-one', WhatsAppConversation::first()->sync_cursor);
+        }
     }
 
     public function test_system_only_delta_advances_cursor_without_storing_or_removing_messages(): void

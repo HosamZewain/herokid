@@ -165,7 +165,8 @@ class OrderConversationService
                 'kind' => $this->plain($raw['type'] ?? 'text', 20), 'body' => $raw['text'] ?? null,
                 'sent_at' => $date, 'attachments' => $attachments,
                 'sender_name' => $this->plain($raw['agentName'] ?? null, 255),
-                'sender_type' => $this->plain($raw['senderType'] ?? null, 20),
+                // Provider metadata is opaque plain text, not an authorization enum.
+                'sender_type' => $this->plain($raw['senderType'] ?? null, 64),
                 'delivery_status' => $this->plain($raw['status'] ?? null, 20)];
             $row['fingerprint'] = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             $rows[$hash] = $row;
