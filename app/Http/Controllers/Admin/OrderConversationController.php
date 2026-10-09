@@ -18,7 +18,7 @@ class OrderConversationController extends Controller
 {
     public function notifications(Request $request, ConversationNotifications $notifications): JsonResponse
     {
-        return response()->json($notifications->unread($request->user()))->header('Cache-Control', 'no-store, private');
+        return response()->json($notifications->awaitingReply($request->user()))->header('Cache-Control', 'no-store, private');
     }
 
     public function read(Request $request, Order $order, ConversationNotifications $notifications, ConversationAccess $access): JsonResponse

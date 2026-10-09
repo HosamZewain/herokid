@@ -323,7 +323,7 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->assertDatabaseCount('whatsapp_conversation_reads', 0);
         Http::assertSentCount(1);
         $this->postJson(route('admin.orders.conversation.read', $this->order), ['version' => 1])->assertOk();
-        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
         $this->assertDatabaseCount('whatsapp_conversation_reads', 1);
     }
 
@@ -343,8 +343,9 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->assertSame(1, DB::table('whatsapp_conversation_reads')->where('user_id', $this->employee->id)->value('inbound_version'));
     }
 
-    public function test_finished_cancelled_deleted_and_unassigned_orders_do_not_notify(): void
+    public function test_finished_cancelled_deleted_and_unassigned_orders_do_not_notify_own_only_employee(): void
     {
+        $this->ownOnly($this->employee);
         $url = route('admin.orders.conversation.notifications');
         $this->getJson($url)->assertJsonPath('count', 0);
         $this->assigned($this->employee);
@@ -371,9 +372,117 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->assertSame(2, (int) WhatsAppConversation::first()->inbound_version);
         $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1);
         $this->postJson(route('admin.orders.conversation.read', $this->order), ['version' => 2])->assertOk();
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
         $this->travel(20)->seconds();
         app(OrderConversationService::class)->sync($this->order);
         $this->assertSame(2, (int) WhatsAppConversation::first()->inbound_version);
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
+    }
+
+    public function test_all_customer_permission_notifies_unassigned_and_other_employees_active_orders_only(): void
+    {
+        $url = route('admin.orders.conversation.notifications');
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $other = User::factory()->create(['role' => 'admin']);
+        $this->assigned($other);
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $this->ownOnly($this->employee);
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->assigned($this->employee);
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $this->employee->permissions()->attach(Permission::where('key', 'orders.conversations.view-all')->value('id'));
+        $this->employee->unsetRelation('permissions');
+        foreach (['cancelled', 'delivered'] as $status) {
+            $this->order->update(['status' => $status, 'payment_status' => 'paid_in_full', 'printing_status' => 'completed', 'shipping_status' => 'delivered']);
+            $this->getJson($url)->assertJsonPath('count', 0);
+        }
+        $this->order->update(['status' => 'new']);
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $this->order->delete();
+        $this->getJson($url)->assertJsonPath('count', 0);
+    }
+
+    public function test_successful_employee_reply_dismisses_for_everyone_but_new_customer_message_reopens(): void
+    {
+        $other = User::factory()->create(['role' => 'admin']);
+        $url = route('admin.orders.conversation.notifications');
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $this->accept([$this->remote('reply-one', 'out', ['date' => now()->toISOString()])]);
+        $this->reply()->assertOk();
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->actingAs($other)->getJson($url)->assertJsonPath('count', 0);
+        $this->travel(20)->seconds();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [$this->remote('new-customer', 'in', ['date' => now()->toISOString()])]])]);
+        app(OrderConversationService::class)->sync($this->order);
+        $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', true);
+        $this->actingAs($this->employee)->getJson($url)->assertJsonPath('count', 1);
+    }
+
+    public static function notificationReplies(): array
+    {
+        return [
+            'human in RoboDesk' => ['agent', 'text', 'sent', 1, 0],
+            'bot' => ['bot', 'text', 'sent', 1, 1],
+            'ai' => ['ai', 'text', 'sent', 1, 1],
+            'automatic integration' => ['integration', 'text', 'sent', 1, 1],
+            'campaign' => ['campaign', 'text', 'sent', 1, 1],
+            'reaction' => ['agent', 'reaction', 'sent', 1, 1],
+            'failed delivery' => ['agent', 'text', 'failed', 1, 1],
+            'earlier human reply' => ['agent', 'text', 'sent', -1, 1],
+            'image reply' => ['agent', 'image', 'delivered', 1, 0],
+        ];
+    }
+
+    #[DataProvider('notificationReplies')]
+    public function test_synced_human_reply_only_hides_when_after_customer(string $sender, string $kind, string $status, int $offset, int $expected): void
+    {
+        $this->travel(20)->seconds();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        $customer = WhatsAppConversationMessage::where('direction', 'inbound')->first();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [$this->remote('remote-reply', 'out', [
+            'senderType' => $sender, 'type' => $kind, 'status' => $status,
+            'date' => $customer->sent_at->addSeconds($offset)->toISOString(),
+        ])]])]);
+        app(OrderConversationService::class)->sync($this->order);
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', $expected);
+    }
+
+    public function test_failed_and_uncertain_send_keep_pending_notification(): void
+    {
+        Http::fake(['*/messagesByPhone/reply' => Http::response(['code' => 'SEND_FAILED', 'message' => 'رفض الإرسال'], 502)]);
+        $this->reply()->assertStatus(502);
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1);
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => fn () => throw new ConnectionException('synthetic timeout')]);
+        $this->reply()->assertStatus(502)->assertJsonPath('code', 'SEND_UNCERTAIN');
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1);
+    }
+
+    public function test_read_unanswered_stays_pending_but_reaction_only_contact_does_not_notify(): void
+    {
+        $message = WhatsAppConversationMessage::where('direction', 'inbound')->first();
+        $this->postJson(route('admin.orders.conversation.read', $this->order), ['version' => 1])->assertOk();
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
+        $message->update(['kind' => 'reaction']);
         $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 0);
+    }
+
+    public function test_same_timestamp_uses_saved_timeline_order_and_later_synced_customer_is_not_lost(): void
+    {
+        $this->accept(); // Same millisecond as the saved customer; higher timeline ID.
+        $this->reply()->assertOk();
+        $url = route('admin.orders.conversation.notifications');
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->travel(20)->seconds();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        $at = WhatsAppConversationMessage::where('direction', 'outbound')->first()->sent_at->toISOString();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [$this->remote('same-ms-customer', 'in', ['date' => $at])]])]);
+        app(OrderConversationService::class)->sync($this->order);
+        $this->getJson($url)->assertJsonPath('count', 1);
     }
 }

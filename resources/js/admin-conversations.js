@@ -242,6 +242,14 @@ export function initializeOrderConversations() {
 
     let notificationBusy = false; let notificationTimer;
     const notifications = document.querySelector('[data-chat-notifications]');
+    function positionNotifications() {
+        const menu = notifications?.querySelector('[data-chat-notifications-menu]');
+        if (!menu || menu.hidden) return;
+        menu.style.transform = '';
+        const bounds = menu.getBoundingClientRect();
+        const offset = Math.max(12 - bounds.left, Math.min(0, window.innerWidth - 12 - bounds.right));
+        menu.style.transform = `translateX(${offset}px)`;
+    }
     async function updateNotifications() {
         if (!notifications || notificationBusy || document.visibilityState !== 'visible') return;
         notificationBusy = true;
@@ -250,12 +258,12 @@ export function initializeOrderConversations() {
             if (!response.ok) throw new Error('notifications');
             const data = await response.json();
             const count = notifications.querySelector('[data-chat-unread-count]'); count.textContent = String(data.count); count.hidden = data.count === 0;
-            const toggle = notifications.querySelector('[data-chat-notifications-toggle]'); toggle.setAttribute('aria-label', `محادثات طلباتي غير المقروءة: ${data.count}`);
+            const toggle = notifications.querySelector('[data-chat-notifications-toggle]'); toggle.setAttribute('aria-label', `${notifications.dataset.label}: ${data.count}`);
             notifications.querySelector('[data-chat-notifications-empty]').hidden = data.count > 0;
             const items = notifications.querySelector('[data-chat-notifications-items]');
             items.replaceChildren(...data.items.map(item => {
                 const button = el('button', '', 'hk-chat-notification-item'); button.type = 'button';
-                button.append(el('strong', `${shortContactName(item.contact_title || 'العميل')} · ${item.order_reference}`), el('span', 'رسالة جديدة — اضغط لفتح المحادثة'));
+                button.append(el('strong', `${shortContactName(item.contact_title || 'العميل')} · ${item.order_reference}`), el('span', item.unread ? 'غير مقروءة · بانتظار الرد' : 'مقروءة · بانتظار الرد'));
                 button.onclick = () => {
                     notifications.querySelector('[data-chat-notifications-menu]').hidden = true; toggle.setAttribute('aria-expanded', 'false');
                     void open({orderId:item.order_id, minimized:false}, button);
@@ -264,7 +272,7 @@ export function initializeOrderConversations() {
             notifications.querySelector('[data-chat-notifications-error]').hidden = true;
         } catch {
             notifications.querySelector('[data-chat-notifications-error]').hidden = false;
-        } finally { notificationBusy = false; }
+        } finally { notificationBusy = false; positionNotifications(); }
     }
     function pollNotifications() {
         clearTimeout(notificationTimer);
@@ -273,9 +281,11 @@ export function initializeOrderConversations() {
     notifications?.querySelector('[data-chat-notifications-toggle]').addEventListener('click', async () => {
         const menu = notifications.querySelector('[data-chat-notifications-menu]'); menu.hidden = !menu.hidden;
         notifications.querySelector('[data-chat-notifications-toggle]').setAttribute('aria-expanded', String(!menu.hidden));
+        positionNotifications();
         if (!menu.hidden) await updateNotifications();
     });
     notifications?.addEventListener('keydown', event => { if (event.key === 'Escape') { notifications.querySelector('[data-chat-notifications-menu]').hidden = true; notifications.querySelector('[data-chat-notifications-toggle]').setAttribute('aria-expanded', 'false'); notifications.querySelector('[data-chat-notifications-toggle]').focus(); } });
+    window.addEventListener('resize', positionNotifications);
     document.addEventListener('click', event => { if (notifications && !notifications.contains(event.target)) { notifications.querySelector('[data-chat-notifications-menu]').hidden = true; notifications.querySelector('[data-chat-notifications-toggle]').setAttribute('aria-expanded', 'false'); } });
     window.addEventListener('pagehide', () => clearTimeout(notificationTimer));
     window.addEventListener('pageshow', event => { if (event.persisted) { void updateNotifications(); pollNotifications(); } });
@@ -348,6 +358,7 @@ export function initializeOrderConversations() {
                     showError(Object.values(data.errors ?? {}).flat()[0] || data.message || 'تعذر إرسال الرسالة.'); return;
                 }
                 state.messages = mergeMessages(state.messages, data.messages ?? []); render(state); text.value = ''; clearImage();
+                void updateNotifications();
                 selector(state, 'scroll').scrollTop = selector(state, 'scroll').scrollHeight;
             } catch { state.uncertain = true; showError('نتيجة الإرسال غير مؤكدة. حدّث المحادثة وتحقق قبل إرسال نفس الرسالة مجدداً.'); }
             finally {

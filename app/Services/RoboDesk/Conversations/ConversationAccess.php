@@ -11,6 +11,13 @@ class ConversationAccess
 {
     private array $assignedKeys = [];
 
+    public function notificationOrders(User $user): Builder
+    {
+        return $user->hasPermission('orders.conversations.view-all')
+            ? app(AdminOrderGroupService::class)->activeOrdersQuery()
+            : $this->assignedActive($user);
+    }
+
     public function assignedActive(User $user): Builder
     {
         return app(AdminOrderGroupService::class)->activeOrdersQuery()

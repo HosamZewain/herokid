@@ -65,3 +65,12 @@ Follow-up final result: **passed locally**. Production credentials, queue/schedu
 - Full Laravel/MySQL suite: 1285 passed / 10324 assertions; Node state tests: 12 passed. The backend regression includes an old cancelled order plus recent customer messages and an accepted mocked reply. This is a diagnostic/compatibility repair, not a visual redesign.
 
 Hotfix final result: passed locally; live confirmation pending deployment.
+
+## Active-contact awaiting-reply notifications — 2026-10-09
+
+- `view-all` users now receive notifications for all active contacts, including unassigned orders and other employees' orders; own-only employees remain restricted to their assigned active checkouts. Historical manual viewing is unchanged.
+- The badge counts contacts awaiting a human response, not unread contacts. Reading remains per employee and is shown independently; opening a conversation leaves it in the list until a successful human response. A later customer message restores it. Bots, automatic integration messages, reactions and failed/uncertain sends do not dismiss it.
+- Accepted local sends refresh the badge immediately; synced RoboDesk employee responses are reflected on the next stored-state refresh. No real-customer message was sent.
+- Local 628px viewport check: two already-read pending synthetic contacts stayed visible in the dropdown. Its position is clamped to the viewport (296–616px inside a 628px viewport), correcting a pre-existing right-edge clipping issue. [Local synthetic notification screenshot](qa/conversations/awaiting-reply-notifications.png).
+- Focused conversation/history/background suites: 84 passed / 553 assertions. Full `composer test`: **1299 passed / 10364 assertions** (294.11s). Node state helpers: 12 passed. Build, manifest assets/imports, changed PHP formatting, PHP 8.2 syntax checks for all changed PHP files and Blade compilation passed. Full regression runtime uses PHP 8.5 / MySQL 8.4; no new schema or hosting configuration is needed.
+- Run tests with isolated `APP_ENV=testing`, `APP_URL=http://localhost`, array cache/session and sync queue environment values. The initial run inherited the preview's `localhost:8089` URL and failed one unrelated hard-coded prompt URL assertion; the complete rerun with the correct test URL passed without changing production-prompt code or loosening assertions.
