@@ -519,6 +519,71 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', true);
     }
 
+    public function test_opening_and_reading_unanswered_history_keeps_notification_until_backdated_reply_is_reconciled(): void
+    {
+        $history = app(OrderConversationService::class);
+        $url = route('admin.orders.conversation.notifications');
+        $customer = $this->remote('customer', 'in');
+        $reply = $this->remote('backfilled-business-reply', 'out', [
+            'senderType' => 'whatsapp_business_app', 'date' => now()->subMinutes(30)->toISOString(), 'status' => 'pending',
+        ]);
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => fn ($request) => Http::response(['phone' => '201012345678',
+            'messages' => isset($request['after']) ? [] : [$customer, $reply]])]);
+
+        // A historical import is behind the cursor and absent from normal deltas.
+        $this->travel(10)->minutes();
+        $history->sync($this->order);
+        Http::assertSent(fn ($request) => ($request['after'] ?? null) === 'customer');
+        $this->getJson(route('admin.orders.conversation.show', $this->order))->assertOk();
+        $this->postJson(route('admin.orders.conversation.read', $this->order), ['version' => 1])->assertOk();
+        $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
+
+        // The existing background poll reconciles without opening the window.
+        $this->travel(50)->minutes();
+        $history->sync($this->order);
+        Http::assertSent(fn ($request) => ! isset($request['after']));
+        Http::assertSentCount(2);
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->assertSame(1, WhatsAppConversation::first()->inbound_version);
+
+        $this->travel(1)->minutes();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [
+            $this->remote('new-customer-after-reply', 'in', ['date' => now()->toISOString()]),
+        ]])]);
+        $history->sync($this->order);
+        $this->postJson(route('admin.orders.conversation.read', $this->order), ['version' => 2])->assertOk();
+        $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', false);
+    }
+
+    public function test_periodic_reconciliation_updates_old_sender_metadata_without_recounting_or_deleting_messages(): void
+    {
+        $history = app(OrderConversationService::class);
+        $this->travel(20)->seconds();
+        $reply = $this->remote('old-reply', 'out', ['date' => now()->subMinutes(30)->toISOString(), 'senderType' => 'unknown']);
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [$reply]])]);
+        $history->sync($this->order);
+        $url = route('admin.orders.conversation.notifications');
+        $this->getJson($url)->assertJsonPath('count', 1);
+        $id = WhatsAppConversationMessage::where('direction', 'outbound')->firstOrFail()->id;
+
+        $this->travel(60)->minutes();
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [
+            array_replace($reply, ['senderType' => 'whatsapp_business_app']),
+        ]])]);
+        $history->sync($this->order);
+        Http::assertSent(fn ($request) => ! isset($request['after']));
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->assertSame($id, WhatsAppConversationMessage::where('direction', 'outbound')->firstOrFail()->id);
+        $this->assertSame(1, WhatsAppConversation::first()->inbound_version);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 2);
+    }
+
     public function test_failed_and_uncertain_send_keep_pending_notification(): void
     {
         Http::fake(['*/messagesByPhone/reply' => Http::response(['code' => 'SEND_FAILED', 'message' => 'رفض الإرسال'], 502)]);

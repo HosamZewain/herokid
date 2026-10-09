@@ -95,9 +95,12 @@ class OrderConversationService
             if ($existing?->last_synced_at?->gt(now()->subSeconds((int) config('robodesk.conversations.sync_cooldown_seconds', 12)))) {
                 return $this->history($order, $before) + ['refresh_deferred' => true];
             }
-            $page = $this->provider->fetch($phone, $full ? null : $existing?->sync_cursor);
+            $interval = max(600, (int) config('robodesk.conversations.full_reconciliation_interval_seconds', 3600));
+            $full = $full || ! $existing?->sync_cursor || ! $existing?->last_full_synced_at
+                || $existing->last_full_synced_at->lte(now()->subSeconds($interval));
+            $page = $this->provider->fetch($phone, $full ? null : $existing->sync_cursor);
             [$rows, $links] = $this->validate($page, $phone);
-            DB::transaction(function () use ($rows, $phone, $account, $hash, $page): void {
+            DB::transaction(function () use ($rows, $phone, $account, $hash, $page, $full): void {
                 $conversation = WhatsAppConversation::firstOrCreate(['account_key' => $account, 'phone_hash' => $hash], ['phone' => $phone]);
                 $conversation = WhatsAppConversation::whereKey($conversation->id)->lockForUpdate()->firstOrFail();
                 $existingMessages = $conversation->messages()->whereIn('remote_hash', array_column($rows, 'remote_hash'))
@@ -113,6 +116,9 @@ class OrderConversationService
                 }
                 // A limited v1 window is never grounds for removing older saved messages.
                 $changes = ['last_synced_at' => now(), 'sync_state' => 'ready', 'error_code' => null];
+                if ($full || $page->cursorReset) {
+                    $changes['last_full_synced_at'] = now();
+                }
                 if ($page->messages !== []) {
                     $changes['sync_cursor'] = $page->messages[array_key_last($page->messages)]['id'];
                 } elseif ($page->cursorReset) {

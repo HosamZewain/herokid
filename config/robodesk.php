@@ -22,6 +22,10 @@ return [
         // Scan/dispatch incrementally; never fetch RoboDesk during web requests
         // unless an employee explicitly opens/refreshes a conversation.
         'background_interval_seconds' => 600,
+        // Delta cursors cannot see backdated imports or changes to older senders.
+        // Reconcile the provider's recent-history window on the existing request,
+        // not with an additional call or an unbounded sweep during web requests.
+        'full_reconciliation_interval_seconds' => 3600,
         'background_batch_size' => 20,
         'background_scan_size' => 100,
         'background_requests_per_minute' => 20,

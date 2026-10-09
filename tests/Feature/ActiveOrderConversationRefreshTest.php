@@ -121,6 +121,49 @@ class ActiveOrderConversationRefreshTest extends TestCase
         Queue::assertPushed(RefreshActiveOrderConversation::class, 1);
     }
 
+    public function test_legacy_conversation_gets_one_full_reconciliation_then_returns_to_delta_polling(): void
+    {
+        $order = $this->order();
+        $before = $order->refresh()->getRawOriginal();
+        $conversation = WhatsAppConversation::create(['account_key' => 'primary',
+            'phone_hash' => $this->job($order)->phoneHash,
+            'phone' => ConversationPhone::canonical(data_get($order->delivery_details, 'phone')),
+            'sync_cursor' => 'legacy-cursor', 'last_synced_at' => now()->subMinutes(11)]);
+        $this->fake($order, [['id' => 'known-latest', 'date' => now()->toISOString(), 'direction' => 'in', 'type' => 'text', 'text' => 'نص اختبار']]);
+        app()->call([$this->job($order), 'handle']);
+        Http::assertSent(fn ($request) => ! isset($request['after']));
+        $this->assertNotNull($conversation->fresh()->last_full_synced_at);
+        $stamp = $conversation->fresh()->last_full_synced_at->toISOString();
+        $this->travel(10)->minutes();
+        $this->fake($order);
+        app()->call([$this->job($order), 'handle']);
+        Http::assertSent(fn ($request) => ($request['after'] ?? null) === 'known-latest');
+        $this->assertSame($stamp, $conversation->fresh()->last_full_synced_at->toISOString());
+        $this->assertSame($before, $order->refresh()->getRawOriginal());
+    }
+
+    public function test_failed_reconciliation_preserves_history_cursor_and_full_sync_time_for_retry(): void
+    {
+        $order = $this->order();
+        $message = ['id' => 'saved-customer', 'date' => now()->toISOString(), 'direction' => 'in', 'type' => 'text', 'text' => 'نص اختبار'];
+        $this->fake($order, [$message]);
+        app()->call([$this->job($order), 'handle']);
+        $stamp = WhatsAppConversation::first()->last_full_synced_at->toISOString();
+        $this->travel(60)->minutes();
+        $this->fake($order, [array_replace($message, ['direction' => 'invalid'])]);
+        app()->call([$this->job($order), 'handle']);
+        Http::assertSent(fn ($request) => ! isset($request['after']));
+        $this->assertSame($stamp, WhatsAppConversation::first()->last_full_synced_at->toISOString());
+        $this->assertSame('saved-customer', WhatsAppConversation::first()->sync_cursor);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+        $this->travel(11)->minutes();
+        $this->fake($order, [$message]);
+        app()->call([$this->job($order), 'handle']);
+        Http::assertSent(fn ($request) => ! isset($request['after']));
+        $this->assertNotSame($stamp, WhatsAppConversation::first()->last_full_synced_at->toISOString());
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+    }
+
     public function test_worker_rechecks_phone_lifecycle_account_and_activation(): void
     {
         $order = $this->order();
