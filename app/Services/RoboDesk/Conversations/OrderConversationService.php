@@ -121,7 +121,17 @@ class OrderConversationService
         $rows = $links = [];
         foreach ($page->messages as $raw) {
             if (! is_array($raw) || ! is_string($raw['id'] ?? null) || strlen($raw['id']) > 512 || $raw['id'] === ''
-                || ! in_array($raw['direction'] ?? null, ['in', 'out'], true)
+            ) {
+                throw new RuntimeException('invalid_provider_response');
+            }
+            // Production RoboDesk responses can include these non-message records.
+            // Ignore only the verified system-log pair; keep its ID available for
+            // the raw page's `after` cursor, even when no customer messages remain.
+            if (($raw['direction'] ?? null) === 'system' && ($raw['type'] ?? null) === 'systemLog') {
+                continue;
+            }
+            if (! in_array($raw['direction'] ?? null, ['in', 'out'], true)
+                || ($raw['type'] ?? null) === 'systemLog'
                 || ($raw['channel'] ?? 'WhatsApp') !== 'WhatsApp'
                 || ! is_string($raw['date'] ?? null) || ! preg_match('/^\d{4}-\d{2}-\d{2}T/', $raw['date'])
                 || (isset($raw['text']) && (! is_string($raw['text']) || strlen($raw['text']) > 1000000))

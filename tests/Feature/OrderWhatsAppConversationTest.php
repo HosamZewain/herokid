@@ -133,6 +133,85 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->assertSame(base64_encode('base64:a:-1876030920'), RoboDeskConversationHistoryProvider::authorization('a', 'synthetic-secret'));
     }
 
+    public function test_production_shape_with_system_logs_keeps_all_29_actual_messages(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $before = $order->refresh()->getRawOriginal();
+        $messages = [];
+        foreach ([['in', 'text', 15], ['out', 'text', 10], ['in', 'image', 1], ['out', 'reaction', 2], ['in', 'reaction', 1]] as [$direction, $type, $count]) {
+            for ($i = 0; $i < $count; $i++) {
+                $messages[] = $this->message('synthetic-'.$direction.'-'.$type.'-'.$i, ['direction' => $direction, 'type' => $type]);
+            }
+        }
+        for ($i = 0; $i < 4; $i++) {
+            array_splice($messages, $i * 2, 0, [['id' => 'system-'.$i, 'direction' => 'system', 'type' => 'systemLog', 'text' => 'PRIVATE_SYNTHETIC_SYSTEM_LOG']]);
+        }
+        $this->fake($messages);
+        $this->sync($order)->assertOk()->assertJsonCount(29, 'messages')->assertDontSee('PRIVATE_SYNTHETIC_SYSTEM_LOG');
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 29);
+        $this->assertSame(17, WhatsAppConversationMessage::where('direction', 'inbound')->count());
+        $this->assertSame(12, WhatsAppConversationMessage::where('direction', 'outbound')->count());
+        $this->assertSame(3, WhatsAppConversationMessage::where('kind', 'reaction')->count());
+        $this->assertSame(1, WhatsAppConversationMessage::where('kind', 'image')->count());
+        $this->assertSame(0, WhatsAppConversationMessage::where('kind', 'systemLog')->count());
+        $this->assertSame($before, $order->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('order_group_assignments', 0);
+        $this->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonCount(29, 'messages')->assertDontSee('PRIVATE_SYNTHETIC_SYSTEM_LOG');
+    }
+
+    public function test_system_only_delta_advances_cursor_without_storing_or_removing_messages(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $this->fake([$this->message(), ['id' => 'system-one', 'direction' => 'system', 'type' => 'systemLog']]);
+        $data = $this->sync($order)->assertOk()->assertJsonCount(1, 'messages')->json();
+        $this->assertSame('system-one', WhatsAppConversation::first()->sync_cursor);
+        $this->travel(15)->seconds();
+        $this->fake([['id' => 'system-two', 'direction' => 'system', 'type' => 'systemLog']]);
+        $this->sync($order)->assertOk()->assertJsonCount(1, 'messages')->assertJsonPath('messages.0.id', $data['messages'][0]['id']);
+        Http::assertSent(fn ($request) => ($request['after'] ?? null) === 'system-one');
+        $this->assertSame('system-two', WhatsAppConversation::first()->sync_cursor);
+        $this->travel(15)->seconds();
+        $this->fake([]);
+        $this->sync($order)->assertOk()->assertJsonCount(1, 'messages');
+        Http::assertSent(fn ($request) => ($request['after'] ?? null) === 'system-two');
+        $this->assertSame('system-two', WhatsAppConversation::first()->sync_cursor);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+    }
+
+    public function test_initial_system_only_response_is_safe_empty_history_with_a_cursor(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $this->fake([['id' => 'system-one', 'direction' => 'system', 'type' => 'systemLog']]);
+        $this->sync($order)->assertOk()->assertJsonCount(0, 'messages');
+        $this->assertSame('system-one', WhatsAppConversation::first()->sync_cursor);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 0);
+    }
+
+    public function test_system_log_handling_does_not_hide_other_invalid_records_or_unsafe_cursors(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        foreach ([['direction' => 'system', 'type' => 'text'], ['direction' => 'in', 'type' => 'systemLog'],
+            ['direction' => 'unknown', 'type' => 'text'], ['id' => '', 'direction' => 'system', 'type' => 'systemLog']] as $invalid) {
+            $this->fake([$this->message(), $this->message('bad', $invalid)]);
+            $this->sync($order)->assertStatus(502)->assertJsonPath('reason', 'invalid_provider_response');
+            $this->assertDatabaseCount('whatsapp_conversations', 0);
+            $this->assertDatabaseCount('whatsapp_conversation_messages', 0);
+        }
+    }
+
+    public function test_filtered_system_only_response_still_rejects_another_customers_phone(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $this->fake([['id' => 'system-one', 'direction' => 'system', 'type' => 'systemLog']], '201112345678');
+        $this->sync($order)->assertStatus(502)->assertJsonPath('reason', 'invalid_provider_response');
+        $this->assertDatabaseCount('whatsapp_conversations', 0);
+    }
+
     public function test_phone_normalization_deduplicates_same_customer_orders_and_accounts_are_isolated(): void
     {
         $this->enable();

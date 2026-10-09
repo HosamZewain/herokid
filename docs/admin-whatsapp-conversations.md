@@ -19,6 +19,7 @@ Authorization is the supplied legacy base64 format, **not** Bearer. Password has
 - Panel opens: read the DB cache immediately, then asynchronously request a full sync.
 - Visible, expanded panel: background sync every 15 seconds using encrypted stored `after` (remote newest-message ID).
 - Empty delta preserves the cursor; messages repeated at the cursor are deduplicated by remote ID.
+- Live RoboDesk can also return `direction=system` / `type=systemLog`, contrary to its initial contract. Only this exact pair is excluded from display/storage; other malformed or unknown records still reject the entire page atomically. The cursor uses the last raw record ID, including a filtered log, so a log-only delta does not repeat forever. IDs remain validated and encrypted; no system-log text or attachments are persisted.
 - Provider 400 with `after`: retry once without it; reset the cursor even if the fallback is empty.
 - Opening again/manual Refresh requests full recent history, including delivery/text edits. Incremental responses cannot detect edits to older messages not returned by RoboDesk.
 - Closing/minimizing stops polling and aborts pending browser requests; background tabs do not poll. Normal navigation closes windows; private messages are not persisted in browser storage.
@@ -38,3 +39,9 @@ Messages/phone/cursor/sender name/attachment metadata are encrypted at rest. Sta
 Apply `2026_10_09_000100_create_whatsapp_conversation_history` using the normal additive migration process. Includes three new tables and one permission; no changes to order schemas. Rebuild/ship Vite assets. No required new environment variables; optional `ROBODESK_CONVERSATIONS_ACCOUNT_KEY` defaults to `primary` and namespaces a single business account. Changing it isolates future cache lookups.
 
 Run the conversation feature tests, existing RoboDesk tests, full Laravel suite, JS helper tests and Pint. Live verification must be done after adding real credentials in Admin: open an authorized synthetic/order conversation, check inbound/outbound messages and attachment links, wait for a delta poll, close the panel and confirm polling stops. Local mocks/UI fixtures do **not** prove live authentication/provider compatibility. Never log the Authorization header.
+
+### 2026-10-09 system-log compatibility regression
+
+Sanitized production diagnostics for HK10-105 confirmed HTTP 200, a matching phone and 33 records: four `system / systemLog`, 25 text messages, one image and three reactions. The four logs previously caused atomic rejection of the entire response. A synthetic fixture now verifies that all 29 actual messages survive without storing or exposing log bodies, while log-only deltas advance the cursor. Unknown directions, mismatched system-log types, unsafe IDs and cross-phone pages still fail safely.
+
+Verification: focused conversation/RoboDesk tests 34 passed (219 assertions), JS helpers 4 passed, changed PHP Pint and whitespace checks passed. Full-suite first run: 1242 passed and one existing Bosta queue representative-link assertion failed; isolated Bosta suite: 20 passed (170 assertions). Full-suite rerun: 1243 passed (10000 assertions). Bosta code was not changed. No new migrations, environment variables or frontend build are required for this compatibility patch. Repair of the live order remains unverified until the patch is deployed and the conversation is refreshed.
