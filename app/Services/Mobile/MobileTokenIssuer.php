@@ -25,6 +25,7 @@ class MobileTokenIssuer
             'name' => $user->name,
             'email' => $user->email,
             'phone' => $user->phone,
+            'phone_verified' => $user->phone_verified_at !== null,
             'email_verified' => $user->email_verified_at !== null,
         ];
     }

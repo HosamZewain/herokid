@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MobileDraft;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class MobileDraftController extends Controller
@@ -48,19 +49,25 @@ class MobileDraftController extends Controller
             'version' => ['required', 'integer', 'min:1'],
             'child_profile_id' => ['nullable', 'uuid'],
         ]);
-        if ((int) $draft->version !== (int) $validated['version']) {
-            return response()->json(['message' => 'The draft changed on another device.', 'data' => $this->payload($draft)], 409);
-        }
-        $draft->update([
-            'child_profile_id' => array_key_exists('child_profile_id', $validated)
-                ? $this->resolveChild($request, $validated['child_profile_id'])
-                : $draft->child_profile_id,
-            'payload' => $validated['payload'],
-            'version' => $draft->version + 1,
-            'last_activity_at' => now(),
-        ]);
 
-        return response()->json(['data' => $this->payload($draft->fresh())]);
+        return DB::transaction(function () use ($request, $draft, $validated): JsonResponse {
+            // Route binding can be stale by the time another device finishes a save.
+            $locked = MobileDraft::query()->whereKey($draft->id)->where('user_id', $request->user()->id)
+                ->where('status', 'active')->lockForUpdate()->firstOrFail();
+            if ((int) $locked->version !== (int) $validated['version']) {
+                return response()->json(['message' => 'The draft changed on another device.', 'data' => $this->payload($locked)], 409)
+                    ->header('Cache-Control', 'private, no-store');
+            }
+            $locked->update([
+                'child_profile_id' => array_key_exists('child_profile_id', $validated)
+                    ? $this->resolveChild($request, $validated['child_profile_id']) : $locked->child_profile_id,
+                'payload' => $validated['payload'],
+                'version' => $locked->version + 1,
+                'last_activity_at' => now(),
+            ]);
+
+            return response()->json(['data' => $this->payload($locked->fresh())])->header('Cache-Control', 'private, no-store');
+        });
     }
 
     public function destroy(Request $request, MobileDraft $draft): JsonResponse

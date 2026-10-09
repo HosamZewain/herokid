@@ -16,6 +16,7 @@ class MobileOtpController extends Controller
 {
     public function request(Request $request, MobileOtpService $otp): JsonResponse
     {
+        abort_unless(config('services.mobile_otp.enabled'), 404);
         $data = $request->validate(['phone' => ['required', 'string', 'max:32']]);
 
         return response()->json(['data' => $otp->create($data['phone'], $request)], 202);
@@ -23,6 +24,7 @@ class MobileOtpController extends Controller
 
     public function verify(Request $request, MobileOtpService $otp, MobileTokenIssuer $tokens): JsonResponse
     {
+        abort_unless(config('services.mobile_otp.enabled'), 404);
         $data = $request->validate([
             'challenge_id' => ['required', 'uuid'],
             'code' => ['required', 'digits:6'],
@@ -38,12 +40,13 @@ class MobileOtpController extends Controller
                     'name' => trim((string) ($data['name'] ?? 'ولي أمر HeroKid')) ?: 'ولي أمر HeroKid',
                     'email' => null,
                     'phone' => $phone,
+                    'phone_verified_at' => now(),
                     'password' => Hash::make(Str::random(64)),
                     'last_seen_at' => now(),
                 ]);
             } else {
                 abort_unless($user->is_active, 403, 'This account is not active.');
-                $user->forceFill(['last_seen_at' => now()])->saveQuietly();
+                $user->forceFill(['last_seen_at' => now(), 'phone_verified_at' => now()])->saveQuietly();
             }
 
             return $user;

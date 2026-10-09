@@ -54,6 +54,7 @@ return [
     ],
 
     'mobile_otp' => [
+        'enabled' => (bool) env('MOBILE_OTP_ENABLED', false),
         'driver' => env('MOBILE_OTP_DRIVER', 'none'),
     ],
 

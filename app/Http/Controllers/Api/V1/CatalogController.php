@@ -8,7 +8,9 @@ use App\Models\Story;
 use App\Services\Catalog\UnifiedStorefrontService;
 use App\Services\Mobile\MobileAnalyticsRecorder;
 use App\Services\Mobile\MobileCatalogPresenter;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\Seo;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -27,14 +29,14 @@ class CatalogController extends Controller
             'lang' => ['nullable', 'in:ar,en'],
             'locale' => ['nullable', 'in:ar,en'],
             'personalization' => ['nullable', 'in:none,story_context,requires_child_photos'],
-            'sort' => ['nullable', 'in:featured,newest,price_asc,price_desc'],
+            'sort' => ['nullable', 'in:best_selling,most_viewed,featured,newest,price_asc,price_desc'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'in:12,20,24,30'],
         ]);
 
         if (isset($validated['locale'])) {
             App::setLocale($validated['locale']);
-            $validated['lang'] ??= $validated['locale'];
+            // UI locale changes labels, not which story languages are available.
         }
         $request->merge($validated);
         $result = $catalog->storefront($request, true, 20);
@@ -63,31 +65,33 @@ class CatalogController extends Controller
     {
         $locale = in_array($request->query('locale'), ['ar', 'en'], true) ? $request->query('locale') : 'ar';
         App::setLocale($locale);
-        $catalogRequest = Request::create('/api/v1/catalog', 'GET', [
-            'type' => $type === 'story' ? 'stories' : 'products',
-            'per_page' => 30,
-            'lang' => $type === 'story' ? $locale : null,
-        ]);
-        $result = app(UnifiedStorefrontService::class)->storefront($catalogRequest, true, 30);
-        $item = collect($result['items']->items())->first(fn ($candidate) => $candidate->slug === $slug);
-
-        abort_unless($item, 404);
+        // Detail links must not depend on the first catalogue page or UI locale.
+        $catalog = app(UnifiedStorefrontService::class);
+        $model = $type === 'story'
+            ? Story::query()->with('categories')->where('active', true)->where('slug', $slug)->firstOrFail()
+            : Product::query()->publiclyVisible()->with(['category', 'activeVariants'])->where('slug', $slug)->firstOrFail();
+        $item = $type === 'story' ? $catalog->storyItem($model) : $catalog->productItem($model);
         $payload = $presenter->item($item);
         $analytics->record($request, 'product_viewed', ['item_type' => $type, 'item_id' => (int) str($item->id)->after(':')->toString(), 'item_slug' => $slug]);
 
         if ($type === 'story') {
-            $story = Story::query()->where('active', true)->where('slug', $slug)->firstOrFail();
+            $story = $model;
+            $payload['personalization'] += $this->personalizationContract(ProductPersonalizationSchema::legacyDefault(), 'story');
             $payload['details'] = [
                 'language' => $story->language,
                 'lesson' => $story->lesson_value,
                 'gender' => $story->gender,
-                'gallery_images' => $story->gallery_images ?? [],
+                'gallery_images' => $this->galleryUrls($story->gallery_images ?? []),
             ];
         } else {
-            $product = Product::query()->publiclyVisible()->with('activeVariants')->where('slug', $slug)->firstOrFail();
+            $product = $model;
+            $payload['personalization'] += $this->personalizationContract(ProductPersonalizationSchema::forProduct($product), $product->personalization_mode);
             $payload['details'] = [
                 'features' => $product->features ?? [],
-                'gallery_images' => $product->gallery_images ?? [],
+                'gallery_images' => $this->galleryUrls($product->gallery_images ?? []),
+                'available' => $product->activeVariants->isNotEmpty()
+                    ? $product->activeVariants->contains(fn ($variant) => $product->hasStock(1, $variant))
+                    : $product->hasStock(1),
                 'production_lead_time_days' => $product->production_lead_time_days,
                 'variants' => $product->activeVariants->map(fn ($variant): array => [
                     'id' => $variant->id,
@@ -109,5 +113,31 @@ class CatalogController extends Controller
         }
 
         return response()->json(['data' => $payload]);
+    }
+
+    private function personalizationContract(array $schema, string $mode): array
+    {
+        $definitions = ProductPersonalizationSchema::definitions();
+        foreach ($schema['fields'] as $key => &$field) {
+            if (isset($definitions[$key]['max'])) {
+                $field['max'] = $definitions[$key]['max'];
+            }
+        }
+        unset($field);
+
+        return [
+            'mode' => $mode,
+            'schema' => $schema,
+            'age_options' => StoryAgeOptions::forPersonalization(),
+            'supported_languages' => ['ar', 'en'],
+            'photo_max_bytes' => (int) config('photo_uploads.max_size_mb', 15) * 1024 * 1024,
+        ];
+    }
+
+    private function galleryUrls(array $images): array
+    {
+        return collect($images)->filter(fn ($image) => is_string($image) && $image !== '')
+            ->map(fn (string $image) => Seo::imageUrl(str_starts_with($image, 'http') ? $image : Storage::disk((string) config('media.public_disk', 'public'))->url($image)))
+            ->values()->all();
     }
 }

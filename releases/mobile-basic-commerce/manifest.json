@@ -1,0 +1,94 @@
+{
+  "release_branch": "codex/mobile-basic-commerce-release",
+  "release_parent": "1bda0e5ff611f97a4a963a89d733d96bd10dfc9c",
+  "source_package_base": "6f31a446c083e431f3daea55f26e8d8e07160297",
+  "source_patch_sha256": "6725f53b37eb033f2f18e3f679158b2953d7bd1d721681fbb0cb46ccab75704e",
+  "package_review": {
+    "already_present_in_original_dirty_workspace": true,
+    "applied_once_in_clean_release_worktree": true,
+    "unrelated_workspace_edits_included": false,
+    "existing_whatsapp_and_aws_s3_release_preserved": true
+  },
+  "runtime_files": [
+    "app/Http/Controllers/Api/V1/AuthController.php",
+    "app/Http/Controllers/Api/V1/CatalogController.php",
+    "app/Http/Controllers/Api/V1/CustomerAddressController.php",
+    "app/Http/Controllers/Api/V1/MobileCartController.php",
+    "app/Http/Controllers/Api/V1/MobileCheckoutController.php",
+    "app/Http/Controllers/Api/V1/MobileDraftController.php",
+    "app/Http/Controllers/Api/V1/MobileOtpController.php",
+    "app/Models/User.php",
+    "app/Services/Mobile/MobileTokenIssuer.php",
+    "app/Services/Mobile/MobileCartService.php",
+    "app/Services/Mobile/MobileCheckoutService.php",
+    "app/Services/Mobile/MobileOrderPresenter.php",
+    "app/Services/Mobile/MobileOrderReorderService.php",
+    "app/Services/Mobile/MobileProductPersonalization.php",
+    "config/services.php",
+    "routes/api.php",
+    "database/migrations/2026_09_24_000001_add_phone_verified_at_to_users.php"
+  ],
+  "test_files": [
+    "tests/Feature/MobileApiFoundationTest.php",
+    "tests/Feature/MobileAuthenticationApiTest.php",
+    "tests/Feature/MobileCommerceApiTest.php",
+    "tests/Feature/MobileAddressManagementTest.php",
+    "tests/Feature/MobileCatalogContractTest.php",
+    "tests/Feature/MobileCheckoutQuoteTest.php",
+    "tests/Feature/MobileDraftConcurrencyTest.php",
+    "tests/Feature/MobileMinimalRegistrationTest.php",
+    "tests/Feature/MobileProductPersonalizationTest.php"
+  ],
+  "deployment_file": "scripts/deploy-mobile-basic-commerce.sh",
+  "environment": {"MOBILE_OTP_ENABLED": false},
+  "additional_hardening": [
+    "New checkout attempts require the reviewed quote fingerprint; completed retries remain idempotent.",
+    "Quote fingerprints include address, current totals, child personalization and current admin field rules.",
+    "Equivalent Egyptian registration formats use a canonical local phone and unique-conflict handling.",
+    "Gallery URLs preserve the configured hybrid public storage disk.",
+    "Story photo counts follow existing configured rules; product photo counts follow their own admin schema."
+  ],
+  "excluded_changes": [
+    "Website customer design approval and printing workflows",
+    "Admin and Production Studio implementation",
+    "Frontend source and compiled assets",
+    "PDF library, favorites and identity feature implementation",
+    "Composer dependencies",
+    "Production customer records and payment state"
+  ],
+  "verification": {
+    "original_package_sqlite": {"passed": 37, "assertions": 294, "network": "disabled"},
+    "expanded_mobile_sqlite": {"passed": 85, "assertions": 683, "network": "disabled"},
+    "full_mysql_suite": {"passed": 1348, "failed": 0, "assertions": 10694, "duration_seconds": 277.13, "database": "testing_mobile_release_oct10", "production": false},
+    "frontend": {"passed": 67, "failed": 0, "skipped": 1, "skip_reason": "Opt-in live local HEIC upload E2E was not enabled."},
+    "native_dump_restore": {"passed": 1, "assertions": 13, "database": "isolated local MySQL fixtures"},
+    "php_82_runtime_syntax": "passed",
+    "shell_syntax_and_diff_whitespace": "passed",
+    "admin_and_studio_child_photo_isolation": "passed on test database",
+    "authenticated_production_commerce_tested": false
+  },
+  "production": {
+    "deployed_by_this_task": false,
+    "deployment_owner": "user",
+    "predeployment_site_check": {
+      "bootstrap": 200,
+      "product_personalization_contract": "missing",
+      "story_personalization_contract": "missing",
+      "cart_batch_unauthenticated": 405,
+      "checkout_quote_unauthenticated": 404,
+      "phone_or_email_registration_contract": "not ready"
+    },
+    "postdeployment_site_check": "required after user deploys",
+    "postdeployment_command": "npm run release:site-check from HeroKid-Mobile",
+    "authenticated_journey": "Requires an authorized customer account and confirmed isolation before submitting any real checkout."
+  },
+  "deployment_guards": [
+    "Validate application root, clean tracked files, exact fetched SHA and ancestor relationship to current deployed code.",
+    "Private database, tracked code and environment backup outside the web root before maintenance or code switch.",
+    "Apply phone_verified_at with the previous application before activating the new User model.",
+    "Preserve environment, untracked hosting files and existing media; do not reset or clean.",
+    "Install locked dependencies; rebuild config, routes and views; verify OTP disabled; restart queues and take application live."
+  ],
+  "backup_limits": "Media files are unchanged and are not duplicated by this release backup. Native dump support is required; the script stops if backup fails.",
+  "failure_and_rollback": "If activation fails, maintenance may remain enabled. Inspect the failure and the private previous-commit.txt. Code rollback can retain the additive phone_verified_at column; do not blindly restore the database or roll back unrelated migrations."
+}

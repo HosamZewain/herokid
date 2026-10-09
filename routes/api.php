@@ -134,11 +134,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('privacy/consents', [PrivacyController::class, 'consents']);
         Route::get('cart', [MobileCartController::class, 'show']);
         Route::post('cart/items', [MobileCartController::class, 'storeItem']);
+        Route::post('cart/items/batch', [MobileCartController::class, 'storeBatch']);
         Route::patch('cart/items/{item}', [MobileCartController::class, 'updateItem']);
         Route::delete('cart/items/{item}', [MobileCartController::class, 'destroyItem']);
         Route::post('cart/items/{item}/duplicate', [MobileCartController::class, 'duplicateItem']);
         Route::put('cart/promo-code', [MobileCartController::class, 'applyPromo']);
         Route::delete('cart/promo-code', [MobileCartController::class, 'removePromo']);
+        Route::post('checkout/quote', [MobileCheckoutController::class, 'quote']);
         Route::post('checkout', [MobileCheckoutController::class, 'store'])->middleware('throttle:10,1');
         Route::get('children/{child:uuid}/photos', [ChildProfilePhotoController::class, 'index']);
         Route::get('children/{child:uuid}/photos/{photo:uuid}/media', [ChildProfilePhotoController::class, 'media'])

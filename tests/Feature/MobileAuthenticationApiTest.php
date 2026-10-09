@@ -45,7 +45,7 @@ class MobileAuthenticationApiTest extends TestCase
 
     public function test_parent_can_request_and_consume_a_one_time_phone_code(): void
     {
-        config(['services.mobile_otp.driver' => 'array']);
+        config(['services.mobile_otp.enabled' => true, 'services.mobile_otp.driver' => 'array']);
 
         $challenge = $this->postJson('/api/v1/auth/otp/request', [
             'phone' => '010 1234 5678',

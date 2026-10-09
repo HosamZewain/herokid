@@ -12,8 +12,10 @@ use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Pricing\StoryPricingService;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class MobileCartService
@@ -88,6 +90,23 @@ class MobileCartService
         });
     }
 
+    public function addBatch(User $user, array $items): MobileCart
+    {
+        return DB::transaction(function () use ($user, $items): MobileCart {
+            $cart = $this->lockedActiveCart($user);
+            foreach ($items as $index => $item) {
+                try {
+                    $cart = $this->add($user, $item);
+                } catch (ValidationException $exception) {
+                    throw ValidationException::withMessages(collect($exception->errors())
+                        ->mapWithKeys(fn ($messages, $key) => ['items.'.$index.'.'.$key => $messages])->all());
+                }
+            }
+
+            return $this->reprice($cart);
+        });
+    }
+
     public function remove(User $user, string $itemUuid): MobileCart
     {
         return DB::transaction(function () use ($user, $itemUuid): MobileCart {
@@ -144,7 +163,7 @@ class MobileCartService
 
     public function payload(MobileCart $cart): array
     {
-        $cart->loadMissing(['items.childProfile', 'promoCode']);
+        $cart->loadMissing(['items.childProfile', 'items.story', 'items.product', 'items.variant', 'promoCode']);
 
         return [
             'id' => $cart->uuid,
@@ -158,13 +177,14 @@ class MobileCartService
                 'variant_id' => $item->product_variant_id,
                 'linked_item_id' => $item->linkedItem?->uuid,
                 'title' => $item->title,
+                'image_url' => data_get($item->personalization, 'variant_snapshot.image_url') ?? $item->variant?->image_url ?? $item->product?->featured_image_url ?? $item->story?->cover_url,
                 'sku' => $item->sku,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price_cents / 100,
                 'line_total' => $item->total_price_cents / 100,
-                'child' => $item->childProfile ? [
-                    'id' => $item->childProfile->uuid,
-                    'name' => $item->childProfile->name,
+                'child' => $item->childProfile || data_get($item->personalization, 'personalization_snapshot.child_name') ? [
+                    'id' => $item->childProfile?->uuid,
+                    'name' => data_get($item->personalization, 'personalization_snapshot.child_name') ?: $item->childProfile?->name,
                 ] : null,
                 'personalization' => collect($item->personalization ?? [])->except(['photo_ids', 'variant_snapshot'])->all(),
             ])->values(),
@@ -255,8 +275,10 @@ class MobileCartService
 
         $photoIds = collect($data['child_photo_ids'] ?? [])->unique()->values();
         $photos = $child->activePhotos()->whereIn('uuid', $photoIds)->get();
-        if ($photos->count() !== $photoIds->count() || ! in_array($photos->count(), [2, 3], true)) {
-            throw ValidationException::withMessages(['child_photo_ids' => 'Select two or three reusable child photos.']);
+        $schema = ProductPersonalizationSchema::legacyDefault();
+        $photoField = $schema['fields']['photos'];
+        if ($photos->count() !== $photoIds->count() || $photos->count() < $photoField['min_files'] || $photos->count() > $photoField['max_files']) {
+            throw ValidationException::withMessages(['child_photo_ids' => 'Select the required number of reusable child photos.']);
         }
 
         $identity = null;
@@ -276,6 +298,20 @@ class MobileCartService
         }
 
         $price = (int) round($this->storyPricing->effectivePrice($story) * 100);
+        $values = [
+            'child_name' => $child->name,
+            'child_age' => $child->age ?? $child->birth_date?->age,
+            'child_gender' => $child->gender,
+            'interests' => implode(', ', $child->interests ?? []),
+        ];
+
+        $input = [...$values, ...($data['personalization'] ?? []), 'photo_upload_ids' => $photoIds->all()];
+        $validator = Validator::make($input, ProductPersonalizationSchema::validationRules($schema), ProductPersonalizationSchema::validationMessages($schema));
+        if ($validator->fails()) {
+            throw ValidationException::withMessages(collect($validator->errors()->messages())->mapWithKeys(fn ($messages, $key) => ['personalization.'.$key => $messages])->all());
+        }
+        $values = $validator->validated();
+
         $cart->items()->create([
             'item_type' => 'story',
             'story_id' => $story->id,
@@ -286,11 +322,12 @@ class MobileCartService
             'quantity' => 1,
             'total_price_cents' => $price,
             'personalization' => [
-                'photo_ids' => $photos->pluck('uuid')->all(),
+                'photo_ids' => $photoIds->all(),
                 'dedication' => $data['dedication'] ?? null,
                 'additional_instructions' => $data['additional_instructions'] ?? null,
                 'language' => $data['language'] ?? $child->preferred_language ?? $story->language,
                 'theme' => $data['theme'] ?? null,
+                'personalization_snapshot' => ProductPersonalizationSchema::snapshot(ProductPersonalizationSchema::legacyDefault(), $values, $photos->count()),
             ],
             'idempotency_key' => $data['idempotency_key'],
         ]);
@@ -326,13 +363,14 @@ class MobileCartService
             }
         }
 
+        $personalization = app(MobileProductPersonalization::class)->resolve($user, $product, $data);
         $price = $product->effectivePriceCents($variant);
         $cart->items()->create([
             'item_type' => $linkedItem ? 'product_add_on' : 'product',
             'product_id' => $product->id,
             'product_variant_id' => $variant?->id,
             'linked_mobile_cart_item_id' => $linkedItem?->id,
-            'child_profile_id' => $linkedItem?->child_profile_id,
+            'child_profile_id' => $linkedItem?->child_profile_id ?? $personalization['child']?->id,
             'title' => ProductVariantSnapshot::title($product, $variant),
             'sku' => $variant?->sku ?? $product->sku,
             'unit_price_cents' => $price,
@@ -341,6 +379,8 @@ class MobileCartService
             'personalization' => [
                 ...($linkedItem ? ['inherited_from_item_id' => $linkedItem->uuid] : []),
                 'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
+                'personalization_snapshot' => $personalization['snapshot'],
+                'photo_ids' => $personalization['photo_ids'],
             ],
             'idempotency_key' => $data['idempotency_key'],
         ]);

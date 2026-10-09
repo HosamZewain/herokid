@@ -25,6 +25,12 @@ class User extends Authenticatable
 
     protected static function booted(): void
     {
+        static::saving(function (User $user): void {
+            if ($user->exists && $user->isDirty('phone')) {
+                $user->phone_verified_at = null;
+            }
+        });
+
         static::created(function (User $user): void {
             if (app()->runningUnitTests() && $user->role === 'admin' && Schema::hasTable('permissions')) {
                 $user->permissions()->syncWithoutDetaching(Permission::pluck('id'));
@@ -51,6 +57,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'last_seen_at' => 'datetime',
             'deletion_requested_at' => 'datetime',
             'deletion_scheduled_for' => 'datetime',

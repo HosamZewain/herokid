@@ -63,6 +63,18 @@ class MobileCommerceApiTest extends TestCase
         $this->assertDatabaseCount('mobile_cart_items', 1);
     }
 
+    public function test_disabled_cash_on_delivery_is_rejected_by_server_without_creating_an_attempt_or_order(): void
+    {
+        Setting::query()->updateOrCreate(['key' => 'cash_on_delivery_enabled'], ['value' => '0']);
+        $user = User::factory()->create();
+        $address = $this->address($user);
+        Sanctum::actingAs($user, ['mobile']);
+        $this->postJson('/api/v1/checkout', $this->checkoutPayload($address, (string) Str::uuid(), 'cash_on_delivery'))
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_method');
+        $this->assertDatabaseCount('mobile_checkout_attempts', 0);
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_cash_on_delivery_checkout_creates_existing_orders_once_and_copies_private_photos(): void
     {
         $user = User::factory()->create(['name' => 'Parent']);
@@ -127,7 +139,7 @@ class MobileCommerceApiTest extends TestCase
     public function test_unconfigured_online_payment_never_creates_or_marks_an_order_paid(): void
     {
         $user = User::factory()->create();
-        $child = ChildProfile::create(['user_id' => $user->id, 'name' => 'Laila', 'age' => 5]);
+        $child = ChildProfile::create(['user_id' => $user->id, 'name' => 'Laila', 'age' => 5, 'gender' => 'girl']);
         $story = $this->story('mobile-online-payment-story', 180);
         $address = $this->address($user);
         Sanctum::actingAs($user, ['mobile']);
@@ -207,6 +219,7 @@ class MobileCommerceApiTest extends TestCase
             'idempotency_key' => (string) Str::uuid(),
         ])->assertCreated();
 
+        $originalVariantImageUrl = $variant->image_url;
         $variant->update([
             'name_ar' => 'اسم جديد بعد السلة',
             'sku' => 'MOBILE-CHANGED',
@@ -214,6 +227,8 @@ class MobileCommerceApiTest extends TestCase
             'gallery_images' => [],
             'attributes' => ['صفة جديدة'],
         ]);
+
+        $this->getJson('/api/v1/cart')->assertOk()->assertJsonPath('data.items.0.image_url', $originalVariantImageUrl);
 
         $this->postJson('/api/v1/checkout', $this->checkoutPayload($address, (string) Str::uuid(), 'cash_on_delivery'))
             ->assertCreated();
@@ -228,7 +243,7 @@ class MobileCommerceApiTest extends TestCase
     public function test_delivered_story_order_can_be_reordered_idempotently_with_reusable_photos(): void
     {
         $user = User::factory()->create();
-        $child = ChildProfile::create(['user_id' => $user->id, 'name' => 'Nour', 'age' => 8, 'is_active' => true]);
+        $child = ChildProfile::create(['user_id' => $user->id, 'name' => 'Nour', 'age' => 8, 'gender' => 'girl', 'is_active' => true]);
         $photos = $this->photos($child);
         $story = $this->story('mobile-reorder-story', 175);
         $address = $this->address($user);
@@ -322,6 +337,8 @@ class MobileCommerceApiTest extends TestCase
 
     private function checkoutPayload(CustomerAddress $address, string $key, string $method): array
     {
+        $quote = $this->postJson('/api/v1/checkout/quote', ['address_id' => $address->uuid]);
+
         return [
             'address_id' => $address->uuid,
             'payment_method' => $method,
@@ -330,6 +347,7 @@ class MobileCommerceApiTest extends TestCase
             'image_processing_consent' => true,
             'consent_document_version' => '2026-08-03',
             'idempotency_key' => $key,
+            'quote_fingerprint' => $quote->json('data.fingerprint') ?? str_repeat('0', 64),
         ];
     }
 }

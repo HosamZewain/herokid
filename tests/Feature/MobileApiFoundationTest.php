@@ -81,7 +81,7 @@ class MobileApiFoundationTest extends TestCase
             ->assertJsonPath('data.details.language', 'ar');
 
         $this->getJson('/api/v1/catalog?per_page=20&locale=en')
-            ->assertOk()->assertJsonCount(1, 'data')
+            ->assertOk()->assertJsonCount(2, 'data')
             ->assertJsonPath('data.0.title', 'Maze Book')
             ->assertJsonPath('data.0.short_description', 'Fun activities')
             ->assertJsonPath('meta.filters.product_categories.0.name', 'Activity Books');

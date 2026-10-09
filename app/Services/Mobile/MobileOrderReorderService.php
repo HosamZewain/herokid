@@ -5,6 +5,7 @@ namespace App\Services\Mobile;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\OrderStatusRegistry;
+use App\Support\ProductPersonalizationSchema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Ramsey\Uuid\Uuid;
@@ -26,15 +27,18 @@ class MobileOrderReorderService
             foreach ($order->items->where('item_type', 'story') as $item) {
                 $childUuid = data_get($item->personalization_snapshot, 'child_profile_uuid');
                 $child = $user->childProfiles()->where('is_active', true)->where('uuid', $childUuid)->first();
-                $photos = $child?->activePhotos()->limit(2)->pluck('uuid')->all() ?? [];
-                if (! $child || count($photos) < 2) {
-                    throw ValidationException::withMessages(['child_profile_id' => 'This story needs an active child profile with at least two reusable photos before it can be reordered.']);
+                $photos = data_get($item->personalization_snapshot, 'reusable_photo_ids', []);
+                $photoField = ProductPersonalizationSchema::legacyDefault()['fields']['photos'];
+                if (! $child || count($photos) < $photoField['min_files'] || count($photos) > $photoField['max_files']) {
+                    throw ValidationException::withMessages(['child_profile_id' => 'This story needs an active child profile with the required selected reusable photos before it can be reordered.']);
                 }
                 $key = $this->itemKey($requestKey, $item->id);
                 $cart = $this->carts->add($user, [
                     'item_type' => 'story', 'story_id' => $item->story_id, 'child_profile_id' => $child->uuid,
                     'child_photo_ids' => $photos, 'dedication' => data_get($item->personalization_snapshot, 'dedication'),
-                    'language' => data_get($item->item_snapshot, 'story_language'), 'idempotency_key' => $key,
+                    'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
+                    'additional_instructions' => data_get($item->personalization_snapshot, 'additional_instructions'),
+                    'language' => data_get($item->personalization_snapshot, 'language', data_get($item->item_snapshot, 'story_language')), 'idempotency_key' => $key,
                 ]);
                 $storyCartItems[$item->id] = $cart->items()->where('idempotency_key', $key)->value('uuid');
             }
@@ -44,6 +48,9 @@ class MobileOrderReorderService
                 $this->carts->add($user, [
                     'item_type' => 'product', 'product_id' => $item->product_id, 'variant_id' => $item->product_variant_id,
                     'linked_item_id' => $linked, 'quantity' => $item->quantity, 'idempotency_key' => $this->itemKey($requestKey, $item->id),
+                    'child_profile_id' => data_get($item->personalization_snapshot, 'child_profile_uuid'),
+                    'child_photo_ids' => data_get($item->personalization_snapshot, 'reusable_photo_ids', []),
+                    'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
                 ]);
             }
 

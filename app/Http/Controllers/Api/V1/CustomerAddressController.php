@@ -74,12 +74,20 @@ class CustomerAddressController extends Controller
     private function validated(Request $request, bool $partial = false): array
     {
         $required = $partial ? 'sometimes' : 'required';
-        $request->merge(['phone' => Phone::normalize($request->input('phone'))]);
+        // PATCH may change only a label/default flag; never erase its saved phone.
+        $request->validate(['phone' => [$required, 'string', 'max:32']]);
+        if ($request->has('phone')) {
+            $request->merge(['phone' => Phone::normalize($request->input('phone'))]);
+        }
 
         $validated = $request->validate([
             'label' => ['nullable', 'string', 'max:80'],
             'recipient_name' => [$required, 'string', 'max:255'],
-            'phone' => [$required, 'string', 'max:32'],
+            'phone' => [$required, 'string', 'max:32', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! Phone::isValidMobile($value)) {
+                    $fail('Enter a valid mobile number.');
+                }
+            }],
             'delivery_country_id' => [$required, Rule::exists('delivery_countries', 'id')->where('active', true)],
             'delivery_governorate_id' => [$required, Rule::exists('delivery_governorates', 'id')->where('active', true)],
             'city' => [$required, 'string', 'max:255'],

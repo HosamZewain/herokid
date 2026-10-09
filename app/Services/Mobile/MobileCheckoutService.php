@@ -20,6 +20,7 @@ use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Support\OrderPaymentStatus;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,28 @@ class MobileCheckoutService
         private readonly AdminNotificationDispatcher $notifications,
         private readonly MobileNotificationService $mobileNotifications,
     ) {}
+
+    public function quote(User $user, string $addressUuid): array
+    {
+        return DB::transaction(function () use ($user, $addressUuid): array {
+            User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            [$address, $country, $governorate] = $this->deliveryAddress($user, $addressUuid);
+            $cart = $this->checkoutCart($user);
+            $deliveryCents = (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
+            $cart = $this->carts->reprice($cart, $deliveryCents);
+            $this->lockCommerceRows($cart);
+            $cart = $this->carts->reprice($cart, $deliveryCents);
+            $payload = $this->carts->payload($cart);
+
+            return ['cart_id' => $cart->uuid, 'address_id' => $address->uuid,
+                'fingerprint' => $this->quoteFingerprint($cart, $address),
+                'totals' => $payload['totals'] + ['currency' => 'EGP'],
+                'items' => $payload['items'],
+                'requires_image_consent' => $cart->items->contains(fn ($item) => count(data_get($item->personalization, 'photo_ids', [])) > 0),
+                'payment_methods' => (bool) setting('cash_on_delivery_enabled', true) ? ['cash_on_delivery'] : [],
+            ];
+        }, 3);
+    }
 
     public function checkout(User $user, array $data): array
     {
@@ -61,38 +84,26 @@ class MobileCheckoutService
                     throw ValidationException::withMessages(['idempotency_key' => 'This checkout request is already being processed.']);
                 }
 
-                $address = CustomerAddress::query()
-                    ->where('user_id', $user->id)
-                    ->where('uuid', $data['address_id'])
-                    ->lockForUpdate()
-                    ->first();
-                if (! $address) {
-                    throw ValidationException::withMessages(['address_id' => 'The selected delivery address is not available.']);
+                if ($data['payment_method'] === 'cash_on_delivery' && ! (bool) setting('cash_on_delivery_enabled', true)) {
+                    throw ValidationException::withMessages(['payment_method' => 'Cash on delivery is currently unavailable.']);
                 }
 
-                $country = DeliveryCountry::query()->where('active', true)->find($address->delivery_country_id);
-                $governorate = DeliveryGovernorate::query()
-                    ->where('active', true)
-                    ->where('delivery_country_id', $country?->id)
-                    ->find($address->delivery_governorate_id);
-                if (! $country || ! $governorate) {
-                    throw ValidationException::withMessages(['address_id' => 'The selected delivery area is no longer available.']);
-                }
-
-                $cart = MobileCart::query()
-                    ->where('user_id', $user->id)
-                    ->where('status', 'active')
-                    ->latest('id')
-                    ->lockForUpdate()
-                    ->first();
-                if (! $cart || ! $cart->items()->exists()) {
-                    throw ValidationException::withMessages(['cart' => 'The cart is empty.']);
-                }
+                [$address, $country, $governorate] = $this->deliveryAddress($user, $data['address_id']);
+                $cart = $this->checkoutCart($user);
 
                 $deliveryCents = (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
                 $cart = $this->carts->reprice($cart, $deliveryCents);
+
                 $this->lockCommerceRows($cart);
                 $cart = $this->carts->reprice($cart, $deliveryCents);
+
+                if (empty($data['quote_fingerprint']) || ! hash_equals($this->quoteFingerprint($cart, $address), $data['quote_fingerprint'])) {
+                    throw ValidationException::withMessages(['quote_fingerprint' => 'Your cart, address or price changed. Review the updated total before confirming again.']);
+                }
+                if ($cart->items->contains(fn ($item) => count(data_get($item->personalization, 'photo_ids', [])) > 0)
+                    && ! ($data['image_processing_consent'] ?? false)) {
+                    throw ValidationException::withMessages(['image_processing_consent' => 'Guardian consent is required to process the selected child images.']);
+                }
 
                 $attempt = MobileCheckoutAttempt::query()->create([
                     'user_id' => $user->id,
@@ -163,6 +174,45 @@ class MobileCheckoutService
         return $result;
     }
 
+    private function deliveryAddress(User $user, string $uuid): array
+    {
+        $address = CustomerAddress::query()->where('user_id', $user->id)->where('uuid', $uuid)->lockForUpdate()->first();
+        if (! $address) {
+            throw ValidationException::withMessages(['address_id' => 'The selected delivery address is not available.']);
+        }
+        $country = DeliveryCountry::query()->where('active', true)->find($address->delivery_country_id);
+        $governorate = DeliveryGovernorate::query()->where('active', true)->where('delivery_country_id', $country?->id)->find($address->delivery_governorate_id);
+        if (! $country || ! $governorate) {
+            throw ValidationException::withMessages(['address_id' => 'The selected delivery area is no longer available.']);
+        }
+
+        return [$address, $country, $governorate];
+    }
+
+    private function checkoutCart(User $user): MobileCart
+    {
+        $cart = MobileCart::query()->where('user_id', $user->id)->where('status', 'active')->latest('id')->lockForUpdate()->first();
+        if (! $cart || ! $cart->items()->exists()) {
+            throw ValidationException::withMessages(['cart' => 'The cart is empty.']);
+        }
+
+        return $cart;
+    }
+
+    private function quoteFingerprint(MobileCart $cart, CustomerAddress $address): string
+    {
+        $snapshot = ['cart' => $cart->uuid, 'address' => $address->only(['uuid', 'recipient_name', 'phone', 'delivery_country_id', 'delivery_governorate_id', 'city', 'street', 'details', 'delivery_instructions']),
+            'totals' => [$cart->subtotal_cents, $cart->discount_cents, $cart->delivery_cents, $cart->total_cents],
+            'promo' => $cart->mobile_promo_code_id,
+            'items' => $cart->items->sortBy('id')->map(fn ($item) => [
+                $item->uuid, $item->quantity, $item->unit_price_cents, $item->total_price_cents, $item->personalization,
+                $item->product ? [$item->product->personalization_mode, ProductPersonalizationSchema::forProduct($item->product)] : ProductPersonalizationSchema::legacyDefault(),
+            ])->values()->all(),
+        ];
+
+        return hash_hmac('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR), (string) config('app.key'));
+    }
+
     private function pendingPaymentResponse(MobileCheckoutAttempt $attempt, MobileCart $cart, string $method): array
     {
         $intent = MobilePaymentIntent::query()->create([
@@ -216,7 +266,7 @@ class MobileCheckoutService
         foreach ($storyItems as $index => $cartItem) {
             $story = Story::query()->where('active', true)->lockForUpdate()->find($cartItem->story_id);
             $child = $cartItem->childProfile;
-            if (! $story || ! $child || $child->user_id !== $user->id) {
+            if (! $story || ! $child || ! $child->is_active || $child->user_id !== $user->id) {
                 throw ValidationException::withMessages(['cart' => 'A personalized story is no longer valid.']);
             }
 
@@ -245,12 +295,12 @@ class MobileCheckoutService
                 'child_identity_request_id' => $identity?->id,
                 'child_identity_approved_attempt_id' => $identity?->approved_attempt_id,
                 'referred_by_child_identity_share_id' => $identity?->referred_by_child_identity_share_id,
-                'child_name' => $child->name,
-                'child_age' => $child->age ?? $child->birth_date?->age,
-                'child_gender' => $child->gender,
+                'child_name' => data_get($cartItem->personalization, 'personalization_snapshot.child_name', $child->name),
+                'child_age' => data_get($cartItem->personalization, 'personalization_snapshot.child_age', $child->age ?? $child->birth_date?->age),
+                'child_gender' => data_get($cartItem->personalization, 'personalization_snapshot.child_gender', $child->gender),
                 'language' => data_get($cartItem->personalization, 'language', $story->language),
                 'lesson' => $story->lesson_value,
-                'interests' => implode(', ', $child->interests ?? []),
+                'interests' => data_get($cartItem->personalization, 'personalization_snapshot.interests', implode(', ', $child->interests ?? [])),
                 'gift_note' => data_get($cartItem->personalization, 'dedication'),
                 'parent_notes' => data_get($cartItem->personalization, 'additional_instructions'),
                 'delivery_details' => $delivery,
@@ -259,7 +309,8 @@ class MobileCheckoutService
             ]);
 
             $photoIds = data_get($cartItem->personalization, 'photo_ids', []);
-            $storedPhotos = $this->copyPhotosForOrder($user, $child->id, $photoIds, $order);
+            $photoField = ProductPersonalizationSchema::legacyDefault()['fields']['photos'];
+            $storedPhotos = $this->copyPhotosForOrder($user, $child->id, $photoIds, $order, $photoField['min_files'], $photoField['max_files']);
             $order->update(['uploaded_photos' => $storedPhotos]);
             $order->statusLogs()->create(['status' => 'new', 'notes' => 'تم إنشاء الطلب من تطبيق HeroKid وسيتم مراجعته قريباً.']);
             $storyOrderItem = $order->items()->create([
@@ -280,12 +331,16 @@ class MobileCheckoutService
                     'mobile_cart_item_id' => $cartItem->uuid,
                 ],
                 'personalization_snapshot' => [
+                    ...(data_get($cartItem->personalization, 'personalization_snapshot') ?? []),
                     'child_profile_uuid' => $child->uuid,
-                    'child_name' => $child->name,
-                    'child_age' => $child->age ?? $child->birth_date?->age,
-                    'child_gender' => $child->gender,
+                    'child_name' => $order->child_name,
+                    'child_age' => $order->child_age,
+                    'child_gender' => $order->child_gender,
+                    'reusable_photo_ids' => $photoIds,
                     'uploaded_photos_count' => count($storedPhotos),
                     'dedication' => data_get($cartItem->personalization, 'dedication'),
+                    'additional_instructions' => data_get($cartItem->personalization, 'additional_instructions'),
+                    'language' => $order->language,
                     'child_identity' => $identity ? [
                         'request_id' => $identity->id,
                         'request_uuid' => $identity->uuid,
@@ -324,27 +379,6 @@ class MobileCheckoutService
             }
         }
 
-        if ($storyItems->isEmpty() && $productItems->isNotEmpty()) {
-            $firstOrder = Order::query()->create([
-                'order_number' => $this->newOrderNumber(),
-                'checkout_group_key' => $checkoutGroup,
-                'discount_cents' => $cart->discount_cents,
-                'discount_reason' => $cart->promoCode?->code,
-                'payment_status' => OrderPaymentStatus::UNPAID,
-                'paid_amount_cents' => 0,
-                'payment_method' => 'cash_on_delivery',
-                'user_id' => $user->id,
-                'order_source' => 'mobile',
-                'source_notes' => 'HeroKid mobile application',
-                'parent_name' => $address->recipient_name ?: $user->name,
-                'delivery_details' => $this->deliverySnapshot($cart, $address, $country, $governorate, $checkoutGroup, 1, $itemCount, $data['payment_method']),
-                'uploaded_photos' => [],
-                'status' => 'new',
-            ]);
-            $firstOrder->statusLogs()->create(['status' => 'new', 'notes' => 'تم إنشاء طلب المتجر من تطبيق HeroKid وسيتم مراجعته قريباً.']);
-            $orders[] = $firstOrder;
-        }
-
         foreach ($productItems as $cartItem) {
             $product = Product::query()->where('is_active', true)->lockForUpdate()->find($cartItem->product_id);
             $variant = $cartItem->product_variant_id
@@ -357,6 +391,53 @@ class MobileCheckoutService
             $targetOrder = $cartItem->linked_mobile_cart_item_id
                 ? ($ordersByCartItem[$cartItem->linked_mobile_cart_item_id] ?? null)
                 : $firstOrder;
+            $personalizationSnapshot = null;
+            if ($product->personalization_mode === 'collect_child_details') {
+                // Revalidate current admin rules and ownership before producing anything.
+                $stored = data_get($cartItem->personalization, 'personalization_snapshot', []);
+                $personalization = app(MobileProductPersonalization::class)->resolve($user, $product, [
+                    'personalization' => ProductPersonalizationSchema::formValues(is_array($stored) ? $stored : []),
+                    'child_profile_id' => $cartItem->childProfile?->uuid,
+                    'child_photo_ids' => data_get($cartItem->personalization, 'photo_ids', []),
+                ]);
+                $personalizationSnapshot = $personalization['snapshot'];
+                $personalizationSnapshot['child_profile_uuid'] = $personalization['child']?->uuid;
+                $personalizationSnapshot['reusable_photo_ids'] = $personalization['photo_ids'];
+            }
+            // Each personalized product keeps its own child's production record.
+            // Ready-made products can share an order; linked add-ons stay with their story.
+            if (! $cartItem->linked_mobile_cart_item_id && ($personalizationSnapshot !== null || ! $targetOrder)) {
+                $targetOrder = Order::query()->create([
+                    'order_number' => $this->newOrderNumber(),
+                    'checkout_group_key' => $checkoutGroup,
+                    'discount_cents' => $cart->discount_cents,
+                    'discount_reason' => $cart->promoCode?->code,
+                    'payment_status' => OrderPaymentStatus::UNPAID,
+                    'paid_amount_cents' => 0,
+                    'payment_method' => 'cash_on_delivery',
+                    'user_id' => $user->id,
+                    'order_source' => 'mobile',
+                    'source_notes' => 'HeroKid mobile application',
+                    'parent_name' => $address->recipient_name ?: $user->name,
+                    'child_name' => $personalizationSnapshot['child_name'] ?? null,
+                    'child_age' => $personalizationSnapshot['child_age'] ?? null,
+                    'child_gender' => $personalizationSnapshot['child_gender'] ?? null,
+                    'interests' => $personalizationSnapshot['interests'] ?? null,
+                    'parent_notes' => $personalizationSnapshot['parent_notes'] ?? null,
+                    'delivery_details' => $this->deliverySnapshot($cart, $address, $country, $governorate, $checkoutGroup, count($orders) + 1, $itemCount, $data['payment_method']),
+                    'uploaded_photos' => [],
+                    'status' => 'new',
+                ]);
+                if ($personalizationSnapshot !== null && $personalization['photo_ids'] !== []) {
+                    $photoField = $personalizationSnapshot['schema']['fields']['photos'];
+                    $paths = $this->copyPhotosForOrder($user, $personalization['child']->id, $personalization['photo_ids'], $targetOrder,
+                        $photoField['required'] ? $photoField['min_files'] : 0, $photoField['max_files']);
+                    $targetOrder->update(['uploaded_photos' => $paths]);
+                }
+                $targetOrder->statusLogs()->create(['status' => 'new', 'notes' => 'تم إنشاء طلب المتجر من تطبيق HeroKid وسيتم مراجعته قريباً.']);
+                $orders[] = $targetOrder;
+                $firstOrder ??= $targetOrder;
+            }
             if (! $targetOrder) {
                 throw ValidationException::withMessages(['cart' => 'A product add-on has lost its linked story.']);
             }
@@ -385,7 +466,9 @@ class MobileCheckoutService
                 'variant_snapshot' => is_array(data_get($cartItem->personalization, 'variant_snapshot'))
                     ? data_get($cartItem->personalization, 'variant_snapshot')
                     : ProductVariantSnapshot::make($product, $variant),
-                'personalization_snapshot' => $cartItem->linkedItem ? ['child_profile_uuid' => $cartItem->linkedItem->childProfile?->uuid] : null,
+                'personalization_snapshot' => $cartItem->linkedItem
+                    ? ['child_profile_uuid' => $cartItem->linkedItem->childProfile?->uuid]
+                    : $personalizationSnapshot,
             ]);
             $this->decrementStock($product, $variant, $cartItem->quantity);
         }
@@ -406,7 +489,8 @@ class MobileCheckoutService
 
     private function recordConsents(User $user, MobileCart $cart, array $data): void
     {
-        $profileIds = $cart->items->pluck('child_profile_id')->filter()->unique();
+        $profileIds = $cart->items->filter(fn ($item) => count(data_get($item->personalization, 'photo_ids', [])) > 0)
+            ->pluck('child_profile_id')->filter()->unique();
         foreach ($profileIds as $profileId) {
             DB::table('consent_records')->insert([
                 'user_id' => $user->id,
@@ -437,7 +521,7 @@ class MobileCheckoutService
     }
 
     /** @param array<int, string> $photoUuids */
-    private function copyPhotosForOrder(User $user, int $childProfileId, array $photoUuids, Order $order): array
+    private function copyPhotosForOrder(User $user, int $childProfileId, array $photoUuids, Order $order, int $minimum = 2, int $maximum = 3): array
     {
         $photos = ChildProfilePhoto::query()
             ->whereHas('childProfile', fn ($query) => $query->where('user_id', $user->id))
@@ -446,14 +530,16 @@ class MobileCheckoutService
             ->whereNull('deleted_at')
             ->whereIn('uuid', $photoUuids)
             ->get();
-        if ($photos->count() !== count(array_unique($photoUuids)) || ! in_array($photos->count(), [2, 3], true)) {
-            throw ValidationException::withMessages(['cart' => 'Two or three selected child photos are required.']);
+        if ($photos->count() !== count($photoUuids) || $photos->count() < $minimum || $photos->count() > $maximum) {
+            throw ValidationException::withMessages(['cart' => 'The selected child photos are no longer valid for this product.']);
         }
 
         $targetDiskName = (string) config('photo_uploads.disk', 'local');
         $targetDisk = Storage::disk($targetDiskName);
         $paths = [];
-        foreach ($photos as $photo) {
+        $photosByUuid = $photos->keyBy('uuid');
+        foreach ($photoUuids as $uuid) {
+            $photo = $photosByUuid[$uuid];
             $source = Storage::disk($photo->disk)->readStream($photo->path);
             if (! is_resource($source)) {
                 throw ValidationException::withMessages(['cart' => 'A selected child photo could not be read.']);

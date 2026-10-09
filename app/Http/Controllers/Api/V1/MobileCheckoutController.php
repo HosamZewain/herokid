@@ -11,6 +11,14 @@ use Illuminate\Validation\Rule;
 
 class MobileCheckoutController extends Controller
 {
+    public function quote(Request $request, MobileCheckoutService $checkout): JsonResponse
+    {
+        $data = $request->validate(['address_id' => ['required', 'uuid']]);
+
+        return response()->json(['data' => $checkout->quote($request->user(), $data['address_id'])])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function store(Request $request, MobileCheckoutService $checkout, MobileAnalyticsRecorder $analytics): JsonResponse
     {
         $data = $request->validate([
@@ -18,9 +26,10 @@ class MobileCheckoutController extends Controller
             'payment_method' => ['required', Rule::in(['cash_on_delivery', 'card', 'mobile_wallet'])],
             'terms_accepted' => ['accepted'],
             'terms_document_version' => ['required', 'string', 'max:40'],
-            'image_processing_consent' => ['accepted'],
+            'image_processing_consent' => ['sometimes', 'boolean'],
             'consent_document_version' => ['required', 'string', 'max:40'],
             'idempotency_key' => ['required', 'uuid'],
+            'quote_fingerprint' => ['sometimes', 'required', 'string', 'size:64'],
         ]);
 
         $analytics->record($request, 'checkout_started', ['payment_method' => $data['payment_method']]);

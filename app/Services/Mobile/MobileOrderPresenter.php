@@ -15,6 +15,7 @@ class MobileOrderPresenter
             'checkout_group' => $order->checkoutGroupKey(),
             'customer_status' => $this->customerStatus($order),
             'payment_status' => $order->payment_status ?: 'unpaid',
+            'payment_method' => $order->payment_method,
             'paid_amount' => ((int) $order->paid_amount_cents) / 100,
             'child_name' => $order->child_name,
             'product_count' => $order->items->sum('quantity'),
