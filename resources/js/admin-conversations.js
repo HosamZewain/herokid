@@ -41,6 +41,9 @@ export function initializeOrderConversations() {
         tooltip.style.top = `${Math.max(8, Math.min(rect.top, window.innerHeight - tooltip.offsetHeight - 8))}px`;
     }
     function orderDetails(state, data) {
+        const assignee = selector(state, 'assignee');
+        assignee.textContent = `المسؤول: ${data.assigned_employee_name || 'غير معيّن'}`;
+        assignee.title = assignee.textContent; assignee.hidden = false;
         const link = selector(state, 'order');
         const url = safeOrderUrl(data.order_url, window.location.origin);
         link.hidden = !url || typeof data.order_reference !== 'string';
@@ -263,7 +266,9 @@ export function initializeOrderConversations() {
             const items = notifications.querySelector('[data-chat-notifications-items]');
             items.replaceChildren(...data.items.map(item => {
                 const button = el('button', '', 'hk-chat-notification-item'); button.type = 'button';
-                button.append(el('strong', `${shortContactName(item.contact_title || 'العميل')} · ${item.order_reference}`), el('span', item.unread ? 'غير مقروءة · بانتظار الرد' : 'مقروءة · بانتظار الرد'));
+                button.append(el('strong', `${shortContactName(item.contact_title || 'العميل')} · ${item.order_reference}`),
+                    el('span', `المسؤول: ${item.assigned_employee_name || 'غير معيّن'}`),
+                    el('span', item.unread ? 'غير مقروءة · بانتظار الرد' : 'مقروءة · بانتظار الرد'));
                 button.onclick = () => {
                     notifications.querySelector('[data-chat-notifications-menu]').hidden = true; toggle.setAttribute('aria-expanded', 'false');
                     void open({orderId:item.order_id, minimized:false}, button);

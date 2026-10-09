@@ -402,6 +402,46 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->getJson($url)->assertJsonPath('count', 0);
     }
 
+    public function test_assigned_employee_name_is_current_in_history_and_notifications_without_changing_assignment(): void
+    {
+        $history = route('admin.orders.conversation.show', $this->order);
+        $notifications = route('admin.orders.conversation.notifications');
+        $this->getJson($history)->assertJsonPath('assigned_employee_name', null);
+        $this->getJson($notifications)->assertJsonPath('items.0.assigned_employee_name', null);
+        $this->assigned($this->employee);
+        $this->getJson($history)->assertJsonPath('assigned_employee_name', $this->employee->name);
+        $this->getJson($notifications)->assertJsonPath('items.0.assigned_employee_name', $this->employee->name);
+        $other = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول جديد']);
+        $this->assigned($other);
+        $before = OrderGroupAssignment::first()->getRawOriginal();
+        $this->getJson($history)->assertJsonPath('assigned_employee_name', $other->name);
+        $this->getJson($notifications)->assertJsonPath('items.0.assigned_employee_name', $other->name);
+        $this->assertSame($before, OrderGroupAssignment::first()->getRawOriginal());
+        OrderGroupAssignment::first()->delete();
+        $this->getJson($history)->assertJsonPath('assigned_employee_name', null);
+        $this->getJson($notifications)->assertJsonPath('items.0.assigned_employee_name', null);
+        Http::assertSentCount(1); // Display/read calls never contact RoboDesk.
+    }
+
+    public function test_shared_phone_shows_employee_of_the_linked_order_not_another_checkout(): void
+    {
+        $other = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول الطلب الأحدث']);
+        $this->assigned($this->employee);
+        $second = $this->order->replicate();
+        $second->order_number = 'SYNTHETIC-'.Str::uuid();
+        $second->checkout_group_key = 'SYNTHETIC-GROUP-'.Str::uuid();
+        $second->save();
+        $this->assigned($other, $second);
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1)
+            ->assertJsonPath('items.0.order_id', $second->id)->assertJsonPath('items.0.assigned_employee_name', $other->name);
+        $this->getJson(route('admin.orders.conversation.show', $this->order))->assertJsonPath('assigned_employee_name', $this->employee->name);
+        $this->getJson(route('admin.orders.conversation.show', $second))->assertJsonPath('assigned_employee_name', $other->name);
+        $this->ownOnly($this->employee);
+        $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', 1)
+            ->assertJsonPath('items.0.order_id', $this->order->id)->assertJsonPath('items.0.assigned_employee_name', $this->employee->name);
+        $this->getJson(route('admin.orders.conversation.show', $second))->assertForbidden();
+    }
+
     public function test_successful_employee_reply_dismisses_for_everyone_but_new_customer_message_reopens(): void
     {
         $other = User::factory()->create(['role' => 'admin']);
@@ -424,6 +464,14 @@ class ConversationReplyAndNotificationsTest extends TestCase
     {
         return [
             'human in RoboDesk' => ['agent', 'text', 'sent', 1, 0],
+            'WhatsApp Business text with pending channel status' => ['whatsapp_business_app', 'text', 'pending', 1, 0],
+            'WhatsApp Business image' => ['whatsapp_business_app', 'image', 'delivered', 1, 0],
+            'WhatsApp Business reaction' => ['whatsapp_business_app', 'reaction', 'sent', 1, 1],
+            'WhatsApp Business failed' => ['whatsapp_business_app', 'text', 'failed', 1, 1],
+            'WhatsApp Business rejected' => ['whatsapp_business_app', 'text', 'rejected', 1, 1],
+            'WhatsApp Business undelivered' => ['whatsapp_business_app', 'text', 'undelivered', 1, 1],
+            'earlier WhatsApp Business reply' => ['whatsapp_business_app', 'text', 'sent', -1, 1],
+            'unknown sender' => ['unknown', 'text', 'sent', 1, 1],
             'bot' => ['bot', 'text', 'sent', 1, 1],
             'ai' => ['ai', 'text', 'sent', 1, 1],
             'automatic integration' => ['integration', 'text', 'sent', 1, 1],
@@ -448,6 +496,27 @@ class ConversationReplyAndNotificationsTest extends TestCase
         ])]])]);
         app(OrderConversationService::class)->sync($this->order);
         $this->getJson(route('admin.orders.conversation.notifications'))->assertJsonPath('count', $expected);
+    }
+
+    public function test_new_customer_message_after_whatsapp_business_reply_reopens_notification(): void
+    {
+        $this->travel(20)->seconds();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [
+            $this->remote('business-reply', 'out', ['senderType' => 'whatsapp_business_app', 'status' => 'pending', 'date' => now()->toISOString()]),
+        ]])]);
+        app(OrderConversationService::class)->sync($this->order);
+        $url = route('admin.orders.conversation.notifications');
+        $this->getJson($url)->assertJsonPath('count', 0);
+        $this->travel(20)->seconds();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['phone' => '201012345678', 'messages' => [
+            $this->remote('later-customer', 'in', ['date' => now()->toISOString()]),
+        ]])]);
+        app(OrderConversationService::class)->sync($this->order);
+        $this->getJson($url)->assertJsonPath('count', 1)->assertJsonPath('items.0.unread', true);
     }
 
     public function test_failed_and_uncertain_send_keep_pending_notification(): void

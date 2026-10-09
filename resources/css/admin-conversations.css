@@ -8,7 +8,7 @@
 .hk-conversation-header .hk-conversation-avatar { width:36px;height:36px }
 .hk-conversation-heading { flex:1;min-width:0 }
 .hk-conversation-heading [data-chat-title] { display:block;font-weight:800;font-size:14px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:#172033 }
-.hk-conversation-heading .hk-conversation-subtitle { display:block;font-size:11px;color:#64748b;margin-top:2px }
+.hk-conversation-heading .hk-conversation-subtitle { display:block;font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden }
 .hk-conversation-header { cursor:pointer }
 .hk-conversation-header .hk-conversation-toggle { display:flex;align-items:center;gap:9px;flex:1;min-width:0;text-align:right;padding:0;color:inherit }
 .hk-conversation-header .hk-conversation-toggle .hk-conversation-avatar { flex-shrink:0 }

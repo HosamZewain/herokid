@@ -22,7 +22,7 @@
         <header class="hk-conversation-header">
             <button type="button" data-chat-minimize class="hk-conversation-toggle" aria-label="تصغير المحادثة" title="اضغط لتصغير المحادثة">
                 <x-front-icon name="user-circle" class="hk-conversation-avatar" />
-                <span class="hk-conversation-heading"><span data-chat-title></span><span class="hk-conversation-subtitle">واتساب · عرض المحادثة</span></span>
+                <span class="hk-conversation-heading"><span data-chat-title></span><span data-chat-assignee class="hk-conversation-subtitle" hidden></span></span>
             </button>
             <a data-chat-order class="hk-conversation-order-link" dir="ltr" hidden></a>
             <button type="button" data-chat-close aria-label="إغلاق المحادثة"><x-front-icon name="x-mark" /></button>

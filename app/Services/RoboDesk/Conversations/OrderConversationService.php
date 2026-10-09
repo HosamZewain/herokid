@@ -31,6 +31,9 @@ class OrderConversationService
 
     public function history(Order $order, ?int $before = null, array $links = []): array
     {
+        // Read the current checkout-level employee, not a cached relation or
+        // the sender of the last WhatsApp message.
+        $order->load('groupAssignment.assignee:id,name');
         [$phone, $account, $hash] = $this->contact($order);
         $conversation = WhatsAppConversation::where('account_key', $account)->where('phone_hash', $hash)->first();
         $configured = $this->provider->configured();
@@ -54,6 +57,7 @@ class OrderConversationService
             'contact_title' => $order->parent_name ?: 'محادثة العميل',
             'order_reference' => $order->checkoutReference?->short_reference ?: $order->order_number,
             'order_url' => route('admin.orders.groups.show', $order->id),
+            'assigned_employee_name' => $order->groupAssignment?->assignee?->name,
             'key' => hash('sha256', $account.':'.$hash), 'configured' => $configured,
             'state' => ! $configured ? 'setup_required' : ($conversation?->sync_state ?? 'idle'),
             'error_code' => $conversation?->error_code,

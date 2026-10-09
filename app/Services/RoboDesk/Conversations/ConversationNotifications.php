@@ -15,7 +15,7 @@ class ConversationNotifications
     {
         $account = (string) config('robodesk.conversations.account_key', 'primary');
         $contacts = [];
-        foreach ($this->access->notificationOrders($user)->with('checkoutReference:id,checkout_group_key,short_reference')
+        foreach ($this->access->notificationOrders($user)->with(['checkoutReference:id,checkout_group_key,short_reference', 'groupAssignment.assignee:id,name'])
             ->orderByDesc('id')->get(['id', 'checkout_group_key', 'parent_name', 'order_number', 'delivery_details']) as $order) {
             $phone = ConversationPhone::canonical(data_get($order->delivery_details, 'phone'));
             if ($phone) {
@@ -35,7 +35,7 @@ class ConversationNotifications
                 ->whereNotExists(fn ($reply) => $reply->selectRaw('1')->from('whatsapp_conversation_messages as reply')
                     ->whereColumn('reply.conversation_id', 'customer.conversation_id')->where('reply.direction', 'outbound')
                     ->where('reply.kind', '!=', 'reaction')
-                    ->where(fn ($human) => $human->whereNotNull('reply.employee_name')->orWhere('reply.sender_type', 'agent'))
+                    ->where(fn ($human) => $human->whereNotNull('reply.employee_name')->orWhereIn('reply.sender_type', ['agent', 'whatsapp_business_app']))
                     ->where(fn ($accepted) => $accepted->whereNull('reply.delivery_status')->orWhereNotIn('reply.delivery_status', ['failed', 'rejected', 'undelivered']))
                     ->where(fn ($later) => $later->whereColumn('reply.sent_at', '>', 'customer.sent_at')
                         ->orWhere(fn ($tie) => $tie->whereColumn('reply.sent_at', 'customer.sent_at')->whereColumn('reply.id', '>', 'customer.id')))));
@@ -48,6 +48,7 @@ class ConversationNotifications
 
                 return ['order_id' => $order->id, 'contact_title' => $order->parent_name,
                     'order_reference' => $order->checkoutReference?->short_reference ?: $order->order_number,
+                    'assigned_employee_name' => $order->groupAssignment?->assignee?->name,
                     'date' => $conversation->latest_inbound_at,
                     'unread' => (int) $conversation->read_version < (int) $conversation->inbound_version];
             })->all();
