@@ -37,16 +37,16 @@
     ]
   },
   "resources/js/admin-conversations.js": {
-    "file": "assets/admin-conversations-BMtfDwQB.js",
+    "file": "assets/admin-conversations-Bdo-awOb.js",
     "name": "admin-conversations",
     "src": "resources/js/admin-conversations.js",
     "isDynamicEntry": true,
     "css": [
-      "assets/admin-conversations-DJGVD5g4.css"
+      "assets/admin-conversations-DjNCxZvz.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-SMrpo46I.js",
+    "file": "assets/app-Cc682iG5.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

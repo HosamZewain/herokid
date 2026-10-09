@@ -31,6 +31,10 @@
 .hk-chat-message .hk-chat-agent { font-weight:bold;font-size:10px;margin-bottom:4px }
 .hk-chat-message a { display:block;text-decoration:underline;font-size:12px;padding:6px 0;overflow-wrap:anywhere }
 .hk-chat-message img { max-width:100%;max-height:180px;border-radius:10px;margin-top:8px }
+.hk-chat-audio { width:250px;max-width:100%;min-width:0 }
+.hk-chat-audio audio { display:block;width:100%;max-width:100%;height:40px;direction:ltr }
+.hk-chat-audio a { font-size:10px;opacity:.85 }
+.hk-chat-audio .hk-chat-audio-notice { font-size:11px;line-height:1.6 }
 .hk-chat-day { text-align:center;font-size:11px;color:#64748b;padding:8px }
 .hk-conversation footer { padding:12px;text-align:center;font-size:11px;color:#64748b;border-top:1px solid #f1f5f9 }
 .hk-conversation-empty { text-align:center;color:#64748b;font-size:13px;padding:40px 8px;line-height:1.8 }

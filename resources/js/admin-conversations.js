@@ -1,5 +1,6 @@
 import '../css/admin-conversations.css';
 import { mergeMessages, safeAttachmentUrl, shouldPoll, normalizeConversationWindows, readConversationWindows, writeConversationWindows, shortContactName, safeOrderUrl, replyWindowState } from './conversation-state';
+import { isAudioAttachment, audioBubbleSignature, createAudioAttachment, updateAudioAttachment, reconcileConversationNodes, pauseConversationAudio } from './conversation-audio';
 
 export function initializeOrderConversations() {
     const dock = document.querySelector('[data-conversation-dock]');
@@ -54,13 +55,29 @@ export function initializeOrderConversations() {
         const scroll = selector(state, 'scroll');
         const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 90;
         const nodes = []; let day = '';
+        const audioBubbles = new Map();
         for (const message of state.messages) {
             const date = new Date(message.date); const label = dates.format(date);
             if (label !== day) { nodes.push(el('p', label, 'hk-chat-day')); day = label; }
+            const hasAudio = (message.attachments ?? []).some(attachment => isAudioAttachment(message, attachment));
+            const signature = hasAudio ? audioBubbleSignature(message) : null;
+            const previous = state.audioBubbles?.get(message.id);
+            if (hasAudio && previous?.signature === signature) {
+                for (const wrapper of previous.bubble.querySelectorAll('[data-audio-attachment]')) {
+                    updateAudioAttachment(wrapper, message.attachments[Number(wrapper.dataset.audioAttachment)]);
+                }
+                previous.bubble.querySelector('small').textContent = `${times.format(date)}${states[message.status] ? ` · ${states[message.status]}` : ''}`;
+                nodes.push(previous.bubble); audioBubbles.set(message.id, previous);
+                continue;
+            }
             const bubble = el('article', '', 'hk-chat-message'); bubble.dataset.direction = message.direction;
             if (message.employee_name || message.agent_name) bubble.append(el('p', message.employee_name || message.agent_name, 'hk-chat-agent'));
             if (message.text) bubble.append(el('p', message.text));
-            for (const attachment of message.attachments ?? []) {
+            for (const [index, attachment] of (message.attachments ?? []).entries()) {
+                if (isAudioAttachment(message, attachment)) {
+                    bubble.append(createAudioAttachment(attachment, index));
+                    continue;
+                }
                 const url = safeAttachmentUrl(attachment.url);
                 if (url) {
                     const link = el('a', attachment.name || 'عرض المرفق'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
@@ -73,8 +90,13 @@ export function initializeOrderConversations() {
             }
             bubble.append(el('small', `${times.format(date)}${states[message.status] ? ` · ${states[message.status]}` : ''}`));
             nodes.push(bubble);
+            if (hasAudio) audioBubbles.set(message.id, { signature, bubble });
         }
-        list.replaceChildren(...nodes);
+        for (const [id, previous] of state.audioBubbles ?? []) {
+            if (audioBubbles.get(id) !== previous) pauseConversationAudio(previous.bubble, true);
+        }
+        state.audioBubbles = audioBubbles;
+        reconcileConversationNodes(list, nodes);
         selector(state, 'empty').hidden = state.messages.length > 0;
         selector(state, 'older').hidden = !state.hasMore;
         if (nearBottom || !state.rendered) scroll.scrollTop = scroll.scrollHeight;
@@ -165,6 +187,7 @@ export function initializeOrderConversations() {
     }
     function close(state, focus = true) {
         state.closed = true; clearTimeout(state.timer); state.abort?.abort();
+        pauseConversationAudio(state.panel, true);
         if (windows.get(state.history) === state) windows.delete(state.history);
         if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
         state.panel.remove(); state.bubble.remove(); updateRail();
@@ -197,6 +220,7 @@ export function initializeOrderConversations() {
         selector(state, 'minimize').onclick = () => {
             if (state.minimized) { restore(state); return; }
             state.minimized = true; selector(state, 'content').hidden = true; clearTimeout(state.timer); state.abort?.abort();
+            pauseConversationAudio(state.panel);
             panel.hidden = true; bubble.hidden = false; updateRail();
             persist(); bubble.querySelector('[data-chat-reopen]').focus();
         };
@@ -228,6 +252,7 @@ export function initializeOrderConversations() {
     window.addEventListener('pagehide', () => {
         for (const state of windows.values()) {
             state.suspended = true; clearTimeout(state.timer); state.abort?.abort();
+            pauseConversationAudio(state.panel);
         }
     });
     window.addEventListener('pageshow', event => {
