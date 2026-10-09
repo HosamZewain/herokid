@@ -1,0 +1,36 @@
+.hk-conversation-open { display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#ede9fe;color:#6d28d9;flex-shrink:0 }
+.hk-conversation-open:hover { background:#ddd6fe }
+.hk-conversation-open img { width:20px;height:20px }
+.hk-conversation-dock { position:fixed;bottom:12px;left:12px;right:12px;z-index:70;display:flex;justify-content:flex-start;align-items:flex-end;gap:12px;overflow-x:auto;pointer-events:none;padding:12px;max-height:calc(100dvh - 85px) }
+.hk-conversation { pointer-events:auto;flex:0 0 360px;width:360px;background:white;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 12px 44px #17255433;overflow:hidden;max-height:calc(100dvh - 110px);display:flex;flex-direction:column }
+.hk-conversation-header { display:flex;align-items:center;gap:9px;padding:14px 12px;border-bottom:1px solid #f1f5f9;background:white }
+.hk-conversation-header img { width:20px;height:20px }
+.hk-conversation-header .hk-conversation-avatar { width:36px;height:36px }
+.hk-conversation-heading { flex:1;min-width:0 }
+.hk-conversation-heading h2 { font-weight:800;font-size:14px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden }
+.hk-conversation-heading p { font-size:11px;color:#64748b;margin-top:2px }
+.hk-conversation-header button { color:#7c3aed;font-size:11px;min-height:36px;min-width:36px;display:grid;place-items:center;border-radius:8px }
+.hk-conversation-header button:hover { background:#f5f3ff }
+.hk-conversation-content { display:flex;flex-direction:column;min-height:0 }
+.hk-conversation-content[hidden] { display:none }
+.hk-conversation-toolbar { display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;font-size:11px;color:#64748b;background:#faf9ff }
+.hk-conversation-toolbar button { font-weight:bold;color:#6d28d9;padding:6px }
+.hk-conversation-toolbar button:disabled { opacity:.5 }
+.hk-conversation-notice { font-size:12px;line-height:1.7;background:#fff7ed;color:#9a3412;padding:10px 14px }
+.hk-conversation-scroll { height:380px;overflow-y:auto;overscroll-behavior:contain;padding:16px;min-height:100px;max-height:calc(100dvh - 290px) }
+.hk-conversation-messages { display:flex;flex-direction:column;gap:12px }
+.hk-chat-message { max-width:88%;padding:10px 13px;border-radius:18px;background:#f1f3f5;align-self:flex-end;color:#172033;overflow-wrap:anywhere }
+.hk-chat-message[data-direction=outbound] { align-self:flex-start;background:#7c3aed;color:#fff;border-bottom-left-radius:5px }
+.hk-chat-message[data-direction=inbound] { border-bottom-right-radius:5px }
+.hk-chat-message p { white-space:pre-wrap;font-size:14px;line-height:1.75 }
+.hk-chat-message small { display:block;font-size:10px;opacity:.85;margin-top:6px }
+.hk-chat-message .hk-chat-agent { font-weight:bold;font-size:10px;margin-bottom:4px }
+.hk-chat-message a { display:block;text-decoration:underline;font-size:12px;padding:6px 0;overflow-wrap:anywhere }
+.hk-chat-message img { max-width:100%;max-height:180px;border-radius:10px;margin-top:8px }
+.hk-chat-day { text-align:center;font-size:11px;color:#64748b;padding:8px }
+.hk-conversation footer { padding:12px;text-align:center;font-size:11px;color:#64748b;border-top:1px solid #f1f5f9 }
+.hk-conversation-empty { text-align:center;color:#64748b;font-size:13px;padding:40px 8px;line-height:1.8 }
+.hk-conversation-older { display:block;margin:0 auto 12px;padding:8px 12px;font-size:12px;color:#6d28d9;background:#f5f3ff;border-radius:12px }
+.hk-conversation [hidden] { display:none }
+@media(min-width:1024px) { .hk-conversation-dock { right:280px } }
+@media(max-width:600px) { .hk-conversation-dock { left:0;right:0;bottom:0;padding:10px;gap:10px;scroll-snap-type:x mandatory }.hk-conversation { flex-basis:calc(100vw - 24px);width:calc(100vw - 24px);scroll-snap-align:center }.hk-conversation-header button { min-width:44px;min-height:44px } }

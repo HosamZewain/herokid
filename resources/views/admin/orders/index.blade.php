@@ -403,6 +403,7 @@
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
+                                @include('admin.orders._conversation-button', ['conversationOrderId' => $group['representative_id'], 'conversationCustomerName' => $group['customer_name'], 'conversationTrashed' => $group['trashed']])
                                 <a href="{{ $detailsUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-xs font-black text-white">عرض وإدارة</a>
                                 @if(!empty($group['whatsapp_messages']) && !$group['trashed'])
                                     <div class="col-span-2 rounded-2xl border border-green-100 bg-green-50 p-2">
@@ -485,6 +486,7 @@
                                         <p class="mt-1 max-w-40 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                         <p class="mt-1 max-w-48 truncate text-[10px] text-gray-400" dir="ltr">{{ implode('، ', $group['order_numbers']) }}</p>
                                         <div class="mt-2 flex max-w-40 flex-wrap gap-1" data-order-row-actions>
+                                            @include('admin.orders._conversation-button', ['conversationOrderId' => $group['representative_id'], 'conversationCustomerName' => $group['customer_name'], 'conversationTrashed' => $group['trashed']])
                                             <a href="{{ $detailsUrl }}" title="عرض التفاصيل" aria-label="عرض التفاصيل" class="grid h-8 w-8 place-items-center rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                                                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                             </a>

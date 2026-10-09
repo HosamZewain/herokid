@@ -31,6 +31,9 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (document.querySelector('[data-conversation-dock]')) {
+        import('./admin-conversations').then(({ initializeOrderConversations }) => initializeOrderConversations());
+    }
     clearCompletedCheckoutDrafts();
     initializeOrderStatusFilters();
     initializeAdminFileUploads();

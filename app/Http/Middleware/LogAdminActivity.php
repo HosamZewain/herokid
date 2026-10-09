@@ -34,7 +34,9 @@ class LogAdminActivity
                 subject: $subject,
                 properties: [
                     'route_parameters' => $this->routeParameters($request),
-                    'request_payload' => $request->except(['_token', '_method']),
+                    'request_payload' => $request->routeIs('admin.robodesk.conversation-settings.update')
+                        ? $request->only(['enabled', 'conversation_limit'])
+                        : $request->except(['_token', '_method']),
                     'response_status' => $response->getStatusCode(),
                 ],
                 request: $request,
@@ -101,7 +103,7 @@ class LogAdminActivity
             $label = $subject->getAttribute('title')
                 ?? $subject->getAttribute('name')
                 ?? $subject->getAttribute('order_number')
-                ?? ('#' . $subject->getKey());
+                ?? ('#'.$subject->getKey());
 
             return "تنفيذ {$request->method()} على {$routeName}: {$label}";
         }

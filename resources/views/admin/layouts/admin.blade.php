@@ -309,6 +309,9 @@
                         @can('robodesk.view')
                             <a href="{{ route('admin.robodesk.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.*') ? $activeLink : $idleLink }}">RoboDesk وواتساب</a>
                         @endcan
+                        @can('robodesk.manage')
+                            <a href="{{ route('admin.robodesk.conversation-settings.edit') }}" class="{{ $navLink }} {{ request()->routeIs('admin.robodesk.conversation-settings.*') ? $activeLink : $idleLink }}">إعدادات محادثات واتساب</a>
+                        @endcan
                         @can('agent_api.tokens.manage')
                             <a href="{{ route('admin.agent-api-tokens.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agent-api-tokens.*') ? $activeLink : $idleLink }}">Agent API Tokens</a>
                         @endcan
@@ -442,6 +445,7 @@
         {{ $leftDrawer }}
     @endisset
 
+@include('admin.orders._conversation-dock')
 @stack('scripts')
 </body>
 

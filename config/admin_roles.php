@@ -52,7 +52,7 @@ return [
             'description_ar' => 'عرض وإنشاء وتحديث الطلبات والعملاء والرسائل بدون البيانات المالية الحساسة.',
             'permission_patterns' => [
                 'orders.view', 'orders.create', 'orders.update', 'orders.assign',
-                'customers.view', 'customers.update',
+                'customers.view', 'customers.update', 'orders.conversations.view',
                 'content.messages.view', 'content.messages.delete',
             ],
             'sort_order' => 40,

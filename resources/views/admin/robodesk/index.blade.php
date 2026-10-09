@@ -7,6 +7,7 @@
     </x-slot>
 
     <div class="space-y-6">
+        @can('robodesk.manage')<a href="{{ route('admin.robodesk.conversation-settings.edit') }}" class="inline-flex rounded-xl bg-violet-600 px-5 py-3 font-bold text-white">إعدادات قراءة محادثات واتساب</a>@endcan
         @if(session('success'))
             <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{{ session('success') }}</div>
         @endif

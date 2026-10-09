@@ -36,13 +36,23 @@
       "homepage.css"
     ]
   },
+  "resources/js/admin-conversations.js": {
+    "file": "assets/admin-conversations-Bmdq3G3p.js",
+    "name": "admin-conversations",
+    "src": "resources/js/admin-conversations.js",
+    "isDynamicEntry": true,
+    "css": [
+      "assets/admin-conversations-kUbtHkVg.css"
+    ]
+  },
   "resources/js/app.js": {
-    "file": "assets/app-B42HS6bv.js",
+    "file": "assets/app-C4cjbH27.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
       "node_modules/heic-to/dist/csp/heic-to.js",
+      "resources/js/admin-conversations.js",
       "resources/js/booklet-reader.js",
       "resources/js/scene-reader.js"
     ]

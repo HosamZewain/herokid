@@ -193,6 +193,12 @@ return [
             'sensitive' => true,
         ],
 
+        'orders.conversations.view' => [
+            'group_key' => 'orders', 'name_ar' => 'عرض ومزامنة محادثات واتساب العملاء', 'name_en' => 'View and sync customer WhatsApp conversations',
+            'description_ar' => 'قراءة محادثات العميل المرتبط بالطلب وتحديث النسخة المحفوظة، دون إرسال رسائل.',
+            'description_en' => 'Read and sync stored conversations for an order customer. Does not permit sending messages.',
+            'sort_order' => 12, 'sensitive' => true,
+        ],
         'orders.view' => [
             'group_key' => 'orders',
             'name_ar' => 'عرض الطلبات',

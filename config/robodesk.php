@@ -15,4 +15,9 @@ return [
     'signature_tolerance_seconds' => (int) env('ROBODESK_SIGNATURE_TOLERANCE_SECONDS', 300),
     'payment_proof_max_mb' => (int) env('ROBODESK_PAYMENT_PROOF_MAX_MB', 10),
     'instapay_url' => env('ROBODESK_INSTAPAY_URL'),
+    // Credentials/enabled state live in encrypted admin-managed DB settings.
+    'conversations' => [
+        'account_key' => (string) env('ROBODESK_CONVERSATIONS_ACCOUNT_KEY', 'primary'),
+        'sync_cooldown_seconds' => 12,
+    ],
 ];
