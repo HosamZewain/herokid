@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
+use App\Http\Controllers\ConversationReplyMediaController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CartPromoCodeController;
@@ -119,6 +120,9 @@ Route::get('/media/{media}', PublicMediaController::class)
     ->whereUuid('media')
     ->middleware('throttle:120,1')
     ->name('media-library.public');
+
+Route::get('/conversation-reply-media/{reply}', ConversationReplyMediaController::class)
+    ->whereUuid('reply')->middleware(['signed', 'throttle:120,1'])->name('conversation-reply-media');
 
 // Homepage
 Route::get('/', HomeController::class)->name('home');

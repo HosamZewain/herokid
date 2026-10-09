@@ -15,7 +15,7 @@ class WhatsAppConversationMessage extends Model
     protected $hidden = ['remote_id', 'remote_hash', 'fingerprint'];
 
     protected $casts = [
-        'remote_id' => 'encrypted', 'body' => 'encrypted', 'sender_name' => 'encrypted', 'attachments' => 'encrypted:array',
+        'remote_id' => 'encrypted', 'body' => 'encrypted', 'sender_name' => 'encrypted', 'employee_name' => 'encrypted', 'attachments' => 'encrypted:array',
         'sent_at' => 'immutable_datetime', 'source_updated_at' => 'immutable_datetime',
     ];
 }

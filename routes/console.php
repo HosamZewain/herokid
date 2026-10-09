@@ -12,6 +12,8 @@ use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationStuckChecker;
 use App\Services\Orders\OrderAttachmentService;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
+use App\Services\RoboDesk\Conversations\ActiveConversationRefreshService;
+use App\Services\RoboDesk\Conversations\ConversationReplyService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
 use App\Support\AdminRoleSyncer;
@@ -25,6 +27,17 @@ use Symfony\Component\Console\Command\Command;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('robodesk:sync-active-conversations', function (ActiveConversationRefreshService $refresh) {
+    $this->info('Background conversation refresh jobs queued: '.$refresh->dispatchDue());
+})->purpose('Queue bounded delta refreshes for active-order conversations only');
+
+Schedule::command('robodesk:sync-active-conversations')->everyMinute()->withoutOverlapping(2);
+
+Artisan::command('robodesk:cleanup-reply-media', function (ConversationReplyService $replies) {
+    $this->info('Expired reply image copies removed: '.$replies->cleanup());
+})->purpose('Remove expired temporary WhatsApp reply copies only, never order or library media');
+Schedule::command('robodesk:cleanup-reply-media')->hourly()->withoutOverlapping(10);
 
 Artisan::command('database-exports:process', function (DatabaseExportService $exports) {
     $exports->cleanup();

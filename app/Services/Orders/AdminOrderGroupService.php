@@ -211,6 +211,14 @@ class AdminOrderGroupService
         return $this->groupedFilteredQuery($request, $this->includeDeleted($request, $lifecycle), $type, $lifecycle);
     }
 
+    public function activeOrdersQuery(): Builder
+    {
+        $query = Order::query();
+        $this->applyLifecycleFilter($query, 'active');
+
+        return $query->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'));
+    }
+
     public function reportFacts(Request $request): Collection
     {
         $keys = $this->reportQuery($request)->select('checkout_group_key')->distinct()->toBase();

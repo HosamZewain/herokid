@@ -15,7 +15,7 @@ class OrderConversationService
 {
     public function __construct(private ConversationHistoryProvider $provider) {}
 
-    private function contact(Order $order): array
+    public function contact(Order $order): array
     {
         $phone = ConversationPhone::canonical(data_get($order->delivery_details, 'phone'));
         if (! $phone) {
@@ -51,16 +51,23 @@ class OrderConversationService
         }
 
         return [
+            'contact_title' => $order->parent_name ?: 'محادثة العميل',
+            'order_reference' => $order->checkoutReference?->short_reference ?: $order->order_number,
+            'order_url' => route('admin.orders.groups.show', $order->id),
             'key' => hash('sha256', $account.':'.$hash), 'configured' => $configured,
             'state' => ! $configured ? 'setup_required' : ($conversation?->sync_state ?? 'idle'),
             'error_code' => $conversation?->error_code,
             'last_synced_at' => $conversation?->last_synced_at?->toIso8601String(),
+            'read_version' => (int) ($conversation?->inbound_version ?? 0),
+            'last_customer_message_at' => ($lastCustomer = $conversation?->messages()->where('direction', 'inbound')->where('kind', '!=', 'reaction')->max('sent_at'))
+                ? CarbonImmutable::parse($lastCustomer, 'UTC')->toISOString() : null,
             'has_more' => $more, 'older_before' => $messages->first()?->id,
             'messages' => $messages->map(fn ($message) => [
                 'id' => $message->id, 'direction' => $message->direction, 'kind' => $message->kind,
                 'text' => $message->body, 'date' => $message->sent_at->toISOString(),
                 'status' => $message->delivery_status, 'agent_name' => $message->sender_name,
                 'sender_type' => $message->sender_type,
+                'employee_name' => $message->employee_name,
                 'attachments' => collect($message->attachments ?? [])->map(fn ($attachment, $index) => $attachment + (
                     array_key_exists($index, $links[$message->remote_hash] ?? []) ? ['url' => $links[$message->remote_hash][$index]] : []
                 ))->all(),
@@ -94,6 +101,9 @@ class OrderConversationService
                 foreach ($rows as $row) {
                     $message = $existingMessages->get($row['remote_hash']) ?? new WhatsAppConversationMessage(['conversation_id' => $conversation->id]);
                     if (! $message->exists || $message->fingerprint !== $row['fingerprint']) {
+                        if (! $message->exists && $row['direction'] === 'inbound') {
+                            $conversation->inbound_version++;
+                        }
                         $message->fill($row)->save();
                     }
                 }
@@ -113,7 +123,7 @@ class OrderConversationService
         }
     }
 
-    private function validate(ConversationHistoryPage $page, string $phone): array
+    public function validate(ConversationHistoryPage $page, string $phone): array
     {
         if (ConversationPhone::canonical($page->phone) !== $phone || count($page->messages) > 10000 || ! array_is_list($page->messages)) {
             throw new RuntimeException('invalid_provider_response');

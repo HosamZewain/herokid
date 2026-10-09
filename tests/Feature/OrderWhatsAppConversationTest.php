@@ -66,7 +66,9 @@ class OrderWhatsAppConversationTest extends TestCase
     public function test_get_is_read_only_and_unconfigured_post_does_not_create_records(): void
     {
         $order = $this->order();
-        $this->actingAs($this->admin)->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonPath('state', 'setup_required')->assertJsonCount(0, 'messages');
+        $this->actingAs($this->admin)->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonPath('state', 'setup_required')
+            ->assertJsonPath('contact_title', $order->parent_name)->assertJsonPath('order_reference', $order->checkoutReference->short_reference)
+            ->assertJsonPath('order_url', route('admin.orders.groups.show', $order))->assertJsonCount(0, 'messages');
         $this->sync($order)->assertStatus(422)->assertJsonPath('reason', 'setup_required');
         $this->assertDatabaseCount('whatsapp_conversations', 0);
         Http::assertNothingSent();
@@ -492,5 +494,18 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->admin->unsetRelation('permissions');
         $this->put(route('admin.robodesk.conversation-settings.update'), ['email' => 'invalid', 'password' => 'synthetic-secret', 'conversation_limit' => 0])->assertSessionHasErrors();
         $this->assertNull(session()->getOldInput('password'));
+    }
+
+    public function test_dock_restoration_metadata_is_employee_scoped_and_permission_guarded(): void
+    {
+        $this->actingAs($this->admin);
+        $key = 'hk-conversations:v1:'.$this->admin->id.':'.hash('sha256', 'primary');
+        $this->blade('@include("admin.orders._conversation-dock")')->assertSee($key, false)
+            ->assertSee('data-conversation-bubbles', false)->assertSee('data-history-template', false)->assertSee('__ORDER__', false);
+        config(['robodesk.conversations.account_key' => 'other-account']);
+        $this->blade('@include("admin.orders._conversation-dock")')->assertDontSee($key, false);
+        $this->admin->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $this->admin->unsetRelation('permissions');
+        $this->blade('@include("admin.orders._conversation-dock")')->assertDontSee('data-conversation-dock', false);
     }
 }

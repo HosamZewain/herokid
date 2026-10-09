@@ -73,7 +73,7 @@
         </div>
     </x-slot>
     <x-slot name="headerActions">
-        @include('admin.orders._conversation-button', ['conversationOrderId' => $order->id, 'conversationCustomerName' => $order->parent_name])
+        @include('admin.orders._conversation-button', ['conversationOrderId' => $order->id, 'conversationCustomerName' => $order->parent_name, 'conversationCheckoutKey' => $order->checkout_group_key])
         @include('admin.orders._activity-log-button')
     </x-slot>
 

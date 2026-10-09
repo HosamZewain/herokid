@@ -41,3 +41,19 @@ No unresolved P0/P1/P2 visual deviations from the agreed read-only scope. No liv
 - The same focused suite on strict MariaDB 10.11: 29 passed, 169 assertions.
 - Node state/URL/polling policy: 4 passed.
 - Changed PHP Pint: passed; PHP 8.2 syntax checks passed; Vite build and git diff whitespace check passed.
+
+## Persistence, replies and employee notifications — 2026-10-09
+
+The preceding sections describe the initial read-only release. This follow-up adds the requested composer and notification behavior without changing the public storefront.
+
+- Bubble reference: `/Users/hosam/Desktop/Screenshot 2026-10-09 at 6.52.04 PM.png`. Source and rendered desktop evidence were inspected together. Intentional differences: retain HeroKid's light admin panels and generic bundled user icons because RoboDesk does not provide customer avatars; use the reference's compact left-hand circular stack, close affordance and name tooltip.
+- Saved actual viewport captures: [desktop conversation and notifications](qa/conversations/persistent-desktop.jpg), [mobile composer](qa/conversations/persistent-mobile.jpg), [minimized bubbles](qa/conversations/minimized-bubbles.jpg). Desktop is 1440×960; mobile is 390×844. Synthetic fixtures only; no customer-private content or live credentials.
+- Verified refresh, admin-page navigation and a fresh browser tab preserve expanded/minimized windows. Closing a bubble persists the removal. Storage contains only user-scoped order IDs and minimized flags, not names, messages, credentials or signed URLs.
+- Clicking the header minimizes; the visible minimize word is removed. The separate close button and linked order reference retain independent behavior. Names use eight graphemes and a full-name tooltip. Opening another order for the same canonical phone reuses its conversation window and updates the order link.
+- Notification count deduplicates three assigned active orders into two customer conversations. Opening and loading a notification marks it read for that employee and reduces the count; merely loading the notification list does not. All-customer access and replying have separate permissions; direct API actions recheck current assignment.
+- Composer supports text, caret-position emoji insertion, image preview/removal and an explicit send action. A synthetic image was selected and removed successfully. The local integration remains disabled, so no real message was sent. Mocked provider tests cover accepted sends, refusals, uncertain outcomes, idempotency and the 24-hour reply window.
+- Responsive checks at 320×640, 390×844 and 1440×960 showed no horizontal overflow. An initially clipped mobile send button with the emoji picker open was fixed by preserving header/toolbar space and making the composer scrollable; final send-button bottom was 615px inside a panel ending at 630px at 320×640. Browser console errors/warnings: none in the final inspected states.
+- Full Laravel/MySQL suites both passed: `composer test` and `php artisan test --compact`, each **1281 tests / 10252 assertions**. Node state tests: **11 passed**. PHP 8.2 syntax checks, Blade compilation, production asset build and whitespace checks passed. Full runtime regression tests used PHP 8.5, not PHP 8.2.
+- Background refresh is bounded and queued for active orders only, with a minimum ten-minute interval per contact. Header polling reads local stored state; it does not call RoboDesk. Deployment requires the new migration, employee permission selection, Laravel scheduler and the `robodesk-conversations` queue worker. No new environment variables, production deployment or live customer sends occurred.
+
+Follow-up final result: **passed locally**. Production credentials, queue/scheduler operation and real WhatsApp acceptance remain deployment checks, not claims from this local QA.

@@ -1,13 +1,13 @@
 {
-  "_pdf.worker.min-DQioOMWc.js": {
-    "file": "assets/pdf.worker.min-DQioOMWc.js",
-    "name": "pdf.worker.min"
-  },
   "node_modules/heic-to/dist/csp/heic-to.js": {
     "file": "assets/heic-to-lXPrQE7P.js",
     "name": "heic-to",
     "src": "node_modules/heic-to/dist/csp/heic-to.js",
     "isDynamicEntry": true
+  },
+  "_pdf.worker.min-DQioOMWc.js": {
+    "file": "assets/pdf.worker.min-DQioOMWc.js",
+    "name": "pdf.worker.min"
   },
   "resources/css/app.css": {
     "file": "assets/app-CXaNG7fB.css",
@@ -37,16 +37,16 @@
     ]
   },
   "resources/js/admin-conversations.js": {
-    "file": "assets/admin-conversations-Bmdq3G3p.js",
+    "file": "assets/admin-conversations-7vnAtxLI.js",
     "name": "admin-conversations",
     "src": "resources/js/admin-conversations.js",
     "isDynamicEntry": true,
     "css": [
-      "assets/admin-conversations-kUbtHkVg.css"
+      "assets/admin-conversations-CqgEqbM1.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-C4cjbH27.js",
+    "file": "assets/app-Be1NrITh.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

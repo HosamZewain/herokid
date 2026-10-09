@@ -33,7 +33,7 @@ class SecurityAndCacheHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
-        $isIsolatedMedia = $request->routeIs(['booklet-previews.*', 'media-library.public']);
+        $isIsolatedMedia = $request->routeIs(['booklet-previews.*', 'media-library.public', 'conversation-reply-media']);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', $isIsolatedMedia ? 'no-referrer' : 'strict-origin-when-cross-origin');

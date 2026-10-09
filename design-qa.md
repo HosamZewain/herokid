@@ -95,3 +95,16 @@ Footer follow-up final result: passed
 Social/home-link follow-up final result: passed
 
 final result: passed
+
+## Admin conversations follow-up — 2026-10-09
+
+Scoped admin enhancement; the public homepage/footer QA above is unchanged. The user's Messenger bubble reference was compared with the rendered implementation in the same input. HeroKid's light panels and generic user icon are intentional differences; compact circular minimized conversations remain stacked on the left.
+
+- Evidence: [desktop notifications/composer](docs/qa/conversations/persistent-desktop.jpg), [mobile composer](docs/qa/conversations/persistent-mobile.jpg), [minimized bubbles](docs/qa/conversations/minimized-bubbles.jpg). Actual viewports: 1440×960 desktop and 390×844 mobile, with synthetic customer/order data only. Detailed findings: [conversation QA](docs/admin-whatsapp-conversations-design-qa.md).
+- Verified persisted windows across refresh/navigation/new tab, independent close/reopen, eight-grapheme names, linked order references and header-click minimization. Same-phone orders reuse one window.
+- Employee notification counter counts distinct unread conversations for assigned active orders; clicking and loading a conversation marks only that employee's displayed inbound version read. Separate all-customer and reply permissions are enforced server-side.
+- Text, emoji and image preview/removal work in the composer. Local provider disabled: no live send. Mocked integration tests cover sending and failure states. Mobile send-button clipping with emoji picker open was corrected; final 320×640, 390×844 and 1440×960 checks show no horizontal overflow or browser console errors/warnings.
+- Complete Laravel/MySQL suites passed twice: **1281 tests, 10252 assertions** each. Node state tests: **11 passed**. PHP 8.2 syntax, Blade compilation, asset build and diff whitespace checks passed. Runtime full suites used PHP 8.5.
+- New database migration and scheduler/queue activation are required for deployment. No new environment variables, main changes, production deployment or real customer messages in this follow-up.
+
+Admin conversations follow-up final result: passed locally.

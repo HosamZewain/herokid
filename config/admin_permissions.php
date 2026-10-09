@@ -199,6 +199,18 @@ return [
             'description_en' => 'Read and sync stored conversations for an order customer. Does not permit sending messages.',
             'sort_order' => 12, 'sensitive' => true,
         ],
+        'orders.conversations.view-all' => [
+            'group_key' => 'orders', 'name_ar' => 'عرض محادثات كل العملاء', 'name_en' => 'View all customer conversations',
+            'description_ar' => 'بدون هذه الصلاحية يمكن عرض محادثات الطلبات النشطة المسندة للموظف فقط.',
+            'description_en' => 'Without this permission, conversation access is limited to assigned active orders.',
+            'sort_order' => 13, 'sensitive' => true,
+        ],
+        'orders.conversations.reply' => [
+            'group_key' => 'orders', 'name_ar' => 'الرد على محادثات واتساب', 'name_en' => 'Reply to WhatsApp conversations',
+            'description_ar' => 'إرسال نصوص وصور للعملاء المسموح بعرض محادثاتهم داخل مهلة واتساب.',
+            'description_en' => 'Send text and images in accessible conversations within the WhatsApp reply window.',
+            'sort_order' => 14, 'sensitive' => true,
+        ],
         'orders.view' => [
             'group_key' => 'orders',
             'name_ar' => 'عرض الطلبات',

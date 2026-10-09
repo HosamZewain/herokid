@@ -19,5 +19,11 @@ return [
     'conversations' => [
         'account_key' => (string) env('ROBODESK_CONVERSATIONS_ACCOUNT_KEY', 'primary'),
         'sync_cooldown_seconds' => 12,
+        // Scan/dispatch incrementally; never fetch RoboDesk during web requests
+        // unless an employee explicitly opens/refreshes a conversation.
+        'background_interval_seconds' => 600,
+        'background_batch_size' => 20,
+        'background_scan_size' => 100,
+        'background_requests_per_minute' => 20,
     ],
 ];
