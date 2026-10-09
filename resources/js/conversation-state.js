@@ -26,6 +26,19 @@ export function replyWindowOpen(value, now = Date.now()) {
     return Number.isFinite(timestamp) && now >= timestamp && now - timestamp < 86400000;
 }
 
+export function replyWindowState({ configured, lastCustomerMessageAt, lastSyncedAt, syncFailed }, now = Date.now()) {
+    if (configured === undefined) return 'loading';
+    if (!configured) return 'setup_required';
+    if (replyWindowOpen(lastCustomerMessageAt, now)) return 'open';
+    // A failed/absent sync is not evidence that WhatsApp's window is closed.
+    if (syncFailed) return 'sync_failed';
+    if (!lastSyncedAt) return 'sync_required';
+    if (lastCustomerMessageAt == null) return 'no_customer_message';
+    const timestamp = new Date(lastCustomerMessageAt).getTime();
+    if (!Number.isFinite(timestamp) || timestamp > now) return 'unverified';
+    return 'closed';
+}
+
 // Persist only window identity/state, never customer names, messages or URLs.
 export function normalizeConversationWindows(value) {
     if (!Array.isArray(value)) return [];

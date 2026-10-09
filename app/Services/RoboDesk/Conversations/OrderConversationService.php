@@ -140,6 +140,17 @@ class OrderConversationService
             if (($raw['direction'] ?? null) === 'system' && ($raw['type'] ?? null) === 'systemLog') {
                 continue;
             }
+            // Legacy RoboDesk histories can start with an empty placeholder:
+            // no direction/date, no text, no attachment or file to display.
+            // Never skip a content-bearing message or invent its direction/time.
+            if (array_key_exists('direction', $raw) && $raw['direction'] === null
+                && array_key_exists('date', $raw) && $raw['date'] === null
+                && ($raw['channel'] ?? null) === 'WhatsApp' && ($raw['type'] ?? null) === 'text'
+                && ($raw['status'] ?? null) === 'pending'
+                && ($raw['text'] ?? null) === '' && ($raw['attachments'] ?? null) === []
+                && ! filled($raw['fileName'] ?? null)) {
+                continue;
+            }
             if (! in_array($raw['direction'] ?? null, ['in', 'out'], true)
                 || ($raw['type'] ?? null) === 'systemLog'
                 || ($raw['channel'] ?? 'WhatsApp') !== 'WhatsApp'

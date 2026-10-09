@@ -1,11 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeMessages, safeAttachmentUrl, shouldPoll, normalizeConversationWindows, readConversationWindows, writeConversationWindows, shortContactName, safeOrderUrl, replyWindowOpen } from '../../resources/js/conversation-state.js';
+import { mergeMessages, safeAttachmentUrl, shouldPoll, normalizeConversationWindows, readConversationWindows, writeConversationWindows, shortContactName, safeOrderUrl, replyWindowOpen, replyWindowState } from '../../resources/js/conversation-state.js';
 
 test('reply window excludes absent/invalid/future timestamps and exactly 24 hours', () => {
     const now = Date.parse('2026-10-09T14:00:00Z');
     for (const value of [null, '', 'invalid', '2026-10-09T14:00:01Z', '2026-10-08T14:00:00Z']) assert.equal(replyWindowOpen(value, now), false);
     assert.equal(replyWindowOpen('2026-10-08T14:00:00.001Z', now), true);
+});
+
+test('failed or missing history never falsely reports a closed WhatsApp window', () => {
+    const now = Date.parse('2026-10-09T14:00:00Z');
+    const state = {configured:true, lastCustomerMessageAt:null};
+    assert.equal(replyWindowState({}, now), 'loading');
+    assert.equal(replyWindowState({...state, configured:false}, now), 'setup_required');
+    assert.equal(replyWindowState(state, now), 'sync_required');
+    assert.equal(replyWindowState({...state, syncFailed:true}, now), 'sync_failed');
+    assert.equal(replyWindowState({...state, lastSyncedAt:'2026-10-09T13:59:00Z'}, now), 'no_customer_message');
+    const stale = {...state, lastCustomerMessageAt:'2026-10-08T14:00:00Z', lastSyncedAt:'2026-10-09T13:59:00Z'};
+    assert.equal(replyWindowState(stale, now), 'closed');
+    assert.equal(replyWindowState({...stale, syncFailed:true}, now), 'sync_failed');
+    assert.equal(replyWindowState({...stale, lastCustomerMessageAt:'invalid'}, now), 'unverified');
+    assert.equal(replyWindowState({...stale, lastCustomerMessageAt:'2026-10-09T14:00:01Z'}, now), 'unverified');
+    assert.equal(replyWindowState({...stale, syncFailed:true, lastCustomerMessageAt:'2026-10-09T13:00:00Z'}, now), 'open');
 });
 
 test('deduplicates, updates status and orders equal timestamps deterministically', () => {

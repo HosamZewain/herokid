@@ -93,6 +93,28 @@ class ConversationReplyAndNotificationsTest extends TestCase
         $this->assertDatabaseCount('whatsapp_conversation_reads', 0);
     }
 
+    public function test_old_cancelled_order_can_reply_after_loading_recent_messages_with_empty_legacy_placeholder(): void
+    {
+        $this->order->update(['status' => 'cancelled', 'created_at' => now()->subMonth(), 'delivery_details' => ['phone' => '01112345678']]);
+        $before = $this->order->refresh()->getRawOriginal();
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake([
+            '*/messagesByPhone?*' => Http::response(['phone' => '201112345678', 'messages' => [
+                $this->remote('empty', 'out', ['direction' => null, 'date' => null, 'text' => '', 'status' => 'pending', 'senderType' => null]),
+                $this->remote('recent-customer', 'in'),
+            ]]),
+            '*/messagesByPhone/reply' => Http::response(['phone' => '201112345678', 'messages' => [$this->remote('accepted-reply')]]),
+        ]);
+        $this->postJson(route('admin.orders.conversation.sync', $this->order))->assertOk()->assertJsonCount(1, 'messages');
+        $this->reply()->assertOk()->assertJsonPath('reply_state', 'accepted')->assertJsonCount(2, 'messages');
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->method() === 'POST' && $request['phone'] === '201112345678');
+        $this->assertDatabaseMissing('whatsapp_conversation_messages', ['remote_hash' => hash('sha256', 'empty')]);
+        $this->assertSame($before, $this->order->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('order_group_assignments', 0);
+    }
+
     public function test_same_request_is_not_sent_twice_and_different_payload_is_rejected(): void
     {
         $this->accept();

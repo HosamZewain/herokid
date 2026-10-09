@@ -223,6 +223,61 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->assertDatabaseCount('whatsapp_conversation_messages', 0);
     }
 
+    public function test_empty_legacy_placeholder_does_not_block_old_order_history_or_recent_reply_window(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $order->update(['status' => 'cancelled', 'created_at' => now()->subMonth()]);
+        $placeholder = $this->message('empty-placeholder', ['direction' => null, 'date' => null, 'text' => '', 'senderType' => null, 'agentName' => null, 'status' => 'pending']);
+        $messages = [$placeholder];
+        for ($i = 1; $i <= 116; $i++) {
+            $messages[] = $this->message('old-message-'.$i);
+        }
+        $latest = now()->subMinutes(5)->startOfSecond()->toISOString();
+        $messages[] = $this->message('latest-customer', ['direction' => 'in', 'date' => $latest]);
+        $this->fake($messages);
+        $this->sync($order)->assertOk()->assertJsonCount(50, 'messages')->assertJsonPath('last_customer_message_at', $latest)
+            ->assertJsonPath('has_more', true);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 117);
+        $this->assertDatabaseMissing('whatsapp_conversation_messages', ['remote_hash' => hash('sha256', 'empty-placeholder')]);
+        $this->assertSame('latest-customer', WhatsAppConversation::first()->sync_cursor);
+        $this->assertSame(1, WhatsAppConversation::first()->inbound_version);
+    }
+
+    public function test_placeholder_only_delta_advances_cursor_without_erasing_messages_or_reply_eligibility(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $latest = now()->subMinutes(5)->startOfSecond()->toISOString();
+        $this->fake([$this->message('customer', ['direction' => 'in', 'date' => $latest])]);
+        $this->sync($order)->assertOk();
+        $this->travel(13)->seconds();
+        $this->fake([$this->message('empty-cursor', ['direction' => null, 'date' => null, 'text' => '', 'status' => 'pending'])]);
+        $this->sync($order)->assertOk()->assertJsonCount(1, 'messages')->assertJsonPath('last_customer_message_at', $latest);
+        $this->assertSame('empty-cursor', WhatsAppConversation::first()->sync_cursor);
+        $this->assertSame(1, WhatsAppConversation::first()->inbound_version);
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+    }
+
+    public function test_placeholder_filter_never_discards_content_files_or_other_malformed_messages(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        foreach ([['text' => 'Actual message must not be discarded'],
+            ['attachments' => [['file' => 'test.jpg', 'url' => null]]], ['fileName' => 'test.jpg'],
+            ['direction' => 'in'], ['date' => now()->toISOString()], ['id' => ''],
+            ['channel' => 'Other'], ['type' => 'file'], ['attachments' => null], ['text' => null], ['status' => 'unknown']] as $invalid) {
+            $placeholder = $this->message('bad-placeholder', $invalid + ['direction' => null, 'date' => null, 'text' => '', 'status' => 'pending']);
+            $this->fake([$this->message('valid'), $placeholder]);
+            $this->sync($order)->assertStatus(502)->assertJsonPath('reason', 'invalid_provider_response');
+            $this->assertDatabaseCount('whatsapp_conversations', 0);
+            $this->assertDatabaseCount('whatsapp_conversation_messages', 0);
+        }
+        $this->fake([$this->message('empty', ['direction' => null, 'date' => null, 'text' => '', 'status' => 'pending'])], '201112345678');
+        $this->sync($order)->assertStatus(502)->assertJsonPath('reason', 'invalid_provider_response');
+        $this->assertDatabaseCount('whatsapp_conversations', 0);
+    }
+
     public function test_system_log_handling_does_not_hide_other_invalid_records_or_unsafe_cursors(): void
     {
         $this->enable();

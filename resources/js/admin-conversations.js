@@ -1,5 +1,5 @@
 import '../css/admin-conversations.css';
-import { mergeMessages, safeAttachmentUrl, shouldPoll, normalizeConversationWindows, readConversationWindows, writeConversationWindows, shortContactName, safeOrderUrl, replyWindowOpen } from './conversation-state';
+import { mergeMessages, safeAttachmentUrl, shouldPoll, normalizeConversationWindows, readConversationWindows, writeConversationWindows, shortContactName, safeOrderUrl, replyWindowState } from './conversation-state';
 
 export function initializeOrderConversations() {
     const dock = document.querySelector('[data-conversation-dock]');
@@ -105,6 +105,8 @@ export function initializeOrderConversations() {
                 existing.readEnabled ||= state.readEnabled;
                 existing.readVersion = data.read_version; existing.configured = data.configured;
                 existing.lastCustomerMessageAt = data.last_customer_message_at;
+                existing.lastSyncedAt = data.last_synced_at;
+                if (sync && !data.refresh_deferred) existing.syncFailed = false;
                 existing.messages = mergeMessages(existing.messages, data.messages ?? []);
                 render(existing); updateComposer(existing);
                 orderDetails(existing, data); persist();
@@ -115,6 +117,8 @@ export function initializeOrderConversations() {
             state.key = data.key; state.configured = data.configured;
             state.readVersion = data.read_version;
             state.lastCustomerMessageAt = data.last_customer_message_at;
+            state.lastSyncedAt = data.last_synced_at;
+            if (sync && !data.refresh_deferred) state.syncFailed = false;
             if (typeof data.contact_title === 'string') {
                 title(state, data.contact_title);
             }
@@ -130,10 +134,12 @@ export function initializeOrderConversations() {
             updateComposer(state); void markRead(state);
         } catch (error) {
             if (state.closed || error.name === 'AbortError') return;
+            state.syncFailed = true;
             const notice = selector(state, 'notice'); notice.hidden = false;
             notice.textContent = error.message.includes('JSON') || error.name === 'TypeError' ? 'تعذر الاتصال. الرسائل المحفوظة ما زالت متاحة.' : error.message;
         } finally {
             state.busy = false; selector(state, 'refresh').disabled = false;
+            updateComposer(state);
             if (state.refreshPending && !state.closed && !state.suspended) {
                 state.refreshPending = false; void refresh(state);
             }
@@ -288,8 +294,18 @@ export function initializeOrderConversations() {
     }
     function updateComposer(state) {
         const composer = selector(state, 'composer'); if (!composer) return;
-        state.canReply = Boolean(state.configured && replyWindowOpen(state.lastCustomerMessageAt));
-        selector(state, 'reply-window').textContent = !state.configured ? 'فعّل ربط المحادثات أولاً.' : state.canReply ? 'يمكنك الرد بنص أو صورة · الإرسال باسمك' : 'مهلة الرد انتهت — يلزم قالب واتساب (قريباً).';
+        const windowState = replyWindowState(state);
+        state.canReply = windowState === 'open';
+        selector(state, 'reply-window').textContent = {
+            loading:'جارٍ تحميل المحادثة والتحقق من إمكانية الرد…',
+            setup_required:'فعّل ربط المحادثات أولاً.',
+            sync_required:'حدّث المحادثة للتحقق من إمكانية الرد.',
+            sync_failed:'تعذر التحقق من إمكانية الرد بسبب فشل تحديث المحادثة. اضغط تحديث.',
+            no_customer_message:'لا توجد رسالة واردة من العميل في المحادثة المحمّلة؛ يلزم قالب واتساب (قريباً).',
+            unverified:'تعذر التحقق من وقت آخر رسالة. حدّث المحادثة.',
+            open:'يمكنك الرد بنص أو صورة · الإرسال باسمك',
+            closed:'مهلة الرد انتهت — يلزم قالب واتساب (قريباً).',
+        }[windowState];
         selector(state, 'send').disabled = !state.canReply || state.sending || state.uncertain;
     }
     function initializeComposer(state) {

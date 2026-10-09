@@ -57,3 +57,11 @@ The preceding sections describe the initial read-only release. This follow-up ad
 - Background refresh is bounded and queued for active orders only, with a minimum ten-minute interval per contact. Header polling reads local stored state; it does not call RoboDesk. Deployment requires the new migration, employee permission selection, Laravel scheduler and the `robodesk-conversations` queue worker. No new environment variables, production deployment or live customer sends occurred.
 
 Follow-up final result: **passed locally**. Production credentials, queue/scheduler operation and real WhatsApp acceptance remain deployment checks, not claims from this local QA.
+
+## Historical conversation / reply-window repair — 2026-10-09
+
+- Temporary localhost Fetch-response mock reproduced an empty cache followed by HTTP 502, without touching server settings or calling RoboDesk. The composer now says that reply eligibility cannot be checked because refresh failed, not that the WhatsApp window expired. [Actual local failure-state screenshot](qa/conversations/history-sync-failed.png).
+- Removed the mock and reloaded the user's local preview afterward; the normal synthetic history and disabled-integration notice returned. No viewport override, production mutation or live send.
+- Full Laravel/MySQL suite: 1285 passed / 10324 assertions; Node state tests: 12 passed. The backend regression includes an old cancelled order plus recent customer messages and an accepted mocked reply. This is a diagnostic/compatibility repair, not a visual redesign.
+
+Hotfix final result: passed locally; live confirmation pending deployment.
