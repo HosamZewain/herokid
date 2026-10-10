@@ -49,11 +49,51 @@ async function pageFixture(width = 1200) {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/quick-edit-options', (route) => route.fulfill({ json: options }));
+    await page.route('**/removal-options', (route) => route.fulfill({ json: { removals: [{ id: 9, child_name: 'ليلى', removal_fingerprint: 'a'.repeat(64), affected_items: [{ title: 'ستيكر الطفل', quantity: 2, total_price_cents: 20000 }] }] } }));
     await page.route('**/photo-test', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0S8AAAAASUVORK5CYII=', 'base64') }));
     await page.goto(origin);
     await page.waitForFunction(() => document.querySelector('[data-order-quick-edit]')?.dataset.initialized === '1');
     return { page, errors };
 }
+
+test('removal on mobile needs a reason and explicit confirmation, can cancel, and preserves retry key', async () => {
+    const { page, errors } = await pageFixture(390);
+    const bodies = [];
+    await page.route('**/groups/1/items/9', route => {
+        bodies.push(route.request().postData());
+        return route.fulfill({ status: bodies.length === 1 ? 422 : 200,
+            json: bodies.length === 1 ? { errors: { change_reason: ['راجع سبب الحذف'] } } : { message: 'تم الحذف', redirect_url: origin } });
+    });
+    await page.locator('[data-quick-open="remove"]').click();
+    await page.locator('input[name="confirmed"]').waitFor();
+    assert.ok(await page.locator('[data-quick-fields]').textContent().then(text => text.includes('العدد: 2')));
+    assert.ok(await page.locator('[data-quick-fields]').textContent().then(text => text.includes('الطفل: ليلى')));
+    await page.locator('[data-quick-cancel]').click();
+    assert.equal(bodies.length, 0);
+    await page.locator('[data-quick-open="remove"]').click();
+    await page.locator('input[name="confirmed"]').waitFor();
+    await page.locator('[data-quick-save]').click();
+    assert.equal(bodies.length, 0);
+    await page.locator('#quick-change-reason').fill('طلب العميل حذف المنتج.');
+    await page.locator('[data-quick-save]').click();
+    assert.equal(bodies.length, 0);
+    await page.locator('input[name="confirmed"]').check();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    if (process.env.HEROKID_REMOVAL_UI_SCREENSHOT) await page.screenshot({ path: process.env.HEROKID_REMOVAL_UI_SCREENSHOT });
+    await page.locator('[data-quick-save]').click();
+    await page.getByText('راجع سبب الحذف').waitFor();
+    assert.equal(await page.locator('input[name="confirmed"]').isChecked(), true);
+    await page.locator('[data-quick-save]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-quick-dialog]').open);
+    const key = body => body.match(/name="request_key"\r\n\r\n([^\r]+)/)?.[1];
+    assert.equal(bodies.length, 2);
+    assert.ok(key(bodies[0])); assert.equal(key(bodies[0]), key(bodies[1]));
+    assert.ok(bodies[0].includes('DELETE')); assert.ok(bodies[0].includes('a'.repeat(64)));
+    assert.deepEqual(errors, []);
+    await page.locator('[data-quick-open="contact"]').click();
+    assert.equal(await page.locator('[data-quick-save]').textContent(), 'حفظ التعديل');
+    await page.close();
+});
 
 test('contact can be edited directly; dialog starts closed and closes with Escape', async () => {
     const { page, errors } = await pageFixture();

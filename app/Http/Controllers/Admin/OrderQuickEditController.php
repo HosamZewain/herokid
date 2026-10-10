@@ -15,6 +15,25 @@ use Illuminate\Validation\ValidationException;
 
 class OrderQuickEditController extends Controller
 {
+    public function removalOptions(Order $representative, AdminOrderQuickEditService $edits)
+    {
+        return response()->json($edits->removalOptions($representative))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function removeItem(Request $request, Order $representative, OrderItem $item, AdminOrderQuickEditService $edits)
+    {
+        $validated = $request->validate([
+            'request_key' => ['required', 'uuid'],
+            'confirmed' => ['required', 'accepted'],
+            'removal_fingerprint' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
+            'change_reason' => $this->reasonRules(),
+        ], $this->messages());
+        $active = $edits->removeItem($representative, $item, $validated, $request->user(), $request);
+
+        return response()->json(['message' => 'تم نقل العنصر للمحذوفات وتحديث الإجمالي مع الحفاظ على المبلغ المدفوع.',
+            'redirect_url' => route('admin.orders.groups.show', $active)]);
+    }
+
     public function options(Order $representative, AdminOrderQuickEditService $edits, Request $request)
     {
         return response()->json($edits->options($representative, $request->user()))->header('Cache-Control', 'private, no-store');

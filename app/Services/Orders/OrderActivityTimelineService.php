@@ -103,6 +103,7 @@ class OrderActivityTimelineService
             'checkout.contact_updated' => 'تم تعديل بيانات التواصل.',
             'checkout.product_added' => 'تمت إضافة منتج إلى الطلب.',
             'checkout.story_added' => 'تمت إضافة قصة إلى الطلب.',
+            'checkout.item_removed' => 'تم حذف عنصر من الطلب ونقله للمحذوفات.',
             'order.product_details_updated' => 'تم تعديل بيانات منتج واحد.',
             'order.note_added' => 'تمت إضافة ملاحظة داخلية.',
             'order.assignment_acquired' => 'تم استلام مسؤولية الطلب.',
@@ -144,6 +145,11 @@ class OrderActivityTimelineService
 
         $this->addStatusChanges($details, (array) ($properties['before'] ?? []), (array) ($properties['after'] ?? []));
         $this->addCheckoutChanges($details, (array) ($properties['before'] ?? []), (array) ($properties['after'] ?? []));
+        foreach ((array) ($properties['removed_items'] ?? []) as $item) {
+            if (is_array($item) && isset($item['title'])) {
+                $details->push(['label' => 'العنصر المحذوف', 'value' => $item['title'].' × '.($item['quantity'] ?? 1)]);
+            }
+        }
 
         if (isset($properties['status']) && is_array($properties['status']) && array_key_exists('new', $properties['status'])) {
             $details->push([

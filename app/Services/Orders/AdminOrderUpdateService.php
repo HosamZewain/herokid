@@ -20,6 +20,7 @@ use App\Support\OrderStatusRegistry;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -194,13 +195,110 @@ class AdminOrderUpdateService
         });
     }
 
-    /** Shared financial reconciliation for additive edits; never records new collection. */
+    /** Exact purchased lines affected by removal, including a story's linked extras. */
+    public function removalItems(Collection $orders, OrderItem $item): Collection
+    {
+        return $orders->flatMap->items->filter(fn (OrderItem $line): bool => $line->id === $item->id
+            || ($item->item_type === 'story' && $line->item_type === 'product_add_on'
+                && ($line->order_id === $item->order_id || $line->linked_order_item_id === $item->id)))->values();
+    }
+
+    public function removalFingerprint(Collection $orders, OrderItem $item): string
+    {
+        return hash('sha256', json_encode($this->removalItems($orders, $item)->sortBy('id')->map(
+            fn (OrderItem $line): array => $line->only(['id', 'order_id', 'title', 'quantity', 'unit_price_cents', 'total_price_cents', 'personalization_snapshot', 'linked_order_item_id']),
+        )->values()->all(), JSON_THROW_ON_ERROR));
+    }
+
+    public function removePurchasedItem(Order $representative, int $itemId, array $data, User $admin, Request $request): Order
+    {
+        return DB::transaction(function () use ($representative, $itemId, $data, $admin, $request): Order {
+            $orders = Order::query()->with(['items', 'story'])->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
+            $item = $orders->flatMap->items->firstWhere('id', $itemId);
+            abort_unless($item && in_array($item->item_type, ['story', 'product', 'product_add_on'], true), 404);
+            abort_unless(hash_equals($this->removalFingerprint($orders, $item), $data['removal_fingerprint']), 409, 'العنصر تغيّر منذ فتح التأكيد؛ ألغِ النافذة وافتحها من جديد لمراجعة البيانات الحالية.');
+            $affected = $this->removalItems($orders, $item);
+            if ($orders->flatMap->items->count() <= $affected->count()) {
+                throw ValidationException::withMessages(['item' => 'هذا هو آخر عنصر في الطلب؛ استخدم حذف عملية الشراء كاملة بدل ترك طلب فارغ.']);
+            }
+            $before = $this->groups->present($orders);
+            if ((int) $before['items_cents'] !== (int) $orders->flatMap->items->sum('total_price_cents')) {
+                throw ValidationException::withMessages(['item' => 'سجل أسعار هذا الطلب القديم غير مكتمل؛ راجع تعديل الطلب الكامل أولًا.']);
+            }
+            $source = $orders->firstWhere('id', $item->order_id);
+            $auditItems = $affected->map(fn (OrderItem $line): array => $line->only(['id', 'order_id', 'item_type', 'title', 'quantity', 'unit_price_cents', 'total_price_cents', 'personalization_snapshot', 'linked_order_item_id']))->all();
+            $originalParent = $item->linked_order_item_id;
+            if ($item->item_type === 'story') {
+                // Independent products must survive even if this was the last story carrier.
+                $independent = $source->items->where('item_type', 'product');
+                if ($independent->isNotEmpty()) {
+                    $carrier = $this->removalCarrier($source, $data['on_stored']);
+                    OrderItem::whereKey($independent->pluck('id'))->update(['order_id' => $carrier->id]);
+                }
+                OrderItem::whereKey($affected->pluck('id'))->update(['order_id' => $source->id]);
+                $archived = $source;
+            } else {
+                $archived = ! $source->story_id && $source->items->count() === 1
+                    ? $source : $this->removalCarrier($source, $data['on_stored']);
+                $item->forceFill(['order_id' => $archived->id, 'linked_order_item_id' => null])->save();
+            }
+            $archived->forceFill(['delivery_details' => array_replace($archived->delivery_details ?? [], [
+                'quick_removal' => ['source_order_id' => $source->id, 'item_id' => $item->id, 'linked_order_item_id' => $originalParent],
+            ])])->save();
+            $this->deletions->deleteOrder($archived, $data['change_reason'], $admin, $request, preserveIndependentProducts: false);
+            // Cross-carrier linked extras can leave a now-empty historical carrier.
+            $remaining = Order::with('items')->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->get();
+            foreach ($remaining as $order) {
+                if (! $order->story_id && $order->items->isEmpty()) {
+                    $this->deletions->deleteOrder($order, 'أرشفة سجل فارغ بعد حذف عنصر: '.$data['change_reason'], $admin, $request, preserveIndependentProducts: false);
+                }
+            }
+            $active = Order::where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->firstOrFail();
+            [$subtotal, $total, $payment] = $this->refreshAfterAddition($active, $before, $data, $admin, $request, 'admin_item_removed');
+            AdminActivityLogger::log(action: 'checkout.item_removed', description: 'حذف عنصر من الطلب: '.$item->title, subject: $source,
+                properties: ['checkout_group_key' => $representative->checkoutGroupKey(), 'reason' => $data['change_reason'],
+                    'request_key' => $data['request_key'], 'request_hash' => $data['request_hash'], 'removed_items' => $auditItems,
+                    'archived_order_id' => $archived->id, 'historical_assets_preserved' => true,
+                    'paid_amount_preserved_cents' => $payment['paid_amount_cents'],
+                    'changes' => AdminActivityLogger::changedValues(
+                        ['items_cents' => $before['items_cents'], 'total_cents' => $before['total_cents'], 'payment_status' => $before['payment_status']],
+                        ['items_cents' => $subtotal, 'total_cents' => $total, 'payment_status' => $payment['payment_status']])], admin: $admin, request: $request);
+
+            return $active->fresh();
+        });
+    }
+
+    /** Preserve a purchased line's records and photos without rebuilding sibling items. */
+    private function removalCarrier(Order $source, callable $onStored): Order
+    {
+        foreach ($source->uploaded_photos ?? [] as $path) {
+            if (! Storage::disk((string) config('photo_uploads.disk', 'local'))->exists($path)) {
+                throw ValidationException::withMessages(['item' => 'إحدى صور هذا العنصر غير متاحة؛ راجع الصور أولًا حتى يمكن الاحتفاظ بها في المحذوفات.']);
+            }
+        }
+        $carrier = $source->replicate();
+        $carrier->forceFill(['order_number' => $this->newOrderNumber(), 'story_id' => null, 'uploaded_photos' => [],
+            'delivery_details' => Arr::except($source->delivery_details ?? [], ['quick_removal'])]);
+        // This is an internal container, not a new purchase. In particular, old
+        // paid checkouts without an initial ledger event must not collect again.
+        $carrier->saveQuietly();
+        app(AdminCustomerChildService::class)->copyPhotos($carrier, $source->uploaded_photos ?? [], $onStored);
+
+        return $carrier;
+    }
+
+    public function reconcileRestoredRemoval(Order $order, array $before, User $admin, Request $request): void
+    {
+        $this->refreshAfterAddition($order, $before, ['change_reason' => 'استعادة عنصر محذوف من الطلب.'], $admin, $request, 'admin_item_restored');
+    }
+
+    /** Shared financial reconciliation for item edits; never records new collection. */
     private function refreshAfterAddition(Order $source, array $before, array $data, User $admin, Request $request, string $eventSource): array
     {
         $orders = Order::query()->with(['items', 'story'])
             ->where('checkout_group_key', $source->checkoutGroupKey())->orderBy('id')->get();
         $subtotal = (int) $orders->flatMap->items->sum('total_price_cents');
-        $total = $subtotal + (int) $before['delivery_cents'] - (int) $before['discount_cents'];
+        $total = max(0, $subtotal + (int) $before['delivery_cents'] - (int) $before['discount_cents']);
         [$payment] = $this->resolveEditedPayment($before, ['payment_edit_intent' => 'preserve'], $total, (int) $before['delivery_cents']);
         foreach ($orders as $position => $order) {
             $delivery = array_replace($order->delivery_details ?? [], [

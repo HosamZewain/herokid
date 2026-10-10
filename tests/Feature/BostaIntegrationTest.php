@@ -586,6 +586,9 @@ class BostaIntegrationTest extends TestCase
     public function test_bosta_queue_only_lists_checkouts_whose_entire_shipping_status_is_ready(): void
     {
         $ready = $this->checkout('BOSTA-READY-QUEUE', 20_000);
+        // The queue may link any representative of the checkout (currently the
+        // latest). Do not assume both fixture rows were created in one second.
+        $ready->last()->update(['created_at' => $ready->first()->created_at->copy()->addSecond()]);
         $notReady = $this->checkout('BOSTA-NOT-READY-QUEUE', 20_000);
         $notReady->each->update(['shipping_status' => 'not_ready']);
         $mixed = $this->checkout('BOSTA-MIXED-QUEUE', 20_000);
@@ -598,13 +601,14 @@ class BostaIntegrationTest extends TestCase
         $this->assertFalse($eligibleGroups->contains('BOSTA-NOT-READY-QUEUE'));
         $this->assertFalse($eligibleGroups->contains('BOSTA-MIXED-QUEUE'));
 
-        $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin)
             ->get(route('admin.bosta.index'))
             ->assertOk()
-            ->assertSee(route('admin.orders.groups.show', $ready->first()), false)
+            ->assertViewHas('eligibleOrders', fn ($orders): bool => $orders->count() === 1 && $orders->first()->checkoutGroupKey() === 'BOSTA-READY-QUEUE')
             ->assertDontSee(route('admin.orders.groups.show', $notReady->first()), false)
             ->assertDontSee(route('admin.orders.groups.show', $mixed->first()), false)
             ->assertSee('تظهر هنا للمراجعة فقط. افتح الطلب لمراجعة بيانات المستلم والعنوان وCOD ثم إنشاء الشحنة.');
+        $response->assertSee(route('admin.orders.groups.show', $response->viewData('eligibleOrders')->first()), false);
     }
 
     public function test_direct_shipment_creation_rejects_checkout_until_every_order_is_ready_for_shipping(): void

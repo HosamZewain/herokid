@@ -66,7 +66,7 @@
         $statusLabels = \App\Services\Orders\OrderStatusService::labels(false);
         $statusColors = \App\Services\Orders\OrderStatusService::colors();
         $visibleStoryOrders = $group['story_orders'];
-        $deletedStoryOrders = $group['deleted_orders']->filter(fn ($order) => $order->story_id || $order->items->contains('item_type', 'story'));
+        $deletedStoryOrders = $group['deleted_orders']->filter(fn ($order) => $order->items->isNotEmpty() || $order->story_id);
         $paymentStatusColors = \App\Support\OrderPaymentStatus::colors();
         $adminNotesCount = collect($orderAdminNotes ?? [])->count();
         $attachmentsCount = collect($attachmentOrders ?? [])->sum(fn ($order) => $order->attachments->count());
@@ -330,6 +330,11 @@
                                     @can('orders.update')
                                         <button type="button" data-quick-open="story" data-order-id="{{ $order->id }}" class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">تعديل بيانات القصة / الصور</button>
                                     @endcan
+                                    @can('orders.delete')
+                                        @if($storyItem && !$group['trashed'])
+                                            <button type="button" data-quick-open="remove" data-item-id="{{ $storyItem->id }}" class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700">حذف القصة</button>
+                                        @endif
+                                    @endcan
                                 </div>
                                 <h4 class="mt-3 text-lg font-black text-gray-950">{{ $storyItem?->title ?: $order->story?->title ?: 'قصة مخصصة' }}</h4>
                                 @if(data_get($storyItem?->item_snapshot, 'package.name'))
@@ -420,9 +425,14 @@
                                 <p class="mb-2 text-xs font-black text-amber-700">إضافات مرتبطة بهذه القصة</p>
                                 <div class="grid gap-2 md:grid-cols-2">
                                     @foreach($linkedAddOns as $addOn)
-                                        <div class="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
+                                        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
                                             <div><p class="font-black text-gray-900">{{ $addOn->title }}</p>@if($addOn->sku)<p class="text-[10px] text-gray-400" dir="ltr">{{ $addOn->sku }}</p>@endif</div>
                                             <p class="font-bold text-gray-700">{{ $addOn->quantity }} × {{ format_money($addOn->unit_price_cents / 100) }}</p>
+                                            @can('orders.delete')
+                                                @if(!$group['trashed'])
+                                                    <button type="button" data-quick-open="remove" data-item-id="{{ $addOn->id }}" class="rounded-lg bg-white px-2 py-1 text-xs font-black text-red-700">حذف الإضافة</button>
+                                                @endif
+                                            @endcan
                                         </div>
                                     @endforeach
                                 </div>
@@ -513,6 +523,7 @@
 
                         <div class="mt-4 border-t border-gray-100 pt-4">
                             @can('orders.delete')
+                                @if(!$storyItem)
                                 <details class="rounded-xl border border-gray-100 bg-gray-50 p-3">
                                     <summary class="cursor-pointer text-xs font-black text-gray-600">إجراءات متقدمة للقصة</summary>
                                     <form method="POST" action="{{ route('admin.orders.destroy', $order) }}" class="mt-3 grid gap-2 sm:grid-cols-3">
@@ -523,6 +534,7 @@
                                         <button class="rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white">نقل للمحذوفات</button>
                                     </form>
                                 </details>
+                                @endif
                             @endcan
                         </div>
                     </article>
@@ -553,6 +565,11 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'] && $product->personalization_mode === 'collect_child_details')
                                         <button type="button" data-quick-open="item" data-item-id="{{ $product->id }}" class="mt-2 self-start rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-black text-emerald-700">تعديل بيانات المنتج / الصور</button>
+                                    @endif
+                                @endcan
+                                @can('orders.delete')
+                                    @if(!$group['trashed'])
+                                        <button type="button" data-quick-open="remove" data-item-id="{{ $product->id }}" class="mt-2 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-black text-red-700">حذف المنتج</button>
                                     @endif
                                 @endcan
                                 @if($product->sku)<p class="mt-1 text-xs text-gray-400" dir="ltr">SKU: {{ $product->sku }}</p>@endif
@@ -723,15 +740,15 @@
 
             @if($deletedStoryOrders->isNotEmpty())
                 <section class="rounded-3xl border border-red-100 bg-red-50 p-6">
-                    <h3 class="text-lg font-black text-red-900">قصص محذوفة من هذه العملية</h3>
+                    <h3 class="text-lg font-black text-red-900">عناصر محذوفة من هذه العملية</h3>
                     <div class="mt-4 space-y-3">
                         @foreach($deletedStoryOrders as $order)
                             <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div><p class="font-black text-gray-900">{{ $order->story?->title ?: $order->order_number }}</p><p class="mt-1 text-xs text-gray-500">{{ $order->child_name }} · {{ $order->deletion_reason }}</p></div>
+                                <div><p class="font-black text-gray-900">{{ $order->items->pluck('title')->join(' + ') ?: $order->story?->title ?: $order->order_number }}</p><p class="mt-1 text-xs text-gray-500">{{ $order->child_name }} · {{ $order->deletion_reason }}</p></div>
                                 @can('orders.delete')
-                                    <form method="POST" action="{{ route('admin.orders.restore', $order->id) }}" onsubmit="return confirm('استعادة هذه القصة وحجز مخزون إضافاتها مرة أخرى؟')">
+                                    <form method="POST" action="{{ route('admin.orders.restore', $order->id) }}" onsubmit="return confirm('استعادة العنصر وتحديث الإجمالي وحجز مخزونه مرة أخرى؟')">
                                         @csrf
-                                        <button class="rounded-xl bg-green-600 px-4 py-2 text-sm font-black text-white hover:bg-green-700">استعادة القصة</button>
+                                        <button class="rounded-xl bg-green-600 px-4 py-2 text-sm font-black text-white hover:bg-green-700">استعادة العنصر</button>
                                     </form>
                                 @endcan
                             </div>

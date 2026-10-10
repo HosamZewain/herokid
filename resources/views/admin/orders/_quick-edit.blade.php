@@ -1,7 +1,9 @@
-@can('orders.update')
+@canany(['orders.update', 'orders.delete'])
     @if(!$group['trashed'])
         <div data-order-quick-edit
             data-options-url="{{ route('admin.orders.groups.quick-edit-options', $group['representative_id']) }}"
+            data-removal-options-url="{{ route('admin.orders.groups.removal-options', $group['representative_id']) }}"
+            data-remove-url="{{ route('admin.orders.groups.items.destroy', [$group['representative_id'], '__ITEM__']) }}"
             data-contact-url="{{ route('admin.orders.groups.contact', $group['representative_id']) }}"
             data-add-url="{{ route('admin.orders.groups.products.store', $group['representative_id']) }}"
             data-add-story-url="{{ route('admin.orders.groups.stories.store', $group['representative_id']) }}"
@@ -20,7 +22,7 @@
                         <div data-quick-fields class="space-y-3"></div>
                     </div>
                     <div class="border-t border-gray-100 bg-gray-50 p-4">
-                        <label class="block text-xs font-black text-gray-700" for="quick-change-reason">سبب التعديل *</label>
+                        <label data-quick-reason-label class="block text-xs font-black text-gray-700" for="quick-change-reason">سبب التعديل *</label>
                         <input id="quick-change-reason" name="change_reason" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل إضافة قصة أو منتج أو تصحيح بيانات الطفل" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                         <div class="mt-3 flex items-center gap-3">
                             <button data-quick-save type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">حفظ التعديل</button>
@@ -32,4 +34,4 @@
             </dialog>
         </div>
     @endif
-@endcan
+@endcanany

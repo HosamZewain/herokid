@@ -10,7 +10,7 @@
     "name": "pdf.worker.min"
   },
   "resources/css/app.css": {
-    "file": "assets/app-CMe93T5S.css",
+    "file": "assets/app-CXaNG7fB.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -46,7 +46,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-bj3yQm5y.js",
+    "file": "assets/app-C1vEzVhd.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

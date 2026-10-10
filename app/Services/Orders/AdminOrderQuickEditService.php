@@ -92,6 +92,41 @@ class AdminOrderQuickEditService
         ];
     }
 
+    /** Removal previews expose purchased lines only, never customer photos or catalog data. */
+    public function removalOptions(Order $representative): array
+    {
+        $orders = Order::query()->with('items')->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->get();
+
+        return ['removals' => $orders->flatMap->items->map(fn (OrderItem $item): array => [
+            'id' => $item->id, 'title' => $item->title, 'quantity' => $item->quantity,
+            'child_name' => data_get($item->personalization_snapshot, 'child_name') ?: $orders->firstWhere('id', $item->order_id)?->child_name,
+            'type' => $item->item_type, 'total_price_cents' => $item->total_price_cents,
+            'affected_items' => $this->updater->removalItems($orders, $item)->map(fn (OrderItem $line): array => $line->only(['id', 'title', 'quantity', 'total_price_cents']))->values()->all(),
+            'removal_fingerprint' => $this->updater->removalFingerprint($orders, $item),
+        ])->values()->all()];
+    }
+
+    public function removeItem(Order $representative, OrderItem $item, array $data, User $actor, Request $request): Order
+    {
+        return $this->withPhotoCleanup(function (callable $onStored) use ($representative, $item, $data, $actor, $request): Order {
+            return DB::transaction(function () use ($representative, $item, $data, $actor, $request, $onStored): Order {
+                $orders = Order::query()->with('items')->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
+                abort_if($orders->isEmpty(), 404);
+                $data['request_hash'] = hash('sha256', json_encode([...$data, 'item_id' => $item->id], JSON_THROW_ON_ERROR));
+                $previous = AdminActivityLog::query()->where('action', 'checkout.item_removed')->where('user_id', $actor->id)
+                    ->where('properties->checkout_group_key', $representative->checkoutGroupKey())
+                    ->where('properties->request_key', $data['request_key'])->first();
+                if ($previous) {
+                    abort_unless(hash_equals((string) $previous->properties['request_hash'], $data['request_hash']), 409, 'طلب حذف مكرر ببيانات مختلفة. افتح نافذة تأكيد جديدة.');
+
+                    return $orders->first();
+                }
+
+                return $this->updater->removePurchasedItem($representative, $item->id, [...$data, 'on_stored' => $onStored], $actor, $request);
+            });
+        });
+    }
+
     public function updateStory(Order $order, array $data, User $actor, Request $request): void
     {
         $this->withPhotoCleanup(function (callable $onStored) use ($order, $data, $actor, $request): void {
@@ -343,11 +378,11 @@ class AdminOrderQuickEditService
         abort_if(($newPhotos !== [] || $reusedPhotos !== []) && ! $actor->hasPermission('orders.photos.view'), 403);
     }
 
-    private function withPhotoCleanup(callable $operation): void
+    private function withPhotoCleanup(callable $operation): mixed
     {
         $paths = [];
         try {
-            $operation(function (string $path) use (&$paths): void {
+            return $operation(function (string $path) use (&$paths): void {
                 $paths[] = $path;
             });
         } catch (\Throwable $exception) {

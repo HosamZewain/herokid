@@ -230,7 +230,13 @@ export function initializeOrderQuickEdit() {
         const thisOpening = ++opening;
         save.disabled = true;
         dialog.showModal();
-        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور' }[mode];
+        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور', remove: 'تأكيد حذف عنصر من الطلب' }[mode];
+        save.textContent = mode === 'remove' ? 'تأكيد الحذف' : 'حفظ التعديل';
+        save.classList.toggle('bg-red-600', mode === 'remove');
+        save.classList.toggle('bg-indigo-600', mode !== 'remove');
+        const reasonLabel = root.querySelector('[data-quick-reason-label]');
+        if (reasonLabel) reasonLabel.textContent = mode === 'remove' ? 'سبب الحذف *' : 'سبب التعديل *';
+        form.querySelector('[name="change_reason"]').placeholder = mode === 'remove' ? 'مثال: طلب العميل إلغاء هذا المنتج أو القصة' : 'مثال: طلب العميل إضافة قصة أو منتج أو تصحيح بيانات الطفل';
         if (mode === 'contact') {
             const contact = JSON.parse(root.dataset.contact);
             const name = input(fields, 'اسم ولي الأمر *', 'parent_name', contact.parent_name); name.required = true; name.maxLength = 150;
@@ -242,12 +248,25 @@ export function initializeOrderQuickEdit() {
         status.textContent = 'جارٍ تحميل البيانات…';
         try {
             // Refetch when opening to avoid stale product settings or children after another employee's edit.
-            const response = await fetch(root.dataset.optionsUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+            const response = await fetch(mode === 'remove' ? root.dataset.removalOptionsUrl : root.dataset.optionsUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' });
             if (!response.ok) throw new Error('تعذر تحميل بيانات التعديل. تحقق من الصلاحيات وحاول مرة أخرى.');
             const loaded = await response.json();
             if (!dialog.open || thisOpening !== opening) return;
             options = loaded;
-            if (mode === 'add') renderAdd();
+            if (mode === 'remove') {
+                currentItem = options.removals.find((item) => String(item.id) === button.dataset.itemId);
+                if (!currentItem) throw new Error('العنصر لم يعد موجوداً بالطلب. أعد تحميل الصفحة.');
+                if (currentItem.child_name) fields.append(element('p', `الطفل: ${currentItem.child_name}`, 'text-sm font-black text-gray-900'));
+                fields.append(element('p', 'سيُحذف العنصر بكل الكمية الموضحة، ويُعاد حساب الإجمالي دون تغيير المدفوع. سيظل محفوظاً في المحذوفات مع بياناته وصوره.', 'rounded-xl bg-red-50 p-3 text-sm font-bold leading-6 text-red-800'));
+                const list = element('ul', undefined, 'space-y-2');
+                currentItem.affected_items.forEach((item) => list.append(element('li', `${item.title} — العدد: ${item.quantity} — ${(item.total_price_cents / 100).toFixed(2)} ج.م`, 'rounded-xl border border-red-100 p-3 text-sm font-black break-words')));
+                fields.append(list);
+                if (currentItem.affected_items.length > 1) fields.append(element('p', 'الإضافات المرتبطة بالقصة المذكورة أعلاه ستُحذف معها أيضاً.', 'text-sm font-bold text-red-700'));
+                input(fields, '', 'removal_fingerprint', currentItem.removal_fingerprint, 'hidden');
+                const confirmation = input(fields, 'أؤكد حذف العناصر الموضحة أعلاه، وقد راجعت الكمية وسبب الحذف.', 'confirmed', '', 'checkbox');
+                confirmation.value = '1'; confirmation.required = true; confirmation.className = 'mt-2 h-5 w-5 rounded border-red-300 text-red-600';
+            }
+            else if (mode === 'add') renderAdd();
             else if (mode === 'add-story') renderAddStory();
             else if (mode === 'story') {
                 currentStory = options.stories.find((story) => String(story.order_id) === button.dataset.orderId);
@@ -290,10 +309,11 @@ export function initializeOrderQuickEdit() {
         if (busy || !form.reportValidity()) return;
         busy = true; save.disabled = true; showError(''); status.textContent = 'جارٍ حفظ التعديل…';
         const body = new FormData(form);
-        if (mode === 'add' || mode === 'add-story') body.append('request_key', requestKey);
+        if (mode === 'add' || mode === 'add-story' || mode === 'remove') body.append('request_key', requestKey);
         body.append('_token', document.querySelector('meta[name="csrf-token"]').content);
         let url = root.dataset.addUrl;
         if (mode === 'add-story') url = root.dataset.addStoryUrl;
+        if (mode === 'remove') { url = root.dataset.removeUrl.replace('__ITEM__', currentItem.id); body.append('_method', 'DELETE'); }
         if (mode === 'contact') {
             url = root.dataset.contactUrl; body.append('_method', 'PATCH');
             const initial = JSON.parse(root.dataset.contact);
@@ -323,7 +343,8 @@ export function initializeOrderQuickEdit() {
                 throw new Error(messages.join('\n') || (response.status === 419 ? 'انتهت الجلسة. افتح الصفحة من جديد ثم حاول الحفظ.' : payload.message || 'تعذر حفظ التعديل.'));
             }
             status.textContent = payload.message;
-            window.location.reload();
+            if (payload.redirect_url) window.location.assign(payload.redirect_url);
+            else window.location.reload();
         } catch (error) { showError(error.message || 'تعذر الاتصال. تحقق من سجل النشاط قبل إعادة إضافة القصة أو المنتج.'); status.textContent = ''; }
         finally { busy = false; save.disabled = false; }
     });

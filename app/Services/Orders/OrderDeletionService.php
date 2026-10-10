@@ -60,9 +60,9 @@ class OrderDeletionService
         });
     }
 
-    public function deleteOrder(Order $order, string $reason, User $admin, Request $request): void
+    public function deleteOrder(Order $order, string $reason, User $admin, Request $request, bool $preserveIndependentProducts = true): void
     {
-        DB::transaction(function () use ($order, $reason, $admin, $request): void {
+        DB::transaction(function () use ($order, $reason, $admin, $request, $preserveIndependentProducts): void {
             $locked = Order::query()->with('items')->lockForUpdate()->findOrFail($order->id);
             $siblings = Order::query()
                 ->where('checkout_group_key', $locked->checkoutGroupKey())
@@ -70,7 +70,8 @@ class OrderDeletionService
                 ->lockForUpdate()
                 ->get();
             $directProducts = $locked->items->where('item_type', 'product');
-            $movedProducts = $directProducts->map(fn (OrderItem $item): array => [
+            $willMoveProducts = $preserveIndependentProducts && $directProducts->isNotEmpty() && $siblings->isNotEmpty();
+            $movedProducts = ($willMoveProducts ? $directProducts : collect())->map(fn (OrderItem $item): array => [
                 'item_id' => $item->id,
                 'title' => $item->title,
                 'quantity' => $item->quantity,
@@ -78,13 +79,13 @@ class OrderDeletionService
 
             $isStoryOrder = $locked->story_id !== null || $locked->items->contains('item_type', 'story');
 
-            if ($directProducts->isNotEmpty() && $siblings->isEmpty() && $isStoryOrder) {
+            if ($preserveIndependentProducts && $directProducts->isNotEmpty() && $siblings->isEmpty() && $isStoryOrder) {
                 throw ValidationException::withMessages([
                     'delete' => 'لا يمكن حذف القصة الأخيرة منفردة لأنها تحمل منتجات مستقلة. احذف عملية الشراء كاملة للحفاظ على ترابط المنتجات.',
                 ]);
             }
 
-            if ($directProducts->isNotEmpty() && $siblings->isNotEmpty()) {
+            if ($willMoveProducts) {
                 OrderItem::query()
                     ->whereKey($directProducts->pluck('id'))
                     ->update(['order_id' => $siblings->first()->id]);
@@ -105,7 +106,7 @@ class OrderDeletionService
                 description: 'نقل قصة/طلب إلى سلة المحذوفات: '.$locked->order_number,
                 subject: $locked,
                 properties: $this->activityProperties(collect([$locked]), $reason) + [
-                    'independent_products_moved_to_order_id' => $directProducts->isNotEmpty() ? $siblings->first()?->id : null,
+                    'independent_products_moved_to_order_id' => $willMoveProducts ? $siblings->first()?->id : null,
                     'independent_products_moved' => $movedProducts,
                     'stock_changes' => $stockChanges,
                     'production_effects' => array_values(array_filter([$productionEffect])),
@@ -120,6 +121,8 @@ class OrderDeletionService
         return DB::transaction(function () use ($representative, $request): int {
             $orders = Order::onlyTrashed()
                 ->where('checkout_group_key', $representative->checkoutGroupKey())
+                // Previously removed items are restored explicitly, never as part of a later whole-order restoration.
+                ->whereNull('delivery_details->quick_removal')
                 ->lockForUpdate()
                 ->get();
 
@@ -143,10 +146,35 @@ class OrderDeletionService
 
     public function restoreOrder(Order $order, User $admin, Request $request): void
     {
-        DB::transaction(function () use ($order, $request): void {
-            $locked = Order::onlyTrashed()->lockForUpdate()->findOrFail($order->id);
+        DB::transaction(function () use ($order, $admin, $request): void {
+            $groupOrders = Order::withTrashed()->with('items')->where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
+            $locked = $groupOrders->firstWhere('id', $order->id);
+            abort_unless($locked && $locked->trashed(), 404);
+            $removal = data_get($locked->delivery_details, 'quick_removal');
+            $activeOrders = $groupOrders->reject(fn (Order $entry): bool => $entry->trashed());
+            if ($removal && $activeOrders->isEmpty()) {
+                throw ValidationException::withMessages(['restore' => 'استعد عملية الشراء كاملة أولًا قبل استعادة هذا العنصر المحذوف منفردًا.']);
+            }
+            $before = $removal && $activeOrders->isNotEmpty() ? app(AdminOrderGroupService::class)->present($activeOrders) : null;
+            if ($removal && ($parentId = $removal['linked_order_item_id'] ?? null)) {
+                $parent = $activeOrders->flatMap->items->firstWhere('id', $parentId);
+                if (! $parent || $parent->item_type !== 'story') {
+                    throw ValidationException::withMessages(['restore' => 'استعد القصة المرتبطة أولاً قبل استعادة هذه الإضافة.']);
+                }
+            }
             $stockChanges = $this->reserveStockFor(collect([$locked]));
             $locked->restore();
+            if ($removal && ($removal['linked_order_item_id'] ?? null)) {
+                $locked->items()->whereKey($removal['item_id'])->update(['linked_order_item_id' => $removal['linked_order_item_id']]);
+            }
+            if ($before) {
+                app(AdminOrderUpdateService::class)->reconcileRestoredRemoval($locked, $before, $admin, $request);
+            }
+            if ($removal) {
+                $details = $locked->fresh()->delivery_details ?? [];
+                unset($details['quick_removal']);
+                $locked->forceFill(['delivery_details' => $details])->save();
+            }
 
             AdminActivityLogger::log(
                 action: 'order.restored',
