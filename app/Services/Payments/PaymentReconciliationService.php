@@ -28,6 +28,7 @@ class PaymentReconciliationService
 
     public function report(): array
     {
+        $history = app(HistoricalPaymentSource::class)->history();
         $events = OrderPaymentEvent::query()->get(['checkout_group_key', 'event_type', 'affects_collection_stats',
             'new_paid_amount_cents', 'previous_paid_amount_cents', 'amount_delta_cents', 'occurred_at']);
         $expected = [];
@@ -49,6 +50,11 @@ class PaymentReconciliationService
             }
             $key = $this->canonicalKey($event->checkout_group_key);
             $expected[$key] = ($expected[$key] ?? 0) + $delta;
+        }
+        foreach ($history['baseline_corrections'] as $correction) {
+            $key = $this->canonicalKey($correction['key']);
+            $expected[$key] = ($expected[$key] ?? 0) + $correction['delta_cents'];
+            $opening += $correction['delta_cents'];
         }
         $representatives = DB::table('orders as o')->select('o.checkout_group_key')->selectRaw('MIN(o.id) as first_id')
             ->whereNotNull('o.checkout_group_key')->where('o.checkout_group_key', '!=', '')
@@ -72,9 +78,16 @@ class PaymentReconciliationService
                 'expected_cents' => $balance, 'difference_cents' => $paid - $balance];
         })->filter(fn (array $row): bool => $row['difference_cents'] !== 0)
             ->sortByDesc(fn (array $row): int => abs($row['difference_cents']))->values();
-        $history = app(HistoricalPaymentSource::class)->history();
+        $baselineCorrections = $history['baseline_corrections']->map(function (array $correction) use ($current): array {
+            $row = $current->get($this->canonicalKey($correction['key']));
+
+            return [...$correction, 'reference' => $row->short_reference ?? $correction['key']];
+        });
 
         return ['opening_cents' => $opening, 'recorded_net_cents' => $cash,
+            'opening_snapshot_cents' => $history['baseline_cents'],
+            'historical_baseline_correction_cents' => $history['baseline_correction_cents'],
+            'baseline_corrections' => $baselineCorrections,
             'opening_plus_net_cents' => $opening + $cash, 'non_cash_adjustments_cents' => $adjustments,
             'merge_transfers_cents' => $transferred, 'expected_balance_cents' => array_sum($expected),
             'merged_source_copies_cents' => (int) $mergedCopies->sum('paid_amount_cents'),

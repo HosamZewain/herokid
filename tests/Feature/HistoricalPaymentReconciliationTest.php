@@ -59,6 +59,216 @@ class HistoricalPaymentReconciliationTest extends TestCase
                 'payment' => ['paid_amount_cents' => $new, 'payment_status' => 'partially_paid', 'payment_method' => 'Synthetic']], 'created_at' => $date]);
     }
 
+    /** Same migration defect as the supplied live diagnostics; no real customer data. */
+    private function deletedCarrierFixture(string $key, int $paid, string $paidAt = '2026-08-18 12:16:53'): array
+    {
+        $deleted = $this->order($key);
+        $deleted->forceFill(['deleted_at' => '2026-08-05 12:05:08'])->saveQuietly();
+        $live = $this->order($key, $paid);
+        $live->forceFill(['created_at' => '2026-08-05 12:05:08', 'payment_updated_at' => $paidAt])->saveQuietly();
+        $baseline = $this->event($deleted, 'legacy_baseline', 0, 0, 0);
+        DB::table('order_payment_events')->where('id', $baseline->id)->update([
+            'created_at' => '2026-08-31 01:13:29', 'occurred_at' => $paidAt]);
+        AdminActivityLog::create(['action' => 'checkout.full_order_updated', 'properties' => [
+            'checkout_group_key' => $key, 'before' => ['paid_amount_cents' => 0], 'after' => ['paid_amount_cents' => 0]],
+            'created_at' => '2026-08-05 12:05:08']);
+        $this->log($live, 0, $paid, $paidAt);
+
+        return [$deleted, $live, $baseline];
+    }
+
+    public function test_deleted_unpaid_migration_carriers_recover_the_two_proven_receipts_once(): void
+    {
+        [$oldA, $liveA, $baselineA] = $this->deletedCarrierFixture('PROVEN-778', 77800, '2026-08-30 13:29:36');
+        // The actual receipt precedes later zero-delta payment/status saves.
+        DB::table('admin_activity_logs')->where('action', 'checkout.payment_updated')->update(['created_at' => '2026-08-29 11:57:23']);
+        $this->log($liveA, 77800, 77800, '2026-08-29 22:32:33');
+        $lastA = $this->log($liveA, 77800, 77800, '2026-08-30 13:29:36');
+        $sibling = $this->order('PROVEN-778', 77800);
+        $sibling->forceFill(['created_at' => '2026-08-26 08:03:57', 'payment_updated_at' => '2026-08-30 13:29:36'])->saveQuietly();
+        [$oldB, $liveB, $baselineB] = $this->deletedCarrierFixture('PROVEN-499', 49900, '2026-08-18 12:16:53');
+        DB::table('admin_activity_logs')->where('action', 'checkout.payment_updated')
+            ->where('properties->checkout_group_key', 'PROVEN-499')->update(['created_at' => '2026-08-08 11:10:47']);
+        $lastB = $this->log($liveB, 49900, 49900, '2026-08-18 12:16:53');
+        $beforeEvents = DB::table('order_payment_events')->get()->toJson();
+        $beforeOrders = DB::table('orders')->get()->toJson();
+        $beforeLogs = DB::table('admin_activity_logs')->get()->toJson();
+        $r = app(PaymentReconciliationService::class)->report();
+        $this->assertSame(0, $r['opening_snapshot_cents']);
+        $this->assertSame(127700, $r['historical_baseline_correction_cents']);
+        $this->assertSame(127700, $r['opening_cents']);
+        $this->assertSame(127700, $r['opening_plus_net_cents']);
+        $this->assertSame(0, $r['recorded_net_cents']);
+        $this->assertSame(127700, $r['expected_balance_cents']);
+        $this->assertSame(127700, $r['current_balance_cents']);
+        $this->assertSame(0, $r['unreconciled_cents']);
+        $this->assertEmpty($r['differences']);
+        $this->assertEmpty($r['history']['issues']);
+        $this->assertSame(0, $r['history']['undated_cents']);
+        $this->assertSame(127700, $r['history']['recovered_net_cents']);
+        $this->assertEqualsCanonicalizing([$lastA->id, $lastB->id], $r['baseline_corrections']->pluck('last_payment_log_id')->all());
+        $this->assertEqualsCanonicalizing([$oldA->id, $oldB->id], $r['baseline_corrections']->pluck('discarded_order_id')->all());
+        $this->assertEqualsCanonicalizing([$baselineA->id, $baselineB->id], $r['baseline_corrections']->pluck('baseline_event_id')->all());
+        $this->assertSame($beforeEvents, DB::table('order_payment_events')->get()->toJson());
+        $this->assertSame($beforeOrders, DB::table('orders')->get()->toJson());
+        $this->assertSame($beforeLogs, DB::table('admin_activity_logs')->get()->toJson());
+        $payments = app(PaymentCollectionReportService::class);
+        $august = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'custom', 'start_date' => '2026-08-01', 'end_date' => '2026-08-31']));
+        $rows = $payments->events($august, true);
+        $this->assertCount(2, $rows);
+        $this->assertSame(127700, (int) $rows->sum('amount_delta_cents'));
+        $this->assertEqualsCanonicalizing(['2026-08-08', '2026-08-29'], $rows->pluck('occurred_at')->map->toDateString()->all());
+        $this->assertEqualsCanonicalizing([$liveA->id, $liveB->id], $rows->pluck('first_order_id')->all());
+        $detailed = $payments->movementsBetween($august->start(), $august->end(), true);
+        $this->assertEqualsCanonicalizing([$liveA->id, $liveB->id], $detailed->pluck('order')->pluck('id')->all());
+        $sales = app(SalesReportService::class)->report($august, 1);
+        $this->assertSame($payments->summary($rows), $sales['collection_summary']);
+        $october = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'custom', 'start_date' => '2026-10-01', 'end_date' => '2026-10-10']));
+        $this->assertEmpty($payments->events($october));
+        foreach (['admin.payment-report.index', 'admin.sales-report.index', 'admin.order-report.index', 'admin.advertising-report.index', 'admin.dashboard.index'] as $route) {
+            $this->get(route($route))->assertOk()->assertSee('١,٢٧٧')->assertSee('تصحيح قراءة الأرصدة القديمة');
+        }
+        $this->artisan('payments:reconcile', ['--json' => true])->expectsOutputToContain('"historical_baseline_correction": 1277')->assertSuccessful();
+        $this->assertSame($beforeEvents, DB::table('order_payment_events')->get()->toJson());
+    }
+
+    public function test_a_live_or_late_deleted_baseline_carrier_cannot_be_corrected_from_current_balance(): void
+    {
+        [$old] = $this->deletedCarrierFixture('LIVE-BASELINE', 49900);
+        $old->forceFill(['deleted_at' => null])->saveQuietly();
+        [$late] = $this->deletedCarrierFixture('LATE-DELETION', 77800);
+        $late->forceFill(['deleted_at' => '2026-09-01 12:00:00'])->saveQuietly();
+        $r = app(PaymentReconciliationService::class)->report();
+        $this->assertSame(0, $r['historical_baseline_correction_cents']);
+        $this->assertEmpty($r['history']['events']);
+        $this->assertCount(2, $r['history']['issues']);
+    }
+
+    public function test_deleted_carrier_correction_rejects_gaps_revaluation_and_unverified_opening_balances(): void
+    {
+        [, $gap] = $this->deletedCarrierFixture('CARRIER-GAP', 49900);
+        AdminActivityLog::create(['action' => 'checkout.discount_updated', 'properties' => ['checkout_group_key' => 'CARRIER-GAP',
+            'before' => ['paid_amount_cents' => 100], 'after' => ['paid_amount_cents' => 100]], 'created_at' => '2026-08-08 12:00:00']);
+        [, $revalued] = $this->deletedCarrierFixture('CARRIER-REVALUATION', 77800);
+        AdminActivityLog::create(['action' => 'checkout.full_order_updated', 'properties' => ['checkout_group_key' => 'CARRIER-REVALUATION',
+            'before' => ['paid_amount_cents' => 0], 'after' => ['paid_amount_cents' => 77800]], 'created_at' => '2026-08-08 12:00:00']);
+        $this->deletedCarrierFixture('CARRIER-UNKNOWN-OPENING', 49900);
+        AdminActivityLog::where('properties->checkout_group_key', 'CARRIER-UNKNOWN-OPENING')->where('action', 'checkout.full_order_updated')->delete();
+        $log = AdminActivityLog::where('properties->checkout_group_key', 'CARRIER-UNKNOWN-OPENING')->where('action', 'checkout.payment_updated')->firstOrFail();
+        $p = $log->properties;
+        $p['old']['paid_amount_cents'] = 10000;
+        $log->update(['properties' => $p]);
+        $history = app(HistoricalPaymentSource::class)->history();
+        $this->assertEmpty($history['baseline_corrections']);
+        $this->assertEmpty($history['events']);
+        $this->assertCount(3, $history['issues']);
+    }
+
+    public function test_deleted_carrier_requires_unchanged_consistent_pre_capture_payment_state_on_all_active_items(): void
+    {
+        [, $changed] = $this->deletedCarrierFixture('POST-CAPTURE-CHANGE', 49900);
+        $changed->forceFill(['payment_updated_at' => '2026-09-01 12:00:00'])->saveQuietly();
+        $this->deletedCarrierFixture('DISAGREEING-ACTIVE-ITEMS', 77800);
+        $other = $this->order('DISAGREEING-ACTIVE-ITEMS', 10000);
+        $other->forceFill(['created_at' => '2026-08-05 12:05:08', 'payment_updated_at' => '2026-08-18 12:16:53'])->saveQuietly();
+        [, , $wrongTime] = $this->deletedCarrierFixture('UNPROVEN-CAPTURE-TIME', 49900);
+        DB::table('order_payment_events')->where('id', $wrongTime->id)->update(['occurred_at' => '2026-08-20 12:00:00']);
+        $history = app(HistoricalPaymentSource::class)->history();
+        $this->assertEmpty($history['baseline_corrections']);
+        $this->assertEmpty($history['events']);
+        $this->assertCount(3, $history['issues']);
+    }
+
+    public function test_deleted_carrier_correction_is_not_applied_when_real_ledger_movements_overlap(): void
+    {
+        [, $live] = $this->deletedCarrierFixture('CARRIER-OVERLAP', 49900);
+        $event = $this->event($live, 'payment_received', 0, 49900, 49900, true);
+        DB::table('order_payment_events')->where('id', $event->id)->update(['occurred_at' => '2026-08-18 12:16:53']);
+        $history = app(HistoricalPaymentSource::class)->history();
+        $this->assertEmpty($history['baseline_corrections']);
+        $this->assertEmpty($history['events']);
+        $this->assertSame('overlapping_ledger', $history['issues']->first()['reason']);
+        $this->assertSame(49900, app(PaymentReconciliationService::class)->report()['opening_plus_net_cents']);
+    }
+
+    public function test_deleted_carrier_correction_preserves_signed_historical_reversals_without_inventing_a_refund(): void
+    {
+        [$old, $live, $baseline] = $this->deletedCarrierFixture('CARRIER-REVERSAL', 0);
+        $old->forceFill(['paid_amount_cents' => 10000])->saveQuietly();
+        DB::table('order_payment_events')->where('id', $baseline->id)->update(['new_paid_amount_cents' => 10000]);
+        $snapshot = AdminActivityLog::where('action', 'checkout.full_order_updated')->firstOrFail();
+        $snapshot->update(['properties' => ['checkout_group_key' => $old->checkout_group_key,
+            'before' => ['paid_amount_cents' => 10000], 'after' => ['paid_amount_cents' => 10000]]]);
+        $payment = AdminActivityLog::where('action', 'checkout.payment_updated')->firstOrFail();
+        $properties = $payment->properties;
+        $properties['old']['paid_amount_cents'] = 10000;
+        $payment->update(['properties' => $properties]);
+        $r = app(PaymentReconciliationService::class)->report();
+        $this->assertSame(10000, $r['opening_snapshot_cents']);
+        $this->assertSame(-10000, $r['historical_baseline_correction_cents']);
+        $this->assertSame(0, $r['opening_plus_net_cents']);
+        $this->assertSame(0, $r['unreconciled_cents']);
+        $this->assertSame(10000, $r['history']['undated_cents']);
+        $this->assertSame(-10000, $r['history']['recovered_net_cents']);
+        $this->assertSame($live->id, $r['history']['events']->sole()->order_id);
+        $this->assertSame('payment_reversed', $r['history']['events']->sole()->event_type);
+        $this->assertSame(10000, $baseline->fresh()->new_paid_amount_cents);
+    }
+
+    public function test_deleted_carrier_proofs_are_loaded_in_batches_and_cached_without_per_checkout_queries(): void
+    {
+        for ($i = 0; $i < 25; $i++) {
+            $this->deletedCarrierFixture('BATCH-CORRECTION-'.$i, 10000);
+        }
+        DB::enableQueryLog();
+        $source = app(HistoricalPaymentSource::class);
+        $history = $source->history();
+        $queries = count(DB::getQueryLog());
+        $this->assertCount(25, $history['baseline_corrections']);
+        $this->assertSame(250000, $history['baseline_correction_cents']);
+        $this->assertLessThanOrEqual(6, $queries);
+        $this->assertSame($history, $source->history());
+        $this->assertSame($queries, count(DB::getQueryLog()));
+        DB::disableQueryLog();
+    }
+
+    public function test_later_immutable_payment_or_method_transition_preserves_the_proven_pre_capture_receipt(): void
+    {
+        foreach ([['LATER-PAYMENT', 'payment_received', 10000, true],
+            ['LATER-METHOD', 'payment_status_changed', 0, false]] as [$key, $type, $delta, $cash]) {
+            [, $live] = $this->deletedCarrierFixture($key, 49900);
+            $live->forceFill(['paid_amount_cents' => 49900 + $delta, 'payment_updated_at' => '2026-09-02 12:00:00'])->saveQuietly();
+            $this->event($live, $type, 49900, 49900 + $delta, $delta, $cash);
+        }
+        $r = app(PaymentReconciliationService::class)->report();
+        $this->assertSame(99800, $r['opening_cents']);
+        $this->assertSame(10000, $r['recorded_net_cents']);
+        $this->assertSame(109800, $r['opening_plus_net_cents']);
+        $this->assertSame(0, $r['unreconciled_cents']);
+        $this->assertCount(2, $r['history']['events']);
+        $this->assertEmpty($r['history']['issues']);
+        $this->assertSame(['post_baseline_ledger'], $r['baseline_corrections']->pluck('proof')->unique()->all());
+        $this->assertCount(2, $r['baseline_corrections']->pluck('post_baseline_anchor_event_id')->filter());
+    }
+
+    public function test_later_state_proof_cannot_skip_a_conflicting_unknown_or_backdated_first_transition(): void
+    {
+        foreach ([['CONFLICTING-ANCHOR', 'payment_received', 10000, '2026-09-01 12:00:00'],
+            ['UNKNOWN-ANCHOR', 'unknown_snapshot', 49900, '2026-09-01 12:00:00'],
+            ['BACKDATED-ANCHOR', 'payment_status_changed', 49900, '2026-08-01 12:00:00']] as [$key, $type, $before, $date]) {
+            [, $live] = $this->deletedCarrierFixture($key, 49900);
+            $live->forceFill(['payment_updated_at' => '2026-09-02 12:00:00'])->saveQuietly();
+            $first = $this->event($live, $type, $before, 49900, 0);
+            DB::table('order_payment_events')->where('id', $first->id)->update(['occurred_at' => $date]);
+            $later = $this->event($live, 'payment_status_changed', 49900, 49900, 0);
+            DB::table('order_payment_events')->where('id', $later->id)->update(['created_at' => '2026-09-02 12:00:00']);
+        }
+        $history = app(HistoricalPaymentSource::class)->history();
+        $this->assertEmpty($history['baseline_corrections']);
+        $this->assertEmpty($history['events']);
+        $this->assertCount(3, $history['issues']);
+    }
+
     public function test_live_figures_are_explained_without_treating_adjustments_or_merges_as_cash(): void
     {
         $order = $this->order('FIGURES', 35532101);

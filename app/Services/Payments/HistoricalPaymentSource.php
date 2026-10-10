@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\AdminActivityLog;
+use App\Models\Order;
 use App\Models\OrderPaymentEvent;
 use Illuminate\Support\Collection;
 
@@ -21,6 +22,7 @@ class HistoricalPaymentSource
         $events = collect();
         $undated = collect();
         $issues = collect();
+        $corrections = collect();
         foreach ($baselines->chunk(200) as $batch) {
             $logs = AdminActivityLog::query()->select(['id', 'user_id', 'action', 'properties', 'created_at'])
                 ->with('user:id,name')
@@ -31,15 +33,49 @@ class HistoricalPaymentSource
             $alreadyDated = OrderPaymentEvent::query()->whereIn('checkout_group_key', $batch->pluck('checkout_group_key'))
                 ->where('affects_collection_stats', true)->where('occurred_at', '<=', $batch->max('created_at'))
                 ->get(['checkout_group_key', 'occurred_at'])->groupBy('checkout_group_key');
+            $projections = [];
             foreach ($batch as $baseline) {
                 $key = $baseline->checkout_group_key;
                 $same = $logs->get($key, collect())->filter(fn ($log) => $log->created_at->lt($baseline->created_at));
                 $duplicate = $baselineCounts->get($key, 0) > 1;
                 $overlap = $alreadyDated->get($key, collect())->contains(fn ($event) => $event->occurred_at->lte($baseline->created_at));
                 $projected = $duplicate || $overlap ? null : $this->project($baseline, $same);
+                $projections[$baseline->id] = ['page' => $projected,
+                    'reason' => $duplicate ? 'duplicate_baseline' : ($overlap ? 'overlapping_ledger' : 'incomplete_history')];
+            }
+            $mismatches = $batch->filter(fn ($baseline): bool => ($projections[$baseline->id]['page'] ?? null) !== null
+                && $projections[$baseline->id]['page']['end_cents'] !== (int) $baseline->new_paid_amount_cents);
+            // One compact query per batch, not one query per mismatched checkout.
+            $states = $mismatches->isEmpty() ? collect() : Order::withTrashed()
+                ->whereIn('checkout_group_key', $mismatches->pluck('checkout_group_key'))
+                ->orderBy('id')->get(['id', 'checkout_group_key', 'paid_amount_cents', 'created_at', 'deleted_at', 'payment_updated_at'])
+                ->groupBy('checkout_group_key');
+            $laterStates = $mismatches->isEmpty() ? collect() : OrderPaymentEvent::query()
+                ->whereIn('checkout_group_key', $mismatches->pluck('checkout_group_key'))
+                ->whereNotIn('event_type', ['legacy_baseline', 'payment_initialized'])
+                ->where('created_at', '>=', $mismatches->min('created_at'))
+                ->orderBy('created_at')->orderBy('id')
+                ->get(['id', 'checkout_group_key', 'order_id', 'event_type', 'previous_paid_amount_cents', 'created_at', 'occurred_at'])
+                ->groupBy('checkout_group_key');
+            foreach ($batch as $baseline) {
+                $key = $baseline->checkout_group_key;
+                $projected = $projections[$baseline->id]['page'];
+                if ($projected !== null && $projected['end_cents'] !== (int) $baseline->new_paid_amount_cents) {
+                    $correction = $this->deletedCarrierCorrection($baseline, $projected, $states->get($key, collect()), $laterStates->get($key, collect()));
+                    if ($correction === null) {
+                        $projected = null;
+                    } else {
+                        $corrections->push($correction);
+                        foreach ($projected['events'] as $event) {
+                            $event->order_id = $correction['order_id'];
+                            $event->metadata = [...$event->metadata, 'baseline_carrier_corrected' => true,
+                                'discarded_baseline_order_id' => $correction['discarded_order_id']];
+                        }
+                    }
+                }
                 if ($projected === null) {
                     $issues->push(['key' => $key, 'order_id' => $baseline->order_id,
-                        'reason' => $duplicate ? 'duplicate_baseline' : ($overlap ? 'overlapping_ledger' : 'incomplete_history')]);
+                        'reason' => $projections[$baseline->id]['reason']]);
                     $undated->push(['key' => $key, 'cents' => (int) $baseline->new_paid_amount_cents]);
 
                     continue;
@@ -51,6 +87,7 @@ class HistoricalPaymentSource
 
         return $this->result = ['events' => $events->values(), 'undated' => $undated,
             'baseline_cents' => (int) $baselines->sum('new_paid_amount_cents'),
+            'baseline_correction_cents' => (int) $corrections->sum('delta_cents'), 'baseline_corrections' => $corrections,
             'recovered_net_cents' => (int) $events->sum('amount_delta_cents'),
             'undated_cents' => (int) $undated->sum('cents'), 'issues' => $issues,
             'baseline_captured_at' => $baselines->min('created_at')];
@@ -61,6 +98,7 @@ class HistoricalPaymentSource
         $balance = null;
         $opening = 0;
         $events = collect();
+        $lastPaymentLog = null;
         foreach ($logs as $log) {
             $p = $log->properties ?? [];
             if (in_array($log->action, ['checkout.full_order_updated', 'checkout.discount_updated'], true)) {
@@ -90,6 +128,7 @@ class HistoricalPaymentSource
                 $opening = $before;
             }
             $balance = $after;
+            $lastPaymentLog = $log;
             $delta = $after - $before;
             if ($delta === 0) {
                 continue;
@@ -109,13 +148,58 @@ class HistoricalPaymentSource
             $events->push($event);
         }
         if ($balance === null) {
-            return ['events' => collect(), 'opening_cents' => (int) $baseline->new_paid_amount_cents];
+            return ['events' => collect(), 'opening_cents' => (int) $baseline->new_paid_amount_cents,
+                'end_cents' => (int) $baseline->new_paid_amount_cents, 'last_payment_log' => null];
         }
-        if ($balance !== (int) $baseline->new_paid_amount_cents) {
+
+        return ['events' => $events, 'opening_cents' => $opening, 'end_cents' => $balance, 'last_payment_log' => $lastPaymentLog];
+    }
+
+    /** Correct only the proven MIN(id)-of-a-deleted-carrier migration mistake. No writes. */
+    private function deletedCarrierCorrection(OrderPaymentEvent $baseline, array $page, Collection $orders, Collection $laterStates): ?array
+    {
+        $snapshot = (int) $baseline->new_paid_amount_cents;
+        $last = $page['last_payment_log'];
+        $original = $orders->firstWhere('id', $baseline->order_id);
+        if (! $last || $page['events']->isEmpty() || $page['opening_cents'] !== $snapshot
+            || ! $original || ! $original->deleted_at
+            || ! $original->created_at->lte($baseline->created_at)
+            || ! $original->deleted_at->lt($last->created_at)
+            || ! $last->created_at->lt($baseline->created_at)
+            || ! $baseline->occurred_at->equalTo($last->created_at)
+            || (int) $original->paid_amount_cents !== $snapshot
+            || ($original->payment_updated_at && $original->payment_updated_at->gt($original->deleted_at))) {
+            return null;
+        }
+        $atCapture = $orders->filter(fn (Order $order): bool => $order->created_at->lte($baseline->created_at));
+        if ((int) $atCapture->min('id') !== (int) $original->id) {
+            return null;
+        }
+        $active = $atCapture->filter(fn (Order $order): bool => ! $order->deleted_at || $order->deleted_at->gt($baseline->created_at));
+        if ($active->isEmpty()) {
+            return null;
+        }
+        $retained = ! $active->contains(fn (Order $order): bool => (int) $order->paid_amount_cents !== $page['end_cents'] || ! $order->payment_updated_at
+            || ! $order->payment_updated_at->equalTo($last->created_at));
+        // A later immutable transition's BEFORE snapshot can independently anchor
+        // the old end balance, so a legitimate new payment does not erase history.
+        // Never skip an earlier conflicting transition to find a matching one.
+        $anchor = $laterStates->first(fn (OrderPaymentEvent $event): bool => $event->created_at->gte($baseline->created_at));
+        $anchored = $anchor && $anchor->occurred_at->gte($baseline->created_at)
+            && in_array($anchor->event_type, ['payment_received', 'payment_reversed', 'payment_status_changed', 'payment_balance_adjusted', 'discount_adjustment'], true)
+            && $active->contains('id', $anchor->order_id)
+            && (int) $anchor->previous_paid_amount_cents === $page['end_cents'];
+        if (! $retained && ! $anchored) {
             return null;
         }
 
-        return ['events' => $events, 'opening_cents' => $opening];
+        return ['key' => $baseline->checkout_group_key, 'baseline_event_id' => $baseline->id,
+            'discarded_order_id' => $original->id, 'order_id' => $active->first()->id,
+            'snapshot_cents' => $snapshot, 'corrected_cents' => $page['end_cents'],
+            'delta_cents' => $page['end_cents'] - $snapshot,
+            'proof' => $retained ? 'retained_payment_state' : 'post_baseline_ledger',
+            'post_baseline_anchor_event_id' => ! $retained && $anchored ? $anchor->id : null,
+            'last_payment_log_id' => $last->id, 'last_payment_log_at' => $last->created_at->toISOString()];
     }
 
     private function cents(mixed $value): ?int

@@ -132,8 +132,10 @@ match for identical dates and filters; current order-cohort balances deliberatel
 remain separate and are not renamed cash receipts.
 
 `HistoricalPaymentSource` reads immutable baseline snapshots and pre-baseline
-admin payment/manual-creation logs. A complete old/new balance chain must end at
-the baseline. The initial unproven balance remains undated. Broken chains,
+admin payment/manual-creation logs. A complete old/new balance chain normally must
+end at the baseline. The strictly verified deleted-carrier exception below handles
+the proven original migration defect without rewriting that baseline. The initial
+unproven balance remains undated. Broken chains,
 duplicate baselines, overlapping ledger receipts and old editor revaluations are
 flagged rather than fabricated as cash. Audit timestamps are receipt-recording
 dates, not bank settlement confirmations. Zero baselines do not erase verified
@@ -141,8 +143,8 @@ old positive and negative movements. No projections are persisted; repeated
 reads cannot create duplicate ledger rows. Internal negative IDs refer to audit
 records; exports identify them as `activity:<id>` vs `payment:<id>`.
 
-The all-time recorded-paid figure is **opening balances + subsequent signed
-cash-event deltas**, NOT opening balances plus recovered history plus cash. The
+The all-time recorded-paid figure is **effective opening balances + subsequent
+signed cash-event deltas**, NOT opening balances plus recovered history plus cash. The
 recovered history only dates the proven portion of the opening balances; adding
 it again would double count. Remaining undated balances are always shown.
 
@@ -176,13 +178,14 @@ must be reviewed before claiming production financial reconciliation is complete
 The earlier raw-ledger query does not include recovered pre-ledger receipts;
 the report source's dated movements and CSV must be used for historic periods.
 
-The supplied snapshot reconstructs 44,647 + 306,249.01 = **350,896.01 EGP** of
+The earlier supplied snapshot reconstructed 44,647 + 306,249.01 = **350,896.01 EGP** of
 recorded opening balance plus net movements; adding 1,714 of non-cash changes
-yields expected balance **352,610.01**, leaving **2,711** against the screenshot's
-355,321.01. Whether source-merge copies explain that live difference requires the
-new read-only production reconciliation; this code does not assume the answer.
+yielded expected balance **352,610.01**, leaving **2,711** against the screenshot's
+355,321.01. The subsequent live reconciliation identified **1,434** of duplicate
+merged-source balances, leaving **1,277** across HK08-4 and HK08-46. Those diagnostics
+are past snapshots, not a claim about today's live balance.
 
-## Current historical-reconciliation release verification
+## Earlier historical-reconciliation release verification (f7d971f)
 
 - Full isolated MySQL 8.4 suite: **1,407 tests / 11,151 assertions**, no failures
   or errors. The unrelated native `DatabaseDumpRoundTripTest` was excluded; no
@@ -198,6 +201,81 @@ new read-only production reconciliation; this code does not assume the answer.
   disabled. Desktop and 390px mobile views showed the same global recorded-paid
   amount, the explicit reconciliation gap, and the selected day's signed total.
   No real orders, receipts or customers were created or changed.
-- No deployment, main-branch push or live financial reconciliation has been
-  performed for this update. The read-only production reconciliation above is
-  still required; local tests do not establish the cause of the observed 2,711 EGP.
+- This release was subsequently deployed by the user. The supplied live
+  reconciliation exposed the remaining deleted-carrier defect below; local
+  tests alone did not establish its production cause.
+
+## Verified deleted-carrier baseline correction
+
+The supplied live audit/state diagnostics confirmed that the old migration used
+`MIN(id)` across deleted and active items in a checkout. For HK08-4 and HK08-46 it
+captured an obsolete, unpaid soft-deleted row instead of the active paid rows.
+Continuous old payment logs recorded **499 EGP on August 8** and **778 EGP on
+August 29**. Later zero-delta payment saves are not the receipt dates.
+
+The reporting source now applies a read-only correction only if all evidence
+agrees: a complete non-revalued activity chain, its initial balance equal to the
+raw snapshot, nonzero recorded movements, the captured lowest-ID carrier deleted
+before the last payment save, and the baseline's timestamp matching that save.
+The end balance must also be independently anchored: either all rows active at
+capture still retain its exact balance/payment timestamp, or the first subsequent
+recognized immutable ledger transition for such a row confirms that end balance
+in its **before** snapshot. A later legitimate payment or method save therefore
+does not erase the historical receipt. The reader never skips an earlier
+conflicting, unknown or backdated transition to find a matching anchor.
+
+Duplicate baselines, overlapping real ledger movements, live or late-deleted
+carriers, changed post-capture state without a matching ledger anchor, ambiguous
+active-item balances, unknown opening credit and broken chains still fail closed
+and remain visible for review. This is not a fallback that treats today's balance
+as a dated receipt.
+
+The immutable baseline, orders and audit logs stay unchanged. No receipt is
+inserted and no migration is needed. The effective opening balance is the raw
+snapshot plus its separately disclosed, signed proof-based correction. Recovered
+activity movements provide the actual recorded dates, but are **not added again**
+to the effective opening. Historical projections use the active carrier for
+order links. Evidence is loaded in compact batches and cached only per request.
+
+The shared panel in all reports shows the correction and its order, baseline
+and activity-log references. The read-only command also returns `opening_snapshot`,
+`historical_baseline_correction` and `historical_baseline_corrections`, preserving
+existing summary fields and exposing the proof type and optional later anchor
+event ID without customer personal data.
+
+For the supplied unchanged live snapshot, the expected bridge after this correction
+is **44,647 + 1,277 + 306,249.01 = 352,173.01 EGP** net recorded paid funds, plus
+**1,714 EGP** of separately disclosed non-cash editor adjustments = **353,887.01 EGP**
+current order balance, with **zero unexplained balance difference**. Proven dated
+pre-ledger net becomes **43,541 EGP**; undated historical balance remains **2,383 EGP**.
+Merge transfers of 7,293 EGP are not extra receipts. These expected numbers require
+the post-deployment command to confirm; newly recorded live payments can change
+them. They do not establish physical cash or bank balances, refund settlement or
+expense totals.
+
+After deployment, rerun `payments:reconcile --json --limit=20`. Verify both orders'
+correction evidence and `different_groups`/`unreconciled`, then compare dated
+payments and sales with identical dates and no advanced filters. Do not repair
+the database or add 1,277 EGP as a new payment to force agreement.
+
+## Deleted-carrier correction release verification
+
+- Final isolated MySQL 8.4 suite: **1,416 tests / 11,233 assertions**, no failures
+  or errors. The unrelated native `DatabaseDumpRoundTripTest` was excluded. No
+  production database was used or modified.
+- Final historical-reconciliation regressions on isolated in-memory SQLite:
+  **21 tests / 159 assertions**. They cover the two proven receipts, original
+  receipt dates rather than later status saves, once-only reporting and unchanged
+  stored data, all shared report panels, signed reversals, bounded query counts,
+  and later ledger anchors without accepting conflicting or unverified history.
+- Runtime tests used PHP 8.5.5. All four changed PHP files passed PHP 8.2 syntax
+  lint, not a complete PHP 8.2 runtime suite. Pint, diff whitespace validation,
+  production asset build and isolated config/route/view compilation passed.
+  The build produced identical tracked outputs; no public build files changed.
+- Local browser checks used only a fresh synthetic SQLite database with
+  integrations disabled. The shared panel displayed the correction evidence
+  and zero reconciliation gap. August 29 drill-down and CSV showed a single
+  **778 EGP** activity-sourced receipt at Cairo-local time. Synthetic order
+  references are not production order identities.
+- This update still requires user deployment and a fresh live reconciliation.
+  Successful isolated tests do not establish today's production cash balance.

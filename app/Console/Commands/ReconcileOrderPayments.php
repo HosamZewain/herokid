@@ -26,6 +26,16 @@ class ReconcileOrderPayments extends Command
             $output[substr($key, 0, -6)] = round($r[$key] / 100, 2);
         }
         $output['historical_recovered_net'] = $r['history']['recovered_net_cents'] / 100;
+        $output['opening_snapshot'] = $r['opening_snapshot_cents'] / 100;
+        $output['historical_baseline_correction'] = $r['historical_baseline_correction_cents'] / 100;
+        $output['historical_baseline_corrections'] = $r['baseline_corrections']->map(fn (array $row): array => [
+            'reference' => $row['reference'], 'order_id' => $row['order_id'],
+            'baseline_event_id' => $row['baseline_event_id'], 'discarded_order_id' => $row['discarded_order_id'],
+            'snapshot_balance' => $row['snapshot_cents'] / 100, 'corrected_balance' => $row['corrected_cents'] / 100,
+            'correction' => $row['delta_cents'] / 100, 'last_payment_log_id' => $row['last_payment_log_id'],
+            'last_payment_log_at' => $row['last_payment_log_at'],
+            'proof' => $row['proof'], 'post_baseline_anchor_event_id' => $row['post_baseline_anchor_event_id'],
+        ])->all();
         $output['historical_undated_balance'] = $r['history']['undated_cents'] / 100;
         $output['historical_problem_groups'] = $r['history']['issues']->count();
         $output['different_groups'] = $r['differences']->count();
