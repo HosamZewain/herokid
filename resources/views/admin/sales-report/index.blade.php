@@ -3,12 +3,13 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-right">
                 <h2 class="text-xl font-black text-gray-900">تقرير المبيعات</h2>
-                <p class="mt-1 text-xs font-bold text-gray-500">المبالغ المحصلة فعليًا وحالة كل عمليات الشراء</p>
+                <p class="mt-1 text-xs font-bold text-gray-500">التحصيل بتاريخ الدفع، وحالة الطلبات بتاريخ الشراء الأصلي</p>
             </div>
             <a href="{{ route('admin.sales-report.export', request()->except('page')) }}"
                class="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100">
-                تصدير CSV
+                تصدير الطلبات وأرصدة الدفع CSV
             </a>
+            <a class="font-bold text-indigo-700" href="{{ route('admin.payment-report.export', array_merge(request()->except('page'), ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate])) }}">تصدير حركات التحصيل CSV</a>
         </div>
     </x-slot>
 
@@ -41,8 +42,10 @@
     <div class="py-8">
         <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-right text-sm leading-7 text-emerald-950">
-                <span class="font-black">قاعدة احتساب المبيعات:</span>
-                إجمالي المبيعات هو مجموع المبالغ المدفوعة فعليًا للطلبات غير الملغاة، سواء تم شحن الطلب أو تسليمه أم لا. الدفع الجزئي يُحتسب بقيمة المبلغ المحصل فقط، ولا تُستخدم قيمة الطلب الكاملة بدلًا منه.
+                <span class="font-black">قاعدة احتساب التحصيل:</span>
+                الصافي من سجل الدفعات حسب تاريخ الدفع داخل الفترة، ويشمل الطلبات القديمة والملغاة والمحذوفة ما لم تُضيّق الفلاتر ذلك. لا تُخصم قيمة الخصم التجاري مرة أخرى ولا يُقصّ المبلغ بقيمة الطلب الحالية. العكس/التصحيحات السالبة تخصم من الصافي ولا تثبت وحدها استردادًا فعليًا.
+                <p class="mt-2">أعداد الطلبات وقيمتها ومتوسطها وحالتها وأرصدة الدفع والتصدير الخاص بها تعتمد تاريخ الشراء الأصلي. الفلاتر غير الزمنية تخص التحصيل والطلبات؛ حالة الدفع للتحصيل هي الحالة بعد الحركة. توزيع التحصيل على العناصر تقديري بنسبة قيم مكونات الطلب المتاحة، ويشمل الشحن. الكميات في جداول التحصيل تصف محتويات الطلبات ذات الحركة، وليست مبيعات جديدة بعدد الدفعات.</p>
+                <a class="mt-2 inline-block font-black text-indigo-700 underline" href="{{ route('admin.payment-report.index', ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate]) }}">افتح تقرير الدفعات وتفاصيل الأيام ←</a>
             </div>
 
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -210,34 +213,34 @@
 
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-right">
-                    <p class="text-sm font-black text-indigo-700">إجمالي المبيعات المحصلة</p>
-                    <p class="mt-3 text-3xl font-black text-indigo-950">{{ format_money($summary['total']) }}</p>
-                    <p class="mt-2 text-xs font-bold text-indigo-700/70">المبالغ المدفوعة فعليًا فقط</p>
+                    <p class="text-sm font-black text-indigo-700">صافي التحصيل خلال الفترة</p>
+                    <p class="mt-3 text-3xl font-black text-indigo-950">{{ format_report_money($summary['total']) }}</p>
+                    <p class="mt-2 text-xs font-bold text-indigo-700/70">بتاريخ الدفع · المضاف {{ format_report_money($report['collection_summary']['received_cents'] / 100) }} · العكس/التصحيحات {{ format_report_money($report['collection_summary']['reversed_cents'] / 100) }}</p>
                     <div class="mt-3">{!! $comparisonBadge($comparison['total']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
-                    <p class="text-sm font-black text-gray-500">قيمة الطلبات التي بها تحصيل</p>
-                    <p class="mt-3 text-3xl font-black text-gray-950">{{ format_money($summary['order_value']) }}</p>
+                    <p class="text-sm font-black text-gray-500">قيمة طلبات الفترة ذات رصيد مدفوع</p>
+                    <p class="mt-3 text-3xl font-black text-gray-950">{{ format_report_money($summary['order_value']) }}</p>
                     <p class="mt-3 text-xs font-bold text-gray-400">بعد الخصم وتشمل التوصيل</p>
                 </div>
                 <div class="rounded-3xl border border-amber-100 bg-amber-50 p-5 text-right">
-                    <p class="text-sm font-black text-amber-700">المتبقي على طلبات بها تحصيل</p>
-                    <p class="mt-3 text-3xl font-black text-amber-950">{{ format_money($summary['remaining']) }}</p>
+                    <p class="text-sm font-black text-amber-700">المتبقي على طلبات الفترة المدفوعة</p>
+                    <p class="mt-3 text-3xl font-black text-amber-950">{{ format_report_money($summary['remaining']) }}</p>
                     <p class="mt-3 text-xs font-bold text-amber-700/70">لا يدخل ضمن إجمالي المبيعات</p>
                 </div>
                 <div class="rounded-3xl border border-rose-100 bg-rose-50 p-5 text-right">
-                    <p class="text-sm font-black text-rose-700">خصومات الطلبات التي بها تحصيل</p>
-                    <p class="mt-3 text-3xl font-black text-rose-950">{{ format_money($summary['discounts']) }}</p>
+                    <p class="text-sm font-black text-rose-700">خصومات طلبات الفترة المدفوعة</p>
+                    <p class="mt-3 text-3xl font-black text-rose-950">{{ format_report_money($summary['discounts']) }}</p>
                     <p class="mt-3 text-xs font-bold text-rose-700/70">مخصومة من إجمالي قيمة الطلبات</p>
                 </div>
                 <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 text-right">
-                    <p class="text-sm font-black text-emerald-700">عمليات بها مبلغ مدفوع</p>
+                    <p class="text-sm font-black text-emerald-700">طلبات الفترة ذات رصيد مدفوع</p>
                     <p class="mt-3 text-3xl font-black text-emerald-950">{{ number_format($summary['checkouts']) }}</p>
                     <div class="mt-3">{!! $comparisonBadge($comparison['checkouts']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
                     <p class="text-sm font-black text-gray-500">متوسط الطلب بدون الشحن</p>
-                    <p class="mt-3 text-3xl font-black text-gray-950">{{ format_money($summary['average_checkout']) }}</p>
+                    <p class="mt-3 text-3xl font-black text-gray-950">{{ format_report_money($summary['average_checkout']) }}</p>
                     <div class="mt-3">{!! $comparisonBadge($comparison['average_checkout']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
@@ -246,12 +249,12 @@
                     <div class="mt-3">{!! $comparisonBadge($comparison['items_quantity']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
-                    <p class="text-sm font-black text-gray-500">سجلات الطلبات التي بها تحصيل</p>
+                    <p class="text-sm font-black text-gray-500">سجلات طلبات الفترة ذات رصيد مدفوع</p>
                     <p class="mt-3 text-3xl font-black text-gray-950">{{ number_format($summary['order_records']) }}</p>
                     <p class="mt-3 text-xs font-bold text-gray-400">قد تضم مجموعة الشراء أكثر من طلب</p>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
-                    <p class="text-sm font-black text-gray-500">عملاء المبيعات المحصلة</p>
+                    <p class="text-sm font-black text-gray-500">عملاء طلبات الفترة المدفوعة</p>
                     <p class="mt-3 text-3xl font-black text-gray-950">{{ number_format($summary['unique_customers']) }}</p>
                     <p class="mt-3 text-xs font-bold text-gray-400">حسب الحساب أو رقم الهاتف</p>
                 </div>
@@ -259,13 +262,13 @@
 
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div class="mb-4 text-right">
-                    <h3 class="text-lg font-black text-gray-900">حالة الطلبات والتحصيل</h3>
-                    <p class="mt-1 text-xs font-bold text-gray-500">إحصاءات تشغيلية لكل عمليات الشراء المطابقة للفلاتر؛ وقد تتداخل بعض الحالات مثل الطلب الملغي وغير المدفوع.</p>
+                    <h3 class="text-lg font-black text-gray-900">حالة طلبات الفترة وأرصدة الدفع الحالية</h3>
+                    <p class="mt-1 text-xs font-bold text-gray-500">حسب تاريخ الشراء الأصلي، وليست حركات تحصيل الفترة. وقد تتداخل بعض الحالات مثل الطلب الملغي وغير المدفوع.</p>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     @foreach([
                         ['إجمالي عمليات الشراء', $operational['all_checkouts'], $operational['all_order_value'], 'bg-slate-50 text-slate-800'],
-                        ['عمليات بها تحصيل', $operational['paid_checkouts'], $operational['paid_amount'], 'bg-emerald-50 text-emerald-800'],
+                        ['طلبات برصيد مدفوع حالي', $operational['paid_checkouts'], $operational['paid_amount'], 'bg-emerald-50 text-emerald-800'],
                         ['مدفوعة بالكامل', $operational['fully_paid_checkouts'], $operational['fully_paid_amount'], 'bg-teal-50 text-teal-800'],
                         ['مدفوعة جزئيًا', $operational['partially_paid_checkouts'], $operational['partially_paid_amount'], 'bg-orange-50 text-orange-800'],
                         ['غير مدفوعة', $operational['unpaid_checkouts'], $operational['unpaid_value'], 'bg-rose-50 text-rose-800'],
@@ -277,18 +280,18 @@
                         <div class="rounded-2xl p-4 text-right {{ $classes }}">
                             <p class="text-xs font-black opacity-80">{{ $label }}</p>
                             <p class="mt-2 text-2xl font-black">{{ number_format($value) }}</p>
-                            @if($amount !== null)<p class="mt-2 text-xs font-black opacity-80">{{ format_money($amount) }}</p>@endif
+                            @if($amount !== null)<p class="mt-2 text-xs font-black opacity-80">{{ format_report_money($amount) }}</p>@endif
                         </div>
                     @endforeach
                     <div class="rounded-2xl bg-fuchsia-50 p-4 text-right text-fuchsia-900">
                         <p class="text-xs font-black opacity-80">المبالغ المتبقية غير الملغاة</p>
-                        <p class="mt-2 text-xl font-black">{{ format_money($operational['outstanding_amount']) }}</p>
+                        <p class="mt-2 text-xl font-black">{{ format_report_money($operational['outstanding_amount']) }}</p>
                     </div>
                     @if($operational['cancelled_paid_amount'] > 0)
                         <div class="rounded-2xl bg-red-100 p-4 text-right text-red-900">
                             <p class="text-xs font-black opacity-80">مبالغ مدفوعة مسجلة على طلبات ملغاة</p>
-                            <p class="mt-2 text-xl font-black">{{ format_money($operational['cancelled_paid_amount']) }}</p>
-                            <p class="mt-1 text-[10px] font-bold opacity-70">لا تدخل في إجمالي المبيعات وتحتاج مراجعة الاسترداد يدويًا</p>
+                            <p class="mt-2 text-xl font-black">{{ format_report_money($operational['cancelled_paid_amount']) }}</p>
+                            <p class="mt-1 text-[10px] font-bold opacity-70">حركات دفعها تبقى في التحصيل بتاريخها. راجع الاسترداد يدويًا؛ الإلغاء وحده لا يعني رد الأموال.</p>
                         </div>
                     @endif
                 </div>
@@ -296,8 +299,8 @@
 
             <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-xs font-bold text-gray-400">يعرض المبالغ المدفوعة فعليًا بغض النظر عن الشحن أو التسليم</p>
-                    <h3 class="text-lg font-black text-gray-900">اتجاه المبيعات المحصلة</h3>
+                    <p class="text-xs font-bold text-gray-400">صافي الدفعات المضافة والعكس/التصحيحات حسب تاريخ الدفع</p>
+                    <h3 class="text-lg font-black text-gray-900">اتجاه التحصيل بتاريخ الدفع</h3>
                 </div>
                 @if($trend->isEmpty())
                     <p class="rounded-2xl bg-gray-50 p-10 text-center text-sm font-black text-gray-400">لا توجد بيانات في هذه الفترة.</p>
@@ -306,8 +309,8 @@
                         @foreach($trend as $point)
                             @php $height = $point['total'] > 0 ? max(8, ($point['total'] / $trendMax) * 210) : 3; @endphp
                             <div class="flex min-w-16 flex-col items-center gap-2">
-                                <span class="text-[10px] font-black text-gray-500">{{ format_money($point['total'], false) }}</span>
-                                <div class="w-8 rounded-t-xl bg-gradient-to-t from-indigo-700 to-violet-400" style="height: {{ $height }}px" title="{{ format_money($point['total']) }}"></div>
+                                <span class="text-[10px] font-black text-gray-500">{{ format_report_money($point['total'], false) }}</span>
+                                <div class="w-8 rounded-t-xl bg-gradient-to-t from-indigo-700 to-violet-400" style="height: {{ $height }}px" title="{{ format_report_money($point['total']) }}"></div>
                                 <span class="whitespace-nowrap text-[11px] font-bold text-gray-400" dir="ltr">{{ $point['label'] }}</span>
                             </div>
                         @endforeach
@@ -317,22 +320,22 @@
 
             <div class="grid gap-6 xl:grid-cols-2">
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'الأكثر مبيعاً حسب المبلغ المحصل',
+                    'title' => 'العناصر ذات أعلى تحصيل خلال الفترة (توزيع تقديري)',
                     'headers' => ['العنصر', 'النوع', 'الكمية', 'مجموعات الشراء', 'القيمة'],
                     'rows' => collect($report['top_items'])->map(fn ($item) => [
                         $item['title'],
                         $typeLabels[$item['type']] ?? $item['type'],
                         number_format($item['quantity']),
                         number_format($item['checkouts']),
-                        format_money($item['sales']),
+                        format_report_money($item['sales']),
                     ])->all(),
                 ])
 
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'المبيعات المحصلة حسب النوع',
+                    'title' => 'تحصيل الفترة حسب نوع العنصر (توزيع تقديري)',
                     'headers' => ['النوع', 'الكمية', 'القيمة'],
                     'rows' => collect($report['type_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['quantity']), format_money($item['sales']),
+                        $item['label'], number_format($item['quantity']), format_report_money($item['sales']),
                     ])->all(),
                 ])
 
@@ -340,39 +343,39 @@
                     'title' => 'الطلبات حسب الحالة',
                     'headers' => ['الحالة', 'السجلات', 'قيمة العناصر'],
                     'rows' => collect($report['status_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['orders']), format_money($item['items_sales']),
+                        $item['label'], number_format($item['orders']), format_report_money($item['items_sales']),
                     ])->all(),
                 ])
 
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'عمليات الشراء حسب حالة الدفع',
-                    'headers' => ['حالة الدفع', 'العمليات', 'الإجمالي', 'المدفوع', 'المتبقي'],
+                    'title' => 'طلبات الفترة حسب حالة الدفع الحالية',
+                    'headers' => ['حالة الدفع', 'العمليات', 'الإجمالي', 'الرصيد المدفوع الحالي', 'المتبقي'],
                     'rows' => collect($report['payment_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['checkouts']), format_money($item['total']), format_money($item['paid']), format_money($item['remaining']),
+                        $item['label'], number_format($item['checkouts']), format_report_money($item['total']), format_report_money($item['paid']), format_report_money($item['remaining']),
                     ])->all(),
                 ])
 
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'مصادر المبيعات المحصلة',
+                    'title' => 'مصادر تحصيل الفترة بتاريخ الدفع',
                     'headers' => ['المصدر', 'مجموعات الشراء', 'القيمة'],
                     'rows' => collect($report['source_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['checkouts']), format_money($item['sales']),
+                        $item['label'], number_format($item['checkouts']), format_report_money($item['sales']),
                     ])->all(),
                 ])
 
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'مناطق المبيعات المحصلة',
+                    'title' => 'مناطق تحصيل الفترة بتاريخ الدفع',
                     'headers' => ['المنطقة', 'مجموعات الشراء', 'العملاء', 'القيمة'],
                     'rows' => collect($report['geography_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['checkouts']), number_format($item['customers']), format_money($item['sales']),
+                        $item['label'], number_format($item['checkouts']), number_format($item['customers']), format_report_money($item['sales']),
                     ])->all(),
                 ])
 
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'عملاء المبيعات المحصلة',
+                    'title' => 'عملاء تحصيل الفترة بتاريخ الدفع',
                     'headers' => ['النوع', 'مجموعات الشراء', 'العملاء', 'القيمة'],
                     'rows' => collect($report['customer_breakdown'])->map(fn ($item) => [
-                        $item['label'], number_format($item['checkouts']), number_format($item['customers']), format_money($item['sales']),
+                        $item['label'], number_format($item['checkouts']), number_format($item['customers']), format_report_money($item['sales']),
                     ])->all(),
                 ])
             </div>
@@ -380,7 +383,7 @@
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-sm font-bold text-gray-500">{{ number_format($rows->total()) }} مجموعة شراء مطابقة</p>
-                    <h3 class="text-lg font-black text-gray-900">تفاصيل الطلبات والتحصيل</h3>
+                    <h3 class="text-lg font-black text-gray-900">تفاصيل طلبات الفترة وأرصدة الدفع الحالية — بتاريخ الشراء</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-100 text-right text-sm">
@@ -430,20 +433,20 @@
                                             {{ $row['sales_classification_label'] }}
                                         </span>
                                         <p class="mt-2 text-xs font-black text-gray-700">{{ $row['payment_status_label'] }}</p>
-                                        <p class="mt-1 text-xs text-emerald-700">مدفوع: {{ format_money($row['paid_amount_cents'] / 100) }}</p>
+                                        <p class="mt-1 text-xs text-emerald-700">مدفوع: {{ format_report_money($row['paid_amount_cents'] / 100) }}</p>
                                         @if($row['remaining_amount_cents'] > 0)
-                                            <p class="mt-1 text-xs text-rose-600">متبقي: {{ format_money($row['remaining_amount_cents'] / 100) }}</p>
+                                            <p class="mt-1 text-xs text-rose-600">متبقي: {{ format_report_money($row['remaining_amount_cents'] / 100) }}</p>
                                         @endif
                                         @if($row['payment_method'])
                                             <p class="mt-1 text-[10px] text-gray-400">{{ $row['payment_method'] }}</p>
                                         @endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap">
-                                        <p class="text-lg font-black text-gray-950">{{ format_money($row['total_cents'] / 100) }}</p>
-                                        <p class="mt-1 text-[10px] font-black {{ $row['sale_recognized'] ? 'text-emerald-600' : 'text-amber-600' }}">{{ $row['sale_recognized'] ? 'محتسب في المبيعات' : 'غير محتسب في المبيعات' }}</p>
-                                        <p class="mt-1 text-xs text-gray-500">عناصر: {{ format_money($row['items_total_cents'] / 100) }}</p>
-                                        <p class="mt-1 text-xs text-gray-400">توصيل: {{ format_money($row['delivery_cents'] / 100) }}</p>
-                                        @if($row['discount_cents'] > 0)<p class="mt-1 text-xs font-bold text-rose-600">خصم: - {{ format_money($row['discount_cents'] / 100) }}</p>@endif
+                                        <p class="text-lg font-black text-gray-950">{{ format_report_money($row['total_cents'] / 100) }}</p>
+                                        <p class="mt-1 text-[10px] font-black {{ $row['sale_recognized'] ? 'text-emerald-600' : 'text-amber-600' }}">{{ $row['sale_recognized'] ? 'طلب غير ملغي برصيد مدفوع' : 'راجع حالة الطلب ورصيده' }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">عناصر: {{ format_report_money($row['items_total_cents'] / 100) }}</p>
+                                        <p class="mt-1 text-xs text-gray-400">توصيل: {{ format_report_money($row['delivery_cents'] / 100) }}</p>
+                                        @if($row['discount_cents'] > 0)<p class="mt-1 text-xs font-bold text-rose-600">خصم: - {{ format_report_money($row['discount_cents'] / 100) }}</p>@endif
                                     </td>
                                 </tr>
                             @empty

@@ -9,6 +9,8 @@ use App\Models\Story;
 use App\Models\VisitorCart;
 use App\Services\Analytics\AnalyticsMetricNormalizer;
 use App\Services\Orders\CheckoutIntakeStatistics;
+use App\Services\Orders\OrderFinancialStatistics;
+use App\Services\Payments\PaymentCollectionReportService;
 use App\Support\AppDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
@@ -29,9 +31,18 @@ class SalesReportService
         $previousRecognizedRows = $previousRows->where('sale_recognized', true)->values();
         $summary = $this->summary($recognizedRows);
         $previousSummary = $this->summary($previousRecognizedRows);
+        $payments = app(PaymentCollectionReportService::class);
+        $events = $payments->events($filters);
+        $collection = $payments->summary($events);
+        $cashRows = $payments->checkouts($events);
+        $previousCollection = $payments->summary($payments->events($filters->previousPeriod()));
+        $summary['order_balance_total'] = $summary['total'];
+        $summary['total'] = round($collection['net_cents'] / 100, 2);
+        $previousSummary['total'] = round($previousCollection['net_cents'] / 100, 2);
 
         return [
             'summary' => $summary,
+            'collection_summary' => $collection,
             'comparison' => [
                 'total' => AnalyticsMetricNormalizer::percentage($summary['total'], $previousSummary['total']),
                 'checkouts' => AnalyticsMetricNormalizer::percentage($summary['checkouts'], $previousSummary['checkouts']),
@@ -41,14 +52,14 @@ class SalesReportService
                 'previous_checkouts' => $previousSummary['checkouts'],
             ],
             'operational_summary' => $this->operationalSummary($rows),
-            'trend' => $this->trend($recognizedRows, $filters),
-            'top_items' => $this->topItems($recognizedRows),
-            'type_breakdown' => $this->typeBreakdown($recognizedRows),
+            'trend' => $payments->trend($events, $filters),
+            'top_items' => $this->topItems($cashRows),
+            'type_breakdown' => $this->typeBreakdown($cashRows),
             'status_breakdown' => $this->statusBreakdown($rows),
             'payment_breakdown' => $this->paymentBreakdown($rows),
-            'source_breakdown' => $this->sourceBreakdown($recognizedRows),
-            'geography_breakdown' => $this->geographyBreakdown($recognizedRows),
-            'customer_breakdown' => $this->customerBreakdown($recognizedRows),
+            'source_breakdown' => $this->sourceBreakdown($cashRows),
+            'geography_breakdown' => $this->geographyBreakdown($cashRows),
+            'customer_breakdown' => $this->customerBreakdown($cashRows),
             'rows' => $page === null ? $rows : $this->page($filters, $rows, $page),
             'options' => $this->options(),
         ];
@@ -103,6 +114,9 @@ class SalesReportService
             ->get();
         $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($checkoutKeys);
+        $filterTotals = $filters->minimumTotal !== null || $filters->maximumTotal !== null
+            ? app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, false)->pluck('total_cents', 'checkout_group_key')
+            : collect();
         $checkoutStates = Order::query()
             ->whereIn('checkout_group_key', $checkoutKeys)
             ->get(['id', 'checkout_group_key', 'status', 'payment_status', 'paid_amount_cents', 'payment_method'])
@@ -145,12 +159,12 @@ class SalesReportService
                 $paymentStatus = in_array($stateFirst->payment_status, OrderStatusRegistry::keys(OrderStatusRegistry::TYPE_PAYMENT, false), true)
                     ? $stateFirst->payment_status
                     : OrderPaymentStatus::UNPAID;
-                $paidAmountCents = min($totalCents, max(0, (int) $stateFirst->paid_amount_cents));
+                $paidAmountCents = max(0, (int) $stateFirst->paid_amount_cents);
                 $items = $this->withCollectedAmounts($items, $paidAmountCents);
                 $fullyDelivered = $statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered');
                 $cancelled = $statuses->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
-                // Sales are recognized from money actually collected. Fulfilment status is
-                // operational and must not delay recognition of a valid payment.
+                // This is the current balance of the order cohort, NOT cash collected in
+                // the date range. PaymentCollectionReportService supplies cash metrics.
                 $saleRecognized = ! $cancelled && $paidAmountCents > 0;
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
                 $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
@@ -213,11 +227,11 @@ class SalesReportService
             ->when($filters->source, function (Collection $rows, string $source): Collection {
                 return $rows->filter(fn (array $row): bool => $row['source_key'] === $source);
             })
-            ->when($filters->minimumTotal !== null, function (Collection $rows) use ($filters): Collection {
-                return $rows->filter(fn (array $row): bool => $row['total_cents'] >= (int) round($filters->minimumTotal * 100));
+            ->when($filters->minimumTotal !== null, function (Collection $rows) use ($filters, $filterTotals): Collection {
+                return $rows->filter(fn (array $row): bool => (int) $filterTotals->get($row['key'], $row['total_cents']) >= (int) round($filters->minimumTotal * 100));
             })
-            ->when($filters->maximumTotal !== null, function (Collection $rows) use ($filters): Collection {
-                return $rows->filter(fn (array $row): bool => $row['total_cents'] <= (int) round($filters->maximumTotal * 100));
+            ->when($filters->maximumTotal !== null, function (Collection $rows) use ($filters, $filterTotals): Collection {
+                return $rows->filter(fn (array $row): bool => (int) $filterTotals->get($row['key'], $row['total_cents']) <= (int) round($filters->maximumTotal * 100));
             });
 
         return $this->sortRows($rows, $filters);
@@ -432,56 +446,6 @@ class SalesReportService
         ];
     }
 
-    private function trend(Collection $rows, SalesReportFilters $filters): array
-    {
-        $groupBy = $filters->resolvedGroupBy();
-        $periods = [];
-        $cursor = $filters->localStart();
-        $end = $filters->localEnd()->startOfDay();
-
-        while ($cursor->lte($end)) {
-            $key = $this->periodKey($cursor, $groupBy);
-            $periods[$key] ??= [
-                'key' => $key,
-                'label' => $this->periodLabel($cursor, $groupBy),
-                'total' => 0.0,
-                'items_sales' => 0.0,
-                'delivery' => 0.0,
-                'discounts' => 0.0,
-                'checkouts' => 0,
-                'items_quantity' => 0,
-            ];
-            $cursor = match ($groupBy) {
-                'week' => $cursor->addWeek(),
-                'month' => $cursor->addMonthNoOverflow()->startOfMonth(),
-                default => $cursor->addDay(),
-            };
-        }
-
-        foreach ($rows as $row) {
-            $date = AppDateTime::display($row['created_at']);
-            $key = $this->periodKey($date, $groupBy);
-            $periods[$key] ??= [
-                'key' => $key,
-                'label' => $this->periodLabel($date, $groupBy),
-                'total' => 0.0,
-                'items_sales' => 0.0,
-                'delivery' => 0.0,
-                'discounts' => 0.0,
-                'checkouts' => 0,
-                'items_quantity' => 0,
-            ];
-            $periods[$key]['total'] += $row['paid_amount_cents'] / 100;
-            $periods[$key]['items_sales'] += $row['items_total_cents'] / 100;
-            $periods[$key]['delivery'] += $row['delivery_cents'] / 100;
-            $periods[$key]['discounts'] += $row['discount_cents'] / 100;
-            $periods[$key]['checkouts']++;
-            $periods[$key]['items_quantity'] += $row['items_quantity'];
-        }
-
-        return array_values($periods);
-    }
-
     private function topItems(Collection $rows): array
     {
         return $rows->flatMap(fn (array $row): array => collect($row['items'])->map(fn (array $item): array => $item + ['checkout_key' => $row['key']])->all())
@@ -503,7 +467,7 @@ class SalesReportService
     {
         $labels = ['story' => 'قصص مخصصة', 'product' => 'منتجات مباشرة', 'product_add_on' => 'إضافات مرتبطة بقصة'];
 
-        return $rows->flatMap(fn (array $row): array => $row['items'])
+        $breakdown = $rows->flatMap(fn (array $row): array => $row['items'])
             ->groupBy('type')
             ->map(fn (Collection $items, string $type): array => [
                 'key' => $type,
@@ -514,6 +478,12 @@ class SalesReportService
             ->sortByDesc('sales')
             ->values()
             ->all();
+        $unknownCents = (int) $rows->filter(fn (array $row): bool => $row['items'] === [])->sum('paid_amount_cents');
+        if ($unknownCents !== 0) {
+            $breakdown[] = ['key' => 'unknown', 'label' => 'غير مصنف', 'quantity' => 0, 'sales' => round($unknownCents / 100, 2)];
+        }
+
+        return $breakdown;
     }
 
     private function statusBreakdown(Collection $rows): array
@@ -550,18 +520,18 @@ class SalesReportService
     private function salesClassificationLabel(bool $cancelled, string $paymentStatus, int $paidAmountCents, int $totalCents): string
     {
         if ($cancelled) {
-            return 'ملغي — غير محتسب في المبيعات';
+            return 'ملغي — راجع الرصيد والاسترداد؛ حركاته تبقى في تقرير الدفعات';
         }
 
         if ($paidAmountCents <= 0) {
-            return 'غير مدفوع — غير محتسب في المبيعات';
+            return 'غير مدفوع حاليًا';
         }
 
         if ($paidAmountCents < $totalCents || OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'partially_paid') {
-            return 'تحصيل جزئي — المبلغ المدفوع محتسب';
+            return 'رصيد مدفوع جزئي حالي';
         }
 
-        return 'مدفوع — المبلغ المحصل محتسب';
+        return 'رصيد مدفوع حالي';
     }
 
     private function sourceBreakdown(Collection $rows): array
@@ -666,23 +636,5 @@ class SalesReportService
         }
 
         return trim((string) $cart->utm_source.(filled($cart->utm_medium) ? ' / '.$cart->utm_medium : ''));
-    }
-
-    private function periodKey(CarbonImmutable $date, string $groupBy): string
-    {
-        return match ($groupBy) {
-            'week' => $date->startOfWeek()->toDateString(),
-            'month' => $date->format('Y-m'),
-            default => $date->toDateString(),
-        };
-    }
-
-    private function periodLabel(CarbonImmutable $date, string $groupBy): string
-    {
-        return match ($groupBy) {
-            'week' => 'أسبوع '.$date->startOfWeek()->format('d/m'),
-            'month' => $date->format('m/Y'),
-            default => $date->format('d/m'),
-        };
     }
 }

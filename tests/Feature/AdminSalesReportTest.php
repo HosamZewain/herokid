@@ -57,7 +57,7 @@ class AdminSalesReportTest extends TestCase
 
         $response->assertOk()
             ->assertSee('تقرير المبيعات')
-            ->assertSee('قاعدة احتساب المبيعات')
+            ->assertSee('قاعدة احتساب التحصيل')
             ->assertSee($first->order_number)
             ->assertSee($second->order_number);
 
@@ -114,14 +114,14 @@ class AdminSalesReportTest extends TestCase
             'country_id' => $this->country->id,
             'governorate_id' => $this->governorate->id,
             'source' => 'facebook',
-            'min_total' => 100,
-            'max_total' => 100,
+            'min_total' => 798,
+            'max_total' => 798,
             'q' => 'ملصق',
         ]))->viewData('report');
 
         $this->assertSame(1, $addon['summary']['checkouts']);
         $this->assertSame(50.0, $addon['summary']['items_sales']);
-        $this->assertSame(100.0, $addon['summary']['total']);
+        $this->assertSame(53.34, $addon['summary']['total']); // Only the allocated add-on share of cash.
         $this->assertSame('facebook / paid_social', $addon['rows']->first()['source']);
     }
 
@@ -155,8 +155,8 @@ class AdminSalesReportTest extends TestCase
 
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertStringContainsString('مجموعة الشراء', $csv);
-        $this->assertStringContainsString('محتسب في المبيعات', $csv);
-        $this->assertStringContainsString('مدفوع — المبلغ المحصل محتسب', $csv);
+        $this->assertStringContainsString('طلب غير ملغي به رصيد مدفوع', $csv);
+        $this->assertStringContainsString('رصيد مدفوع حالي', $csv);
         $this->assertSame(1, substr_count($csv, 'CHECKOUT-GROUP'));
         $this->assertStringContainsString($first->order_number, $csv);
         $this->assertStringContainsString($second->order_number, $csv);
@@ -189,7 +189,7 @@ class AdminSalesReportTest extends TestCase
 
     public function test_previous_period_comparison_and_daily_zero_fill_are_calculated(): void
     {
-        $current = $this->order('HK-CURRENT', 'CURRENT', 'delivered', null, 0, now());
+        $current = $this->order('HK-CURRENT', 'CURRENT', 'delivered', null, 0, now(), 'paid_in_full', 20000);
         $current->items()->create([
             'item_type' => 'story',
             'story_id' => $current->story_id,
@@ -199,7 +199,7 @@ class AdminSalesReportTest extends TestCase
             'total_price_cents' => 20000,
         ]);
 
-        $previous = $this->order('HK-PREVIOUS', 'PREVIOUS', 'delivered', null, 0, now()->subDay());
+        $previous = $this->order('HK-PREVIOUS', 'PREVIOUS', 'delivered', null, 0, now()->subDay(), 'paid_in_full', 10000);
         $previous->items()->create([
             'item_type' => 'story',
             'story_id' => $previous->story_id,
@@ -238,7 +238,7 @@ class AdminSalesReportTest extends TestCase
                 0,
                 now(),
                 $paymentStatus,
-                $paymentStatus === 'partially_paid' ? 10_000 : null,
+                $paymentStatus === 'partially_paid' ? 10_000 : ($paymentStatus === 'paid_in_full' ? $amount : 0),
             );
             $order->items()->create([
                 'item_type' => 'story',
@@ -251,7 +251,7 @@ class AdminSalesReportTest extends TestCase
         }
 
         foreach ([['HK-MIXED-DELIVERED', 'delivered', 70_000], ['HK-MIXED-SHIPPED', 'shipped', 80_000]] as [$number, $status, $amount]) {
-            $order = $this->order($number, 'MIXED-CHECKOUT', $status, null, 0, now());
+            $order = $this->order($number, 'MIXED-CHECKOUT', $status, null, 0, now(), 'paid_in_full', 150000);
             $order->items()->create([
                 'item_type' => 'story',
                 'story_id' => $order->story_id,
@@ -293,11 +293,11 @@ class AdminSalesReportTest extends TestCase
             'status' => 'delivered',
         ]))->viewData('report');
 
-        $this->assertSame(1000.0, $delivered['summary']['total']);
+        $this->assertSame(1800.0, $delivered['summary']['total']); // Cash belongs to the whole mixed-status checkout.
         $this->assertTrue($delivered['rows']->firstWhere('key', 'MIXED-CHECKOUT')['sale_recognized']);
     }
 
-    public function test_report_uses_paid_amount_after_discount_and_excludes_cancelled_collections(): void
+    public function test_report_does_not_deduct_discount_twice_or_erase_cancelled_collections(): void
     {
         $discounted = $this->order(
             'HK-DISCOUNTED-PAID',
@@ -342,7 +342,7 @@ class AdminSalesReportTest extends TestCase
             'range' => 'today',
         ]))->viewData('report');
 
-        $this->assertSame(200.0, $report['summary']['total']);
+        $this->assertSame(300.0, $report['summary']['total']);
         $this->assertSame(200.0, $report['summary']['order_value']);
         $this->assertSame(200.0, $report['summary']['average_checkout']);
         $this->assertSame(1, $report['summary']['checkouts']);
@@ -357,8 +357,8 @@ class AdminSalesReportTest extends TestCase
 
     private function multiOrderCheckout(): array
     {
-        $first = $this->order('HK-FIRST', 'CHECKOUT-GROUP', 'delivered', null, 50, now());
-        $second = $this->order('HK-SECOND', 'CHECKOUT-GROUP', 'delivered', null, 50, now());
+        $first = $this->order('HK-FIRST', 'CHECKOUT-GROUP', 'delivered', null, 50, now(), 'paid_in_full', 79800);
+        $second = $this->order('HK-SECOND', 'CHECKOUT-GROUP', 'delivered', null, 50, now(), 'paid_in_full', 79800);
         $product = Product::create([
             'name_ar' => 'ملصق',
             'slug' => 'sales-report-poster',
@@ -413,7 +413,7 @@ class AdminSalesReportTest extends TestCase
             'active' => true,
         ]);
 
-        return Order::create([
+        return Carbon::withTestNow($date, fn () => Order::create([
             'order_number' => $number,
             'user_id' => $user?->id,
             'parent_name' => 'والدة رنا',
@@ -435,10 +435,10 @@ class AdminSalesReportTest extends TestCase
             'uploaded_photos' => [],
             'status' => $status,
             'payment_status' => $paymentStatus,
-            'paid_amount_cents' => $paidAmountCents ?? ($paymentStatus === 'paid_in_full' ? 999_999 : 0),
+            'paid_amount_cents' => $paidAmountCents ?? 0,
             'payment_method' => $paymentStatus === 'unpaid' ? null : 'انستاباي',
             'created_at' => $date,
             'updated_at' => $date,
-        ]);
+        ]));
     }
 }

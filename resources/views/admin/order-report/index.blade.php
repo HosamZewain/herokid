@@ -11,7 +11,7 @@
         $options = $report['options'];
         $rows = $report['rows'];
         $statusOptions = ['' => 'كل حالات الطلب', 'mixed' => 'حالات متعددة'] + $options['statuses'];
-        $money = fn (int $cents): string => format_money($cents / 100);
+        $money = fn (int $cents): string => format_report_money($cents / 100);
     @endphp
 
     <div class="py-8">
@@ -20,7 +20,8 @@
                 <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                     <div class="text-right">
                         <h3 class="text-base font-black text-gray-900">فلاتر التقرير</h3>
-                        <p class="mt-1 text-xs font-bold text-gray-400">كل الإحصاءات والجداول والتصدير تتبع نفس الفلاتر.</p>
+                        <p class="mt-1 text-xs font-bold text-gray-400">الفترة حسب تاريخ الشراء الأصلي. المدفوع والمتبقي أرصدة حالية للطلبات المختارة، وليس تحصيل الفترة.</p>
+                        @can('sales_reports.view')<a class="mt-2 inline-block text-xs font-bold text-indigo-700" href="{{ route('admin.payment-report.index') }}">التحصيل حسب تاريخ الدفع: تقرير الدفعات ←</a>@endcan
                     </div>
                     <a href="{{ route('admin.order-report.export', request()->except('page')) }}"
                        class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 hover:bg-emerald-100">
@@ -150,7 +151,7 @@
                 @foreach([
                     ['إجمالي عمليات الشراء', number_format($summary['checkouts']), 'border-indigo-100 bg-indigo-50', 'text-indigo-700', 'text-indigo-950'],
                     ['إجمالي قيمة الطلبات', $money($summary['total_cents']), 'border-slate-200 bg-slate-50', 'text-slate-600', 'text-slate-950'],
-                    ['المدفوع فعليًا', $money($summary['paid_amount_cents']), 'border-emerald-100 bg-emerald-50', 'text-emerald-700', 'text-emerald-950'],
+                    ['الرصيد المدفوع للطلبات المختارة', $money($summary['paid_amount_cents']), 'border-emerald-100 bg-emerald-50', 'text-emerald-700', 'text-emerald-950'],
                     ['المبلغ المتبقي', $money($summary['remaining_amount_cents']), 'border-amber-100 bg-amber-50', 'text-amber-700', 'text-amber-950'],
                     ['الطلبات الملغاة', number_format($summary['cancelled_checkouts']), 'border-rose-100 bg-rose-50', 'text-rose-700', 'text-rose-950'],
                     ['قيمة الطلبات الملغاة', $money($summary['cancelled_value_cents']), 'border-red-100 bg-red-50', 'text-red-700', 'text-red-950'],
@@ -181,13 +182,13 @@
                     'printing' => 'حسب حالة الطباعة',
                     'shipping' => 'حسب حالة الشحن',
                     'source' => 'حسب المصدر',
-                    'daily' => 'الحركة اليومية',
+                    'daily' => 'الطلبات اليومية بتاريخ الشراء',
                 ] as $key => $title)
                     <details class="rounded-2xl border border-gray-100 bg-white shadow-sm" @if(in_array($key, ['catalog', 'lifecycle', 'payment'])) open @endif>
                         <summary class="cursor-pointer px-5 py-4 text-sm font-black text-gray-900">{{ $title }}</summary>
                         <div class="overflow-x-auto border-t border-gray-100">
                             <table class="min-w-full text-right text-xs">
-                                <thead class="bg-gray-50 text-gray-500"><tr><th class="px-4 py-2">التصنيف</th><th class="px-4 py-2">العدد</th><th class="px-4 py-2">القيمة</th><th class="px-4 py-2">المدفوع</th></tr></thead>
+                                <thead class="bg-gray-50 text-gray-500"><tr><th class="px-4 py-2">التصنيف</th><th class="px-4 py-2">العدد</th><th class="px-4 py-2">القيمة</th><th class="px-4 py-2">الرصيد المدفوع الحالي</th></tr></thead>
                                 <tbody class="divide-y divide-gray-100">
                                     @forelse($report['breakdowns'][$key] as $item)
                                         <tr><td class="px-4 py-2 font-bold text-gray-700">{{ $item['label'] }}</td><td class="px-4 py-2">{{ number_format($item['count']) }}</td><td class="px-4 py-2">{{ $money($item['total_cents']) }}</td><td class="px-4 py-2 text-emerald-700">{{ $money($item['paid_cents']) }}</td></tr>

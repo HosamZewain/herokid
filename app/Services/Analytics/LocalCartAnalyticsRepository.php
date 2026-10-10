@@ -29,7 +29,7 @@ class LocalCartAnalyticsRepository
                 $this->completedOrdersBetween($yesterdayStart, $yesterdayEnd),
             ),
             'revenue_today' => $this->metricCard(
-                'إيراد اليوم',
+                'قيمة الطلبات المنشأة اليوم (ليست تحصيلًا)',
                 $this->revenueBetween($todayStart, $todayEnd),
                 $this->revenueBetween($yesterdayStart, $yesterdayEnd),
             ),

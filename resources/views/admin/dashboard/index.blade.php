@@ -25,7 +25,7 @@
                         </a>
                         <div class="col-span-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-right backdrop-blur sm:col-span-1">
                             <p class="text-xs font-bold text-indigo-200">المتبقي تحصيله</p>
-                            <p class="mt-1 text-xl font-black">{{ format_money($operationsStats['outstanding_cents'] / 100) }}</p>
+                            <p class="mt-1 text-xl font-black">{{ format_report_money($operationsStats['outstanding_cents'] / 100) }}</p>
                         </div>
                     </div>
                     @endif
@@ -59,13 +59,13 @@
                     </a>
                     <div class="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-violet-50 p-3 text-2xl">📈</span><span class="text-xs font-black text-violet-600">قيمة طلبات اليوم</span></div>
-                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['order_value_cents'] / 100) }}</p>
+                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_report_money($todayStats['order_value_cents'] / 100) }}</p>
                         <p class="mt-1 text-xs text-slate-500">إجمالي قيمة عمليات الشراء الجديدة</p>
                     </div>
                     <div class="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5 shadow-sm">
-                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-emerald-100 p-3 text-2xl">💳</span><span class="text-xs font-black text-emerald-700">مدفوعات اليوم</span></div>
-                        <p class="mt-5 text-3xl font-black text-emerald-900">{{ format_money($todayStats['payments_cents'] / 100) }}</p>
-                        <p class="mt-1 text-xs text-emerald-700">الزيادات الفعلية المسجلة في المبلغ المدفوع اليوم</p>
+                        <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-emerald-100 p-3 text-2xl">💳</span><span class="text-xs font-black text-emerald-700">مدفوعات اليوم (الصافي)</span></div>
+                        <p class="mt-5 text-3xl font-black text-emerald-900">{{ format_report_money($todayStats['payments_cents'] / 100) }}</p>
+                        <p class="mt-1 text-xs text-emerald-700">الدفعات المضافة ناقص العكس والتصحيحات المسجلة اليوم</p>
                     </div>
                     <div class="rounded-3xl border border-cyan-100 bg-white p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-cyan-50 p-3 text-2xl">🧾</span><span class="text-xs font-black text-cyan-700">عمليات دفع اليوم</span></div>
@@ -74,7 +74,7 @@
                     </div>
                     <div class="rounded-3xl border border-amber-100 bg-white p-5 shadow-sm">
                         <div class="flex items-start justify-between gap-4"><span class="rounded-2xl bg-amber-50 p-3 text-2xl">🧮</span><span class="text-xs font-black text-amber-700">متوسط الطلب بدون الشحن</span></div>
-                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_money($todayStats['average_order_cents'] / 100) }}</p>
+                        <p class="mt-5 text-3xl font-black text-slate-950">{{ format_report_money($todayStats['average_order_cents'] / 100) }}</p>
                         <p class="mt-1 text-xs text-slate-500">قيمة المنتجات بعد الخصم، دون تكلفة الشحن</p>
                     </div>
                 </div>
@@ -109,10 +109,10 @@
                                                 @endif
                                             </td>
                                             <td class="whitespace-nowrap px-4 py-3 font-black {{ $paymentEvent['amount_delta_cents'] >= 0 ? 'text-emerald-700' : 'text-rose-700' }}" dir="ltr">
-                                                {{ $paymentEvent['amount_delta_cents'] >= 0 ? '+' : '−' }} {{ format_money(abs($paymentEvent['amount_delta_cents']) / 100) }}
+                                                {{ $paymentEvent['amount_delta_cents'] >= 0 ? '+' : '−' }} {{ format_report_money(abs($paymentEvent['amount_delta_cents']) / 100) }}
                                             </td>
                                             <td class="px-4 py-3 font-bold text-slate-700">{{ $paymentEvent['status_label'] }}</td>
-                                            <td class="whitespace-nowrap px-4 py-3 font-black text-slate-900">{{ format_money($paymentEvent['new_paid_amount_cents'] / 100) }}</td>
+                                            <td class="whitespace-nowrap px-4 py-3 font-black text-slate-900">{{ format_report_money($paymentEvent['new_paid_amount_cents'] / 100) }}</td>
                                             <td class="px-4 py-3 text-slate-600">{{ $paymentEvent['payment_method'] ?: '—' }}</td>
                                             <td class="px-4 py-3 text-slate-600">{{ $paymentEvent['actor_name'] }}</td>
                                             <td class="whitespace-nowrap px-4 py-3 text-slate-500" dir="ltr">{{ $paymentEvent['occurred_at_label'] }}</td>
@@ -149,7 +149,7 @@
                                 <th scope="col" class="px-4 py-4">قيمة القصص</th>
                                 <th scope="col" class="px-4 py-4">قيمة المتجر</th>
                                 <th scope="col" class="px-4 py-4">إجمالي قيمة الطلبات</th>
-                                <th scope="col" class="px-4 py-4 text-emerald-700">مدفوع اليوم</th>
+                                <th scope="col" class="px-4 py-4 text-emerald-700">مدفوع اليوم (الصافي)</th>
                                 <th scope="col" class="px-4 py-4 text-rose-700">ملغي اليوم</th>
                                 <th scope="col" class="px-4 py-4">متوسط الطلب بدون الشحن</th>
                             </tr>
@@ -166,12 +166,12 @@
                                     <td class="px-4 py-4 font-black text-slate-900">{{ arabic_number($day['new_checkouts']) }}</td>
                                     <td class="px-4 py-4"><span class="rounded-full bg-violet-50 px-2.5 py-1 font-black text-violet-700">{{ arabic_number($day['story_checkouts']) }}</span></td>
                                     <td class="px-4 py-4"><span class="rounded-full bg-emerald-50 px-2.5 py-1 font-black text-emerald-700">{{ arabic_number($day['product_checkouts']) }}</span></td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['story_value_cents'] / 100) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['product_value_cents'] / 100) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ format_money($day['total_value_cents'] / 100) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-black text-emerald-700">{{ format_money($day['payments_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['story_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['product_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ format_report_money($day['total_value_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-black text-emerald-700">{{ format_report_money($day['payments_cents'] / 100) }}</td>
                                     <td class="px-4 py-4"><span class="rounded-full {{ $day['cancelled_checkouts'] > 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-400' }} px-2.5 py-1 font-black">{{ arabic_number($day['cancelled_checkouts']) }}</span></td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_money($day['average_order_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['average_order_cents'] / 100) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -190,14 +190,14 @@
                             <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                                 <div class="rounded-xl bg-violet-50 p-3"><span class="block font-bold text-violet-600">طلبات القصص</span><strong class="mt-1 block text-base text-violet-900">{{ arabic_number($day['story_checkouts']) }}</strong></div>
                                 <div class="rounded-xl bg-emerald-50 p-3"><span class="block font-bold text-emerald-600">طلبات المتجر</span><strong class="mt-1 block text-base text-emerald-900">{{ arabic_number($day['product_checkouts']) }}</strong></div>
-                                <div class="col-span-2 rounded-xl bg-slate-100 p-3 sm:col-span-1"><span class="block font-bold text-slate-500">إجمالي القيمة</span><strong class="mt-1 block text-base text-slate-950">{{ format_money($day['total_value_cents'] / 100) }}</strong></div>
+                                <div class="col-span-2 rounded-xl bg-slate-100 p-3 sm:col-span-1"><span class="block font-bold text-slate-500">إجمالي القيمة</span><strong class="mt-1 block text-base text-slate-950">{{ format_report_money($day['total_value_cents'] / 100) }}</strong></div>
                             </div>
                             <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                                <div><dt class="text-slate-500">قيمة القصص</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_money($day['story_value_cents'] / 100) }}</dd></div>
-                                <div><dt class="text-slate-500">قيمة المتجر</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_money($day['product_value_cents'] / 100) }}</dd></div>
-                                <div><dt class="text-emerald-600">مدفوع اليوم</dt><dd class="mt-0.5 font-black text-emerald-800">{{ format_money($day['payments_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-slate-500">قيمة القصص</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_report_money($day['story_value_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-slate-500">قيمة المتجر</dt><dd class="mt-0.5 font-black text-slate-800">{{ format_report_money($day['product_value_cents'] / 100) }}</dd></div>
+                                <div><dt class="text-emerald-600">مدفوع اليوم (الصافي)</dt><dd class="mt-0.5 font-black text-emerald-800">{{ format_report_money($day['payments_cents'] / 100) }}</dd></div>
                                 <div><dt class="text-rose-600">ملغي اليوم</dt><dd class="mt-0.5 font-black text-rose-800">{{ arabic_number($day['cancelled_checkouts']) }}</dd></div>
-                                <div class="col-span-2 border-t border-slate-100 pt-2"><dt class="text-slate-500">متوسط الطلب بدون الشحن</dt><dd class="mt-0.5 font-black text-slate-900">{{ format_money($day['average_order_cents'] / 100) }}</dd></div>
+                                <div class="col-span-2 border-t border-slate-100 pt-2"><dt class="text-slate-500">متوسط الطلب بدون الشحن</dt><dd class="mt-0.5 font-black text-slate-900">{{ format_report_money($day['average_order_cents'] / 100) }}</dd></div>
                             </dl>
                         </article>
                     @endforeach
@@ -249,15 +249,16 @@
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <p class="text-xs font-black text-slate-500">قيمة الطلبات النشطة</p>
-                    <p class="mt-2 text-2xl font-black text-slate-950">{{ format_money($operationsStats['active_value_cents'] / 100) }}</p>
+                    <p class="mt-2 text-2xl font-black text-slate-950">{{ format_report_money($operationsStats['active_value_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-                    <p class="text-xs font-black text-emerald-700">المحصل من الطلبات النشطة</p>
-                    <p class="mt-2 text-2xl font-black text-emerald-900">{{ format_money($operationsStats['collected_cents'] / 100) }}</p>
+                    <p class="text-xs font-black text-emerald-700">الرصيد المدفوع للطلبات النشطة</p>
+                    <p class="mt-2 text-2xl font-black text-emerald-900">{{ format_report_money($operationsStats['collected_cents'] / 100) }}</p>
+                    <p class="mt-1 text-xs text-emerald-700">رصيد حالي، وليس تحصيل فترة زمنية</p>
                 </div>
                 <div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
                     <p class="text-xs font-black text-rose-700">المتبقي من الطلبات النشطة</p>
-                    <p class="mt-2 text-2xl font-black text-rose-900">{{ format_money($operationsStats['outstanding_cents'] / 100) }}</p>
+                    <p class="mt-2 text-2xl font-black text-rose-900">{{ format_report_money($operationsStats['outstanding_cents'] / 100) }}</p>
                 </div>
             </div>
 

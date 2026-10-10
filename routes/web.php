@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\OrderQuickEditController;
 use App\Http\Controllers\Admin\OrderReportController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
 use App\Http\Controllers\Admin\OrderWhatsAppTemplateController;
+use App\Http\Controllers\Admin\PaymentReportController;
 use App\Http\Controllers\Admin\PricingPackageController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
@@ -466,6 +467,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         ->middleware('permission:sales_reports.view')->name('advertising-report.index');
     Route::get('advertising-report/export', [AdvertisingTargetingReportController::class, 'export'])
         ->middleware(['permission:sales_reports.view', 'throttle:10,1'])->name('advertising-report.export');
+    Route::get('payment-report', [PaymentReportController::class, 'index'])
+        ->middleware('permission:sales_reports.view')->name('payment-report.index');
+    Route::get('payment-report/export', [PaymentReportController::class, 'export'])
+        ->middleware(['permission:sales_reports.view', 'throttle:10,1'])->name('payment-report.export');
     Route::get('sales-report', [SalesReportController::class, 'index'])
         ->middleware('permission:sales_reports.view')
         ->name('sales-report.index');

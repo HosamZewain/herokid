@@ -253,6 +253,7 @@
                         @can('sales_reports.view')
                             <a href="{{ route('admin.advertising-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.advertising-report.*') ? $activeLink : $idleLink }}">تقرير استهداف الإعلانات</a>
                             <a href="{{ route('admin.sales-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-report.*') ? $activeLink : $idleLink }}">تقرير المبيعات</a>
+                            <a href="{{ route('admin.payment-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.payment-report.*') ? $activeLink : $idleLink }}">تقرير الدفعات</a>
                         @endcan
                         @can('order_reports.view')
                             <a href="{{ route('admin.order-report.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.order-report.*') ? $activeLink : $idleLink }}">تقرير الطلبات</a>

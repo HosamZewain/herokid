@@ -28,8 +28,8 @@ class AdvertisingTargetingReportController extends Controller
             fwrite($output, "\xEF\xBB\xBF");
             $headers = match ($section) {
                 'items' => ['المنتج/القصة', 'النوع', 'عمليات شراء تحتوي العنصر', 'القطع', 'قبل الخصم بدون شحن', 'بعد توزيع الخصم بدون شحن'],
-                'campaigns' => ['المصدر', 'UTM source', 'الوسيط', 'الحملة', 'معرف الحملة', 'مجموعة الإعلان', 'معرف المجموعة', 'الإعلان', 'معرف الإعلان', 'عمليات الشراء', 'قيمة الطلبات بدون الشحن', 'المدفوع الفعلي شامل الشحن'],
-                default => ['المنطقة', 'نوع العنوان', 'عمليات الشراء', 'العملاء', 'عملاء متكررون خلال الفترة', 'القطع', 'قيمة الطلبات بدون الشحن', 'متوسط الطلب بدون الشحن', 'المدفوع الفعلي شامل الشحن', 'طلبات مدفوعة', 'طلبات مسلمة'],
+                'campaigns' => ['المصدر', 'UTM source', 'الوسيط', 'الحملة', 'معرف الحملة', 'مجموعة الإعلان', 'معرف المجموعة', 'الإعلان', 'معرف الإعلان', 'عمليات الشراء', 'قيمة الطلبات بدون الشحن', 'تحصيل الفترة للطلبات المختارة شامل الشحن'],
+                default => ['المنطقة', 'نوع العنوان', 'عمليات الشراء', 'العملاء', 'عملاء متكررون خلال الفترة', 'القطع', 'قيمة الطلبات بدون الشحن', 'متوسط الطلب بدون الشحن', 'تحصيل الفترة للطلبات المختارة شامل الشحن', 'طلبات برصيد مدفوع', 'طلبات مسلمة'],
             };
             fputcsv($output, $headers);
             foreach ($report[$section] as $row) {
@@ -38,7 +38,7 @@ class AdvertisingTargetingReportController extends Controller
                     'campaigns' => [$row['label'], $row['source'], $row['medium'], $row['campaign_name'] ?? $row['campaign'], $row['campaign_id'], $row['adset_name'], $row['adset_id'], $row['ad_name'] ?? $row['content'], $row['ad_id'], $row['checkouts'], $row['net_cents'] / 100, $row['collected_cents'] / 100],
                     default => [$row['label'], $row['legacy'] ? 'مدينة/منطقة مكتوبة يدويًا' : 'عنوان مسجل', $row['checkouts'], $row['customers'], $row['repeat_customers'], $row['quantity'], $row['net_cents'] / 100, $row['average_cents'] / 100, $row['collected_cents'] / 100, $row['paid_checkouts'], $row['delivered']],
                 };
-                fputcsv($output, array_map(fn (mixed $value): string => preg_match('/^[\s]*[=+\-@]/u', (string) $value) ? "'".$value : (string) $value, $values));
+                fputcsv($output, array_map(fn (mixed $value): string => ! is_int($value) && ! is_float($value) && preg_match('/^[\s]*[=+\-@]/u', (string) $value) ? "'".$value : (string) $value, $values));
             }
             fclose($output);
         }, 'herokid-advertising-'.$section.'-'.$report['dates']->startDate.'-'.$report['dates']->endDate.'.csv', [

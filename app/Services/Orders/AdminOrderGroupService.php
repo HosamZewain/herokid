@@ -8,6 +8,7 @@ use App\Models\OrderPaymentEvent;
 use App\Models\OrderTag;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Payments\PaymentCollectionReportService;
 use App\Support\MarketingAttribution;
 use App\Support\OrderDateTime;
 use App\Support\OrderLifecycle;
@@ -502,10 +503,8 @@ class AdminOrderGroupService
     /** @return Collection<int, OrderPaymentEvent> */
     private function paymentEventsBetween(mixed $start, mixed $end): Collection
     {
-        return OrderPaymentEvent::query()
+        return app(PaymentCollectionReportService::class)->query($start, $end)
             ->with(['actor:id,name', 'order.checkoutReference'])
-            ->whereBetween('occurred_at', [$start, $end])
-            ->where('affects_collection_stats', true)
             ->orderBy('occurred_at')
             ->get();
     }

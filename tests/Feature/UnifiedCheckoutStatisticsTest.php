@@ -10,6 +10,7 @@ use App\Services\Analytics\LocalCartAnalyticsRepository;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\CheckoutIntakeStatistics;
 use App\Services\Orders\OrderFinancialStatistics;
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Sales\SalesReportFilters;
 use App\Services\Sales\SalesReportService;
 use App\Support\AppDateTime;
@@ -192,11 +193,13 @@ class UnifiedCheckoutStatisticsTest extends TestCase
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-03 00:30:00', 'Africa/Cairo')->utc());
         $order = $this->row('MIDNIGHT', 30000, 9500);
+        app(OrderPaymentLedgerService::class)->recordTransition($order,
+            ['paid_amount_cents' => 0], ['paid_amount_cents' => 39500, 'payment_status' => 'paid_in_full'], 'synthetic_test');
         $order->update(['paid_amount_cents' => 39500, 'payment_status' => 'paid_in_full']);
         $report = $this->sales('today');
         $this->assertCount(1, $report['trend']);
         $this->assertSame('2026-10-03', $report['trend'][0]['key']);
-        $this->assertSame(1, $report['trend'][0]['checkouts']);
+        $this->assertSame(1, $report['collection_summary']['checkouts']);
         $this->assertSame(395.0, $report['trend'][0]['total']);
     }
 

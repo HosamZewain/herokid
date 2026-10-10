@@ -94,6 +94,18 @@ if (! function_exists('format_money')) {
     }
 }
 
+if (! function_exists('format_report_money')) {
+    /** Preserve cents in financial reports without changing storefront price formatting. */
+    function format_report_money(int|float|string|null $amount, bool $withCurrency = true): string
+    {
+        $value = round((float) ($amount ?? 0), 2);
+        $decimals = (int) round($value * 100) % 100 === 0 ? 0 : 2;
+        $formatted = arabic_number(number_format($value, $decimals));
+
+        return $withCurrency ? trim($formatted.' '.setting('currency_label', setting('currency_symbol', ''))) : $formatted;
+    }
+}
+
 if (! function_exists('format_age_range')) {
     function format_age_range(?string $value): string
     {

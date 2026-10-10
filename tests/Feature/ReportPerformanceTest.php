@@ -103,7 +103,7 @@ class ReportPerformanceTest extends TestCase
         $this->assertSame(30000, $orders['paid_amount_cents']);
         $this->assertSame(20000, $orders['remaining_amount_cents']);
         $sales = app(SalesReportService::class)->report(SalesReportFilters::fromRequest($this->request()), 1)['summary'];
-        $this->assertSame(250.0, $sales['total']); // Sales retains its existing per-checkout paid cap.
+        $this->assertSame(300.0, $sales['total']); // Cash is not capped at the present order value.
         $this->assertSame(175.0, $sales['average_checkout']);
     }
 
@@ -240,6 +240,9 @@ class ReportPerformanceTest extends TestCase
         $this->assertDatabaseCount('order_group_assignments', 0);
         $order->update(['paid_amount_cents' => 12345]);
         $this->assertSame(12345, $this->get(route('admin.order-report.index'))->viewData('report')['summary']['paid_amount_cents']);
+        $this->assertSame(100.0, $this->get(route('admin.sales-report.index'))->viewData('report')['summary']['total']); // A balance write is not a ledger payment.
+        $order->update(['paid_amount_cents' => 10000]);
+        $this->patch(route('admin.orders.groups.payment', $order->id), ['payment_status' => 'partially_paid', 'paid_amount' => 123.45, 'payment_method' => 'انستاباي'])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame(123.45, $this->get(route('admin.sales-report.index'))->viewData('report')['summary']['total']);
     }
 

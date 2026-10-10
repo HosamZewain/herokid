@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Models\Order;
+use App\Services\Payments\PaymentCollectionReportService;
 use App\Support\MarketingAttribution;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -19,12 +20,20 @@ class AdvertisingTargetingReportService
         $dates = SalesReportFilters::fromRequest(Request::create('/', 'GET', array_filter($request->only('range', 'start_date', 'end_date'), 'is_string')));
         $level = in_array($request->query('level'), ['governorate', 'city', 'district'], true) ? $request->query('level') : 'district';
         $basis = $request->query('basis') === 'collected' ? 'collected' : 'ordered';
-        $facts = $this->enrich($this->sales->rows($dates, detailed: false));
+        $cash = app(PaymentCollectionReportService::class)->checkouts(app(PaymentCollectionReportService::class)->events($dates))->keyBy('key');
+        if ($basis === 'collected') {
+            // Marketing cash mode selects payment-date keys, including older purchases.
+            $allDates = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'custom', 'start_date' => '1900-01-01', 'end_date' => '2200-01-01']));
+            $facts = $cash->isEmpty() ? collect() : $this->sales->rows($allDates, detailed: false, onlyKeys: $cash->keys());
+        } else {
+            $facts = $this->sales->rows($dates, detailed: false);
+        }
+        $facts = $this->enrich($facts)->map(fn (array $row): array => $row + ['period_collection_cents' => (int) ($cash->get($row['key'])['paid_amount_cents'] ?? 0)]);
         $allCount = $facts->count();
         $cancelled = $facts->where('cancelled', true)->count();
         $facts = $facts->where('cancelled', false)->values();
         if ($basis === 'collected') {
-            $facts = $facts->where('sale_recognized', true)->values();
+            $facts = $facts->filter(fn (array $row): bool => $cash->has($row['key']))->values();
         }
         $location = is_string($request->query('location')) ? mb_substr(trim($request->query('location')), 0, 100) : '';
         if ($location !== '') {
@@ -137,7 +146,7 @@ class AdvertisingTargetingReportService
             'repeat_customers' => $customers->filter(fn (Collection $same): bool => $same->count() > 1)->count(),
             'quantity' => (int) $rows->sum('items_quantity'), 'net_cents' => $net,
             'average_cents' => $rows->isEmpty() ? 0 : (int) round($net / $rows->count()),
-            'collected_cents' => (int) $rows->sum('paid_amount_cents'),
+            'collected_cents' => (int) $rows->sum('period_collection_cents'),
             'paid_checkouts' => $rows->where('sale_recognized', true)->count(),
             'delivered' => $rows->where('fully_delivered', true)->count()];
     }

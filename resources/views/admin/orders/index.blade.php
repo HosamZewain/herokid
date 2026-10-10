@@ -287,16 +287,16 @@
                 </div>
                 <div class="rounded-2xl border border-slate-200 bg-white p-4">
                     <p class="text-xs font-black text-slate-600">إجمالي قيمة الطلبات</p>
-                    <p class="mt-2 text-lg font-black text-slate-950">{{ format_money($stats['total_value_cents'] / 100) }}</p>
+                    <p class="mt-2 text-lg font-black text-slate-950">{{ format_report_money($stats['total_value_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                     <p class="text-xs font-black text-amber-700">متوسط الطلب بدون الشحن</p>
-                    <p class="mt-2 text-lg font-black text-amber-950">{{ format_money($stats['average_order_cents'] / 100) }}</p>
+                    <p class="mt-2 text-lg font-black text-amber-950">{{ format_report_money($stats['average_order_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                    <p class="text-xs font-black text-emerald-700">إجمالي المدفوع</p>
-                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_money($stats['collected_cents'] / 100) }}</p>
-                    <p class="mt-1 text-[10px] font-bold text-emerald-700">من {{ number_format($stats['payment_checkouts']) }} عملية شراء</p>
+                    <p class="text-xs font-black text-emerald-700">الرصيد المدفوع للطلبات المختارة</p>
+                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_report_money($stats['collected_cents'] / 100) }}</p>
+                    <p class="mt-1 text-[10px] font-bold text-emerald-700">من {{ number_format($stats['payment_checkouts']) }} عملية شراء · رصيد حالي وليس تحصيل الفترة</p>
                 </div>
                 <div class="rounded-2xl border border-rose-100 bg-rose-50 p-4">
                     <p class="text-xs font-black text-rose-700">الطلبات الملغاة</p>
@@ -304,7 +304,7 @@
                 </div>
                 <div class="rounded-2xl border border-rose-100 bg-white p-4">
                     <p class="text-xs font-black text-rose-600">قيمة الطلبات الملغاة</p>
-                    <p class="mt-2 text-lg font-black text-rose-950">{{ format_money($stats['cancelled_value_cents'] / 100) }}</p>
+                    <p class="mt-2 text-lg font-black text-rose-950">{{ format_report_money($stats['cancelled_value_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                     <p class="text-xs font-black text-emerald-700">الطلبات المدفوعة كليًا</p>
@@ -312,7 +312,7 @@
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-white p-4">
                     <p class="text-xs font-black text-emerald-600">قيمة الطلبات المدفوعة كليًا</p>
-                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_money($stats['paid_value_cents'] / 100) }}</p>
+                    <p class="mt-2 text-lg font-black text-emerald-950">{{ format_report_money($stats['paid_value_cents'] / 100) }}</p>
                 </div>
                 <div class="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
                     <p class="text-xs font-black text-cyan-700">الطلبات المشحونة</p>
@@ -377,10 +377,10 @@
                                         @if($group['phone'])<p class="mt-1 text-xs text-gray-400" dir="ltr">{{ $group['phone'] }}</p>@endif
                                     </div>
                                     <div class="text-left">
-                                        <p class="font-black text-gray-950">{{ format_money($group['total_cents'] / 100) }}</p>
+                                        <p class="font-black text-gray-950">{{ format_report_money($group['total_cents'] / 100) }}</p>
                                         <p class="mt-1 text-[10px] text-gray-400">شامل التوصيل</p>
                                         <span data-workflow-badge="payment_status" class="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
-                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_money($group['remaining_amount_cents'] / 100) }}</p>@endif
+                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي {{ format_report_money($group['remaining_amount_cents'] / 100) }}</p>@endif
                                     </div>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-1.5">
@@ -552,13 +552,13 @@
                                     </td>
                                     <td class="min-w-44 whitespace-nowrap px-4 py-4">
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <p class="font-black text-gray-900">{{ format_money($group['total_cents'] / 100) }}</p>
+                                            <p class="font-black text-gray-900">{{ format_report_money($group['total_cents'] / 100) }}</p>
                                             <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>
                                         </div>
-                                        <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_money($group['delivery_cents'] / 100) }}</p>
-                                        @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_money($group['discount_cents'] / 100) }}</p>@endif
-                                        @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع <span data-workflow-paid>{{ format_money($group['paid_amount_cents'] / 100) }}</span></p>@endif
-                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي <span data-workflow-remaining>{{ format_money($group['remaining_amount_cents'] / 100) }}</span></p>@endif
+                                        <p class="mt-1 text-[10px] text-gray-400">التوصيل {{ format_report_money($group['delivery_cents'] / 100) }}</p>
+                                        @if($group['discount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">خصم - {{ format_report_money($group['discount_cents'] / 100) }}</p>@endif
+                                        @if($group['paid_amount_cents'] > 0)<p class="mt-2 text-[10px] font-bold text-emerald-700">مدفوع <span data-workflow-paid>{{ format_report_money($group['paid_amount_cents'] / 100) }}</span></p>@endif
+                                        @if($group['remaining_amount_cents'] > 0)<p class="mt-1 text-[10px] font-bold text-rose-600">متبقي <span data-workflow-remaining>{{ format_report_money($group['remaining_amount_cents'] / 100) }}</span></p>@endif
                                         @if($group['payment_method'])<p class="mt-1 text-[10px] text-gray-400">{{ $group['payment_method'] }}</p>@endif
                                     </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-gray-500" dir="ltr">

@@ -20,10 +20,10 @@ timestamps. The date column shows that same original date and time in Cairo.
 Deleted original rows still establish the date of a checkout with live rows;
 fully deleted checkouts remain excluded from this operational recent list.
 
-Order-list filters, order-report filters/CSV and sales-report period selection
-use the same original checkout date. Order-report daily breakdown and sales
-trends use that date too. Sales trends group dates in the display timezone, not
-UTC. Historical daily **values** reflect the checkout's current item/discount
+Order-list filters, order-report filters/CSV and sales-report order-cohort selection
+use the same original checkout date. Order-report daily breakdown uses it too.
+Sales-report collections and cash trends instead use payment-event dates (see
+`payment-report.md`). Historical daily **order values** reflect the checkout's current item/discount
 configuration, not an immutable historical sale-price ledger.
 
 ## Financial amounts
@@ -46,12 +46,15 @@ added to its current item value.
 
 - Operational active/order-status cards describe current workload, not new
   purchases. A filter or permission can intentionally narrow their population.
-- Sales-report recognized revenue still requires actual collected money and
-  excludes cancelled/deleted sales. It is not the same measure as total daily
-  intake value. Type/item filters still narrow the sales item population.
+- Sales-report period collections use signed ledger deltas by payment date,
+  including old, cancelled and deleted purchases. Operational cards and its
+  order CSV remain original-purchase cohorts with explicitly labelled current
+  balances. Cash type/item filters select an estimated proportional share of
+  the checkout payment, not its full balance. See `payment-report.md`.
 - Local analytics purchases/funnel count checkouts, including deleted history.
   Local `revenue_today` retains its existing *order value* meaning (shipping
-  included), using the shared financial calculation; it is not payment cash flow.
+  included), using the shared financial calculation; it is not payment cash flow
+  and its UI label explicitly says so.
 - GA4 traffic/campaign metrics remain external GA4 data; cart conversion and
   sharing reports use their own conversion/event dates, not order-row dates.
 - Story/product quantity and customer saved-story-record counters remain

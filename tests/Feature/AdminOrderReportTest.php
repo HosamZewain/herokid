@@ -65,7 +65,7 @@ class AdminOrderReportTest extends TestCase
 
         $response->assertOk()
             ->assertSee('تقرير الطلبات')
-            ->assertSee('المدفوع فعليًا')
+            ->assertSee('الرصيد المدفوع للطلبات المختارة')
             ->assertSee('ستيكر مدرسي')
             ->assertSee('قصة ملغاة');
 

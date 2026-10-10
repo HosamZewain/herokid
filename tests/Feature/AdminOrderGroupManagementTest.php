@@ -651,7 +651,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('إحصائيات الطلبات المطابقة للفلاتر', false)
             ->assertSee('إجمالي قيمة الطلبات')
             ->assertSee('متوسط الطلب')
-            ->assertSee('إجمالي المدفوع')
+            ->assertSee('الرصيد المدفوع للطلبات المختارة')
             ->assertSee('قيمة الطلبات الملغاة')
             ->assertSee('قيمة الطلبات المدفوعة كليًا')
             ->assertSee('الطلبات المشحونة')
