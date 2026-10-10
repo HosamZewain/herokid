@@ -37,7 +37,8 @@ if (cmd === 'git') {
   if (a.startsWith('diff --name-only') && e.TEST_SCHEMA) console.log('database/migrations/new.php');
   if (args[0] === 'archive') process.stdout.write('code fixture');
   if (args[0] === 'switch') fs.writeFileSync(e.TEST_SWITCHED, 'main');
-  if (a === 'branch --show-current') console.log('main');
+  if (args[0] === 'merge') fs.writeFileSync(e.TEST_SWITCHED, 'main');
+  if (a === 'branch --show-current') console.log(fs.existsSync(e.TEST_SWITCHED) ? 'main' : (e.TEST_CURRENT_BRANCH || 'codex/previous-release'));
 }
 if (cmd === 'php' && args[1] === 'tinker') fs.writeFileSync(path.join(e.HEROKID_RELEASE_BACKUP, 'database.sql'), 'SQL fixture');
 if (cmd === 'php' && args[1] === 'route:cache' && e.TEST_FAIL_CACHE) process.exit(1);
@@ -53,6 +54,32 @@ if (cmd === 'php' && args[1] === 'route:cache' && e.TEST_FAIL_CACHE) process.exi
 }
 
 test('main deploy script has valid bash syntax', () => execFileSync('/bin/bash', ['-n', script]));
+
+test('real Git advances inactive main without force and rejects rewinding it', () => {
+    const root = mkdtempSync(join(tmpdir(), 'herokid-main-fast-forward-test-'));
+    const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    try {
+        git('init', '--initial-branch=main');
+        git('config', 'user.name', 'Release Test');
+        git('config', 'user.email', 'release-test@example.test');
+        writeFileSync(join(root, 'fixture.txt'), 'old');
+        git('add', 'fixture.txt');
+        git('commit', '-m', 'old main');
+        const oldCommit = git('rev-parse', 'HEAD');
+        git('switch', '--create', 'feature');
+        writeFileSync(join(root, 'fixture.txt'), 'new');
+        git('commit', '-am', 'verified release');
+        const newCommit = git('rev-parse', 'HEAD');
+        git('fetch', '--no-tags', '.', `${newCommit}:refs/heads/main`);
+        assert.equal(git('rev-parse', 'main'), newCommit);
+        assert.equal(git('branch', '--show-current'), 'feature');
+        assert.equal(spawnSync('git', ['fetch', '--no-tags', '.', `${oldCommit}:refs/heads/main`], { cwd: root }).status === 0, false);
+        assert.equal(git('rev-parse', 'main'), newCommit);
+        git('switch', 'main');
+        assert.equal(readFileSync(join(root, 'fixture.txt'), 'utf8'), 'new');
+        assert.equal(git('status', '--porcelain'), '');
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 for (const [name, env] of [
     ['tracked local changes', { TEST_DIRTY: '1' }],
@@ -76,7 +103,11 @@ for (const noMain of [false, true]) {
         try {
             assert.equal(f.result.status, 0, f.result.stdout + f.result.stderr);
             assert.ok(f.calls.some(c => c[0] === 'git' && c[1] === 'switch' && (noMain ? c[2] === '--create' : c[2] === 'main')));
-            if (!noMain) assert.ok(f.calls.some(c => c[1] === 'merge' && c[2] === '--ff-only' && c[3] === release));
+            if (!noMain) {
+                const advance = f.calls.findIndex(c => c[0] === 'git' && c[1] === 'fetch' && c[2] === '--no-tags' && c[3] === '.' && c[4] === `${release}:refs/heads/main`);
+                const checkout = f.calls.findIndex(c => c[0] === 'git' && c[1] === 'switch');
+                assert.ok(advance >= 0 && checkout > advance, 'main is advanced without force before checking out its final snapshot');
+            }
             assert.ok(f.calls.some(c => c[0] === 'php' && c[2] === 'up'));
             assert.equal(statSync(join(f.app, 'public/build/asset.js')).mode & 0o777, 0o644);
             const backup = readdirSync(f.backups).find(n => n.startsWith('release-'));
@@ -88,6 +119,15 @@ for (const noMain of [false, true]) {
         } finally { f.cleanup(); }
     });
 }
+
+test('already on main deploys by fast-forward without checking out an old snapshot', () => {
+    const f = fixture({ TEST_CURRENT_BRANCH: 'main' });
+    try {
+        assert.equal(f.result.status, 0, f.result.stdout + f.result.stderr);
+        assert.ok(f.calls.some(c => c[1] === 'merge' && c[2] === '--ff-only' && c[3] === release));
+        assert.equal(f.calls.some(c => c[1] === 'switch'), false);
+    } finally { f.cleanup(); }
+});
 
 test('failed cache rebuild never reopens the site or automatically restores data', () => {
     const f = fixture({ TEST_FAIL_CACHE: '1' });

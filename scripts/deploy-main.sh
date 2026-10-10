@@ -64,8 +64,14 @@ echo "Backup completed: $HEROKID_RELEASE_BACKUP"
 # Private backups retain 600/700 permissions; public assets need 644/755.
 umask 022
 if git show-ref --verify --quiet refs/heads/main; then
-    git switch main
-    git merge --ff-only "$RELEASE_COMMIT"
+    if test "$(git branch --show-current)" = main; then
+        git merge --ff-only "$RELEASE_COMMIT"
+    else
+        # Advance the inactive main ref without force, then check out the final
+        # snapshot once. Never briefly check out the old main release.
+        git fetch --no-tags . "$RELEASE_COMMIT:refs/heads/main"
+        git switch main
+    fi
 else
     git switch --create main "$RELEASE_COMMIT"
 fi
