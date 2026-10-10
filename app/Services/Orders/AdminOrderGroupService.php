@@ -482,7 +482,7 @@ class AdminOrderGroupService
                 ->map(function (OrderPaymentEvent $event): array {
                     return [
                         'id' => $event->id,
-                        'order_id' => $event->order_id,
+                        'order_id' => $event->order?->id,
                         'checkout_group_key' => $event->checkout_group_key,
                         'reference' => $event->order?->checkoutReference?->short_reference
                             ?: $event->checkout_group_key,
@@ -503,10 +503,7 @@ class AdminOrderGroupService
     /** @return Collection<int, OrderPaymentEvent> */
     private function paymentEventsBetween(mixed $start, mixed $end): Collection
     {
-        return app(PaymentCollectionReportService::class)->query($start, $end)
-            ->with(['actor:id,name', 'order.checkoutReference'])
-            ->orderBy('occurred_at')
-            ->get();
+        return app(PaymentCollectionReportService::class)->movementsBetween($start, $end, detailed: true);
     }
 
     public function recent(int $limit = 20): Collection
@@ -916,6 +913,9 @@ class AdminOrderGroupService
         bool $applyTagFilter = true,
     ): Builder {
         $query = $this->filteredQuery($request, $includeDeleted, $catalogType, $lifecycle, $applyTagFilter);
+        if ($request->attributes->getBoolean('order_report')) {
+            $query->whereNotIn('checkout_group_key', OrderGroupMergeAlias::query()->select('source_checkout_group_key'));
+        }
 
         $statuses = $this->selectedStatuses($request);
         if ($statuses !== []) {

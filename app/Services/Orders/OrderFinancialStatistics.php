@@ -14,6 +14,9 @@ class OrderFinancialStatistics
     public function checkouts($keys, bool $includeDeleted, bool $preferActive = true): Builder
     {
         $orders = DB::table('orders as o')->whereIn('o.checkout_group_key', $keys);
+        // Deleted carriers left at a merged source are historical copies, not
+        // another current checkout balance. Its receipts remain in the ledger.
+        $orders->whereNotIn('o.checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'));
         if (! $includeDeleted) {
             $orders->whereNull('o.deleted_at');
         } elseif ($preferActive) {

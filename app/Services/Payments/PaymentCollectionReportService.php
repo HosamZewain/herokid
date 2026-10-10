@@ -10,6 +10,7 @@ use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /** Read-only cash movement facts. Never substitute order balances for ledger deltas. */
@@ -23,18 +24,47 @@ class PaymentCollectionReportService
             ->whereBetween('occurred_at', [$start, $end]);
     }
 
+    /** Dated legacy receipts and ledger receipts share one source across reports. */
+    public function movementsBetween(mixed $start, mixed $end, bool $detailed = false): EloquentCollection
+    {
+        $events = $this->query($start, $end)->orderBy('occurred_at')->orderBy('id')->get([
+            'id', 'checkout_group_key', 'order_id', 'actor_user_id', 'event_type', 'source',
+            'new_status', 'previous_paid_amount_cents', 'new_paid_amount_cents',
+            'amount_delta_cents', 'payment_method', 'occurred_at',
+        ]);
+        $history = app(HistoricalPaymentSource::class)->history()['events']
+            ->filter(fn (OrderPaymentEvent $event): bool => $event->occurred_at->gte($start) && $event->occurred_at->lte($end));
+        $events = new EloquentCollection([...$events->all(), ...$history->all()]);
+        if ($detailed) {
+            $events->loadMissing(['actor:id,name', 'order.checkoutReference']);
+            $merged = $events->mapWithKeys(function (OrderPaymentEvent $event): array {
+                $key = $event->checkout_group_key;
+                $target = app(PaymentReconciliationService::class)->canonicalKey($key);
+
+                return $key === $target ? [] : [$key => $target];
+            });
+            if ($merged->isNotEmpty()) {
+                // Display/link the current target without rewriting the source event.
+                $targets = Order::withTrashed()->whereIn('checkout_group_key', $merged->values()->unique())
+                    ->orderBy('id')->get(['id', 'checkout_group_key', 'deleted_at'])->load('checkoutReference')
+                    ->groupBy('checkout_group_key')->map(fn (Collection $orders): Order => $orders->firstWhere('deleted_at', null) ?? $orders->first());
+                foreach ($events as $event) {
+                    $target = $targets->get($merged->get($event->checkout_group_key));
+                    if ($target) {
+                        $event->setRelation('order', $target);
+                    }
+                }
+            }
+        }
+
+        return $events;
+    }
+
     /** Compact context is loaded once per bounded batch, including deleted history. */
     public function events(SalesReportFilters $filters, bool $detailed = false): Collection
     {
-        $query = $this->query($filters->start(), $filters->end())
-            ->select(['id', 'order_id', 'checkout_group_key', 'actor_user_id', 'occurred_at', 'amount_delta_cents',
-                'new_status', 'new_paid_amount_cents', 'event_type', 'source', 'payment_method'])
-            ->orderBy('id');
-        if ($detailed) {
-            $query->with('actor:id,name');
-        }
         $rows = collect();
-        foreach ($query->lazyById(200)->chunk(200) as $events) {
+        foreach ($this->movementsBetween($filters->start(), $filters->end(), $detailed)->chunk(200) as $events) {
             $events = collect($events->all());
             $contexts = $this->contexts($events->pluck('checkout_group_key')->unique(), $detailed);
             foreach ($events as $event) {
@@ -58,12 +88,14 @@ class PaymentCollectionReportService
                     'items' => $selected->values()->all(),
                     'payment_method' => $event->payment_method, 'event_type' => $event->event_type,
                     'event_source' => $event->source, 'new_paid_amount_cents' => (int) $event->new_paid_amount_cents,
+                    'historical' => $event->source === 'historical_admin_activity',
+                    'original_checkout_key' => $event->checkout_group_key,
                     'actor_name' => $detailed ? ($event->actor?->name ?: 'غير مسجل') : null,
                 ]));
             }
         }
 
-        return $rows->sortBy([['occurred_at', 'desc'], ['id', 'desc']])->values();
+        return $rows->sortBy([['occurred_at', 'desc'], [fn (array $a, array $b): int => abs($b['id']) <=> abs($a['id'])]])->values();
     }
 
     public function summary(Collection $events): array
@@ -120,7 +152,8 @@ class PaymentCollectionReportService
 
     private function contexts(Collection $keys, bool $detailed): Collection
     {
-        $orders = Order::withTrashed()->whereIn('checkout_group_key', $keys)->orderBy('id')
+        $canonical = $keys->mapWithKeys(fn (string $key): array => [$key => app(PaymentReconciliationService::class)->canonicalKey($key)]);
+        $orders = Order::withTrashed()->whereIn('checkout_group_key', $canonical->values()->unique())->orderBy('id')
             ->select(['id', 'checkout_group_key', 'order_number', 'user_id', 'parent_name', 'story_id', 'status',
                 'child_name', 'delivery_details', 'order_source', 'discount_cents', 'created_at', 'deleted_at'])
             ->with(['items:id,order_id,item_type,story_id,product_id,title,sku,quantity,total_price_cents,item_snapshot', 'story:id,title,price', 'marketingCart', 'checkoutReference']);
@@ -128,7 +161,7 @@ class PaymentCollectionReportService
             $orders->with('user:id,name');
         }
 
-        return $orders->get()->groupBy('checkout_group_key')->map(function (Collection $history, string $key) use ($detailed): array {
+        $contexts = $orders->get()->groupBy('checkout_group_key')->map(function (Collection $history, string $key) use ($detailed): array {
             $live = $history->whereNull('deleted_at');
             // Superseded rows must not inflate the present composition of a live checkout.
             $group = $live->isNotEmpty() ? $live : $history;
@@ -168,6 +201,8 @@ class PaymentCollectionReportService
                 'statuses' => $group->pluck('status')->all(), 'total_cents' => $total, 'items' => $items->all(),
                 'search_text' => implode(' ', [$key, $first->checkoutReference?->short_reference, $first->parent_name, $delivery['phone'] ?? '', ...$group->pluck('child_name')->all(), ...$group->pluck('order_number')->all(), ...$items->pluck('title')->all(), ...$items->pluck('sku')->all()])];
         });
+
+        return $canonical->map(fn (string $key): array => $contexts->get($key, $this->missingContext($key)));
     }
 
     private function missingContext(string $key): array

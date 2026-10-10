@@ -99,6 +99,14 @@ class OrderPaymentService
                 'paid_amount_cents' => (int) $orders->first()->paid_amount_cents,
                 'payment_method' => $orders->first()->payment_method,
             ];
+            // Re-saving the same settled status (e.g. changing its method after
+            // a discount) must not silently turn an overpayment into a refund.
+            if ($status === $old['payment_status']
+                && in_array(OrderPaymentStatus::behavior($status), [OrderPaymentStatus::PAID_IN_FULL, OrderPaymentStatus::PAID_WITHOUT_SHIPPING], true)
+                && $old['paid_amount_cents'] > $resolved['paid_amount_cents']) {
+                $resolved['paid_amount_cents'] = $old['paid_amount_cents'];
+                $resolved['remaining_amount_cents'] = max(0, (int) $group['total_cents'] - $old['paid_amount_cents']);
+            }
 
             $paymentChanged = $orders->contains(function (Order $order) use ($resolved): bool {
                 return ($order->payment_status ?: OrderPaymentStatus::UNPAID) !== $resolved['payment_status']

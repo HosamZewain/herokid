@@ -44,6 +44,7 @@
                 فلتر المنتج يختار السلات التي تحتويه، وتظل أرقام السلة كاملة؛ توزيع المنتجات يوضح قيمة كل عنصر بعد توزيع الخصم عليه.
             </div>
         </section>
+        @include('admin.payment-report._reconciliation')
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             @foreach(['checkouts' => 'عمليات الشراء', 'customers' => 'العملاء المختلفون', 'net_cents' => 'قيمة الطلبات بدون الشحن', 'average_cents' => 'متوسط الطلب بدون الشحن'] as $key => $label)
                 <div class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm"><p class="text-sm font-bold text-indigo-600">{{ $label }}</p><p class="mt-3 text-3xl font-black text-gray-900">{{ str_ends_with($key, '_cents') ? $money($summary[$key]) : number_format($summary[$key]) }}</p></div>

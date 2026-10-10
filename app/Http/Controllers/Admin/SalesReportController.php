@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\Payments\PaymentReconciliationService;
 use App\Services\Sales\SalesReportFilters;
 use App\Services\Sales\SalesReportService;
 use App\Support\AdminActivityLogger;
@@ -22,6 +23,7 @@ class SalesReportController extends Controller
         return view('admin.sales-report.index', [
             'filters' => $filters,
             'report' => $report,
+            'reconciliation' => app(PaymentReconciliationService::class)->report(),
         ]);
     }
 

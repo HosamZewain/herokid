@@ -8,6 +8,8 @@ use App\Observers\PublicCatalogImageObserver;
 use App\Services\Images\PublicCatalogImageSources;
 use App\Services\Images\PublicImageVariants;
 use App\Services\Mobile\ProviderTokenVerifier;
+use App\Services\Payments\HistoricalPaymentSource;
+use App\Services\Payments\PaymentReconciliationService;
 use App\Support\AdminPermissionRegistry;
 use App\Support\RequestSettings;
 use App\Support\Seo;
@@ -28,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(MobileSocialIdentityVerifier::class, ProviderTokenVerifier::class);
         $this->app->scoped(PublicImageVariants::class);
+        $this->app->scoped(HistoricalPaymentSource::class);
+        $this->app->scoped(PaymentReconciliationService::class);
     }
 
     public function boot(): void

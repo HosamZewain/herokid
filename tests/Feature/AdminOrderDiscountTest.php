@@ -100,7 +100,7 @@ class AdminOrderDiscountTest extends TestCase
         $this->assertSame(50_000, $first->refresh()->discount_cents);
     }
 
-    public function test_discount_revalues_paid_order_without_recording_collection_or_refund_stats(): void
+    public function test_discount_preserves_money_already_received_without_recording_a_refund(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
         [$first, $second] = $this->checkout(paymentStatus: 'paid_in_full', paidAmountCents: 55_000);
@@ -116,17 +116,45 @@ class AdminOrderDiscountTest extends TestCase
 
         foreach ([$first->refresh(), $second->refresh()] as $order) {
             $this->assertSame('paid_in_full', $order->payment_status);
-            $this->assertSame(50_000, $order->paid_amount_cents);
+            $this->assertSame(55_000, $order->paid_amount_cents);
+            $this->assertSame(550, data_get($order->delivery_details, 'paid_amount'));
             $this->assertSame(0, data_get($order->delivery_details, 'remaining_amount'));
         }
 
-        $event = OrderPaymentEvent::query()
+        $this->assertSame(0, OrderPaymentEvent::query()
             ->where('checkout_group_key', 'DISCOUNT-GROUP')
             ->where('source', 'admin_discount_update')
-            ->sole();
-        $this->assertSame('discount_adjustment', $event->event_type);
-        $this->assertSame(-5_000, $event->amount_delta_cents);
+            ->count());
+    }
+
+    public function test_replacing_discount_with_smaller_discount_does_not_invent_an_extra_payment(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$first, $second] = $this->checkout(discountCents: 10_000, paymentStatus: 'paid_in_full', paidAmountCents: 45_000);
+        $this->actingAs($admin)->patch(route('admin.orders.groups.discount', $first), [
+            'discount_type' => 'fixed', 'discount_value' => 50, 'discount_mode' => 'replace', 'discount_reason' => 'تصحيح الخصم',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        foreach ([$first->refresh(), $second->refresh()] as $order) {
+            $this->assertSame(45_000, $order->paid_amount_cents);
+            $this->assertSame('partially_paid', $order->payment_status);
+            $this->assertSame(50, data_get($order->delivery_details, 'remaining_amount'));
+        }
+        $event = OrderPaymentEvent::where('source', 'admin_discount_update')->sole();
+        $this->assertSame(0, $event->amount_delta_cents);
         $this->assertFalse($event->affects_collection_stats);
+    }
+
+    public function test_discount_below_partial_payment_preserves_the_overpaid_credit(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$first] = $this->checkout(paymentStatus: 'partially_paid', paidAmountCents: 40_000);
+        $this->actingAs($admin)->patch(route('admin.orders.groups.discount', $first), [
+            'discount_type' => 'fixed', 'discount_value' => 200, 'discount_mode' => 'replace', 'discount_reason' => 'خصم بعد الدفعة',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(40_000, $first->refresh()->paid_amount_cents);
+        $this->assertSame('paid_in_full', $first->payment_status);
+        $event = OrderPaymentEvent::where('source', 'admin_discount_update')->sole();
+        $this->assertSame(0, $event->amount_delta_cents);
     }
 
     public function test_discount_requires_its_own_permission_and_form_is_hidden_without_it(): void

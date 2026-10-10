@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Payments\PaymentCollectionReportService;
+use App\Services\Payments\PaymentReconciliationService;
 use App\Services\Sales\SalesReportFilters;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
@@ -41,6 +42,7 @@ class PaymentReportController extends Controller
             max(1, $request->integer('page', 1)), ['path' => $request->url(), 'query' => $request->except('page')]);
 
         return view('admin.payment-report.index', ['filters' => $filters, 'day' => $day, 'rows' => $rows,
+            'reconciliation' => app(PaymentReconciliationService::class)->report(),
             'summary' => $payments->summary($events), 'daily' => $payments->daily($events, $filters),
             'selectedSummary' => $payments->summary($selected), 'categories' => PaymentCollectionReportService::CATEGORIES]);
     }
@@ -58,12 +60,12 @@ class PaymentReportController extends Controller
         return response()->streamDownload(function () use ($events): void {
             $output = fopen('php://output', 'wb');
             fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['معرف الحركة', 'تاريخ ووقت الدفع', 'مرجع الطلب', 'تاريخ الشراء الأصلي', 'العميل', 'تصنيف الطلب', 'الحركة بالعملة', 'طريقة الدفع', 'الموظف', 'نوع الحركة', 'مصدر التسجيل']);
+            fputcsv($output, ['معرف الحركة', 'تاريخ ووقت الدفع', 'مرجع الطلب', 'تاريخ الشراء الأصلي', 'العميل', 'تصنيف الطلب', 'الحركة بالعملة', 'طريقة الدفع', 'الموظف', 'نوع الحركة', 'مصدر التسجيل', 'مجموعة الشراء الأصلية قبل الدمج']);
             foreach ($events as $row) {
                 $values = [
-                    $row['id'], AppDateTime::format($row['occurred_at'], 'Y-m-d H:i:s'), $row['reference'],
+                    ($row['historical'] ? 'activity:' : 'payment:').abs($row['id']), AppDateTime::format($row['occurred_at'], 'Y-m-d H:i:s'), $row['reference'],
                     AppDateTime::format($row['original_created_at'], 'Y-m-d H:i'), $row['customer_name'], $row['category_label'],
-                    number_format($row['amount_delta_cents'] / 100, 2, '.', ''), $row['payment_method'], $row['actor_name'], $row['event_type'], $row['event_source'],
+                    number_format($row['amount_delta_cents'] / 100, 2, '.', ''), $row['payment_method'], $row['actor_name'], $row['event_type'], $row['event_source'], $row['original_checkout_key'],
                 ];
                 // The signed amount is server-formatted numeric data, not user input.
                 fputcsv($output, array_map(fn ($value, $index): string => $index !== 6 && preg_match('/^[\s]*[=+\-@]/u', (string) $value) ? "'".$value : (string) $value, $values, array_keys($values)));

@@ -163,38 +163,27 @@ class OrderGroupDiscountService
     private function recalculatePayment(array $group, int $totalCents): array
     {
         $status = (string) $group['payment_status'];
-        $behavior = OrderPaymentStatus::behavior($status);
         $paidCents = max(0, (int) $group['paid_amount_cents']);
         $paymentMethod = $group['payment_method'] ?? null;
-
-        if ($behavior === OrderPaymentStatus::UNPAID) {
-            $paidCents = 0;
-            $paymentMethod = null;
-        } elseif ($behavior === OrderPaymentStatus::PAID_IN_FULL) {
-            $paidCents = $totalCents;
-        } elseif ($behavior === OrderPaymentStatus::PAID_WITHOUT_SHIPPING) {
-            $paidCents = max(0, $totalCents - min($totalCents, (int) $group['delivery_cents']));
-        } elseif ($behavior === OrderPaymentStatus::PARTIALLY_PAID && $paidCents >= $totalCents) {
-            $paidInFullStatus = collect(OrderStatusRegistry::keysForBehavior(
-                OrderStatusRegistry::TYPE_PAYMENT,
-                OrderPaymentStatus::PAID_IN_FULL,
-                true,
-            ))->first();
-
-            if (! $paidInFullStatus) {
-                throw ValidationException::withMessages([
-                    'discount_value' => 'الخصم يجعل الطلب مدفوعًا بالكامل، لكن حالة الدفع «مدفوع بالكامل» غير مفعلة في الإعدادات.',
-                ]);
+        $behavior = match (true) {
+            $paidCents === 0 => OrderPaymentStatus::UNPAID,
+            $paidCents >= $totalCents => OrderPaymentStatus::PAID_IN_FULL,
+            OrderPaymentStatus::behavior($status) === OrderPaymentStatus::PAID_WITHOUT_SHIPPING
+                && $paidCents === max(0, $totalCents - (int) $group['delivery_cents']) => OrderPaymentStatus::PAID_WITHOUT_SHIPPING,
+            default => OrderPaymentStatus::PARTIALLY_PAID,
+        };
+        if (OrderPaymentStatus::behavior($status) !== $behavior) {
+            $status = collect(OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, $behavior, true))->first();
+            if (! $status) {
+                throw ValidationException::withMessages(['discount_value' => 'لا توجد حالة دفع مفعّلة تناسب الرصيد بعد تعديل الخصم.']);
             }
-
-            $status = $paidInFullStatus;
-            $paidCents = $totalCents;
         }
 
         return [
             'payment_status' => $status,
-            'paid_amount_cents' => min($totalCents, $paidCents),
-            'payment_method' => $paymentMethod,
+            // Discounting changes the amount owed, never the money received.
+            'paid_amount_cents' => $paidCents,
+            'payment_method' => $paidCents > 0 ? $paymentMethod : null,
             'remaining_amount_cents' => max(0, $totalCents - $paidCents),
         ];
     }

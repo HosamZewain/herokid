@@ -211,6 +211,7 @@
                 </form>
             </div>
 
+            @include('admin.payment-report._reconciliation')
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-right">
                     <p class="text-sm font-black text-indigo-700">صافي التحصيل خلال الفترة</p>

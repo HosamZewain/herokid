@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Orders\AdminOrderReportService;
+use App\Services\Payments\PaymentReconciliationService;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ class OrderReportController extends Controller
     {
         $report = $reports->report($request, paginate: true);
 
-        return view('admin.order-report.index', compact('report'));
+        return view('admin.order-report.index', ['report' => $report,
+            'reconciliation' => app(PaymentReconciliationService::class)->report()]);
     }
 
     public function export(Request $request, AdminOrderReportService $reports): StreamedResponse

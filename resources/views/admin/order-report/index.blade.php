@@ -16,6 +16,7 @@
 
     <div class="py-8">
         <div class="w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
+            @include('admin.payment-report._reconciliation')
             <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                     <div class="text-right">

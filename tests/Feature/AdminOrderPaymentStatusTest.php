@@ -182,6 +182,21 @@ class AdminOrderPaymentStatusTest extends TestCase
         $event->update(['amount_delta_cents' => 0]);
     }
 
+    public function test_resaving_settled_status_after_discount_preserves_the_actual_overpayment(): void
+    {
+        [$first, $second] = $this->checkout();
+        foreach ([$first, $second] as $order) {
+            $order->forceFill(['paid_amount_cents' => 55000, 'payment_status' => 'paid_in_full',
+                'payment_method' => 'انستاباي', 'discount_cents' => 5000])->saveQuietly();
+        }
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.payment', $first->id), [
+            'payment_status' => 'paid_in_full', 'payment_method' => 'تحويل بنكي',
+        ])->assertRedirect()->assertSessionHas('success');
+        $this->assertSame(55000, $first->refresh()->paid_amount_cents);
+        $this->assertSame(55000, $second->refresh()->paid_amount_cents);
+        $this->assertSame(0, OrderPaymentEvent::where('affects_collection_stats', true)->count());
+    }
+
     public function test_partial_payment_requires_a_valid_amount_and_payment_method(): void
     {
         [$first] = $this->checkout();

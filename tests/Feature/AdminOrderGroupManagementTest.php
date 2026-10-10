@@ -121,7 +121,7 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('طلبات جديدة اليوم')
             ->assertSee('مدفوعات اليوم')
             ->assertSee('تفاصيل حركات الدفع اليوم')
-            ->assertSee('واقعة دفع فعلية محفوظة وغير قابلة للتعديل')
+            ->assertSee('حركات الدفع المسجلة بتاريخها')
             ->assertSee('انستاباي')
             ->assertSee($this->admin->name)
             ->assertSee('قيمة الطلبات النشطة')

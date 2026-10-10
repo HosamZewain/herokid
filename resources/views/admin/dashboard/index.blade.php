@@ -34,6 +34,9 @@
             </section>
 
             @if($canViewStatistics)
+            @if($reconciliation)
+                @include('admin.payment-report._reconciliation')
+            @endif
             <section aria-labelledby="today-dashboard-heading">
                 <div class="mb-4 flex items-end justify-between gap-4">
                     <div class="text-right">
@@ -81,7 +84,7 @@
 
                 <div class="mt-4 overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-sm">
                     <div class="flex flex-col gap-2 border-b border-emerald-100 bg-emerald-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p class="text-xs font-bold text-emerald-800">كل سطر أدناه هو واقعة دفع فعلية محفوظة وغير قابلة للتعديل.</p>
+                        <p class="text-xs font-bold text-emerald-800">حركات الدفع المسجلة بتاريخها. السالب عكس/تصحيح، وليس إثباتًا لاسترداد نقدي.</p>
                         <h4 class="text-sm font-black text-slate-950">تفاصيل حركات الدفع اليوم</h4>
                     </div>
                     @if(count($todayStats['payment_events'] ?? []) > 0)
@@ -132,7 +135,7 @@
                     <div class="text-right">
                         <p class="text-xs font-black text-indigo-600">اتجاه التشغيل اليومي</p>
                         <h3 id="seven-day-dashboard-heading" class="mt-1 text-xl font-black text-slate-950">آخر 7 أيام</h3>
-                        <p class="mt-1 text-sm text-slate-500">الطلبات والقيم والمدفوعات الفعلية بتوقيت القاهرة.</p>
+                        <p class="mt-1 text-sm text-slate-500">الطلبات والقيم بتاريخ الشراء؛ صافي المدفوع بتاريخ حركة الدفع بتوقيت القاهرة.</p>
                     </div>
                     <span class="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black text-slate-600">7 أيام تقويمية</span>
                 </div>
@@ -169,7 +172,7 @@
                                     <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['story_value_cents'] / 100) }}</td>
                                     <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['product_value_cents'] / 100) }}</td>
                                     <td class="whitespace-nowrap px-4 py-4 font-black text-slate-950">{{ format_report_money($day['total_value_cents'] / 100) }}</td>
-                                    <td class="whitespace-nowrap px-4 py-4 font-black text-emerald-700">{{ format_report_money($day['payments_cents'] / 100) }}</td>
+                                    <td class="whitespace-nowrap px-4 py-4 font-black text-emerald-700">@if(auth()->user()->hasPermission('sales_reports.view'))<a class="underline" href="{{ route('admin.payment-report.index', ['range' => 'custom', 'start_date' => $day['date'], 'end_date' => $day['date'], 'day' => $day['date']]) }}">{{ format_report_money($day['payments_cents'] / 100) }}</a>@else{{ format_report_money($day['payments_cents'] / 100) }}@endif</td>
                                     <td class="px-4 py-4"><span class="rounded-full {{ $day['cancelled_checkouts'] > 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-400' }} px-2.5 py-1 font-black">{{ arabic_number($day['cancelled_checkouts']) }}</span></td>
                                     <td class="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{{ format_report_money($day['average_order_cents'] / 100) }}</td>
                                 </tr>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\Payments\PaymentReconciliationService;
 use App\Services\Sales\AdvertisingTargetingReportService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ class AdvertisingTargetingReportController extends Controller
 {
     public function index(Request $request, AdvertisingTargetingReportService $service): View
     {
-        return view('admin.advertising-report.index', ['report' => $service->report($request)]);
+        return view('admin.advertising-report.index', ['report' => $service->report($request),
+            'reconciliation' => app(PaymentReconciliationService::class)->report()]);
     }
 
     public function export(Request $request, AdvertisingTargetingReportService $service): StreamedResponse
