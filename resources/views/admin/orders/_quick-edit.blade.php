@@ -4,6 +4,7 @@
             data-options-url="{{ route('admin.orders.groups.quick-edit-options', $group['representative_id']) }}"
             data-contact-url="{{ route('admin.orders.groups.contact', $group['representative_id']) }}"
             data-add-url="{{ route('admin.orders.groups.products.store', $group['representative_id']) }}"
+            data-add-story-url="{{ route('admin.orders.groups.stories.store', $group['representative_id']) }}"
             data-item-url="{{ route('admin.orders.groups.products.update', [$group['representative_id'], '__ITEM__']) }}"
             data-story-url="{{ route('admin.orders.quick-story-details', '__ORDER__') }}"
             data-contact="{{ json_encode(['parent_name' => $group['customer_name'], 'phone' => $group['phone'], 'alternate_phone' => data_get($group['delivery'], 'alternate_phone')], JSON_UNESCAPED_UNICODE) }}">
@@ -20,7 +21,7 @@
                     </div>
                     <div class="border-t border-gray-100 bg-gray-50 p-4">
                         <label class="block text-xs font-black text-gray-700" for="quick-change-reason">سبب التعديل *</label>
-                        <input id="quick-change-reason" name="change_reason" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل إضافة منتج أو تصحيح بيانات الطفل" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
+                        <input id="quick-change-reason" name="change_reason" required minlength="5" maxlength="500" placeholder="مثال: طلب العميل إضافة قصة أو منتج أو تصحيح بيانات الطفل" class="mt-1 w-full rounded-xl border-gray-200 text-sm">
                         <div class="mt-3 flex items-center gap-3">
                             <button data-quick-save type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">حفظ التعديل</button>
                             <button data-quick-cancel type="button" class="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-600">إلغاء</button>

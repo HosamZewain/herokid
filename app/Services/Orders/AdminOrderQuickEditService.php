@@ -7,15 +7,19 @@ use App\Models\ChildIdentityRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\Story;
 use App\Models\User;
+use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AdminOrderQuickEditService
@@ -24,6 +28,8 @@ class AdminOrderQuickEditService
         private readonly AdminOrderUpdateService $updater,
         private readonly OrderPhotoUploadService $photos,
         private readonly OrderDetailsUpdateService $details,
+        private readonly AdminCustomerChildService $customerChildren,
+        private readonly StoryPricingService $storyPricing,
     ) {}
 
     public function options(Order $representative, User $actor): array
@@ -33,6 +39,23 @@ class AdminOrderQuickEditService
         $canSeePhotos = $actor->hasPermission('orders.photos.view');
 
         return [
+            'story_catalog' => Story::query()->where('active', true)->orderBy('title')->get()
+                ->map(fn (Story $story): array => [
+                    'id' => $story->id, 'name' => $story->title,
+                    'price' => $this->storyPricing->effectivePrice($story), 'language' => $story->language ?? 'ar',
+                ])->all(),
+            'story_children' => $orders->filter(fn (Order $order): bool => filled($order->child_name))
+                ->map(fn (Order $order): array => [
+                    'order_id' => $order->id, 'label' => $order->child_name.' — من الطلب الحالي',
+                    'values' => $this->childValues($order),
+                    'photos' => $canSeePhotos ? collect($order->uploaded_photos ?? [])->keys()
+                        ->map(fn (int $index): string => route('admin.orders.photo', [$order, $index, 'thumbnail' => 1]))->all() : [],
+                ])->concat(filled(data_get($representative->delivery_details, 'phone'))
+                    ? $this->customerChildren->children(data_get($representative->delivery_details, 'phone'), $actor) : [])
+                ->unique('order_id')->values()->all(),
+            'story_age_options' => StoryAgeOptions::forPersonalization(),
+            'story_photo_min' => (int) config('photo_uploads.min_files', 2),
+            'story_photo_max' => (int) config('photo_uploads.max_files', 3),
             'products' => Product::query()->with('activeVariants')->where('is_active', true)
                 ->orderBy('name_ar')->get()->map(fn (Product $product): array => [
                     'id' => $product->id, 'name' => $product->name_ar,
@@ -207,6 +230,65 @@ class AdminOrderQuickEditService
                         'file_names' => collect($data['photos'] ?? [])->map(fn ($file) => $file->getClientOriginalName())->all()],
                     admin: $actor, request: $request,
                 );
+            });
+        });
+    }
+
+    public function addStory(Order $representative, array $data, User $actor, Request $request): void
+    {
+        $this->withPhotoCleanup(function (callable $onStored) use ($representative, $data, $actor, $request): void {
+            DB::transaction(function () use ($representative, $data, $actor, $request, $onStored): void {
+                $orders = Order::query()->with('items')->where('checkout_group_key', $representative->checkoutGroupKey())
+                    ->orderBy('id')->lockForUpdate()->get();
+                abort_if($orders->isEmpty(), 404);
+                $fingerprint = Arr::except($data, ['photos', 'request_key']);
+                $fingerprint['photos'] = collect($data['photos'] ?? [])->map(fn ($file): array => [
+                    'name' => $file->getClientOriginalName(), 'sha256' => hash_file('sha256', $file->getRealPath()),
+                ])->all();
+                $data['request_hash'] = hash('sha256', json_encode($fingerprint, JSON_THROW_ON_ERROR));
+                $previous = AdminActivityLog::query()->where('action', 'checkout.story_added')
+                    ->where('user_id', $actor->id)->where('properties->checkout_group_key', $representative->checkoutGroupKey())
+                    ->where('properties->request_key', $data['request_key'])->first();
+                if ($previous) {
+                    abort_unless(hash_equals((string) ($previous->properties['request_hash'] ?? ''), $data['request_hash']), 409, 'طلب الإضافة مكرر ببيانات مختلفة. افتح إضافة جديدة.');
+
+                    return;
+                }
+                $source = null;
+                if (! empty($data['reuse_child_order_id'])) {
+                    $source = $orders->firstWhere('id', (int) $data['reuse_child_order_id'])
+                        ?? $this->customerChildren->source((int) $data['reuse_child_order_id'],
+                            (string) data_get($orders->first()->delivery_details, 'phone'), $actor, 'reuse_child_order_id', true);
+                    if (blank($source->child_name)) {
+                        throw ValidationException::withMessages(['reuse_child_order_id' => 'اختر طفلًا له بيانات محفوظة.']);
+                    }
+                }
+                $reusedPhotos = $source ? $this->customerChildren->photos($source, $actor) : [];
+                $this->authorizePhotos($actor, $data['photos'] ?? [], $reusedPhotos);
+                foreach ($reusedPhotos as $path) {
+                    if (! Storage::disk((string) config('photo_uploads.disk', 'local'))->exists($path)) {
+                        throw ValidationException::withMessages(['photos' => 'إحدى صور الطفل المحفوظة غير متاحة؛ اختر الإدخال اليدوي وارفع الصور من جديد.']);
+                    }
+                }
+                $values = array_replace($source ? $this->childValues($source) : [], Arr::only($data, [
+                    'child_name', 'child_age', 'child_gender', 'interests', 'parent_notes',
+                ]));
+                $minimum = max(1, (int) config('photo_uploads.min_files', 2));
+                $maximum = max($minimum, (int) config('photo_uploads.max_files', 3));
+                $count = count($reusedPhotos) + count($data['photos'] ?? []);
+                if ($count < $minimum || $count > $maximum) {
+                    throw ValidationException::withMessages(['photos' => 'تحتاج القصة من '.$minimum.' إلى '.$maximum.' صور؛ الصور المحفوظة تُحسب ضمن العدد.']);
+                }
+                $child = Validator::make($values, [
+                    'child_name' => ['required', 'string', 'max:100'],
+                    'child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
+                    'child_gender' => ['required', Rule::in(['boy', 'girl'])],
+                    'interests' => ['nullable', 'string', 'max:1000'],
+                    'parent_notes' => ['nullable', 'string', 'max:2000'],
+                ])->validate();
+                $this->updater->appendStory($representative, [
+                    ...$data, ...$child, 'reused_photos' => $reusedPhotos, 'on_stored' => $onStored,
+                ], $actor, $request);
             });
         });
     }

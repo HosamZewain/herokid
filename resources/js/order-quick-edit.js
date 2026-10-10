@@ -163,6 +163,64 @@ export function initializeOrderQuickEdit() {
         });
     };
 
+    const renderAddStory = () => {
+        const search = input(fields, 'ابحث عن قصة', '', '', 'search');
+        search.placeholder = 'اكتب اسم القصة لتقليل الاختيارات';
+        const storySelect = select(fields, 'القصة *', 'story_id', [['', 'اختر القصة']]);
+        storySelect.required = true;
+        const details = element('div', undefined, 'space-y-3');
+        fields.append(details);
+        const catalog = options.story_catalog ?? [];
+        const populate = () => {
+            const selected = storySelect.value;
+            const entries = filteredProducts(catalog, search.value);
+            const current = catalog.find((story) => String(story.id) === selected);
+            if (current && !entries.includes(current)) entries.push(current);
+            storySelect.replaceChildren();
+            [['', 'اختر القصة'], ...entries.map((story) => [story.id, story.name])].forEach(([id, name]) => {
+                const option = element('option', name); option.value = id; storySelect.append(option);
+            });
+            storySelect.value = selected;
+        };
+        search.addEventListener('input', populate); populate();
+        storySelect.addEventListener('change', () => {
+            details.replaceChildren();
+            const story = catalog.find((entry) => String(entry.id) === storySelect.value);
+            if (!story) return;
+            details.append(element('p', `سعر النسخة الحالي: ${story.price} ج.م — سيُضاف للإجمالي مع الحفاظ على المبلغ المدفوع.`, 'text-sm font-black text-violet-700'));
+            const quantity = input(details, 'عدد النسخ لنفس الطفل *', 'quantity', 1, 'number');
+            quantity.required = true; quantity.min = 1; quantity.max = 20;
+            select(details, 'لغة القصة *', 'language', [['ar', 'العربية'], ['en', 'English']], story.language).required = true;
+            const children = options.story_children ?? options.children ?? [];
+            const reuse = select(details, 'بيانات الطفل وصوره', 'reuse_child_order_id', [['', 'طفل جديد / إدخال يدوي'], ...children.map((child) => [child.order_id, child.label ?? child.name])]);
+            const previews = element('div', undefined, 'flex flex-wrap gap-2');
+            const childFields = element('div', undefined, 'space-y-3');
+            details.append(previews, childFields);
+            const renderChild = () => {
+                const child = children.find((entry) => String(entry.order_id) === reuse.value);
+                const values = child?.values ?? {};
+                childFields.replaceChildren(); photoPreview(previews, child?.photos ?? []);
+                const name = input(childFields, 'اسم الطفل *', 'child_name', values.child_name); name.required = true; name.maxLength = 100;
+                select(childFields, 'عمر الطفل *', 'child_age', [['', 'اختر العمر'], ...(options.story_age_options ?? Array.from({ length: 15 }, (_, i) => i + 2)).map((age) => [age, `${age} سنوات`])], values.child_age).required = true;
+                select(childFields, 'جنس الطفل *', 'child_gender', [['', 'اختر الجنس'], ['boy', 'ولد'], ['girl', 'بنت']], values.child_gender).required = true;
+                [['interests', 'اهتمامات الطفل', 1000], ['parent_notes', 'ملاحظات ولي الأمر', 2000]].forEach(([key, label, max]) => {
+                    input(childFields, label, key, values[key], 'textarea').maxLength = max;
+                });
+                const minimum = options.story_photo_min ?? 2; const maximum = options.story_photo_max ?? 3;
+                childFields.append(element('p', `القصة تحتاج من ${minimum} إلى ${maximum} صور. الصور المحفوظة المختارة: ${child?.photos?.length ?? 0}. يمكنك تعديل البيانات دون تغيير الطفل في طلبه السابق.`, 'text-xs font-bold leading-6 text-gray-500'));
+                if (options.can_upload_photos) {
+                    const photos = input(childFields, 'إضافة صور للطفل', 'photos[]', '', 'file');
+                    photos.multiple = true; photos.accept = 'image/*,.heic,.heif';
+                    photos.required = (child?.photos?.length ?? 0) < minimum;
+                } else {
+                    childFields.append(element('p', 'تحتاج صلاحية عرض صور الطلبات لاستخدام صور الطفل أو رفع صور للقصة.', 'text-xs font-bold text-amber-700'));
+                }
+            };
+            reuse.addEventListener('change', renderChild); renderChild();
+            input(details, 'إهداء القصة (اختياري)', 'gift_note', '', 'textarea').maxLength = 1000;
+        });
+    };
+
     document.querySelectorAll('[data-quick-open]').forEach((button) => button.addEventListener('click', async () => {
         if (busy) return;
         mode = button.dataset.quickOpen;
@@ -172,7 +230,7 @@ export function initializeOrderQuickEdit() {
         const thisOpening = ++opening;
         save.disabled = true;
         dialog.showModal();
-        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور' }[mode];
+        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور' }[mode];
         if (mode === 'contact') {
             const contact = JSON.parse(root.dataset.contact);
             const name = input(fields, 'اسم ولي الأمر *', 'parent_name', contact.parent_name); name.required = true; name.maxLength = 150;
@@ -190,6 +248,7 @@ export function initializeOrderQuickEdit() {
             if (!dialog.open || thisOpening !== opening) return;
             options = loaded;
             if (mode === 'add') renderAdd();
+            else if (mode === 'add-story') renderAddStory();
             else if (mode === 'story') {
                 currentStory = options.stories.find((story) => String(story.order_id) === button.dataset.orderId);
                 if (!currentStory) throw new Error('تعذر العثور على القصة الحالية. أعد تحميل الصفحة.');
@@ -231,9 +290,10 @@ export function initializeOrderQuickEdit() {
         if (busy || !form.reportValidity()) return;
         busy = true; save.disabled = true; showError(''); status.textContent = 'جارٍ حفظ التعديل…';
         const body = new FormData(form);
-        if (mode === 'add') body.append('request_key', requestKey);
+        if (mode === 'add' || mode === 'add-story') body.append('request_key', requestKey);
         body.append('_token', document.querySelector('meta[name="csrf-token"]').content);
         let url = root.dataset.addUrl;
+        if (mode === 'add-story') url = root.dataset.addStoryUrl;
         if (mode === 'contact') {
             url = root.dataset.contactUrl; body.append('_method', 'PATCH');
             const initial = JSON.parse(root.dataset.contact);
@@ -264,7 +324,7 @@ export function initializeOrderQuickEdit() {
             }
             status.textContent = payload.message;
             window.location.reload();
-        } catch (error) { showError(error.message || 'تعذر الاتصال. تحقق من سجل النشاط قبل إعادة إضافة المنتج.'); status.textContent = ''; }
+        } catch (error) { showError(error.message || 'تعذر الاتصال. تحقق من سجل النشاط قبل إعادة إضافة القصة أو المنتج.'); status.textContent = ''; }
         finally { busy = false; save.disabled = false; }
     });
 }

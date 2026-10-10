@@ -7,8 +7,10 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\Orders\AdminOrderQuickEditService;
 use App\Support\Phone;
+use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class OrderQuickEditController extends Controller
@@ -64,6 +66,27 @@ class OrderQuickEditController extends Controller
     {
         $validated = $request->validate($this->personalizationRules(), $this->messages());
         $edits->updateItem($representative, $item, $validated, $request->user(), $request);
+
+        return $this->saved($request);
+    }
+
+    public function addStory(Request $request, Order $representative, AdminOrderQuickEditService $edits)
+    {
+        $validated = $request->validate([
+            'request_key' => ['required', 'uuid'],
+            'story_id' => ['required', 'integer', Rule::exists('stories', 'id')->where('active', true)],
+            'quantity' => ['required', 'integer', 'min:1', 'max:20'],
+            'reuse_child_order_id' => ['nullable', 'integer'],
+            'child_name' => ['sometimes', 'required', 'string', 'max:100'],
+            'child_age' => ['sometimes', 'required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
+            'child_gender' => ['sometimes', 'required', Rule::in(['boy', 'girl'])],
+            'language' => ['nullable', Rule::in(['ar', 'en'])],
+            'interests' => ['nullable', 'string', 'max:1000'],
+            'gift_note' => ['nullable', 'string', 'max:1000'],
+            'parent_notes' => ['nullable', 'string', 'max:2000'],
+            ...Arr::except($this->personalizationRules(), ['personalization']),
+        ], $this->messages());
+        $edits->addStory($representative, $validated, $request->user(), $request);
 
         return $this->saved($request);
     }

@@ -63,7 +63,7 @@ class AdminCustomerChildService
     }
 
     /** Copy to independent private files so later source-order edits cannot affect this purchase. */
-    public function copyPhotos(Order $target, array $paths): void
+    public function copyPhotos(Order $target, array $paths, ?callable $onStored = null): void
     {
         $disk = (string) config('photo_uploads.disk', 'local');
         $created = [];
@@ -73,6 +73,9 @@ class AdminCustomerChildService
                 $extension = in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif'], true) ? $extension : 'jpg';
                 $destination = 'orders/photos/'.$target->id.'/reused/'.Str::uuid().'.'.$extension;
                 $created[] = $destination;
+                if ($onStored) {
+                    $onStored($destination);
+                }
                 app(MediaStorage::class)->copy($disk, $path, $disk, $destination);
             }
             $target->forceFill(['uploaded_photos' => [...($target->uploaded_photos ?? []), ...$created]])->save();

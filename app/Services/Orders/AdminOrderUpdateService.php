@@ -103,43 +103,7 @@ class AdminOrderUpdateService
                 $this->decrementStock($line['product'], $line['variant'], $line['quantity']);
                 $newItems->push($item);
             }
-            $orders = Order::query()->with(['items', 'story'])
-                ->where('checkout_group_key', $representative->checkoutGroupKey())->orderBy('id')->get();
-            $subtotal = (int) $orders->flatMap->items->sum('total_price_cents');
-            $total = $subtotal + (int) $before['delivery_cents'] - (int) $before['discount_cents'];
-            [$payment] = $this->resolveEditedPayment($before, ['payment_edit_intent' => 'preserve'], $total, (int) $before['delivery_cents']);
-            foreach ($orders as $position => $order) {
-                $delivery = $order->delivery_details ?? [];
-                $delivery = array_replace($delivery, [
-                    'cart_item_index' => $position + 1,
-                    'cart_items_count' => $orders->flatMap->items->count(),
-                    'item_price' => $order->items->sum('total_price_cents') / 100,
-                    'subtotal' => $subtotal / 100,
-                    'total' => $total / 100,
-                    'paid_amount' => $payment['paid_amount_cents'] / 100,
-                    'remaining_amount' => $payment['remaining_amount_cents'] / 100,
-                    'payment_status' => $payment['payment_status'],
-                ]);
-                $order->forceFill([
-                    'discount_cents' => $before['discount_cents'],
-                    'discount_reason' => $before['discount_reason'],
-                    'paid_amount_cents' => $payment['paid_amount_cents'],
-                    'payment_status' => $payment['payment_status'],
-                    'payment_method' => $payment['payment_method'],
-                    'delivery_details' => $delivery,
-                ])->save();
-            }
-            $this->paymentLedger->recordTransition(
-                representative: $source,
-                before: $before,
-                after: $payment,
-                source: 'admin_product_added',
-                actor: $admin,
-                request: $request,
-                metadata: ['change_reason' => $data['change_reason']],
-                forcedEventType: 'payment_balance_adjusted',
-                affectsCollectionStats: false,
-            );
+            [$subtotal, $total, $payment] = $this->refreshAfterAddition($source, $before, $data, $admin, $request, 'admin_product_added');
             AdminActivityLogger::log(
                 action: 'checkout.product_added',
                 description: 'إضافة منتج إلى الطلب: '.$product->name_ar,
@@ -166,6 +130,100 @@ class AdminOrderUpdateService
 
             return $newItems->first();
         });
+    }
+
+    /** Add independent story records without rebuilding existing purchased items or approvals. */
+    public function appendStory(Order $representative, array $data, User $admin, Request $request): void
+    {
+        DB::transaction(function () use ($representative, $data, $admin, $request): void {
+            $orders = Order::query()->with(['items', 'story'])
+                ->where('checkout_group_key', $representative->checkoutGroupKey())
+                ->orderBy('id')->lockForUpdate()->get();
+            abort_if($orders->isEmpty(), 404);
+            $before = $this->groups->present($orders);
+            if ((int) $before['items_cents'] !== (int) $orders->flatMap->items->sum('total_price_cents')) {
+                throw ValidationException::withMessages(['story_id' => 'هذا الطلب القديم لا يحتوي على سجل أسعار العناصر. استخدم تعديل الطلب الكامل أولًا للحفاظ على قيمته الأصلية.']);
+            }
+            $quantity = (int) $data['quantity'];
+            if ($orders->flatMap->items->count() + $quantity > (int) config('orders.admin_max_items', 20)) {
+                throw ValidationException::withMessages(['quantity' => 'الحد الأقصى للطلب هو ٢٠ عنصرًا.']);
+            }
+            $story = Story::query()->where('active', true)->lockForUpdate()->findOrFail($data['story_id']);
+            $source = $orders->first();
+            $addedOrders = collect();
+            foreach (range(1, $quantity) as $copy) {
+                $order = $this->createStoryOrder($representative->checkoutGroupKey(), $story, $data, $source, $admin);
+                app(AdminCustomerChildService::class)->copyPhotos($order, $data['reused_photos'], $data['on_stored']);
+                if (($data['photos'] ?? []) !== []) {
+                    $this->photoUploads->append($order, $data['photos'], $data['on_stored']);
+                }
+                $item = $order->items->firstWhere('item_type', 'story');
+                $snapshot = array_replace($item->personalization_snapshot ?? [], [
+                    'uploaded_photos_count' => count($order->refresh()->uploaded_photos ?? []),
+                    'language' => $order->language, 'interests' => $order->interests,
+                    'gift_note' => $order->gift_note, 'parent_notes' => $order->parent_notes,
+                ]);
+                $item->forceFill(['personalization_snapshot' => $snapshot])->save();
+                $storySnapshot = $item->item_snapshot ?? [];
+                $order->forceFill(['delivery_details' => array_replace($order->delivery_details ?? [], [
+                    'story_regular_price' => $storySnapshot['regular_price'] ?? ($item->unit_price_cents / 100),
+                    'story_offer_applied' => (bool) ($storySnapshot['offer_applied'] ?? false),
+                    'story_offer_label' => $storySnapshot['offer_label'] ?? null,
+                ])])->save();
+                $addedOrders->push($order->load('items'));
+            }
+            [$subtotal, $total, $payment] = $this->refreshAfterAddition($source, $before, $data, $admin, $request, 'admin_story_added');
+            AdminActivityLogger::log(
+                action: 'checkout.story_added', description: 'إضافة قصة إلى الطلب: '.$story->title, subject: $source,
+                properties: [
+                    'reason' => $data['change_reason'], 'checkout_group_key' => $representative->checkoutGroupKey(),
+                    'request_key' => $data['request_key'], 'request_hash' => $data['request_hash'],
+                    'story_title' => $story->title, 'added_order_ids' => $addedOrders->pluck('id')->all(),
+                    'reused_child_order_id' => $data['reuse_child_order_id'] ?? null,
+                    'file_names' => collect($data['photos'] ?? [])->map(fn ($file) => $file->getClientOriginalName())->all(),
+                    'changes' => AdminActivityLogger::changedValues(
+                        ['items_cents' => $before['items_cents'], 'total_cents' => $before['total_cents'], 'payment_status' => $before['payment_status']],
+                        ['items_cents' => $subtotal, 'total_cents' => $total, 'payment_status' => $payment['payment_status']],
+                    ),
+                    'added_items' => $addedOrders->flatMap->items->map(fn (OrderItem $item): array => $item->only([
+                        'id', 'order_id', 'story_id', 'title', 'quantity', 'unit_price_cents', 'personalization_snapshot',
+                    ]))->all(),
+                    'paid_amount_preserved_cents' => $payment['paid_amount_cents'],
+                ], admin: $admin, request: $request,
+            );
+        });
+    }
+
+    /** Shared financial reconciliation for additive edits; never records new collection. */
+    private function refreshAfterAddition(Order $source, array $before, array $data, User $admin, Request $request, string $eventSource): array
+    {
+        $orders = Order::query()->with(['items', 'story'])
+            ->where('checkout_group_key', $source->checkoutGroupKey())->orderBy('id')->get();
+        $subtotal = (int) $orders->flatMap->items->sum('total_price_cents');
+        $total = $subtotal + (int) $before['delivery_cents'] - (int) $before['discount_cents'];
+        [$payment] = $this->resolveEditedPayment($before, ['payment_edit_intent' => 'preserve'], $total, (int) $before['delivery_cents']);
+        foreach ($orders as $position => $order) {
+            $delivery = array_replace($order->delivery_details ?? [], [
+                'cart_item_index' => $position + 1, 'cart_items_count' => $orders->flatMap->items->count(),
+                'item_price' => $order->items->sum('total_price_cents') / 100,
+                'subtotal' => $subtotal / 100, 'total' => $total / 100,
+                'paid_amount' => $payment['paid_amount_cents'] / 100,
+                'remaining_amount' => $payment['remaining_amount_cents'] / 100,
+                'payment_status' => $payment['payment_status'],
+            ]);
+            $order->forceFill([
+                'discount_cents' => $before['discount_cents'], 'discount_reason' => $before['discount_reason'],
+                'paid_amount_cents' => $payment['paid_amount_cents'], 'payment_status' => $payment['payment_status'],
+                'payment_method' => $payment['payment_method'], 'delivery_details' => $delivery,
+            ])->save();
+        }
+        $this->paymentLedger->recordTransition(
+            representative: $source, before: $before, after: $payment, source: $eventSource,
+            actor: $admin, request: $request, metadata: ['change_reason' => $data['change_reason']],
+            forcedEventType: 'payment_balance_adjusted', affectsCollectionStats: false,
+        );
+
+        return [$subtotal, $total, $payment];
     }
 
     /** @return array{representative: Order, orders: Collection<int, Order>} */

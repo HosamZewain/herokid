@@ -10,6 +10,9 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 let server, browser, origin, html;
 const options = {
     can_upload_photos: true,
+    story_catalog: [{ id: 4, name: 'رحلة إلى الفضاء', price: 250, language: 'ar' }, { id: 5, name: 'المخترع العبقري', price: 290, language: 'ar' }],
+    story_children: [{ order_id: 12, label: 'ليلى أحمد — طلب سابق', values: { child_name: 'ليلى أحمد', child_age: 7, child_gender: 'girl', interests: 'الفضاء', parent_notes: '' }, photos: ['/photo-test', '/photo-test'] }],
+    story_age_options: [2, 3, 4, 5, 6, 7, 8, 9, 10], story_photo_min: 2, story_photo_max: 3,
     products: [{ id: 2, name: 'ستيكر شخصي', price: 200, linked: false, variants: [], schema: { fields: {
         child_name: { enabled: true, required: true, label: 'اسم الطفل', type: 'text' },
         school_name: { enabled: true, label: 'اسم المدرسة', type: 'text' },
@@ -139,4 +142,37 @@ test('story language edit submits only language, leaving child and checkout cont
     assert.ok(!body.includes('name="phone"'));
     assert.deepEqual(errors, []);
     await page.close();
+});
+
+test('mobile quick story addition reuses a previous child and keeps photos and operation key after a validation error', async () => {
+    const { page, errors } = await pageFixture(390);
+    await page.locator('[data-quick-open="add-story"]').click();
+    await page.locator('select[name="story_id"]').waitFor();
+    await page.locator('input[type="search"]').fill('الفضاء');
+    assert.equal(await page.locator('select[name="story_id"] option').count(), 2);
+    await page.locator('select[name="story_id"]').selectOption('4');
+    await page.locator('select[name="reuse_child_order_id"]').selectOption('12');
+    assert.equal(await page.locator('input[name="child_name"]').inputValue(), 'ليلى أحمد');
+    assert.equal(await page.locator('select[name="child_age"]').inputValue(), '7');
+    assert.equal(await page.locator('[data-quick-fields] img').count(), 2);
+    await page.locator('input[name="child_name"]').fill('ليلى أحمد علي');
+    await page.locator('input[name="photos[]"]').setInputFiles({ name: 'extra.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0S8AAAAASUVORK5CYII=', 'base64') });
+    await page.locator('#quick-change-reason').fill('طلب العميل إضافة قصة جديدة.');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const box = await page.locator('[data-quick-save]').boundingBox(); assert.ok(box.y + box.height <= 844);
+    if (process.env.HEROKID_STORY_UI_SCREENSHOT) await page.screenshot({ path: process.env.HEROKID_STORY_UI_SCREENSHOT });
+    const bodies = [];
+    await page.route('**/groups/1/stories', route => {
+        bodies.push(route.request().postData());
+        return route.fulfill({ status: bodies.length === 1 ? 422 : 200, json: bodies.length === 1 ? { errors: { child_name: ['راجع الاسم'] } } : { message: 'تم الحفظ' } });
+    });
+    await page.locator('[data-quick-save]').click(); await page.getByText('راجع الاسم', { exact: true }).waitFor();
+    assert.equal(await page.locator('input[name="photos[]"]').evaluate(node => node.files[0].name), 'extra.png');
+    assert.equal(await page.locator('input[name="child_name"]').inputValue(), 'ليلى أحمد علي');
+    await page.locator('[data-quick-save]').click(); await page.waitForFunction(() => !document.querySelector('[data-quick-dialog]').open);
+    assert.equal(bodies.length, 2);
+    const key = body => body.match(/name="request_key"\r\n\r\n([^\r]+)/)?.[1];
+    assert.ok(key(bodies[0])); assert.equal(key(bodies[0]), key(bodies[1]));
+    assert.ok(bodies[0].includes('extra.png')); assert.ok(!bodies[0].includes('name="product_id"'));
+    assert.deepEqual(errors, []); await page.close();
 });

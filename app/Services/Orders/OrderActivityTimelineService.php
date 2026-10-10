@@ -102,6 +102,7 @@ class OrderActivityTimelineService
             'order.details_updated', 'checkout.full_order_updated' => 'تم تعديل بيانات الطلب.',
             'checkout.contact_updated' => 'تم تعديل بيانات التواصل.',
             'checkout.product_added' => 'تمت إضافة منتج إلى الطلب.',
+            'checkout.story_added' => 'تمت إضافة قصة إلى الطلب.',
             'order.product_details_updated' => 'تم تعديل بيانات منتج واحد.',
             'order.note_added' => 'تمت إضافة ملاحظة داخلية.',
             'order.assignment_acquired' => 'تم استلام مسؤولية الطلب.',
@@ -166,6 +167,7 @@ class OrderActivityTimelineService
             'released_user_name' => 'المسؤول السابق',
             'prompt_type_label' => 'نوع البرومبت',
             'product_title' => 'المنتج',
+            'story_title' => 'القصة',
         ] as $key => $label) {
             if (! isset($properties[$key]) || $properties[$key] === '') {
                 continue;
