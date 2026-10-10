@@ -47,8 +47,14 @@ echo "Backup completed: $HEROKID_RELEASE_BACKUP"
 
 "$PHP_BIN" artisan down --retry=60
 trap 'echo "Deployment stopped. Site may remain in maintenance; review the error before reopening. No database restore was attempted."' ERR
+# Keep private backups restricted; use standard permissions for the code checkout.
+umask 022
 git switch --detach "$RELEASE_COMMIT"
 test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+# Backups stay private, but newly checked-out application files must be readable
+# by Hostinger's static-file server. A private umask produces 600/700 on checkout.
+find public/build -type d -exec chmod 755 {} +
+find public/build -type f -exec chmod 644 {} +
 composer install --no-dev --optimize-autoloader --no-interaction
 "$PHP_BIN" -r '
 $manifest = json_decode(file_get_contents("public/build/manifest.json"), true, 512, JSON_THROW_ON_ERROR);
