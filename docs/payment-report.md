@@ -126,10 +126,24 @@ These checks do not replace the post-deployment ledger reconciliation above.
 ## Historical reconciliation and balance safeguards
 
 The same global panel is shown in payments, sales, orders and advertising reports,
-and on the dashboard for users with both statistics and sales-report access. It
-is explicitly independent of period/population filters. Dated movement amounts
+not on the dashboard. It is explicitly independent of period/population filters. Dated movement amounts
 match for identical dates and filters; current order-cohort balances deliberately
 remain separate and are not renamed cash receipts.
+
+The dashboard retains its operational cards and Cairo-dated daily/last-seven-day
+collections, but does not load the all-time reconciliation report. Verified old
+baseline corrections are shown in a separate historical audit section, not in
+the list of unresolved differences. When there are no actual differences, the UI
+explicitly says that balances match; it does not display a zero-count review alert.
+This presentation change does not alter payments, baselines or financial totals.
+
+Dashboard cleanup verification: 120 focused tests / 766 assertions passed on an
+isolated in-memory SQLite database (PHP 8.5.5), including dashboard permissions,
+purchase ordering, daily collections, report parity and read-only legacy
+corrections. PHP 8.2 syntax checks, Pint, `git diff --check` and the production
+asset build passed. A separate synthetic browser database confirmed the panel
+is absent from the dashboard and verified corrections are labelled as already
+counted in financial reports. No production data was changed.
 
 `HistoricalPaymentSource` reads immutable baseline snapshots and pre-baseline
 admin payment/manual-creation logs. A complete old/new balance chain normally must

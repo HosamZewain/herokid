@@ -10,7 +10,6 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\Analytics\Ga4AnalyticsRepository;
 use App\Services\Orders\AdminOrderGroupService;
-use App\Services\Payments\PaymentReconciliationService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,9 +28,6 @@ class DashboardController extends Controller
     ) {
         $canViewStatistics = auth()->user()->hasPermission('dashboard.statistics.view');
         $orderStats = $canViewStatistics ? $orderGroups->dashboardStats() : null;
-        $reconciliation = $canViewStatistics && auth()->user()->hasPermission('sales_reports.view')
-            ? app(PaymentReconciliationService::class)->report()
-            : null;
 
         // Numeric dashboard data is not queried unless the separate sensitive
         // statistics permission is present.
@@ -64,7 +60,7 @@ class DashboardController extends Controller
             'totalOrders', 'newOrders', 'pendingPreview', 'shippedOrders', 'deliveredOrders',
             'totalStories', 'activeStories', 'totalUsers', 'unreadMessages',
             'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats',
-            'lastSevenDaysStats', 'canViewStatistics', 'managementNotes', 'reconciliation'
+            'lastSevenDaysStats', 'canViewStatistics', 'managementNotes'
         ));
     }
 

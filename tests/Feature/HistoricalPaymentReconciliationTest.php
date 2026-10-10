@@ -125,11 +125,18 @@ class HistoricalPaymentReconciliationTest extends TestCase
         $this->assertSame($payments->summary($rows), $sales['collection_summary']);
         $october = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'custom', 'start_date' => '2026-10-01', 'end_date' => '2026-10-10']));
         $this->assertEmpty($payments->events($october));
-        foreach (['admin.payment-report.index', 'admin.sales-report.index', 'admin.order-report.index', 'admin.advertising-report.index', 'admin.dashboard.index'] as $route) {
-            $this->get(route($route))->assertOk()->assertSee('١,٢٧٧')->assertSee('تصحيح قراءة الأرصدة القديمة');
+        foreach (['admin.payment-report.index', 'admin.sales-report.index', 'admin.order-report.index', 'admin.advertising-report.index'] as $route) {
+            $this->get(route($route))->assertOk()->assertSee('١,٢٧٧')->assertSee('تصحيح قراءة الأرصدة القديمة')
+                ->assertSee('سجل تصحيحات القراءة القديمة — محسوبة بالفعل')
+                ->assertSee('الأرصدة متطابقة — لا توجد فروق معلّقة')
+                ->assertDontSee('مجموعة تحتاج مراجعة')
+                ->assertDontSee('فرق غير مفسّر يحتاج مراجعة');
         }
+        $this->get(route('admin.dashboard.index'))->assertOk()->assertDontSee('إجمالي المدفوع المسجل')
+            ->assertDontSee('تصحيح قراءة الأرصدة القديمة');
         $this->artisan('payments:reconcile', ['--json' => true])->expectsOutputToContain('"historical_baseline_correction": 1277')->assertSuccessful();
         $this->assertSame($beforeEvents, DB::table('order_payment_events')->get()->toJson());
+        $this->assertSame($beforeOrders, DB::table('orders')->get()->toJson());
     }
 
     public function test_a_live_or_late_deleted_baseline_carrier_cannot_be_corrected_from_current_balance(): void
@@ -286,9 +293,10 @@ class HistoricalPaymentReconciliationTest extends TestCase
         $this->assertSame(271100, $report['unreconciled_cents']);
         $this->assertSame(4464700, $report['history']['undated_cents']);
         $this->assertSame($before, DB::table('order_payment_events')->get()->toJson());
-        foreach (['admin.payment-report.index', 'admin.sales-report.index', 'admin.order-report.index', 'admin.advertising-report.index', 'admin.dashboard.index'] as $route) {
+        foreach (['admin.payment-report.index', 'admin.sales-report.index', 'admin.order-report.index', 'admin.advertising-report.index'] as $route) {
             $this->get(route($route))->assertOk()->assertSee('٣٥٠,٨٩٦.٠١')->assertSee('إجمالي المدفوع المسجل');
         }
+        $this->get(route('admin.dashboard.index'))->assertOk()->assertDontSee('إجمالي المدفوع المسجل');
     }
 
     public function test_legacy_partial_payments_and_reversal_use_real_audit_dates_once(): void
@@ -425,7 +433,21 @@ class HistoricalPaymentReconciliationTest extends TestCase
         $this->assertSame($summary['net_cents'], (int) collect($dashboard['last_seven_days'])->sum('payments_cents'));
         $this->assertSame($summary['net_cents'], (int) $payments->daily($rows, $filters)->sum('net_cents'));
         $this->assertSame($summary, $sales['collection_summary']);
-        $this->get(route('admin.dashboard.index'))->assertOk()->assertSee('إجمالي المدفوع المسجل')->assertSee('١٢٥.٠١');
+        $this->get(route('admin.dashboard.index'))->assertOk()->assertDontSee('إجمالي المدفوع المسجل')->assertSee('١٢٥.٠١');
+    }
+
+    public function test_dashboard_keeps_operational_statistics_without_loading_global_reconciliation(): void
+    {
+        $this->partialMock(PaymentReconciliationService::class, function ($mock): void {
+            $mock->shouldNotReceive('report');
+        });
+        $this->get(route('admin.dashboard.index'))->assertOk()
+            ->assertSee('أهم أرقام اليوم')
+            ->assertSee('مدفوعات اليوم (الصافي)')
+            ->assertSee('آخر 7 أيام')
+            ->assertSee('آخر عمليات الشراء')
+            ->assertDontSee('مطابقة المدفوع المسجل')
+            ->assertDontSee('سجل تصحيحات القراءة القديمة');
     }
 
     public function test_reconciliation_command_is_read_only_and_reports_opposing_differences_even_when_net_is_zero(): void

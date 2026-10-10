@@ -22,7 +22,7 @@
         <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold leading-7 text-amber-900">بيانات التحصيل التاريخية غير مكتملة بالتاريخ. الأيام قبل بدء سجل الدفعات ليست دليلًا على عدم وجود تحصيل. المستعاد بتاريخ موثّق من السجل القديم: {{ $reconcileMoney($history['recovered_net_cents']) }}؛ والباقي ظاهر منفصلًا أعلاه. لا تعتمد على صافي الفترة وحده كإجمالي منذ البداية.</p>
     @endif
     <details class="mt-4 rounded-xl border border-gray-200 p-4">
-        <summary class="cursor-pointer font-black text-indigo-800">لماذا يختلف رصيد الطلبات عن التحصيل؟ · {{ $reconciliation['differences']->count() }} مجموعة تحتاج مراجعة</summary>
+        <summary class="cursor-pointer font-black text-indigo-800">تفاصيل مطابقة الرصيد والتحصيل · @if($reconciliation['differences']->isNotEmpty()){{ $reconciliation['differences']->count() }} مجموعة تحتاج مراجعة@elseالأرصدة متطابقة — لا توجد فروق معلّقة@endif</summary>
         <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             @foreach([
                 'الأرصدة القديمة' => $reconciliation['opening_cents'],
@@ -30,14 +30,9 @@
                 'صافي تغيّر الرصيد غير المصنّف كدفعات' => $reconciliation['non_cash_adjustments_cents'],
                 'الرصيد المتوقع من السجل والتسويات' => $reconciliation['expected_balance_cents'],
                 'الرصيد الحالي على الطلبات دون تكرار الدمج' => $reconciliation['current_balance_cents'],
-                'فرق غير مفسّر يحتاج مراجعة — ليس إثبات عجز نقدي' => $reconciliation['unreconciled_cents'],
+                ($reconciliation['differences']->isNotEmpty() ? 'فرق غير مفسّر يحتاج مراجعة — ليس إثبات عجز نقدي' : 'صافي فرق المطابقة') => $reconciliation['unreconciled_cents'],
             ] as $label => $amount)<div class="flex flex-wrap justify-between gap-2 rounded-xl bg-gray-50 p-3"><dt>{{ $label }}</dt><dd class="font-black">{{ $reconcileMoney($amount) }}</dd></div>@endforeach
         </dl>
-        @if($reconciliation['baseline_corrections']->isNotEmpty())
-            <div class="mt-4 overflow-x-auto"><table class="w-full whitespace-nowrap text-right text-sm"><thead><tr><th class="p-3">تصحيح الترحيل الموثّق</th><th class="p-3">اللقطة الأصلية</th><th class="p-3">الرصيد المصحّح</th><th class="p-3">فرق القراءة</th></tr></thead><tbody>
-                @foreach($reconciliation['baseline_corrections'] as $correction)<tr class="border-t"><td class="p-3">@if(auth()->user()->hasPermission('orders.view'))<a class="font-bold text-indigo-700 underline" href="{{ route('admin.orders.groups.show', $correction['order_id']) }}">{{ $correction['reference'] }}</a>@else{{ $correction['reference'] }}@endif <span class="text-xs text-gray-500">· لقطة #{{ $correction['baseline_event_id'] }} · سجل نشاط #{{ $correction['last_payment_log_id'] }}</span></td><td class="p-3">{{ $reconcileMoney($correction['snapshot_cents']) }}</td><td class="p-3">{{ $reconcileMoney($correction['corrected_cents']) }}</td><td class="p-3 font-bold">{{ $reconcileMoney($correction['delta_cents']) }}</td></tr>@endforeach
-            </tbody></table></div>
-        @endif
         <p class="mt-3 text-xs leading-6 text-gray-500">نُقلت أرصدة {{ $reconcileMoney($reconciliation['merge_transfers_cents']) }} بين طلبات عند الدمج؛ ليست دفعات جديدة. نسخ أرصدة المصادر المدمجة المستبعدة من تكرار الرصيد الحالي: {{ $reconcileMoney($reconciliation['merged_source_copies_cents']) }}.</p>
         @if($reconciliation['differences']->isNotEmpty())
             <div class="mt-4 overflow-x-auto"><table class="w-full whitespace-nowrap text-right text-sm"><thead><tr><th class="p-3">الطلب</th><th class="p-3">الرصيد الحالي</th><th class="p-3">المتوقع من السجل</th><th class="p-3">الفرق</th></tr></thead><tbody>
@@ -46,4 +41,13 @@
             <p class="mt-2 text-xs text-gray-500">أكبر ٢٠ فرقًا. لا تُعدّل الأرصدة تلقائيًا ولا تُضاف حركات دفع لسد الفرق.</p>
         @endif
     </details>
+    @if($reconciliation['baseline_corrections']->isNotEmpty())
+        <details class="mt-4 rounded-xl border border-sky-200 p-4">
+            <summary class="cursor-pointer font-black text-sky-900">سجل تصحيحات القراءة القديمة — محسوبة بالفعل</summary>
+            <p class="mt-3 text-sm leading-7 text-gray-600">هذه تصحيحات موثّقة ومحسوبة في الإجمالي، وليست فروقًا معلّقة ولا مبالغ متبقية على العملاء. لم تتغير دفعات الطلبات؛ بقيت لقطة الترحيل القديمة محفوظة للمراجعة التاريخية فقط.</p>
+            <div class="mt-4 overflow-x-auto"><table class="w-full whitespace-nowrap text-right text-sm"><thead><tr><th class="p-3">تصحيح الترحيل الموثّق</th><th class="p-3">اللقطة القديمة قبل التصحيح</th><th class="p-3">المدفوع الموثّق وقت الترحيل</th><th class="p-3">تصحيح القراءة المحتسب</th></tr></thead><tbody>
+                @foreach($reconciliation['baseline_corrections'] as $correction)<tr class="border-t"><td class="p-3">@if(auth()->user()->hasPermission('orders.view'))<a class="font-bold text-indigo-700 underline" href="{{ route('admin.orders.groups.show', $correction['order_id']) }}">{{ $correction['reference'] }}</a>@else{{ $correction['reference'] }}@endif <span class="text-xs text-gray-500">· لقطة #{{ $correction['baseline_event_id'] }} · سجل نشاط #{{ $correction['last_payment_log_id'] }}</span><span class="block text-xs font-bold text-sky-900">تصحيح موثّق — محسوب</span></td><td class="p-3">{{ $reconcileMoney($correction['snapshot_cents']) }}</td><td class="p-3">{{ $reconcileMoney($correction['corrected_cents']) }}</td><td class="p-3 font-bold">{{ $reconcileMoney($correction['delta_cents']) }}</td></tr>@endforeach
+            </tbody></table></div>
+        </details>
+    @endif
 </section>

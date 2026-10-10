@@ -34,9 +34,6 @@
             </section>
 
             @if($canViewStatistics)
-            @if($reconciliation)
-                @include('admin.payment-report._reconciliation')
-            @endif
             <section aria-labelledby="today-dashboard-heading">
                 <div class="mb-4 flex items-end justify-between gap-4">
                     <div class="text-right">
