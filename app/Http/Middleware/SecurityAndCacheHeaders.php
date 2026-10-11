@@ -108,6 +108,7 @@ class SecurityAndCacheHeaders
             'cart.*',
             'dashboard',
             'profile.*',
+            'account-deletion.*',
             'checkout.*',
             'photo-uploads.*',
             'booklet-previews.*',

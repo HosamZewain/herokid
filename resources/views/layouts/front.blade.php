@@ -113,8 +113,8 @@
     @stack('schema')
 
     @php
-        $metaPixelId = trim((string) config('services.meta_pixel.id', ''));
-        $googleAnalyticsId = trim((string) config('services.google_analytics.id', ''));
+        $metaPixelId = request()->routeIs('account-deletion.*') ? '' : trim((string) config('services.meta_pixel.id', ''));
+        $googleAnalyticsId = request()->routeIs('account-deletion.*') ? '' : trim((string) config('services.google_analytics.id', ''));
     @endphp
     @if($metaPixelId !== '')
         <!-- Meta Pixel Code -->

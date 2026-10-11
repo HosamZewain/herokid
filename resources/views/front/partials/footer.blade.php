@@ -43,6 +43,7 @@
         <span>HeroKid © {{ date('Y') }} جميع الحقوق محفوظة.</span>
         <nav aria-label="السياسات" class="hk-footer-policies">
             <a href="{{ route('privacy') }}">سياسة الخصوصية</a>
+            <a href="{{ route('account-deletion.show') }}">حذف الحساب والبيانات</a>
             <a href="{{ route('terms') }}">الشروط والأحكام</a>
         </nav>
         <span>صُنع بحب في مصر</span>

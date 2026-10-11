@@ -89,7 +89,10 @@
                         <li>الاعتراض على معالجة بياناتك</li>
                         <li>سحب موافقتك في أي وقت</li>
                     </ul>
-                    <p class="text-slate-600 mt-3">لممارسة أي من هذه الحقوق، تواصل معنا على: <a href="mailto:{{ $settings['privacy_email'] ?? $settings['site_email'] ?? '' }}" class="text-indigo-600 font-semibold">{{ $settings['privacy_email'] ?? $settings['site_email'] ?? '' }}</a></p>
+                    <p class="text-slate-600 mt-3">لحذف حسابك وبياناته، استخدم <a href="{{ route('account-deletion.show') }}" class="text-indigo-600 font-semibold underline">صفحة طلب حذف الحساب والبيانات</a>. لا يلزم الاتصال بالدعم لتقديم الطلب.</p>
+                    @if(filled($settings['privacy_email'] ?? $settings['site_email'] ?? null))
+                        <p class="text-slate-600 mt-3">للحقوق الأخرى أو الاستفسارات: <a href="mailto:{{ $settings['privacy_email'] ?? $settings['site_email'] }}" class="text-indigo-600 font-semibold">{{ $settings['privacy_email'] ?? $settings['site_email'] }}</a></p>
+                    @endif
                 </section>
 
                 <section>
@@ -101,7 +104,9 @@
                     <h2 class="text-2xl font-bold text-slate-900 mb-4">٨. تواصل معنا</h2>
                     <p class="text-slate-600">لأي استفسار حول هذه السياسة أو بياناتك الشخصية:</p>
                     <div class="bg-slate-50 rounded-lg p-4 mt-3 space-y-1 text-slate-700">
-                        <p>📧 البريد الإلكتروني: <a href="mailto:privacy@herokid.sa" class="text-indigo-600">privacy@herokid.sa</a></p>
+                        @if(filled($settings['privacy_email'] ?? $settings['site_email'] ?? null))
+                            <p>📧 البريد الإلكتروني: <a href="mailto:{{ $settings['privacy_email'] ?? $settings['site_email'] }}" class="text-indigo-600">{{ $settings['privacy_email'] ?? $settings['site_email'] }}</a></p>
+                        @endif
                         <p>📱 واتساب:
                             @if(!empty($settings['whatsapp_url']))
                                 <a href="{{ $settings['whatsapp_url'] }}" class="text-indigo-600">{{ $settings['whatsapp_number'] ?? '' }}+</a>

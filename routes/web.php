@@ -65,6 +65,7 @@ use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\ConversationReplyMediaController;
+use App\Http\Controllers\Front\AccountDeletionController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CartPromoCodeController;
@@ -89,6 +90,7 @@ use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicMediaController;
+use App\Http\Middleware\TrackCustomerVisit;
 use App\Models\Order;
 use App\Models\PricingPackage;
 use App\Models\Product;
@@ -382,6 +384,10 @@ Route::get('/faq', [PageController::class, 'faq'])->name('faq');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
+Route::get('/account-deletion', [AccountDeletionController::class, 'show'])
+    ->withoutMiddleware(TrackCustomerVisit::class)->name('account-deletion.show');
+Route::post('/account-deletion', [AccountDeletionController::class, 'store'])
+    ->middleware('throttle:5,1')->withoutMiddleware(TrackCustomerVisit::class)->name('account-deletion.store');
 Route::get('/terms', [PageController::class, 'terms'])->name('terms');
 Route::get('/packages', [PageController::class, 'pricing'])->name('packages');
 Route::redirect('/pricing', '/packages', 301)->name('pricing');
