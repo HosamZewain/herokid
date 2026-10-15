@@ -34,7 +34,8 @@
         $initialDiscountPercent = $initialHasSale && $initialRegularPrice > 0
             ? (int) round((1 - ($initialDisplayPrice / $initialRegularPrice)) * 100)
             : 0;
-        $initialQuantity = max(1, min(10, (int) old('quantity', 1)));
+        $maxQuantity = \App\Support\CartQuantity::MAX_PER_PRODUCT;
+        $initialQuantity = max(1, min($maxQuantity, (int) old('quantity', 1)));
         $productSchema = [
             '@context' => 'https://schema.org',
             '@type' => 'Product',
@@ -196,7 +197,7 @@
                                         <p class="text-sm font-black text-indigo-950"><span class="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">١</span>عدد الأطفال / النسخ</p>
                                         <p class="mt-1 text-xs font-bold text-indigo-700">سنفتح بيانات مستقلة لكل طفل.</p>
                                     </div>
-                                    <input id="personalized-product-quantity" type="number" name="quantity" min="1" max="10" value="{{ $initialQuantity }}"
+                                    <input id="personalized-product-quantity" type="number" name="quantity" min="1" max="{{ $maxQuantity }}" value="{{ $initialQuantity }}"
                                         aria-label="عدد الأطفال أو النسخ" class="min-h-11 w-20 rounded-xl border-indigo-200 text-center font-black" data-personalized-product-quantity>
                                 </div>
                             </div>
@@ -234,7 +235,7 @@
                             <p class="mt-1 text-sm font-bold leading-6 text-slate-500">أدخل بيانات كل طفل وارفع صوره، أو استخدم بيانات الطفل الأول للنسخ المتكررة.</p>
                         </div>
                         <div class="grid items-start gap-4 lg:grid-cols-2" data-personalization-units>
-                            @for($unitIndex = 0; $unitIndex < 10; $unitIndex++)
+                            @for($unitIndex = 0; $unitIndex < $maxQuantity; $unitIndex++)
                                 @include('front.shop._personalization-unit', compact('unitIndex', 'initialQuantity'))
                             @endfor
                         </div>
@@ -471,7 +472,7 @@
                     if (!form || !quantity || !units.length) return;
 
                     const refresh = () => {
-                        const count = Math.max(1, Math.min(10, Number(quantity.value || 1)));
+                        const count = Math.max(1, Math.min(Number(quantity.max), Math.trunc(Number(quantity.value || 1))));
                         quantity.value = count;
                         units.forEach((unit, index) => {
                             const active = index < count;

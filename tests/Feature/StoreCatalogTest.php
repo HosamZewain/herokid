@@ -622,6 +622,58 @@ class StoreCatalogTest extends TestCase
         $this->assertSame([1, 1], $orders->map(fn (Order $order): int => $order->items->sole()->quantity)->all());
     }
 
+    public function test_sixteen_personalized_coloring_books_keep_each_child_and_price_through_checkout(): void
+    {
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $product = $this->product('bulk-coloring-book', 195, [
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => $this->schoolStickerPersonalizationFields(),
+        ]);
+        $token = 'bulk-coloring-test';
+        $units = collect(range(1, 16))->map(fn (int $i) => [
+            'child_name' => 'طفل '.$i, 'school_name' => 'مدرسة اختبار', 'class_name' => '3A',
+            'photo_upload_ids' => [$this->temporaryPhoto($token, 'bulk-'.$i.'-a')->public_id, $this->temporaryPhoto($token, 'bulk-'.$i.'-b')->public_id],
+        ])->all();
+
+        $this->withSession(['photo_upload.token' => $token])->postJson(route('cart.products.store', $product), [
+            'quantity' => 16, 'upload_session_token' => $token, 'personalizations' => $units,
+        ])->assertOk()->assertJsonPath('added_line_total', 3120)->assertJsonPath('cart_count', 16);
+        $cart = collect(session('cart.items'))->values();
+        $this->assertSame(array_column($units, 'child_name'), $cart->pluck('child_name')->all());
+        $this->assertSame(312000, $cart->sum('line_total_cents'));
+        $this->assertCount(32, $cart->flatMap(fn ($item) => $item['uploaded_photos'])->unique());
+
+        $this->post(route('checkout.store'), $this->checkoutPayload($egypt, $cairo))->assertRedirect(route('checkout.success'));
+        $orders = Order::with('items')->orderBy('id')->get();
+        $this->assertCount(16, $orders);
+        $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
+        $this->assertSame(array_column($units, 'child_name'), $orders->pluck('child_name')->all());
+        $this->assertSame(312000, $orders->sum(fn ($order) => $order->items->sum('total_price_cents')));
+        $this->assertSame(array_fill(0, 16, 2), $orders->map(fn ($order) => count($order->uploaded_photos))->all());
+    }
+
+    public function test_personalized_product_supports_fifty_units_and_rejects_excess_or_incomplete_data_atomically(): void
+    {
+        $product = $this->product('bulk-personalized-limit', 195, [
+            'personalization_mode' => 'collect_child_details',
+            'personalization_fields' => ['fields' => ['child_name' => ['enabled' => true, 'required' => true]]],
+        ]);
+        $this->get(route('shop.product.show', $product))->assertOk()
+            ->assertSee('max="50"', false)->assertSee('data-personalization-unit="49"', false)
+            ->assertDontSee('data-personalization-unit="50"', false);
+        $units = [['child_name' => 'طفل اختبار'], ...array_fill(0, 49, ['reuse_first' => 1])];
+        $this->postJson(route('cart.products.store', $product), ['quantity' => 51, 'personalizations' => $units])
+            ->assertUnprocessable()->assertJsonValidationErrors('quantity');
+        $this->postJson(route('cart.products.store', $product), ['quantity' => 16, 'personalizations' => array_slice($units, 0, 15)])
+            ->assertUnprocessable();
+        $this->assertEmpty(session('cart.items', []));
+        $this->postJson(route('cart.products.store', $product), ['quantity' => 50, 'personalizations' => $units])
+            ->assertOk()->assertJsonPath('cart_count', 50)->assertJsonPath('added_line_total', 9750);
+        $this->assertCount(50, collect(session('cart.items'))->pluck('key')->unique());
+        $this->assertSame(['طفل اختبار'], collect(session('cart.items'))->pluck('child_name')->unique()->values()->all());
+    }
+
     public function test_personalized_product_can_reuse_first_child_data_and_photos_for_another_unit(): void
     {
         $product = $this->product('reused-child-school-sticker', 195, [

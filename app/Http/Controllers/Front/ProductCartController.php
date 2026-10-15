@@ -10,6 +10,7 @@ use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
+use App\Support\CartQuantity;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class ProductCartController extends Controller
         $photoField = $personalizationFields['photos'] ?? null;
         $rules = [
             'variant_id' => 'nullable|integer|exists:product_variants,id',
-            'quantity' => 'nullable|integer|min:1|max:50',
+            'quantity' => 'nullable|integer|min:1|max:'.CartQuantity::MAX_PER_PRODUCT,
             'linked_story_key' => 'nullable|string',
         ];
 
@@ -45,9 +46,6 @@ class ProductCartController extends Controller
 
         $quantity = (int) ($validated['quantity'] ?? 1);
 
-        if ($collectsChildDetails && $quantity > 10) {
-            return $this->errorResponse($request, 'الحد الأقصى للمنتج المخصص في الطلب الواحد هو ١٠ أطفال.', 'quantity');
-        }
         $variant = null;
 
         if (! empty($validated['variant_id'])) {
