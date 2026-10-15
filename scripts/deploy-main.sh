@@ -42,12 +42,15 @@ test -z "$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- composer
 # This additive campaign migration is explicitly reviewed for this release.
 # Do not silently run unrelated pending migrations on shared production.
 PUSH_MIGRATION="database/migrations/2026_10_15_000100_create_mobile_push_campaigns.php"
+CHANGED_MIGRATIONS="$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- database/migrations)"
 while IFS= read -r migration; do
     test -z "$migration" || test "$migration" = "$PUSH_MIGRATION" || {
         echo "Stopped: unreviewed schema change requires its own deployment plan."
         exit 1
     }
-done < <(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- database/migrations)
+done <<HEROKID_MIGRATION_LIST
+$CHANGED_MIGRATIONS
+HEROKID_MIGRATION_LIST
 
 mkdir -p "$BACKUP_ROOT"
 chmod 700 "$BACKUP_ROOT"
