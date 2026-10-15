@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
+use App\Http\Controllers\Admin\MobilePushCampaignController;
 use App\Http\Controllers\Admin\NotificationCenterController;
 use App\Http\Controllers\Admin\OrderActivityController;
 use App\Http\Controllers\Admin\OrderAdminNoteController;
@@ -912,6 +913,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('settings/notifications/rules', [NotificationCenterController::class, 'updateRules'])->middleware('permission:settings.notifications.manage_rules')->name('settings.notifications.rules.update');
     Route::put('settings/notifications/thresholds', [NotificationCenterController::class, 'updateThresholds'])->middleware('permission:settings.notifications.manage')->name('settings.notifications.thresholds.update');
     Route::put('settings/notifications/order-created-template', [NotificationCenterController::class, 'updateOrderCreatedTemplate'])->middleware('permission:settings.notifications.manage')->name('settings.notifications.order-created-template.update');
+    Route::get('mobile-push', [MobilePushCampaignController::class, 'index'])->middleware('permission:settings.mobile.view')->name('mobile-push.index');
+    Route::post('mobile-push/preview', [MobilePushCampaignController::class, 'preview'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:20,1'])->name('mobile-push.preview');
+    Route::post('mobile-push', [MobilePushCampaignController::class, 'store'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:5,1'])->name('mobile-push.store');
+    Route::get('mobile-push/{campaign}', [MobilePushCampaignController::class, 'show'])->middleware('permission:settings.mobile.view')->name('mobile-push.show');
     Route::get('mobile-operations', [MobileOperationsController::class, 'index'])->middleware('permission:settings.mobile.view')->name('mobile-operations.index');
     Route::put('mobile-operations/config', [MobileOperationsController::class, 'updateConfig'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.config.update');
     Route::post('mobile-operations/promo-codes', [MobileOperationsController::class, 'storePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.store');

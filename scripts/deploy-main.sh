@@ -35,10 +35,19 @@ if git show-ref --verify --quiet refs/heads/main; then
         exit 1
     }
 fi
-test -z "$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- database/migrations composer.json composer.lock)" || {
+test -z "$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- composer.json composer.lock)" || {
     echo "Stopped: schema/dependency changes need a reviewed deployment plan."
     exit 1
 }
+# This additive campaign migration is explicitly reviewed for this release.
+# Do not silently run unrelated pending migrations on shared production.
+PUSH_MIGRATION="database/migrations/2026_10_15_000100_create_mobile_push_campaigns.php"
+while IFS= read -r migration; do
+    test -z "$migration" || test "$migration" = "$PUSH_MIGRATION" || {
+        echo "Stopped: unreviewed schema change requires its own deployment plan."
+        exit 1
+    }
+done < <(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- database/migrations)
 
 mkdir -p "$BACKUP_ROOT"
 chmod 700 "$BACKUP_ROOT"
@@ -92,6 +101,7 @@ foreach ($manifest as $entry) {
 "$PHP_BIN" artisan config:clear
 "$PHP_BIN" artisan route:clear
 "$PHP_BIN" artisan view:clear
+"$PHP_BIN" artisan migrate --force --path="$PUSH_MIGRATION"
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
 "$PHP_BIN" artisan view:cache
@@ -100,4 +110,4 @@ foreach ($manifest as $entry) {
 "$PHP_BIN" artisan up
 trap - ERR
 git log -1 --oneline
-echo "Deployment completed on main. Verify order additions/removal and public assets."
+echo "Deployment completed on main. Verify app notifications, queue worker and public assets."

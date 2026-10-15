@@ -300,6 +300,7 @@
                         @endcan
                         @can('settings.mobile.view')
                             <a href="{{ route('admin.mobile-operations.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-operations.*') ? $activeLink : $idleLink }}">تطبيق الهاتف</a>
+                            <a href="{{ route('admin.mobile-push.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-push.*') ? $activeLink : $idleLink }}">إشعارات التطبيق</a>
                         @endcan
                     </div>
                 @endif

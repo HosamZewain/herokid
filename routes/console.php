@@ -259,3 +259,5 @@ Artisan::command('production-automation:recover {--limit= : Maximum active runs 
 Schedule::command('production-automation:recover')
     ->everyFiveMinutes()
     ->withoutOverlapping(10);
+
+Schedule::command('mobile-push:check-receipts')->everyTenMinutes()->withoutOverlapping(10);
