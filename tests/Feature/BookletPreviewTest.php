@@ -84,6 +84,7 @@ class BookletPreviewTest extends TestCase
         $reader->assertOk()
             ->assertSee('data-booklet-reader', false)
             ->assertSee('data-reading-direction="rtl"', false)
+            ->assertSee('data-mobile-single-page="false"', false)
             ->assertSee('[data-reader-loading][hidden]', false)
             ->assertSee('h-[100dvh]', false)
             ->assertSee('--reader-fit-width', false)

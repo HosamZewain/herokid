@@ -34,6 +34,7 @@ export async function initializeBookletReader(root) {
     const thumbnailList = root.querySelector('[data-thumbnail-list]');
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const mobileViewport = window.matchMedia('(max-width: 767px)').matches;
+    const mobileSinglePage = mobileViewport && root.dataset.mobileSinglePage === 'true';
     const pageImages = new Map();
     const thumbnailImages = new Map();
     const pagePromises = new Map();
@@ -225,12 +226,12 @@ export async function initializeBookletReader(root) {
                     width: Math.round(viewport.width),
                     height: Math.round(viewport.height),
                     size: 'stretch',
-                    minWidth: mobileViewport ? 160 : 260,
+                    minWidth: mobileViewport && !mobileSinglePage ? 160 : 260,
                     maxWidth: 920,
                     minHeight: mobileViewport ? 220 : 360,
                     maxHeight: 1180,
                     showCover: true,
-                    usePortrait: !mobileViewport,
+                    usePortrait: !mobileViewport || mobileSinglePage,
                     autoSize: true,
                     drawShadow: true,
                     maxShadowOpacity: 0.45,

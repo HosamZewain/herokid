@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const source = readFileSync(new URL('../../scripts/deploy-main.sh', import.meta.url), 'utf8');
 const block = source.slice(source.indexOf('PUSH_MIGRATION='), source.indexOf('\nmkdir -p "$BACKUP_ROOT"'));
 const allowed = 'database/migrations/2026_10_15_000100_create_mobile_push_campaigns.php';
+const library = 'database/migrations/2026_10_15_000200_create_public_story_library.php';
 function preflight(diff, exitCode = '0') {
     return spawnSync('/bin/bash', ['-se'], {
         input: `set -euo pipefail\nPREVIOUS_COMMIT=previous\nRELEASE_COMMIT=release\ngit() { printf '%s' "$MIGRATION_DIFF"; return "$GIT_EXIT_CODE"; }\n${block}\nprintf 'guard-passed\\n'\n`,
@@ -19,7 +20,7 @@ test('deployment preflight avoids /dev/fd process substitution', () => {
     assert.doesNotMatch(source, /<\s*<\(/);
 });
 test('piped bash accepts no migrations and the reviewed migration', () => {
-    for (const diff of ['', allowed, `${allowed}\n`]) {
+    for (const diff of ['', allowed, `${allowed}\n`, library, `${allowed}\n${library}`]) {
         const result = preflight(diff);
         assert.equal(result.status, 0, result.stderr);
         assert.match(result.stdout, /guard-passed/);

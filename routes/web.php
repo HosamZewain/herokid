@@ -87,6 +87,7 @@ use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\PublicChildIdentityShareController;
 use App\Http\Controllers\Front\ShopController;
 use App\Http\Controllers\Front\StoryController;
+use App\Http\Controllers\Front\StoryLibraryController;
 use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
@@ -385,6 +386,11 @@ Route::get('/faq', [PageController::class, 'faq'])->name('faq');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
+Route::get('/story-library', [StoryLibraryController::class, 'index'])->name('story-library.index');
+Route::get('/story-library/{story}', [StoryLibraryController::class, 'show'])->name('story-library.show');
+Route::get('/story-library/{story}/read', [StoryLibraryController::class, 'read'])->name('story-library.read');
+Route::get('/story-library/{story}/document', [StoryLibraryController::class, 'document'])->name('story-library.document');
+Route::get('/story-library/{story}/cover', [StoryLibraryController::class, 'cover'])->name('story-library.cover');
 Route::get('/account-deletion', [AccountDeletionController::class, 'show'])
     ->withoutMiddleware(TrackCustomerVisit::class)->name('account-deletion.show');
 Route::post('/account-deletion', [AccountDeletionController::class, 'store'])
@@ -913,6 +919,13 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::put('settings/notifications/rules', [NotificationCenterController::class, 'updateRules'])->middleware('permission:settings.notifications.manage_rules')->name('settings.notifications.rules.update');
     Route::put('settings/notifications/thresholds', [NotificationCenterController::class, 'updateThresholds'])->middleware('permission:settings.notifications.manage')->name('settings.notifications.thresholds.update');
     Route::put('settings/notifications/order-created-template', [NotificationCenterController::class, 'updateOrderCreatedTemplate'])->middleware('permission:settings.notifications.manage')->name('settings.notifications.order-created-template.update');
+    Route::get('story-library', [App\Http\Controllers\Admin\StoryLibraryController::class, 'index'])->middleware('permission:story_library.view')->name('story-library.index');
+    Route::get('story-library/create', [App\Http\Controllers\Admin\StoryLibraryController::class, 'create'])->middleware(['permission:story_library.view', 'permission:story_library.manage'])->name('story-library.create');
+    Route::post('story-library', [App\Http\Controllers\Admin\StoryLibraryController::class, 'store'])->middleware(['permission:story_library.view', 'permission:story_library.manage', 'throttle:15,1'])->name('story-library.store');
+    Route::get('story-library/{story}/edit', [App\Http\Controllers\Admin\StoryLibraryController::class, 'edit'])->middleware(['permission:story_library.view', 'permission:story_library.manage'])->name('story-library.edit');
+    Route::put('story-library/{story}', [App\Http\Controllers\Admin\StoryLibraryController::class, 'update'])->middleware(['permission:story_library.view', 'permission:story_library.manage', 'throttle:15,1'])->name('story-library.update');
+    Route::delete('story-library/{story}', [App\Http\Controllers\Admin\StoryLibraryController::class, 'destroy'])->middleware(['permission:story_library.view', 'permission:story_library.manage'])->name('story-library.destroy');
+    Route::get('story-library/{story}/document', [App\Http\Controllers\Admin\StoryLibraryController::class, 'document'])->middleware('permission:story_library.view')->name('story-library.document');
     Route::get('mobile-push', [MobilePushCampaignController::class, 'index'])->middleware('permission:settings.mobile.view')->name('mobile-push.index');
     Route::post('mobile-push/preview', [MobilePushCampaignController::class, 'preview'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:20,1'])->name('mobile-push.preview');
     Route::post('mobile-push', [MobilePushCampaignController::class, 'store'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:5,1'])->name('mobile-push.store');

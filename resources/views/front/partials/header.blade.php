@@ -2,6 +2,7 @@
     $navItems = [
         ['label' => 'الرئيسية', 'url' => route('home'), 'active' => request()->routeIs('home')],
         ['label' => 'قصص', 'url' => route('stories.index'), 'active' => request()->routeIs('stories.*') || request('type') === 'stories'],
+        ['label' => 'مكتبة القصص', 'url' => route('story-library.index'), 'active' => request()->routeIs('story-library.*')],
         ['label' => 'منتجات مخصصة', 'url' => route('shop.index', ['type' => 'products']), 'active' => request()->routeIs('shop.*') && !request()->routeIs('shop.package.*') && !in_array(request('type'), ['stories', 'activities'])],
         ['label' => 'أنشطة وتعلّم', 'url' => route('shop.index', ['type' => 'activities']), 'active' => request('type') === 'activities'],
         ['label' => 'باقات', 'url' => route('packages'), 'active' => request()->routeIs('packages', 'shop.package.*')],

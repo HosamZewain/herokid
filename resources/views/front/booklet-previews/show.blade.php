@@ -6,10 +6,10 @@
     <meta name="robots" content="noindex,nofollow,noarchive,noimageindex">
     <meta name="referrer" content="no-referrer">
     <meta name="theme-color" content="#111827">
-    <title>معاينة قصة HeroKid</title>
-    <meta name="description" content="معاينة خاصة لكتاب HeroKid. الرابط مخصص للعرض فقط.">
-    <meta property="og:title" content="معاينة قصة HeroKid">
-    <meta property="og:description" content="افتح الرابط لمشاهدة معاينة الكتاب بطريقة تفاعلية.">
+    <title>{{ ($publicLibrary ?? false) ? $publicTitle.' — مكتبة القصص' : 'معاينة قصة HeroKid' }}</title>
+    <meta name="description" content="{{ ($publicLibrary ?? false) ? 'اقرأ القصة كاملة في مكتبة HeroKid.' : 'معاينة خاصة لكتاب HeroKid. الرابط مخصص للعرض فقط.' }}">
+    <meta property="og:title" content="{{ ($publicLibrary ?? false) ? $publicTitle : 'معاينة قصة HeroKid' }}">
+    <meta property="og:description" content="{{ ($publicLibrary ?? false) ? 'اقرأ القصة كاملة في مكتبة HeroKid المجانية.' : 'افتح الرابط لمشاهدة معاينة الكتاب بطريقة تفاعلية.' }}">
     <meta property="og:image" content="{{ \App\Support\Seo::imageUrl('/images/og-cover.jpg') }}">
     <meta property="og:type" content="website">
     <link rel="icon" type="image/png" href="/images/logo-96.png">
@@ -32,6 +32,7 @@
 </head>
 <body class="h-[100dvh] overflow-hidden text-white">
     <div class="flex h-[100dvh] flex-col overflow-hidden" data-booklet-reader
+        data-mobile-single-page="{{ ($publicLibrary ?? false) ? 'true' : 'false' }}"
         data-document-url="{{ $documentUrl }}"
         data-reading-direction="{{ $preview->reading_direction }}"
         data-page-count="{{ $pageCount }}">
@@ -43,10 +44,10 @@
                 </a>
                 <div class="min-w-0 text-center">
                     <h1 class="truncate text-sm font-black sm:text-base">{{ $publicTitle }}</h1>
-                    <p class="text-[9px] font-bold text-slate-400 sm:text-[10px]">معاينة خاصة للعرض فقط</p>
+                    <p class="text-[9px] font-bold text-slate-400 sm:text-[10px]">{{ ($publicLibrary ?? false) ? 'مكتبة القصص — قراءة مجانية' : 'معاينة خاصة للعرض فقط' }}</p>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <a href="{{ $scenesUrl }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 px-2.5 text-[10px] font-black hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 sm:px-3 sm:text-xs">عرض المشاهد</a>
+                    <a href="{{ $scenesUrl }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 px-2.5 text-[10px] font-black hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 sm:px-3 sm:text-xs">{{ ($publicLibrary ?? false) ? 'تفاصيل القصة' : 'عرض المشاهد' }}</a>
                     <button type="button" data-fullscreen class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-lg hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300" aria-label="عرض بملء الشاشة">⛶</button>
                 </div>
             </div>
@@ -102,7 +103,7 @@
                 <button type="button" data-zoom-reset class="hidden h-9 min-w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 px-2 text-[10px] font-black hover:bg-white/15 sm:inline-flex" aria-label="إعادة ضبط التكبير">100%</button>
                 <button type="button" data-zoom-in class="hidden h-9 min-w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 px-2 text-base font-black hover:bg-white/15 sm:inline-flex" aria-label="تكبير">+</button>
             </nav>
-            <p class="sr-only">المعاينة مخصصة للعرض داخل HeroKid ولا يتوفر تنزيل أو طباعة.</p>
+            <p class="sr-only">{{ ($publicLibrary ?? false) ? 'قصة مجانية متاحة للقراءة في مكتبة HeroKid العامة.' : 'المعاينة مخصصة للعرض داخل HeroKid ولا يتوفر تنزيل أو طباعة.' }}</p>
         </main>
     </div>
 </body>

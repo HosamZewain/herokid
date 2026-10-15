@@ -140,7 +140,7 @@
                     'orders.view', 'orders.create', 'booklet_previews.view', 'production_studio.view', 'child_identities.view', 'bosta.view',
                 ]);
                 $canCatalog = auth()->user()->hasAnyPermission([
-                    'stories.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
+                    'stories.view', 'story_library.view', 'story_categories.view', 'store.products.view', 'store.categories.view',
                     'store.homepage_sections.view', 'store.upsell_rules.view', 'customers.view', 'settings.pricing.view',
                     'store.discount_codes.view',
                 ]);
@@ -207,6 +207,9 @@
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الكتالوج والعملاء</p>
                         @can('stories.view')
                             <a href="{{ route('admin.stories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.stories.*') ? $activeLink : $idleLink }}">القصص</a>
+                        @endcan
+                        @can('story_library.view')
+                            <a href="{{ route('admin.story-library.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.story-library.*') ? $activeLink : $idleLink }}">مكتبة القصص</a>
                         @endcan
                         @if(auth()->user()->hasAnyPermission(['store.products.view', 'store.categories.view', 'store.homepage_sections.view', 'store.upsell_rules.view']))
                             <a href="{{ auth()->user()->hasPermission('store.products.view') ? route('admin.products.index') : route('admin.product-categories.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.products.*') || request()->routeIs('admin.product-categories.*') || request()->routeIs('admin.homepage-store-sections.*') || request()->routeIs('admin.upsell-rules.*') ? $activeLink : $idleLink }}">المتجر</a>

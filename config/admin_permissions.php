@@ -402,6 +402,8 @@ return [
         ],
 
         'stories.view' => ['group_key' => 'stories', 'name_ar' => 'عرض القصص', 'name_en' => 'View stories', 'description_ar' => 'عرض مكتبة القصص.', 'description_en' => 'View story catalog.', 'sort_order' => 10],
+        'story_library.view' => ['group_key' => 'stories', 'name_ar' => 'عرض مكتبة القصص العامة', 'name_en' => 'View public story library', 'description_ar' => 'عرض ملفات ومحتوى مكتبة القراءة العامة.', 'description_en' => 'View public library entries.', 'sort_order' => 100],
+        'story_library.manage' => ['group_key' => 'stories', 'name_ar' => 'إدارة ونشر مكتبة القصص العامة', 'name_en' => 'Manage public story library', 'description_ar' => 'رفع وتعديل ونشر وإخفاء قصص المكتبة العامة.', 'description_en' => 'Upload, publish and remove public library entries.', 'sort_order' => 110, 'sensitive' => true],
         'stories.create' => ['group_key' => 'stories', 'name_ar' => 'إضافة القصص', 'name_en' => 'Create stories', 'description_ar' => 'إنشاء قصص جديدة.', 'description_en' => 'Create new stories.', 'sort_order' => 20],
         'stories.update' => ['group_key' => 'stories', 'name_ar' => 'تعديل القصص', 'name_en' => 'Update stories', 'description_ar' => 'تعديل بيانات القصص.', 'description_en' => 'Update story records.', 'sort_order' => 30],
         'stories.delete' => ['group_key' => 'stories', 'name_ar' => 'حذف القصص', 'name_en' => 'Delete stories', 'description_ar' => 'حذف القصص.', 'description_en' => 'Delete stories.', 'sort_order' => 40, 'sensitive' => true],

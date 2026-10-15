@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\V1\MobileSessionController;
 use App\Http\Controllers\Api\V1\MobileUploadController;
 use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
+use App\Http\Controllers\Front\StoryLibraryController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('integrations/bosta/webhook', BostaWebhookController::class)
@@ -86,6 +87,9 @@ Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(fun
 });
 
 Route::prefix('v1')->group(function (): void {
+    Route::get('story-library', [StoryLibraryController::class, 'index'])->middleware('throttle:120,1')->name('api.story-library.index');
+    Route::get('story-library/{story}', [StoryLibraryController::class, 'show'])->middleware('throttle:120,1')->name('api.story-library.show');
+    Route::get('story-library/{story}/document', [StoryLibraryController::class, 'document'])->name('api.story-library.document');
     Route::get('bootstrap', BootstrapController::class)->middleware('throttle:120,1');
     Route::get('catalog', [CatalogController::class, 'index'])->middleware('throttle:120,1');
     Route::get('catalog/{type}/{slug}', [CatalogController::class, 'show'])

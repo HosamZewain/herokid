@@ -77,6 +77,7 @@ class AdminPermissionRegistry
             'child_identities.view' => 'admin.child-identities.index',
             'media_library.view' => 'admin.media-library.index',
             'stories.view' => 'admin.stories.index',
+            'story_library.view' => 'admin.story-library.index',
             'store.products.view' => 'admin.products.index',
             'store.categories.view' => 'admin.product-categories.index',
             'store.discount_codes.view' => 'admin.discount-codes.index',
