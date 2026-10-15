@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendMobilePushNotification;
+use App\Models\DeviceInstallation;
 use App\Models\Order;
 use App\Models\Story;
 use App\Models\User;
@@ -9,6 +11,7 @@ use App\Services\Mobile\MobileNotificationService;
 use App\Services\Orders\OrderStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -62,6 +65,41 @@ class MobileNotificationsApiTest extends TestCase
 
         Sanctum::actingAs($other, ['mobile']);
         $this->postJson('/api/v1/notifications/'.$notification->uuid.'/read')->assertNotFound();
+    }
+
+    public function test_push_uuid_preserves_navigation_and_can_only_mark_its_owners_notification_read(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['exp.host/*' => Http::response(['data' => ['status' => 'ok', 'id' => 'synthetic-ticket']])]);
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        DeviceInstallation::create([
+            'user_id' => $owner->id, 'platform' => 'ios', 'push_token' => 'ExponentPushToken[synthetic]',
+            'push_token_hash' => hash('sha256', 'synthetic'), 'operational_notifications' => true,
+        ]);
+        $notification = app(MobileNotificationService::class)->notifyUser($owner, 'preview.ready', 'جاهز', 'معاينة تجريبية', [
+            'screen' => 'order', 'order_id' => 123, 'notification_id' => 'untrusted-id',
+        ]);
+        $job = new SendMobilePushNotification($notification->id);
+        $job->handle();
+        $job->handle();
+        Http::assertSentCount(1);
+        $payload = Http::recorded()->first()[0]['data'];
+        $this->assertSame(['screen' => 'order', 'order_id' => 123, 'notification_id' => $notification->uuid], $payload);
+        $this->assertTrue(Str::isUuid($payload['notification_id']));
+        $this->assertNull($notification->fresh()->read_at);
+
+        Sanctum::actingAs($other, ['mobile']);
+        $this->postJson('/api/v1/notifications/'.$payload['notification_id'].'/read')->assertNotFound();
+        $this->assertNull($notification->fresh()->read_at);
+        Sanctum::actingAs($owner, ['mobile']);
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('data.0.id', $payload['notification_id'])->assertJsonPath('meta.unread', 1);
+        $this->postJson('/api/v1/notifications/'.$payload['notification_id'].'/read')->assertOk()->assertJsonPath('data.id', $payload['notification_id']);
+        $readAt = $notification->fresh()->read_at->toISOString();
+        $this->travel(5)->minutes();
+        $this->postJson('/api/v1/notifications/'.$payload['notification_id'].'/read')->assertOk();
+        $this->assertSame($readAt, $notification->fresh()->read_at->toISOString());
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('meta.unread', 0);
     }
 
     public function test_order_status_changes_create_operational_in_app_notifications(): void

@@ -32,7 +32,12 @@ are cleared on DeviceNotRegistered. No eligible device means no push attempt.
 
 ## App contract and current blocker
 
-Campaign payload data is `{ "screen": "home|catalog|cart|orders|notifications|profile" }`.
+Campaign push payload data is `{ "screen": "home|catalog|cart|orders|notifications|profile", "notification_id": "notification UUID" }`.
+At send time the server adds `notification_id` to every push (campaign or
+operational). It is the same UUID returned as `data[].id` by the notifications
+API, not the internal integer ID. Server generation overrides any conflicting
+custom payload field without replacing `screen` or `order_id`. Existing stored
+notification data need no backfill. Already-sent pushes remain unchanged.
 No arbitrary URL/path is accepted. The app must map this allowlist to its own
 routes, continue supporting existing positive-integer `order_id` notifications,
 and handle both live taps and cold-start responses after navigation/auth are ready.
@@ -54,8 +59,15 @@ delivery or destination support until tested on an authorized physical device.
   enable marketing silently. Existing PATCH/DELETE device routes update consent
   or revoke the installation on logout.
 - Read existing `GET /api/v1/notifications`; mark a customer-owned notification
-  read through its existing read endpoint. Campaign notification data contains
-  only the allowlisted `screen` above; no arbitrary path or external URL.
+  read through its existing read endpoint. On a push tap, read `data.notification_id`
+  and POST `/api/v1/notifications/{notification_id}/read` with the current user's
+  Bearer token, then refresh unread state. The endpoint is idempotent and checks
+  ownership; a UUID is not authorization. Wait for account/auth restoration on
+  cold start. Never mark all notifications read on a single tap. Older pushes
+  may lack the field: preserve navigation without guessing an ID. A read-request
+  failure must not prevent navigation or falsely mark the item read locally.
+  Campaign navigation contains only the allowlisted `screen` above; no arbitrary
+  path or external URL.
 - Suggested Expo routes: home → /(tabs), catalog → /(tabs)/catalog, cart →
   /(tabs)/cart, orders → /(tabs)/orders, notifications → /notifications,
   profile → /(tabs)/profile. Verify against the mobile release's actual routes.

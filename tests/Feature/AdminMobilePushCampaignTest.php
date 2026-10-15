@@ -119,6 +119,7 @@ class AdminMobilePushCampaignTest extends TestCase
         $job->handle();
         $job->handle();
         Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => $request['data'] === ['screen' => 'home', 'notification_id' => $notification->uuid]);
         $this->assertSame('sent', $notification->deliveries()->sole()->status);
         $second = $this->campaign();
         (new DispatchMobilePushCampaign($second->id))->handle(new MobilePushAudience);

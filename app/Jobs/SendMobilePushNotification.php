@@ -64,7 +64,9 @@ class SendMobilePushNotification implements ShouldQueue
                     'title' => $notification->title,
                     'body' => $notification->body,
                     'sound' => 'default',
-                    'data' => $notification->data ?? [],
+                    // The owner-scoped read API expects this UUID, never a row ID
+                    // or an identifier supplied by a campaign/custom payload.
+                    'data' => [...($notification->data ?? []), 'notification_id' => $notification->uuid],
                 ]);
             } catch (ConnectionException $exception) {
                 $delivery->forceFill(['status' => 'failed', 'error_code' => 'TransportError', 'safe_error_message' => 'Push service connection failed.', 'attempts' => $delivery->attempts + 1])->save();
