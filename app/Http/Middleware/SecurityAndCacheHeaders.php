@@ -105,6 +105,8 @@ class SecurityAndCacheHeaders
     {
         return $request->routeIs([
             'admin.*',
+            'app.metrics.*',
+            'app.store',
             'story-library.*',
             'api.story-library.*',
             'cart.*',

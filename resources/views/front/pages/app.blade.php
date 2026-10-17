@@ -7,7 +7,7 @@
 @push('scripts')
     @vite('resources/js/app-download.js')
 @endpush
-<div class="hk-app" data-app-download dir="rtl">
+<div class="hk-app" data-app-download data-app-visit-url="{{ route('app.metrics.visit') }}" dir="rtl">
     <section class="hk-app-hero" aria-labelledby="app-title">
         <div class="hk-app-wrap hk-app-hero-grid">
             <div class="hk-app-intro">

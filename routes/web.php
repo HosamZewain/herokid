@@ -388,6 +388,10 @@ Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::view('/app', 'front.pages.app')->name('app.download');
+Route::get('/app/metrics/visit', [App\Http\Controllers\Front\AppLandingMetricsController::class, 'visit'])
+    ->middleware('throttle:120,1')->withoutMiddleware(TrackCustomerVisit::class)->name('app.metrics.visit');
+Route::get('/app/download/{platform}', [App\Http\Controllers\Front\AppLandingMetricsController::class, 'download'])
+    ->whereIn('platform', ['ios', 'android'])->withoutMiddleware(TrackCustomerVisit::class)->name('app.store');
 Route::get('/story-library', [StoryLibraryController::class, 'index'])->name('story-library.index');
 Route::get('/story-library/{story}', [StoryLibraryController::class, 'show'])->name('story-library.show');
 Route::get('/story-library/{story}/read', [StoryLibraryController::class, 'read'])->name('story-library.read');
@@ -457,6 +461,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')
         ->name('analytics.index');
+    Route::get('app-download-analytics', [App\Http\Controllers\Admin\AppLandingAnalyticsController::class, 'index'])
+        ->middleware('permission:analytics.view')->name('app-download-analytics.index');
     Route::get('agent-api-tokens', [AgentApiTokenController::class, 'index'])
         ->middleware('permission:agent_api.tokens.manage')
         ->name('agent-api-tokens.index');

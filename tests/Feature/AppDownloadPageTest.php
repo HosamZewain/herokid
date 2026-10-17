@@ -18,8 +18,8 @@ class AppDownloadPageTest extends TestCase
             ->assertSee('data-app-download', false)
             ->assertSee('data-store-link="ios"', false)
             ->assertSee('data-store-link="android"', false)
-            ->assertSee(config('mobile_app.ios_url'), false)
-            ->assertSee(e(config('mobile_app.android_url')), false)
+            ->assertSee(route('app.store', 'ios'), false)
+            ->assertSee(route('app.store', 'android'), false)
             ->assertSee('images/app/home.webp', false)
             ->assertSee('images/app/catalog.webp', false)
             ->assertSee('images/app/account.webp', false)
@@ -35,8 +35,8 @@ class AppDownloadPageTest extends TestCase
     {
         foreach (['iPhone', 'Android', 'Macintosh'] as $userAgent) {
             $this->withHeader('User-Agent', $userAgent)->get('/app')->assertOk()
-                ->assertSee(config('mobile_app.ios_url'), false)
-                ->assertSee(e(config('mobile_app.android_url')), false);
+                ->assertSee(route('app.store', 'ios'), false)
+                ->assertSee(route('app.store', 'android'), false);
         }
     }
 
