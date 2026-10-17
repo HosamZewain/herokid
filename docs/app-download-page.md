@@ -12,8 +12,20 @@ HeroKid guide menu. No database migration, account or mobile-app change required
 Public URLs verified on 2026-10-17 (both HTTP 200). Apple lookup independently
 matched track ID 6821424235, bundle com.herokid.app and developer Hosam Zewain.
 Links live in `config/mobile_app.php`. Do not use the similarly named unrelated
-HeroKid story app (6758614616). Marketing copy describes current physical-commerce
-features, not the pending iOS digital-library update.
+HeroKid story app (6758614616).
+
+The owner requested reading as the primary benefit: purchased child-story PDFs
+and the separate public full-story library, with shopping secondary. Purchased
+stories require the owner's account, a delivered order and an available document;
+payment alone does not unlock a PDF. Existing approval/production flows unchanged.
+The owner confirmed immediate feature availability and requested no upcoming-update
+label; the page presents both reading benefits as core app features and also links
+to the website library. PDF readiness/account ownership remain explicit.
+On 2026-10-17 Apple public lookup still returned 1.0.0 without digital reading;
+the local mobile release record reported 1.0.1(12) awaiting review. Production
+`/api/v1/library/books` returned 404, while the public story-library API returned
+one story. Publishing/enabling purchased-library backend/app support is separate
+work and is not silently bundled into this marketing-content change.
 
 ## Device detection and performance
 

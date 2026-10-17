@@ -14,7 +14,7 @@ class AppDownloadPageTest extends TestCase
     public function test_guest_page_has_both_real_store_links_screenshots_and_safe_public_caching(): void
     {
         $response = $this->get('/app')->assertOk()
-            ->assertSee('عالم طفلك.')
+            ->assertSee('قصصه.')
             ->assertSee('data-app-download', false)
             ->assertSee('data-store-link="ios"', false)
             ->assertSee('data-store-link="android"', false)
@@ -38,6 +38,19 @@ class AppDownloadPageTest extends TestCase
                 ->assertSee(config('mobile_app.ios_url'), false)
                 ->assertSee(e(config('mobile_app.android_url')), false);
         }
+    }
+
+    public function test_reading_is_the_main_benefit_with_separate_purchased_and_public_libraries(): void
+    {
+        $this->get('/app')->assertOk()
+            ->assertSee('النسخة الرقمية PDF من قصصه اللي اشتريتها')
+            ->assertSee('مكتبة قصص كاملة جاهزة للقراءة')
+            ->assertSeeInOrder(['اقرأوا قصصه اللي اشتريتوها', 'مكتبة قصص جاهزة للقراءة', 'واختار له الحكاية اللي بعدها'])
+            ->assertSee('بعد تجهيز النسخة الرقمية وإتاحتها لحسابك')
+            ->assertDontSee('ميزات القراءة ضمن تحديث التطبيق الجديد')
+            ->assertDontSee('قد لا تظهر في نسختك الحالية')
+            ->assertSee('النسخة الرقمية للقصة المشتراة لا تظهر بمجرد الدفع')
+            ->assertSee(route('story-library.index'), false);
     }
 
     public function test_app_is_discoverable_and_assets_are_small_local_webp_files(): void
