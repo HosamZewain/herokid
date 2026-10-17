@@ -9,6 +9,15 @@
     "file": "assets/pdf.worker.min-DQioOMWc.js",
     "name": "pdf.worker.min"
   },
+  "resources/css/app-download.css": {
+    "file": "assets/app-download-dg8q9jcF.css",
+    "src": "resources/css/app-download.css",
+    "isEntry": true,
+    "name": "app-download",
+    "names": [
+      "app-download.css"
+    ]
+  },
   "resources/css/app.css": {
     "file": "assets/app-CAhzLlDc.css",
     "src": "resources/css/app.css",
@@ -44,6 +53,12 @@
     "css": [
       "assets/admin-conversations-DjNCxZvz.css"
     ]
+  },
+  "resources/js/app-download.js": {
+    "file": "assets/app-download-Cl6CcEhR.js",
+    "name": "app-download",
+    "src": "resources/js/app-download.js",
+    "isEntry": true
   },
   "resources/js/app.js": {
     "file": "assets/app-CMGHaTAZ.js",

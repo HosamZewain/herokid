@@ -180,7 +180,7 @@
     @endif
     @php
         $cartItemCount = count(session('cart.items', []));
-        $guideMenuActive = request()->routeIs('about', 'how-it-works', 'faq', 'track.*');
+        $guideMenuActive = request()->routeIs('about', 'how-it-works', 'app.download', 'faq', 'track.*');
     @endphp
     <div class="min-h-screen flex flex-col">
 

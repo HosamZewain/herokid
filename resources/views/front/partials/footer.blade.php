@@ -21,6 +21,7 @@
             <h2 id="hk-footer-discover">اكتشف هيروكيد</h2>
             <a href="{{ route('stories.index') }}">قصص</a>
             <a href="{{ route('story-library.index') }}">مكتبة القصص</a>
+            <a href="{{ route('app.download') }}">حمّل تطبيق HeroKid</a>
             <a href="{{ route('shop.index', ['type' => 'products']) }}">منتجات مخصصة</a>
             @if(setting('child_identity_enabled', '1') === '1')<a href="{{ route('child-identity.index') }}">اصنع هوية طفلك</a>@endif
             <a href="{{ route('packages') }}">باقات</a>

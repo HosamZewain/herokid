@@ -5,7 +5,7 @@
         <x-front-icon name="chevron-down" />
     </summary>
     <div class="hk-guide-panel">
-        @foreach(['about' => 'عن HeroKid', 'how-it-works' => 'كيف يعمل؟', 'faq' => 'الأسئلة الشائعة', 'track.index' => 'تتبع الطلب'] as $guideRoute => $guideLabel)
+        @foreach(['about' => 'عن HeroKid', 'how-it-works' => 'كيف يعمل؟', 'app.download' => 'تطبيق HeroKid', 'faq' => 'الأسئلة الشائعة', 'track.index' => 'تتبع الطلب'] as $guideRoute => $guideLabel)
             <a href="{{ route($guideRoute) }}" @if(request()->routeIs($guideRoute === 'track.index' ? 'track.*' : $guideRoute)) aria-current="page" @endif>{{ $guideLabel }}</a>
         @endforeach
     </div>
