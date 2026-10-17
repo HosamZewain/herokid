@@ -330,6 +330,8 @@ class UnifiedStorefrontService
             $item->sortOrder,
             -$item->createdTimestamp,
             $item->title,
+            // Resolve complete ties before pagination without relying on DB row order.
+            $item->id,
         ])->values();
 
         $stories = $sorted->where('type', 'story')->values();
