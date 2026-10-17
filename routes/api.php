@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\MobileCheckoutController;
 use App\Http\Controllers\Api\V1\MobileChildIdentityController;
 use App\Http\Controllers\Api\V1\MobileChildIdentityShareController;
 use App\Http\Controllers\Api\V1\MobileDraftController;
+use App\Http\Controllers\Api\V1\MobileGuestSessionController;
 use App\Http\Controllers\Api\V1\MobileNotificationController;
 use App\Http\Controllers\Api\V1\MobileOrderController;
 use App\Http\Controllers\Api\V1\MobileOrderPreviewController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Api\V1\MobileUploadController;
 use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Front\StoryLibraryController;
+use App\Http\Middleware\EnsureMobileGuestScope;
 use Illuminate\Support\Facades\Route;
 
 Route::post('integrations/bosta/webhook', BostaWebhookController::class)
@@ -96,6 +98,7 @@ Route::prefix('v1')->group(function (): void {
         ->whereIn('type', ['story', 'product'])
         ->middleware('throttle:120,1');
     Route::post('analytics/events', [MobileAnalyticsController::class, 'store'])->middleware('throttle:120,1');
+    Route::post('guest-session', [MobileGuestSessionController::class, 'store'])->middleware('throttle:10,60');
 
     Route::prefix('auth')->middleware('throttle:10,1')->group(function (): void {
         Route::post('register', [AuthController::class, 'register']);
@@ -105,7 +108,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('social', SocialAuthController::class);
     });
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', EnsureMobileGuestScope::class])->group(function (): void {
+        Route::get('guest-session', [MobileGuestSessionController::class, 'show']);
+        Route::delete('guest-session', [MobileGuestSessionController::class, 'destroy']);
         Route::get('me', [AuthController::class, 'me']);
         Route::patch('me', [AuthController::class, 'update']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
