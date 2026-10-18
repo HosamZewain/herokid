@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\Seo;
+use App\Support\SiteBranding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,15 +21,15 @@ class PublicAboutNavigationTest extends TestCase
             ->assertSee('الخصوصية وحماية الصور')
             ->assertSee('<link rel="canonical" href="'.Seo::url('/about').'">', false)
             ->assertSee('<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">', false)
-            ->assertSee('<meta property="og:image" content="'.Seo::imageUrl('/images/logo.jpg').'">', false)
-            ->assertSee('<meta property="og:image:width" content="1024">', false)
-            ->assertSee('<meta property="og:image:height" content="1024">', false)
+            ->assertSee('<meta property="og:image" content="'.Seo::imageUrl(SiteBranding::url()).'">', false)
+            ->assertSee('<meta property="og:image:width" content="384">', false)
+            ->assertSee('<meta property="og:image:height" content="150">', false)
             ->assertSee('<meta property="og:image:alt" content="HeroKid — قصص مخصصة تجعل طفلك بطل الحكاية">', false)
             ->assertSee('"@type":"AboutPage"', false)
             ->assertSee('"@type":"BreadcrumbList"', false)
             ->assertSee('aria-label="مسار التنقل"', false);
 
-        $this->assertFileExists(public_path('images/logo.jpg'));
+        $this->assertFileExists(public_path(SiteBranding::DEFAULT_PATH));
     }
 
     public function test_about_page_is_publicly_cacheable_for_search_crawlers(): void

@@ -11,7 +11,7 @@
 <header class="hk-site-header">
     <nav class="hk-header-inner" aria-label="القائمة الرئيسية">
         <a href="{{ route('home') }}" class="hk-brand" aria-label="HeroKid — الصفحة الرئيسية">
-            <img src="{{ asset('images/logo-192.png') }}" srcset="{{ asset('images/logo-96.png') }} 96w, {{ asset('images/logo-192.png') }} 192w, {{ asset('images/logo-320.png') }} 320w" sizes="(min-width: 1024px) 120px, 82px" width="192" height="164" alt="HeroKid Logo">
+            <x-site-logo sizes="(min-width: 1024px) 164px, 124px" alt="HeroKid Logo" />
         </a>
         <div class="hk-desktop-nav">
             @foreach($navItems as $navItem)

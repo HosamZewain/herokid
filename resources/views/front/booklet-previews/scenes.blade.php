@@ -12,7 +12,7 @@
     <meta property="og:description" content="افتح الرابط لمشاهدة مشاهد الكتاب بالترتيب.">
     <meta property="og:image" content="{{ \App\Support\Seo::imageUrl('/images/og-cover.jpg') }}">
     <meta property="og:type" content="website">
-    <link rel="icon" type="image/png" href="/images/logo-96.png">
+    <link rel="icon" type="image/png" href="{{ \App\Support\SiteBranding::url() }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         html { min-height: 100%; background: #030712; }
@@ -42,7 +42,7 @@
         <header class="relative z-20 border-b border-white/10 bg-slate-950/85 px-3 py-1.5 backdrop-blur sm:px-4 sm:py-2">
             <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
                 <a href="{{ route('home') }}" class="flex items-center gap-2" aria-label="HeroKid">
-                    <img src="/images/logo-192.png" alt="HeroKid" class="h-10 w-10 rounded-lg bg-white object-contain p-0.5 sm:h-11 sm:w-11">
+                    <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" class="h-10 w-10 rounded-lg bg-white object-contain p-0.5 sm:h-11 sm:w-11">
                     <span class="hidden text-sm font-black sm:block">HeroKid</span>
                 </a>
                 <div class="min-w-0 text-center">

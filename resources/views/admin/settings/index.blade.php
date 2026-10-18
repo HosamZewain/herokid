@@ -20,12 +20,43 @@
         const img = document.getElementById(previewId);
         if (img) { img.src = url || ''; img.style.display = url ? 'block' : 'none'; }
     }
+    function previewSiteLogo(input) {
+        const preview = document.getElementById('site-logo-preview');
+        if (preview.dataset.localPreview) URL.revokeObjectURL(preview.dataset.localPreview);
+        const file = input.files[0];
+        if (!file) { preview.src = preview.dataset.savedSrc; return; }
+        const url = URL.createObjectURL(file);
+        preview.dataset.localPreview = url;
+        preview.removeAttribute('srcset');
+        preview.src = url;
+    }
     </script>
 
-    <form action="{{ route('admin.settings.update') }}" method="POST">
+    <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data">
         @csrf @method('PUT')
 
         <div class="space-y-6">
+
+            <section class="rounded-xl border border-indigo-100 bg-white p-6 shadow-sm" aria-labelledby="site-branding-heading">
+                <h3 id="site-branding-heading" class="text-base font-bold text-gray-900">الهوية البصرية — لوجو الموقع</h3>
+                <p class="mt-2 text-sm leading-6 text-gray-500">غيّر اللوجو من هنا؛ يُستخدم في الهيدر والفوتر وصفحات الموقع والإدارة. نحافظ على أبعاده ونجهّز نسخًا خفيفة للعرض.</p>
+                <div class="mt-5 grid gap-5 md:grid-cols-2">
+                    <div class="flex items-center justify-center rounded-xl border bg-slate-50 p-5">
+                        <img id="site-logo-preview" src="{{ \App\Support\SiteBranding::url() }}" data-saved-src="{{ \App\Support\SiteBranding::url() }}" alt="معاينة لوجو الموقع الحالي" class="max-h-40 w-full object-contain">
+                    </div>
+                    <div>
+                        <label for="site-logo-file" class="mb-2 block text-sm font-bold text-gray-700">رفع لوجو جديد</label>
+                        <input id="site-logo-file" type="file" name="site_logo_file" accept="image/png,image/jpeg,image/webp" onchange="previewSiteLogo(this)" class="block w-full rounded-lg border border-gray-300 p-3 text-sm">
+                        <p class="mt-2 text-xs leading-6 text-gray-500">PNG أو JPG أو WebP، بحد أقصى 5 ميجا و4096 × 4096 بكسل. الصورة تُعرض كاملة بدون قص. اضغط «حفظ الإعدادات» لتطبيق التغيير.</p>
+                        @error('site_logo_file')<p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>@enderror
+                        <label class="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                            <input type="checkbox" name="reset_site_logo" value="1" class="rounded border-gray-300 text-indigo-600">
+                            الرجوع للوجو HeroKid الافتراضي الجديد بدلًا من اللوجو المرفوع
+                        </label>
+                        @error('reset_site_logo')<p class="mt-2 text-sm text-red-700" role="alert">{{ $message }}</p>@enderror
+                    </div>
+                </div>
+            </section>
 
             {{-- ===== Business Info ===== --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

@@ -48,7 +48,7 @@ class SeoSpeedJourneyAuditFixTest extends TestCase
 
         $this->get(route('home'))
             ->assertOk()
-            ->assertSee('/images/logo-192.png', false)
+            ->assertSee('/site-logo/384.png', false)
             ->assertDontSee('/images/logo.png', false)
             ->assertDontSee('href="#"', false)
             ->assertDontSee('images.unsplash.com', false)

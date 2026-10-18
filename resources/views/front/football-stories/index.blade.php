@@ -3,7 +3,7 @@
         $minimumPrice = $stories->min(fn ($story) => $story['catalog']->price);
         $maximumPrice = $stories->max(fn ($story) => $story['catalog']->price);
         $selectedIds = collect(old('story_ids', []))->map(fn ($id) => (int) $id)->all();
-        $seoImage = data_get($stories->first(), 'catalog.imageUrl') ?: asset('images/logo-320.png');
+        $seoImage = data_get($stories->first(), 'catalog.imageUrl') ?: \App\Support\SiteBranding::url();
         $priceCopy = $stories->isEmpty()
             ? null
             : ($minimumPrice === $maximumPrice
@@ -120,7 +120,7 @@
                                         class="{{ $loop->first ? 'aspect-[16/8]' : 'aspect-[4/3]' }} h-full w-full object-cover" />
                                 @else
                                     <div class="{{ $loop->first ? 'aspect-[16/8]' : 'aspect-[4/3]' }} flex h-full w-full items-center justify-center bg-white/10 p-6">
-                                        <img src="{{ asset('images/logo-320.png') }}" alt="HeroKid" width="160" height="160" class="h-24 w-24 object-contain opacity-90">
+                                        <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" width="160" height="160" class="h-24 w-24 object-contain opacity-90">
                                     </div>
                                 @endif
                             </div>
@@ -189,7 +189,7 @@
                                             loading="lazy" decoding="async" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
                                     @else
                                         <div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-50 to-violet-100 p-8">
-                                            <img src="{{ asset('images/logo-320.png') }}" alt="HeroKid" width="160" height="160" loading="lazy" class="h-28 w-28 object-contain opacity-80">
+                                            <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" width="160" height="160" loading="lazy" class="h-28 w-28 object-contain opacity-80">
                                         </div>
                                     @endif
                                     <span data-selected-badge class="absolute start-2 top-2 inline-flex min-h-8 items-center rounded-full bg-white/95 px-2 text-[10px] font-black text-indigo-700 shadow sm:start-3 sm:top-3 sm:min-h-11 sm:px-4 sm:text-sm {{ in_array($story->id, $selectedIds, true) ? '' : 'hidden' }}">✓ تم الاختيار</span>

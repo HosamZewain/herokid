@@ -31,7 +31,7 @@
                         <h1 class="mt-2 text-2xl font-black sm:text-3xl">رأيك يهمنا</h1>
                         <p class="mt-2 text-sm font-bold leading-6 text-indigo-100">شاركنا تقييمك لتجربة طلبك من HeroKid.</p>
                     </div>
-                    <img src="{{ asset('images/logo-192.png') }}" alt="HeroKid" class="h-16 w-16 shrink-0 rounded-2xl bg-white object-contain p-1.5 shadow-lg">
+                    <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" class="h-16 w-16 shrink-0 rounded-2xl bg-white object-contain p-1.5 shadow-lg">
                 </div>
             </section>
 

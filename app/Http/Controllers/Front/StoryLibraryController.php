@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\LibraryStory;
 use App\Services\Storage\PersistentMediaResponse;
+use App\Support\SiteBranding;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -74,7 +75,7 @@ class StoryLibraryController extends Controller
         return ['id' => $story->uuid, 'slug' => $story->slug, 'title' => $story->title, 'description' => $story->description,
             'category' => $story->category, 'language' => $story->language, 'reading_direction' => $story->reading_direction,
             'age_min' => $story->age_min, 'age_max' => $story->age_max, 'page_count' => $story->page_count, 'file_size_bytes' => $story->file_size,
-            'cover_url' => $story->cover_path ? route('story-library.cover', $story) : asset('images/logo-320.png'),
+            'cover_url' => $story->cover_path ? route('story-library.cover', $story) : SiteBranding::url(),
             'web_url' => route('story-library.show', $story), 'reader_url' => route('story-library.read', $story),
             'document_url' => route('api.story-library.document', $story), 'version' => $story->checksum, 'updated_at' => $story->updated_at->toISOString()];
     }

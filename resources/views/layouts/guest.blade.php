@@ -12,7 +12,7 @@
     <link rel="preload" href="{{ asset('fonts/cairo-regular.ttf') }}" as="font" type="font/ttf" crossorigin>
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/images/logo-96.png">
+    <link rel="icon" type="image/png" href="{{ \App\Support\SiteBranding::url() }}">
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/css/front-theme.css', 'resources/js/app.js'])
@@ -27,11 +27,7 @@
     <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0">
         <div>
             <a href="/">
-                <img src="/images/logo-192.png"
-                    srcset="/images/logo-96.png 96w, /images/logo-192.png 192w, /images/logo-320.png 320w"
-                    sizes="(min-width: 768px) 104px, 72px"
-                    width="192" height="164"
-                    alt="HeroKid Logo" class="h-16 md:h-24 w-auto object-contain">
+                <x-site-logo sizes="240px" alt="HeroKid Logo" class="h-auto w-60 object-contain" />
             </a>
         </div>
 

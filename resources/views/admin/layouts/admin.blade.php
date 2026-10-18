@@ -32,11 +32,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="herokid-logo" content="{{ \App\Support\SiteBranding::url() }}">
     <title>{{ $browserPageTitle }} — {{ config('app.name') }}</title>
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=cairo:400,500,600,700,800&display=swap" rel="stylesheet" />
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/images/logo-96.png">
+    <link rel="icon" type="image/png" href="{{ \App\Support\SiteBranding::url() }}">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
@@ -111,9 +112,7 @@
             {{-- Logo --}}
             <div class="flex items-center justify-between gap-3 border-b border-indigo-700 px-4 py-4 sm:px-6 sm:py-5">
                 <a href="{{ route('admin.home') }}" class="flex min-w-0 items-center gap-3">
-                    <img src="/images/logo-192.png" alt="HeroKid"
-                        class="h-8 md:h-16 w-8 md:w-16 rounded-lg object-contain bg-white p-0.5">
-                    <span class="truncate font-extrabold text-lg text-white">HeroKid</span>
+                    <x-site-logo sizes="144px" class="h-auto w-32 rounded-lg bg-white p-1" />
                     <span class="text-indigo-300 text-xs font-bold">Admin</span>
                 </a>
                 <button type="button"

@@ -25,7 +25,7 @@ class SiteImages
 
     public static function path(string $key): string
     {
-        return self::SETTINGS[$key] ?? '/images/logo-192.png';
+        return self::SETTINGS[$key] ?? SiteBranding::url();
     }
 
     public static function url(string $key): string

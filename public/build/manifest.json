@@ -19,7 +19,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-CAhzLlDc.css",
+    "file": "assets/app-BZKB4hLv.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -28,7 +28,7 @@
     ]
   },
   "resources/css/front-theme.css": {
-    "file": "assets/front-theme-P0ynHyVX.css",
+    "file": "assets/front-theme-edEGbyjH.css",
     "src": "resources/css/front-theme.css",
     "isEntry": true,
     "name": "front-theme",
@@ -61,7 +61,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-CMGHaTAZ.js",
+    "file": "assets/app-CmVPYLme.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,

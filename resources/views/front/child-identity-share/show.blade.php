@@ -13,7 +13,7 @@
             <section class="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur">
                 <div class="grid items-center gap-6 p-4 sm:p-6 lg:grid-cols-12 lg:gap-8 lg:p-8 xl:p-10">
                     <div data-share-copy-panel class="order-2 text-center lg:order-1 lg:col-span-4 lg:text-right">
-                        <img src="/images/logo-320.png" alt="HeroKid" class="mx-auto h-20 w-auto lg:mx-0">
+                        <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" class="mx-auto h-20 w-auto lg:mx-0">
                         <p class="mt-4 text-sm font-black text-fuchsia-300">هوية طفل مميزة من HeroKid</p>
                         <h1 class="mt-2 text-3xl font-black leading-tight sm:text-4xl xl:text-5xl">{{ $public['title'] }}</h1>
                         <p class="mt-3 text-sm leading-7 text-indigo-100 xl:text-base">{{ $public['description'] }}</p>

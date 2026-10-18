@@ -12,7 +12,7 @@
     <meta property="og:description" content="{{ ($publicLibrary ?? false) ? 'اقرأ القصة كاملة في مكتبة HeroKid المجانية.' : 'افتح الرابط لمشاهدة معاينة الكتاب بطريقة تفاعلية.' }}">
     <meta property="og:image" content="{{ \App\Support\Seo::imageUrl('/images/og-cover.jpg') }}">
     <meta property="og:type" content="website">
-    <link rel="icon" type="image/png" href="/images/logo-96.png">
+    <link rel="icon" type="image/png" href="{{ \App\Support\SiteBranding::url() }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         body { font-family: Tahoma, Arial, sans-serif; background: radial-gradient(circle at top, #312e81 0, #111827 46%, #030712 100%); }
@@ -39,7 +39,7 @@
         <header class="shrink-0 border-b border-white/10 bg-slate-950/70 px-3 py-1.5 backdrop-blur sm:px-4 sm:py-2">
             <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
                 <a href="{{ route('home') }}" class="flex items-center gap-2" aria-label="HeroKid">
-                    <img src="/images/logo-192.png" alt="HeroKid" class="h-10 w-10 rounded-lg bg-white object-contain p-0.5 sm:h-11 sm:w-11">
+                    <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" class="h-10 w-10 rounded-lg bg-white object-contain p-0.5 sm:h-11 sm:w-11">
                     <span class="hidden text-sm font-black text-white sm:block">HeroKid</span>
                 </a>
                 <div class="min-w-0 text-center">

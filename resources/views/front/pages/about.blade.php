@@ -2,10 +2,10 @@
     <x-slot name="pageTitle">عن HeroKid — قصص ومنتجات تجعل طفلك بطل الحكاية</x-slot>
     <x-slot name="pageDescription">تعرف على HeroKid، وكيف نصنع قصص أطفال مخصصة باسم وصورة الطفل، وما تحتاجه للطلب، وخطوات المراجعة والتوصيل والخصوصية.</x-slot>
     <x-slot name="canonical">/about</x-slot>
-    <x-slot name="pageImage">/images/logo.jpg</x-slot>
+    <x-slot name="pageImage">{{ \App\Support\SiteBranding::url() }}</x-slot>
     <x-slot name="pageImageAlt">HeroKid — قصص مخصصة تجعل طفلك بطل الحكاية</x-slot>
-    <x-slot name="ogImageWidth">1024</x-slot>
-    <x-slot name="ogImageHeight">1024</x-slot>
+    <x-slot name="ogImageWidth">{{ \App\Support\SiteBranding::presentation()['width'] }}</x-slot>
+    <x-slot name="ogImageHeight">{{ \App\Support\SiteBranding::presentation()['height'] }}</x-slot>
 
     @push('schema')
         @php
@@ -24,9 +24,9 @@
                         'breadcrumb' => ['@id' => \App\Support\Seo::url('/about#breadcrumb')],
                         'primaryImageOfPage' => [
                             '@type' => 'ImageObject',
-                            'url' => \App\Support\Seo::imageUrl('/images/logo.jpg'),
-                            'width' => 1024,
-                            'height' => 1024,
+                            'url' => \App\Support\SiteBranding::url(),
+                            'width' => \App\Support\SiteBranding::presentation()['width'],
+                            'height' => \App\Support\SiteBranding::presentation()['height'],
                         ],
                     ],
                     [
@@ -92,8 +92,7 @@
             </div>
             <div class="mx-auto w-full max-w-md rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur">
                 <div class="rounded-[1.5rem] bg-white p-6 text-center">
-                    <img src="/images/logo-320.png" width="320" height="274" alt="HeroKid"
-                        class="mx-auto h-32 w-auto object-contain sm:h-40">
+                    <x-site-logo sizes="320px" class="mx-auto h-auto w-full object-contain" />
                     <p class="mt-3 text-xl font-black text-slate-900">طفلك داخل عالم من الخيال والتعلّم</p>
                     <p class="mt-2 text-sm leading-7 text-slate-600">قصة مخصصة، مراجعة بشرية، وتجربة واضحة من الاختيار حتى الاستلام.</p>
                 </div>

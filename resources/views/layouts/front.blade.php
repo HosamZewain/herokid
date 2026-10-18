@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="herokid-logo" content="{{ \App\Support\SiteBranding::url() }}">
 
     {{-- ── Dynamic title: pages pass $pageTitle via x-slot; falls back to default ── --}}
     @php
@@ -29,7 +30,7 @@
                     'url' => $siteUrl,
                     'logo' => [
                         '@type' => 'ImageObject',
-                        'url' => \App\Support\Seo::imageUrl('/images/logo-192.png'),
+                        'url' => \App\Support\SiteBranding::url(),
                     ],
                     'description' => setting('seo_home_description', $settings['seo_home_description'] ?? ''),
                     'address' => [
@@ -99,8 +100,8 @@
     <meta name="twitter:image:alt" content="{{ $seoImageAlt }}">
 
     <!-- ══ Favicon & Icons ══ -->
-    <link rel="icon" type="image/png" href="/images/logo-96.png">
-    <link rel="apple-touch-icon" href="/images/logo-192.png">
+    <link rel="icon" type="image/png" href="{{ \App\Support\SiteBranding::url() }}">
+    <link rel="apple-touch-icon" href="{{ \App\Support\SiteBranding::url() }}">
     <meta name="theme-color" content="#074ad6">
     <meta name="msapplication-TileColor" content="#074ad6">
 

@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\Images\SiteLogoUpload;
 use App\Support\AdminActivityLogger;
+use App\Support\RequestSettings;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
 class SettingsController extends Controller
@@ -18,7 +19,7 @@ class SettingsController extends Controller
         return view('admin.settings.index', compact('settings'));
     }
 
-    public function update(Request $request)
+    public function update(Request $request, SiteLogoUpload $logos)
     {
         $settingsInput = $request->input('settings', []);
         $homepageSectionSettings = collect(config('homepage.sections', []))
@@ -31,6 +32,9 @@ class SettingsController extends Controller
             ->toArray();
 
         $rules = [
+            'site_logo_file' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:5120', 'dimensions:min_width=64,min_height=24,max_width=4096,max_height=4096', 'prohibited_if:reset_site_logo,1'],
+            'reset_site_logo' => ['nullable', 'boolean'],
+            'settings.site_logo' => ['prohibited'],
             'settings' => 'required|array',
             'settings.site_name' => 'required|string|max:100',
             'settings.site_email' => 'required|email',
@@ -75,7 +79,16 @@ class SettingsController extends Controller
             $rules["settings.{$settingKey}"] = 'nullable|boolean';
         }
 
-        $request->validate($rules);
+        $request->validate($rules, [
+            'site_logo_file.prohibited_if' => 'اختر رفع لوجو جديد أو الرجوع للوجو الافتراضي، وليس الخيارين معًا.',
+        ], ['site_logo_file' => 'لوجو الموقع']);
+
+        if ($request->hasFile('site_logo_file') || $request->boolean('reset_site_logo')) {
+            $before['site_logo'] = Setting::where('key', 'site_logo')->value('value');
+            $settingsInput['site_logo'] = $request->hasFile('site_logo_file')
+                ? json_encode($logos->store($request->file('site_logo_file')), JSON_THROW_ON_ERROR)
+                : '';
+        }
 
         if ($request->has('settings.shop_enabled')) {
             $settingsInput['shop_enabled'] = $request->boolean('settings.shop_enabled') ? '1' : '0';
@@ -109,7 +122,7 @@ class SettingsController extends Controller
         Setting::updateOrCreate(['key' => 'age_ranges'], ['value' => json_encode($ageRanges, JSON_UNESCAPED_UNICODE)]);
 
         // Bust the cache so front-end picks up new values immediately
-        Cache::forget('site_settings');
+        RequestSettings::forget();
 
         $after = Setting::whereIn('key', array_keys($settingsInput))
             ->pluck('value', 'key')

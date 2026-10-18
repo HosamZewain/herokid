@@ -34,7 +34,7 @@
                 <h1 class="text-lg font-black sm:text-xl">معاينة طلبك من HeroKid</h1>
                 <p class="mt-1 text-xs font-bold text-slate-400">راجع جميع الصور وأرسل تأكيدك لنا عبر واتساب.</p>
             </div>
-            <img src="{{ asset('images/logo-192.png') }}" alt="HeroKid" class="h-14 w-14 rounded-xl bg-white object-contain p-1">
+            <img src="{{ \App\Support\SiteBranding::url() }}" alt="HeroKid" class="h-14 w-14 rounded-xl bg-white object-contain p-1">
         </div>
     </header>
 

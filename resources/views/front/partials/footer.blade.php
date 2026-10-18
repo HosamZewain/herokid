@@ -2,7 +2,7 @@
     <div class="hk-footer-inner">
         <div class="hk-footer-brand">
             <div class="hk-footer-brand-media">
-                <a href="{{ route('home') }}"><img class="hk-footer-logo" src="{{ asset('images/logo-192.png') }}" width="192" height="164" alt="HeroKid Logo" loading="lazy"></a>
+                <a href="{{ route('home') }}"><x-site-logo class="hk-footer-logo" sizes="180px" alt="HeroKid Logo" loading="lazy" /></a>
                 @if(!empty($settings['facebook_url']) || !empty($settings['instagram_url']) || !empty($settings['youtube_url']) || !empty($settings['whatsapp_url']))
                     <div class="hk-footer-social" aria-label="تابع هيروكيد">
                         @foreach(['facebook_url' => 'Facebook', 'instagram_url' => 'Instagram', 'youtube_url' => 'YouTube', 'whatsapp_url' => 'WhatsApp'] as $contactKey => $contactLabel)

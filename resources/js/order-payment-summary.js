@@ -1,3 +1,5 @@
+import { drawContainedLogo, siteLogoUrl } from './site-branding';
+
 const COLORS = Object.freeze({
     ink: '#0f172a',
     muted: '#64748b',
@@ -110,7 +112,7 @@ const loadLogo = () => new Promise((resolve) => {
     const logo = new Image();
     logo.onload = () => resolve(logo);
     logo.onerror = () => resolve(null);
-    logo.src = '/images/logo-192.png';
+    logo.src = siteLogoUrl();
 });
 
 const createSummaryImage = async (data) => {
@@ -136,7 +138,7 @@ const createSummaryImage = async (data) => {
     const logo = await loadLogo();
     if (logo) {
         roundedRect(context, 1400, 28, 118, 118, 24, COLORS.white);
-        context.drawImage(logo, 1409, 37, 100, 100);
+        drawContainedLogo(context, logo, 1409, 37, 100, 100);
     }
 
     drawRtlText(context, 'ملخص طلب HeroKid', 1365, 78, 42, 800, COLORS.white);

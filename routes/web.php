@@ -86,6 +86,7 @@ use App\Http\Controllers\Front\PageController;
 use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\PublicChildIdentityShareController;
 use App\Http\Controllers\Front\ShopController;
+use App\Http\Controllers\Front\SiteLogoController;
 use App\Http\Controllers\Front\StoryController;
 use App\Http\Controllers\Front\StoryLibraryController;
 use App\Http\Controllers\Front\TemporaryPhotoUploadController;
@@ -131,6 +132,10 @@ Route::get('/conversation-reply-media/{reply}', ConversationReplyMediaController
 
 // Homepage
 Route::get('/', HomeController::class)->name('home');
+Route::get('/site-logo/{width}.png', SiteLogoController::class)
+    ->where('width', '[1-9][0-9]{0,2}')
+    ->withoutMiddleware(TrackCustomerVisit::class)
+    ->name('branding.logo');
 
 // Public Story Routes
 Route::get('/football-stories', [FootballStoriesController::class, 'index'])->name('football-stories.index');

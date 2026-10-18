@@ -1,3 +1,5 @@
+import { drawContainedLogo, siteLogoUrl } from './site-branding';
+
 const A6_WIDTH = 1240;
 const A6_HEIGHT = 1748;
 
@@ -113,7 +115,7 @@ const loadLogo = () => new Promise((resolve) => {
     const logo = new Image();
     logo.onload = () => resolve(logo);
     logo.onerror = () => resolve(null);
-    logo.src = '/images/logo-320.png';
+    logo.src = siteLogoUrl();
 });
 
 const createInvoiceImage = async (data) => {
@@ -137,7 +139,7 @@ const createInvoiceImage = async (data) => {
     const logo = await loadLogo();
     if (logo) {
         roundedRect(context, 1010, 38, 155, 155, 28, COLORS.white);
-        context.drawImage(logo, 1022, 50, 131, 131);
+        drawContainedLogo(context, logo, 1022, 50, 131, 131);
     }
 
     drawRtlText(context, 'فاتورة طلب', 970, 98, 52, 800, COLORS.white);

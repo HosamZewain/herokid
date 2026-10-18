@@ -67,11 +67,7 @@
                         </div>
                     </div>
                     <div class="bg-indigo-50 p-8 sm:p-10 flex items-center justify-center">
-                        <img src="/images/logo-192.png"
-                            srcset="/images/logo-96.png 96w, /images/logo-192.png 192w, /images/logo-320.png 320w"
-                            sizes="160px"
-                            width="192" height="164"
-                            alt="HeroKid" class="max-h-40 w-auto object-contain">
+                        <x-site-logo sizes="240px" class="max-h-40 w-full object-contain" />
                     </div>
                 </div>
             </div>
