@@ -116,7 +116,9 @@ The dedicated private directory also includes an Apache deny-all rule for defens
 
 ## Management and publication
 
-`GET /admin/studio-settings` contains friendly typography/export/UI/cover controls, logo/back-cover selection, private uploads, complete advanced JSON for text presets/profiles/crop/placement, publication history, rollback, employee policy binding and session revocation. OpenAI credentials reuse the existing encrypted Admin AI-provider settings and are never included in snapshots. Operator settings access is API read-only; the management page requires `studio.settings.manage`.
+`GET /admin/studio-settings` contains form controls for typography/export/UI/cover defaults, back-cover upload/preview/crop, logo upload/preview/placement, repeatable text presets and reusable product profiles (dimensions, sides, copies, cut, templates, photo rectangles and text fields). Operators do not edit JSON or copy asset UUIDs. Existing preset/profile IDs and values are retained; new entries get independent stable IDs. Removing an asset reference does not delete old published media. Publication history, rollback, employee policy binding and session revocation remain available. OpenAI credentials reuse the existing encrypted Admin AI-provider settings linked from this screen and are never included in snapshots. Operator settings access is API read-only; the management page requires `studio.settings.manage`.
+
+Inline manager image uploads use the existing `POST /admin/studio-settings/assets` with web-session authentication, CSRF, multipart `file` and `Accept: application/json`. Success returns 201 with `data: {id,width,height,bytes,preview_url}` only. The private preview URL is an Admin route, not a desktop download URL. Uploads alone do not publish assets. Normal HTML uploads still redirect as before. All asset and publication validation/permissions are unchanged.
 
 Publication and rollback require a reason and explicit confirmation. `base_revision` implements optimistic concurrency: stale updates return 409. Asset validation, revision/manifest creation, publication pointer and audit record are one database transaction. Rollback creates a new increasing revision, checks every asset again, and retains prior history. An incomplete publication or rollback leaves the last active revision unchanged.
 
@@ -168,8 +170,29 @@ After host deployment, verify anonymous settings/me return 401 and malformed log
 
 Desktop must stage and verify the entire snapshot and all asset checksums before atomically switching revisions. On 401, 403, 503, timeout, invalid JSON, missing asset or checksum failure, retain last-known-good settings and per-order overrides and show stale/offline state. A 304 retains the already verified revision. Do not remove desktop credentials/settings until secret-free generation and production operations pass coordinated QA. Roll back settings through the Admin revision history; roll back code through a reviewed release using the deployment backup. Do not roll back by dropping these tables or deleting existing Agent credentials.
 
+### Desktop agent: download once, manual refresh
+
+The backend contract remains **schema 1 with unchanged employee API routes**. Desktop implementation is owned by the Studio agent; this backend update edits no desktop files.
+
+1. Sign in with the employee's website email/phone and password using `POST /api/studio/auth/login`. Keep only the short session secret in OS secure storage in Electron main. Do not ask staff for a shared Agent token or OpenAI key.
+2. After login, request `GET /api/studio/settings` once. If a complete verified local cache exists for this server/account, send its ETag in `If-None-Match`. Without such a cache, request the full snapshot (do not send a remembered ETag alone).
+3. For 200, validate the complete schema; download every referenced asset from its relative `download_url` with the same bearer header. Restrict requests to the trusted API origin and published asset path; do not forward credentials across redirects/origins. Verify bytes, MIME, dimensions and each asset's SHA256. Reuse already verified matching media. Stage all files before switching the local effective settings revision atomically. Do not persist remote asset URLs as local paths or expose raw filesystem/credential IPC to React.
+4. Render effective settings read-only with revision, publication time, last successful sync and stale/error state. Expose **Refresh settings** using exactly the same fetch/stage flow. A 304 means retain the current verified snapshot. An Admin publication does not push to desktop: the new revision is picked up on manual Refresh or next login, not per order and not through background polling.
+5. Preserve per-order/project overrides, source photos, PDFs and project directories. Do not replace the local configuration with defaults after a failed sync. On 401 discard the expired secret and require login again; cached settings do not authorize production requests. Logout revokes only that session. On 403 do not continue protected actions or widen permissions.
+6. Local-only preferences (project directory, device environment, autosave, app version) remain local. Migrate reusable assets and stable profile/preset IDs deliberately; do not silently import secrets, device paths or child images. Existing installations continue using their old implementation until coordinated desktop cutover passes.
+
+Use the server ETag as an opaque revision validator. The snapshot checksum is not the SHA256 of the HTTP JSON body: it uses the existing PHP canonical encoding of `[settings, assets]` (recursively sorted object keys, list order preserved). Asset SHA256 values apply directly to downloaded normalized PNG bytes. Do not compare `JSON.stringify(data)` against the snapshot checksum.
+
+Desktop acceptance tests: first login/full sync; same ETag/304; Admin edit followed by manual Refresh/new revision; missing/corrupt asset and interrupted download keep the previous revision; permission denial and expired/revoked session; independent employees; retained per-order overrides; backend cover submission without shared secrets. Do not generate a paid production cover or modify a real order as part of connection tests.
+
 ## Backend verification on 21 October 2026
 
 The final focused and regression selection passed on isolated SQLite and disposable MySQL 8.4: **194 tests and 1428 assertions on each database**. This includes 46 new Studio tests plus 148 existing Agent and production-AI regression tests. All image-provider responses were faked; no production order or live paid generation was used. The production asset build, route cache, Blade cache, focused style checks and deployment-script syntax check passed.
 
 Browser QA on a disposable local SQLite fixture verified manager sign-in, permission-gated sidebar/direct page access, confirmed publication with a reason, increasing revision/history and rejection of a read-only employee at the management page (403). The live anonymous settings route returned 404 before host deployment. GitHub availability is not host deployment evidence; production authenticated verification and real-provider acceptance remain cutover gates.
+
+### Admin-form follow-up verification
+
+The follow-up form update passed **198 tests / 1458 assertions on each of isolated SQLite and disposable MySQL 8.4**, plus 16 JavaScript/default-entry and deployment-guard tests. Production build, focused PHP style, route cache, Blade cache and script syntax checks passed. Browser QA uploaded a synthetic logo through the inline manager upload, created a text preset and product profile with a template and child-name field, published revision 2 and verified preserved values after reload. No desktop code, real child media, production settings/order or paid generation was changed.
+
+Read-only live checks on 21 October confirmed the previously released employee API exists: anonymous settings returned 401 and empty login returned 422. These checks do not establish deployment of this follow-up Admin UI; that requires the new pinned release and host/browser verification.

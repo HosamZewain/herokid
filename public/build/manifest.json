@@ -61,12 +61,13 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-CmVPYLme.js",
+    "file": "assets/app-BVPuJoMV.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
       "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js",
+      "resources/js/studio-settings-editor.js",
       "resources/js/admin-conversations.js",
       "resources/js/booklet-reader.js",
       "resources/js/scene-reader.js"
@@ -89,5 +90,11 @@
     "imports": [
       "_pdf.worker.min-DQioOMWc.js"
     ]
+  },
+  "resources/js/studio-settings-editor.js": {
+    "file": "assets/studio-settings-editor-DocfiOw8.js",
+    "name": "studio-settings-editor",
+    "src": "resources/js/studio-settings-editor.js",
+    "isDynamicEntry": true
   }
 }

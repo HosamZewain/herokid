@@ -236,6 +236,21 @@ class RemoteStudioApiTest extends TestCase
         $this->callApi('GET', '/api/studio/settings/assets/'.Str::uuid(), $token)->assertForbidden();
     }
 
+    public function test_same_employee_session_receives_new_full_revision_on_manual_refresh(): void
+    {
+        $user = $this->staff();
+        $one = $this->publish($user);
+        $token = $this->login($user);
+        $first = $this->callApi('GET', '/api/studio/settings', $token)->assertOk();
+        $changed = $one->settings;
+        $changed['production_typography']['default_text_box_page_side'] = 'left';
+        $two = $this->publish($user, $changed, $one->id);
+        $this->withHeader('If-None-Match', $first->headers->get('ETag'))->getJson('/api/studio/settings')
+            ->assertOk()->assertJsonPath('data.revision', (string) $two->id)->assertJsonPath('data.settings', fn ($value) => $value == $changed);
+        $this->assertDatabaseCount('studio_sessions', 1);
+        $this->assertEquals($one->settings, $one->fresh()->settings);
+    }
+
     public function test_protected_asset_integrity_and_unpublished_assets_are_not_downloadable(): void
     {
         $user = $this->staff();
@@ -333,6 +348,55 @@ class RemoteStudioApiTest extends TestCase
         $this->get('/admin/studio-settings/assets/'.$asset->id)->assertOk();
         $this->postJson('/admin/studio-settings/assets', ['file' => UploadedFile::fake()->createWithContent('bad.svg', '<svg/>')])->assertUnprocessable();
         $this->actingAs($this->staff())->get('/admin/studio-settings/assets/'.$asset->id)->assertForbidden();
+    }
+
+    public function test_admin_editor_preserves_complete_settings_and_hides_raw_json_controls(): void
+    {
+        $manager = $this->staff(['studio.access', 'studio.settings.read', 'studio.settings.manage']);
+        $asset = app(StudioSettingsService::class)->upload(UploadedFile::fake()->image('logo.png', 100, 40), $manager);
+        $settings = StudioSettingsSchema::defaults();
+        $settings['brand_logo'] = ['asset_id' => $asset->id, 'placement' => ['position' => 'custom', 'x' => 0.36, 'y' => 0.04, 'widthPercent' => 0.28, 'opacity' => 0.8]];
+        $settings['default_back_cover'] = ['asset_id' => $asset->id, 'crop' => ['focalX' => 0.3, 'focalY' => 0.8, 'zoom' => 2]];
+        $revision = $this->publish($manager, $settings);
+        $response = $this->actingAs($manager)->get('/admin/studio-settings')->assertOk()->assertSee('data-studio-settings-editor', false)->assertDontSee('rows="24"', false);
+        $response->assertViewHas('configuration', fn ($value) => $value == $settings);
+        $options = $response->viewData('editorOptions');
+        $this->assertSame(['id', 'width', 'height', 'bytes', 'preview_url'], array_keys($options['assets'][0]));
+        $this->assertStringNotContainsString('studio-private', json_encode($options));
+        $this->post('/admin/studio-settings/publish', ['settings_json' => json_encode($settings), 'base_revision' => $revision->id, 'reason' => 'Keep configured positions', 'confirmed' => true])->assertRedirect();
+        $this->assertEquals($settings, app(StudioSettingsService::class)->current()->settings);
+        $this->postJson('/admin/studio-settings/publish', ['settings_json' => json_encode($settings), 'base_revision' => $revision->id, 'reason' => 'Stale form', 'confirmed' => true])->assertConflict();
+    }
+
+    public function test_inline_upload_returns_only_safe_metadata_and_remains_unpublished(): void
+    {
+        $manager = $this->staff(['studio.access', 'studio.settings.read', 'studio.settings.manage']);
+        $response = $this->actingAs($manager)->postJson('/admin/studio-settings/assets', ['file' => UploadedFile::fake()->image('private-local-name.png', 100, 80)])
+            ->assertCreated()->assertJsonStructure(['data' => ['id', 'width', 'height', 'bytes', 'preview_url']]);
+        $this->assertSame(['id', 'width', 'height', 'bytes', 'preview_url'], array_keys($response->json('data')));
+        $this->assertStringNotContainsString('private-local-name', $response->getContent());
+        $id = $response->json('data.id');
+        $token = $this->login($manager);
+        $this->callApi('GET', '/api/studio/settings/assets/'.$id, $token)->assertNotFound();
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders();
+        $this->actingAs($this->staff())->postJson('/admin/studio-settings/assets', ['file' => UploadedFile::fake()->image('denied.png')])->assertForbidden();
+    }
+
+    public function test_editor_does_not_omit_old_assets_referenced_by_current_revision(): void
+    {
+        $manager = $this->staff(['studio.settings.manage']);
+        $asset = app(StudioSettingsService::class)->upload(UploadedFile::fake()->image('old-logo.png'), $manager);
+        $asset->update(['created_at' => now()->subYear()]);
+        $settings = StudioSettingsSchema::defaults();
+        $settings['default_back_cover'] = ['asset_id' => $asset->id, 'crop' => ['focalX' => 0.5, 'focalY' => 0.5, 'zoom' => 1]];
+        $this->publish($manager, $settings);
+        $rows = [];
+        for ($i = 0; $i < 501; $i++) {
+            $rows[] = ['id' => (string) Str::uuid(), 'path' => 'qa-placeholder.png', 'mime' => 'image/png', 'bytes' => 100, 'width' => 10, 'height' => 10, 'checksum' => str_repeat('a', 64), 'uploaded_by' => $manager->id, 'created_at' => now()];
+        }
+        DB::table('studio_assets')->insert($rows);
+        $this->actingAs($manager)->get('/admin/studio-settings')->assertOk()->assertViewHas('assets', fn ($assets) => $assets->contains('id', $asset->id));
     }
 
     public function test_manager_can_revoke_session_and_cannot_bind_another_employees_policy(): void

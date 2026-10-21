@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiModel;
 use App\Models\StudioAsset;
 use App\Models\StudioSession;
 use App\Models\StudioSettingsRevision;
@@ -21,11 +22,20 @@ class StudioSettingsController extends Controller
     public function index(StudioSettingsService $service): mixed
     {
         $current = $service->current();
+        $configuration = $current?->settings ?? StudioSettingsSchema::defaults();
+        $referenced = app(StudioSettingsSchema::class)->assetIds($configuration);
+        $assets = StudioAsset::whereIn('id', $referenced)->orWhereIn('id', StudioAsset::latest('created_at')->limit(500)->pluck('id'))->latest('created_at')->get();
+        $editorOptions = [
+            'schema' => app(StudioSettingsSchema::class)->schema(),
+            'models' => AiModel::where('is_active', true)->whereHas('provider', fn ($q) => $q->where('driver', 'openai')->where('is_active', true))->get()->filter(fn ($model) => $model->supportsCapability('cover_generation'))->map(fn ($model) => ['code' => $model->code, 'name' => $model->display_name ?: $model->code])->values(),
+            'assets' => $assets->map(fn ($asset) => ['id' => $asset->id, 'width' => $asset->width, 'height' => $asset->height, 'bytes' => $asset->bytes, 'preview_url' => route('admin.studio-settings.assets.show', $asset->id)])->values(),
+        ];
 
         return view('admin.studio-settings.index', [
-            'revision' => $current, 'configuration' => $current?->settings ?? StudioSettingsSchema::defaults(),
+            'revision' => $current, 'configuration' => $configuration,
+            'editorOptions' => $editorOptions,
             'history' => StudioSettingsRevision::latest('id')->limit(30)->get(),
-            'assets' => StudioAsset::latest('created_at')->limit(500)->get(),
+            'assets' => $assets,
             'employees' => User::where('role', 'admin')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'sessions' => StudioSession::whereNull('revoked_at')->where('expires_at', '>', now())->latest('id')->limit(100)->get(),
             'grants' => DB::table('studio_employee_grants')->get()->keyBy('user_id'),
@@ -69,6 +79,11 @@ class StudioSettingsController extends Controller
     {
         $request->validate(['file' => 'required|file']);
         $asset = $service->upload($request->file('file'), $request->user());
+
+        if ($request->expectsJson()) {
+            return response()->json(['data' => ['id' => $asset->id, 'width' => $asset->width, 'height' => $asset->height,
+                'bytes' => $asset->bytes, 'preview_url' => route('admin.studio-settings.assets.show', $asset->id)]], 201);
+        }
 
         return back()->with('success', 'تم رفع الأصل بأمان. اختاره في الإعدادات ثم انشر النسخة. معرّفه: '.$asset->id);
     }
