@@ -196,7 +196,7 @@ class OrderDeletionService
                 continue;
             }
 
-            $product = $item->product_id ? Product::query()->lockForUpdate()->find($item->product_id) : null;
+            $product = $item->product_id ? Product::withTrashed()->lockForUpdate()->find($item->product_id) : null;
             if (! $product || $product->inventory_mode !== 'track_stock') {
                 continue;
             }
@@ -236,7 +236,7 @@ class OrderDeletionService
         $changes = [];
 
         foreach ($items as $item) {
-            $product = $item->product_id ? Product::query()->lockForUpdate()->find($item->product_id) : null;
+            $product = $item->product_id ? Product::withTrashed()->lockForUpdate()->find($item->product_id) : null;
             if (! $product || $product->inventory_mode !== 'track_stock') {
                 $item->forceFill(['stock_released_at' => null, 'stock_released_by_user_id' => null])->save();
 

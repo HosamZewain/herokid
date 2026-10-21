@@ -34,7 +34,8 @@ class OrderItem extends Model
 
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        // Catalog removal must not break historical orders or production units.
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     public function variant()

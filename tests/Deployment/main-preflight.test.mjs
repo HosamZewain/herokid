@@ -8,6 +8,7 @@ const block = source.slice(source.indexOf('PUSH_MIGRATION='), source.indexOf('\n
 const allowed = 'database/migrations/2026_10_15_000100_create_mobile_push_campaigns.php';
 const library = 'database/migrations/2026_10_15_000200_create_public_story_library.php';
 const appMetrics = 'database/migrations/2026_10_17_000100_create_app_landing_events.php';
+const productDeletion = 'database/migrations/2026_10_21_000200_add_soft_deletes_to_products.php';
 function preflight(diff, exitCode = '0') {
     return spawnSync('/bin/bash', ['-se'], {
         input: `set -euo pipefail\nPREVIOUS_COMMIT=previous\nRELEASE_COMMIT=release\ngit() { printf '%s' "$MIGRATION_DIFF"; return "$GIT_EXIT_CODE"; }\n${block}\nprintf 'guard-passed\\n'\n`,
@@ -21,7 +22,7 @@ test('deployment preflight avoids /dev/fd process substitution', () => {
     assert.doesNotMatch(source, /<\s*<\(/);
 });
 test('piped bash accepts no migrations and the reviewed migration', () => {
-    for (const diff of ['', allowed, `${allowed}\n`, library, `${allowed}\n${library}`, appMetrics, `${allowed}\n${library}\n${appMetrics}`]) {
+    for (const diff of ['', allowed, `${allowed}\n`, library, `${allowed}\n${library}`, appMetrics, `${allowed}\n${library}\n${appMetrics}`, productDeletion, `${appMetrics}\n${productDeletion}`]) {
         const result = preflight(diff);
         assert.equal(result.status, 0, result.stderr);
         assert.match(result.stdout, /guard-passed/);

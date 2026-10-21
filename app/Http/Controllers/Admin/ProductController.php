@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductUpsellRule;
 use App\Services\Orders\ProductProductionPromptSyncService;
+use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
@@ -458,11 +459,27 @@ class ProductController extends Controller
         }
     }
 
-    public function destroy(Product $product)
+    public function destroy(Request $request, Product $product)
     {
-        $product->delete();
+        $data = $request->validate([
+            'confirmed' => ['required', 'accepted'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ], [
+            'confirmed.accepted' => 'يجب تأكيد حذف المنتج أولًا.',
+            'confirmed.required' => 'يجب تأكيد حذف المنتج أولًا.',
+            'reason.required' => 'اكتب سبب حذف المنتج.',
+            'reason.min' => 'اكتب سببًا واضحًا لا يقل عن 3 أحرف.',
+        ]);
+        DB::transaction(function () use ($product, $data): void {
+            $current = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $current->forceFill(['is_active' => false])->save();
+            $current->delete();
+            AdminActivityLogger::log('store.product.deleted', 'حذف المنتج من المتجر مع الاحتفاظ ببيانات الطلبات السابقة.', $current, [
+                'reason' => $data['reason'], 'product_name' => $current->name_ar, 'slug' => $current->slug,
+            ]);
+        });
 
-        return redirect()->route('admin.products.index')->with('success', 'تم حذف المنتج.');
+        return redirect()->route('admin.products.index')->with('success', 'تم حذف المنتج من المتجر. بيانات الطلبات السابقة وصورها محفوظة دون تغيير.');
     }
 
     private function validatedData(Request $request, ?Product $product = null): array

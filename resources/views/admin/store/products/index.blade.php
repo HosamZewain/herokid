@@ -20,7 +20,7 @@
     </x-slot>
     <div class="py-8" dir="rtl">
         <div class="mx-auto max-w-7xl space-y-4 sm:px-6 lg:px-8">
-            @if(session('success'))<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-bold text-green-700">{{ session('success') }}</div>@endif
+            @if($errors->any())<div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
             <form method="GET" class="flex flex-wrap gap-3 rounded-2xl bg-white p-4 shadow-sm">
                 <select name="category" class="rounded-xl border-gray-300 text-right"><option value="">كل التصنيفات</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(request('category') == $category->id)>{{ $category->name_ar }}</option>@endforeach</select>
                 <select name="status" class="rounded-xl border-gray-300 text-right"><option value="">كل الحالات</option><option value="active" @selected(request('status') === 'active')>نشط</option><option value="inactive" @selected(request('status') === 'inactive')>معطل</option></select>
@@ -58,7 +58,23 @@
                                 <td class="px-4 py-3">{{ $product->personalization_mode }}</td>
                                 <td class="px-4 py-3">{{ $product->inventory_mode }} @if($product->stock_quantity !== null) / {{ $product->stock_quantity }} @endif</td>
                                 <td class="px-4 py-3">{{ $product->is_active ? 'نشط' : 'معطل' }}</td>
-                                <td class="px-4 py-3"><a href="{{ route('shop.product.show', $product) }}" target="_blank" class="font-bold text-slate-600">معاينة</a></td>
+                                <td class="px-4 py-3">
+                                    <a href="{{ route('shop.product.show', $product) }}" target="_blank" class="font-bold text-slate-600">معاينة</a>
+                                    @can('store.products.delete')
+                                        <details class="mt-3 rounded-xl border border-red-200 p-3" data-product-delete>
+                                            <summary class="cursor-pointer font-bold text-red-600" aria-label="حذف المنتج {{ $product->name_ar }}">حذف المنتج</summary>
+                                            <form method="POST" action="{{ route('admin.products.destroy', $product) }}" class="mt-3 space-y-3">
+                                                @csrf @method('DELETE')
+                                                <p class="text-xs text-slate-600">سيختفي «{{ $product->name_ar }}» من المتجر وقائمة المنتجات. بيانات الطلبات القديمة وصورها لن تتغير.</p>
+                                                <label class="block text-xs font-bold">سبب الحذف
+                                                    <textarea name="reason" required minlength="3" maxlength="500" rows="2" class="mt-1 w-full rounded-lg border-gray-300" aria-label="سبب حذف {{ $product->name_ar }}"></textarea>
+                                                </label>
+                                                <label class="flex items-start gap-2 text-xs"><input type="checkbox" name="confirmed" value="1" required> أؤكد حذف هذا المنتج من المتجر.</label>
+                                                <button class="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white">تأكيد حذف المنتج</button>
+                                            </form>
+                                        </details>
+                                    @endcan
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -1101,7 +1101,7 @@ class AdminOrderUpdateService
             return;
         }
 
-        $product = $item->product_id ? Product::query()->lockForUpdate()->find($item->product_id) : null;
+        $product = $item->product_id ? Product::withTrashed()->lockForUpdate()->find($item->product_id) : null;
         if (! $product || $product->inventory_mode !== 'track_stock') {
             return;
         }
