@@ -4,6 +4,9 @@ use App\Http\Controllers\Api\Agent\AgentCheckoutController;
 use App\Http\Controllers\Api\Agent\AgentOrderController;
 use App\Http\Controllers\Api\Agent\AgentStudioController;
 use App\Http\Controllers\Api\BostaWebhookController;
+use App\Http\Controllers\Api\Studio\StudioAuthController;
+use App\Http\Controllers\Api\Studio\StudioCoverController;
+use App\Http\Controllers\Api\Studio\StudioSettingsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BootstrapController;
 use App\Http\Controllers\Api\V1\CatalogController;
@@ -29,7 +32,25 @@ use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Front\StoryLibraryController;
 use App\Http\Middleware\EnsureMobileGuestScope;
+use App\Http\Middleware\EnsureStudioAccess;
 use Illuminate\Support\Facades\Route;
+
+Route::prefix('studio')->name('studio.')->group(function (): void {
+    Route::post('auth/login', [StudioAuthController::class, 'login'])->middleware('throttle:20,1')->name('auth.login');
+    Route::middleware(['auth:sanctum', EnsureStudioAccess::class, 'throttle:120,1'])->group(function (): void {
+        Route::get('auth/me', [StudioAuthController::class, 'me'])->name('auth.me');
+        Route::post('auth/logout', [StudioAuthController::class, 'logout'])->name('auth.logout');
+        Route::middleware(EnsureStudioAccess::class.':studio.settings.read')->group(function (): void {
+            Route::get('settings', [StudioSettingsController::class, 'show'])->name('settings.show');
+            Route::get('settings/assets/{assetId}', [StudioSettingsController::class, 'asset'])->whereUuid('assetId')->name('settings.assets');
+        });
+        Route::middleware([EnsureStudioAccess::class.':studio.covers.generate', 'agent_api:ability:orders.read,permission:orders.view,permission:orders.photos.view'])->group(function (): void {
+            Route::post('covers', [StudioCoverController::class, 'store'])->name('covers.store');
+            Route::get('covers/{generation}', [StudioCoverController::class, 'show'])->whereUuid('generation')->name('covers.show');
+            Route::get('covers/{generation}/image', [StudioCoverController::class, 'image'])->whereUuid('generation')->name('covers.image');
+        });
+    });
+});
 
 Route::post('integrations/bosta/webhook', BostaWebhookController::class)
     ->middleware('throttle:120,1')

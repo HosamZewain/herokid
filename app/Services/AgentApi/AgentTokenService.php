@@ -198,7 +198,8 @@ class AgentTokenService
     public function agentForToken(PersonalAccessToken $token): User
     {
         $abilities = is_array($token->abilities) ? $token->abilities : [];
-        if ($token->tokenable_type !== User::class || ! in_array(self::BASE_ABILITY, $abilities, true)) {
+        if ($token->tokenable_type !== User::class || ! in_array(self::BASE_ABILITY, $abilities, true)
+            || in_array('studio:session', $abilities, true)) {
             abort(404);
         }
 

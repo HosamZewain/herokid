@@ -36,14 +36,17 @@ class GptImageClient
             throw new GptImageException('خدمة إنشاء الصورة غير متاحة حاليًا. يرجى المحاولة لاحقًا.', 'provider_unavailable');
         }
 
-        if ($request->inputImages === []) {
+        if ($request->inputImages === [] && ! $request->allowTextOnly) {
             throw new GptImageException('يجب إرفاق صور مرجعية قبل إنشاء الهوية.', 'missing_input_photos');
         }
 
         try {
+            $textOnly = $request->allowTextOnly && $request->inputImages === [];
             $client = $this->client($request)
-                ->withHeaders(['X-Client-Request-Id' => $this->safeId($request->clientRequestId)])
-                ->asMultipart();
+                ->withHeaders(['X-Client-Request-Id' => $this->safeId($request->clientRequestId)]);
+            if (! $textOnly) {
+                $client = $client->asMultipart();
+            }
 
             foreach ($this->normalizeInputs($request) as $index => $input) {
                 $client = $client->attach(
@@ -62,12 +65,12 @@ class GptImageClient
                 'n' => 1,
             ];
 
-            if ($request->model->code !== 'gpt-image-2'
+            if (! $textOnly && $request->model->code !== 'gpt-image-2'
                 && (bool) data_get($request->model->configuration_json, 'supports_high_input_fidelity', false)) {
                 $payload['input_fidelity'] = 'high';
             }
 
-            $response = $client->post('https://api.openai.com/v1/images/edits', $payload);
+            $response = $client->post('https://api.openai.com/v1/images/'.($textOnly ? 'generations' : 'edits'), $payload);
             $json = $response->throw()->json();
             $output = $this->extractOutput($request, $json);
             $requestId = $this->safeId(
@@ -170,7 +173,7 @@ class GptImageClient
             $client = $client->withHeaders(['OpenAI-Project' => $project]);
         }
 
-        return $client->retry((int) ($request->provider->default_max_retries ?? 1), 500);
+        return $client->retry($request->maxAttempts ?? (int) ($request->provider->default_max_retries ?? 1), 500);
     }
 
     private function normalizeInputs(GptImageRequest $request): array

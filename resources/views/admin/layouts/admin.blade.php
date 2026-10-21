@@ -147,6 +147,7 @@
                     'media_library.view', 'content.testimonials.view', 'content.faqs.view', 'content.messages.view',
                 ]);
                 $canSettings = auth()->user()->hasAnyPermission([
+                    'studio.settings.manage',
                     'settings.site.view', 'settings.production_prompt.view', 'settings.delivery_zones.view',
                     'settings.ai_providers.view', 'settings.notifications.view',
                     'settings.mobile.view',
@@ -276,6 +277,9 @@
                 @if($canSettings)
                     <div class="pt-4">
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">الإعدادات</p>
+                        @can('studio.settings.manage')
+                            <a href="{{ route('admin.studio-settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.studio-settings.*') ? $activeLink : $idleLink }}">إعدادات HeroKid Studio</a>
+                        @endcan
                         @can('settings.site.view')
                             <a href="{{ route('admin.settings.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.index') || request()->routeIs('admin.settings.update') ? $activeLink : $idleLink }}">إعدادات الموقع</a>
                         @endcan

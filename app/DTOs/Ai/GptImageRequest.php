@@ -18,5 +18,7 @@ readonly class GptImageRequest
         public string $size,
         public string $quality,
         public string $clientRequestId,
+        public bool $allowTextOnly = false,
+        public ?int $maxAttempts = null,
     ) {}
 }

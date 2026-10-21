@@ -44,9 +44,10 @@ test -z "$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- composer
 PUSH_MIGRATION="database/migrations/2026_10_15_000100_create_mobile_push_campaigns.php"
 LIBRARY_MIGRATION="database/migrations/2026_10_15_000200_create_public_story_library.php"
 APP_METRICS_MIGRATION="database/migrations/2026_10_17_000100_create_app_landing_events.php"
+STUDIO_MIGRATION="database/migrations/2026_10_21_000100_create_remote_studio_settings.php"
 CHANGED_MIGRATIONS="$(git diff --name-only "$PREVIOUS_COMMIT" "$RELEASE_COMMIT" -- database/migrations)"
 while IFS= read -r migration; do
-    test -z "$migration" || test "$migration" = "$PUSH_MIGRATION" || test "$migration" = "$LIBRARY_MIGRATION" || test "$migration" = "$APP_METRICS_MIGRATION" || {
+    test -z "$migration" || test "$migration" = "$PUSH_MIGRATION" || test "$migration" = "$LIBRARY_MIGRATION" || test "$migration" = "$APP_METRICS_MIGRATION" || test "$migration" = "$STUDIO_MIGRATION" || {
         echo "Stopped: unreviewed schema change requires its own deployment plan."
         exit 1
     }
@@ -109,12 +110,14 @@ foreach ($manifest as $entry) {
 "$PHP_BIN" artisan migrate --force --path="$PUSH_MIGRATION"
 "$PHP_BIN" artisan migrate --force --path="$LIBRARY_MIGRATION"
 "$PHP_BIN" artisan migrate --force --path="$APP_METRICS_MIGRATION"
+"$PHP_BIN" artisan migrate --force --path="$STUDIO_MIGRATION"
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
 "$PHP_BIN" artisan view:cache
 "$PHP_BIN" artisan route:list --name=admin.orders.groups.items
+"$PHP_BIN" artisan route:list --path=api/studio
 "$PHP_BIN" artisan queue:restart
 "$PHP_BIN" artisan up
 trap - ERR
 git log -1 --oneline
-echo "Deployment completed on main. Verify public story library, permissions, reader and app notifications."
+echo "Deployment completed on main. Verify Studio sessions, settings, private assets, and existing Agent reads."

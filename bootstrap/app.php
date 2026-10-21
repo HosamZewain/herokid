@@ -7,6 +7,7 @@ use App\Http\Middleware\IsAdmin;
 use App\Http\Middleware\LogAdminActivity;
 use App\Http\Middleware\RequireAdminPermission;
 use App\Http\Middleware\SecurityAndCacheHeaders;
+use App\Http\Middleware\StudioSessionBoundary;
 use App\Http\Middleware\TrackCustomerVisit;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [StudioSessionBoundary::class]);
         $middleware->encryptCookies(except: ['_fbp', '_fbc']);
         $middleware->validateCsrfTokens(except: [
             'order-rating/*',
@@ -70,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (AgentApiException $exception, Request $request) {
-            if ($request->is('api/agent/*')) {
+            if ($request->is('api/agent/*', 'api/studio/*')) {
                 return response()->json($exception->payload(), $exception->httpStatus);
             }
         });

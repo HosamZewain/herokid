@@ -62,6 +62,7 @@ use App\Http\Controllers\Admin\ShippingReportController;
 use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryChildIdentityPromptTemplateController;
 use App\Http\Controllers\Admin\StoryProductionPromptTemplateController;
+use App\Http\Controllers\Admin\StudioSettingsController;
 use App\Http\Controllers\Admin\TestimonialController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
@@ -430,6 +431,16 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('studio-settings')->name('studio-settings.')->group(function (): void {
+        $controller = StudioSettingsController::class;
+        Route::get('/', [$controller, 'index'])->middleware('permission:studio.settings.manage')->name('index');
+        Route::post('publish', [$controller, 'publish'])->middleware(['permission:studio.settings.manage', 'throttle:10,1'])->name('publish');
+        Route::post('assets', [$controller, 'upload'])->middleware(['permission:studio.settings.manage', 'throttle:10,1'])->name('assets.store');
+        Route::get('assets/{assetId}', [$controller, 'preview'])->whereUuid('assetId')->middleware('permission:studio.settings.manage')->name('assets.show');
+        Route::post('revisions/{revision}/rollback', [$controller, 'rollback'])->middleware(['permission:studio.settings.manage', 'throttle:10,1'])->name('rollback');
+        Route::put('employees/{employee}', [$controller, 'grant'])->middleware(['permission:studio.settings.manage', 'permission:studio.sessions.manage'])->name('employees.update');
+        Route::delete('sessions/{session}', [$controller, 'revoke'])->middleware(['permission:studio.settings.manage', 'permission:studio.sessions.manage'])->name('sessions.destroy');
+    });
     Route::get('/', AdminHomeController::class)->name('home');
     Route::get('dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')

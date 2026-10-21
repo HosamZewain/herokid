@@ -29,7 +29,8 @@ class AgentApiTokenController extends Controller
             ->get();
 
         $tokens = $agents->flatMap(fn (User $agent) => $agent->tokens
-            ->filter(fn (PersonalAccessToken $token): bool => in_array('agent', $token->abilities ?? [], true))
+            ->filter(fn (PersonalAccessToken $token): bool => in_array('agent', $token->abilities ?? [], true)
+                && ! in_array('studio:session', $token->abilities ?? [], true))
             ->map(fn (PersonalAccessToken $token): array => [
                 'id' => $token->id,
                 'name' => $token->name,
