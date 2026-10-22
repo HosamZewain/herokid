@@ -84,6 +84,44 @@ class RemoteStudioCoverTest extends TestCase
         $this->assertSame('new', $this->order->fresh()->status);
     }
 
+    private function useDirectEmployeeSession(): void
+    {
+        // Test-only removal: no production grant is migrated or deleted.
+        DB::table('studio_employee_grants')->where('user_id', $this->employee->id)->delete();
+        $this->employee->update(['agent_api_enabled' => false]);
+        $this->token = app(StudioSessionService::class)->issue($this->employee->fresh())['token'];
+    }
+
+    public function test_unlinked_employee_can_read_story_and_product_without_agent_switch(): void
+    {
+        $this->useDirectEmployeeSession();
+        Storage::fake('local');
+        Storage::disk('local')->put('orders/studio/child.jpg', 'isolated-child-photo');
+        $this->order->update(['uploaded_photos' => ['orders/studio/child.jpg']]);
+        $product = Product::create(['name_ar' => 'منتج اختبار', 'slug' => 'direct-studio-product', 'price_cents' => 10000, 'is_active' => true, 'personalization_mode' => 'none', 'production_prompt_template' => 'Produce {{product_name}}']);
+        $this->order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'title' => $product->name_ar, 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000, 'personalization_mode' => 'none']);
+        $this->api('GET', '/api/agent/studio/connection')->assertOk();
+        $this->api('GET', '/api/agent/studio/orders/'.$this->order->order_number)->assertOk()
+            ->assertJsonPath('production_stories.0.child.name', 'طفل الاختبار')->assertJsonCount(2, 'production_units');
+        $this->api('GET', '/api/agent/checkouts/'.$this->order->checkoutReference->short_reference.'/production-context')->assertOk();
+        $this->assertDatabaseCount('order_group_assignments', 0);
+        $this->assertSame('new', $this->order->fresh()->status);
+        $this->assertFalse($this->employee->fresh()->agent_api_enabled);
+    }
+
+    public function test_direct_employee_cover_job_honors_current_permissions_without_agent_switch(): void
+    {
+        $this->useDirectEmployeeSession();
+        $image = UploadedFile::fake()->image('result.png', 24, 36);
+        Http::fake(['api.openai.com/v1/images/edits' => Http::response(['data' => [['b64_json' => base64_encode(file_get_contents($image->getRealPath()))]]], 200)]);
+        $id = $this->api('POST', '/api/studio/covers', $this->payload())->assertAccepted()->json('data.id');
+        (new GenerateStudioCover($id))->handle(app(StudioCoverService::class));
+        $this->api('GET', '/api/studio/covers/'.$id)->assertOk()->assertJsonPath('data.status', 'completed');
+        Http::assertSentCount(1);
+        $this->employee->permissions()->detach(Permission::where('key', 'orders.photos.view')->value('id'));
+        $this->api('POST', '/api/studio/covers', $this->payload())->assertForbidden();
+    }
+
     public function test_generation_is_idempotent_private_scoped_and_never_attaches_to_or_updates_orders(): void
     {
         $payload = $this->payload();

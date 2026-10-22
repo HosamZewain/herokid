@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\RemoteStudio\StudioSessionService;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,15 @@ class EnsureAgentApiAccess
             return $this->error('UNAUTHORIZED', 'Agent authentication is required.', 401);
         }
 
-        if (! $user->isAdmin() || ! $user->agent_api_enabled || ! $user->tokenCan('agent')) {
+        $token = $user->currentAccessToken();
+        $employeeSession = in_array(StudioSessionService::ABILITY, $token->abilities, true)
+            && in_array(StudioSessionService::EMPLOYEE_PERMISSIONS, $token->abilities, true);
+        if ($employeeSession) {
+            // Only a recorded, valid employee session can bypass the legacy
+            // Agent integration switch; an arbitrary token marker is not enough.
+            app(StudioSessionService::class)->validate($user, $token);
+        }
+        if (! $user->isAdmin() || (! $employeeSession && ! $user->agent_api_enabled) || ! $user->tokenCan('agent')) {
             return $this->error('FORBIDDEN', 'This account is not enabled for Agent API access.', 403);
         }
 

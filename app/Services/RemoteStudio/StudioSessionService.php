@@ -13,6 +13,8 @@ class StudioSessionService
 {
     public const ABILITY = 'studio:session';
 
+    public const EMPLOYEE_PERMISSIONS = 'studio:employee-permissions';
+
     public function issue(User $user): array
     {
         return DB::transaction(function () use ($user): array {
@@ -21,7 +23,12 @@ class StudioSessionService
             abort_unless($user->hasPermission('studio.access'), 403);
             $grant = DB::table('studio_employee_grants')->where('user_id', $user->id)->first();
             $source = $this->source($user, $grant?->agent_token_id);
-            $abilities = [self::ABILITY, ...$this->agentAbilities($user, $source)];
+            // New employees use their existing admin permissions directly. An
+            // explicit legacy grant (including a revoked/disabled one) remains
+            // restrictive: never turn a missing source into unrestricted access.
+            $abilities = $grant === null
+                ? [self::ABILITY, self::EMPLOYEE_PERMISSIONS, ...$this->employeeAbilities($user)]
+                : [self::ABILITY, ...$this->agentAbilities($user, $source)];
             $expires = now()->addMinutes((int) config('remote_studio.session_minutes'));
             if ($source?->expires_at && $source->expires_at->lt($expires)) {
                 $expires = $source->expires_at;
@@ -60,6 +67,12 @@ class StudioSessionService
         abort_unless(hash_equals($session->password_fingerprint, hash('sha256', $user->getAuthPassword())), 401, 'Please sign in again.');
         $grant = DB::table('studio_employee_grants')->where('user_id', $user->id)->first();
         abort_unless((int) $session->grant_version === (int) ($grant?->version ?? 0), 401, 'Studio access policy changed.');
+        if (in_array(self::EMPLOYEE_PERMISSIONS, $token->abilities, true)) {
+            abort_unless($grant === null && $session->agent_token_id === null, 401, 'Studio access policy changed.');
+            // Re-check on every API request and queued cover job. Existing
+            // sessions can narrow immediately but cannot gain new abilities.
+            $token->abilities = array_values(array_intersect($token->abilities, [self::ABILITY, self::EMPLOYEE_PERMISSIONS, ...$this->employeeAbilities($user)]));
+        }
         if ($session->agent_token_id) {
             $source = $this->source($user, $session->agent_token_id);
             abort_unless($source, 401, 'Studio production policy was revoked.');
@@ -114,6 +127,20 @@ class StudioSessionService
         }
 
         return array_values(array_unique($abilities));
+    }
+
+    private function employeeAbilities(User $user): array
+    {
+        $abilities = [];
+        foreach (AgentTokenService::ABILITY_DEFINITIONS as $ability => $definition) {
+            // Routine production only. Identity queues and rework remain opt-in
+            // through existing restricted Agent policies.
+            if ($definition['mode'] === 'operation' && $user->hasAllPermissions($definition['permissions'])) {
+                $abilities[] = $ability;
+            }
+        }
+
+        return $abilities === [] ? [] : ['agent', ...$abilities, 'agent:catalog.stories', 'agent:catalog.products'];
     }
 
     public function revoke(StudioSession $session): void

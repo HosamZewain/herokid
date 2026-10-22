@@ -34,7 +34,7 @@ Sanitized successful response:
     "refresh_token": null,
     "user": {"id": 17, "name": "Studio employee"},
     "permissions": ["studio.access", "studio.settings.read", "orders.view", "orders.photos.view"],
-    "abilities": ["studio:session", "agent", "agent:orders.read", "agent:catalog.products", "agent:catalog.product.42"]
+    "abilities": ["studio:session", "studio:employee-permissions", "agent", "agent:orders.read", "agent:catalog.stories", "agent:catalog.products"]
   }
 }
 ```
@@ -48,16 +48,28 @@ Permission keys:
 - `studio.access`: active admin employee login and continued session use.
 - `studio.settings.read`: download published configuration and assets; does not grant order access.
 - `studio.settings.manage`: manage the central settings page, uploads, publication and rollback.
-- `studio.sessions.manage`: bind an employee's existing Agent policy and revoke Studio sessions, additionally requiring settings management on the Admin routes.
+- `studio.sessions.manage`: view/revoke Studio sessions, additionally requiring settings management on the Admin routes. The legacy policy-update endpoint remains protected for compatibility, but the central settings UI no longer contains policy binding controls.
 - `studio.covers.generate`: explicitly authorize billable cover generation. This is not automatically granted by the migration.
 
 Existing permission administrators receive the new management/read/access permissions for bootstrap; ordinary staff receive nothing automatically. Grant staff access/read from the existing Admin users/roles screen. The additive migration does not activate Agent API, grant order permissions, issue Agent tokens, revoke existing tokens, create assignments or change orders.
 
 ## Existing Agent operations
 
-Managers use `/admin/studio-settings` to bind an employee to the numeric ID of an **existing, active, non-wildcard Agent token owned by that same employee**. This record supplies the production policy, not a shared credential. Its secret is never copied or returned. An employee without a binding can sign in for settings only but cannot use Agent operations.
+As of 22 October 2026, employees without a legacy `studio_employee_grants` row receive a short-lived `studio:employee-permissions` session based on their existing admin permissions. No Agent token, binding, or `agent_api_enabled` switch is required for this mode. The switch is not changed on the employee account, and ordinary Agent tokens still require it.
 
-The new employee-owned token inherits the exact catalog/product restrictions and only canonical Agent operation abilities for which the employee currently has all required application permissions. No `*` is issued. Ephemeral Studio sessions are excluded from the legacy Agent token editor and cannot be converted there into ordinary tokens. The existing `/api/agent/studio/connection`, `/api/agent/studio/orders/{orderNumber}` and production/preview endpoints remain the production interface; their existing permissions, catalog filters, acquisition and unit checks continue unchanged. Studio sessions are denied access to `/api/v1` customer/mobile routes and other authenticated API families.
+| Existing admin permissions | Session ability |
+| --- | --- |
+| `orders.view` + `orders.photos.view` | `agent:orders.read` |
+| `orders.update` | `agent:orders.upload-attachment`, `agent:orders.update-status` |
+| `orders.preview.upload` | `agent:orders.upload-preview` |
+
+`studio.access` is still required for login; `studio.settings.read` is needed for configuration. Cover generation additionally requires `studio.covers.generate` and explicit billable consent. Identity/rework-specific abilities are not automatically granted. Both catalog types are available to direct employee sessions, matching the admin order permissions (which have no per-product restriction). Route permissions and production-unit checks remain enforced. No permission records, orders, assignments, or Agent credentials are altered by login.
+
+An existing legacy grant remains an additional restriction, including catalog/product limits and operation capabilities. An expired/deleted/disabled source or an explicit settings-only grant never falls back to unrestricted employee permissions. Existing restricted sessions and their invalidation rules remain unchanged. This release does not delete or migrate legacy grants.
+
+Desktop rollout: keep the existing URLs, bearer authentication, and ability checks. Log out and sign in after deployment: existing settings-only sessions are deliberately not upgraded in place. Consume the abilities returned by login/`auth/me`, not a hard-coded list, and tolerate the additional marker. Never request or store a shared Agent secret. For a remaining 403, distinguish missing read permission from a catalog/unit restriction; the server message is more specific than a generic token error. Password/permission changes, disabled employees, expiry, and logout remain enforced on each production request and queued cover job.
+
+When a legacy grant exists, the employee-owned token inherits its exact catalog/product restrictions and only canonical Agent abilities for which the employee currently has all required application permissions. No `*` is issued in either mode. Ephemeral Studio sessions are excluded from the legacy Agent token editor and cannot be converted there into ordinary tokens. The existing `/api/agent/studio/connection`, `/api/agent/studio/orders/{orderNumber}` and production/preview endpoints remain the production interface; their existing permissions, catalog filters, acquisition and unit checks continue unchanged. Studio sessions are denied access to `/api/v1` customer/mobile routes and other authenticated API families.
 
 Changing the bound policy or its abilities, revoking/expiring its token, changing the employee's password, disabling the employee or removing access invalidates continued use. Removing operation permissions narrows authorization immediately. A new login is needed after policy changes; an active session is never widened. Revoking a Studio session leaves the underlying Agent token and other employees untouched.
 

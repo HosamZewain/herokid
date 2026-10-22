@@ -39,7 +39,8 @@ class StudioCoverService
         $token = PersonalAccessToken::findOrFail($generation->personal_access_token_id);
         $user->withAccessToken($token);
         app(StudioSessionService::class)->validate($user, $token);
-        abort_unless($user->agent_api_enabled && $user->hasAllPermissions(['studio.covers.generate', 'orders.view', 'orders.photos.view']) && $user->tokenCan('agent:orders.read'), 403);
+        abort_unless(($user->agent_api_enabled || in_array(StudioSessionService::EMPLOYEE_PERMISSIONS, $token->abilities, true))
+            && $user->hasAllPermissions(['studio.covers.generate', 'orders.view', 'orders.photos.view']) && $user->tokenCan('agent:orders.read'), 403);
         $unit = $this->authorizeGeneration($generation, $user);
         $settings = StudioSettingsRevision::findOrFail($generation->revision_id)->settings;
         $cover = $settings['openai_cover'];

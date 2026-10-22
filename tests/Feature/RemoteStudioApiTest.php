@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\AdminActivityLog;
+use App\Models\Order;
 use App\Models\Permission;
 use App\Models\StudioAsset;
 use App\Models\StudioSession;
 use App\Models\StudioSettingsRevision;
 use App\Models\User;
+use App\Services\RemoteStudio\StudioSessionService;
 use App\Services\RemoteStudio\StudioSettingsSchema;
 use App\Services\RemoteStudio\StudioSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,10 +130,94 @@ class RemoteStudioApiTest extends TestCase
     {
         $user = $this->staff();
         $token = $this->login($user);
-        $this->callApi('GET', '/api/studio/auth/me', $token)->assertOk()->assertJsonPath('data.abilities', ['studio:session']);
+        $this->callApi('GET', '/api/studio/auth/me', $token)->assertOk()->assertJsonPath('data.abilities', ['studio:session', StudioSessionService::EMPLOYEE_PERMISSIONS]);
         $this->callApi('GET', '/api/agent/studio/connection', $token)->assertForbidden();
         $this->callApi('GET', '/api/v1/cart', $token)->assertForbidden();
         $this->assertDatabaseCount('permission_user', 2);
+    }
+
+    public function test_employee_permissions_allow_reading_without_agent_switch_or_policy(): void
+    {
+        $order = Order::create(['order_number' => 'HK-DIRECT-READ', 'status' => 'new', 'uploaded_photos' => []]);
+        $user = $this->staff(['studio.access', 'studio.settings.read', 'orders.view', 'orders.photos.view']);
+        $user->update(['agent_api_enabled' => false]);
+        $token = $this->login($user);
+        $abilities = PersonalAccessToken::findToken($token)->abilities;
+        $this->assertContains('agent:orders.read', $abilities);
+        $this->assertNotContains('agent:orders.upload-attachment', $abilities);
+        $this->assertNotContains('agent:orders.upload-preview', $abilities);
+        $this->callApi('GET', '/api/agent/studio/connection', $token)->assertOk();
+        $this->callApi('POST', '/api/agent/checkouts/acquire-next', $token)->assertForbidden();
+        $this->callApi('POST', '/api/agent/orders/'.$order->id.'/attachments', $token)->assertForbidden();
+        $this->callApi('POST', '/api/agent/orders/'.$order->id.'/previews', $token)->assertForbidden();
+        $this->callApi('GET', '/api/v1/cart', $token)->assertForbidden();
+        $this->assertFalse($user->fresh()->agent_api_enabled);
+        $this->assertDatabaseCount('studio_employee_grants', 0);
+        $this->assertSame(1, $user->tokens()->count());
+    }
+
+    public function test_employee_permissions_map_writes_and_narrow_immediately_without_auto_widening(): void
+    {
+        $order = Order::create(['order_number' => 'HK-DIRECT-WRITE', 'status' => 'new', 'uploaded_photos' => []]);
+        $user = $this->staff(['studio.access', 'orders.view', 'orders.photos.view', 'orders.update']);
+        $token = $this->login($user);
+        $abilities = PersonalAccessToken::findToken($token)->abilities;
+        $this->assertContains('agent:orders.upload-attachment', $abilities);
+        $this->assertContains('agent:orders.update-status', $abilities);
+        $this->assertNotContains('agent:orders.rework', $abilities);
+        $this->assertNotContains('agent:orders.identity', $abilities);
+        $user->permissions()->attach(Permission::where('key', 'orders.preview.upload')->value('id'));
+        $this->callApi('POST', '/api/agent/orders/'.$order->id.'/previews', $token)->assertForbidden();
+        $new = $this->login($user);
+        $this->assertContains('agent:orders.upload-preview', PersonalAccessToken::findToken($new)->abilities);
+        $user->permissions()->detach(Permission::whereIn('key', ['orders.photos.view', 'orders.update', 'orders.preview.upload'])->pluck('id'));
+        $this->callApi('GET', '/api/agent/studio/connection', $new)->assertForbidden();
+        $this->callApi('POST', '/api/agent/orders/'.$order->id.'/attachments', $new)->assertForbidden();
+        $this->callApi('POST', '/api/agent/orders/'.$order->id.'/previews', $new)->assertForbidden();
+    }
+
+    public function test_old_settings_only_session_requires_new_login_and_revocation_still_works(): void
+    {
+        $user = $this->staff(['studio.access', 'orders.view', 'orders.photos.view']);
+        $old = $this->login($user);
+        PersonalAccessToken::findToken($old)->update(['abilities' => ['studio:session']]);
+        $this->callApi('GET', '/api/agent/studio/connection', $old)->assertForbidden();
+        $new = $this->login($user);
+        $this->callApi('GET', '/api/agent/studio/connection', $new)->assertOk();
+        $this->callApi('POST', '/api/studio/auth/logout', $new)->assertNoContent();
+        $this->callApi('GET', '/api/agent/studio/connection', $new)->assertUnauthorized();
+        $expiring = $this->login($user);
+        $this->travel(121)->minutes();
+        $this->callApi('GET', '/api/agent/studio/connection', $expiring)->assertUnauthorized();
+    }
+
+    public function test_legacy_denial_or_missing_policy_never_falls_back_to_unrestricted_employee_access(): void
+    {
+        $user = $this->staff(['studio.access', 'orders.view', 'orders.photos.view']);
+        $source = $this->policy($user, ['agent', 'agent:catalog.products', 'agent:catalog.product.17']);
+        $token = $this->login($user);
+        $this->callApi('GET', '/api/agent/studio/connection', $token)->assertForbidden();
+        $source->delete();
+        $token = $this->login($user);
+        $this->callApi('GET', '/api/agent/studio/connection', $token)->assertForbidden();
+        $this->assertNotContains(StudioSessionService::EMPLOYEE_PERMISSIONS, PersonalAccessToken::findToken($token)->abilities);
+        DB::table('studio_employee_grants')->where('user_id', $user->id)->update(['agent_token_id' => null]);
+        $this->callApi('GET', '/api/agent/studio/connection', $this->login($user))->assertForbidden();
+    }
+
+    public function test_employee_marker_cannot_enable_unrecorded_tokens_or_legacy_agent_access(): void
+    {
+        $user = $this->staff(['studio.access', 'orders.view', 'orders.photos.view']);
+        $user->update(['agent_api_enabled' => false]);
+        $forged = $user->createToken('Not an issued Studio session', ['studio:session', StudioSessionService::EMPLOYEE_PERMISSIONS, 'agent', 'agent:orders.read'], now()->addHour())->plainTextToken;
+        $this->callApi('GET', '/api/agent/studio/connection', $forged)->assertUnauthorized();
+        $legacy = $user->createToken('Existing Agent', ['agent', 'agent:orders.read'])->plainTextToken;
+        $this->callApi('GET', '/api/agent/studio/connection', $legacy)->assertForbidden();
+        $user->update(['agent_api_enabled' => true]);
+        $this->callApi('GET', '/api/agent/studio/connection', $legacy)->assertOk();
+        $direct = $this->login($user);
+        $user->update(['is_active' => false]);
+        $this->callApi('GET', '/api/agent/studio/connection', $direct)->assertForbidden();
     }
 
     public function test_logout_revokes_one_session_without_revoking_other_session_or_agent_token(): void
