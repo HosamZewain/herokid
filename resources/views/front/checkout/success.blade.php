@@ -99,6 +99,9 @@
                 <div class="mt-5 pt-4 border-t border-indigo-100 space-y-2 text-indigo-900">
                     <div class="flex justify-between"><span class="font-bold">{{ format_money($subtotal) }}</span><span>إجمالي العناصر</span></div>
                     <div class="flex justify-between"><span class="font-bold">{{ format_money($deliveryFee) }}</span><span>مصاريف التوصيل</span></div>
+                    @if(($order->delivery_details['shipping_discount'] ?? 0) > 0)
+                        <div class="flex justify-between text-emerald-700"><span class="font-bold">− {{ format_money($order->delivery_details['shipping_discount']) }}</span><span>توفير عرض الشحن المجاني (مخصوم بالفعل)</span></div>
+                    @endif
                     <div class="flex justify-between text-lg"><span class="font-black">{{ format_money($total) }}</span><span class="font-black">الإجمالي</span></div>
                 </div>
             </div>

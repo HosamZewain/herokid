@@ -6,6 +6,9 @@
 @php
     $cartCount = count($cartItems);
     $discount = $discount ?? 0;
+    $originalDeliveryFee = $deliveryFee;
+    $shippingEligible = $shippingOffer && $subtotal > 0 && (int) round(max(0, $subtotal - $discount) * 100) >= $shippingOffer['minimum_cents'];
+    $deliveryFee = $shippingEligible ? 0 : $deliveryFee;
     $total = max(0, $subtotal - $discount) + $deliveryFee;
     $defaultCountry = $deliveryCountries->firstWhere('code', 'EG') ?? $deliveryCountries->first();
     $savedDeliveryDetails = $savedDeliveryDetails ?? [];
@@ -23,6 +26,13 @@
 
 <div class="min-h-[70vh] bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+        @if($shippingOffer)
+            <div data-free-shipping-banner role="status" aria-live="polite" class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-right font-bold text-emerald-800">
+                شحن مجاني تلقائيًا للطلبات بقيمة {{ format_money($shippingOffer['minimum_cents'] / 100) }} أو أكثر بعد الخصومات.
+                <span data-free-shipping-progress class="mt-1 block text-sm">{{ $shippingEligible ? 'تم تطبيق الشحن المجاني على طلبك.' : 'أكمل سلتك للاستفادة من العرض.' }}</span>
+                <span class="mt-1 block text-xs">حتى {{ \Carbon\CarbonImmutable::parse($shippingOffer['ends_at'])->setTimezone('Africa/Cairo')->format('d/m/Y H:i') }} بتوقيت القاهرة — كل مناطق التوصيل المتاحة.</span>
+            </div>
+        @endif
         <div class="mb-6 hidden justify-start sm:flex">
             <a href="{{ $footballLandingCart ? route('football-stories.index') : route('stories.index') }}"
                 class="inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-extrabold text-indigo-700 shadow-sm hover:bg-indigo-50 transition">
@@ -110,6 +120,7 @@
                             data-checkout-draft-scope="{{ $checkoutDraftScope }}"
                             data-checkout-draft-old-fields="{{ json_encode(array_keys(session()->getOldInput())) }}">
                             <input type="hidden" name="checkout_submission_token" value="{{ $checkoutSubmissionToken }}">
+                            <input type="hidden" name="expected_delivery_fee" value="">
                             <input type="hidden" name="checkout_draft_scope" value="{{ $checkoutDraftScope }}">
                             @csrf
                             <p data-checkout-draft-status hidden class="text-right text-xs font-medium leading-6 text-slate-500" role="status" aria-live="polite"></p>
@@ -581,6 +592,9 @@
             let subtotal = Number(@json((float) $subtotal));
             let discount = Number(@json((float) $discount));
             const appliedPromoCode = @json($promoCode?->code);
+            const shippingOffer = @json($shippingOffer);
+            const shippingClockOffset = Number(@json(now()->valueOf())) - Date.now();
+            let lastDeliveryFee = Number(@json((float) $originalDeliveryFee));
             const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
             const requiredFieldMessage = 'يرجى إكمال هذا الحقل.';
 
@@ -606,6 +620,19 @@
             }
 
             function updateTotals(fee) {
+                lastDeliveryFee = Math.max(0, Number(fee || 0));
+                const activeOffer = shippingOffer && Date.now() + shippingClockOffset < Date.parse(shippingOffer.ends_at);
+                const remaining = activeOffer ? Math.max(0, shippingOffer.minimum_cents - Math.round(Math.max(0, subtotal - discount) * 100)) : 0;
+                const freeShipping = activeOffer && subtotal > 0 && remaining === 0;
+                fee = freeShipping ? 0 : lastDeliveryFee;
+                const expectedFee = checkoutForm?.querySelector('[name="expected_delivery_fee"]');
+                if (expectedFee) expectedFee.value = Number(fee).toFixed(2);
+                document.querySelectorAll('[data-free-shipping-banner]').forEach(node => { node.hidden = !activeOffer; });
+                document.querySelectorAll('[data-free-shipping-progress]').forEach(node => {
+                    node.textContent = freeShipping ? 'تم تطبيق الشحن المجاني على طلبك.' : `أضف بقيمة ${(remaining / 100).toLocaleString('ar-EG', { maximumFractionDigits: 2 })} جنيه للاستفادة من الشحن المجاني.`;
+                });
+                document.querySelectorAll('[data-shipping-saving]').forEach(node => { node.hidden = !freeShipping || lastDeliveryFee <= 0; });
+                document.querySelectorAll('[data-original-delivery-fee], [data-shipping-discount]').forEach(node => { node.textContent = formatMoney(lastDeliveryFee); });
                 document.querySelectorAll('[data-cart-subtotal]').forEach((node) => {
                     node.textContent = `${formatMoney(subtotal)} {{ setting('currency_label', $settings['currency_label'] ?? '') }}`;
                 });
@@ -916,6 +943,15 @@
                 cityInput.value = districtSelect.selectedOptions?.[0]?.dataset?.name || '';
             });
             filterGovernorates();
+            // Re-evaluate an offer that expires while this cart remains open.
+            if (shippingOffer) {
+                const expiryTimer = window.setInterval(() => {
+                    if (Date.now() + shippingClockOffset >= Date.parse(shippingOffer.ends_at)) {
+                        updateTotals(lastDeliveryFee);
+                        window.clearInterval(expiryTimer);
+                    }
+                }, 1000);
+            }
 
             document.querySelectorAll('[data-cart-upsell-form]').forEach((form) => {
                 form.addEventListener('submit', async (event) => {

@@ -9,10 +9,12 @@ use App\Models\OrderItem;
 use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\TemporaryPhotoUpload;
 use App\Models\User;
 use App\Models\VisitorCartItem;
+use App\Services\Cart\FreeShippingOfferService;
 use App\Support\ProductProductionPrompt;
 use App\Support\StoryProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -169,6 +171,28 @@ class SharedChildPackagesTest extends TestCase
         $employee = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $employee->permissions()->detach();
         $this->actingAs($employee)->get(route('admin.pricing.create'))->assertForbidden();
+    }
+
+    public function test_free_shipping_uses_package_sale_price_and_one_fee_across_production_orders(): void
+    {
+        Storage::fake('local');
+        [$package, $story] = $this->bundle();
+        Setting::updateOrCreate(['key' => FreeShippingOfferService::KEY], ['value' => json_encode([
+            'enabled' => true, 'minimum_cents' => 70001, 'starts_at' => now()->subHour()->toISOString(), 'ends_at' => now()->addHour()->toISOString(),
+        ])]);
+        $country = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        DeliveryGovernorate::where('delivery_country_id', $country->id)->update(['delivery_fee' => 95]);
+        $this->post(route('cart.packages.store', $package), [...$this->childInput(), 'stories' => [['story_id' => $story->id]]])->assertSessionHasNoErrors();
+        $this->checkout();
+        $orders = Order::all();
+        $this->assertGreaterThan(1, $orders->count());
+        foreach ($orders as $order) {
+            $this->assertEquals(700.01, $order->delivery_details['total']);
+            $this->assertEquals(0, $order->delivery_details['delivery_fee']);
+            $this->assertEquals(95, $order->delivery_details['shipping_discount']);
+        }
+        $this->assertSame(1, $orders->pluck('checkout_group_key')->unique()->count());
+        $this->get(route('checkout.success'))->assertOk()->assertSee('توفير عرض الشحن المجاني');
     }
 
     private function bundle(): array

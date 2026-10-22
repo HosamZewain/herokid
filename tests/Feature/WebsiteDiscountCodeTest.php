@@ -9,13 +9,134 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\Cart\FreeShippingOfferService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class WebsiteDiscountCodeTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_free_shipping_admin_schedule_uses_cairo_time_and_requires_management_permission(): void
+    {
+        $data = ['enabled' => 1, 'minimum_subtotal' => 1000, 'starts_at' => '2026-10-22T12:00', 'ends_at' => '2026-10-23T12:00'];
+        $this->actingAs($this->admin(['store.discount_codes.view']))
+            ->put(route('admin.discount-codes.free-shipping'), $data)->assertForbidden();
+        $admin = $this->admin(['store.discount_codes.view', 'store.discount_codes.manage']);
+        $this->actingAs($admin)->put(route('admin.discount-codes.free-shipping'), $data)
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.discount-codes.index'));
+        $offer = app(FreeShippingOfferService::class)->configuration();
+        $this->assertSame(100000, $offer['minimum_cents']);
+        $this->assertSame('2026-10-22T09:00:00.000000Z', $offer['starts_at']);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'free_shipping_offer.updated']);
+        $this->get(route('admin.discount-codes.index'))->assertOk()->assertSee('عرض الشحن المجاني')->assertSee('2026-10-22T12:00');
+        $this->put(route('admin.discount-codes.free-shipping'), array_merge($data, ['minimum_subtotal' => -1, 'ends_at' => $data['starts_at']]))
+            ->assertSessionHasErrorsIn('shippingOffer', ['minimum_subtotal', 'ends_at']);
+        $this->put(route('admin.discount-codes.free-shipping'), array_merge($data, ['enabled' => 0]))->assertSessionHasNoErrors();
+        $this->assertFalse(app(FreeShippingOfferService::class)->configuration()['enabled']);
+    }
+
+    public function test_free_shipping_is_off_by_default_and_enforces_threshold_after_discounts_and_time_boundaries(): void
+    {
+        $service = app(FreeShippingOfferService::class);
+        $this->assertNull($service->active());
+        $this->travelTo(Carbon::parse('2026-10-22T09:00:00Z'));
+        $this->shippingOffer(['starts_at' => now()->toISOString(), 'ends_at' => now()->addHour()->toISOString()]);
+        foreach ([[99999, 0, 75], [100000, 0, 0], [150000, 50000, 0], [100000, 1, 75], [0, 0, 75]] as [$subtotal, $discount, $fee]) {
+            $quote = $service->quote($subtotal, $discount, 7500);
+            $this->assertEquals($fee, $quote['delivery_fee']);
+            $this->assertEquals(75 - $fee, $quote['shipping_discount']);
+        }
+        $this->assertEquals(0, $service->quote(100000, 0, 0)['shipping_discount']);
+        $this->travel(-1)->seconds();
+        $this->assertNull($service->active());
+        $this->travel(3601)->seconds();
+        $this->assertNull($service->active());
+    }
+
+    public function test_free_shipping_cart_and_checkout_use_actual_governorate_fee_and_keep_a_snapshot(): void
+    {
+        $this->shippingOffer();
+        $product = $this->product(100000);
+        [$country, $governorate] = $this->delivery(125);
+        $this->withSession(['cart.items' => $this->cart($product)])->get(route('cart.index'))
+            ->assertOk()->assertSee('data-free-shipping-banner', false)->assertSee('تم تطبيق الشحن المجاني على طلبك.');
+        $this->post(route('checkout.store'), $this->checkoutPayload($country, $governorate, '01012345678'))
+            ->assertRedirect(route('checkout.success'));
+        $order = Order::firstOrFail();
+        $this->assertEquals(0, $order->delivery_details['delivery_fee']);
+        $this->assertEquals(125, $order->delivery_details['shipping_discount']);
+        $this->assertEquals(125, $order->delivery_details['original_delivery_fee']);
+        $this->assertEquals(1000, $order->delivery_details['total']);
+        $this->assertEquals(0, $order->discount_cents);
+        $this->shippingOffer(['enabled' => false]);
+        $this->assertEquals(100000, $order->refresh()->delivery_details['free_shipping_offer']['minimum_cents']);
+    }
+
+    public function test_free_shipping_combines_with_coupon_only_if_discounted_subtotal_qualifies(): void
+    {
+        $this->shippingOffer(['minimum_cents' => 45000]);
+        $product = $this->product(50000);
+        $this->promo(['code' => 'SHIPTEST', 'discount_value' => 5000]);
+        $this->withSession(['cart.items' => $this->cart($product)])->post(route('cart.promo-code.store'), ['promo_code' => 'SHIPTEST'])->assertSessionHasNoErrors();
+        [$country, $governorate] = $this->delivery(90);
+        $this->post(route('checkout.store'), $this->checkoutPayload($country, $governorate, '01012345678'))->assertRedirect(route('checkout.success'));
+        $order = Order::firstOrFail();
+        $this->assertEquals(450, $order->delivery_details['total']);
+        $this->assertEquals(5000, $order->discount_cents);
+        $this->assertEquals(90, $order->delivery_details['shipping_discount']);
+        $this->assertDatabaseCount('website_promo_code_redemptions', 1);
+    }
+
+    public function test_checkout_rechecks_disabled_or_expired_offer_and_ignores_client_shipping_values(): void
+    {
+        $this->shippingOffer();
+        $product = $this->product(100000);
+        $this->withSession(['cart.items' => $this->cart($product)])->get(route('cart.index'))->assertSee('تم تطبيق الشحن المجاني على طلبك.');
+        $this->shippingOffer(['ends_at' => now()->subSecond()->toISOString()]);
+        [$country, $governorate] = $this->delivery(90);
+        $this->post(route('checkout.store'), array_merge($this->checkoutPayload($country, $governorate, '01012345678'), ['delivery_fee' => 0, 'shipping_discount' => 90]))->assertRedirect(route('checkout.success'));
+        $order = Order::firstOrFail();
+        $this->assertEquals(1090, $order->delivery_details['total']);
+        $this->assertEquals(0, $order->delivery_details['shipping_discount']);
+        $this->assertNull($order->delivery_details['free_shipping_offer']);
+    }
+
+    public function test_changed_shipping_requires_review_and_rolls_back_coupon_redemption(): void
+    {
+        $this->shippingOffer(['enabled' => false]);
+        $product = $this->product(120000);
+        $code = $this->promo(['code' => 'REVIEW', 'discount_value' => 1000]);
+        $this->withSession(['cart.items' => $this->cart($product)])->post(route('cart.promo-code.store'), ['promo_code' => 'REVIEW']);
+        [$country, $governorate] = $this->delivery(90);
+        $this->post(route('checkout.store'), [...$this->checkoutPayload($country, $governorate, '01012345678'), 'expected_delivery_fee' => 0])->assertSessionHasErrors('expected_delivery_fee');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('website_promo_code_redemptions', 0);
+        $this->assertSame(0, $code->refresh()->used_count);
+    }
+
+    public function test_below_threshold_coupon_cart_does_not_receive_free_shipping(): void
+    {
+        $this->shippingOffer();
+        $product = $this->product(100000);
+        $this->promo(['code' => 'UNDER', 'discount_value' => 100]);
+        $this->withSession(['cart.items' => $this->cart($product)])->post(route('cart.promo-code.store'), ['promo_code' => 'UNDER']);
+        $this->get(route('cart.index'))->assertOk()->assertSee('أكمل سلتك للاستفادة من العرض.');
+        [$country, $governorate] = $this->delivery(90);
+        $this->post(route('checkout.store'), $this->checkoutPayload($country, $governorate, '01012345678'))->assertRedirect(route('checkout.success'));
+        $this->assertEquals(1089, Order::firstOrFail()->delivery_details['total']);
+        $this->assertEquals(0, Order::firstOrFail()->delivery_details['shipping_discount']);
+    }
+
+    private function shippingOffer(array $overrides = []): void
+    {
+        Setting::updateOrCreate(['key' => FreeShippingOfferService::KEY], ['value' => json_encode(array_merge([
+            'enabled' => true, 'minimum_cents' => 100000, 'starts_at' => now()->subDay()->toISOString(), 'ends_at' => now()->addDay()->toISOString(),
+        ], $overrides))]);
+    }
 
     public function test_authorized_admin_can_create_and_edit_a_limited_website_code(): void
     {

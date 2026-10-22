@@ -20,6 +20,7 @@
         @endif
         <div class="rounded-xl bg-slate-50 p-2 text-right sm:rounded-2xl sm:p-4">
             <span class="mb-1 block text-[11px] leading-4 text-slate-500 sm:text-sm">مصاريف التوصيل</span>
+            <span data-shipping-saving @if(!$shippingEligible || $originalDeliveryFee <= 0) hidden @endif class="text-xs text-slate-500"><del><span data-original-delivery-fee>{{ arabic_number(number_format($originalDeliveryFee, 0)) }}</span> ج.م</del><br></span>
             <span class="text-xs font-black text-slate-950 sm:text-sm">
                 <span data-delivery-fee>{{ arabic_number(number_format($deliveryFee, 0)) }}</span>
                 {{ setting('currency_label', $settings['currency_label'] ?? '') }}
@@ -33,6 +34,7 @@
             </span>
         </div>
     </div>
+    <p data-shipping-saving @if(!$shippingEligible || $originalDeliveryFee <= 0) hidden @endif class="px-4 pb-3 text-sm font-bold text-emerald-700">خصم الشحن المجاني: −<span data-shipping-discount>{{ arabic_number(number_format($originalDeliveryFee, 0)) }}</span> ج.م — مخصوم من الإجمالي تلقائيًا.</p>
     <div class="border-t border-slate-100 p-3 sm:p-5">
         @if($promoCode)
             <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">

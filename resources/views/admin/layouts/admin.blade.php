@@ -219,7 +219,7 @@
                             <a href="{{ route('admin.pricing.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.pricing.*') ? $activeLink : $idleLink }}">الباقات</a>
                         @endcan
                         @can('store.discount_codes.view')
-                            <a href="{{ route('admin.discount-codes.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.discount-codes.*') ? $activeLink : $idleLink }}">أكواد الخصم</a>
+                            <a href="{{ route('admin.discount-codes.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.discount-codes.*') ? $activeLink : $idleLink }}">العروض وأكواد الخصم</a>
                         @endcan
                         @can('customers.view')
                             <a href="{{ route('admin.customers.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.customers.*') ? $activeLink : $idleLink }}">العملاء</a>

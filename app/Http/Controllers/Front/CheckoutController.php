@@ -15,6 +15,7 @@ use App\Services\Analytics\MetaPurchaseTrackingService;
 use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\CheckoutFormDraft;
+use App\Services\Cart\FreeShippingOfferService;
 use App\Services\Cart\PackageCartExpander;
 use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
@@ -65,6 +66,7 @@ class CheckoutController extends Controller
 
         $validated = $request->validate([
             'parent_name' => 'required|string|max:255',
+            'expected_delivery_fee' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'phone' => ['required', 'string', 'max:20', new InternationalMobileNumber],
             'alternate_phone' => ['nullable', 'string', 'max:20', new InternationalMobileNumber],
             'delivery_country_id' => [
@@ -179,6 +181,13 @@ class CheckoutController extends Controller
                     $checkoutGroup,
                 );
                 $discountCents = $promotion['discount_cents'];
+                $shippingOffer = app(FreeShippingOfferService::class)->quote(
+                    (int) round($subtotal * 100), $discountCents, (int) round($deliveryFee * 100),
+                );
+                $deliveryFee = $shippingOffer['delivery_fee'];
+                if (isset($validated['expected_delivery_fee']) && (int) round($validated['expected_delivery_fee'] * 100) !== (int) round($deliveryFee * 100)) {
+                    throw ValidationException::withMessages(['expected_delivery_fee' => 'تغير عرض الشحن أو تكلفة التوصيل. راجع الإجمالي المحدث ثم أكد الطلب مرة أخرى.']);
+                }
                 $discountReason = $promotion['promo'] ? 'كود خصم: '.$promotion['promo']->code : null;
                 $itemCount = count($cart);
                 $storyOrderItemIdsByCartKey = [];
@@ -261,6 +270,7 @@ class CheckoutController extends Controller
                             'story_offer_applied' => $storyOfferApplied,
                             'story_offer_label' => $storyOfferLabel,
                             'subtotal' => $subtotal,
+                            ...$shippingOffer,
                             'delivery_fee' => $deliveryFee,
                             'discount' => $discountCents / 100,
                             'promo_code' => $promotion['promo']?->code,
@@ -375,7 +385,7 @@ class CheckoutController extends Controller
                         'gift_note' => null,
                         'notes' => null,
                         'parent_notes' => null,
-                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $discountCents, $promotion['promo']?->code, $attribution),
+                        'delivery_details' => $this->deliverySnapshot($validated, $country, $governorate, $checkoutGroup, $checkoutSessionId, 1, $itemCount, $subtotal, $deliveryFee, $discountCents, $promotion['promo']?->code, $attribution, $shippingOffer),
                         'uploaded_photos' => [],
                         'status' => 'new',
                     ]);
@@ -443,6 +453,7 @@ class CheckoutController extends Controller
                                 $discountCents,
                                 $promotion['promo']?->code,
                                 $attribution,
+                                $shippingOffer,
                             ),
                             'uploaded_photos' => $uploadedPhotos,
                             'status' => 'new',
@@ -628,7 +639,7 @@ class CheckoutController extends Controller
         return max(0, (float) ($governorate->delivery_fee ?? $country->delivery_fee));
     }
 
-    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee, int $discountCents, ?string $promoCode, array $attribution): array
+    private function deliverySnapshot(array $validated, DeliveryCountry $country, DeliveryGovernorate $governorate, string $checkoutGroup, string $checkoutSessionId, int $itemIndex, int $itemCount, float $subtotal, float $deliveryFee, int $discountCents, ?string $promoCode, array $attribution, array $shippingOffer): array
     {
         return [
             'phone' => $validated['phone'],
@@ -643,6 +654,7 @@ class CheckoutController extends Controller
             'cart_item_index' => $itemIndex,
             'cart_items_count' => $itemCount,
             'item_price' => 0,
+            ...$shippingOffer,
             'subtotal' => $subtotal,
             'delivery_fee' => $deliveryFee,
             'discount' => $discountCents / 100,

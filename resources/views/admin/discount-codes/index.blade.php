@@ -1,7 +1,7 @@
 <x-admin-layout>
     <x-slot name="header">
         <div>
-            <h2 class="text-xl font-black text-slate-900">أكواد الخصم</h2>
+            <h2 class="text-xl font-black text-slate-900">العروض وأكواد الخصم</h2>
             <p class="mt-1 text-sm text-slate-500">أنشئ أكوادًا بتاريخ وشروط وحدود استخدام، وطبّقها على الموقع أو التطبيق.</p>
         </div>
     </x-slot>
@@ -12,6 +12,7 @@
         @endif
 
         @can('store.discount_codes.manage')
+            @include('admin.discount-codes._free-shipping')
             <section class="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm lg:p-8">
                 <div class="mb-6">
                     <p class="text-xs font-black text-indigo-600">كود جديد</p>
