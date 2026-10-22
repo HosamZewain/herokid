@@ -6,16 +6,17 @@
     <div class="relative">
         <div data-home-package-track class="home-package-track" tabindex="0">
             @foreach($packages as $pkg)
+                @php $componentPrice = $pkg->componentPriceCents() / 100; @endphp
                 <article data-home-package-slide data-index="{{ $loop->index }}" class="home-package-slide {{ $loop->index === $initialPackageIndex ? 'is-active' : '' }}" aria-label="{{ $pkg->name }}، {{ $loop->iteration }} من {{ $packages->count() }}">
                     <a href="{{ route('shop.package.show', $pkg) }}" class="home-package-card group" aria-label="عرض باقة {{ $pkg->name }}">
-                        @if($pkg->badge || $pkg->discountPercentage())
+                        @if($pkg->badge || $pkg->discountPercentage((int) round($componentPrice * 100)))
                             <div class="flex min-h-7 flex-wrap items-center justify-between gap-2">
                                 @if($pkg->badge)
                                     <span class="rounded-full bg-amber-300 px-3 py-1 text-[11px] font-black text-amber-950">⭐ {{ $pkg->badge }}</span>
                                 @else
                                     <span></span>
                                 @endif
-                                @if($discount = $pkg->discountPercentage())
+                                @if($discount = $pkg->discountPercentage((int) round($componentPrice * 100)))
                                     <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-[11px] font-black text-emerald-200" dir="rtl">خصم {{ arabic_number($discount) }}٪</span>
                                 @endif
                             </div>
@@ -34,8 +35,8 @@
 
                         <span class="mt-4 flex items-baseline justify-start gap-2" dir="rtl">
                             <strong class="text-4xl font-black text-white">{{ format_money((float) $pkg->price) }}</strong>
-                            @if((float) $pkg->regular_price > (float) $pkg->price)
-                                <span class="text-sm font-bold text-indigo-300 line-through">{{ format_money((float) $pkg->regular_price) }}</span>
+                            @if($componentPrice > (float) $pkg->price)
+                                <span class="text-sm font-bold text-indigo-300 line-through">{{ format_money($componentPrice) }}</span>
                             @endif
                         </span>
 

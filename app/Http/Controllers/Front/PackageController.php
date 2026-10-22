@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerPackageView;
 use App\Models\PricingPackage;
 use App\Models\Story;
+use App\Services\Cart\PackagePersonalizationService;
 use App\Services\Catalog\CatalogSalesRankingService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
@@ -47,10 +48,8 @@ class PackageController extends Controller
 
         $referenceStory = $stories->first();
         abort_if($pricingPackage->story_count > 0 && ! $referenceStory, 404);
-        $regularTotal = ($pricingPackage->story_count * ($referenceStory ? (int) round($storyPricing->effectivePrice($referenceStory) * 100) : 0))
-            + $pricingPackage->items->sum(fn ($item): int => $item->product
-                ? $item->product->effectivePriceCents($item->variant) * $item->quantity
-                : 0);
+        $regularTotal = $pricingPackage->componentPriceCents();
+        $childSchema = app(PackagePersonalizationService::class)->schema($pricingPackage);
 
         $uploadSession = $uploads->ensureSession($request);
         $photoUploadConfig = [
@@ -61,8 +60,10 @@ class PackageController extends Controller
             'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
             'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
             'jpegQuality' => (int) config('photo_uploads.jpeg_quality', 90),
+            'minFiles' => data_get($childSchema, 'fields.photos.required') ? (int) data_get($childSchema, 'fields.photos.min_files', 1) : 0,
+            'maxFiles' => (int) data_get($childSchema, 'fields.photos.max_files', 3),
         ];
 
-        return view('front.packages.show', compact('pricingPackage', 'stories', 'regularTotal', 'photoUploadConfig'));
+        return view('front.packages.show', compact('pricingPackage', 'stories', 'regularTotal', 'photoUploadConfig', 'childSchema'));
     }
 }

@@ -46,6 +46,7 @@ class PricingPackageController extends Controller
             $package = PricingPackage::create($data);
             $this->syncProducts($package, $request->input('products', []));
             $this->syncStories($package, $request->input('story_ids', []));
+            $package->update(['regular_price' => $package->componentPriceCents() / 100]);
         });
 
         return redirect()->route('admin.pricing.index')->with('success', 'تم إضافة الباقة بنجاح.');
@@ -76,6 +77,8 @@ class PricingPackageController extends Controller
             $pricing->update($data);
             $this->syncProducts($pricing, $request->input('products', []));
             $this->syncStories($pricing, $request->input('story_ids', []));
+            $pricing->unsetRelation('items');
+            $pricing->update(['regular_price' => $pricing->componentPriceCents() / 100]);
         });
 
         if (array_key_exists('image_path', $data) && $oldImagePath !== $data['image_path']) {
@@ -194,12 +197,13 @@ class PricingPackageController extends Controller
     {
         $products = Product::query()->with(['category', 'activeVariants'])->where('is_active', true)->orderBy('name_ar')->get();
         $stories = Story::query()->where('active', true)->orderBy('title')->get();
-        $referenceStory = $stories->first();
+        $storyPrices = $stories->mapWithKeys(fn (Story $story) => [$story->id => (int) round($storyPricing->effectivePrice($story) * 100)]);
 
         return [
             'products' => $products,
             'stories' => $stories,
-            'storyPriceCents' => $referenceStory ? (int) round($storyPricing->effectivePrice($referenceStory) * 100) : 0,
+            'storyPriceCents' => $storyPrices->min() ?? 0,
+            'storyPrices' => $storyPrices,
         ];
     }
 

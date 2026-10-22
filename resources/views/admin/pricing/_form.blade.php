@@ -20,7 +20,8 @@
 <section class="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4" data-package-builder data-story-price-cents="{{ $storyPriceCents }}">
     <div class="mb-4">
         <h3 class="font-black text-gray-900">محتويات الباقة</h3>
-        <p class="mt-1 text-xs text-gray-500">حدد عدد القصص والمنتجات من المتجر. السعر الذي تدخله في حقل السعر هو السعر النهائي للعميل. المنتج الذي يستخدم بيانات قصة الطفل سيرتبط بأول قصة في الباقة.</p>
+        <p class="mt-1 text-xs text-gray-500">اختر القصص والمنتجات والكميات وحدد سعر الباكدج النهائي. بيانات الطفل تُدخل مرة واحدة لكل العناصر، وكل عنصر يحتفظ ببرومبت إنتاجه داخل عملية شراء واحدة.</p>
+        <p class="mt-1 text-xs text-gray-500">إذا اختلفت أسعار القصص المتاحة، نحسب المقارنة بأقل سعر متاح، وتظهر القيمة الفعلية للقصص المختارة في السلة.</p>
     </div>
 
     <div class="mb-4 max-w-xs">
@@ -57,7 +58,7 @@
             <div class="mt-3 grid max-h-80 gap-2 overflow-y-auto rounded-xl bg-gray-50 p-2 sm:grid-cols-2" data-admin-story-list>
                 @foreach($stories as $story)
                     <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white p-2 transition has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50" data-admin-story-option data-title="{{ $story->title }}">
-                        <input type="checkbox" name="story_ids[]" value="{{ $story->id }}" @checked(in_array($story->id, $selectedStoryIds, true)) class="rounded border-gray-300 text-indigo-600">
+                        <input type="checkbox" name="story_ids[]" value="{{ $story->id }}" data-price-cents="{{ $storyPrices[$story->id] }}" @checked(in_array($story->id, $selectedStoryIds, true)) class="rounded border-gray-300 text-indigo-600">
                         <span class="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100"><x-story-cover-image :src="$story->cover_url" alt="" class="h-full w-full object-cover" /></span>
                         <span class="min-w-0 text-sm font-bold text-gray-900">{{ $story->title }}</span>
                     </label>
@@ -145,9 +146,9 @@
 <div class="grid gap-4 sm:grid-cols-3">
     <div>
         <label class="block text-sm font-bold text-gray-700 mb-1">السعر الأصلي للمكونات</label>
-        <input type="number" name="regular_price" value="{{ old('regular_price', $p?->regular_price) }}" min="0" step="0.01"
+        <input type="number" name="regular_price" value="{{ old('regular_price', $p?->regular_price) }}" min="0" step="0.01" readonly
                class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-        <p class="mt-1 text-xs text-gray-400">يظهر مشطوبًا عند وجود خصم.</p>
+        <p class="mt-1 text-xs text-gray-400">محسوب تلقائيًا من أسعار المكونات، ويظهر مشطوبًا عند وجود توفير.</p>
     </div>
     <div>
         <label class="block text-sm font-bold text-gray-700 mb-1">سعر الباقة بعد الخصم <span class="text-red-500">*</span></label>
@@ -239,7 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const money = cents => `${new Intl.NumberFormat('ar-EG').format(cents / 100)} ج.م`;
     const update = () => {
         const storyCount = Number(builder.querySelector('[data-package-story-count]')?.value || 0);
-        let total = storyCount * Number(builder.dataset.storyPriceCents || 0);
+        const specific = storyScopeInputs.find(input => input.checked)?.value === 'specific';
+        const eligible = [...builder.querySelectorAll('input[name="story_ids[]"]')].filter(input => !specific || input.checked).map(input => Number(input.dataset.priceCents));
+        let total = storyCount * (eligible.length ? Math.min(...eligible) : 0);
         builder.querySelectorAll('[data-package-product]').forEach(card => {
             const quantity = Number(card.querySelector('[data-package-product-quantity]')?.value || 0);
             const variant = card.querySelector('[data-package-product-variant] option:checked');
@@ -249,7 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const entered = Math.round(Number(priceInput?.value || 0) * 100);
         builder.querySelector('[data-package-regular-total]').textContent = money(total);
         builder.querySelector('[data-package-entered-price]').textContent = money(entered);
-        builder.querySelector('[data-package-saving]').textContent = money(Math.max(0, total - entered));
+        const saving = Math.max(0, total - entered);
+        builder.querySelector('[data-package-saving]').textContent = `${money(saving)} (${total ? Math.round(saving / total * 100) : 0}٪)`;
+        document.querySelector('input[name="regular_price"]').value = (total / 100).toFixed(2);
     };
     builder.addEventListener('input', update);
     builder.addEventListener('change', update);

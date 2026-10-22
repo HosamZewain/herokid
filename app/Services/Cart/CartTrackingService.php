@@ -344,11 +344,13 @@ class CartTrackingService
             ->except(['uploaded_photos'])
             ->all();
 
-        if (isset($snapshot['package_stories']) && is_array($snapshot['package_stories'])) {
-            $snapshot['package_stories'] = array_map(
-                fn (array $story): array => collect($story)->except(['uploaded_photos'])->all(),
-                $snapshot['package_stories'],
-            );
+        foreach (['package_stories', 'package_products'] as $key) {
+            if (isset($snapshot[$key]) && is_array($snapshot[$key])) {
+                $snapshot[$key] = array_map(
+                    fn (array $component): array => collect($component)->except(['uploaded_photos'])->all(),
+                    $snapshot[$key],
+                );
+            }
         }
 
         return $snapshot;

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Pricing\StoryPricingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -90,9 +91,23 @@ class PricingPackage extends Model
         return Storage::disk((string) config('media.public_disk', 'public'))->url($this->image_path);
     }
 
-    public function discountPercentage(): ?int
+    public function componentPriceCents(): int
     {
-        $regular = (float) $this->regular_price;
+        $this->loadMissing(['items.product', 'items.variant']);
+        $pricing = app(StoryPricingService::class);
+        // With multiple eligible stories, advertise the lowest supported comparison,
+        // never an inflated saving. The cart stores the actual chosen-story total.
+        $storyPrice = $this->story_count > 0
+            ? $this->availableStoriesQuery()->get(['stories.id', 'stories.price'])->map(fn ($story) => (int) round($pricing->effectivePrice($story) * 100))->min()
+            : 0;
+
+        return $this->story_count * (int) $storyPrice + $this->items->sum(fn ($item) => $item->product
+            ? $item->product->effectivePriceCents($item->variant) * $item->quantity : 0);
+    }
+
+    public function discountPercentage(?int $regularCents = null): ?int
+    {
+        $regular = ($regularCents ?? $this->componentPriceCents()) / 100;
         $price = (float) $this->price;
 
         if ($regular <= 0 || $price >= $regular) {

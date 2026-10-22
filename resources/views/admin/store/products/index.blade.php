@@ -3,6 +3,12 @@
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold text-gray-800">منتجات المتجر</h2>
             <div class="flex gap-2">
+                @can('settings.pricing.create')
+                    <a href="{{ route('admin.pricing.create') }}" class="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-bold text-indigo-700">إضافة باكدج</a>
+                @endcan
+                @can('settings.pricing.view')
+                    <a href="{{ route('admin.pricing.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">الباكدجات</a>
+                @endcan
                 @can('store.categories.view')
                     <a href="{{ route('admin.product-categories.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">التصنيفات</a>
                 @endcan

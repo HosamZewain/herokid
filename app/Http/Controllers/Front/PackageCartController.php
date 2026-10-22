@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\PricingPackage;
 use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Cart\PackagePersonalizationService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\Pricing\PackagePricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
+use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductVariantSnapshot;
 use App\Support\StoryAgeOptions;
 use Illuminate\Http\Request;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PackageCartController extends Controller
 {
@@ -32,10 +35,24 @@ class PackageCartController extends Controller
     ) {
         abort_unless($pricingPackage->active && $pricingPackage->show_in_store, 404);
         $pricingPackage->load(['items.product', 'items.variant', 'eligibleStories']);
+        abort_unless($pricingPackage->availableForPurchase(), 422, 'أحد عناصر الباقة غير متاح حاليًا.');
+        $sharedChild = $request->boolean('shared_child');
+        $childSchema = app(PackagePersonalizationService::class)->schema($pricingPackage);
+        $childData = [];
+        if ($sharedChild) {
+            $childData = Validator::make((array) $request->input('child', []),
+                ProductPersonalizationSchema::validationRules($childSchema),
+                ProductPersonalizationSchema::validationMessages($childSchema))->validate();
+            // Never accept per-item overrides for a same-child package.
+            $request->merge(['stories' => collect((array) $request->input('stories', []))->map(fn ($story) => [
+                'story_id' => is_array($story) ? ($story['story_id'] ?? null) : null,
+                ...$childData,
+            ])->all()]);
+        }
         $allowedStoryIds = $pricingPackage->availableStoriesQuery()->pluck('stories.id')->all();
 
         $rules = [
-            'stories' => ['array', 'size:'.$pricingPackage->story_count],
+            'stories' => ['required', 'array', 'size:'.$pricingPackage->story_count],
             'stories.*.story_id' => ['required', 'integer', Rule::in($allowedStoryIds)],
             'stories.*.child_name' => ['required', 'string', 'max:255'],
             'stories.*.child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
@@ -83,9 +100,14 @@ class PackageCartController extends Controller
 
         try {
             foreach ($storyInputs as $input) {
-                if (($input['photo_upload_ids'] ?? []) !== []) {
+                if (! $sharedChild && ($input['photo_upload_ids'] ?? []) !== []) {
                     $uploads->validatedUploadedIds($request, $input['photo_upload_ids'], 2, 3);
                 }
+            }
+            if ($sharedChild && ! empty($childData['photo_upload_ids'])) {
+                $uploads->validatedUploadedIds($request, $childData['photo_upload_ids'],
+                    data_get($childSchema, 'fields.photos.required') ? data_get($childSchema, 'fields.photos.min_files') : 0,
+                    data_get($childSchema, 'fields.photos.max_files'));
             }
         } catch (UploadValidationException $exception) {
             return back()->withInput()->withErrors(['stories' => $exception->getMessage()]);
@@ -99,14 +121,20 @@ class PackageCartController extends Controller
         $storyItems = [];
         $componentPrices = [];
         $directPhotoPaths = [];
+        $sharedPaths = [];
 
         try {
+            if ($sharedChild && ! empty($childData['photo_upload_ids'])) {
+                $sharedPaths = $uploads->attachIdsToCart($request, $childData['photo_upload_ids'], $packageKey)->pluck('path')->all();
+            }
             foreach ($storyInputs as $index => $input) {
                 $story = $stories->get((int) $input['story_id']);
                 $storyKey = $packageKey.'-story-'.($index + 1);
                 $paths = [];
                 $uploadIds = $input['photo_upload_ids'] ?? [];
-                if ($uploadIds !== []) {
+                if ($sharedChild) {
+                    $paths = $sharedPaths;
+                } elseif ($uploadIds !== []) {
                     $paths = $uploads->attachIdsToCart($request, $uploadIds, $storyKey)->pluck('path')->all();
                 } else {
                     foreach ($request->file("stories.$index.photos", []) as $photo) {
@@ -114,7 +142,7 @@ class PackageCartController extends Controller
                     }
                     $directPhotoPaths = array_merge($directPhotoPaths, $paths);
                 }
-                $storyItem = $storyBuilder->build($story, $storyKey, $input, $paths);
+                $storyItem = $storyBuilder->build($story, $storyKey, $sharedChild ? [...$input, ...$childData] : $input, $paths);
                 $componentPrices[] = (int) round($storyItem['story_price'] * 100);
                 $storyItems[] = $storyItem;
             }
@@ -150,6 +178,15 @@ class PackageCartController extends Controller
                 $variant = $packageProduct->variant;
                 $allocated = $allocations[$allocationIndex++] ?? 0;
                 $requiresStory = $product->isPersonalizedAddon();
+                $schema = ProductPersonalizationSchema::forProduct($product);
+                $personalized = $product->personalization_mode === 'collect_child_details';
+                $details = $sharedChild ? $childData : ($storyItems[0] ?? []);
+                $productPhotos = data_get($schema, 'fields.photos.enabled')
+                    ? array_slice($sharedChild ? $sharedPaths : ($storyItems[0]['uploaded_photos'] ?? []), 0, data_get($schema, 'fields.photos.max_files', 3)) : [];
+                $snapshot = $personalized ? ProductPersonalizationSchema::snapshot($schema, $details, count($productPhotos)) : null;
+                if ($personalized && ! ProductPersonalizationSchema::cartItemIsComplete($schema, [...$details, 'uploaded_photos' => $productPhotos])) {
+                    throw ValidationException::withMessages(['child' => 'استكمل بيانات الطفل المطلوبة لجميع منتجات الباقة.']);
+                }
                 $productItems[] = [
                     'key' => $packageKey.'-product-'.$packageProduct->id,
                     'item_type' => $requiresStory ? 'product_add_on' : 'product',
@@ -167,6 +204,15 @@ class PackageCartController extends Controller
                     'quantity' => $packageProduct->quantity,
                     'line_total_cents' => $allocated,
                     'personalization_mode' => $product->personalization_mode,
+                    'child_name' => $details['child_name'] ?? null,
+                    'child_age' => $details['child_age'] ?? null,
+                    'child_gender' => $details['child_gender'] ?? null,
+                    'school_name' => $details['school_name'] ?? null,
+                    'class_name' => $details['class_name'] ?? null,
+                    'interests' => $details['interests'] ?? null,
+                    'parent_notes' => $details['parent_notes'] ?? null,
+                    'uploaded_photos' => $productPhotos,
+                    'personalization_snapshot' => $snapshot,
                     'linked_story_key' => $requiresStory ? $firstStoryKey : null,
                     'linked_story_snapshot' => $requiresStory && isset($storyItems[0]) ? [
                         'story_id' => $storyItems[0]['story_id'],

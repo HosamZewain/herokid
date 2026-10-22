@@ -3,8 +3,7 @@
         $packageUrl = route('shop.package.show', $pricingPackage);
         $packageDescription = trim((string) ($pricingPackage->description ?: 'اختر قصص ومنتجات باقة '.$pricingPackage->name.' بسعر موفر من HeroKid.'));
         $packagePriceCents = (int) round((float) $pricingPackage->price * 100);
-        $configuredRegularCents = (int) round((float) $pricingPackage->regular_price * 100);
-        $displayRegularCents = max($regularTotal, $configuredRegularCents);
+        $displayRegularCents = $regularTotal;
         $savingCents = max(0, $displayRegularCents - $packagePriceCents);
         $packageImage = $pricingPackage->image_url ?: \App\Support\StoryCover::fallbackUrl();
         $packageFeatures = collect($pricingPackage->features ?? [])->filter()->take(4);
@@ -85,7 +84,7 @@
                     <div class="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
                         <div class="flex flex-wrap items-center gap-2">
                             @if($pricingPackage->badge)<span class="rounded-full bg-amber-300 px-3 py-1 text-[11px] font-black text-amber-950 sm:text-xs">{{ $pricingPackage->badge }}</span>@endif
-                            @if($discount = $pricingPackage->discountPercentage())<span class="rounded-full bg-emerald-400/20 px-3 py-1 text-[11px] font-black text-emerald-100 ring-1 ring-emerald-300/40">وفّر {{ arabic_number($discount) }}٪</span>@endif
+                            @if($discount = $pricingPackage->discountPercentage($regularTotal))<span class="rounded-full bg-emerald-400/20 px-3 py-1 text-[11px] font-black text-emerald-100 ring-1 ring-emerald-300/40">وفّر {{ arabic_number($discount) }}٪</span>@endif
                         </div>
                         <h1 class="mt-3 text-2xl font-black leading-tight sm:text-4xl">{{ $pricingPackage->name }}</h1>
                         <p class="mt-2 text-sm font-bold text-indigo-100 sm:text-base">{{ $pricingPackage->componentSummary() }}</p>
@@ -117,7 +116,7 @@
 
             <section aria-label="خطوات طلب الباقة" class="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-indigo-100 bg-white p-3 shadow-sm sm:mt-6 sm:gap-4 sm:p-4">
                 <div class="flex min-w-0 items-center gap-2"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-black text-white">١</span><span class="text-[11px] font-black text-slate-800 sm:text-sm">اختر القصص</span></div>
-                <div class="flex min-w-0 items-center gap-2"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fuchsia-500 text-xs font-black text-white">٢</span><span class="text-[11px] font-black text-slate-800 sm:text-sm">أضف بيانات الأطفال</span></div>
+                <div class="flex min-w-0 items-center gap-2"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fuchsia-500 text-xs font-black text-white">٢</span><span class="text-[11px] font-black text-slate-800 sm:text-sm">أضف بيانات الطفل</span></div>
                 <div class="flex min-w-0 items-center gap-2"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xs font-black text-white">٣</span><span class="text-[11px] font-black text-slate-800 sm:text-sm">أدخل التوصيل</span></div>
             </section>
 
@@ -132,10 +131,12 @@
                 @csrf
                 <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] ?? '' }}">
 
+                @include('front.packages._child')
+
                 @if($pricingPackage->story_count > 0)
                     <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                         <div class="border-b border-slate-100 p-4 sm:flex sm:items-center sm:justify-between sm:p-6">
-                            <div><h2 class="text-xl font-black text-slate-950">اختر {{ $pricingPackage->story_count === 1 ? 'القصة وبيانات الطفل' : 'القصص وبيانات الأطفال' }}</h2><p class="mt-1 text-xs leading-6 text-slate-500 sm:text-sm">كل قصة لها بيانات طفلها وصورتان أو ٣ صور واضحة.</p></div>
+                            <div><h2 class="text-xl font-black text-slate-950">اختر قصص الباكدج</h2><p class="mt-1 text-xs leading-6 text-slate-500 sm:text-sm">تستخدم كل القصص بيانات وصور الطفل المُدخلة أعلاه.</p></div>
                             <div class="mt-3 sm:mt-0 sm:w-52" aria-live="polite"><div class="flex items-center justify-between text-xs font-black text-indigo-700"><span>التقدم</span><span dir="ltr" data-package-progress-text>٠ / {{ arabic_number($pricingPackage->story_count) }}</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-indigo-100"><span class="block h-full w-0 rounded-full bg-gradient-to-l from-indigo-600 to-fuchsia-500 transition-all duration-300" data-package-progress-bar></span></div></div>
                         </div>
                         <div class="space-y-3 bg-slate-50/70 p-3 sm:space-y-4 sm:p-6">
@@ -158,9 +159,7 @@
                                             </button>
                                             <p class="mt-1 hidden text-xs font-bold text-red-600" data-story-picker-error>اختر قصة لهذه الخانة.</p>
                                         </div>
-                                        <label for="package-child-name-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">اسم الطفل</span><input id="package-child-name-{{ $slot }}" name="stories[{{ $slot }}][child_name]" value="{{ old("stories.$slot.child_name") }}" required autocomplete="given-name" class="min-h-11 w-full rounded-xl border-slate-300" data-package-required></label>
-                                        <div class="grid grid-cols-2 gap-3"><label for="package-child-age-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">العمر</span><select id="package-child-age-{{ $slot }}" name="stories[{{ $slot }}][child_age]" required class="min-h-11 w-full rounded-xl border-slate-300" data-package-required><option value="">اختر</option>@foreach(\App\Support\StoryAgeOptions::forPersonalization() as $age)<option value="{{ $age }}" @selected((string) old("stories.$slot.child_age") === (string) $age)>{{ $age }} سنوات</option>@endforeach</select></label><label for="package-child-gender-{{ $slot }}"><span class="mb-1 block text-xs font-black text-slate-700 sm:text-sm">الجنس</span><select id="package-child-gender-{{ $slot }}" name="stories[{{ $slot }}][child_gender]" required class="min-h-11 w-full rounded-xl border-slate-300" data-package-required><option value="">اختر</option><option value="boy" @selected(old("stories.$slot.child_gender") === 'boy')>ولد</option><option value="girl" @selected(old("stories.$slot.child_gender") === 'girl')>بنت</option></select></label></div>
-                                        <div class="sm:col-span-2" data-package-uploader data-slot="{{ $slot }}"><label for="package-photos-{{ $slot }}" class="block rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/50 p-3"><span class="flex items-center justify-between gap-3"><span><strong class="block text-xs font-black text-slate-800 sm:text-sm">صور الطفل</strong><span class="mt-0.5 block text-[11px] text-slate-500">اختر صورتين أو ٣ صور واضحة للوجه</span></span><span class="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-indigo-700 shadow-sm">اختيار الصور</span></span><input id="package-photos-{{ $slot }}" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,.heic,.heif,.avif" class="sr-only" data-package-photo-input><span class="mt-1 hidden text-xs font-bold text-red-600" data-package-photo-error></span></label><div class="mt-2 flex flex-wrap gap-2" data-package-photo-previews></div><div data-package-photo-hidden></div></div>
+
                                     </div>
                                 </fieldset>
                             @endfor
@@ -234,10 +233,10 @@
             let complete = 0;
             cards.forEach(card => {
                 const slot = card.querySelector('[data-package-story-slot]');
-                const uploader = card.querySelector('[data-package-uploader]');
+                const uploader = form.querySelector('[data-package-uploader]');
                 const uploaded = states.get(Number(uploader?.dataset.slot))?.filter(item => item.status === 'uploaded').length || 0;
-                const fieldsReady = [...card.querySelectorAll('[data-package-required]')].every(field => Boolean(field.value));
-                const ready = Boolean(slot?.querySelector('[data-package-story-select]')?.value) && fieldsReady && uploaded >= 2;
+                const fieldsReady = [...form.querySelectorAll('[data-package-required]')].every(field => !field.required || Boolean(field.value));
+                const ready = Boolean(slot?.querySelector('[data-package-story-select]')?.value) && fieldsReady && uploaded >= config.minFiles;
                 if (ready) complete += 1;
                 const status = card.querySelector('[data-slot-status]');
                 if (status) {
@@ -323,7 +322,7 @@
 
             const render = () => {
                 previews.innerHTML = items.map((item, index) => `<div class="relative w-20 rounded-xl border border-indigo-100 bg-white p-1 shadow-sm"><div class="aspect-square overflow-hidden rounded-lg bg-slate-100">${item.preview ? `<img src="${item.preview}" class="h-full w-full object-cover" alt="معاينة الصورة">` : ''}</div><button type="button" data-remove="${index}" class="absolute -start-1 -top-1 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-sm font-black text-white shadow" aria-label="حذف الصورة">×</button><p class="mt-1 truncate text-center text-[9px] font-bold text-slate-600">${escape(item.name)}</p><p class="text-center text-[9px] font-black ${item.status === 'uploaded' ? 'text-emerald-600' : item.status === 'failed' ? 'text-red-600' : 'text-indigo-600'}">${item.status === 'uploaded' ? 'تم الرفع' : item.status === 'failed' ? 'فشل' : 'يرفع...'}</p></div>`).join('');
-                hidden.innerHTML = items.filter(item => item.status === 'uploaded').map(item => `<input type="hidden" name="stories[${slot}][photo_upload_ids][]" value="${item.id}">`).join('');
+                hidden.innerHTML = items.filter(item => item.status === 'uploaded').map(item => `<input type="hidden" name="child[photo_upload_ids][]" value="${item.id}">`).join('');
                 previews.querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
                     const [removed] = items.splice(Number(button.dataset.remove), 1);
                     removed?.controller?.abort();
@@ -356,12 +355,12 @@
             }
             window.HeroKidImageUpload.observeSession(uploadConfig, items, render, pump);
             input.addEventListener('change', () => {
-                const available = Math.max(0, 3 - items.length);
+                const available = Math.max(0, config.maxFiles - items.length);
                 const selected = Array.from(input.files);
                 selected.slice(0, available).forEach(file => items.push({ file, name: file.name, preview: URL.createObjectURL(file), status: 'waiting', id: null }));
                 render(); pump();
                 input.value = '';
-                if (selected.length > available) { error.textContent = 'الحد الأقصى ٣ صور.'; error.classList.remove('hidden'); }
+                if (selected.length > available) { error.textContent = `الحد الأقصى ${config.maxFiles} صور.`; error.classList.remove('hidden'); }
             });
         });
 
@@ -375,11 +374,11 @@
                 missingStory.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
-            const incomplete = [...states.values()].some(items => items.filter(item => item.status === 'uploaded').length < 2 || items.some(item => item.status === 'uploading'));
+            const incomplete = [...states.values()].some(items => items.filter(item => item.status === 'uploaded').length < config.minFiles || items.some(item => item.status !== 'uploaded'));
             if (!incomplete) return;
             event.preventDefault();
-            const first = [...document.querySelectorAll('[data-package-uploader]')].find(element => states.get(Number(element.dataset.slot)).filter(item => item.status === 'uploaded').length < 2 || states.get(Number(element.dataset.slot)).some(item => item.status === 'uploading'));
-            const error = first?.querySelector('[data-package-photo-error]'); if (error) { error.textContent = 'انتظر اكتمال الرفع وتأكد من وجود صورتين على الأقل.'; error.classList.remove('hidden'); }
+            const first = [...document.querySelectorAll('[data-package-uploader]')].find(element => states.get(Number(element.dataset.slot)).filter(item => item.status === 'uploaded').length < config.minFiles || states.get(Number(element.dataset.slot)).some(item => item.status !== 'uploaded'));
+            const error = first?.querySelector('[data-package-photo-error]'); if (error) { error.textContent = 'انتظر اكتمال الرفع واستكمل عدد الصور المطلوب أو احذف الصور التي فشل رفعها.'; error.classList.remove('hidden'); }
             first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
     });

@@ -229,7 +229,7 @@ class CartController extends Controller
             $photoPathsStillInUse = $this->photoPathsReferencedByOtherItems($cart, $key);
 
             if (($item['item_type'] ?? 'story') === 'package') {
-                foreach ($item['package_stories'] ?? [] as $packageStory) {
+                foreach (array_merge($item['package_stories'] ?? [], $item['package_products'] ?? []) as $packageStory) {
                     foreach ($packageStory['uploaded_photos'] ?? [] as $photoPath) {
                         if (is_string($photoPath)
                             && ! str_contains($photoPath, '..')
@@ -326,7 +326,7 @@ class CartController extends Controller
                     ? $item['uploaded_photos']
                     : [];
 
-                foreach ($item['package_stories'] ?? [] as $packageStory) {
+                foreach (array_merge($item['package_stories'] ?? [], $item['package_products'] ?? []) as $packageStory) {
                     if (is_array($packageStory['uploaded_photos'] ?? null)) {
                         $paths = array_merge($paths, $packageStory['uploaded_photos']);
                     }
