@@ -1,0 +1,2 @@
+@if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
+@if(!config('order_automation.delivery_ready'))<p class="rounded-xl border border-amber-200 bg-amber-50 p-4">الإرسال اختياري. يمكنك تشغيل مسار يولّد الهوية ويحفظها فقط؛ أضف خطوة واتساب لاحقًا بعد تجهيز ربط القالب. اختيار الإرسال الآن يوقف المسار عند هذه الخطوة.</p>@endif

@@ -95,9 +95,9 @@ class FalImageProvider implements AiImageProvider
         );
     }
 
-    public function pollGeneration(string $externalRequestId, ?string $statusUrl = null, ?string $responseUrl = null): GenerationStatusResult
+    public function pollGeneration(string $externalRequestId, ?string $statusUrl = null, ?string $responseUrl = null, ?AiProvider $selectedProvider = null): GenerationStatusResult
     {
-        $provider = AiProvider::query()->where('driver', 'fal')->first();
+        $provider = $selectedProvider ?? AiProvider::query()->where('driver', 'fal')->first();
 
         if (! $provider || ! $this->availability->providerAvailable($provider)) {
             throw new RuntimeException('AI generation is not configured yet.');
@@ -216,6 +216,9 @@ class FalImageProvider implements AiImageProvider
         $isDevKontext = Str::startsWith($request->model->code, 'fal-ai/flux-kontext/dev');
         $isScene = $request->generationMode === 'character_scene';
         $ratio = $isScene ? '3:2' : '2:3';
+        if (isset($request->options['size'])) {
+            $ratio = match ($request->options['size']) { '1536x1024' => '3:2', '1024x1024' => '1:1', default => '2:3' };
+        }
 
         if ($isDevKontext) {
             return [

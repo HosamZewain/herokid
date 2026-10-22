@@ -431,6 +431,19 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('order-automation')->name('order-automation.')->middleware('permission:order_automation.view')->group(function (): void {
+        $controller = \App\Http\Controllers\Admin\OrderAutomationController::class;
+        Route::get('/', [$controller, 'index'])->name('index');
+        Route::post('/', [$controller, 'create'])->middleware('permission:order_automation.manage')->name('create');
+        Route::get('runs/{run}', [$controller, 'show'])->middleware('permission:orders.view')->name('runs.show');
+        Route::get('runs/{run}/image', [$controller, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('runs.image');
+        Route::post('runs/{run}/action', [$controller, 'action'])->middleware(['permission:orders.view', 'permission:orders.photos.view', 'permission:order_automation.execute', 'throttle:10,1'])->name('runs.action');
+        Route::get('{automation}/edit', [$controller, 'edit'])->middleware('permission:order_automation.manage')->name('edit');
+        Route::put('{automation}', [$controller, 'save'])->middleware('permission:order_automation.manage')->name('save');
+        Route::post('{automation}/publish', [$controller, 'publish'])->middleware('permission:order_automation.manage')->name('publish');
+        Route::post('{automation}/activate', [$controller, 'activate'])->middleware('permission:order_automation.activate')->name('activate');
+        Route::post('{automation}/trial', [$controller, 'trial'])->middleware(['permission:orders.view', 'permission:orders.photos.view', 'permission:order_automation.execute', 'throttle:5,1'])->name('trial');
+    });
     Route::prefix('studio-settings')->name('studio-settings.')->group(function (): void {
         $controller = StudioSettingsController::class;
         Route::get('/', [$controller, 'index'])->middleware('permission:studio.settings.manage')->name('index');

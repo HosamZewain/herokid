@@ -263,3 +263,8 @@ Schedule::command('production-automation:recover')
     ->withoutOverlapping(10);
 
 Schedule::command('mobile-push:check-receipts')->everyTenMinutes()->withoutOverlapping(10);
+
+Artisan::command('order-automation:tick', function (\App\Services\OrderAutomation\WorkflowService $workflows) {
+    $this->info('New workflow runs: '.$workflows->tick());
+})->purpose('Admit new orders and recover safe workflow steps; never resubmit uncertain generation');
+Schedule::command('order-automation:tick')->everyMinute()->withoutOverlapping(10);

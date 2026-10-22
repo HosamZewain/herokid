@@ -87,6 +87,7 @@ class AdminPermissionRegistry
             'content.messages.view' => 'admin.messages.index',
             'settings.site.view' => 'admin.settings.index',
             'studio.settings.manage' => 'admin.studio-settings.index',
+            'order_automation.view' => 'admin.order-automation.index',
             'settings.order_statuses.manage' => 'admin.settings.order-statuses.index',
             'settings.production_prompt.view' => 'admin.settings.story-production-prompt.edit',
             'settings.ai_providers.view' => 'admin.settings.ai-providers.index',

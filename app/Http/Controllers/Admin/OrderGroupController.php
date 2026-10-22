@@ -86,6 +86,9 @@ class OrderGroupController extends Controller
 
         return view('admin.orders.group-show', [
             'group' => $group,
+            'automationRuns' => request()->user()->hasPermission('order_automation.view')
+                ? \App\Models\OrderAutomationRun::whereIn('order_id', $group['orders']->pluck('id'))->where('dry_run', false)->latest('id')->limit(20)->get()
+                : collect(),
             'statuses' => $statuses,
             'paymentStatuses' => $paymentStatuses,
             'paymentMethods' => OrderPaymentStatus::paymentMethods(),

@@ -44,6 +44,16 @@ return [
             'after_commit' => false,
         ],
 
+        // Separate reservation window; do not change existing workers' behavior.
+        'order-automation' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'order-automation',
+            'retry_after' => 600,
+            'after_commit' => true,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

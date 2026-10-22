@@ -114,6 +114,15 @@
 
             @include('admin.orders._customer-rating')
 
+            @if(isset($automationRuns) && $automationRuns->isNotEmpty())
+                <section class="rounded-xl border bg-white p-4" aria-label="أتمتة الطلب">
+                    <h3 class="font-bold">أتمتة هوية القصص</h3>
+                    @foreach($automationRuns as $automationRun)
+                        <a class="mt-2 block text-indigo-700 underline" href="{{ route('admin.order-automation.runs.show', $automationRun) }}">تشغيل #{{ $automationRun->id }} — {{ \App\Services\OrderAutomation\WorkflowPresentation::status($automationRun->status) }}</a>
+                    @endforeach
+                </section>
+            @endif
+
             @include('admin.orders._merge-checkout', ['mergeGroup' => $group])
 
             @include('admin.orders._related-customer-checkouts')
