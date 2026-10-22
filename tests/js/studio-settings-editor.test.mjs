@@ -1,7 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newStudioEntry, studioDisplayScale } from '../../resources/js/studio-settings-editor.js';
+import { newStudioEntry, studioDisplayScale, studioSettingsGroups } from '../../resources/js/studio-settings-editor.js';
 import { uploadStudioAsset, studioUploadError } from '../../resources/js/studio-asset-upload.js';
+
+test('daily settings have three tabs without a product-template editing section', () => {
+    assert.deepEqual(studioSettingsGroups.map(([title]) => title), ['الصور واللوجو', 'النص والطباعة', 'توليد الأغلفة']);
+    const keys = studioSettingsGroups.flatMap(([, fields]) => fields);
+    assert.equal(keys.includes('product_production_profiles'), false);
+    assert.equal(keys.includes('text_style_presets'), true);
+    assert.equal(new Set(keys).size, keys.length);
+});
 
 test('new reusable entries carry stable independent ids and typed defaults without device paths', () => {
     for (const key of ['text_style_presets', 'product_production_profiles', 'fields']) {

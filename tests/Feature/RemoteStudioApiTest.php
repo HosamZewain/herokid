@@ -383,32 +383,38 @@ class RemoteStudioApiTest extends TestCase
         $this->actingAs($this->staff())->postJson('/admin/studio-settings/assets', ['file' => UploadedFile::fake()->image('denied.png')])->assertForbidden();
     }
 
-    public function test_admin_access_picker_lists_only_eligible_owned_policies_without_secrets(): void
+    public function test_admin_shows_only_active_sessions_without_employee_policy_controls_or_secrets(): void
     {
         $manager = $this->staff(['studio.settings.manage', 'studio.sessions.manage']);
         $employee = $this->staff();
         $valid = $employee->createToken('Story production', ['agent', 'agent:orders.read', 'agent:catalog.stories'], now()->addDay());
-        $employee->createToken('Expired hidden', ['agent'], now()->subDay());
-        $employee->createToken('Wildcard hidden', ['agent', '*']);
-        $employee->createToken('Session hidden', ['agent', 'studio:session']);
-        $employee->createToken('Customer hidden', ['mobile']);
-        $disabled = $this->staff();
-        $disabled->update(['agent_api_enabled' => false]);
-        $disabled->createToken('Disabled hidden', ['agent']);
-        $other = $this->staff();
-        $otherSource = $other->createToken('Other products', ['agent', 'agent:catalog.products', 'agent:catalog.product.42']);
+        $this->login($employee);
+        $active = StudioSession::where('user_id', $employee->id)->firstOrFail();
+        $expired = $active->replicate();
+        $expired->created_at = now()->subDay();
+        $expired->personal_access_token_id = $employee->createToken('Expired session', ['studio:session'])->accessToken->id;
+        $expired->expires_at = now()->subMinute();
+        $expired->save();
+        $revoked = $active->replicate();
+        $revoked->created_at = now()->subHour();
+        $revoked->personal_access_token_id = $employee->createToken('Revoked session', ['studio:session'])->accessToken->id;
+        $revoked->revoked_at = now();
+        $revoked->save();
+        $this->app['auth']->forgetGuards();
+        $this->flushHeaders();
 
         $response = $this->actingAs($manager)->get('/admin/studio-settings')->assertOk()
-            ->assertSee('Story production')->assertSee('القصص فقط')->assertDontSee('رقم سياسة Agent')
-            ->assertDontSee('Expired hidden')->assertDontSee('Wildcard hidden')->assertDontSee('Session hidden')->assertDontSee('Customer hidden')->assertDontSee('Disabled hidden');
-        $choices = $response->viewData('policies');
-        $this->assertSame([$valid->accessToken->id], array_column($choices[$employee->id], 'id'));
-        $this->assertSame([$otherSource->accessToken->id], array_column($choices[$other->id], 'id'));
-        $this->assertSame([], $choices[$disabled->id]);
+            ->assertSee('الجلسات النشطة')->assertSee('إلغاء الجلسة رقم '.$active->id)
+            ->assertDontSee('وصول الموظفين والأجهزة')->assertDontSee('name="agent_token_id"', false)
+            ->assertDontSee('Story production')->assertDontSee('حفظ وصول الموظف');
+        $this->assertSame([$active->id], $response->viewData('sessions')->pluck('id')->all());
+        $this->assertSame(['id', 'user_id', 'created_at', 'expires_at'], array_keys($response->viewData('sessions')->first()->getAttributes()));
         $this->assertStringNotContainsString($valid->plainTextToken, $response->getContent());
         $this->assertStringNotContainsString($valid->accessToken->token, $response->getContent());
-        $this->assertStringNotContainsString('token', json_encode($choices));
-        $this->actingAs($this->staff(['studio.settings.manage']))->get('/admin/studio-settings')->assertOk()->assertDontSee('Story production')->assertViewHas('policies', []);
+        $this->assertNotNull($valid->accessToken->fresh());
+        $this->actingAs($this->staff(['studio.settings.manage']))->get('/admin/studio-settings')->assertOk()
+            ->assertDontSee('الجلسات النشطة')->assertViewHas('sessions', fn ($sessions) => $sessions->isEmpty());
+        $this->delete('/admin/studio-settings/sessions/'.$active->id)->assertForbidden();
     }
 
     public function test_failed_publish_keeps_original_revision_instead_of_overwriting_newer_settings(): void
@@ -486,6 +492,34 @@ class RemoteStudioApiTest extends TestCase
         $token = $this->login($user);
         $response = $this->callApi('GET', '/api/studio/settings', $token)->assertOk()->assertJsonPath('data.settings', fn ($value) => $value == $settings)->assertJsonCount(1, 'data.assets');
         $this->assertSame($response->json('data.checksum'), $service->checksum($response->json('data.settings'), $response->json('data.assets')));
+
+        // Removing the editor must never drop profiles or their protected assets
+        // when another setting is published, even from an incomplete/stale client.
+        $manager = $this->staff(['studio.settings.manage']);
+        foreach (['empty', 'missing', 'modified'] as $submission) {
+            $revision = $service->current();
+            $edited = $revision->settings;
+            $edited['ui_preferences']['show_safe_area'] = ! $edited['ui_preferences']['show_safe_area'];
+            if ($submission === 'missing') {
+                unset($edited['product_production_profiles']);
+            } elseif ($submission === 'empty') {
+                $edited['product_production_profiles'] = [];
+            } else {
+                $edited['product_production_profiles'][0]['name'] = 'Unwanted overwrite';
+            }
+            $this->app['auth']->forgetGuards();
+            $this->flushHeaders();
+            $this->actingAs($manager)->post('/admin/studio-settings/publish', [
+                'settings_json' => json_encode($edited), 'base_revision' => $revision->id,
+                'reason' => 'Update visible preferences only', 'confirmed' => true,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+            $this->assertEquals($settings['product_production_profiles'], $service->current()->settings['product_production_profiles']);
+            $this->assertEquals($edited['ui_preferences'], $service->current()->settings['ui_preferences']);
+            $this->callApi('GET', '/api/studio/settings', $token)->assertOk()
+                ->assertJsonPath('data.settings.product_production_profiles', fn ($value) => $value == $settings['product_production_profiles'])
+                ->assertJsonCount(1, 'data.assets');
+            $this->callApi('GET', '/api/studio/settings/assets/'.$asset->id, $token)->assertOk();
+        }
         $settings['product_production_profiles'][] = $settings['product_production_profiles'][0];
         $this->expectException(ValidationException::class);
         app(StudioSettingsSchema::class)->validate($settings);

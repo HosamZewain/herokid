@@ -8,9 +8,6 @@ use App\Models\StudioAsset;
 use App\Models\StudioSession;
 use App\Models\StudioSettingsRevision;
 use App\Models\User;
-use App\Services\AgentApi\AgentCatalogScope;
-use App\Services\AgentApi\AgentProductScope;
-use App\Services\AgentApi\AgentTokenService;
 use App\Services\RemoteStudio\StudioSessionService;
 use App\Services\RemoteStudio\StudioSettingsSchema;
 use App\Services\RemoteStudio\StudioSettingsService;
@@ -22,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class StudioSettingsController extends Controller
 {
-    public function index(Request $request, StudioSettingsService $service, StudioSessionService $sessions): mixed
+    public function index(Request $request, StudioSettingsService $service): mixed
     {
         $current = $service->current();
         $configuration = $current?->settings ?? StudioSettingsSchema::defaults();
@@ -34,32 +31,17 @@ class StudioSettingsController extends Controller
             'models' => AiModel::where('is_active', true)->whereHas('provider', fn ($q) => $q->where('driver', 'openai')->where('is_active', true))->get()->filter(fn ($model) => $model->supportsCapability('cover_generation'))->map(fn ($model) => ['code' => $model->code, 'name' => $model->display_name ?: $model->code])->values(),
             'assets' => $assets->map(fn ($asset) => ['id' => $asset->id, 'width' => $asset->width, 'height' => $asset->height, 'bytes' => $asset->bytes, 'preview_url' => route('admin.studio-settings.assets.show', $asset->id)])->values(),
         ];
-        $employees = User::where('role', 'admin')->where('is_active', true)->orderBy('name')->get(['id', 'name', 'agent_api_enabled']);
-        $policies = [];
-        if ($request->user()->can('studio.sessions.manage')) {
-            // Load only metadata, never token hashes, and only eligible employee-owned sources.
-            $employees->load(['tokens' => fn ($q) => $q->select('id', 'tokenable_id', 'tokenable_type', 'name', 'abilities', 'expires_at')]);
-            foreach ($employees as $employee) {
-                $policies[$employee->id] = $employee->agent_api_enabled
-                    ? $employee->tokens->filter(fn ($token) => $sessions->isPolicySource($token))->map(function ($token) {
-                        $products = AgentProductScope::productIdsFromAbilities($token->abilities);
-                        $operations = collect(AgentTokenService::ABILITY_DEFINITIONS)->filter(fn ($definition, $ability) => in_array($ability, $token->abilities, true))->pluck('label')->implode('، ');
-
-                        return ['id' => $token->id, 'name' => $token->name,
-                            'scope' => AgentCatalogScope::label(AgentCatalogScope::fromAbilities($token->abilities)).($products ? ' — منتجات محددة: '.implode('، ', $products) : ''),
-                            'operations' => $operations ?: 'لا توجد عمليات إنتاج مفعّلة', 'expires' => $token->expires_at?->format('Y-m-d')];
-                    })->values()->all() : [];
-            }
-        }
+        $employees = User::where('role', 'admin')->orderBy('name')->get(['id', 'name']);
 
         return view('admin.studio-settings.index', [
             'revision' => $current, 'configuration' => $configuration,
             'editorOptions' => $editorOptions,
             'history' => StudioSettingsRevision::latest('id')->limit(30)->get(),
             'assets' => $assets,
-            'employees' => $employees, 'policies' => $policies,
-            'sessions' => StudioSession::whereNull('revoked_at')->where('expires_at', '>', now())->latest('id')->limit(100)->get(),
-            'grants' => DB::table('studio_employee_grants')->get()->keyBy('user_id'),
+            'employees' => $employees,
+            'sessions' => $request->user()->can('studio.sessions.manage')
+                ? StudioSession::whereNull('revoked_at')->where('expires_at', '>', now())->latest('id')->limit(100)->get(['id', 'user_id', 'created_at', 'expires_at'])
+                : collect(),
         ]);
     }
 
@@ -74,6 +56,10 @@ class StudioSettingsController extends Controller
         if (! is_array($settings)) {
             throw ValidationException::withMessages(['settings_json' => 'الإعدادات يجب أن تكون كائن JSON.']);
         }
+        // Product templates are no longer editable here. Carry forward the stored
+        // profiles even if an old or incomplete form omits/clears the hidden field.
+        // The service still rejects a stale base_revision under its publish lock.
+        $settings['product_production_profiles'] = $service->current()?->settings['product_production_profiles'] ?? [];
         // Friendly controls override the corresponding advanced configuration, not other fields.
         if ($request->has('font_id')) {
             $controls = $request->validate(['font_id' => 'required|string|max:100', 'font_weight' => 'required|integer', 'page_side' => 'required|in:left,right', 'export_mode' => 'required|in:reading-order,booklet',

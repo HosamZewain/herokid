@@ -1,5 +1,11 @@
 // Admin editor only. Keep the typed, complete schema-1 API unchanged.
 import { uploadStudioAsset } from './studio-asset-upload.js';
+// Visible editing groups only. Hidden product profiles stay in the complete snapshot.
+export const studioSettingsGroups = [
+    ['الصور واللوجو', ['default_back_cover', 'brand_logo']],
+    ['النص والطباعة', ['production_typography', 'export_preferences', 'ui_preferences', 'text_style_presets']],
+    ['توليد الأغلفة', ['openai_cover']],
+];
 const labels = {
     production_typography: 'الخطوط وجانب النص الافتراضي', export_preferences: 'إعدادات تصدير PDF', ui_preferences: 'عرض منطقة التصميم',
     default_back_cover: 'الغلاف الخلفي الافتراضي', brand_logo: 'اللوجو الرسمي وموضعه', openai_cover: 'توليد أغلفة القصص والتلوين', text_style_presets: 'أنماط النص المحفوظة', product_production_profiles: 'قوالب إنتاج المنتجات المشتركة',
@@ -55,7 +61,7 @@ export function initializeStudioSettingsEditor(form) {
             const title = scale === 100 ? percentLabels[key] : labels[key] || key;
             if (['schemaVersion', 'createdAt', 'updatedAt', 'id'].includes(key)) return;
             if (typeof schema === 'object' && !Array.isArray(schema)) {
-                const section = node('fieldset', '', 'min-w-0 space-y-4 rounded-xl border p-4'); section.append(node('legend', title, 'font-bold'));
+                const section = node('fieldset', '', 'min-w-0 space-y-4 rounded-xl border bg-white p-5'); section.append(node('legend', title, 'font-bold'));
                 if (descriptions[path]) section.append(node('p', descriptions[path], 'text-sm leading-7 text-slate-500'));
                 if (schema.asset_id) {
                     const select = node('select', '', inputClass); select.setAttribute('aria-label', `${path}: اختيار الصورة`);
@@ -138,19 +144,14 @@ export function initializeStudioSettingsEditor(form) {
         }
         const root = form.querySelector('[data-studio-fields]'); root.replaceChildren();
         const navigation = form.querySelector('[data-studio-navigation]'), panels = [], tabs = [], providerHelp = form.querySelector('[data-studio-provider-help]');
-        const groups = [
-            ['الصور واللوجو', ['default_back_cover', 'brand_logo']],
-            ['النص والطباعة', ['production_typography', 'export_preferences', 'ui_preferences', 'text_style_presets']],
-            ['توليد الأغلفة', ['openai_cover']],
-            ['قوالب المنتجات', ['product_production_profiles']],
-        ];
+        const groups = studioSettingsGroups;
         const activate = index => { panels.forEach((panel, i) => { panel.hidden = i !== index; tabs[i].setAttribute('aria-selected', String(i === index)); tabs[i].tabIndex = i === index ? 0 : -1; tabs[i].className = i === index ? 'rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white' : 'rounded-xl border bg-white px-5 py-3 text-slate-600'; }); if (providerHelp) providerHelp.hidden = index !== 2; };
         groups.forEach(([name, keys], index) => {
             const tab = button(name, () => activate(index)); tab.id = `studio-tab-${index}`; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', `studio-panel-${index}`);
             tab.addEventListener('keydown', event => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? groups.length - 1 : (index + (event.key === 'ArrowLeft' ? 1 : -1) + groups.length) % groups.length; activate(next); tabs[next].focus(); });
             tabs.push(tab); navigation.append(tab);
             const panel = node('div', '', 'space-y-5'); panel.id = `studio-panel-${index}`; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id); panels.push(panel); root.append(panel);
-            keys.forEach(key => { const section = node('section', '', 'rounded-2xl border bg-white p-5'); render(settings, key, options.schema[key], section, key); panel.append(section); });
+            keys.forEach(key => render(settings, key, options.schema[key], panel, key));
         });
         // Hidden tabs/details must reveal invalid inputs before native validation focuses them.
         form.addEventListener('invalid', event => { const index = panels.findIndex(panel => panel.contains(event.target)); if (index >= 0) activate(index); let parent = event.target.parentElement; while (parent && parent !== form) { if (parent.tagName === 'DETAILS') parent.open = true; parent = parent.parentElement; } }, true);

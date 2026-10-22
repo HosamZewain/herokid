@@ -40,33 +40,19 @@
             @if($history->isEmpty())<p class="text-sm text-slate-500">سيظهر هنا سجل التغييرات بعد أول نشر.</p>@endif
         </details>
         @can('studio.sessions.manage')
-            <details class="rounded-2xl border bg-white p-6 space-y-4"><summary class="cursor-pointer text-lg font-bold">وصول الموظفين والأجهزة — للإدارة فقط</summary>
-                <p class="text-sm text-slate-600">هذا القسم ليس إعدادًا للتصميم. يحدد صلاحيات الإنتاج التي يستخدمها كل موظف داخل Studio. اختر ربطًا محفوظًا باسم الموظف بدل كتابة أرقام. لن تُضاف صلاحيات جديدة ولن يُرسل توكن Agent إلى التطبيق.</p>
-                <p class="text-sm text-slate-600">دخول Studio وقراءة الإعدادات يحتاجان صلاحياتهما من إدارة الموظفين. اختيار «بدون وصول للإنتاج» لا يلغي هاتين الصلاحيتين. تغيير الربط يلغي جلسات الموظف الحالية ويطلب منه تسجيل الدخول مجددًا.</p>
-                @can('agent_api.tokens.manage')<a class="inline-block text-indigo-700 underline" href="{{ route('admin.agent-api-tokens.index') }}">إدارة صلاحيات وتوكنات Agent الحالية</a>@endcan
-                @foreach($employees as $employee)
-                    @php($employeePolicies = collect($policies[$employee->id] ?? []))
-                    @php($linkedId = $grants[$employee->id]->agent_token_id ?? null)
-                    <form method="POST" action="{{ route('admin.studio-settings.employees.update', $employee) }}" class="space-y-3 rounded-xl border p-4">@csrf @method('PUT')
-                        <h3 class="font-bold">{{ $employee->name }}</h3>
-                        @if($linkedId && !$employeePolicies->contains('id', $linkedId))<p class="text-sm text-amber-800">الربط السابق غير متاح أو انتهت صلاحيته. اختر ربطًا صالحًا أو أوقف وصول الإنتاج.</p>@endif
-                        <label class="block text-sm">صلاحيات الإنتاج في Studio
-                            <select class="mt-1 w-full rounded-lg border-slate-300" name="agent_token_id" aria-label="صلاحيات إنتاج {{ $employee->name }}">
-                                <option value="">بدون وصول للإنتاج — الإعدادات فقط حسب صلاحيات الموظف</option>
-                                @foreach($employeePolicies as $policy)<option value="{{ $policy['id'] }}" @selected((int) $linkedId === (int) $policy['id'])>{{ $policy['name'] }} · {{ $policy['scope'] }} · {{ $policy['operations'] }}{{ $policy['expires'] ? ' · ينتهي '.$policy['expires'] : '' }}</option>@endforeach
-                            </select>
-                        </label>
-                        @if($employeePolicies->isEmpty())<p class="text-sm text-slate-500">لا توجد صلاحيات Agent صالحة ومفعّلة لهذا الموظف. مسؤول النظام يراجع إعداداتها؛ لا تستخدم توكن موظف آخر.</p>@endif
-                        <div class="flex flex-wrap items-center gap-3"><label class="text-sm"><input type="checkbox" name="confirmed" value="1" required> أؤكد التغيير وإعادة تسجيل دخول الموظف</label><button class="rounded-lg border px-4 py-2 text-indigo-700">حفظ وصول الموظف</button></div>
-                    </form>
-                @endforeach
-                <h3 class="font-bold">الجلسات النشطة</h3>
+            <section class="rounded-2xl border bg-white p-6 space-y-4" aria-labelledby="studio-active-sessions">
+                <h2 id="studio-active-sessions" class="text-lg font-bold">الجلسات النشطة</h2>
+                <p class="text-sm text-slate-600">جلسات دخول الموظفين إلى Studio، بأحدثها أولًا (حتى ١٠٠ جلسة). إلغاء الجلسة يطلب من الموظف تسجيل الدخول مجددًا، ولا يغيّر صلاحياته أو إعدادات الفريق.</p>
                 @forelse($sessions as $session)
                     <form method="POST" action="{{ route('admin.studio-settings.sessions.destroy', $session) }}" class="flex flex-wrap items-center gap-3 border-b p-3">@csrf @method('DELETE')
-                        <span>جلسة #{{ $session->id }} · {{ $employees->firstWhere('id', $session->user_id)?->name ?? ('الموظف #'.$session->user_id) }} · تنتهي {{ $session->expires_at }}</span><button class="rounded-lg border border-red-200 px-4 py-2 text-red-700">إلغاء الجلسة</button>
+                        <div class="min-w-0 flex-1">
+                            <p class="font-bold">{{ $employees->firstWhere('id', $session->user_id)?->name ?? ('الموظف #'.$session->user_id) }}</p>
+                            <p class="text-sm text-slate-600">جلسة #{{ $session->id }} · بدأت {{ $session->created_at?->timezone('Africa/Cairo')->format('Y-m-d H:i') }} · تنتهي {{ $session->expires_at->timezone('Africa/Cairo')->format('Y-m-d H:i') }} (توقيت القاهرة)</p>
+                        </div>
+                        <button class="rounded-lg border border-red-200 px-4 py-2 text-red-700" aria-label="إلغاء الجلسة رقم {{ $session->id }}">إلغاء الجلسة</button>
                     </form>
                 @empty<p class="text-slate-500">لا توجد جلسات نشطة.</p>@endforelse
-            </details>
+            </section>
         @endcan
     </div>
 </x-admin-layout>
