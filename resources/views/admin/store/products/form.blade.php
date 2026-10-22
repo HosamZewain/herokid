@@ -242,8 +242,9 @@
 
                 <div class="flex gap-6">
                     <label class="inline-flex items-center gap-2 font-bold"><input type="checkbox" name="is_active" value="1" @checked(old('is_active', $product->is_active))> نشط</label>
-                    <label class="inline-flex items-center gap-2 font-bold"><input type="checkbox" name="is_featured" value="1" @checked(old('is_featured', $product->is_featured))> مميز</label>
+                    <label class="inline-flex items-center gap-2 font-bold"><input type="checkbox" name="is_featured" value="1" @checked(old('is_featured', $product->is_featured))> منتج مميّز (Featured)</label>
                 </div>
+                <p class="text-sm text-indigo-700">المنتج المميّز يظهر قبل الأكثر مبيعًا في المتجر وتطبيق الموبايل. المنتجات المميّزة تُرتّب فيما بينها حسب المبيعات. إلغاء الاختيار يعيده لترتيبه الطبيعي، ولا يغيّر اختيارات السعر أو الأحدث.</p>
 
                 <section id="product-recommendations" class="scroll-mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5" data-product-recommendations>
                     <input type="hidden" name="recommendations_present" value="1">

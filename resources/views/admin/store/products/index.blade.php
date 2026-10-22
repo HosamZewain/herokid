@@ -56,6 +56,7 @@
                                         </div>
                                     @endcan
                                     <div class="text-xs text-gray-400">{{ $product->slug }}</div>
+                                    @if($product->is_featured)<span class="text-xs font-bold text-indigo-700">★ منتج مميّز</span>@endif
                                 </td>
                                 <td class="px-4 py-3">{{ $product->category?->name_ar ?? '-' }}</td>
                                 <td class="px-4 py-3">{{ number_format($product->effectivePrice(), 0) }} ج.م</td>

@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Models\User;
 use App\Services\Catalog\CatalogSalesRankingService;
 use App\Services\Catalog\UnifiedStorefrontService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +18,68 @@ use Tests\TestCase;
 class MobileCatalogSortingTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_featured_products_are_pinned_before_best_sellers_across_pages_and_filters(): void
+    {
+        $this->seedCatalog();
+        $featured = Product::orderByDesc('id')->limit(15)->pluck('id');
+        Product::whereIn('id', $featured)->update(['is_featured' => true]);
+        foreach ([[], ['type' => 'products'], ['q' => 'matching'], ['category' => 'product:sorting-products'], ['age' => '6-9'], ['personalization' => 'none']] as $filters) {
+            $pages = [];
+            foreach ([1, 2] as $page) {
+                $pages[] = $this->assertMatchesWebsite($filters + ['sort' => 'best_selling', 'per_page' => 12, 'page' => $page]);
+            }
+            $combined = array_merge(...$pages);
+            $wide = $this->getJson('/api/v1/catalog?'.http_build_query($filters + ['sort' => 'best_selling', 'per_page' => 24]))->assertOk()->json('data');
+            $this->assertSame(array_column($wide, 'id'), $combined);
+            $this->assertCount(24, array_unique($combined));
+            $expectedFeatured = $featured->map(fn ($id) => 'product:'.$id)->all();
+            $this->assertEqualsCanonicalizing($expectedFeatured, array_slice($combined, 0, 15));
+            $this->assertSame([], array_values(array_intersect($expectedFeatured, array_slice($combined, 15))));
+        }
+        // Explicit other sorts are not overridden by featured placement.
+        $cheapest = Product::orderBy('price_cents')->firstOrFail();
+        $this->assertSame('product:'.$cheapest->id, $this->getJson('/api/v1/catalog?sort=price_asc')->assertOk()->json('data.0.id'));
+        $this->assertMatchesWebsite(['sort' => 'best_selling', 'type' => 'stories']);
+    }
+
+    public function test_featured_does_not_override_visibility_or_search_and_can_be_removed(): void
+    {
+        $this->seedCatalog(7);
+        $product = Product::where('slug', 'sorting-product-7')->firstOrFail(); // Lowest sales, not a bestseller.
+        $normal = $this->getJson('/api/v1/catalog?sort=best_selling')->assertOk()->json('data');
+        $product->update(['is_featured' => true]);
+        $this->assertSame('product:'.$product->id, $this->getJson('/api/v1/catalog?sort=best_selling')->assertOk()->json('data.0.id'));
+        $this->assertMatchesWebsite(['sort' => 'best_selling', 'q' => 'story']);
+        $this->getJson('/api/v1/catalog?q=story&sort=best_selling')->assertOk()->assertJsonMissing(['id' => 'product:'.$product->id]);
+        $product->update(['is_featured' => false]);
+        $this->assertSame($normal, $this->getJson('/api/v1/catalog?sort=best_selling')->assertOk()->json('data'));
+        $product->update(['is_featured' => true, 'is_active' => false]);
+        $this->getJson('/api/v1/catalog?sort=best_selling')->assertOk()->assertJsonMissing(['id' => 'product:'.$product->id]);
+    }
+
+    public function test_existing_product_edit_permission_controls_featured_selection_and_persistence(): void
+    {
+        $this->seedCatalog(1);
+        $product = Product::firstOrFail();
+        $admin = User::factory()->create(['role' => 'admin']);
+        $admin->permissions()->sync(Permission::where('key', 'store.products.view')->pluck('id'));
+        $payload = [
+            'product_category_id' => $product->product_category_id, 'name_ar' => $product->name_ar, 'slug' => $product->slug,
+            'price' => 51, 'fulfillment_type' => 'physical', 'purchase_mode' => 'standalone',
+            'personalization_mode' => 'none', 'inventory_mode' => 'no_tracking', 'is_active' => 1, 'is_featured' => 1,
+        ];
+        $this->actingAs($admin)->put(route('admin.products.update', $product), $payload)->assertForbidden();
+        $this->assertFalse($product->fresh()->is_featured);
+        $admin->permissions()->syncWithoutDetaching(Permission::where('key', 'store.products.update')->pluck('id'));
+        $this->actingAs($admin->fresh())->put(route('admin.products.update', $product), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertTrue($product->fresh()->is_featured);
+        $this->get(route('admin.products.edit', $product))->assertOk()->assertSee('منتج مميّز (Featured)');
+        $this->get(route('admin.products.index'))->assertOk()->assertSee('★ منتج مميّز');
+        unset($payload['is_featured']);
+        $this->put(route('admin.products.update', $product), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertFalse($product->fresh()->is_featured);
+    }
 
     public function test_best_selling_matches_the_website_with_filters_and_across_two_pages(): void
     {
@@ -84,6 +148,7 @@ class MobileCatalogSortingTest extends TestCase
     public function test_fully_tied_best_sellers_have_a_deterministic_order_independent_of_input_order(): void
     {
         $this->seedCatalog(28, true);
+        Product::whereIn('id', Product::orderBy('id')->limit(16)->pluck('id'))->update(['is_featured' => true]);
         $service = app(UnifiedStorefrontService::class);
         $items = Story::with('categories')->get()->map(fn ($story) => $service->storyItem($story, 7))
             ->concat(Product::with('category')->get()->map(fn ($product) => $service->productItem($product, 7)));
@@ -95,16 +160,18 @@ class MobileCatalogSortingTest extends TestCase
 
     private function assertMatchesWebsite(array $query): array
     {
+        $query += ['per_page' => 12];
         $website = $this->get('/shop?'.http_build_query($query))->assertOk();
         $expected = collect($website->viewData('items')->items())->pluck('id')->all();
         $api = $this->getJson('/api/v1/catalog?'.http_build_query($query))->assertOk();
         $this->assertSame($expected, array_column($api->json('data'), 'id'), json_encode($query));
         $this->assertSame($website->viewData('items')->total(), $api->json('meta.total'));
-        $counts = collect($website->viewData('items')->items())->pluck('salesCount')->all();
+        $items = collect($website->viewData('items')->items());
         if (($query['sort'] ?? null) === 'best_selling') {
-            $sorted = $counts;
-            rsort($sorted);
-            $this->assertSame($sorted, $counts);
+            $priority = $items->map(fn ($item) => [$item->isFeatured ? 0 : 1, -$item->salesCount])->all();
+            $sorted = $priority;
+            sort($sorted);
+            $this->assertSame($sorted, $priority);
         }
 
         return $expected;

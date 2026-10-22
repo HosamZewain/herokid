@@ -305,6 +305,16 @@ class UnifiedStorefrontService
     /** @param Collection<int, UnifiedCatalogItem> $items */
     private function bestSellingSort(Collection $items): Collection
     {
+        // Pin featured products before sales ranking, before slicing any page.
+        // Ranking and stable tie-breaks remain identical within each group.
+        return $this->salesSort($items->where('isFeatured', true))
+            ->concat($this->salesSort($items->where('isFeatured', false)))
+            ->values();
+    }
+
+    /** @param Collection<int, UnifiedCatalogItem> $items */
+    private function salesSort(Collection $items): Collection
+    {
         return $items
             ->groupBy('salesCount')
             ->sortKeysDesc()
@@ -318,7 +328,7 @@ class UnifiedStorefrontService
         return $items
             ->groupBy('viewsCount')
             ->sortKeysDesc()
-            ->flatMap(fn (Collection $sameViewsCount) => $this->bestSellingSort($sameViewsCount))
+            ->flatMap(fn (Collection $sameViewsCount) => $this->salesSort($sameViewsCount))
             ->values();
     }
 
