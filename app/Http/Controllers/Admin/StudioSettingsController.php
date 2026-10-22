@@ -8,6 +8,9 @@ use App\Models\StudioAsset;
 use App\Models\StudioSession;
 use App\Models\StudioSettingsRevision;
 use App\Models\User;
+use App\Services\AgentApi\AgentCatalogScope;
+use App\Services\AgentApi\AgentProductScope;
+use App\Services\AgentApi\AgentTokenService;
 use App\Services\RemoteStudio\StudioSessionService;
 use App\Services\RemoteStudio\StudioSettingsSchema;
 use App\Services\RemoteStudio\StudioSettingsService;
@@ -19,24 +22,42 @@ use Illuminate\Validation\ValidationException;
 
 class StudioSettingsController extends Controller
 {
-    public function index(StudioSettingsService $service): mixed
+    public function index(Request $request, StudioSettingsService $service, StudioSessionService $sessions): mixed
     {
         $current = $service->current();
         $configuration = $current?->settings ?? StudioSettingsSchema::defaults();
         $referenced = app(StudioSettingsSchema::class)->assetIds($configuration);
         $assets = StudioAsset::whereIn('id', $referenced)->orWhereIn('id', StudioAsset::latest('created_at')->limit(500)->pluck('id'))->latest('created_at')->get();
         $editorOptions = [
+            'maxUploadBytes' => (int) config('remote_studio.asset_max_kb') * 1024,
             'schema' => app(StudioSettingsSchema::class)->schema(),
             'models' => AiModel::where('is_active', true)->whereHas('provider', fn ($q) => $q->where('driver', 'openai')->where('is_active', true))->get()->filter(fn ($model) => $model->supportsCapability('cover_generation'))->map(fn ($model) => ['code' => $model->code, 'name' => $model->display_name ?: $model->code])->values(),
             'assets' => $assets->map(fn ($asset) => ['id' => $asset->id, 'width' => $asset->width, 'height' => $asset->height, 'bytes' => $asset->bytes, 'preview_url' => route('admin.studio-settings.assets.show', $asset->id)])->values(),
         ];
+        $employees = User::where('role', 'admin')->where('is_active', true)->orderBy('name')->get(['id', 'name', 'agent_api_enabled']);
+        $policies = [];
+        if ($request->user()->can('studio.sessions.manage')) {
+            // Load only metadata, never token hashes, and only eligible employee-owned sources.
+            $employees->load(['tokens' => fn ($q) => $q->select('id', 'tokenable_id', 'tokenable_type', 'name', 'abilities', 'expires_at')]);
+            foreach ($employees as $employee) {
+                $policies[$employee->id] = $employee->agent_api_enabled
+                    ? $employee->tokens->filter(fn ($token) => $sessions->isPolicySource($token))->map(function ($token) {
+                        $products = AgentProductScope::productIdsFromAbilities($token->abilities);
+                        $operations = collect(AgentTokenService::ABILITY_DEFINITIONS)->filter(fn ($definition, $ability) => in_array($ability, $token->abilities, true))->pluck('label')->implode('، ');
+
+                        return ['id' => $token->id, 'name' => $token->name,
+                            'scope' => AgentCatalogScope::label(AgentCatalogScope::fromAbilities($token->abilities)).($products ? ' — منتجات محددة: '.implode('، ', $products) : ''),
+                            'operations' => $operations ?: 'لا توجد عمليات إنتاج مفعّلة', 'expires' => $token->expires_at?->format('Y-m-d')];
+                    })->values()->all() : [];
+            }
+        }
 
         return view('admin.studio-settings.index', [
             'revision' => $current, 'configuration' => $configuration,
             'editorOptions' => $editorOptions,
             'history' => StudioSettingsRevision::latest('id')->limit(30)->get(),
             'assets' => $assets,
-            'employees' => User::where('role', 'admin')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'employees' => $employees, 'policies' => $policies,
             'sessions' => StudioSession::whereNull('revoked_at')->where('expires_at', '>', now())->latest('id')->limit(100)->get(),
             'grants' => DB::table('studio_employee_grants')->get()->keyBy('user_id'),
         ]);

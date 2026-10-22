@@ -383,6 +383,44 @@ class RemoteStudioApiTest extends TestCase
         $this->actingAs($this->staff())->postJson('/admin/studio-settings/assets', ['file' => UploadedFile::fake()->image('denied.png')])->assertForbidden();
     }
 
+    public function test_admin_access_picker_lists_only_eligible_owned_policies_without_secrets(): void
+    {
+        $manager = $this->staff(['studio.settings.manage', 'studio.sessions.manage']);
+        $employee = $this->staff();
+        $valid = $employee->createToken('Story production', ['agent', 'agent:orders.read', 'agent:catalog.stories'], now()->addDay());
+        $employee->createToken('Expired hidden', ['agent'], now()->subDay());
+        $employee->createToken('Wildcard hidden', ['agent', '*']);
+        $employee->createToken('Session hidden', ['agent', 'studio:session']);
+        $employee->createToken('Customer hidden', ['mobile']);
+        $disabled = $this->staff();
+        $disabled->update(['agent_api_enabled' => false]);
+        $disabled->createToken('Disabled hidden', ['agent']);
+        $other = $this->staff();
+        $otherSource = $other->createToken('Other products', ['agent', 'agent:catalog.products', 'agent:catalog.product.42']);
+
+        $response = $this->actingAs($manager)->get('/admin/studio-settings')->assertOk()
+            ->assertSee('Story production')->assertSee('القصص فقط')->assertDontSee('رقم سياسة Agent')
+            ->assertDontSee('Expired hidden')->assertDontSee('Wildcard hidden')->assertDontSee('Session hidden')->assertDontSee('Customer hidden')->assertDontSee('Disabled hidden');
+        $choices = $response->viewData('policies');
+        $this->assertSame([$valid->accessToken->id], array_column($choices[$employee->id], 'id'));
+        $this->assertSame([$otherSource->accessToken->id], array_column($choices[$other->id], 'id'));
+        $this->assertSame([], $choices[$disabled->id]);
+        $this->assertStringNotContainsString($valid->plainTextToken, $response->getContent());
+        $this->assertStringNotContainsString($valid->accessToken->token, $response->getContent());
+        $this->assertStringNotContainsString('token', json_encode($choices));
+        $this->actingAs($this->staff(['studio.settings.manage']))->get('/admin/studio-settings')->assertOk()->assertDontSee('Story production')->assertViewHas('policies', []);
+    }
+
+    public function test_failed_publish_keeps_original_revision_instead_of_overwriting_newer_settings(): void
+    {
+        $manager = $this->staff(['studio.settings.manage']);
+        $one = $this->publish($manager);
+        $two = $this->publish($manager, null, $one->id);
+        $this->actingAs($manager)->withSession(['_old_input' => ['base_revision' => $one->id, 'settings_json' => json_encode($one->settings)]])
+            ->get('/admin/studio-settings')->assertOk()->assertSee('name="base_revision" value="'.$one->id.'"', false);
+        $this->assertSame($two->id, app(StudioSettingsService::class)->current()->id);
+    }
+
     public function test_editor_does_not_omit_old_assets_referenced_by_current_revision(): void
     {
         $manager = $this->staff(['studio.settings.manage']);

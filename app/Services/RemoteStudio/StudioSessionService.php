@@ -77,14 +77,21 @@ class StudioSessionService
             return null;
         }
         $source = $user->tokens()->find($id);
-        if (! $source || ($source->expires_at && $source->expires_at->isPast())) {
-            return null;
+
+        return $source && $this->isPolicySource($source) ? $source : null;
+    }
+
+    /** Used by the admin picker and session validation; never expose the token secret. */
+    public function isPolicySource(PersonalAccessToken $source): bool
+    {
+        if ($source->expires_at && $source->expires_at->isPast()) {
+            return false;
         }
         $abilities = $source->abilities ?? [];
 
         // Wildcard and other Studio sessions are not production policy sources.
         return in_array('agent', $abilities, true) && ! in_array('*', $abilities, true)
-            && ! in_array(self::ABILITY, $abilities, true) ? $source : null;
+            && ! in_array(self::ABILITY, $abilities, true);
     }
 
     private function agentAbilities(User $user, ?PersonalAccessToken $source): array
