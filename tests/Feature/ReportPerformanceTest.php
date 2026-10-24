@@ -8,6 +8,7 @@ use App\Models\Story;
 use App\Models\User;
 use App\Models\VisitorCart;
 use App\Services\Orders\AdminOrderReportService;
+use App\Services\Orders\DashboardMonthStatistics;
 use App\Services\Sales\SalesReportFilters;
 use App\Services\Sales\SalesReportService;
 use App\Support\OrderStatusRegistry;
@@ -73,6 +74,82 @@ class ReportPerformanceTest extends TestCase
         $legacy->items()->delete();
         $this->order('ZERO', 0, ['discount_cents' => 30000, 'paid_amount_cents' => 0]);
         $this->order('UNKNOWN', 100, ['printing_status' => 'unknown', 'shipping_status' => 'unknown', 'payment_status' => 'unknown']);
+    }
+
+    public function test_story_copies_and_money_match_month_dashboard_and_order_report_exports(): void
+    {
+        $order = $this->order('QUANTITY', 90000, ['paid_amount_cents' => 20000]);
+        $order->items()->update(['item_type' => 'story', 'quantity' => 3, 'unit_price_cents' => 30000]);
+        $this->order('QUANTITY', 10000);
+        $service = app(AdminOrderReportService::class);
+        $report = $service->report($this->request(), true);
+        $month = app(DashboardMonthStatistics::class)->summarize(CarbonImmutable::now('Africa/Cairo'));
+        $this->assertSame(3, $report['summary']['stories']);
+        $this->assertSame($month['story_pieces'], $report['summary']['stories']);
+        $this->assertSame($month['product_pieces'], $report['summary']['products']);
+        $this->assertSame($month['value_cents'], $report['summary']['total_cents']);
+        $this->assertSame($month['paid_balance_cents'], $report['summary']['paid_amount_cents']);
+        $this->assertSame('mixed', $report['rows']->first()['catalog_type']);
+        $this->assertSame(3, $service->export($this->request())['rows']->first()['story_quantity']);
+        $csv = $this->get(route('admin.order-report.export'))->streamedContent();
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+        $header = str_getcsv($lines[0]);
+        $data = str_getcsv($lines[1]);
+        $this->assertSame('3', $data[array_search('عدد القصص', $header, true)]);
+    }
+
+    public function test_sales_item_filters_do_not_repeat_full_checkout_paid_balance_shipping_or_discount(): void
+    {
+        $story = $this->order('FILTERED-MONEY', 30000, ['discount_cents' => 4000, 'paid_amount_cents' => 20000]);
+        $story->items()->update(['item_type' => 'story']);
+        $this->order('FILTERED-MONEY', 10000, ['discount_cents' => 4000, 'paid_amount_cents' => 20000]);
+        $sales = app(SalesReportService::class);
+        $results = [];
+        foreach (['all', 'story', 'product'] as $type) {
+            $filters = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'this_month', 'type' => $type]));
+            $results[$type] = $sales->rows($filters)->first();
+        }
+        foreach (['items_total_cents', 'delivery_cents', 'discount_cents', 'total_cents', 'paid_amount_cents', 'remaining_amount_cents'] as $field) {
+            $this->assertSame($results['all'][$field], $results['story'][$field] + $results['product'][$field], $field);
+        }
+        $this->assertSame(15000, $results['story']['paid_amount_cents']);
+        $this->assertSame(5000, $results['product']['paid_amount_cents']);
+        $this->assertSame(30750, $results['story']['total_cents']);
+        $this->assertCount(1, $results['story']['orders']);
+        $this->assertCount(1, $results['story']['order_ids']);
+        $this->assertSame(1, $results['story']['order_records']);
+        $csv = $this->get(route('admin.sales-report.export', ['range' => 'this_month', 'type' => 'story']))->streamedContent();
+        $lines = array_values(array_filter(explode("\n", trim($csv))));
+        $header = str_getcsv($lines[0]);
+        $data = str_getcsv($lines[1]);
+        $this->assertSame('150.00', $data[array_search('الرصيد المدفوع الحالي وليس تحصيل الفترة', $header, true)]);
+        $this->assertStringContainsString('نصيب العناصر المختارة', $data[array_search('أساس المبالغ', $header, true)]);
+    }
+
+    public function test_filtered_shares_keep_every_cent_including_zero_price_and_overpaid_orders(): void
+    {
+        foreach ([0, 101] as $price) {
+            $order = $this->order('ROUND-'.$price, $price, ['paid_amount_cents' => 10001, 'discount_cents' => 13]);
+            $order->items()->update(['item_type' => 'story']);
+            foreach (['product', 'product_add_on'] as $type) {
+                $order->items()->create(['item_type' => $type, 'title' => 'Synthetic '.$type, 'quantity' => 1,
+                    'unit_price_cents' => $price, 'total_price_cents' => $price]);
+            }
+        }
+        $before = DB::table('orders')->get()->toJson();
+        $sales = app(SalesReportService::class);
+        $results = [];
+        foreach (['all', 'story', 'product', 'product_add_on'] as $type) {
+            $filters = SalesReportFilters::fromRequest(Request::create('/', 'GET', ['range' => 'this_month', 'type' => $type]));
+            $results[$type] = $sales->rows($filters)->keyBy('key');
+        }
+        foreach (['ROUND-0', 'ROUND-101'] as $key) {
+            foreach (['items_total_cents', 'delivery_cents', 'discount_cents', 'total_cents', 'paid_amount_cents', 'remaining_amount_cents'] as $field) {
+                $sum = $results['story'][$key][$field] + $results['product'][$key][$field] + $results['product_add_on'][$key][$field];
+                $this->assertSame($results['all'][$key][$field], $sum, $key.' '.$field);
+            }
+        }
+        $this->assertSame($before, DB::table('orders')->get()->toJson());
     }
 
     public function test_sql_order_statistics_match_detailed_rows_for_filters_and_historical_edge_cases(): void

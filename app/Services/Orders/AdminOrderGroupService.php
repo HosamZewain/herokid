@@ -285,6 +285,7 @@ class AdminOrderGroupService
     public function dashboardStats(): array
     {
         $byStatus = Order::query()
+            ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
             ->selectRaw('status, COUNT(*) as record_count, COUNT(DISTINCT checkout_group_key) as checkout_count')
             ->groupBy('status')
             ->get()
@@ -300,6 +301,7 @@ class AdminOrderGroupService
         $records = [
             'total' => Order::withTrashed()
                 ->whereNotNull('checkout_group_key')
+                ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
                 ->count(),
         ];
 
@@ -312,10 +314,12 @@ class AdminOrderGroupService
             $keys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, $behavior);
             $shippingKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, $behavior);
             $notReadyKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'not_ready');
-            $shippingOrders = Order::query()->where(fn ($q) => $q
-                ->whereIn('shipping_status', $shippingKeys)
-                ->orWhere(fn ($legacy) => $legacy->whereIn('status', $keys)
-                    ->where(fn ($state) => $state->whereNull('shipping_status')->orWhere('shipping_status', '')->orWhereIn('shipping_status', $notReadyKeys))));
+            $shippingOrders = Order::query()
+                ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
+                ->where(fn ($q) => $q
+                    ->whereIn('shipping_status', $shippingKeys)
+                    ->orWhere(fn ($legacy) => $legacy->whereIn('status', $keys)
+                        ->where(fn ($state) => $state->whereNull('shipping_status')->orWhere('shipping_status', '')->orWhereIn('shipping_status', $notReadyKeys))));
             $checkouts[$behavior] = (clone $shippingOrders)->distinct()->count('checkout_group_key');
             $records[$behavior] = $shippingOrders->count();
         }
@@ -334,6 +338,7 @@ class AdminOrderGroupService
         $newCheckoutDifference = $todayIntake['new_checkouts'] - $yesterdayCheckouts;
 
         $activeKeys = Order::query()
+            ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
             ->whereNotIn('checkout_group_key', $this->cancelledCheckoutKeys())
             ->whereIn('checkout_group_key', $this->unfinishedCheckoutKeys())
             ->distinct()
@@ -372,6 +377,7 @@ class AdminOrderGroupService
                 'active_value_cents' => $activeFinancial['total_value_cents'],
                 'collected_cents' => $activeFinancial['collected_cents'],
                 'outstanding_cents' => $activeFinancial['outstanding_cents'],
+                'excess_paid_cents' => $activeFinancial['collected_cents'] + $activeFinancial['outstanding_cents'] - $activeFinancial['total_value_cents'],
             ],
             'last_seven_days' => $dailyStats,
             'month' => app(DashboardMonthStatistics::class)->summarize($todayDate),
@@ -381,8 +387,8 @@ class AdminOrderGroupService
     /**
      * Daily checkout intake for the latest seven Cairo calendar days.
      *
-     * Story checkouts contain at least one story; product checkouts contain no
-     * stories. This keeps both categories exclusive and counts delivery once.
+     * Daily and monthly categories are identical and exclusive. Each purchase's
+     * full value, including delivery once, belongs to exactly one category.
      *
      * @return array<int, array<string, int|string>>
      */
@@ -402,7 +408,7 @@ class AdminOrderGroupService
             return [(string) $checkout->checkout_group_key => OrderDateTime::display($createdAt)->toDateString()];
         });
         $checkoutKeys = $checkoutDates->keys();
-        $ordersByCheckout = app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, true)->get()->keyBy('checkout_group_key');
+        $ordersByCheckout = app(DashboardCheckoutFacts::class)->forKeys($checkoutKeys)->keyBy('checkout_group_key');
         // Do not count historical merged source copies as new purchases when
         // their financial facts have already been folded into the target.
         $checkoutDates = $checkoutDates->only($ordersByCheckout->keys()->all());
@@ -421,13 +427,14 @@ class AdminOrderGroupService
             ? collect()
             : DB::table('order_status_logs as status_logs')
                 ->join('orders as status_orders', 'status_orders.id', '=', 'status_logs.order_id')
+                ->whereNotIn('status_orders.checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
                 ->where('status_logs.status_type', OrderStatusRegistry::TYPE_ORDER)
                 ->whereIn('status_logs.status', $cancelledStatuses)
                 ->whereBetween('status_logs.created_at', [$start, $end])
                 ->get(['status_orders.checkout_group_key', 'status_logs.created_at'])
                 ->map(function (object $event): array {
                     return [
-                        'date' => OrderDateTime::display(CarbonImmutable::parse((string) $event->created_at))->toDateString(),
+                        'date' => OrderDateTime::display(CarbonImmutable::parse((string) $event->created_at, 'UTC'))->toDateString(),
                         'checkout_group_key' => (string) $event->checkout_group_key,
                     ];
                 })
@@ -444,11 +451,13 @@ class AdminOrderGroupService
                 ->filter(fn (string $createdDate): bool => $createdDate === $dateString)
                 ->keys();
             $dayOrders = $ordersByCheckout->only($dayKeys->all());
-            $storyKeys = $dayOrders->filter(fn ($checkout) => $checkout->stories > 0)->keys();
-            $productKeys = $dayKeys->diff($storyKeys)->values();
+            $storyKeys = $dayOrders->where('category', 'story')->keys();
+            $productKeys = $dayOrders->where('category', 'product')->keys();
+            $mixed = $dayOrders->where('category', 'mixed');
+            $unclassified = $dayOrders->where('category', 'unclassified');
             $storyFinancial = ['total_value_cents' => (int) $dayOrders->only($storyKeys->all())->sum('total_cents')];
             $productFinancial = ['total_value_cents' => (int) $dayOrders->only($productKeys->all())->sum('total_cents')];
-            $totalValueCents = $storyFinancial['total_value_cents'] + $productFinancial['total_value_cents'];
+            $totalValueCents = (int) $dayOrders->sum('total_cents');
             $averageValueCents = (int) $dayOrders->sum('average_value_cents');
             $newCheckouts = $dayKeys->count();
 
@@ -459,6 +468,10 @@ class AdminOrderGroupService
                 'new_checkouts' => $newCheckouts,
                 'story_checkouts' => $storyKeys->count(),
                 'product_checkouts' => $productKeys->count(),
+                'mixed_checkouts' => $mixed->count(),
+                'unclassified_checkouts' => $unclassified->count(),
+                'mixed_value_cents' => (int) $mixed->sum('total_cents'),
+                'unclassified_value_cents' => (int) $unclassified->sum('total_cents'),
                 'story_value_cents' => $storyFinancial['total_value_cents'],
                 'product_value_cents' => $productFinancial['total_value_cents'],
                 'total_value_cents' => $totalValueCents,
@@ -486,7 +499,7 @@ class AdminOrderGroupService
         $events = $this->paymentEventsBetween($start, $end);
 
         return [
-            'count' => $events->where('event_type', 'payment_received')->count(),
+            'count' => $events->where('amount_delta_cents', '>', 0)->count(),
             'amount_cents' => (int) $events->sum('amount_delta_cents'),
             'events' => $events
                 ->sortByDesc('occurred_at')
@@ -578,11 +591,7 @@ class AdminOrderGroupService
             ->unique()->values();
         $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
         $discountCents = (int) $visibleOrders->max('discount_cents');
-        $itemsCents = (int) $items->sum('total_price_cents');
-
-        if ($itemsCents === 0) {
-            $itemsCents = (int) round($visibleOrders->sum(fn (Order $order): float => (float) (data_get($order->delivery_details, 'item_price') ?? $order->story?->price ?? 0)) * 100);
-        }
+        $itemsCents = $this->itemValueCents($visibleOrders);
 
         $phone = (string) (data_get($first->delivery_details, 'phone') ?? '');
         $customerKey = $first->user && $first->user->role !== 'admin'
@@ -632,6 +641,7 @@ class AdminOrderGroupService
             'assigned_admin' => $first->groupAssignment?->assignee,
             'assigned_at' => $first->groupAssignment?->assigned_at,
             'story_count' => $displayStoryOrders->count(),
+            'story_quantity' => (int) $displayStoryOrders->sum(fn (Order $order): int => (int) ($order->items->where('item_type', 'story')->sum('quantity') ?: 1)),
             'product_quantity' => (int) $directProducts->sum('quantity'),
             'add_on_quantity' => (int) $addOns->sum('quantity'),
             'child_names' => $displayStoryOrders->pluck('child_name')->filter()->unique()->values()->all(),
@@ -1023,13 +1033,7 @@ class AdminOrderGroupService
             ->map(function (Collection $group): array {
                 $group = $group->sortBy('id')->values();
                 $first = $group->first();
-                $itemsCents = (int) $group->flatMap->items->sum('total_price_cents');
-
-                if ($itemsCents === 0) {
-                    $itemsCents = (int) round($group->sum(
-                        fn (Order $order): float => (float) (data_get($order->delivery_details, 'item_price') ?? $order->story?->price ?? 0)
-                    ) * 100);
-                }
+                $itemsCents = $this->itemValueCents($group);
 
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
                 $discountCents = (int) $group->max('discount_cents');
@@ -1082,6 +1086,13 @@ class AdminOrderGroupService
                 true,
             ))->count(),
         ];
+    }
+
+    private function itemValueCents(Collection $orders): int
+    {
+        return (int) $orders->sum(fn (Order $order): int => $order->items->isNotEmpty()
+            ? (int) $order->items->sum('total_price_cents')
+            : (int) round((float) (data_get($order->delivery_details, 'item_price') ?? $order->story?->price ?? 0) * 100));
     }
 
     private function isStoryOrder(Order $order): bool

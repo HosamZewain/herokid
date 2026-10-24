@@ -157,9 +157,7 @@ class PaymentCollectionReportService
             ->select(['id', 'checkout_group_key', 'order_number', 'user_id', 'parent_name', 'story_id', 'status',
                 'child_name', 'delivery_details', 'order_source', 'discount_cents', 'created_at', 'deleted_at'])
             ->with(['items:id,order_id,item_type,story_id,product_id,title,sku,quantity,total_price_cents,item_snapshot', 'story:id,title,price', 'marketingCart', 'checkoutReference']);
-        if ($detailed) {
-            $orders->with('user:id,name');
-        }
+        $orders->with($detailed ? 'user:id,name,role' : 'user:id,role');
 
         $contexts = $orders->get()->groupBy('checkout_group_key')->map(function (Collection $history, string $key) use ($detailed): array {
             $live = $history->whereNull('deleted_at');
@@ -193,8 +191,8 @@ class PaymentCollectionReportService
             return ['key' => $key, 'first_order_id' => $first->id, 'reference' => $first->checkoutReference?->short_reference ?: $key,
                 'created_at' => $history->min('created_at'), 'category' => $category, 'category_label' => self::CATEGORIES[$category],
                 'customer_name' => $detailed ? ($first->parent_name ?: $first->user?->name ?: 'زائر') : null,
-                'customer_key' => $first->user_id ? 'user:'.$first->user_id : 'guest:'.sha1((string) (filled($delivery['phone'] ?? null) ? $delivery['phone'] : $key)),
-                'customer_type' => $first->user_id ? 'registered' : 'guest',
+                'customer_key' => $first->user?->role === 'customer' ? 'user:'.$first->user_id : 'guest:'.sha1((string) (filled($delivery['phone'] ?? null) ? $delivery['phone'] : $key)),
+                'customer_type' => $first->user?->role === 'customer' ? 'registered' : 'guest',
                 'country_id' => $delivery['delivery_country_id'] ?? null, 'governorate_id' => $delivery['delivery_governorate_id'] ?? null,
                 'country' => (string) ($delivery['country'] ?? 'غير محدد'), 'governorate' => (string) ($delivery['governorate'] ?? 'غير محدد'),
                 'source_key' => $source, 'source' => $source === 'direct' ? OrderSource::label('website') : ($cart ? trim($source.' '.($cart->utm_medium ?? '')) : OrderSource::label($source)),

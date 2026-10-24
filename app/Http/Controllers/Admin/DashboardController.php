@@ -44,7 +44,7 @@ class DashboardController extends Controller
 
         $totalStories = $canViewStatistics ? Story::count() : null;
         $activeStories = $canViewStatistics ? Story::where('active', true)->count() : null;
-        $totalUsers = $canViewStatistics ? User::where('role', '!=', 'admin')->count() : null;
+        $totalUsers = $canViewStatistics ? User::where('role', 'customer')->count() : null;
         $unreadMessages = $canViewStatistics ? ContactMessage::where('is_read', false)->count() : null;
 
         $recentOrders = $orderGroups->recent();

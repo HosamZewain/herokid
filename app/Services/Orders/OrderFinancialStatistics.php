@@ -28,6 +28,7 @@ class OrderFinancialStatistics
         $items = DB::table('order_items')->select('order_id')
             ->whereIn('order_id', (clone $orders)->select('o.id'))
             ->selectRaw('SUM(total_price_cents) as cents, MAX(CASE WHEN item_type = ? THEN 1 ELSE 0 END) as has_story, SUM(CASE WHEN item_type IN (?, ?) THEN quantity ELSE 0 END) as products', ['story', 'product', 'product_add_on'])
+            ->selectRaw('SUM(CASE WHEN item_type = ? THEN quantity ELSE 0 END) as story_quantity', ['story'])
             ->groupBy('order_id');
         $grammar = DB::connection()->getQueryGrammar();
         $itemPrice = $grammar->wrap('o.delivery_details->item_price');
@@ -45,7 +46,9 @@ class OrderFinancialStatistics
             ->selectRaw('MIN(o.id) as first_id, COALESCE(SUM(i.cents), 0) as item_cents, COALESCE(MAX(o.discount_cents), 0) as discount_cents')
             ->selectRaw('COUNT(*) as order_records')
             ->selectRaw("ROUND(SUM(COALESCE(CAST(NULLIF($itemPrice, 'null') AS DECIMAL(18,4)), s.price, 0)) * 100) as legacy_cents")
+            ->selectRaw("SUM(CASE WHEN i.order_id IS NOT NULL THEN i.cents ELSE ROUND(COALESCE(CAST(NULLIF($itemPrice, 'null') AS DECIMAL(18,4)), s.price, 0) * 100) END) as effective_item_cents")
             ->selectRaw('SUM(CASE WHEN o.story_id IS NOT NULL OR i.has_story = 1 THEN 1 ELSE 0 END) as stories, COALESCE(SUM(i.products), 0) as products')
+            ->selectRaw('SUM(CASE WHEN i.story_quantity > 0 THEN i.story_quantity WHEN o.story_id IS NOT NULL THEN 1 ELSE 0 END) as story_quantity')
             ->selectRaw("CASE WHEN COUNT(DISTINCT NULLIF(NULLIF(o.status, ''), '0')) = 1 THEN MAX(NULLIF(NULLIF(o.status, ''), '0')) ELSE 'mixed' END as status")
             ->selectRaw("CASE WHEN COUNT(DISTINCT $shipping) = 1 THEN MAX($shipping) ELSE 'mixed' END as shipping_status", [...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY, ...$shippingKeys, OrderWorkflowStatus::SHIPPING_NOT_READY])
             ->selectRaw("CASE WHEN COUNT(DISTINCT $printing) = 1 THEN MAX($printing) ELSE 'mixed' END as printing_status", [...$printingKeys, OrderWorkflowStatus::PRINTING_NOT_STARTED, ...$printingKeys, OrderWorkflowStatus::PRINTING_NOT_STARTED])
@@ -64,8 +67,8 @@ class OrderFinancialStatistics
             ->selectRaw("ROUND(CASE WHEN CAST(COALESCE(NULLIF($delivery, 'null'), '0') AS DECIMAL(18,4)) > 0 THEN CAST($delivery AS DECIMAL(18,4)) ELSE 0 END * 100) as delivery_cents")
             ->selectRaw("CASE WHEN first_order.payment_status IN ($slots) THEN first_order.payment_status ELSE ? END as payment_status", [...$paymentKeys, OrderPaymentStatus::UNPAID])
             ->selectRaw('COALESCE(first_order.paid_amount_cents, 0) as raw_paid')
-            ->selectRaw('(CASE WHEN item_cents = 0 THEN legacy_cents ELSE item_cents END - g.discount_cents) as raw_average_value')
-            ->selectRaw("(CASE WHEN item_cents = 0 THEN legacy_cents ELSE item_cents END + ROUND(CASE WHEN CAST(COALESCE(NULLIF($delivery, 'null'), '0') AS DECIMAL(18,4)) > 0 THEN CAST($delivery AS DECIMAL(18,4)) ELSE 0 END * 100) - g.discount_cents) as raw_total");
+            ->selectRaw('(effective_item_cents - g.discount_cents) as raw_average_value')
+            ->selectRaw("(effective_item_cents + ROUND(CASE WHEN CAST(COALESCE(NULLIF($delivery, 'null'), '0') AS DECIMAL(18,4)) > 0 THEN CAST($delivery AS DECIMAL(18,4)) ELSE 0 END * 100) - g.discount_cents) as raw_total");
         $totals = DB::query()->fromSub($base, 'b')
             ->select('b.*')
             ->selectRaw('CASE WHEN raw_average_value > 0 THEN raw_average_value ELSE 0 END as average_value_cents')

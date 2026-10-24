@@ -109,9 +109,15 @@ class SalesReportService
 
     private function rowsForKeys(SalesReportFilters $filters, bool $detailed, Collection $onlyKeys): Collection
     {
-        $orders = $this->orderQuery($filters)
+        $matchingOrders = $this->orderQuery($filters)
             ->whereIn('checkout_group_key', $onlyKeys)
-            ->get();
+            ->withoutEagerLoads()->get(['id', 'checkout_group_key']);
+        $matchingIds = $matchingOrders->pluck('id')->flip();
+        // Allocate over the complete checkout before selecting matching items.
+        // A filtered sibling must not inherit the entire shipping/discount/balance.
+        $orders = $this->baseOrderQuery()
+            ->whereIn('checkout_group_key', $matchingOrders->pluck('checkout_group_key')->unique())
+            ->orderBy('id')->get();
         $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($checkoutKeys);
         $filterTotals = $filters->minimumTotal !== null || $filters->maximumTotal !== null
@@ -130,9 +136,10 @@ class SalesReportService
 
         $rows = $orders
             ->groupBy(fn (Order $order): string => $this->checkoutKey($order))
-            ->map(function (Collection $group) use ($filters, $carts, $cartRanks, $checkoutStates, $creationDates, $detailed): ?array {
+            ->map(function (Collection $group) use ($filters, $carts, $cartRanks, $checkoutStates, $creationDates, $detailed, $matchingIds): ?array {
                 $orders = $group->sortBy('id')->values();
-                $items = $orders->flatMap(fn (Order $order): array => $this->orderItems($order, $filters))->values();
+                $allItems = $orders->flatMap(fn (Order $order): array => $this->orderItems($order))->values();
+                $items = $allItems->filter(fn (array $item): bool => $matchingIds->has($item['order_id']) && $this->itemMatches($item, $filters))->values();
 
                 if ($items->isEmpty()) {
                     return null;
@@ -151,7 +158,7 @@ class SalesReportService
                         $firstCartRank = $rank;
                     }
                 }
-                $itemsTotalCents = (int) $items->sum('total_cents');
+                $itemsTotalCents = (int) $allItems->sum('total_cents');
                 $deliveryCents = (int) round(max(0, (float) data_get($first->delivery_details, 'delivery_fee', 0)) * 100);
                 $discountCents = (int) $orders->max('discount_cents');
                 $totalCents = max(0, $itemsTotalCents + $deliveryCents - $discountCents);
@@ -160,23 +167,36 @@ class SalesReportService
                     ? $stateFirst->payment_status
                     : OrderPaymentStatus::UNPAID;
                 $paidAmountCents = max(0, (int) $stateFirst->paid_amount_cents);
-                $items = $this->withCollectedAmounts($items, $paidAmountCents);
+                $remainingCents = max(0, $totalCents - $paidAmountCents);
+                foreach (['delivery_cents' => $deliveryCents, 'discount_cents' => $discountCents,
+                    'value_cents' => $totalCents, 'collected_cents' => $paidAmountCents,
+                    'remaining_cents' => $remainingCents] as $field => $amount) {
+                    $allItems = $this->allocateAmount($allItems, $amount, $field);
+                }
+                $items = $allItems->filter(fn (array $item): bool => $matchingIds->has($item['order_id']) && $this->itemMatches($item, $filters))->values();
+                $itemsTotalCents = (int) $items->sum('total_cents');
+                $deliveryCents = (int) $items->sum('delivery_cents');
+                $discountCents = (int) $items->sum('discount_cents');
+                $totalCents = (int) $items->sum('value_cents');
+                $paidAmountCents = (int) $items->sum('collected_cents');
+                $remainingCents = (int) $items->sum('remaining_cents');
+                $selectedOrders = $orders->whereIn('id', $items->pluck('order_id'))->values();
                 $fullyDelivered = $statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered');
                 $cancelled = $statuses->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
                 // This is the current balance of the order cohort, NOT cash collected in
                 // the date range. PaymentCollectionReportService supplies cash metrics.
                 $saleRecognized = ! $cancelled && $paidAmountCents > 0;
                 $phone = trim((string) data_get($first->delivery_details, 'phone', ''));
-                $customerKey = $first->user_id ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
+                $customerKey = $first->user?->role === 'customer' ? 'user-'.$first->user_id : 'guest-'.sha1($phone ?: $this->checkoutKey($first));
 
                 return [
                     'key' => $this->checkoutKey($first),
                     'created_at' => $createdAt,
                     'date' => $detailed ? AppDateTime::format($createdAt, 'Y-m-d H:i') : null,
-                    'order_ids' => $detailed ? $orders->pluck('id')->values()->all() : [],
-                    'order_numbers' => $detailed ? $orders->pluck('order_number')->values()->all() : [],
+                    'order_ids' => $detailed ? $selectedOrders->pluck('id')->values()->all() : [],
+                    'order_numbers' => $detailed ? $selectedOrders->pluck('order_number')->values()->all() : [],
                     'first_order_id' => $first->id,
-                    'order_records' => $orders->count(),
+                    'order_records' => $items->pluck('order_id')->unique()->count(),
                     'statuses' => $statuses->all(),
                     'status_label' => $statuses->map(fn (string $status): string => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status))->implode('، '),
                     'fully_delivered' => $fullyDelivered,
@@ -184,7 +204,7 @@ class SalesReportService
                     'payment_status' => $paymentStatus,
                     'payment_status_label' => OrderPaymentStatus::label($paymentStatus),
                     'paid_amount_cents' => $paidAmountCents,
-                    'remaining_amount_cents' => max(0, $totalCents - $paidAmountCents),
+                    'remaining_amount_cents' => $remainingCents,
                     'payment_method' => $stateFirst->payment_method,
                     'sale_recognized' => $saleRecognized,
                     'sales_classification_label' => $this->salesClassificationLabel(
@@ -195,7 +215,7 @@ class SalesReportService
                     ),
                     'customer_name' => $detailed ? ($first->parent_name ?: $first->user?->name ?: 'زائر') : null,
                     'customer_key' => $customerKey,
-                    'customer_type' => $first->user_id ? 'registered' : 'guest',
+                    'customer_type' => $first->user?->role === 'customer' ? 'registered' : 'guest',
                     'phone' => $detailed ? $phone : null,
                     'country' => (string) data_get($first->delivery_details, 'country', 'غير محدد'),
                     'governorate' => (string) data_get($first->delivery_details, 'governorate', 'غير محدد'),
@@ -210,11 +230,12 @@ class SalesReportService
                         ->map(fn (Collection $same): string => $same->first()['title'].' × '.$same->sum('quantity'))
                         ->values()->implode('، '),
                     'items_quantity' => (int) $items->sum('quantity'),
+                    'amounts_allocated' => $items->count() !== $allItems->count(),
                     'items_total_cents' => $itemsTotalCents,
                     'delivery_cents' => $deliveryCents,
                     'discount_cents' => $discountCents,
                     'total_cents' => $totalCents,
-                    'orders' => $orders->map(function (Order $order) use ($items): array {
+                    'orders' => $selectedOrders->map(function (Order $order) use ($items): array {
                         return [
                             'id' => $order->id,
                             'status' => $order->status,
@@ -247,17 +268,22 @@ class SalesReportService
         };
     }
 
-    private function orderQuery(SalesReportFilters $filters): Builder
+    private function baseOrderQuery(): Builder
     {
-        $query = Order::query()
+        return Order::query()
             ->select(['id', 'checkout_group_key', 'order_number', 'story_id', 'user_id', 'status',
                 'payment_status', 'paid_amount_cents', 'payment_method', 'discount_cents',
                 'delivery_details', 'order_source', 'parent_name', 'created_at'])
             ->with([
                 'items:id,order_id,item_type,story_id,product_id,title,sku,unit_price_cents,quantity,total_price_cents',
                 'story:id,title,price',
-                'user:id,name',
-            ])
+                'user:id,name,role',
+            ]);
+    }
+
+    private function orderQuery(SalesReportFilters $filters): Builder
+    {
+        $query = $this->baseOrderQuery()
             ->whereIn('checkout_group_key', app(CheckoutIntakeStatistics::class)->keysBetween($filters->start(), $filters->end()));
 
         if ($filters->status === 'active') {
@@ -271,9 +297,9 @@ class SalesReportService
         }
 
         if ($filters->customerType === 'registered') {
-            $query->whereNotNull('user_id');
+            $query->whereHas('user', fn (Builder $user): Builder => $user->where('role', 'customer'));
         } elseif ($filters->customerType === 'guest') {
-            $query->whereNull('user_id');
+            $query->whereDoesntHave('user', fn (Builder $user): Builder => $user->where('role', 'customer'));
         }
 
         $query
@@ -328,7 +354,7 @@ class SalesReportService
         });
     }
 
-    private function orderItems(Order $order, SalesReportFilters $filters): array
+    private function orderItems(Order $order): array
     {
         $items = $order->items->map(fn ($item): array => [
             'order_id' => $order->id,
@@ -359,10 +385,7 @@ class SalesReportService
             ];
         }
 
-        return collect($items)
-            ->filter(fn (array $item): bool => $this->itemMatches($item, $filters))
-            ->values()
-            ->all();
+        return $items;
     }
 
     private function itemMatches(array $item, SalesReportFilters $filters): bool
@@ -601,26 +624,23 @@ class SalesReportService
 
     /**
      * Attribute the collected checkout amount across its items for reporting.
-     * This keeps item/type breakdown totals tied to cash collected, including
-     * partial payments and order-level discounts, without changing snapshots.
+     * Allocate a checkout fact before filtering. Cumulative integer rounding
+     * preserves the exact amount, including zero-priced orders, without writes.
      */
-    private function withCollectedAmounts(Collection $items, int $paidAmountCents): Collection
+    private function allocateAmount(Collection $items, int $amount, string $field): Collection
     {
         $grossItemsCents = (int) $items->sum('total_cents');
-        $remainingCents = max(0, $paidAmountCents);
         $lastIndex = $items->count() - 1;
+        $cumulative = 0;
+        $allocated = 0;
 
-        return $items->values()->map(function (array $item, int $index) use ($grossItemsCents, $lastIndex, $paidAmountCents, &$remainingCents): array {
-            if ($remainingCents === 0 || $grossItemsCents <= 0) {
-                return $item + ['collected_cents' => 0];
-            }
+        return $items->values()->map(function (array $item, int $index) use ($grossItemsCents, $lastIndex, $amount, $field, &$cumulative, &$allocated): array {
+            $cumulative += max(0, (int) $item['total_cents']);
+            $next = $index === $lastIndex ? $amount : ($grossItemsCents > 0 ? intdiv($amount * $cumulative, $grossItemsCents) : 0);
+            $item[$field] = $next - $allocated;
+            $allocated = $next;
 
-            $collectedCents = $index === $lastIndex
-                ? $remainingCents
-                : min($remainingCents, intdiv(max(0, (int) $item['total_cents']) * $paidAmountCents, $grossItemsCents));
-            $remainingCents -= $collectedCents;
-
-            return $item + ['collected_cents' => $collectedCents];
+            return $item;
         });
     }
 

@@ -86,6 +86,24 @@ class PaymentReportTest extends TestCase
         $this->get(route('admin.dashboard.index'))->assertOk()->assertSee('٥,٣٥٨.٢٦');
     }
 
+    public function test_mobile_guest_and_employee_accounts_are_not_registered_customers_in_reports(): void
+    {
+        foreach (['customer', 'mobile_guest', 'admin'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+            $order = $this->order('CUSTOMER-TYPE-'.$role, ['product'], ['user_id' => $user->id, 'created_at' => '2026-10-05 12:00:00']);
+            $this->event($order, 10000, '2026-10-06 12:00:00');
+        }
+        foreach (['registered' => 1, 'guest' => 2, 'all' => 3] as $type => $count) {
+            $filters = $this->filters(['customer_type' => $type]);
+            $sales = app(SalesReportService::class)->report($filters);
+            $this->assertSame($count, $sales['operational_summary']['all_checkouts']);
+            $payments = app(PaymentCollectionReportService::class);
+            $summary = $payments->summary($payments->events($filters));
+            $this->assertSame($count * 10000, $summary['net_cents']);
+            $this->assertSame($count * 100.0, $sales['summary']['total']);
+        }
+    }
+
     public function test_cancelled_deleted_overpaid_and_reversed_cash_is_not_capped_or_excluded(): void
     {
         $cancelled = $this->order('CANCELLED', ['product'], ['status' => 'cancelled']);

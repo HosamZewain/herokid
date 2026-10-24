@@ -28,10 +28,11 @@ class AdminOrderReportService
                 '_all_delivered' => (bool) $fact->all_delivered,
                 'trashed' => ! $fact->has_live_orders,
                 'story_count' => (int) $fact->stories,
+                'story_quantity' => (int) $fact->story_quantity,
                 'product_quantity' => (int) $fact->products,
                 'add_on_quantity' => 0,
                 'order_records' => (int) $fact->order_records,
-                'items_cents' => (int) ($fact->item_cents == 0 ? $fact->legacy_cents : $fact->item_cents),
+                'items_cents' => (int) $fact->effective_item_cents,
                 'delivery_cents' => (int) $fact->delivery_cents,
                 'discount_cents' => (int) $fact->discount_cents,
                 'total_cents' => (int) $fact->total_cents,
@@ -107,11 +108,19 @@ class AdminOrderReportService
             )));
         $finished = ! $cancelled && $this->isFinished($row);
         $lifecycle = $cancelled ? 'cancelled' : ($finished ? 'finished' : 'active');
+        $hasStories = $row['story_quantity'] > 0;
+        $hasProducts = $row['product_quantity'] + $row['add_on_quantity'] > 0;
+        $catalogType = $hasStories && $hasProducts ? 'mixed' : ($hasStories ? 'stories' : ($hasProducts ? 'products' : 'unclassified'));
 
         return [
             ...$row,
-            'catalog_type' => $row['story_count'] > 0 ? 'stories' : 'products',
-            'catalog_type_label' => $row['story_count'] > 0 ? 'طلبات قصص' : 'طلبات منتجات',
+            'catalog_type' => $catalogType,
+            'catalog_type_label' => match ($catalogType) {
+                'stories' => 'طلبات قصص فقط',
+                'products' => 'طلبات منتجات فقط',
+                'mixed' => 'طلبات مختلطة — قصص ومنتجات',
+                default => 'طلبات غير مصنفة',
+            },
             'lifecycle' => $lifecycle,
             'lifecycle_label' => match ($lifecycle) {
                 'cancelled' => 'ملغاة / محذوفة',
@@ -166,7 +175,7 @@ class AdminOrderReportService
         return [
             'checkouts' => $rows->count(),
             'order_records' => (int) $rows->sum(fn (array $row): int => $row['order_records'] ?? count($row['order_numbers'])),
-            'stories' => (int) $rows->sum('story_count'),
+            'stories' => (int) $rows->sum('story_quantity'),
             'products' => (int) $rows->sum(fn (array $row): int => $row['product_quantity'] + $row['add_on_quantity']),
             'items_cents' => (int) $rows->sum('items_cents'),
             'delivery_cents' => (int) $rows->sum('delivery_cents'),
@@ -174,6 +183,7 @@ class AdminOrderReportService
             'total_cents' => (int) $rows->sum('total_cents'),
             'paid_amount_cents' => (int) $rows->sum('paid_amount_cents'),
             'remaining_amount_cents' => (int) $rows->sum('remaining_amount_cents'),
+            'excess_paid_cents' => (int) $rows->sum(fn (array $row): int => max(0, $row['paid_amount_cents'] - $row['total_cents'])),
             'average_order_cents' => $rows->isEmpty() ? 0 : (int) round($rows->avg(
                 fn (array $row): int => max(0, (int) $row['items_cents'] - (int) $row['discount_cents'])
             )),

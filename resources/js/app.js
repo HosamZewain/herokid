@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('Analytics unavailable');
             const data = await response.json();
             if (data.status !== 'ready') throw new Error(data.status === 'setup_required' ? 'تحليلات GA4 تحتاج إعداد credentials.' : 'تعذر تحميل ملخص التحليلات حالياً.');
-            panel.replaceChildren(...[['نشطون الآن', data.active_users_30m], ['مستخدمون اليوم', data.users_today], ['جلسات اليوم', data.sessions_today]].map(([label, value]) => {
+            panel.replaceChildren(...[['نشطون آخر ٣٠ دقيقة', data.active_users_30m], ['مستخدمون اليوم', data.users_today], ['جلسات اليوم', data.sessions_today]].map(([label, value]) => {
                 const card = document.createElement('div');
                 card.className = 'rounded-2xl bg-indigo-50 px-4 py-3';
                 const title = document.createElement('p'); title.className = 'text-xs font-bold text-indigo-500'; title.textContent = label;

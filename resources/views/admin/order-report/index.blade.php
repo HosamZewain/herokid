@@ -174,6 +174,11 @@
                 @endforeach
             </section>
 
+            <p class="text-sm text-slate-600">الطلبات المختارة تشمل {{ number_format($summary['stories']) }} نسخة قصة و{{ number_format($summary['products']) }} منتجًا وإضافة. كل عملية شراء تُحسب مرة واحدة؛ الطلب المختلط ظاهر كتصنيف مستقل.</p>
+            @if($summary['excess_paid_cents'] > 0)
+                <p class="text-sm text-amber-800">رصيد مدفوع زائد عن القيمة الحالية لبعض الطلبات: {{ $money($summary['excess_paid_cents']) }}. قيمة الطلبات = الرصيد المدفوع + المتبقي − الزيادة. لا تُخصم الزيادة من مديونية طلب آخر، وليست إثباتًا لاسترداد نقدي.</p>
+            @endif
+
             <section class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 @foreach([
                     'catalog' => 'حسب نوع الطلب',
@@ -224,7 +229,7 @@
                                 <tr class="align-top">
                                     <td class="px-4 py-4"><p class="font-mono font-black text-gray-900" dir="ltr">{{ $row['short_reference'] ?: $row['key'] }}</p><p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ app_datetime($row['created_at']) }}</p><span class="mt-2 inline-flex rounded-full bg-gray-100 px-2 py-1 font-black text-gray-600">{{ $row['lifecycle_label'] }}</span></td>
                                     <td class="px-4 py-4"><p class="font-black text-gray-900">{{ $row['customer_name'] }}</p><p class="mt-1 text-gray-400" dir="ltr">{{ $row['phone'] }}</p>@if($row['child_names'])<p class="mt-2 text-gray-500">الأطفال: {{ implode('، ', $row['child_names']) }}</p>@endif</td>
-                                    <td class="max-w-xs px-4 py-4"><span class="rounded-full bg-indigo-50 px-2 py-1 font-black text-indigo-700">{{ $row['catalog_type_label'] }}</span><p class="mt-2 line-clamp-3 leading-5 text-gray-600">{{ implode('، ', $titles) ?: 'لا توجد عناوين مسجلة' }}</p><p class="mt-1 text-[10px] text-gray-400">{{ $row['story_count'] }} قصة · {{ $row['product_quantity'] + $row['add_on_quantity'] }} منتج/إضافة</p></td>
+                                    <td class="max-w-xs px-4 py-4"><span class="rounded-full bg-indigo-50 px-2 py-1 font-black text-indigo-700">{{ $row['catalog_type_label'] }}</span><p class="mt-2 line-clamp-3 leading-5 text-gray-600">{{ implode('، ', $titles) ?: 'لا توجد عناوين مسجلة' }}</p><p class="mt-1 text-[10px] text-gray-400">{{ $row['story_quantity'] }} قصة · {{ $row['product_quantity'] + $row['add_on_quantity'] }} منتج/إضافة</p></td>
                                     <td class="px-4 py-4"><p class="font-black text-gray-700">{{ $row['order_source_label'] }}</p>@if($row['payment_method'])<p class="mt-2 text-gray-400">{{ $row['payment_method'] }}</p>@endif</td>
                                     <td class="space-y-1 px-4 py-4"><p>الطلب: <strong>{{ $row['status_label'] }}</strong></p><p>الدفع: <strong>{{ $row['payment_status_label'] }}</strong></p><p>الطباعة: <strong>{{ $row['printing_status_label'] }}</strong></p><p>الشحن: <strong>{{ $row['shipping_status_label'] }}</strong></p></td>
                                     <td class="px-4 py-4"><p class="font-black text-gray-950">{{ $money($row['total_cents']) }}</p><p class="mt-1 text-[10px] text-gray-400">عناصر {{ $money($row['items_cents']) }} + توصيل {{ $money($row['delivery_cents']) }}</p>@if($row['discount_cents'])<p class="mt-1 text-[10px] text-violet-600">خصم {{ $money($row['discount_cents']) }}</p>@endif</td>

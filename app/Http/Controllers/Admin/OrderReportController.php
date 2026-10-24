@@ -68,7 +68,7 @@ class OrderReportController extends Controller
                     implode('، ', $row['child_names']),
                     implode('، ', $row['story_titles']),
                     implode('، ', array_merge($row['product_titles'], $row['add_on_titles'])),
-                    $row['story_count'],
+                    $row['story_quantity'],
                     $row['product_quantity'] + $row['add_on_quantity'],
                     $row['status_label'],
                     $row['payment_status_label'],
