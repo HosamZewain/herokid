@@ -54,8 +54,8 @@
         <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('admin.analytics.index') }}" class="grid gap-3 lg:grid-cols-[1fr_180px_180px_160px] lg:items-end">
                 <div class="text-right">
-                    <label class="mb-2 block text-sm font-bold text-gray-700">الفترة</label>
-                    <select name="range" class="w-full rounded-xl border-gray-200 text-right">
+                    <label for="analytics-filter-range" class="mb-2 block text-sm font-bold text-gray-700">الفترة</label>
+                    <select id="analytics-filter-range" name="range" class="w-full rounded-xl border-gray-200 text-right">
                         <option value="today" @selected($range->key === 'today')>اليوم</option>
                         <option value="yesterday" @selected($range->key === 'yesterday')>أمس</option>
                         <option value="last_7_days" @selected($range->key === 'last_7_days')>آخر 7 أيام</option>
@@ -64,12 +64,12 @@
                     </select>
                 </div>
                 <div>
-                    <label class="mb-2 block text-sm font-bold text-gray-700">من</label>
-                    <input type="date" name="start_date" value="{{ $range->startDate }}" class="w-full rounded-xl border-gray-200">
+                    <label for="analytics-filter-start-date" class="mb-2 block text-sm font-bold text-gray-700">من</label>
+                    <input id="analytics-filter-start-date" type="date" name="start_date" value="{{ $range->startDate }}" class="w-full rounded-xl border-gray-200">
                 </div>
                 <div>
-                    <label class="mb-2 block text-sm font-bold text-gray-700">إلى</label>
-                    <input type="date" name="end_date" value="{{ $range->endDate }}" class="w-full rounded-xl border-gray-200">
+                    <label for="analytics-filter-end-date" class="mb-2 block text-sm font-bold text-gray-700">إلى</label>
+                    <input id="analytics-filter-end-date" type="date" name="end_date" value="{{ $range->endDate }}" class="w-full rounded-xl border-gray-200">
                 </div>
                 <button class="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-700">تطبيق</button>
             </form>
@@ -101,6 +101,11 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                 <p class="mt-2 leading-8 text-red-800">{{ $analytics['message'] ?? 'حاول مرة أخرى بعد قليل.' }}</p>
             </div>
         @else
+            <section aria-labelledby="analytics-today-heading" class="space-y-4">
+            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-right">
+                <h3 id="analytics-today-heading" class="text-lg font-black text-indigo-900">ملخص اليوم والنشاط المباشر</h3>
+                <p class="mt-1 text-sm text-indigo-800">هذه البطاقات لليوم بتوقيت القاهرة، والنشطون لآخر 30 دقيقة. لا تتغير فترتها عند اختيار تواريخ أخرى؛ التقارير الخاصة بالفترة المختارة بالأسفل.</p>
+            </div>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 @foreach($summaryCards as $key => $meta)
                     @php
@@ -116,6 +121,12 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                         <div class="mt-3">{!! $changeBadge($card['change'] ?? null) !!}</div>
                     </div>
                 @endforeach
+            </div>
+            </section>
+
+            <div class="border-t border-gray-200 pt-6 text-right" aria-labelledby="analytics-period-heading">
+                <h3 id="analytics-period-heading" class="text-lg font-black text-gray-900">تقارير الفترة المختارة</h3>
+                <p class="mt-1 text-sm text-gray-600"><bdi dir="ltr">{{ $range->startDate }} → {{ $range->endDate }}</bdi> · بتوقيت القاهرة</p>
             </div>
 
             @php

@@ -183,7 +183,7 @@
                 <p class="text-sm text-amber-800">رصيد مدفوع زائد عن القيمة الحالية لبعض الطلبات: {{ $money($summary['excess_paid_cents']) }}. قيمة الطلبات = الرصيد المدفوع + المتبقي − الزيادة. لا تُخصم الزيادة من مديونية طلب آخر، وليست إثباتًا لاسترداد نقدي.</p>
             @endif
 
-            <section class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <section class="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
                 @foreach([
                     'catalog' => 'حسب نوع الطلب',
                     'lifecycle' => 'حسب دورة الطلب',

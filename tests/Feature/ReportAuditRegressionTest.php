@@ -178,9 +178,113 @@ class ReportAuditRegressionTest extends TestCase
         $this->assertEquals(50, $report['summary']['ctr']);
         $this->assertSame(2, $report['summary']['views']);
         $this->assertSame(4, $report['summary']['cta_clicks']);
+        $this->assertSame(2, $report['summary']['identified_viewers']);
+        $this->assertSame(1, $report['summary']['clicked_viewers']);
+        $this->assertSame(2, $report['summary']['eligible_click_events']);
+        $this->assertSame(1, $report['summary']['repeated_eligible_click_events']);
+        $this->assertSame(1, $report['summary']['anonymous_click_events']);
+        $this->assertSame(1, $report['summary']['unmatched_click_events']);
+        $this->assertSame($report['summary']['cta_clicks'], array_sum(array_intersect_key($report['summary'], array_flip([
+            'clicked_viewers', 'repeated_eligible_click_events', 'anonymous_click_events', 'unmatched_click_events',
+        ]))));
         $this->assertSame(2, $report['top_shares']->first()->period_views);
         $this->assertSame(4, $report['top_shares']->first()->period_clicks);
         $this->assertSame(999, $share->fresh()->total_views);
+    }
+
+    public function test_share_click_explanation_requires_the_same_share_and_period_and_is_read_only(): void
+    {
+        $one = $this->share();
+        $two = $this->share();
+        foreach (range(1, 2) as $i) {
+            $one->events()->create(['event_type' => 'share.page_viewed', 'anonymous_visitor_id' => 'same-browser', 'occurred_at' => now()]);
+        }
+        $two->events()->create(['event_type' => 'share.page_viewed', 'anonymous_visitor_id' => 'same-browser', 'occurred_at' => now()->subDays(2)]);
+        $two->events()->create(['event_type' => 'share.cta_clicked', 'anonymous_visitor_id' => 'same-browser', 'occurred_at' => now()]);
+        foreach (['unmatched', null] as $visitor) {
+            $one->events()->create(['event_type' => 'share.cta_clicked', 'anonymous_visitor_id' => $visitor, 'occurred_at' => now()]);
+        }
+        $one->events()->create(['event_type' => 'share.image_saved', 'channel' => 'download_feed', 'occurred_at' => now()]);
+        $order = $this->order('CTR-NO-WRITES');
+        $order->update(['paid_amount_cents' => 1700]);
+        OrderPaymentEvent::create(['event_uuid' => Str::uuid(), 'checkout_group_key' => $order->checkout_group_key,
+            'order_id' => $order->id, 'event_type' => 'legacy_baseline', 'source' => 'audit_test', 'new_status' => 'partially_paid',
+            'previous_paid_amount_cents' => 0, 'new_paid_amount_cents' => 1700, 'amount_delta_cents' => 0,
+            'affects_collection_stats' => false, 'occurred_at' => now()->subMonths(2)]);
+        $before = collect(['orders', 'order_payment_events', 'child_identity_shares', 'child_identity_share_events'])
+            ->mapWithKeys(fn ($table) => [$table => DB::table($table)->orderBy('id')->get()->toJson()]);
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+        $response = $this->get('/admin/child-identities/share-report?date_from=2026-10-24&date_to=2026-10-24')->assertOk();
+        $summary = $response->viewData('report')['summary'];
+        $this->assertSame(1, $summary['identified_viewers']);
+        $this->assertEquals(0, $summary['ctr']);
+        $this->assertSame(0, $summary['clicked_viewers']);
+        $this->assertSame(0, $summary['eligible_click_events']);
+        $this->assertSame(0, $summary['repeated_eligible_click_events']);
+        $this->assertSame(2, $summary['unmatched_click_events']);
+        $this->assertSame(1, $summary['anonymous_click_events']);
+        $response->assertSee('نسبة النقر من زوار المشاركات')->assertSee('الأسباب بالأعداد أدناه')
+            ->assertSee('تنزيل صورة المنشور')->assertDontSee('download_feed')
+            ->assertSee('كل ضغطات الزر (بما فيها التكرار)');
+        foreach ($before as $table => $snapshot) {
+            $this->assertSame($snapshot, DB::table($table)->orderBy('id')->get()->toJson(), $table.' must not be changed by reporting');
+        }
+    }
+
+    public function test_share_ctr_without_identified_views_is_unavailable_not_zero(): void
+    {
+        $share = $this->share();
+        foreach (['share.page_viewed', 'share.cta_clicked'] as $type) {
+            $share->events()->create(['event_type' => $type, 'anonymous_visitor_id' => null, 'occurred_at' => now()]);
+        }
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+        $response = $this->get('/admin/child-identities/share-report?date_from=2026-10-24&date_to=2026-10-24')->assertOk();
+        $this->assertNull($response->viewData('report')['summary']['ctr']);
+        $response->assertSee('النسبة غير متاحة وليست 0%')->assertSee('بدون معرّف زائر');
+    }
+
+    public function test_report_filters_have_unique_associated_labels_and_keep_submitted_values(): void
+    {
+        $client = \Mockery::mock(Ga4AnalyticsClient::class);
+        $client->shouldReceive('isConfigured')->andReturn(true);
+        $client->shouldReceive('propertyId')->andReturn('isolated-display-test');
+        $client->shouldReceive('runReport')->andReturn(['rows' => []]);
+        $client->shouldReceive('runRealtimeReport')->andReturn(['rows' => []]);
+        $this->app->instance(Ga4AnalyticsClient::class, $client);
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+        $cases = [
+            ['/admin/sales-report', 'sales-filter-', ['range' => 'custom', 'start_date' => '2026-10-01', 'end_date' => '2026-10-24', 'payment_status' => 'partially_paid', 'type' => 'story', 'q' => 'عرض & test', 'per_page' => '50'], 17],
+            ['/admin/analytics', 'analytics-filter-', ['range' => 'custom', 'start_date' => '2026-10-01', 'end_date' => '2026-10-24'], 3],
+            ['/admin/visitor-carts', 'carts-filter-', ['date_from' => '2026-10-01', 'date_to' => '2026-10-24', 'status' => 'abandoned', 'customer_type' => 'guest', 'q' => 'عرض & test'], 6],
+            ['/admin/child-identities/share-report', 'share-filter-', ['date_from' => '2026-10-01', 'date_to' => '2026-10-24'], 2],
+        ];
+        foreach ($cases as [$path, $prefix, $query, $count]) {
+            $response = $this->get($path.'?'.http_build_query($query))->assertOk();
+            $document = new \DOMDocument;
+            $previous = libxml_use_internal_errors(true);
+            $document->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            $xpath = new \DOMXPath($document);
+            $controls = $xpath->query('//*[self::input or self::select][starts-with(@id, "'.$prefix.'")]');
+            $this->assertCount($count, $controls, $path);
+            foreach ($controls as $control) {
+                $id = $control->getAttribute('id');
+                $this->assertSame(1, $xpath->query('//*[@id="'.$id.'"]')->length, $id.' must be unique');
+                $this->assertSame(1, $xpath->query('//label[@for="'.$id.'"]')->length, $id.' must have a label');
+                $name = $control->getAttribute('name');
+                if (array_key_exists($name, $query)) {
+                    $value = $control->tagName === 'select'
+                        ? $xpath->query('.//option[@selected]', $control)->item(0)?->getAttribute('value')
+                        : $control->getAttribute('value');
+                    $this->assertSame($query[$name], $value, $path.' '.$name);
+                }
+            }
+            if ($path === '/admin/analytics') {
+                $response->assertSeeInOrder(['ملخص اليوم والنشاط المباشر', 'تقارير الفترة المختارة']);
+                $response->assertSee('لا تتغير فترتها عند اختيار تواريخ أخرى');
+            }
+        }
     }
 
     public function test_paid_in_full_means_positive_balance_covering_non_cancelled_value_in_both_reports(): void

@@ -53,8 +53,8 @@
                 <form method="GET" action="{{ route('admin.sales-report.index') }}" class="space-y-4">
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <div>
-                            <label class="mb-2 block text-sm font-black text-gray-700">الفترة</label>
-                            <select name="range" class="w-full rounded-xl border-gray-200 text-right">
+                            <label for="sales-filter-range" class="mb-2 block text-sm font-black text-gray-700">الفترة</label>
+                            <select id="sales-filter-range" name="range" class="w-full rounded-xl border-gray-200 text-right">
                                 <option value="today" @selected($filters->range === 'today')>اليوم</option>
                                 <option value="yesterday" @selected($filters->range === 'yesterday')>أمس</option>
                                 <option value="last_7_days" @selected($filters->range === 'last_7_days')>آخر 7 أيام</option>
@@ -66,16 +66,16 @@
                             </select>
                         </div>
                         <div>
-                            <label class="mb-2 block text-sm font-black text-gray-700">من</label>
-                            <input type="date" name="start_date" value="{{ $filters->startDate }}" class="w-full rounded-xl border-gray-200">
+                            <label for="sales-filter-start-date" class="mb-2 block text-sm font-black text-gray-700">من</label>
+                            <input id="sales-filter-start-date" type="date" name="start_date" value="{{ $filters->startDate }}" class="w-full rounded-xl border-gray-200">
                         </div>
                         <div>
-                            <label class="mb-2 block text-sm font-black text-gray-700">إلى</label>
-                            <input type="date" name="end_date" value="{{ $filters->endDate }}" class="w-full rounded-xl border-gray-200">
+                            <label for="sales-filter-end-date" class="mb-2 block text-sm font-black text-gray-700">إلى</label>
+                            <input id="sales-filter-end-date" type="date" name="end_date" value="{{ $filters->endDate }}" class="w-full rounded-xl border-gray-200">
                         </div>
                         <div>
-                            <label class="mb-2 block text-sm font-black text-gray-700">حالة الطلب</label>
-                            <select name="status" class="w-full rounded-xl border-gray-200 text-right">
+                            <label for="sales-filter-status" class="mb-2 block text-sm font-black text-gray-700">حالة الطلب</label>
+                            <select id="sales-filter-status" name="status" class="w-full rounded-xl border-gray-200 text-right">
                                 @foreach($statuses as $value => $label)
                                     <option value="{{ $value }}" @selected($filters->status === $value)>{{ $label }}</option>
                                 @endforeach
@@ -87,16 +87,16 @@
                         <summary class="cursor-pointer text-sm font-black text-gray-800">فلاتر متقدمة</summary>
                         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">حالة الدفع</label>
-                                <select name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-payment-status" class="mb-2 block text-xs font-black text-gray-600">حالة الدفع</label>
+                                <select id="sales-filter-payment-status" name="payment_status" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     @foreach($paymentStatuses as $value => $label)
                                         <option value="{{ $value }}" @selected($filters->paymentStatus === $value)>{{ $label }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">نوع البيع</label>
-                                <select name="type" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-type" class="mb-2 block text-xs font-black text-gray-600">نوع البيع</label>
+                                <select id="sales-filter-type" name="type" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="all" @selected($filters->type === 'all')>كل الأنواع</option>
                                     <option value="story" @selected($filters->type === 'story')>قصص مخصصة</option>
                                     <option value="product" @selected($filters->type === 'product')>منتجات مباشرة</option>
@@ -104,8 +104,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">قصة أو منتج محدد</label>
-                                <select name="item" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-item" class="mb-2 block text-xs font-black text-gray-600">قصة أو منتج محدد</label>
+                                <select id="sales-filter-item" name="item" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل العناصر</option>
                                     <optgroup label="القصص">
                                         @foreach($options['stories'] as $story)
@@ -120,16 +120,16 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">نوع العميل</label>
-                                <select name="customer_type" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-customer-type" class="mb-2 block text-xs font-black text-gray-600">نوع العميل</label>
+                                <select id="sales-filter-customer-type" name="customer_type" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="all" @selected($filters->customerType === 'all')>الكل</option>
                                     <option value="registered" @selected($filters->customerType === 'registered')>عملاء مسجلون</option>
                                     <option value="guest" @selected($filters->customerType === 'guest')>زوار بدون حساب</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">المصدر التسويقي</label>
-                                <select name="source" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-source" class="mb-2 block text-xs font-black text-gray-600">المصدر التسويقي</label>
+                                <select id="sales-filter-source" name="source" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل المصادر</option>
                                     @foreach($options['sources'] as $source => $label)
                                         <option value="{{ $source }}" @selected($filters->source === $source)>{{ $label }}</option>
@@ -137,8 +137,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">الدولة</label>
-                                <select name="country_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-country-id" class="mb-2 block text-xs font-black text-gray-600">الدولة</label>
+                                <select id="sales-filter-country-id" name="country_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل الدول</option>
                                     @foreach($options['countries'] as $country)
                                         <option value="{{ $country->id }}" @selected($filters->countryId === $country->id)>{{ $country->name }}</option>
@@ -146,8 +146,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">المحافظة</label>
-                                <select name="governorate_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-governorate-id" class="mb-2 block text-xs font-black text-gray-600">المحافظة</label>
+                                <select id="sales-filter-governorate-id" name="governorate_id" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل المحافظات</option>
                                     @foreach($options['countries'] as $country)
                                         <optgroup label="{{ $country->name }}">
@@ -159,20 +159,20 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">أقل إجمالي</label>
-                                <input type="number" min="0" step="0.01" name="min_total" value="{{ $filters->minimumTotal }}" class="w-full rounded-xl border-gray-200 text-sm" placeholder="0">
+                                <label for="sales-filter-min-total" class="mb-2 block text-xs font-black text-gray-600">أقل إجمالي</label>
+                                <input id="sales-filter-min-total" type="number" min="0" step="0.01" name="min_total" value="{{ $filters->minimumTotal }}" class="w-full rounded-xl border-gray-200 text-sm" placeholder="0">
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">أعلى إجمالي</label>
-                                <input type="number" min="0" step="0.01" name="max_total" value="{{ $filters->maximumTotal }}" class="w-full rounded-xl border-gray-200 text-sm" placeholder="بدون حد">
+                                <label for="sales-filter-max-total" class="mb-2 block text-xs font-black text-gray-600">أعلى إجمالي</label>
+                                <input id="sales-filter-max-total" type="number" min="0" step="0.01" name="max_total" value="{{ $filters->maximumTotal }}" class="w-full rounded-xl border-gray-200 text-sm" placeholder="بدون حد">
                             </div>
                             <div class="md:col-span-2">
-                                <label class="mb-2 block text-xs font-black text-gray-600">بحث</label>
-                                <input type="search" name="q" value="{{ $filters->search }}" class="w-full rounded-xl border-gray-200 text-right text-sm" placeholder="رقم طلب، عميل، طفل، هاتف، عنصر أو SKU">
+                                <label for="sales-filter-q" class="mb-2 block text-xs font-black text-gray-600">بحث</label>
+                                <input id="sales-filter-q" type="search" name="q" value="{{ $filters->search }}" class="w-full rounded-xl border-gray-200 text-right text-sm" placeholder="رقم طلب، عميل، طفل، هاتف، عنصر أو SKU">
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">تجميع الرسم</label>
-                                <select name="group_by" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-group-by" class="mb-2 block text-xs font-black text-gray-600">تجميع الرسم</label>
+                                <select id="sales-filter-group-by" name="group_by" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="auto" @selected($filters->groupBy === 'auto')>تلقائي</option>
                                     <option value="day" @selected($filters->groupBy === 'day')>يومي</option>
                                     <option value="week" @selected($filters->groupBy === 'week')>أسبوعي</option>
@@ -180,8 +180,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">الترتيب</label>
-                                <select name="sort" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-sort" class="mb-2 block text-xs font-black text-gray-600">الترتيب</label>
+                                <select id="sales-filter-sort" name="sort" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="newest" @selected($filters->sort === 'newest')>الأحدث</option>
                                     <option value="oldest" @selected($filters->sort === 'oldest')>الأقدم</option>
                                     <option value="highest" @selected($filters->sort === 'highest')>الأعلى قيمة</option>
@@ -189,8 +189,8 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-2 block text-xs font-black text-gray-600">عدد الصفوف</label>
-                                <select name="per_page" class="w-full rounded-xl border-gray-200 text-right text-sm">
+                                <label for="sales-filter-per-page" class="mb-2 block text-xs font-black text-gray-600">عدد الصفوف</label>
+                                <select id="sales-filter-per-page" name="per_page" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     @foreach([25, 50, 100] as $size)
                                         <option value="{{ $size }}" @selected($filters->perPage === $size)>{{ $size }} صفاً</option>
                                     @endforeach
@@ -213,7 +213,7 @@
             </div>
 
             @include('admin.payment-report._reconciliation')
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-right">
                     <p class="text-sm font-black text-indigo-700">صافي التحصيل خلال الفترة</p>
                     <p class="mt-3 text-3xl font-black text-indigo-950">{{ format_report_money($summary['total']) }}</p>

@@ -45,6 +45,13 @@ class ChildIdentityShareReportService
             ->map(fn ($event) => $event->child_identity_share_id.':'.$event->anonymous_visitor_id)->unique();
         $viewers = $pairs('share.page_viewed');
         $clickedViewers = $viewers->intersect($pairs('share.cta_clicked'))->count();
+        // Explain raw clicks without changing the existing distinct visitor/share CTR.
+        $knownViews = array_fill_keys($viewers->all(), true);
+        $clickEvents = $events->where('event_type', 'share.cta_clicked');
+        $anonymousClicks = $clickEvents->filter(fn ($event) => blank($event->anonymous_visitor_id))->count();
+        $unmatchedClicks = $clickEvents->filter(fn ($event) => filled($event->anonymous_visitor_id)
+            && ! isset($knownViews[$event->child_identity_share_id.':'.$event->anonymous_visitor_id]))->count();
+        $eligibleClicks = $clicks - $anonymousClicks - $unmatchedClicks;
         $channelEvents = $events->filter(fn ($event) => in_array($event->event_type, [
             'share.native_opened',
             'share.whatsapp_clicked',
@@ -82,6 +89,11 @@ class ChildIdentityShareReportService
                 'cta_clicks' => $clicks,
                 'ctr' => $viewers->isNotEmpty() ? round(($clickedViewers / $viewers->count()) * 100, 1) : null,
                 'identified_viewers' => $viewers->count(),
+                'clicked_viewers' => $clickedViewers,
+                'eligible_click_events' => $eligibleClicks,
+                'anonymous_click_events' => $anonymousClicks,
+                'unmatched_click_events' => $unmatchedClicks,
+                'repeated_eligible_click_events' => $eligibleClicks - $clickedViewers,
                 'identity_starts' => $starts,
                 'identity_completions' => $completed,
                 'orders' => $orders,

@@ -55,12 +55,12 @@
         <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('admin.visitor-carts.index') }}" class="grid gap-3 text-right lg:grid-cols-7">
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">بحث</label>
-                    <input name="q" value="{{ request('q') }}" class="w-full rounded-xl border-gray-200 text-right" placeholder="عميل، رقم طلب، أو كود السلة">
+                    <label for="carts-filter-q" class="mb-2 block text-xs font-bold text-gray-500">بحث</label>
+                    <input id="carts-filter-q" name="q" value="{{ request('q') }}" class="w-full rounded-xl border-gray-200 text-right" placeholder="عميل، رقم طلب، أو كود السلة">
                 </div>
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">الحالة</label>
-                    <select name="status" class="w-full rounded-xl border-gray-200 text-right">
+                    <label for="carts-filter-status" class="mb-2 block text-xs font-bold text-gray-500">الحالة</label>
+                    <select id="carts-filter-status" name="status" class="w-full rounded-xl border-gray-200 text-right">
                         <option value="">الكل</option>
                         @foreach($statusLabels as $key => $meta)
                             <option value="{{ $key }}" @selected(request('status') === $key)>{{ $meta['label'] }}</option>
@@ -68,16 +68,16 @@
                     </select>
                 </div>
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">نوع العميل</label>
-                    <select name="customer_type" class="w-full rounded-xl border-gray-200 text-right">
+                    <label for="carts-filter-customer-type" class="mb-2 block text-xs font-bold text-gray-500">نوع العميل</label>
+                    <select id="carts-filter-customer-type" name="customer_type" class="w-full rounded-xl border-gray-200 text-right">
                         <option value="">الكل</option>
                         <option value="guest" @selected(request('customer_type') === 'guest')>زائر غير مسجل</option>
                         <option value="known" @selected(request('customer_type') === 'known')>عميل معروف</option>
                     </select>
                 </div>
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">القصة</label>
-                    <select name="story_id" class="w-full rounded-xl border-gray-200 text-right">
+                    <label for="carts-filter-story-id" class="mb-2 block text-xs font-bold text-gray-500">القصة</label>
+                    <select id="carts-filter-story-id" name="story_id" class="w-full rounded-xl border-gray-200 text-right">
                         <option value="">كل القصص</option>
                         @foreach($stories as $story)
                             <option value="{{ $story->id }}" @selected((string) request('story_id') === (string) $story->id)>{{ $story->title }}</option>
@@ -85,12 +85,12 @@
                     </select>
                 </div>
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">من</label>
-                    <input type="date" name="date_from" value="{{ request('date_from') }}" class="w-full rounded-xl border-gray-200">
+                    <label for="carts-filter-date-from" class="mb-2 block text-xs font-bold text-gray-500">من</label>
+                    <input id="carts-filter-date-from" type="date" name="date_from" value="{{ request('date_from') }}" class="w-full rounded-xl border-gray-200">
                 </div>
                 <div>
-                    <label class="mb-2 block text-xs font-bold text-gray-500">إلى</label>
-                    <input type="date" name="date_to" value="{{ request('date_to') }}" class="w-full rounded-xl border-gray-200">
+                    <label for="carts-filter-date-to" class="mb-2 block text-xs font-bold text-gray-500">إلى</label>
+                    <input id="carts-filter-date-to" type="date" name="date_to" value="{{ request('date_to') }}" class="w-full rounded-xl border-gray-200">
                 </div>
                 <div class="flex items-end gap-2">
                     <button class="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-black text-white hover:bg-indigo-700">تصفية</button>
