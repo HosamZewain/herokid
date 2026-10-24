@@ -38,6 +38,7 @@ class DashboardController extends Controller
         $deliveredOrders = data_get($orderStats, 'checkouts.delivered');
         $orderRecordCounts = data_get($orderStats, 'records');
         $todayStats = data_get($orderStats, 'today');
+        $monthStats = data_get($orderStats, 'month');
         $operationsStats = data_get($orderStats, 'operations');
         $lastSevenDaysStats = data_get($orderStats, 'last_seven_days', []);
 
@@ -60,7 +61,7 @@ class DashboardController extends Controller
             'totalOrders', 'newOrders', 'pendingPreview', 'shippedOrders', 'deliveredOrders',
             'totalStories', 'activeStories', 'totalUsers', 'unreadMessages',
             'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats',
-            'lastSevenDaysStats', 'canViewStatistics', 'managementNotes'
+            'lastSevenDaysStats', 'monthStats', 'canViewStatistics', 'managementNotes'
         ));
     }
 

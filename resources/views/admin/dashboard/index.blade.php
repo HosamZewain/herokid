@@ -34,6 +34,49 @@
             </section>
 
             @if($canViewStatistics)
+            <section aria-labelledby="month-dashboard-heading" class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h3 id="month-dashboard-heading" class="text-xl font-black text-slate-950">إحصائيات الشهر الحالي — {{ $monthStats['label'] }}</h3>
+                    <span class="text-xs font-bold text-slate-500" dir="ltr">{{ $monthStats['from'] }} → {{ $monthStats['to'] }}</span>
+                </div>
+                <p class="mt-2 text-xs leading-6 text-slate-500">بتوقيت القاهرة، حسب تاريخ إنشاء عملية الشراء الأصلية. تشمل كل الحالات بما فيها الملغاة والمحذوفة؛ تُستبعد نسخ الدمج. أعداد القطع حسب محتويات الطلب الحالية أو آخر محتويات محفوظة للمحذوف.</p>
+                <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-2xl bg-indigo-50 p-5">
+                        <p class="text-sm font-black text-indigo-700">أوردرات الشهر</p>
+                        <p class="mt-3 text-3xl font-black text-indigo-950">{{ arabic_number($monthStats['checkouts']) }}</p>
+                        <p class="mt-2 text-sm text-indigo-800">تشمل {{ arabic_number($monthStats['pieces']) }} قطعة</p>
+                        <p class="mt-1 text-xs text-indigo-700">{{ arabic_number($monthStats['story_pieces']) }} قصة · {{ arabic_number($monthStats['product_pieces']) }} منتج</p>
+                    </div>
+                    <div class="rounded-2xl bg-violet-50 p-5">
+                        <p class="text-sm font-black text-violet-700">أوردرات القصص فقط</p>
+                        <p class="mt-3 text-3xl font-black text-violet-950">{{ arabic_number($monthStats['story_checkouts']) }}</p>
+                        <p class="mt-2 text-sm text-violet-800">تشمل {{ arabic_number($monthStats['story_only_pieces']) }} قصة</p>
+                    </div>
+                    <div class="rounded-2xl bg-emerald-50 p-5">
+                        <p class="text-sm font-black text-emerald-700">أوردرات المنتجات فقط</p>
+                        <p class="mt-3 text-3xl font-black text-emerald-950">{{ arabic_number($monthStats['product_checkouts']) }}</p>
+                        <p class="mt-2 text-sm text-emerald-800">تشمل {{ arabic_number($monthStats['product_only_pieces']) }} منتج</p>
+                    </div>
+                    <div class="rounded-2xl bg-amber-50 p-5">
+                        <p class="text-sm font-black text-amber-700">متوسط عدد الأوردرات يوميًا</p>
+                        <p class="mt-3 text-3xl font-black text-amber-950">{{ arabic_number(number_format($monthStats['daily_average'], 2)) }}</p>
+                        <p class="mt-2 text-xs text-amber-800">{{ arabic_number($monthStats['checkouts']) }} أوردر ÷ {{ arabic_number($monthStats['elapsed_days']) }} يومًا منقضيًا، شامل اليوم</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-3 text-sm">
+                    <span class="rounded-xl bg-slate-100 px-4 py-3 font-bold text-slate-700">أوردرات مختلطة (قصص ومنتجات): {{ arabic_number($monthStats['mixed_checkouts']) }} — تشمل {{ arabic_number($monthStats['mixed_pieces']) }} قطعة</span>
+                    <span class="rounded-xl bg-rose-50 px-4 py-3 font-bold text-rose-700">أوردرات الشهر الملغاة بالكامل: {{ arabic_number($monthStats['cancelled_checkouts']) }}</span>
+                    @if($monthStats['unclassified_checkouts'] > 0)
+                        <span class="rounded-xl bg-slate-100 px-4 py-3 text-slate-700">أوردرات بلا عناصر مصنفة: {{ arabic_number($monthStats['unclassified_checkouts']) }}</span>
+                    @endif
+                </div>
+                <div class="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div><p class="text-xs font-bold text-slate-500">قيمة أوردرات الشهر</p><p class="mt-2 text-xl font-black text-slate-900">{{ format_report_money($monthStats['value_cents'] / 100) }}</p><p class="mt-1 text-xs text-slate-500">بعد الخصم وشامل الشحن، وكل الحالات</p></div>
+                    <div><p class="text-xs font-bold text-slate-500">الرصيد المدفوع لأوردرات الشهر</p><p class="mt-2 text-xl font-black text-slate-900">{{ format_report_money($monthStats['paid_balance_cents'] / 100) }}</p><p class="mt-1 text-xs text-slate-500">الرصيد الحالي لهذه الأوردرات</p></div>
+                    <div><p class="text-xs font-bold text-slate-500">المتبقي على أوردرات الشهر</p><p class="mt-2 text-xl font-black text-slate-900">{{ format_report_money($monthStats['outstanding_cents'] / 100) }}</p><p class="mt-1 text-xs text-slate-500">يشمل الملغاة؛ ليس تقديرًا لقابلية التحصيل</p></div>
+                    <div><p class="text-xs font-bold text-emerald-700">صافي تحصيل الشهر بتاريخ الدفع</p><p class="mt-2 text-xl font-black text-emerald-800">{{ format_report_money($monthStats['payments_cents'] / 100) }}</p><p class="mt-1 text-xs text-slate-500">يشمل تحصيلات أوردرات قديمة، ناقص العكس والتصحيحات</p></div>
+                </div>
+            </section>
             <section aria-labelledby="today-dashboard-heading">
                 <div class="mb-4 flex items-end justify-between gap-4">
                     <div class="text-right">
@@ -232,7 +275,7 @@
                         <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">شحن</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $shippedOrders }}</p>
-                    <p class="text-sm text-gray-500 mt-1">عمليات شراء في الشحن</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء بها عناصر في الشحن</p>
                     <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['shipped'] }} سجل طلب</p>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -241,7 +284,7 @@
                         <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">مكتمل</span>
                     </div>
                     <p class="text-3xl font-extrabold text-gray-900">{{ $deliveredOrders }}</p>
-                    <p class="text-sm text-gray-500 mt-1">عمليات شراء تم تسليمها</p>
+                    <p class="text-sm text-gray-500 mt-1">عمليات شراء بها عناصر تم تسليمها</p>
                     <p class="mt-1 text-xs font-bold text-gray-400">تتضمن {{ $orderRecordCounts['delivered'] }} سجل طلب</p>
                 </div>
             </div>

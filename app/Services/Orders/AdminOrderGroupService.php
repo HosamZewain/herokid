@@ -293,6 +293,7 @@ class AdminOrderGroupService
         $checkouts = [
             'total' => Order::withTrashed()
                 ->whereNotNull('checkout_group_key')
+                ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
                 ->distinct()
                 ->count('checkout_group_key'),
         ];
@@ -309,8 +310,14 @@ class AdminOrderGroupService
 
         foreach (['shipped', 'delivered'] as $behavior) {
             $keys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, $behavior);
-            $checkouts[$behavior] = (int) $byStatus->only($keys)->sum('checkout_count');
-            $records[$behavior] = (int) $byStatus->only($keys)->sum('record_count');
+            $shippingKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, $behavior);
+            $notReadyKeys = OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'not_ready');
+            $shippingOrders = Order::query()->where(fn ($q) => $q
+                ->whereIn('shipping_status', $shippingKeys)
+                ->orWhere(fn ($legacy) => $legacy->whereIn('status', $keys)
+                    ->where(fn ($state) => $state->whereNull('shipping_status')->orWhere('shipping_status', '')->orWhereIn('shipping_status', $notReadyKeys))));
+            $checkouts[$behavior] = (clone $shippingOrders)->distinct()->count('checkout_group_key');
+            $records[$behavior] = $shippingOrders->count();
         }
 
         $todayDate = OrderDateTime::display(now())->startOfDay();
@@ -367,6 +374,7 @@ class AdminOrderGroupService
                 'outstanding_cents' => $activeFinancial['outstanding_cents'],
             ],
             'last_seven_days' => $dailyStats,
+            'month' => app(DashboardMonthStatistics::class)->summarize($todayDate),
         ];
     }
 
@@ -395,6 +403,9 @@ class AdminOrderGroupService
         });
         $checkoutKeys = $checkoutDates->keys();
         $ordersByCheckout = app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, true)->get()->keyBy('checkout_group_key');
+        // Do not count historical merged source copies as new purchases when
+        // their financial facts have already been folded into the target.
+        $checkoutDates = $checkoutDates->only($ordersByCheckout->keys()->all());
 
         $paymentActivity = $this->paymentEventsBetween($start, $end)
             ->map(function (OrderPaymentEvent $event): array {
