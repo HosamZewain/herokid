@@ -20,8 +20,8 @@
         $rows = $report['rows'];
         $options = $report['options'];
         $trend = collect($report['trend']);
-        $trendMax = max(1, (float) $trend->max('total'));
-        $statuses = ['all' => 'كل الحالات بما فيها الملغاة', 'active' => 'كل الطلبات غير الملغاة'] + \App\Support\OrderStatusRegistry::labels(\App\Support\OrderStatusRegistry::TYPE_ORDER, false);
+        $trendMax = max(1, (float) $trend->max(fn ($point) => abs($point['total'])));
+        $statuses = ['all' => 'كل الحالات بما فيها الملغاة والمحذوفة', 'active' => 'كل الطلبات غير الملغاة وغير المحذوفة'] + \App\Support\OrderStatusRegistry::labels(\App\Support\OrderStatusRegistry::TYPE_ORDER, false);
         $paymentStatuses = ['all' => 'كل حالات الدفع'] + \App\Support\OrderPaymentStatus::labels(false);
         $comparisonBadge = function ($value): string {
             if ($value === null) {
@@ -36,6 +36,7 @@
             'story' => 'قصة مخصصة',
             'product' => 'منتج مباشر',
             'product_add_on' => 'إضافة مرتبطة بقصة',
+            'unknown' => 'غير مصنف',
         ];
     @endphp
 
@@ -44,8 +45,8 @@
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-right text-sm leading-7 text-emerald-950">
                 <span class="font-black">قاعدة احتساب التحصيل:</span>
                 الصافي من سجل الدفعات حسب تاريخ الدفع داخل الفترة، ويشمل الطلبات القديمة والملغاة والمحذوفة ما لم تُضيّق الفلاتر ذلك. لا تُخصم قيمة الخصم التجاري مرة أخرى ولا يُقصّ المبلغ بقيمة الطلب الحالية. العكس/التصحيحات السالبة تخصم من الصافي ولا تثبت وحدها استردادًا فعليًا.
-                <p class="mt-2">أعداد الطلبات وقيمتها ومتوسطها وحالتها وأرصدة الدفع والتصدير الخاص بها تعتمد تاريخ الشراء الأصلي. الفلاتر غير الزمنية تخص التحصيل والطلبات؛ حالة الدفع للتحصيل هي الحالة بعد الحركة. توزيع التحصيل على العناصر تقديري بنسبة قيم مكونات الطلب المتاحة، ويشمل الشحن. عند اختيار نوع أو عنصر، تُوزّع قيمة الطلب والشحن والخصم والرصيد والمتبقي على جميع عناصره أولًا ثم يظهر نصيب العناصر المختارة فقط؛ قد تظهر فروق تقريب في نصيب العنصر لكن إجمالي كل مبلغ محفوظ بالقرش. الكميات في جداول التحصيل تصف محتويات الطلبات ذات الحركة، وليست مبيعات جديدة بعدد الدفعات.</p>
-                <a class="mt-2 inline-block font-black text-indigo-700 underline" href="{{ route('admin.payment-report.index', ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate]) }}">افتح تقرير الدفعات وتفاصيل الأيام ←</a>
+                <p class="mt-2">أعداد الطلبات وقيمتها ومتوسطها وحالتها وأرصدة الدفع والتصدير الخاص بها تعتمد تاريخ الشراء الأصلي. الفلاتر غير الزمنية تخص التحصيل والطلبات؛ فلتر حالة الدفع يستخدم الحالة المسجلة حاليًا للطلب، وليس حالته وقت الحركة. توزيع التحصيل على العناصر تقديري بنسبة قيم مكونات الطلب المتاحة، ويشمل الشحن. عند اختيار نوع أو عنصر، تُوزّع قيمة الطلب والشحن والخصم والرصيد والمتبقي على جميع عناصره أولًا ثم يظهر نصيب العناصر المختارة فقط؛ قد تظهر فروق تقريب في نصيب العنصر لكن إجمالي كل مبلغ محفوظ بالقرش. الكميات في جداول التحصيل تصف محتويات الطلبات ذات الحركة، وليست مبيعات جديدة بعدد الدفعات.</p>
+                <a class="mt-2 inline-block font-black text-indigo-700 underline" href="{{ route('admin.payment-report.index', $filters->query()) }}">افتح تقرير الدفعات وتفاصيل الأيام بنفس الفلاتر ←</a>
             </div>
 
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -240,8 +241,9 @@
                     <div class="mt-3">{!! $comparisonBadge($comparison['checkouts']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
-                    <p class="text-sm font-black text-gray-500">متوسط الطلب بدون الشحن</p>
+                    <p class="text-sm font-black text-gray-500">متوسط الطلبات ذات رصيد مدفوع — بدون الشحن</p>
                     <p class="mt-3 text-3xl font-black text-gray-950">{{ format_report_money($summary['average_checkout']) }}</p>
+                    <p class="mt-2 text-sm text-gray-600">للطلبات غير الملغاة ذات رصيد موجب فقط، بعد الخصم.</p>
                     <div class="mt-3">{!! $comparisonBadge($comparison['average_checkout']) !!}</div>
                 </div>
                 <div class="rounded-3xl border border-gray-100 bg-white p-5 text-right shadow-sm">
@@ -264,7 +266,7 @@
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div class="mb-4 text-right">
                     <h3 class="text-lg font-black text-gray-900">حالة طلبات الفترة وأرصدة الدفع الحالية</h3>
-                    <p class="mt-1 text-xs font-bold text-gray-500">حسب تاريخ الشراء الأصلي، وليست حركات تحصيل الفترة. وقد تتداخل بعض الحالات مثل الطلب الملغي وغير المدفوع.</p>
+                    <p class="mt-1 text-xs font-bold text-gray-500">حسب تاريخ الشراء الأصلي، وليست حركات تحصيل الفترة. تشمل السجلات المحذوفة المحفوظة دون تكرار الدمج. المدفوع بالكامل = طلب غير ملغي وغير محذوف برصيد موجب يغطي قيمته؛ لا يشمل طلبات القيمة والرصيد صفرًا. حالة الدفع المسجلة في الجدول منفصلة عن هذا الحساب.</p>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     @foreach([
@@ -306,12 +308,14 @@
                 @if($trend->isEmpty())
                     <p class="rounded-2xl bg-gray-50 p-10 text-center text-sm font-black text-gray-400">لا توجد بيانات في هذه الفترة.</p>
                 @else
-                    <div class="flex h-72 items-end gap-3 overflow-x-auto border-b border-gray-100 px-2 pb-4">
+                    <p class="mb-3 text-xs text-gray-500">خط المنتصف = صفر؛ الأزرق صافي موجب، والأحمر صافي سالب (العكس/التصحيحات أكبر من الدفعات).</p>
+                    <div class="flex gap-3 overflow-x-auto px-2 pb-4" role="region" aria-label="رسم صافي التحصيل الموجب والسالب" tabindex="0">
                         @foreach($trend as $point)
-                            @php $height = $point['total'] > 0 ? max(8, ($point['total'] / $trendMax) * 210) : 3; @endphp
+                            @php $height = (abs($point['total']) / $trendMax) * 110; @endphp
                             <div class="flex min-w-16 flex-col items-center gap-2">
-                                <span class="text-[10px] font-black text-gray-500">{{ format_report_money($point['total'], false) }}</span>
-                                <div class="w-8 rounded-t-xl bg-gradient-to-t from-indigo-700 to-violet-400" style="height: {{ $height }}px" title="{{ format_report_money($point['total']) }}"></div>
+                                <span class="text-[10px] font-black text-gray-500" dir="ltr">{{ format_report_money($point['total'], false) }}</span>
+                                <div class="flex w-full items-end justify-center border-b border-gray-400" style="height: 110px">@if($point['total'] > 0)<div class="w-8 rounded-t-xl bg-indigo-600" style="height: {{ $height }}px" title="{{ format_report_money($point['total']) }}"></div>@endif</div>
+                                <div class="flex w-full justify-center" style="height: 110px; margin-top: -8px">@if($point['total'] < 0)<div class="w-8 rounded-b-xl bg-rose-600" style="height: {{ $height }}px" title="{{ format_report_money($point['total']) }}"></div>@endif</div>
                                 <span class="whitespace-nowrap text-[11px] font-bold text-gray-400" dir="ltr">{{ $point['label'] }}</span>
                             </div>
                         @endforeach
@@ -350,7 +354,7 @@
 
                 @include('admin.analytics.partials.simple-table', [
                     'title' => 'طلبات الفترة حسب حالة الدفع الحالية',
-                    'headers' => ['حالة الدفع', 'العمليات', 'الإجمالي', 'الرصيد المدفوع الحالي', 'المتبقي'],
+                    'headers' => ['حالة الدفع المسجلة', 'العمليات', 'الإجمالي', 'الرصيد المدفوع الحالي', 'المتبقي'],
                     'rows' => collect($report['payment_breakdown'])->map(fn ($item) => [
                         $item['label'], number_format($item['checkouts']), format_report_money($item['total']), format_report_money($item['paid']), format_report_money($item['remaining']),
                     ])->all(),

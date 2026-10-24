@@ -24,7 +24,7 @@ class LocalCartAnalyticsRepository
 
         return [
             'purchases_today' => $this->metricCard(
-                'مشتريات مكتملة اليوم',
+                'عمليات شراء منشأة اليوم — كل الحالات',
                 $this->completedOrdersBetween($todayStart, $todayEnd),
                 $this->completedOrdersBetween($yesterdayStart, $yesterdayEnd),
             ),
@@ -34,7 +34,8 @@ class LocalCartAnalyticsRepository
                 $this->revenueBetween($yesterdayStart, $yesterdayEnd),
             ),
             'conversion_rate_today' => [
-                'label' => 'معدل تحويل السلات اليوم',
+                'label' => 'تحويل السلات التي بدأت اليوم',
+                'source' => 'local',
                 'value' => AnalyticsMetricNormalizer::ratio(
                     $this->convertedCartsBetween($todayStart, $todayEnd),
                     $this->cartsStartedBetween($todayStart, $todayEnd),
@@ -53,18 +54,22 @@ class LocalCartAnalyticsRepository
         ];
     }
 
-    public function cartSummary(): array
+    public function cartSummary(?AnalyticsDateRange $range = null): array
     {
-        return $this->remember('cart-summary', 300, fn (): array => [
-            'active_carts' => VisitorCart::where('status', 'active')->count(),
-            'abandoned_carts' => VisitorCart::where('status', 'abandoned')->count(),
-            'converted_carts' => VisitorCart::where('status', 'converted')->count(),
-            'abandoned_value' => ((int) VisitorCart::where('status', 'abandoned')->sum('cart_total_cents')) / 100,
-            'conversion_rate' => AnalyticsMetricNormalizer::ratio(
-                VisitorCart::where('status', 'converted')->count(),
-                VisitorCart::whereIn('status', ['active', 'abandoned', 'converted'])->count(),
-            ),
-        ]);
+        return $this->remember('cart-summary:'.($range?->cacheSuffix() ?? 'all'), 300, function () use ($range): array {
+            $query = VisitorCart::query();
+            if ($range) {
+                $query->whereBetween('first_added_at', [AppDateTime::utcStartOfDay($range->startDate), AppDateTime::utcEndOfDay($range->endDate)]);
+            }
+
+            return [
+                'active_carts' => (clone $query)->where('status', 'active')->count(),
+                'abandoned_carts' => (clone $query)->where('status', 'abandoned')->count(),
+                'converted_carts' => (clone $query)->where('status', 'converted')->count(),
+                'abandoned_value' => ((int) (clone $query)->where('status', 'abandoned')->sum('cart_total_cents')) / 100,
+                'conversion_rate' => AnalyticsMetricNormalizer::ratio((clone $query)->where('status', 'converted')->count(), $query->count()),
+            ];
+        });
     }
 
     public function funnel(AnalyticsDateRange $range): array
@@ -72,17 +77,20 @@ class LocalCartAnalyticsRepository
         return $this->remember('funnel:'.$range->cacheSuffix(), 900, function () use ($range): array {
             $start = AppDateTime::utcStartOfDay($range->startDate);
             $end = AppDateTime::utcEndOfDay($range->endDate);
+            $cohort = VisitorCart::whereBetween('first_added_at', [$start, $end]);
+            // Count distinct carts from one creation cohort, as of the period end.
+            // A completed cart necessarily reached checkout even if that event was not recorded.
+            $checkout = (clone $cohort)->where(fn ($q) => $q->where('checkout_started_at', '<=', $end)->orWhere('converted_at', '<=', $end));
             $steps = [
                 ['key' => 'cart_created', 'label' => 'سلات تم إنشاؤها', 'value' => $this->cartsStartedBetween($start, $end)],
-                ['key' => 'local_item_added', 'label' => 'عناصر أضيفت للسلة', 'value' => $this->itemsAddedBetween($start, $end)],
-                ['key' => 'checkout_started_local', 'label' => 'بدأ إدخال بيانات التوصيل', 'value' => $this->checkoutStartedBetween($start, $end)],
-                ['key' => 'purchase_local', 'label' => 'طلبات مكتملة محلياً', 'value' => $this->completedOrdersBetween($start, $end)],
+                ['key' => 'checkout_started_local', 'label' => 'سلات وصلت لإتمام الطلب', 'value' => $checkout->count()],
+                ['key' => 'purchase_local', 'label' => 'سلات تحولت لطلب', 'value' => (clone $cohort)->where('converted_at', '<=', $end)->count()],
             ];
             $previous = null;
 
             return collect($steps)->map(function (array $step) use (&$previous): array {
                 $value = $step['value'];
-                $dropOff = $previous !== null ? max(0, round((($previous - $value) / max(1, $previous)) * 100, 1)) : null;
+                $dropOff = $previous > 0 ? round((($previous - $value) / $previous) * 100, 1) : null;
                 $previous = $value;
 
                 return [
@@ -126,7 +134,7 @@ class LocalCartAnalyticsRepository
 
     private function completedOrdersBetween(CarbonInterface $start, CarbonInterface $end): int
     {
-        return app(CheckoutIntakeStatistics::class)->countBetween($start, $end);
+        return app(OrderFinancialStatistics::class)->checkouts(app(CheckoutIntakeStatistics::class)->keysBetween($start, $end), true)->get()->count();
     }
 
     private function revenueBetween(CarbonInterface $start, CarbonInterface $end): float
@@ -144,21 +152,7 @@ class LocalCartAnalyticsRepository
 
     private function convertedCartsBetween(CarbonInterface $start, CarbonInterface $end): int
     {
-        return VisitorCart::where('status', 'converted')->whereBetween('converted_at', [$start, $end])->count();
-    }
-
-    private function itemsAddedBetween(CarbonInterface $start, CarbonInterface $end): int
-    {
-        return VisitorCart::query()
-            ->whereHas('activities', fn ($query) => $query->where('type', 'item_added')->whereBetween('created_at', [$start, $end]))
-            ->withCount(['activities as added_count' => fn ($query) => $query->where('type', 'item_added')->whereBetween('created_at', [$start, $end])])
-            ->get()
-            ->sum('added_count');
-    }
-
-    private function checkoutStartedBetween(CarbonInterface $start, CarbonInterface $end): int
-    {
-        return VisitorCart::whereBetween('checkout_started_at', [$start, $end])->count();
+        return VisitorCart::whereBetween('first_added_at', [$start, $end])->where('converted_at', '<=', $end)->count();
     }
 
     private function sourceLabel(VisitorCart $cart): string
@@ -188,7 +182,7 @@ class LocalCartAnalyticsRepository
 
     private function remember(string $name, int $seconds, \Closure $callback): mixed
     {
-        $key = 'analytics:local-cart:'.$name;
+        $key = 'analytics:local-cart:v2:'.$name;
         $registryKey = 'analytics:local-cart:cache-keys';
         $keys = Cache::get($registryKey, []);
         $keys = is_array($keys) ? $keys : [];

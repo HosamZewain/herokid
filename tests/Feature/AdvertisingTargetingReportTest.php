@@ -121,7 +121,7 @@ class AdvertisingTargetingReportTest extends TestCase
         $this->assertSame(2, $report['summary']['checkouts']);
         $this->assertSame(40000, $report['summary']['net_cents']);
         $this->assertSame(3000, $report['summary']['collected_cents']);
-        $this->assertSame(1, $report['coverage']['cancelled']);
+        $this->assertSame(2, $report['coverage']['cancelled']); // Cancelled plus retained deleted purchase.
         $paid = $this->report(['basis' => 'collected']);
         $this->assertSame(1, $paid['summary']['checkouts']);
         $this->assertSame(20000, $paid['summary']['net_cents']);
@@ -165,7 +165,7 @@ class AdvertisingTargetingReportTest extends TestCase
         $this->assertSame(1, $report['summary']['checkouts']);
         $this->assertSame(20000, $report['summary']['net_cents']);
         $this->assertSame(20000, $report['items']->sum('net_cents'));
-        $this->assertSame('اسم مكرر', $report['items']->first()['title']);
+        $this->assertSame('اسم جديد — جميع النسخ', $report['items']->first()['title']);
     }
 
     public function test_cent_allocation_and_discount_larger_than_items_reconcile_exactly(): void

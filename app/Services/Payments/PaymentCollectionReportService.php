@@ -155,7 +155,7 @@ class PaymentCollectionReportService
         $canonical = $keys->mapWithKeys(fn (string $key): array => [$key => app(PaymentReconciliationService::class)->canonicalKey($key)]);
         $orders = Order::withTrashed()->whereIn('checkout_group_key', $canonical->values()->unique())->orderBy('id')
             ->select(['id', 'checkout_group_key', 'order_number', 'user_id', 'parent_name', 'story_id', 'status',
-                'child_name', 'delivery_details', 'order_source', 'discount_cents', 'created_at', 'deleted_at'])
+                'child_name', 'delivery_details', 'order_source', 'discount_cents', 'created_at', 'deleted_at', 'payment_status'])
             ->with(['items:id,order_id,item_type,story_id,product_id,title,sku,quantity,total_price_cents,item_snapshot', 'story:id,title,price', 'marketingCart', 'checkoutReference']);
         $orders->with($detailed ? 'user:id,name,role' : 'user:id,role');
 
@@ -196,7 +196,7 @@ class PaymentCollectionReportService
                 'country_id' => $delivery['delivery_country_id'] ?? null, 'governorate_id' => $delivery['delivery_governorate_id'] ?? null,
                 'country' => (string) ($delivery['country'] ?? 'غير محدد'), 'governorate' => (string) ($delivery['governorate'] ?? 'غير محدد'),
                 'source_key' => $source, 'source' => $source === 'direct' ? OrderSource::label('website') : ($cart ? trim($source.' '.($cart->utm_medium ?? '')) : OrderSource::label($source)),
-                'statuses' => $group->pluck('status')->all(), 'total_cents' => $total, 'items' => $items->all(),
+                'statuses' => $group->pluck('status')->all(), 'payment_status' => $first->payment_status, 'deleted' => $live->isEmpty(), 'total_cents' => $total, 'items' => $items->all(),
                 'search_text' => implode(' ', [$key, $first->checkoutReference?->short_reference, $first->parent_name, $delivery['phone'] ?? '', ...$group->pluck('child_name')->all(), ...$group->pluck('order_number')->all(), ...$items->pluck('title')->all(), ...$items->pluck('sku')->all()])];
         });
 
@@ -209,15 +209,16 @@ class PaymentCollectionReportService
             'category' => 'unknown', 'category_label' => self::CATEGORIES['unknown'], 'customer_name' => null,
             'customer_key' => $key, 'customer_type' => 'guest', 'country_id' => null, 'governorate_id' => null,
             'country' => 'غير محدد', 'governorate' => 'غير محدد', 'source_key' => 'unknown', 'source' => 'غير محدد',
-            'statuses' => [], 'total_cents' => 0, 'items' => [], 'search_text' => $key];
+            'statuses' => [], 'payment_status' => null, 'deleted' => true, 'total_cents' => 0, 'items' => [], 'search_text' => $key];
     }
 
     private function matches(array $row, OrderPaymentEvent $event, SalesReportFilters $filters): bool
     {
-        $cancelled = collect($row['statuses'])->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
+        $statuses = collect($row['statuses'])->filter();
+        $cancelled = $row['deleted'] || ($statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled'));
 
         return ($filters->status === 'all' || ($filters->status === 'active' ? ! $cancelled : in_array($filters->status, $row['statuses'], true)))
-            && ($filters->paymentStatus === 'all' || $event->new_status === $filters->paymentStatus)
+            && ($filters->paymentStatus === 'all' || $row['payment_status'] === $filters->paymentStatus)
             && ($filters->customerType === 'all' || $row['customer_type'] === $filters->customerType)
             && (! $filters->countryId || (int) $row['country_id'] === $filters->countryId)
             && (! $filters->governorateId || (int) $row['governorate_id'] === $filters->governorateId)

@@ -309,6 +309,7 @@
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                     <p class="text-xs font-black text-emerald-700">الطلبات المدفوعة كليًا</p>
                     <p class="mt-2 text-2xl font-black text-emerald-950">{{ number_format($stats['paid_checkouts']) }}</p>
+                    <p class="mt-1 text-[10px] text-emerald-700">غير ملغاة وغير محذوفة، برصيد موجب يغطي القيمة؛ ليست الحالة المسجلة فقط.</p>
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-white p-4">
                     <p class="text-xs font-black text-emerald-600">قيمة الطلبات المدفوعة كليًا</p>

@@ -35,7 +35,8 @@ class Ga4AnalyticsRepository
                 'source_details' => $this->sourceDetails($range),
                 'popular_pages' => $this->popularPages($range),
                 'funnel' => $this->localCartAnalytics->funnel($range),
-                'local_cart_summary' => $this->localCartAnalytics->cartSummary(),
+                'local_cart_summary' => $this->localCartAnalytics->cartSummary($range),
+                'local_source_conversions' => $this->localCartAnalytics->sourceConversions($range),
                 'devices' => $this->dimensionBreakdown($range, 'deviceCategory', 'devices'),
                 'locations' => $this->dimensionBreakdown($range, ['country', 'city'], 'locations'),
                 'landing_pages' => $this->landingPages($range),
@@ -175,16 +176,14 @@ class Ga4AnalyticsRepository
                 'orderBys' => [['metric' => ['metricName' => 'sessions'], 'desc' => true]],
                 'limit' => 25,
             ]);
-            $localConversions = $this->localCartAnalytics->sourceConversions($range);
 
-            return collect($report['rows'] ?? [])->map(function (array $row) use ($localConversions): array {
+            return collect($report['rows'] ?? [])->map(function (array $row): array {
                 $source = (string) ($row['dimensionValues'][0]['value'] ?? 'Other');
 
                 return [
                     'source' => $source === '' ? 'Other' : $source,
                     'users' => AnalyticsMetricNormalizer::integer($row['metricValues'][0]['value'] ?? null),
                     'sessions' => AnalyticsMetricNormalizer::integer($row['metricValues'][1]['value'] ?? null),
-                    'conversions' => $localConversions[$source] ?? null,
                 ];
             })->values()->all();
         });

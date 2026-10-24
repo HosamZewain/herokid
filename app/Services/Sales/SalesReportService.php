@@ -15,10 +15,12 @@ use App\Support\AppDateTime;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
+use App\Support\ReportPaymentBalance;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
 
 class SalesReportService
@@ -121,9 +123,9 @@ class SalesReportService
         $checkoutKeys = $orders->map(fn (Order $order): string => $order->checkoutGroupKey())->unique()->values();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($checkoutKeys);
         $filterTotals = $filters->minimumTotal !== null || $filters->maximumTotal !== null
-            ? app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, false)->pluck('total_cents', 'checkout_group_key')
+            ? app(OrderFinancialStatistics::class)->checkouts($checkoutKeys, true)->pluck('total_cents', 'checkout_group_key')
             : collect();
-        $checkoutStates = Order::query()
+        $checkoutStates = $this->visibleOrdersQuery()
             ->whereIn('checkout_group_key', $checkoutKeys)
             ->get(['id', 'checkout_group_key', 'status', 'payment_status', 'paid_amount_cents', 'payment_method'])
             ->groupBy('checkout_group_key');
@@ -182,7 +184,8 @@ class SalesReportService
                 $remainingCents = (int) $items->sum('remaining_cents');
                 $selectedOrders = $orders->whereIn('id', $items->pluck('order_id'))->values();
                 $fullyDelivered = $statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'delivered');
-                $cancelled = $statuses->contains(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled');
+                $deleted = $orders->every(fn (Order $order): bool => $order->trashed());
+                $cancelled = $deleted || ($statuses->isNotEmpty() && $statuses->every(fn (string $status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled'));
                 // This is the current balance of the order cohort, NOT cash collected in
                 // the date range. PaymentCollectionReportService supplies cash metrics.
                 $saleRecognized = ! $cancelled && $paidAmountCents > 0;
@@ -198,7 +201,7 @@ class SalesReportService
                     'first_order_id' => $first->id,
                     'order_records' => $items->pluck('order_id')->unique()->count(),
                     'statuses' => $statuses->all(),
-                    'status_label' => $statuses->map(fn (string $status): string => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status))->implode('، '),
+                    'status_label' => $deleted ? 'محذوفة — سجل محفوظ' : $statuses->map(fn (string $status): string => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status))->implode('، '),
                     'fully_delivered' => $fullyDelivered,
                     'cancelled' => $cancelled,
                     'payment_status' => $paymentStatus,
@@ -270,15 +273,24 @@ class SalesReportService
 
     private function baseOrderQuery(): Builder
     {
-        return Order::query()
+        return $this->visibleOrdersQuery()
             ->select(['id', 'checkout_group_key', 'order_number', 'story_id', 'user_id', 'status',
                 'payment_status', 'paid_amount_cents', 'payment_method', 'discount_cents',
-                'delivery_details', 'order_source', 'parent_name', 'created_at'])
+                'delivery_details', 'order_source', 'parent_name', 'created_at', 'deleted_at'])
             ->with([
                 'items:id,order_id,item_type,story_id,product_id,title,sku,unit_price_cents,quantity,total_price_cents',
                 'story:id,title,price',
                 'user:id,name,role',
             ]);
+    }
+
+    private function visibleOrdersQuery(): Builder
+    {
+        // Prefer live items, otherwise retained deleted items; never count merged copies.
+        return Order::withTrashed()
+            ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
+            ->where(fn (Builder $q) => $q->whereNull('orders.deleted_at')->orWhereNotExists(fn ($live) => $live
+                ->selectRaw('1')->from('orders as live')->whereColumn('live.checkout_group_key', 'orders.checkout_group_key')->whereNull('live.deleted_at')));
     }
 
     private function orderQuery(SalesReportFilters $filters): Builder
@@ -287,7 +299,7 @@ class SalesReportService
             ->whereIn('checkout_group_key', app(CheckoutIntakeStatistics::class)->keysBetween($filters->start(), $filters->end()));
 
         if ($filters->status === 'active') {
-            $query->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'));
+            $query->whereNull('orders.deleted_at')->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'));
         } elseif ($filters->status !== 'all') {
             $query->where('status', $filters->status);
         }
@@ -385,6 +397,15 @@ class SalesReportService
             ];
         }
 
+        if ($items === []) {
+            // Retain an unclassified checkout (including its shipping/balance),
+            // without inventing a story/product or a physical piece.
+            $cents = (int) round((float) data_get($order->delivery_details, 'item_price', 0) * 100);
+            $items[] = ['order_id' => $order->id, 'type' => 'unknown', 'story_id' => null, 'product_id' => null,
+                'title' => 'طلب بلا محتويات موثقة', 'sku' => null, 'quantity' => 0,
+                'unit_cents' => $cents, 'total_cents' => $cents, 'status' => $order->status];
+        }
+
         return $items;
     }
 
@@ -439,8 +460,7 @@ class SalesReportService
         $unpaidRows = $activeRows->where('paid_amount_cents', '<=', 0);
         $partiallyPaidRows = $activeRows->filter(fn (array $row): bool => $row['paid_amount_cents'] > 0
             && $row['paid_amount_cents'] < $row['total_cents']);
-        $fullyPaidRows = $activeRows->filter(fn (array $row): bool => $row['paid_amount_cents'] > 0
-            && $row['remaining_amount_cents'] === 0);
+        $fullyPaidRows = $rows->filter(fn (array $row): bool => ReportPaymentBalance::fullyPaid($row['total_cents'], $row['paid_amount_cents'], $row['cancelled']));
 
         return [
             'all_checkouts' => $rows->count(),
@@ -550,7 +570,7 @@ class SalesReportService
             return 'غير مدفوع حاليًا';
         }
 
-        if ($paidAmountCents < $totalCents || OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $paymentStatus) === 'partially_paid') {
+        if ($paidAmountCents < $totalCents) {
             return 'رصيد مدفوع جزئي حالي';
         }
 

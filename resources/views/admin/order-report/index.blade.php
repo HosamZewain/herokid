@@ -22,6 +22,7 @@
                     <div class="text-right">
                         <h3 class="text-base font-black text-gray-900">فلاتر التقرير</h3>
                         <p class="mt-1 text-xs font-bold text-gray-400">الفترة حسب تاريخ الشراء الأصلي. المدفوع والمتبقي أرصدة حالية للطلبات المختارة، وليس تحصيل الفترة.</p>
+                        <p class="mt-1 text-xs font-bold text-gray-500">المدفوع بالكامل في الملخص = طلب غير ملغي وغير محذوف برصيد موجب يغطي قيمته. طلبات القيمة والرصيد صفرًا ليست تحصيلًا، وتبقى حالتها المسجلة كما هي.</p>
                         @can('sales_reports.view')<a class="mt-2 inline-block text-xs font-bold text-indigo-700" href="{{ route('admin.payment-report.index') }}">التحصيل حسب تاريخ الدفع: تقرير الدفعات ←</a>@endcan
                     </div>
                     <a href="{{ route('admin.order-report.export', request()->except('page')) }}"
@@ -49,6 +50,9 @@
                         <label for="report-catalog" class="mb-1.5 block text-xs font-black text-gray-600">نوع الطلب</label>
                         <select id="report-catalog" name="catalog_type" class="w-full rounded-xl border-gray-200 text-right text-sm">
                             <option value="all" @selected(request('catalog_type', 'all') === 'all')>كل الأنواع</option>
+                            <option value="stories_only" @selected(request('catalog_type') === 'stories_only')>طلبات قصص فقط</option>
+                            <option value="mixed" @selected(request('catalog_type') === 'mixed')>طلبات مختلطة — قصص ومنتجات</option>
+                            <option value="unclassified" @selected(request('catalog_type') === 'unclassified')>طلبات غير مصنفة</option>
                             <option value="stories" @selected(request('catalog_type') === 'stories')>طلبات تحتوي قصصًا</option>
                             <option value="products" @selected(request('catalog_type') === 'products')>طلبات منتجات فقط</option>
                         </select>

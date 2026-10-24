@@ -1,10 +1,11 @@
 <x-admin-layout>
     <x-slot name="header"><div><h2 class="text-xl font-black text-gray-900">تقرير الدفعات</h2><p class="mt-1 text-xs font-bold text-gray-500">حركة التحصيل حسب تاريخ تسجيل الدفع — بتوقيت القاهرة.</p></div></x-slot>
     <x-slot name="title">تقرير الدفعات</x-slot>
-    @php $money = fn ($cents) => format_report_money($cents / 100); $query = array_merge(request()->except('day', 'page'), ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate]); @endphp
+    @php $money = fn ($cents) => format_report_money($cents / 100); $query = $filters->query(); @endphp
     <div class="space-y-6 px-4 py-8 sm:px-6 lg:px-8">
         <section class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('admin.payment-report.index') }}" class="grid items-end gap-4 md:grid-cols-4">
+                @foreach($filters->selectionQuery() as $key => $value)<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endforeach
                 <div><label for="payment-range" class="mb-2 block text-sm font-bold">الفترة</label><select id="payment-range" name="range" class="w-full rounded-xl border-gray-200">
                     @foreach(['today' => 'اليوم', 'yesterday' => 'أمس', 'last_7_days' => 'آخر 7 أيام', 'last_30_days' => 'آخر 30 يومًا', 'this_month' => 'هذا الشهر', 'last_month' => 'الشهر الماضي', 'this_year' => 'هذا العام', 'custom' => 'فترة مخصصة'] as $key => $label)<option value="{{ $key }}" @selected($filters->range === $key)>{{ $label }}</option>@endforeach
                 </select></div>
@@ -14,8 +15,9 @@
             </form>
             <p class="mt-4 text-sm leading-7 text-gray-600">يشمل حركات الدفع الجديدة والدفعات القديمة المستعادة بتاريخ موثّق، حتى للطلبات الملغاة والمحذوفة. صافي الفترة = الدفعات المضافة ناقص العكس/التصحيحات. الحركة السالبة ليست إثباتًا منفصلًا لرد الأموال فعليًا. الرصيد القديم بلا تاريخ موثّق محسوب في كشف إجمالي السجل أدناه، وليس في يوم افتراضي.</p>
             <p class="mt-2 text-xs leading-6 text-gray-500">القصص والمنتجات والباقات/المختلط تصنيفات منفصلة؛ تُحتسب الحركة مرة واحدة وتشمل الشحن. التصنيف من مكونات الطلب المتاحة حاليًا أو المحفوظة للطلب المحذوف، وليس لقطة تاريخية مضمونة. تفاصيل المبلغ والتاريخ من سجل الدفعات نفسه.</p>
-            @if(count(request()->except('range', 'start_date', 'end_date', 'day', 'page')))
-                <p class="mt-2 text-sm font-bold text-indigo-700">توجد فلاتر إضافية على التحصيل. <a class="underline" href="{{ route('admin.payment-report.index', ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate]) }}">عرض كل دفعات الفترة</a></p>
+            <p class="mt-2 text-xs leading-6 text-gray-500">فلاتر حالة الطلب والدفع تصف الحالة المسجلة حاليًا، مثل تقرير المبيعات، وليست الحالة وقت الحركة. فلتر النوع أو العنصر يعرض نصيبه الموزع من الدفعة وليس الدفعة الكاملة مرة أخرى.</p>
+            @if($filters->selectionQuery())
+                <p class="mt-2 text-sm font-bold text-indigo-700">الفلاتر المطبقة على الكروت والأيام والتفاصيل والتصدير: {{ implode(' · ', $filters->selectionLabels()) }}. <a class="underline" href="{{ route('admin.payment-report.index', ['range' => 'custom', 'start_date' => $filters->startDate, 'end_date' => $filters->endDate]) }}">مسح الفلاتر الإضافية وعرض كل دفعات الفترة</a></p>
             @endif
         </section>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

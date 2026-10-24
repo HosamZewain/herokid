@@ -82,9 +82,12 @@ class OrderFinancialStatistics
     {
         $query = DB::query()->fromSub($this->checkouts($keys, $includeDeleted, $preferActive), 'c')
             ->selectRaw('COUNT(*) as checkouts, COALESCE(SUM(stories), 0) as stories, COALESCE(SUM(products), 0) as products, COALESCE(SUM(total_cents), 0) as total_value_cents, COALESCE(ROUND(AVG(average_value_cents)), 0) as average_order_cents, COALESCE(SUM(paid_amount_cents), 0) as collected_cents, COALESCE(SUM(CASE WHEN total_cents > paid_amount_cents THEN total_cents - paid_amount_cents ELSE 0 END), 0) as outstanding_cents, COALESCE(SUM(CASE WHEN paid_amount_cents > 0 THEN 1 ELSE 0 END), 0) as payment_checkouts');
+        // Same read-only balance definition as ReportPaymentBalance::fullyPaid.
+        $paid = 'has_live_orders = 1 AND all_cancelled = 0 AND paid_amount_cents > 0 AND paid_amount_cents >= total_cents';
+        $query->selectRaw("COALESCE(SUM(CASE WHEN $paid THEN 1 ELSE 0 END), 0) as paid_checkouts")
+            ->selectRaw("COALESCE(SUM(CASE WHEN $paid THEN total_cents ELSE 0 END), 0) as paid_value_cents");
         foreach ([
             ['status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled'), 'cancelled'],
-            ['payment_status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_PAYMENT, 'paid_in_full'), 'paid'],
             ['shipping_status', array_merge(OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'shipped'), OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'delivered')), 'shipped'],
         ] as [$column, $statuses, $prefix]) {
             $condition = $statuses ? "$column IN (".implode(',', array_fill(0, count($statuses), '?')).')' : '1 = 0';

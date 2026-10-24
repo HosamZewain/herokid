@@ -7,6 +7,7 @@ use App\Support\OrderLifecycle;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
+use App\Support\ReportPaymentBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -158,10 +159,7 @@ class AdminOrderReportService
         $active = $rows->where('lifecycle', 'active');
         $finished = $rows->where('lifecycle', 'finished');
         $paidAny = $rows->where('paid_amount_cents', '>', 0);
-        $fullyPaid = $rows->filter(fn (array $row): bool => OrderStatusRegistry::behavior(
-            OrderStatusRegistry::TYPE_PAYMENT,
-            $row['payment_status'],
-        ) === 'paid_in_full');
+        $fullyPaid = $rows->filter(fn (array $row): bool => ReportPaymentBalance::fullyPaid($row['total_cents'], $row['paid_amount_cents'], $row['lifecycle'] === 'cancelled'));
         $shipped = $rows->filter(fn (array $row): bool => in_array(
             OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $row['shipping_status']),
             ['shipped', 'delivered'],
@@ -231,7 +229,7 @@ class AdminOrderReportService
     {
         $type = (string) $request->query('catalog_type', 'all');
 
-        return in_array($type, ['all', 'stories', 'products'], true) ? $type : 'all';
+        return in_array($type, ['all', 'stories', 'stories_only', 'products', 'mixed', 'unclassified'], true) ? $type : 'all';
     }
 
     private function lifecycle(Request $request): string

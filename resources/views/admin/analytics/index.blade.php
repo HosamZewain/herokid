@@ -14,7 +14,7 @@
                 return 'غير متاح';
             }
             if ($money) {
-                return number_format((float) $value, 2).' ج.م';
+                return format_report_money((float) $value);
             }
             if ($percent) {
                 return number_format((float) $value, 2).'%';
@@ -122,6 +122,7 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                 $localSummary = $analytics['local_cart_summary'] ?? null;
             @endphp
             @if($localSummary)
+                <p class="text-right text-sm text-gray-600">حالة السلات الحالية التي بدأت في الفترة المختارة، بتوقيت القاهرة. نسبة التحويل = السلات المحوّلة ÷ كل سلات المجموعة، بما فيها المنتهية.</p>
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
                     <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 text-right">
                         <p class="text-sm font-bold text-emerald-700">سلات نشطة محلياً</p>
@@ -160,8 +161,8 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                     <div class="flex h-72 items-end gap-3 overflow-x-auto border-b border-gray-100 px-2 pb-4">
                         @foreach($chartRows as $row)
                             @php
-                                $usersHeight = max(4, ((int) ($row['users'] ?? 0) / $chartMax) * 220);
-                                $sessionsHeight = max(4, ((int) ($row['sessions'] ?? 0) / $chartMax) * 220);
+                                $usersHeight = ((int) ($row['users'] ?? 0) / $chartMax) * 220;
+                                $sessionsHeight = ((int) ($row['sessions'] ?? 0) / $chartMax) * 220;
                             @endphp
                             <div class="flex min-w-14 flex-col items-center gap-2">
                                 <div class="flex h-56 items-end gap-1">
@@ -177,13 +178,12 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 @include('admin.analytics.partials.simple-table', [
-                    'title' => 'مصادر الزيارات',
-                    'headers' => ['المصدر', 'المستخدمون', 'الجلسات', 'تحويلات محلية'],
+                    'title' => 'قنوات الزيارات — GA4',
+                    'headers' => ['القناة', 'المستخدمون', 'الجلسات'],
                     'rows' => collect($analytics['sources'] ?? [])->map(fn ($row) => [
                         $row['source'],
                         $formatValue($row['users']),
                         $formatValue($row['sessions']),
-                        $row['conversions'] === null ? 'غير متاح' : $formatValue($row['conversions']),
                     ])->all(),
                 ])
 
@@ -201,15 +201,21 @@ GOOGLE_ANALYTICS_CREDENTIALS_PATH=/home/u470070883/private/ga4-service-account.j
                 ])
             </div>
 
+            @include('admin.analytics.partials.simple-table', [
+                'title' => 'السلات المحوّلة خلال الفترة حسب المصدر / الوسيط المحفوظ — HeroKid، وليس تصنيف قنوات GA4',
+                'headers' => ['المصدر / الوسيط', 'سلات تحولت لطلبات'],
+                'rows' => collect($analytics['local_source_conversions'] ?? [])->map(fn ($count, $source) => [$source, $formatValue($count)])->values()->all(),
+            ])
+
             <div class="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
                 <h3 class="text-right text-lg font-black text-gray-900">قمع السلة المحلي</h3>
-                <p class="mt-1 text-right text-sm text-gray-500">يعتمد على قاعدة بيانات HeroKid: إنشاء سلة، إضافة عناصر، بدء checkout، وإنشاء الطلب. لا يتم إرسال بيانات السلة إلى GA4 أو Meta.</p>
-                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+                <p class="mt-1 text-right text-sm text-gray-500">نفس السلات التي بدأت في الفترة، حتى نهاية الفترة: كل سلة تُحسب مرة في كل مرحلة. التحول لطلب يؤكد الوصول لإتمام الطلب ولو لم تُسجل بدايته. لا يشمل طلبات الإدارة أو التطبيق غير المرتبطة بسلة زائر. لا يتم إرسال بيانات السلة إلى GA4 أو Meta.</p>
+                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
                     @foreach($analytics['funnel'] ?? [] as $step)
                         <div class="rounded-2xl border border-indigo-50 bg-indigo-50/60 p-4 text-right">
                             <p class="text-sm font-black text-indigo-900">{{ $step['label'] }}</p>
                             <p class="mt-3 text-3xl font-black text-gray-950">{{ $step['available'] ? $formatValue($step['value']) : 'غير متاح' }}</p>
-                            <p class="mt-2 text-xs font-bold text-gray-500">Drop-off: {{ $step['drop_off'] === null ? 'غير متاح' : number_format($step['drop_off'], 1).'%' }}</p>
+                            <p class="mt-2 text-xs font-bold text-gray-500">لم ينتقلوا من المرحلة السابقة: {{ $step['drop_off'] === null ? '—' : number_format($step['drop_off'], 1).'%' }}</p>
                         </div>
                     @endforeach
                 </div>

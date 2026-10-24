@@ -17,6 +17,7 @@ use App\Support\OrderSource;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
 use App\Support\Phone;
+use App\Support\ReportPaymentBalance;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -684,7 +685,13 @@ class AdminOrderGroupService
         bool $applyTagFilter = true,
     ): Builder {
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
-        $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
+        if ($request->attributes->getBoolean('order_report') && $catalogType !== 'all') {
+            // Use the same visible quantities as the report cards, including
+            // retained deletions but not superseded children or merged copies.
+            $query->whereIn('checkout_group_key', $this->reportCheckoutKeysForCatalogType($catalogType, $includeDeleted));
+        } else {
+            $query->whereIn('checkout_group_key', $this->checkoutKeysForCatalogType($catalogType));
+        }
         $this->applyLifecycleFilter($query, $lifecycle);
 
         $hasStatusFilter = $this->selectedStatuses($request) !== [];
@@ -1056,12 +1063,14 @@ class AdminOrderGroupService
                     'status' => $statuses->count() === 1 ? $statuses->first() : 'mixed',
                     'payment_status' => $paymentStatus,
                     'shipping_status' => $shippingStatuses->count() === 1 ? $shippingStatuses->first() : 'mixed',
+                    'cancelled' => $group->every(fn (Order $order): bool => $order->trashed())
+                        || ($statuses->isNotEmpty() && $statuses->every(fn ($status): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $status) === 'cancelled')),
                 ];
             })
             ->values();
 
         $cancelled = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $checkout['status']) === 'cancelled');
-        $paid = $checkouts->filter(fn (array $checkout): bool => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PAYMENT, $checkout['payment_status']) === 'paid_in_full');
+        $paid = $checkouts->filter(fn (array $checkout): bool => ReportPaymentBalance::fullyPaid($checkout['total_cents'], $checkout['paid_amount_cents'], $checkout['cancelled']));
         $withPayments = $checkouts->filter(fn (array $checkout): bool => $checkout['paid_amount_cents'] > 0);
         $totalValueCents = (int) $checkouts->sum('total_cents');
         $averageValueCents = (int) $checkouts->sum('average_value_cents');
@@ -1124,6 +1133,10 @@ class AdminOrderGroupService
 
         $type = (string) $request->query('catalog_type', 'stories');
 
+        if ($request->attributes->getBoolean('order_report')) {
+            return in_array($type, ['all', 'stories', 'stories_only', 'products', 'mixed', 'unclassified'], true) ? $type : 'all';
+        }
+
         return in_array($type, ['all', 'stories', 'products'], true) ? $type : 'stories';
     }
 
@@ -1147,6 +1160,36 @@ class AdminOrderGroupService
         return (bool) $request->user()?->hasPermission('orders.delete')
             || ($request->attributes->getBoolean('order_report')
                 && (bool) $request->user()?->hasPermission('order_reports.view'));
+    }
+
+    private function reportCheckoutKeysForCatalogType(string $type, bool $includeDeleted): \Illuminate\Database\Query\Builder
+    {
+        $keys = DB::table('orders as catalog_orders')->select('catalog_orders.checkout_group_key')->distinct();
+        $visible = DB::table('orders as visible_catalog')->selectRaw('1')
+            ->whereColumn('visible_catalog.checkout_group_key', 'catalog_orders.checkout_group_key');
+        if ($includeDeleted) {
+            $visible->where(fn ($q) => $q->whereNull('visible_catalog.deleted_at')->orWhereNotExists(fn ($live) => $live
+                ->selectRaw('1')->from('orders as live_catalog')->whereColumn('live_catalog.checkout_group_key', 'visible_catalog.checkout_group_key')->whereNull('live_catalog.deleted_at')));
+        } else {
+            $visible->whereNull('visible_catalog.deleted_at');
+        }
+        $items = fn ($types) => DB::table('order_items as catalog_items')->selectRaw('1')
+            ->whereColumn('catalog_items.order_id', 'visible_catalog.id')->whereIn('catalog_items.item_type', $types)->where('catalog_items.quantity', '>', 0);
+        $stories = (clone $visible)->where(fn ($q) => $q->whereNotNull('visible_catalog.story_id')->orWhereExists($items(['story'])));
+        $products = (clone $visible)->whereExists($items(['product', 'product_add_on']));
+
+        if (in_array($type, ['stories', 'stories_only', 'mixed'], true)) {
+            $keys->whereExists($stories);
+        } else {
+            $keys->whereNotExists($stories);
+        }
+        if (in_array($type, ['products', 'mixed'], true)) {
+            $keys->whereExists($products);
+        } elseif ($type !== 'stories') {
+            $keys->whereNotExists($products);
+        }
+
+        return $keys;
     }
 
     private function checkoutKeysForCatalogType(string $catalogType): \Illuminate\Database\Query\Builder

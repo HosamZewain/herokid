@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Models\Order;
+use App\Models\Product;
 use App\Services\Payments\PaymentCollectionReportService;
 use App\Support\MarketingAttribution;
 use Illuminate\Http\Request;
@@ -78,12 +79,14 @@ class AdvertisingTargetingReportService
 
     private function enrich(Collection $facts): Collection
     {
-        return $facts->chunk(200)->flatMap(function (Collection $batch): Collection {
+        $products = Product::withTrashed()->whereIn('id', $facts->flatMap(fn ($row) => collect($row['items'])->pluck('product_id'))->filter()->unique())->pluck('name_ar', 'id');
+
+        return $facts->chunk(200)->flatMap(function (Collection $batch) use ($products): Collection {
             $orders = Order::query()->whereIn('checkout_group_key', $batch->pluck('key'))
                 ->with('marketingCart')->orderBy('id')->get(['id', 'checkout_group_key', 'delivery_details', 'order_source'])
                 ->groupBy('checkout_group_key');
 
-            return $batch->map(function (array $row) use ($orders): array {
+            return $batch->map(function (array $row) use ($orders, $products): array {
                 $group = $orders->get($row['key'], collect());
                 $first = $group->firstWhere('id', $row['first_order_id']);
                 $delivery = $first?->delivery_details ?? [];
@@ -100,12 +103,15 @@ class AdvertisingTargetingReportService
                 $gross = max(0, $row['items_total_cents']);
                 $cumulative = 0;
                 $allocated = 0;
-                $row['items'] = collect($row['items'])->map(function (array $item) use ($row, $gross, &$cumulative, &$allocated): array {
+                $row['items'] = collect($row['items'])->map(function (array $item) use ($row, $gross, $products, &$cumulative, &$allocated): array {
                     $cumulative += max(0, $item['total_cents']);
                     $next = $gross > 0 ? intdiv($row['net_cents'] * $cumulative, $gross) : 0;
                     $item['net_cents'] = $next - $allocated;
                     $allocated = $next;
                     $item['catalog_key'] = $item['story_id'] ? 'story:'.$item['story_id'] : ($item['product_id'] ? 'product:'.$item['product_id'] : 'legacy:'.hash('sha256', $item['type'].'|'.$item['title']));
+                    if ($item['product_id']) {
+                        $item['title'] = ($products->get($item['product_id']) ?: 'منتج #'.$item['product_id']).' — جميع النسخ';
+                    }
 
                     return $item;
                 })->all();

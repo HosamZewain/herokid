@@ -166,6 +166,46 @@ class SalesReportFilters
         };
     }
 
+    /** One normalized contract for links, forms, day details and exports. */
+    public function query(): array
+    {
+        return ['range' => 'custom', 'start_date' => $this->startDate, 'end_date' => $this->endDate, ...$this->selectionQuery()];
+    }
+
+    public function selectionQuery(): array
+    {
+        return array_filter([
+            'status' => $this->status === 'all' ? null : $this->status,
+            'payment_status' => $this->paymentStatus === 'all' ? null : $this->paymentStatus,
+            'type' => $this->type === 'all' ? null : $this->type,
+            'item' => $this->item, 'customer_type' => $this->customerType === 'all' ? null : $this->customerType,
+            'country_id' => $this->countryId, 'governorate_id' => $this->governorateId,
+            'source' => $this->source, 'q' => $this->search,
+            'min_total' => $this->minimumTotal, 'max_total' => $this->maximumTotal,
+        ], fn ($value): bool => $value !== null);
+    }
+
+    public function selectionLabels(): array
+    {
+        $names = ['status' => 'حالة الطلب', 'payment_status' => 'حالة الدفع المسجلة', 'type' => 'نوع العنصر',
+            'item' => 'العنصر', 'customer_type' => 'نوع العميل', 'country_id' => 'رقم الدولة',
+            'governorate_id' => 'رقم المحافظة', 'source' => 'المصدر', 'q' => 'البحث',
+            'min_total' => 'أقل إجمالي للطلب', 'max_total' => 'أعلى إجمالي للطلب'];
+        $labels = [];
+        foreach ($this->selectionQuery() as $key => $value) {
+            $display = match ($key) {
+                'status' => $value === 'active' ? 'غير ملغي وغير محذوف' : OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $value),
+                'payment_status' => OrderStatusRegistry::label(OrderStatusRegistry::TYPE_PAYMENT, $value),
+                'type' => ['story' => 'قصة', 'product' => 'منتج', 'product_add_on' => 'إضافة مرتبطة بقصة'][$value],
+                'customer_type' => $value === 'registered' ? 'مسجل' : 'زائر',
+                default => (string) $value,
+            };
+            $labels[] = $names[$key].': '.$display;
+        }
+
+        return $labels;
+    }
+
     private static function dates(Request $request, string $range, CarbonImmutable $today): array
     {
         return match ($range) {

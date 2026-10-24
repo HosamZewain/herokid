@@ -2,7 +2,8 @@
     $reconcileMoney = fn (int $cents): string => format_report_money($cents / 100);
     $history = $reconciliation['history'];
 @endphp
-<section class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm" aria-label="مطابقة المدفوع المسجل">
+<details class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm" aria-label="مطابقة المدفوع المسجل" @if($reconciliation['differences']->isNotEmpty()) open @endif>
+    <summary class="cursor-pointer font-black text-indigo-800">مطابقة السجل منذ البداية — مستقلة عن فترة وفلاتر التقرير · {{ $reconciliation['differences']->isNotEmpty() ? 'توجد فروق تحتاج مراجعة' : 'الأرصدة متطابقة' }}</summary>
     <h3 class="text-lg font-black text-indigo-950">إجمالي المدفوع المسجل — شامل الأرصدة القديمة</h3>
     <p class="mt-2 text-sm leading-7 text-gray-600">هذا الكشف لكل السجل منذ البداية، مستقل عن فلاتر كل تقرير. الرصيد التاريخي + صافي حركات الدفع الجديدة. ليس رصيد الخزنة أو البنك بعد المصروفات، وليس إثباتًا لتحويل أو استرداد فعلي.</p>
     @if($reconciliation['differences']->isNotEmpty())
@@ -50,4 +51,4 @@
             </tbody></table></div>
         </details>
     @endif
-</section>
+</details>

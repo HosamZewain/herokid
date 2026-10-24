@@ -219,7 +219,7 @@ class UnifiedCheckoutStatisticsTest extends TestCase
         $this->assertSame((float) $stats['today']['new_checkouts'], $summary['purchases_today']['value']);
         $this->assertSame((float) ($stats['today']['order_value_cents'] / 100), $summary['revenue_today']['value']);
         $funnel = $local->funnel(new AnalyticsDateRange('custom', 'Test', '2026-10-03', '2026-10-03'));
-        $this->assertSame(2, collect($funnel)->firstWhere('event', 'purchase_local')['value']);
+        $this->assertSame(0, collect($funnel)->firstWhere('event', 'purchase_local')['value']); // No visitor carts in this fixture.
     }
 
     public function test_statistics_are_read_only_and_historical_values_prefer_current_live_rows(): void
@@ -252,8 +252,8 @@ class UnifiedCheckoutStatisticsTest extends TestCase
         $sales = $this->sales('today');
         $this->assertSame(1, $sales['summary']['checkouts']);
         $this->assertSame(300.0, $sales['summary']['average_checkout']);
-        $this->assertSame(3, $sales['operational_summary']['all_checkouts']);
-        $this->assertSame(1, $sales['operational_summary']['cancelled_checkouts']);
+        $this->assertSame(4, $sales['operational_summary']['all_checkouts']);
+        $this->assertSame(2, $sales['operational_summary']['cancelled_checkouts']);
         $this->assertSame(4, app(AdminOrderGroupService::class)->dashboardStats()['today']['new_checkouts']);
 
         $admin = User::factory()->create(['role' => 'admin']);

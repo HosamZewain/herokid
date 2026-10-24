@@ -14,6 +14,7 @@ class VisitorCartController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate(['date_from' => ['nullable', 'date_format:Y-m-d'], 'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from']]);
         $query = VisitorCart::query()
             ->with(['user:id,name,email,phone', 'relatedOrder:id,order_number', 'activeItems.story:id,title'])
             ->withCount(['activeItems', 'activities']);
@@ -21,11 +22,11 @@ class VisitorCartController extends Controller
         $this->applyFilters($query, $request);
 
         $summary = [
-            'active' => VisitorCart::where('status', 'active')->count(),
-            'abandoned' => VisitorCart::where('status', 'abandoned')->count(),
-            'converted' => VisitorCart::where('status', 'converted')->count(),
-            'abandoned_value' => ((int) VisitorCart::where('status', 'abandoned')->sum('cart_total_cents')) / 100,
-            'conversion_rate' => $this->conversionRate(),
+            'active' => (clone $query)->where('status', 'active')->count(),
+            'abandoned' => (clone $query)->where('status', 'abandoned')->count(),
+            'converted' => (clone $query)->where('status', 'converted')->count(),
+            'abandoned_value' => ((int) (clone $query)->where('status', 'abandoned')->sum('cart_total_cents')) / 100,
+            'conversion_rate' => $this->conversionRate(clone $query),
         ];
 
         $carts = $query->latest('last_activity_at')->paginate(20)->withQueryString();
@@ -81,14 +82,14 @@ class VisitorCartController extends Controller
             });
     }
 
-    private function conversionRate(): ?float
+    private function conversionRate(Builder $query): ?float
     {
-        $total = VisitorCart::whereIn('status', ['active', 'abandoned', 'converted'])->count();
+        $total = (clone $query)->count();
 
         if ($total === 0) {
             return null;
         }
 
-        return round((VisitorCart::where('status', 'converted')->count() / $total) * 100, 2);
+        return round(((clone $query)->where('status', 'converted')->count() / $total) * 100, 2);
     }
 }

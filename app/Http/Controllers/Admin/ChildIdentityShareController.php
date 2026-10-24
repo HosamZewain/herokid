@@ -16,8 +16,8 @@ class ChildIdentityShareController extends Controller
     public function report(Request $request, ChildIdentityShareReportService $reports)
     {
         $validated = $request->validate([
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
         ]);
         $report = $reports->build($validated['date_from'] ?? null, $validated['date_to'] ?? null);
 

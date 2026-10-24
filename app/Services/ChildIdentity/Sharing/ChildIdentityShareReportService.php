@@ -6,45 +6,45 @@ use App\Models\ChildIdentityRequest;
 use App\Models\ChildIdentityShare;
 use App\Models\ChildIdentityShareEvent;
 use App\Models\Order;
-use Illuminate\Support\Carbon;
+use App\Services\Orders\OrderFinancialStatistics;
+use App\Support\AppDateTime;
 
 class ChildIdentityShareReportService
 {
     public function build(?string $from = null, ?string $to = null): array
     {
-        $start = $from ? Carbon::parse($from)->startOfDay() : now()->subDays(29)->startOfDay();
-        $end = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
-        $shares = ChildIdentityShare::query()
-            ->whereBetween('created_at', [$start, $end])
-            ->withCount([
-                'events as referred_identities_count' => fn ($query) => $query
-                    ->where('event_type', 'share.identity_started')
-                    ->whereNotNull('referred_child_identity_request_id'),
-                'events as referred_orders_count' => fn ($query) => $query
-                    ->where('event_type', 'share.order_created')
-                    ->whereNotNull('referred_order_id'),
-            ])
-            ->get();
+        $from = $from ?: now(AppDateTime::timezone())->subDays(29)->toDateString();
+        $to = $to ?: now(AppDateTime::timezone())->toDateString();
+        if ($to < $from) {
+            [$from, $to] = [$to, $from];
+        }
+        $start = AppDateTime::utcStartOfDay($from);
+        $end = AppDateTime::utcEndOfDay($to);
+        $newShares = ChildIdentityShare::withTrashed()->whereBetween('created_at', [$start, $end])->count();
         $events = ChildIdentityShareEvent::query()
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
         $orderIds = $events->where('event_type', 'share.order_created')->pluck('referred_order_id')->filter()->unique();
-        $referredCheckouts = Order::query()
+        $referredOrders = Order::withTrashed()
             ->whereIn('id', $orderIds)
-            ->get()
-            ->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
-        $revenue = $referredCheckouts->sum(
-            fn ($checkout): float => (float) data_get($checkout->first()?->delivery_details, 'total', 0),
-        );
-        $approved = ChildIdentityRequest::query()
+            ->get(['id', 'checkout_group_key'])->keyBy('id');
+        $financial = app(OrderFinancialStatistics::class)->checkouts($referredOrders->pluck('checkout_group_key')->unique(), true)->get();
+        $approvedIds = ChildIdentityRequest::withTrashed()
             ->whereNotNull('approved_attempt_id')
             ->whereBetween('created_at', [$start, $end])
-            ->count();
+            ->pluck('id');
+        $sharedApproved = ChildIdentityShare::withTrashed()->whereIn('child_identity_request_id', $approvedIds)
+            ->where('created_at', '<=', $end)->distinct()->count('child_identity_request_id');
         $views = $events->where('event_type', 'share.page_viewed')->count();
         $clicks = $events->where('event_type', 'share.cta_clicked')->count();
-        $starts = $events->where('event_type', 'share.identity_started')->unique('referred_child_identity_request_id')->count();
-        $completed = $events->where('event_type', 'share.identity_generated')->unique('referred_child_identity_request_id')->count();
-        $orders = $referredCheckouts->count();
+        $starts = $events->where('event_type', 'share.identity_started')->pluck('referred_child_identity_request_id')->filter()->unique()->count();
+        $completed = $events->where('event_type', 'share.identity_generated')->pluck('referred_child_identity_request_id')->filter()->unique()->count();
+        $orders = $financial->count();
+        // CTR is a subset of the same known visitor/share pairs, not raw repeated clicks.
+        $pairs = fn ($type) => $events->where('event_type', $type)->filter(fn ($event) => filled($event->anonymous_visitor_id))
+            ->map(fn ($event) => $event->child_identity_share_id.':'.$event->anonymous_visitor_id)->unique();
+        $viewers = $pairs('share.page_viewed');
+        $clickedViewers = $viewers->intersect($pairs('share.cta_clicked'))->count();
         $channelEvents = $events->filter(fn ($event) => in_array($event->event_type, [
             'share.native_opened',
             'share.whatsapp_clicked',
@@ -58,27 +58,37 @@ class ChildIdentityShareReportService
             ->map(fn ($items, string $channel): array => ['channel' => $channel, 'events' => $items->count()])
             ->sortByDesc('events')
             ->values();
-        $topShares = $shares->sortByDesc(fn (ChildIdentityShare $share): int => (
-            $share->total_orders * 1000
-            + $share->total_identity_starts * 100
-            + $share->total_cta_clicks * 10
-            + $share->total_views
-        ))->take(20)->values();
+        $byShare = $events->groupBy('child_identity_share_id');
+        $shares = ChildIdentityShare::withTrashed()->whereIn('id', $byShare->keys())->get();
+        $topShares = $shares->map(function (ChildIdentityShare $share) use ($byShare, $referredOrders, $financial) {
+            $activity = $byShare->get($share->id, collect());
+            // Display-only attributes. Never overwrite persisted lifetime counters.
+            $share->period_views = $activity->where('event_type', 'share.page_viewed')->count();
+            $share->period_clicks = $activity->where('event_type', 'share.cta_clicked')->count();
+            $share->period_identities = $activity->where('event_type', 'share.identity_started')->pluck('referred_child_identity_request_id')->filter()->unique()->count();
+            $share->period_orders = $activity->where('event_type', 'share.order_created')->pluck('referred_order_id')
+                ->map(fn ($id) => $referredOrders->get($id)?->checkout_group_key)->filter()->unique()->intersect($financial->pluck('checkout_group_key'))->count();
+
+            return $share;
+        })->sortBy([['period_orders', 'desc'], ['period_identities', 'desc'], ['period_clicks', 'desc'], ['period_views', 'desc'], ['id', 'asc']])->take(20)->values();
 
         return [
-            'period' => ['from' => $start->toDateString(), 'to' => $end->toDateString()],
+            'period' => ['from' => $from, 'to' => $to],
             'summary' => [
-                'shares' => $shares->count(),
-                'share_rate' => $approved > 0 ? round(($shares->count() / $approved) * 100, 1) : 0,
+                'shares' => $newShares,
+                'active_shares' => $byShare->count(),
+                'share_rate' => $approvedIds->isNotEmpty() ? round(($sharedApproved / $approvedIds->count()) * 100, 1) : null,
                 'views' => $views,
                 'cta_clicks' => $clicks,
-                'ctr' => $views > 0 ? round(($clicks / $views) * 100, 1) : 0,
+                'ctr' => $viewers->isNotEmpty() ? round(($clickedViewers / $viewers->count()) * 100, 1) : null,
+                'identified_viewers' => $viewers->count(),
                 'identity_starts' => $starts,
                 'identity_completions' => $completed,
                 'orders' => $orders,
-                'revenue' => $revenue,
-                'viral_conversion_rate' => $views > 0 ? round(($orders / $views) * 100, 2) : 0,
-                'average_referred_identities' => $shares->count() > 0 ? round($starts / $shares->count(), 2) : 0,
+                'revenue' => round($financial->sum('total_cents') / 100, 2),
+                'paid_balance' => round($financial->sum('paid_amount_cents') / 100, 2),
+                'viral_conversion_rate' => $views > 0 ? round(($orders / $views) * 100, 2) : null,
+                'average_referred_identities' => $byShare->count() > 0 ? round($starts / $byShare->count(), 2) : 0,
                 'best_channel' => data_get($channels->first(), 'channel', '—'),
             ],
             'channels' => $channels,

@@ -385,7 +385,7 @@ class ChildIdentitySharingTest extends TestCase
             ->get(route('admin.child-identities.share-report'))
             ->assertOk()
             ->assertSee('تقرير مشاركة هويات الأطفال')
-            ->assertSee('إجمالي المشاركات')
+            ->assertSee('مشاركات أُنشئت في الفترة')
             ->assertDontSee($identity->parent_phone);
 
         $permission = Permission::where('key', 'child_identities.view_share_report')->firstOrFail();
@@ -411,6 +411,8 @@ class ChildIdentitySharingTest extends TestCase
             'status' => 'new',
         ]));
         foreach ($orders as $order) {
+            $order->items()->create(['item_type' => 'story', 'title' => 'Synthetic story', 'quantity' => 1,
+                'unit_price_cents' => 25000, 'total_price_cents' => 25000]);
             $share->events()->create([
                 'event_type' => 'share.order_created',
                 'referred_order_id' => $order->id,

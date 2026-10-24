@@ -7,7 +7,7 @@
     @endslot
 
     @php
-        $money = fn ($value): string => number_format((float) $value, 0).' ج.م';
+        $money = fn ($value): string => format_report_money($value);
         $statusLabels = [
             'active' => ['label' => 'نشطة', 'class' => 'bg-emerald-50 text-emerald-700'],
             'abandoned' => ['label' => 'متروكة', 'class' => 'bg-amber-50 text-amber-700'],
@@ -28,6 +28,7 @@
     @endphp
 
     <div class="mx-auto max-w-7xl space-y-6">
+        <p class="text-right text-sm text-gray-600">الكروت والجدول لنفس الفلاتر. التواريخ حسب أول إضافة بتوقيت القاهرة؛ الحالات والأرصدة حالية. نسبة التحويل = المحوّلة ÷ جميع السلات المطابقة، بما فيها المنتهية؛ اختيار حالة واحدة يغيّر النسبة.</p>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div class="rounded-2xl border border-gray-100 bg-white p-5 text-right shadow-sm">
                 <p class="text-sm font-bold text-gray-500">السلات النشطة</p>
@@ -104,8 +105,8 @@
                     <tr>
                         <th class="px-4 py-3">العميل</th>
                         <th class="px-4 py-3">الحالة</th>
-                        <th class="px-4 py-3">العناصر</th>
-                        <th class="px-4 py-3">الإجمالي</th>
+                        <th class="px-4 py-3">العناصر الحالية في السلة</th>
+                        <th class="px-4 py-3">قيمة السلة الحالية — ليست قيمة الطلب</th>
                         <th class="px-4 py-3">أول إضافة</th>
                         <th class="px-4 py-3">آخر نشاط</th>
                         <th class="px-4 py-3">المصدر</th>
@@ -134,7 +135,7 @@
                                     {{ $cart->activeItems->pluck('title_snapshot')->take(3)->implode('، ') ?: '-' }}
                                 </div>
                             </td>
-                            <td class="px-4 py-4 font-black text-gray-900">{{ $money($cart->total) }}</td>
+                            <td class="px-4 py-4 font-black text-gray-900">@if($cart->status === 'converted') راجع الطلب المرتبط @else {{ $money($cart->total) }} @endif</td>
                             <td class="px-4 py-4 text-gray-500">{{ app_datetime($cart->first_added_at, 'Y-m-d H:i', '-') ?? '-' }}</td>
                             <td class="px-4 py-4 text-gray-500">{{ app_datetime_human($cart->last_activity_at, '-') ?? '-' }}</td>
                             <td class="px-4 py-4 text-xs text-gray-500">{{ trim(($cart->utm_source ?: '').' / '.($cart->utm_medium ?: ''), ' /') ?: 'Direct' }}</td>
