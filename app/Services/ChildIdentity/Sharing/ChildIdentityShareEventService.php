@@ -88,11 +88,17 @@ class ChildIdentityShareEventService
 
     private function anonymousVisitorHash(Request $request): string
     {
-        $visitor = (string) ($request->cookie('herokid_share_visitor') ?: $request->session()->get('herokid_share_visitor'));
+        $cookie = $request->cookie('herokid_share_visitor');
+        $session = $request->session()->get('herokid_share_visitor');
+        $visitor = is_string($cookie) && Str::isUuid($cookie) ? $cookie : $session;
 
-        if (! Str::isUuid($visitor)) {
+        if (! is_string($visitor) || ! Str::isUuid($visitor)) {
             $visitor = (string) Str::uuid();
-            $request->session()->put('herokid_share_visitor', $visitor);
+        }
+
+        // Keep both stores in sync, including returning visitors with a new session.
+        $request->session()->put('herokid_share_visitor', $visitor);
+        if ($cookie !== $visitor) {
             Cookie::queue('herokid_share_visitor', $visitor, 60 * 24 * 365, '/', null, $request->isSecure(), true, false, 'Lax');
         }
 

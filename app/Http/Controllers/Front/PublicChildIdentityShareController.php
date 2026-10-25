@@ -22,13 +22,15 @@ class PublicChildIdentityShareController extends Controller
         ChildIdentityShareSettings $settings,
     ) {
         $this->ensureAvailable($share);
-        $referrals->remember($share, $request);
-        $events->record($share, 'share.page_viewed', $request);
+        if (! $this->isSpeculativeRequest($request)) {
+            $referrals->remember($share, $request);
+            $events->record($share, 'share.page_viewed', $request);
+        }
         $public = $presenter->safePublicPayload($share);
 
         return response()
             ->view('front.child-identity-share.show', compact('share', 'public', 'settings'))
-            ->header('Cache-Control', 'private, no-cache, max-age=0')
+            ->header('Cache-Control', 'private, no-store, max-age=0')
             ->header('X-Robots-Tag', 'noindex, follow');
     }
 
@@ -71,10 +73,27 @@ class PublicChildIdentityShareController extends Controller
         ChildIdentityReferralService $referrals,
     ) {
         $this->ensureAvailable($share);
+        // Old shared /start URLs and link previews are navigation, not proof of a click.
+        if (! $request->isMethod('POST') || $this->isSpeculativeRequest($request)) {
+            return redirect()->route('child-identity-shares.show', [
+                'share' => $share->public_token,
+                ...$request->only(['utm_source', 'utm_medium', 'utm_campaign']),
+            ])->header('Cache-Control', 'private, no-store');
+        }
         $referrals->remember($share, $request);
         $events->record($share, 'share.cta_clicked', $request, 'public_page');
 
-        return redirect()->route('child-identity.index');
+        return redirect()->route('child-identity.index')->header('Cache-Control', 'private, no-store');
+    }
+
+    private function isSpeculativeRequest(Request $request): bool
+    {
+        return $request->isMethod('HEAD')
+            || preg_match('/prefetch|prerender/i', implode(' ', [
+                $request->header('Purpose', ''),
+                $request->header('Sec-Purpose', ''),
+                $request->header('X-Purpose', ''),
+            ])) === 1;
     }
 
     private function ensureAvailable(ChildIdentityShare $share): void

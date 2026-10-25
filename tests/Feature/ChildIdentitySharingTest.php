@@ -31,6 +31,102 @@ class ChildIdentitySharingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_public_cta_is_a_protected_form_and_matches_the_view_visitor(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity();
+        $share = $this->readyShare($identity);
+        $this->get(route('child-identity-shares.show', $share->public_token))
+            ->assertOk()->assertSee('method="POST" data-share-cta', false)->assertSee('name="_token"', false);
+        $view = $share->events()->where('event_type', 'share.page_viewed')->sole();
+        $this->post(route('child-identity-shares.cta', $share->public_token))
+            ->assertRedirect(route('child-identity.index'));
+        $click = $share->events()->where('event_type', 'share.cta_clicked')->sole();
+        $this->assertSame($view->anonymous_visitor_id, $click->anonymous_visitor_id);
+        $this->assertSame(1, $share->fresh()->total_views);
+        $this->assertSame(1, $share->fresh()->total_cta_clicks);
+        $this->assertSame($view->getAttributes(), $view->fresh()->getAttributes());
+        $this->post(route('child-identity-shares.cta', $share->public_token))->assertRedirect();
+        $report = app(ChildIdentityShareReportService::class)->build()['summary'];
+        $this->assertSame(2, $report['cta_clicks']);
+        $this->assertEquals(100, $report['ctr']);
+        $this->assertSame(1, $report['clicked_viewers']);
+        $this->assertSame(1, $report['repeated_eligible_click_events']);
+    }
+
+    public function test_direct_and_speculative_requests_do_not_fabricate_clicks_or_views(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity();
+        $share = $this->readyShare($identity);
+        $url = route('child-identity-shares.show', $share->public_token);
+        $cta = route('child-identity-shares.cta', $share->public_token);
+        $this->get($cta)->assertRedirect($url);
+        $this->head($cta)->assertRedirect($url);
+        $this->head($url)->assertOk();
+        foreach (['Purpose' => 'prefetch', 'Sec-Purpose' => 'prefetch;prerender', 'X-Purpose' => 'preview-prefetch'] as $header => $value) {
+            $this->get($url, [$header => $value])->assertOk();
+            $this->post($cta, [], [$header => $value])->assertRedirect($url);
+            $this->flushHeaders();
+        }
+        $this->assertSame(0, $share->events()->count());
+        $this->assertSame(0, $share->fresh()->total_views);
+        $this->assertSame(0, $share->fresh()->total_cta_clicks);
+    }
+
+    public function test_returning_visitor_cookie_is_preserved_in_new_session_and_invalid_cookie_uses_session(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity();
+        $share = $this->readyShare($identity);
+        $visitor = (string) Str::uuid();
+        $session = app('session')->driver();
+        $session->forget('herokid_share_visitor');
+        $events = app(ChildIdentityShareEventService::class);
+        $request = Request::create('/s/test', 'GET', [], ['herokid_share_visitor' => $visitor]);
+        $request->setLaravelSession($session);
+        $view = $events->record($share, 'share.page_viewed', $request);
+        $this->assertSame($visitor, $session->get('herokid_share_visitor'));
+        foreach ([[], ['herokid_share_visitor' => 'invalid'], ['herokid_share_visitor' => ['invalid']]] as $cookies) {
+            $next = Request::create('/s/test/start', 'POST', [], $cookies);
+            $next->setLaravelSession($session);
+            $click = $events->record($share, 'share.cta_clicked', $next);
+            $this->assertSame($view->anonymous_visitor_id, $click->anonymous_visitor_id);
+        }
+    }
+
+    public function test_lost_cookie_and_session_are_not_linked_to_another_visitor_or_backfilled(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity();
+        $share = $this->readyShare($identity);
+        $events = app(ChildIdentityShareEventService::class);
+        $session = app('session')->driver();
+        $request = Request::create('/s/test');
+        $request->setLaravelSession($session);
+        $view = $events->record($share, 'share.page_viewed', $request);
+        $before = $view->fresh()->getAttributes();
+        $session->forget('herokid_share_visitor');
+        $click = $events->record($share, 'share.cta_clicked', $request);
+        $this->assertNotSame($view->anonymous_visitor_id, $click->anonymous_visitor_id);
+        $this->assertSame(1, $share->events()->where('event_type', 'share.page_viewed')->count());
+        $this->assertSame($before, $view->fresh()->getAttributes());
+    }
+
+    public function test_public_cta_rejects_a_post_without_csrf_in_production_mode(): void
+    {
+        Storage::fake('local');
+        [$identity] = $this->approvedIdentity();
+        $share = $this->readyShare($identity);
+        $this->app->instance('env', 'production');
+        try {
+            $this->post(route('child-identity-shares.cta', $share->public_token))->assertStatus(419);
+            $this->assertSame(0, $share->events()->count());
+        } finally {
+            $this->app->instance('env', 'testing');
+        }
+    }
+
     public function test_share_buttons_require_a_successful_approved_attempt_without_an_extra_consent_dialog(): void
     {
         Storage::fake('local');
@@ -172,6 +268,7 @@ class ChildIdentitySharingTest extends TestCase
             ->post(route('child-identity.shares.revoke', [$identity->uuid, $share]))
             ->assertRedirect();
         $this->get(route('child-identity-shares.show', $share->public_token))->assertStatus(410);
+        $this->post(route('child-identity-shares.cta', $share->public_token))->assertStatus(410);
         $this->get(route('child-identity-shares.card', [$share->public_token, 'og']))->assertStatus(410);
         Storage::disk('local')->assertExists($share->og_card_path);
     }

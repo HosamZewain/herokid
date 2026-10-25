@@ -238,7 +238,7 @@ Route::prefix('s')->name('child-identity-shares.')->group(function (): void {
     Route::get('{share:public_token}/card/{variant}', [PublicChildIdentityShareController::class, 'card'])
         ->middleware('throttle:240,1')
         ->name('card');
-    Route::get('{share:public_token}/start', [PublicChildIdentityShareController::class, 'cta'])
+    Route::match(['GET', 'POST'], '{share:public_token}/start', [PublicChildIdentityShareController::class, 'cta'])
         ->middleware('throttle:60,1')
         ->name('cta');
 });

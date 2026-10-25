@@ -27,15 +27,17 @@
                             @endforeach
                         </div>
 
-                        <a href="{{ route('child-identity-shares.cta', [
+                        <form method="POST" data-share-cta action="{{ route('child-identity-shares.cta', [
                                 'share' => $share->public_token,
                                 'utm_source' => request('utm_source', 'identity_share'),
                                 'utm_medium' => 'identity_share',
                                 'utm_campaign' => 'free_child_identity',
-                            ]) }}"
-                           class="mt-5 block w-full rounded-2xl bg-gradient-to-l from-fuchsia-500 to-orange-500 px-5 py-3.5 text-center text-base font-black text-white shadow-lg shadow-fuchsia-950/40 xl:text-lg">
+                            ]) }}">
+                            @csrf
+                            <button type="submit" class="mt-5 block w-full rounded-2xl bg-gradient-to-l from-fuchsia-500 to-orange-500 px-5 py-3.5 text-center text-base font-black text-white shadow-lg shadow-fuchsia-950/40 xl:text-lg">
                             {{ $public['cta'] }}
-                        </a>
+                            </button>
+                        </form>
                         <a href="{{ route('shop.index', ['type' => 'stories']) }}" class="mt-4 inline-flex font-black text-indigo-200 underline decoration-indigo-400 underline-offset-4">
                             اكتشف قصص HeroKid
                         </a>
@@ -61,7 +63,7 @@
                 };
                 if (typeof window.gtag === 'function') window.gtag('event', 'child_identity_share_page_viewed', properties);
                 if (typeof window.fbq === 'function') window.fbq('trackCustom', 'child_identity_share_page_viewed', properties);
-                document.querySelector('a[href*="/start"]')?.addEventListener('click', () => {
+                document.querySelector('[data-share-cta]')?.addEventListener('submit', () => {
                     if (typeof window.gtag === 'function') window.gtag('event', 'child_identity_share_cta_clicked', properties);
                     if (typeof window.fbq === 'function') window.fbq('trackCustom', 'child_identity_share_cta_clicked', properties);
                 });
