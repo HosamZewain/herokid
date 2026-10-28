@@ -6,9 +6,11 @@ use App\Models\AdminActivityLog;
 use App\Models\ChildIdentityRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\PackagePersonalizationService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -39,6 +41,13 @@ class AdminOrderQuickEditService
         $canSeePhotos = $actor->hasPermission('orders.photos.view');
 
         return [
+            'packages' => app(AdminPackageOrderService::class)->availablePackages()->map(fn (PricingPackage $package): array => [
+                'id' => $package->id, 'name' => $package->name,
+                'price_cents' => (int) round((float) $package->price * 100),
+                'summary' => $package->componentSummary(), 'story_count' => $package->story_count,
+                'story_ids' => $package->availableStoriesQuery()->pluck('stories.id')->all(),
+                'schema' => app(PackagePersonalizationService::class)->schema($package),
+            ])->all(),
             'story_catalog' => Story::query()->where('active', true)->orderBy('title')->get()
                 ->map(fn (Story $story): array => [
                     'id' => $story->id, 'name' => $story->title,
@@ -224,6 +233,54 @@ class AdminOrderQuickEditService
                 $this->updater->appendProduct($representative, [
                     ...$data, 'schema' => $schema, 'personalization' => $personalization,
                     'reused_photos' => $reusedPhotos, 'on_stored' => $onStored,
+                ], $actor, $request);
+            });
+        });
+    }
+
+    public function addPackage(Order $representative, array $data, User $actor, Request $request): void
+    {
+        $this->withPhotoCleanup(function (callable $onStored) use ($representative, $data, $actor, $request): void {
+            DB::transaction(function () use ($representative, $data, $actor, $request, $onStored): void {
+                $orders = Order::query()->where('checkout_group_key', $representative->checkoutGroupKey())
+                    ->orderBy('id')->lockForUpdate()->get();
+                abort_if($orders->isEmpty(), 404);
+                $fingerprint = Arr::except($data, ['photos', 'request_key']);
+                $fingerprint['photos'] = collect($data['photos'] ?? [])->map(fn ($file): array => [
+                    'name' => $file->getClientOriginalName(), 'sha256' => hash_file('sha256', $file->getRealPath()),
+                ])->all();
+                $data['request_hash'] = hash('sha256', json_encode($fingerprint, JSON_THROW_ON_ERROR));
+                $previous = AdminActivityLog::where('action', 'checkout.package_added')->where('user_id', $actor->id)
+                    ->where('properties->checkout_group_key', $representative->checkoutGroupKey())
+                    ->where('properties->request_key', $data['request_key'])->first();
+                if ($previous) {
+                    abort_unless(hash_equals((string) ($previous->properties['request_hash'] ?? ''), $data['request_hash']), 409, 'طلب الإضافة مكرر ببيانات مختلفة. افتح إضافة جديدة.');
+
+                    return;
+                }
+                $package = PricingPackage::where('active', true)->lockForUpdate()->find($data['pricing_package_id']);
+                if (! $package || ! $package->availableForPurchase()) {
+                    throw ValidationException::withMessages(['pricing_package_id' => 'الباقة أو أحد مكوناتها غير متاح حاليًا.']);
+                }
+                abort_unless((int) $data['expected_price_cents'] === (int) round((float) $package->price * 100), 409, 'سعر الباقة تغيّر. أغلق النافذة وافتحها من جديد لمراجعة السعر.');
+                $schema = app(PackagePersonalizationService::class)->schema($package);
+                $source = null;
+                if (! empty($data['reuse_child_order_id'])) {
+                    $source = $orders->firstWhere('id', (int) $data['reuse_child_order_id'])
+                        ?? $this->customerChildren->source((int) $data['reuse_child_order_id'], (string) data_get($orders->first()->delivery_details, 'phone'), $actor, 'reuse_child_order_id', true);
+                }
+                $usesPhotos = (bool) data_get($schema, 'fields.photos.enabled');
+                $reused = $usesPhotos && $source ? $this->customerChildren->photos($source, $actor) : [];
+                $this->authorizePhotos($actor, $data['photos'] ?? [], $reused);
+                foreach ($reused as $path) {
+                    if (! Storage::disk((string) config('photo_uploads.disk', 'local'))->exists($path)) {
+                        throw ValidationException::withMessages(['photos' => 'إحدى صور الطفل المحفوظة غير متاحة؛ ارفع الصور من جديد.']);
+                    }
+                }
+                $child = $this->validateFields($schema, array_replace($source ? $this->childValues($source) : [], $data['personalization'] ?? []),
+                    $data['photos'] ?? [], count($reused), false);
+                $this->updater->appendPackage($representative, $package, [
+                    ...$data, 'personalization' => $child, 'reused_photos' => $reused, 'on_stored' => $onStored,
                 ], $actor, $request);
             });
         });

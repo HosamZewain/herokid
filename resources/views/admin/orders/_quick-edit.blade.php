@@ -7,6 +7,7 @@
             data-contact-url="{{ route('admin.orders.groups.contact', $group['representative_id']) }}"
             data-add-url="{{ route('admin.orders.groups.products.store', $group['representative_id']) }}"
             data-add-story-url="{{ route('admin.orders.groups.stories.store', $group['representative_id']) }}"
+            data-add-package-url="{{ route('admin.orders.groups.packages.store', $group['representative_id']) }}"
             data-item-url="{{ route('admin.orders.groups.products.update', [$group['representative_id'], '__ITEM__']) }}"
             data-story-url="{{ route('admin.orders.quick-story-details', '__ORDER__') }}"
             data-contact="{{ json_encode(['parent_name' => $group['customer_name'], 'phone' => $group['phone'], 'alternate_phone' => data_get($group['delivery'], 'alternate_phone')], JSON_UNESCAPED_UNICODE) }}">

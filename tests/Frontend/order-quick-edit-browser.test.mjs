@@ -10,6 +10,12 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 let server, browser, origin, html;
 const options = {
     can_upload_photos: true,
+    packages: [{ id: 7, name: 'باقة الطفل', price_cents: 44999, summary: 'قصتان + بوستر', story_count: 2, story_ids: [4], schema: { fields: {
+        child_name: { enabled: true, required: true, label: 'اسم الطفل', type: 'text' },
+        child_age: { enabled: true, required: true, label: 'عمر الطفل', type: 'age' },
+        child_gender: { enabled: true, required: true, label: 'جنس الطفل', type: 'gender' },
+        photos: { enabled: true, required: true, label: 'صور الطفل', type: 'photos', min_files: 2, max_files: 3 },
+    } } }, { id: 8, name: 'باقة جاهزة', price_cents: 15000, summary: 'منتجان جاهزان', story_count: 0, story_ids: [], schema: { fields: {} } }],
     story_catalog: [{ id: 4, name: 'رحلة إلى الفضاء', price: 250, language: 'ar' }, { id: 5, name: 'المخترع العبقري', price: 290, language: 'ar' }],
     story_children: [{ order_id: 12, label: 'ليلى أحمد — طلب سابق', values: { child_name: 'ليلى أحمد', child_age: 7, child_gender: 'girl', interests: 'الفضاء', parent_notes: '' }, photos: ['/photo-test', '/photo-test'] }],
     story_age_options: [2, 3, 4, 5, 6, 7, 8, 9, 10], story_photo_min: 2, story_photo_max: 3,
@@ -55,6 +61,57 @@ async function pageFixture(width = 1200) {
     await page.waitForFunction(() => document.querySelector('[data-order-quick-edit]')?.dataset.initialized === '1');
     return { page, errors };
 }
+
+test('package picker on mobile keeps eligible stories, shared child, price and retry key', async () => {
+    const { page, errors } = await pageFixture(390);
+    const bodies = [];
+    await page.route('**/groups/1/packages', route => {
+        bodies.push(route.request().postData());
+        return route.fulfill({ status: 422, json: { errors: { pricing_package_id: ['اختبار إعادة المحاولة'] } } });
+    });
+    await page.locator('[data-quick-open="add-package"]').click();
+    await page.locator('[name="pricing_package_id"]').selectOption('7');
+    assert.equal(await page.locator('[name="story_ids[]"]').count(), 2);
+    assert.equal(await page.locator('[name="story_ids[]"]').first().locator('option').count(), 2);
+    await page.locator('[name="story_ids[]"]').nth(0).selectOption('4');
+    await page.locator('[name="story_ids[]"]').nth(1).selectOption('4');
+    await page.locator('[name="reuse_child_order_id"]').selectOption('12');
+    assert.equal(await page.locator('[name="personalization[child_name]"]').inputValue(), 'ليلى أحمد');
+    assert.equal(await page.locator('input[type="file"]').evaluate(node => node.required), false);
+    await page.locator('#quick-change-reason').fill('طلب العميل إضافة الباقة.');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    if (process.env.HEROKID_PACKAGE_UI_SCREENSHOT) await page.screenshot({ path: process.env.HEROKID_PACKAGE_UI_SCREENSHOT });
+    await page.locator('[data-quick-save]').click();
+    await page.getByText('اختبار إعادة المحاولة', { exact: true }).waitFor();
+    await page.locator('[data-quick-save]').click();
+    await page.waitForFunction(() => !document.querySelector('[data-quick-save]').disabled);
+    const key = body => body.match(/name="request_key"\r\n\r\n([^\r]+)/)?.[1];
+    assert.equal(bodies.length, 2);
+    assert.ok(key(bodies[0])); assert.equal(key(bodies[0]), key(bodies[1]));
+    assert.ok(bodies[0].includes('44999')); assert.ok(bodies[0].includes('personalization[child_name]'));
+    await page.locator('[name="pricing_package_id"]').selectOption('8');
+    assert.equal(await page.locator('[name="story_ids[]"]').count(), 0);
+    assert.equal(await page.locator('[name="reuse_child_order_id"]').count(), 0);
+    assert.equal(await page.locator('[name="expected_price_cents"]').inputValue(), '15000');
+    assert.deepEqual(errors, []);
+    await page.close();
+});
+
+test('desktop package addition supports manual child entry and can cancel without submitting', async () => {
+    const { page, errors } = await pageFixture();
+    await page.locator('[data-quick-open="add-package"]').click();
+    await page.locator('[name="pricing_package_id"]').selectOption('7');
+    assert.equal(await page.locator('input[type="file"]').evaluate(node => node.required), true);
+    await page.locator('[name="personalization[child_name]"]').fill('عمر');
+    await page.locator('[name="personalization[child_age]"]').selectOption('8');
+    await page.locator('[name="personalization[child_gender]"]').selectOption('boy');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    if (process.env.HEROKID_PACKAGE_UI_SCREENSHOT) await page.screenshot({ path: process.env.HEROKID_PACKAGE_UI_SCREENSHOT.replace('mobile', 'desktop') });
+    await page.locator('[data-quick-cancel]').click();
+    assert.equal(await page.locator('[data-quick-dialog]').evaluate(node => node.open), false);
+    assert.deepEqual(errors, []);
+    await page.close();
+});
 
 test('removal on mobile needs a reason and explicit confirmation, can cancel, and preserves retry key', async () => {
     const { page, errors } = await pageFixture(390);

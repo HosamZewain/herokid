@@ -221,6 +221,7 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <button type="button" data-quick-open="add-story" class="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-black text-white">+ إضافة قصة</button>
+                                        <button type="button" data-quick-open="add-package" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white">+ إضافة باقة</button>
                                         <button type="button" data-quick-open="add" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-black text-white">+ إضافة منتج</button>
                                     @endif
                                 @endcan

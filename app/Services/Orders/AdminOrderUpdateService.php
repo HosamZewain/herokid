@@ -6,10 +6,12 @@ use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Pricing\PackagePricingService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -193,6 +195,107 @@ class AdminOrderUpdateService
                 ], admin: $admin, request: $request,
             );
         });
+    }
+
+    /** Called inside the quick editor's locked transaction and photo-cleanup boundary. */
+    public function appendPackage(Order $representative, PricingPackage $package, array $data, User $admin, Request $request): void
+    {
+        $orders = Order::with(['items', 'story'])->where('checkout_group_key', $representative->checkoutGroupKey())
+            ->orderBy('id')->lockForUpdate()->get();
+        $before = $this->groups->present($orders);
+        if ((int) $before['items_cents'] !== (int) $orders->flatMap->items->sum('total_price_cents')) {
+            throw ValidationException::withMessages(['pricing_package_id' => 'سجل أسعار هذا الطلب القديم غير مكتمل؛ راجع تعديل الطلب الكامل أولًا.']);
+        }
+        $ids = array_values($data['story_ids'] ?? []);
+        $stories = $package->availableStoriesQuery()->whereIn('stories.id', $ids)->lockForUpdate()->get()->keyBy('id');
+        if (count($ids) !== $package->story_count || collect($ids)->contains(fn ($id) => ! $stories->has($id))) {
+            throw ValidationException::withMessages(['story_ids' => 'اختر العدد المطلوب من القصص المتاحة لهذه الباقة.']);
+        }
+        $components = $package->items()->lockForUpdate()->get();
+        if ($orders->flatMap->items->count() + count($ids) + $components->count() > (int) config('orders.admin_max_items', 20)) {
+            throw ValidationException::withMessages(['pricing_package_id' => 'إضافة مكونات الباقة تتجاوز الحد الأقصى لعناصر الطلب.']);
+        }
+        $source = $orders->first();
+        $added = collect();
+        $firstStory = null;
+        $copyPhotos = function (Order $order, int $max) use ($data): void {
+            $reused = array_slice($data['reused_photos'], 0, $max);
+            app(AdminCustomerChildService::class)->copyPhotos($order, $reused, $data['on_stored']);
+            $new = array_slice($data['photos'] ?? [], 0, max(0, $max - count($reused)));
+            if ($new !== []) {
+                $this->photoUploads->append($order, $new, $data['on_stored']);
+            }
+            $order->refresh();
+        };
+        foreach ($ids as $id) {
+            $order = $this->createStoryOrder($source->checkoutGroupKey(), $stories[$id], [...$data, ...$data['personalization']], $source, $admin);
+            $copyPhotos($order, (int) config('photo_uploads.max_files', 3));
+            $item = $order->items()->where('item_type', 'story')->firstOrFail();
+            $item->forceFill(['personalization_snapshot' => array_replace($item->personalization_snapshot ?? [], [
+                'uploaded_photos_count' => count($order->uploaded_photos ?? []), 'language' => $order->language,
+                'interests' => $order->interests, 'gift_note' => $order->gift_note, 'parent_notes' => $order->parent_notes,
+            ])])->save();
+            $order->forceFill(['delivery_details' => array_replace($order->delivery_details ?? [], [
+                'story_regular_price' => $item->item_snapshot['regular_price'] ?? ($item->unit_price_cents / 100),
+                'story_offer_applied' => (bool) ($item->item_snapshot['offer_applied'] ?? false),
+                'story_offer_label' => $item->item_snapshot['offer_label'] ?? null,
+            ])])->save();
+            $firstStory ??= $order->load('items');
+            $added->push($item);
+        }
+        foreach ($components as $component) {
+            // Reload each component under lock: quantities sharing a stock pool are checked cumulatively.
+            $product = Product::where('is_active', true)->lockForUpdate()->find($component->product_id);
+            $variant = $component->product_variant_id ? ProductVariant::where('product_id', $component->product_id)
+                ->where('is_active', true)->lockForUpdate()->find($component->product_variant_id) : null;
+            if (! $product || ($component->product_variant_id && ! $variant) || ! $product->hasStock($component->quantity, $variant)) {
+                throw ValidationException::withMessages(['pricing_package_id' => 'أحد منتجات الباقة أو خياراته أو كميته غير متاح.']);
+            }
+            $linked = $product->isPersonalizedAddon();
+            if ($linked && ! $firstStory) {
+                throw ValidationException::withMessages(['story_ids' => 'أحد منتجات الباقة يحتاج قصة مرتبطة داخل نفس الباقة.']);
+            }
+            $order = $linked ? $firstStory : $this->createProductCarrier($source->checkoutGroupKey(), $source, $source->only(['parent_name', 'order_source', 'source_notes']), $admin);
+            $schema = ProductPersonalizationSchema::forProduct($product);
+            if (! $linked && data_get($schema, 'fields.photos.enabled')) {
+                $copyPhotos($order, (int) data_get($schema, 'fields.photos.max_files', 3));
+            }
+            $price = $product->effectivePriceCents($variant);
+            $this->createProductItem($order, $linked ? $firstStory->items->firstWhere('item_type', 'story') : null, [
+                'product' => $product, 'variant' => $variant, 'quantity' => $component->quantity,
+                'unit_price_cents' => $price, 'total_price_cents' => $price * $component->quantity,
+                'personalization_snapshot' => $product->personalization_mode === 'collect_child_details'
+                    ? ProductPersonalizationSchema::snapshot($schema, $data['personalization'], count($order->uploaded_photos ?? [])) : null,
+            ], $linked ? 0 : null);
+            $this->decrementStock($product, $variant, $component->quantity);
+            $added->push($order->items()->latest('id')->firstOrFail());
+        }
+        abort_if($added->isEmpty(), 422);
+        $price = (int) round((float) $package->price * 100);
+        $weights = $added->pluck('total_price_cents')->all();
+        $allocations = app(PackagePricingService::class)->allocate($price, $weights);
+        $snapshot = ['id' => $package->id, 'slug' => $package->slug, 'name' => $package->name,
+            'instance_key' => (string) Str::uuid(), 'package_price_cents' => $price,
+            'regular_total_cents' => array_sum($weights), 'created_manually' => true];
+        foreach ($added as $index => $item) {
+            $item->forceFill(['unit_price_cents' => intdiv($allocations[$index], $item->quantity),
+                'total_price_cents' => $allocations[$index],
+                'item_snapshot' => array_replace($item->item_snapshot ?? [], ['package' => $snapshot]),
+            ])->save();
+        }
+        foreach ($added->pluck('order_id')->unique() as $orderId) {
+            $order = Order::findOrFail($orderId);
+            $order->forceFill(['delivery_details' => array_replace($order->delivery_details ?? [], ['package' => $snapshot])])->save();
+        }
+        [$subtotal, $total, $payment] = $this->refreshAfterAddition($source, $before, $data, $admin, $request, 'admin_package_added');
+        AdminActivityLogger::log(action: 'checkout.package_added', description: 'إضافة باقة إلى الطلب: '.$package->name, subject: $source,
+            properties: ['checkout_group_key' => $source->checkoutGroupKey(), 'reason' => $data['change_reason'],
+                'request_key' => $data['request_key'], 'request_hash' => $data['request_hash'], 'package' => $snapshot,
+                'reused_child_order_id' => $data['reuse_child_order_id'] ?? null,
+                'added_item_ids' => $added->pluck('id')->all(), 'paid_amount_preserved_cents' => $payment['paid_amount_cents'],
+                'changes' => AdminActivityLogger::changedValues(
+                    ['items_cents' => $before['items_cents'], 'total_cents' => $before['total_cents']],
+                    ['items_cents' => $subtotal, 'total_cents' => $total])], admin: $admin, request: $request);
     }
 
     /** Exact purchased lines affected by removal, including a story's linked extras. */

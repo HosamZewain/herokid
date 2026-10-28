@@ -110,6 +110,24 @@ class OrderQuickEditController extends Controller
         return $this->saved($request);
     }
 
+    public function addPackage(Request $request, Order $representative, AdminOrderQuickEditService $edits)
+    {
+        $validated = $request->validate([
+            'request_key' => ['required', 'uuid'],
+            'pricing_package_id' => ['required', 'integer'],
+            'expected_price_cents' => ['required', 'integer', 'min:0'],
+            'story_ids' => ['sometimes', 'array', 'max:20'],
+            'story_ids.*' => ['required', 'integer'],
+            'reuse_child_order_id' => ['nullable', 'integer'],
+            'language' => ['nullable', Rule::in(['ar', 'en'])],
+            'gift_note' => ['nullable', 'string', 'max:1000'],
+            ...$this->personalizationRules(),
+        ], $this->messages());
+        $edits->addPackage($representative, $validated, $request->user(), $request);
+
+        return $this->saved($request);
+    }
+
     public function updateStory(Request $request, Order $order, AdminOrderQuickEditService $edits)
     {
         $validated = $request->validate([

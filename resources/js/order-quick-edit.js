@@ -99,7 +99,7 @@ export function initializeOrderQuickEdit() {
                 node.maxLength = { child_name: 100, school_name: 150, class_name: 100, interests: 500, parent_notes: 1000 }[key] ?? 255;
             }
             // Old purchases may legitimately lack fields introduced later in the catalog.
-            node.required = mode === 'add' && field.required;
+            node.required = ['add', 'add-package'].includes(mode) && field.required;
         });
     };
 
@@ -221,6 +221,52 @@ export function initializeOrderQuickEdit() {
         });
     };
 
+    const renderAddPackage = () => {
+        const packages = options.packages ?? [];
+        if (!packages.length) {
+            fields.append(element('p', 'لا توجد باقات متاحة حاليًا. راجع تفعيل الباقات وتوافر مكوناتها من إدارة الباقات.', 'text-sm font-bold text-amber-700'));
+        }
+        const picker = select(fields, 'الباقة *', 'pricing_package_id', [['', 'اختر الباقة'], ...packages.map((p) => [p.id, `${p.name} — ${(p.price_cents / 100).toFixed(2)} ج.م`])]);
+        picker.required = true;
+        const details = element('div', undefined, 'space-y-3'); fields.append(details);
+        picker.addEventListener('change', () => {
+            details.replaceChildren();
+            const pack = packages.find((p) => String(p.id) === picker.value);
+            if (!pack) return;
+            details.append(element('p', pack.summary, 'text-sm font-black text-gray-900'));
+            details.append(element('p', `سيُضاف سعر الباقة ${(pack.price_cents / 100).toFixed(2)} ج.م مرة واحدة. كل العناصر لنفس الطفل، والمدفوع والشحن الحاليان لا يتغيران.`, 'rounded-xl bg-indigo-50 p-3 text-sm font-bold leading-6 text-indigo-700'));
+            input(details, '', 'expected_price_cents', pack.price_cents, 'hidden');
+            const stories = (options.story_catalog ?? []).filter((story) => pack.story_ids.map(String).includes(String(story.id)));
+            for (let i = 0; i < pack.story_count; i++) {
+                select(details, `القصة ${i + 1} *`, 'story_ids[]', [['', 'اختر القصة'], ...stories.map((story) => [story.id, story.name])]).required = true;
+            }
+            if (pack.story_count) {
+                select(details, 'لغة القصص', 'language', [['ar', 'العربية'], ['en', 'English']], 'ar');
+                input(details, 'إهداء القصص (اختياري)', 'gift_note', '', 'textarea').maxLength = 1000;
+            }
+            if (!Object.values(pack.schema.fields ?? {}).some((field) => field.enabled)) return;
+            const children = options.story_children ?? options.children ?? [];
+            const reuse = select(details, 'بيانات الطفل وصوره لكل الباقة', 'reuse_child_order_id', [['', 'طفل جديد / إدخال يدوي'], ...children.map((child) => [child.order_id, child.label ?? child.name])]);
+            const previews = element('div', undefined, 'flex flex-wrap gap-2');
+            const personalization = element('div', undefined, 'space-y-3'); details.append(previews, personalization);
+            const render = () => {
+                const child = children.find((c) => String(c.order_id) === reuse.value);
+                renderPersonalization(personalization, pack.schema, child?.values ?? {});
+                const photoField = pack.schema.fields?.photos;
+                photoPreview(previews, photoField?.enabled ? child?.photos ?? [] : []);
+                if (photoField?.enabled) {
+                    const count = child?.photos?.length ?? 0;
+                    const minimum = photoField.required ? photoField.min_files : 0;
+                    personalization.append(element('p', `الصور المطلوبة: ${minimum}–${photoField.max_files}. الصور المحفوظة المختارة: ${count}. كل منتج يأخذ عدد الصور المناسب لإعداداته.`, 'text-xs font-bold leading-6 text-gray-500'));
+                    const upload = personalization.querySelector('input[type="file"]');
+                    if (upload) upload.required = count < minimum;
+                    else personalization.append(element('p', 'تحتاج صلاحية صور الطلبات لاستخدام الصور.', 'text-xs font-bold text-amber-700'));
+                }
+            };
+            reuse.addEventListener('change', render); render();
+        });
+    };
+
     document.querySelectorAll('[data-quick-open]').forEach((button) => button.addEventListener('click', async () => {
         if (busy) return;
         mode = button.dataset.quickOpen;
@@ -230,7 +276,7 @@ export function initializeOrderQuickEdit() {
         const thisOpening = ++opening;
         save.disabled = true;
         dialog.showModal();
-        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور', remove: 'تأكيد حذف عنصر من الطلب' }[mode];
+        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', 'add-package': 'إضافة باقة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور', remove: 'تأكيد حذف عنصر من الطلب' }[mode];
         save.textContent = mode === 'remove' ? 'تأكيد الحذف' : 'حفظ التعديل';
         save.classList.toggle('bg-red-600', mode === 'remove');
         save.classList.toggle('bg-indigo-600', mode !== 'remove');
@@ -268,6 +314,7 @@ export function initializeOrderQuickEdit() {
             }
             else if (mode === 'add') renderAdd();
             else if (mode === 'add-story') renderAddStory();
+            else if (mode === 'add-package') renderAddPackage();
             else if (mode === 'story') {
                 currentStory = options.stories.find((story) => String(story.order_id) === button.dataset.orderId);
                 if (!currentStory) throw new Error('تعذر العثور على القصة الحالية. أعد تحميل الصفحة.');
@@ -309,10 +356,11 @@ export function initializeOrderQuickEdit() {
         if (busy || !form.reportValidity()) return;
         busy = true; save.disabled = true; showError(''); status.textContent = 'جارٍ حفظ التعديل…';
         const body = new FormData(form);
-        if (mode === 'add' || mode === 'add-story' || mode === 'remove') body.append('request_key', requestKey);
+        if (['add', 'add-story', 'add-package', 'remove'].includes(mode)) body.append('request_key', requestKey);
         body.append('_token', document.querySelector('meta[name="csrf-token"]').content);
         let url = root.dataset.addUrl;
         if (mode === 'add-story') url = root.dataset.addStoryUrl;
+        if (mode === 'add-package') url = root.dataset.addPackageUrl;
         if (mode === 'remove') { url = root.dataset.removeUrl.replace('__ITEM__', currentItem.id); body.append('_method', 'DELETE'); }
         if (mode === 'contact') {
             url = root.dataset.contactUrl; body.append('_method', 'PATCH');

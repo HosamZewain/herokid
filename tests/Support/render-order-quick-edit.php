@@ -25,4 +25,5 @@ echo '<button data-quick-open="contact">تعديل بيانات التواصل</
 echo view('admin.orders._quick-edit', ['group' => [
     'representative_id' => 1, 'trashed' => false, 'customer_name' => 'عميل اختبار', 'phone' => '01012345678', 'delivery' => [],
 ]])->render();
+echo '<button data-quick-open="add-package">إضافة باقة</button>';
 echo '</body></html>';
