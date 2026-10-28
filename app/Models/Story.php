@@ -12,6 +12,20 @@ class Story extends Model
 {
     protected $guarded = [];
 
+    /** Public vocabulary backed by the existing, admin-editable gender column. */
+    public function getHeroGenderAttribute(): string
+    {
+        return in_array($this->gender, ['boy', 'girl'], true) ? $this->gender : 'any';
+    }
+
+    public function setHeroGenderAttribute(string $value): void
+    {
+        if (! in_array($value, ['boy', 'girl', 'any'], true)) {
+            throw new \InvalidArgumentException('Invalid hero_gender');
+        }
+        $this->attributes['gender'] = $value === 'any' ? 'both' : $value;
+    }
+
     protected $casts = [
         'gallery_images' => 'array',
         'active' => 'boolean',

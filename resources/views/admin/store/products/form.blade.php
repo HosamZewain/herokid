@@ -222,7 +222,7 @@
                 <div>
                     <label class="mb-2 block font-bold">الفئات العمرية</label>
                     <div class="flex flex-wrap gap-4">
-                        @foreach(['1-3','3-6','6-9','9-12','12+'] as $age)
+                        @foreach(collect(['1-3','3-5','3-6','4-7','5-7','6-9','7-9','8-12','9-12','12+'])->merge($product->age_groups ?? [])->unique() as $age)
                             <label class="inline-flex items-center gap-2"><input type="checkbox" name="age_groups[]" value="{{ $age }}" @checked(in_array($age, old('age_groups', $product->age_groups ?? [])))> {{ $age }}</label>
                         @endforeach
                     </div>

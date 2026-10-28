@@ -22,6 +22,8 @@
                     <textarea name="answer" id="answer" rows="6" required
                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('answer', $faq->answer) }}</textarea>
                     <x-input-error :messages="$errors->get('answer')" class="mt-2" />
+                    <p class="mt-2 text-xs text-gray-600">النصوص بين الأقواس المزدوجة تُحمّل السياسة أو السعر الحالي تلقائيًا من إعدادات الموقع والباقات.</p>
+                    <div class="mt-2 rounded bg-gray-50 p-3 text-sm">المعاينة للعميل: {{ $faq->customer_answer }}</div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

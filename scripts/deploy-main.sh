@@ -115,6 +115,7 @@ foreach ($manifest as $entry) {
 "$PHP_BIN" artisan migrate --force --path="$STUDIO_MIGRATION"
 "$PHP_BIN" artisan migrate --force --path="$PRODUCT_DELETION_MIGRATION"
 "$PHP_BIN" artisan migrate --force --path="$ORDER_AUTOMATION_MIGRATION"
+"$PHP_BIN" artisan robodesk:prepare-knowledge --apply
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan route:cache
 "$PHP_BIN" artisan view:cache

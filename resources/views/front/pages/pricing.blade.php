@@ -52,7 +52,7 @@
         'mainEntity' => $packageFaqs->map(fn ($faq) => [
             '@type' => 'Question',
             'name' => $faq->question,
-            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq->answer],
+            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq->customer_answer],
         ])->values()->all(),
     ];
 @endphp
@@ -94,7 +94,7 @@
                         @foreach($packageFaqs as $faq)
                             <article class="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
                                 <h3 class="font-black text-slate-900">{{ $faq->question }}</h3>
-                                <p class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{{ $faq->answer }}</p>
+                                <p class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{{ $faq->customer_answer }}</p>
                             </article>
                         @endforeach
                     </div>

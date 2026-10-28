@@ -5,7 +5,7 @@
                 '@context' => 'https://schema.org', '@type' => 'FAQPage',
                 'mainEntity' => $faqs->map(fn ($faq) => [
                     '@type' => 'Question', 'name' => $faq->question,
-                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq->answer],
+                    'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq->customer_answer],
                 ])->values()->all(),
             ];
         @endphp

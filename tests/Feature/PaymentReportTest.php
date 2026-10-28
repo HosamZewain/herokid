@@ -279,7 +279,7 @@ class PaymentReportTest extends TestCase
         $this->assertSame('١٢٣.٤٥', format_report_money(123.45, false));
         $this->assertSame('-٠.٠١', format_report_money(-0.01, false));
         $this->assertSame('١٢٣', format_report_money(123, false));
-        $this->assertSame('١٢٣', format_money(123.45, false)); // Public prices retain their existing formatting.
+        $this->assertSame('١٢٣.٤٥', format_money(123.45, false)); // Public prices must match their stored/structured-data cents too.
         $order = $this->order('MARKETING-NEGATIVE');
         $this->event($order, -101, '2026-10-04 12:00:00');
         $csv = $this->get(route('admin.advertising-report.export', ['range' => 'this_month', 'basis' => 'collected']))->assertOk()->streamedContent();

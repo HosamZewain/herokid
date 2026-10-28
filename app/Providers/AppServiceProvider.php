@@ -3,8 +3,19 @@
 namespace App\Providers;
 
 use App\Contracts\MobileSocialIdentityVerifier;
+use App\Models\DeliveryCountry;
+use App\Models\DeliveryGovernorate;
+use App\Models\FaqItem;
+use App\Models\PricingPackage;
+use App\Models\PricingPackageProduct;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\ProductVariant;
 use App\Models\Setting;
+use App\Models\Story;
+use App\Models\StoryCategory;
 use App\Observers\PublicCatalogImageObserver;
+use App\Services\Catalog\RoboDeskFeedCache;
 use App\Services\Images\PublicCatalogImageSources;
 use App\Services\Images\PublicImageVariants;
 use App\Services\Mobile\ProviderTokenVerifier;
@@ -36,6 +47,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        foreach ([Story::class, Product::class, ProductVariant::class,
+            PricingPackage::class, PricingPackageProduct::class, FaqItem::class,
+            StoryCategory::class, ProductCategory::class, Setting::class,
+            DeliveryCountry::class, DeliveryGovernorate::class] as $feedModel) {
+            $feedModel::saved(fn () => RoboDeskFeedCache::invalidate());
+            $feedModel::deleted(fn () => RoboDeskFeedCache::invalidate());
+        }
         foreach (array_keys(PublicCatalogImageSources::FIELDS) as $model) {
             $model::observe(PublicCatalogImageObserver::class);
         }

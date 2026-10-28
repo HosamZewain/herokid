@@ -88,7 +88,8 @@ if (! function_exists('arabic_number')) {
 if (! function_exists('format_money')) {
     function format_money(int|float|string|null $amount, bool $withCurrency = true): string
     {
-        $formatted = arabic_number(number_format((float) ($amount ?? 0), 0));
+        $value = round((float) ($amount ?? 0), 2);
+        $formatted = arabic_number(number_format($value, $value == floor($value) ? 0 : 2));
 
         return $withCurrency ? trim($formatted.' '.setting('currency_label', setting('currency_symbol', ''))) : $formatted;
     }

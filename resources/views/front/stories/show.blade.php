@@ -214,8 +214,8 @@
                     <!-- Delivery Time -->
                     <div class="bg-indigo-50 rounded-2xl p-5 flex items-center gap-4 justify-end">
                         <div class="text-right">
-                            <p class="font-bold text-indigo-800 text-lg">متوسط وقت التوصيل: {{ delivery_range() }}</p>
-                            <p class="text-indigo-600 text-sm">من تاريخ تأكيد الدفع وموافقتك على التصميم</p>
+                            <p class="font-bold text-indigo-800 text-lg">الإنتاج والتوصيل</p>
+                            <p class="text-indigo-600 text-sm">{{ app(\App\Services\Catalog\CustomerKnowledge::class)->policy('delivery') ?: delivery_range() }}</p>
                         </div>
                         <span class="text-4xl flex-shrink-0">🚀</span>
                     </div>

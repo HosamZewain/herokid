@@ -34,6 +34,15 @@
 
     <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data">
         @csrf @method('PUT')
+        <section class="rounded-xl border bg-white p-6 mb-6">
+            <h3 class="font-bold text-lg mb-3">معلومات خدمة العملاء — الموقع وRoboDesk</h3>
+            <p class="text-sm text-gray-600 mb-4">تستخدم الأسئلة الشائعة ودليل RoboDesk هذه النصوص نفسها. لا تكتب سعر الباقة يدويًا: استخدم @verbatim {{package_price:slug}} @endverbatim مع رابط الباقة المختصر.</p>
+            @foreach(['payment'=>'الدفع والديبوزت', 'delivery'=>'الإنتاج والتوصيل', 'privacy'=>'خصوصية صور الأطفال', 'photos'=>'الصور المطلوبة', 'preview'=>'المعاينة والتعديلات', 'tracking'=>'تتبع الطلب', 'library'=>'مكتبة القصص', 'identity'=>'أداة هوية الطفل'] as $policy => $label)
+                <label class="block mb-3">{{ $label }}
+                    <textarea name="settings[customer_policy_{{ $policy }}]" rows="3" class="block w-full rounded-lg border-gray-300">{{ old('settings.customer_policy_'.$policy, $s('customer_policy_'.$policy)) }}</textarea>
+                </label>
+            @endforeach
+        </section>
 
         <div class="space-y-6">
 

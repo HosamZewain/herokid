@@ -165,7 +165,7 @@
                         @foreach($faqs as $faq)
                             <div data-faq-item class="hk-home-faq-item">
                                 <button type="button" data-faq-toggle aria-expanded="false" aria-controls="home-faq-{{ $faq->id }}"><span>{{ $faq->question }}</span><x-front-icon name="chevron-down" data-faq-icon /></button>
-                                <div id="home-faq-{{ $faq->id }}" data-faq-answer class="faq-answer" hidden>{{ $faq->answer }}</div>
+                                <div id="home-faq-{{ $faq->id }}" data-faq-answer class="faq-answer" hidden>{{ $faq->customer_answer }}</div>
                             </div>
                         @endforeach
                         <a href="{{ route('faq') }}" class="hk-all-faq">كل الأسئلة الشائعة <x-front-icon name="arrow-left" /></a>

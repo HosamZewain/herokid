@@ -41,7 +41,7 @@
             '@type' => 'Product',
             '@id' => \App\Support\Seo::url('/shop/product/'.$product->slug.'#product'),
             'name' => $product->name_ar,
-            'description' => $product->seo_description_ar ?: ($product->short_description_ar ?: $product->description_ar),
+            'description' => \App\Services\Catalog\CustomerKnowledge::text($product->short_description_ar ?: $product->description_ar),
             'url' => \App\Support\Seo::url('/shop/product/'.$product->slug),
             'image' => $productImageUrls,
             'brand' => ['@type' => 'Brand', 'name' => 'HeroKid'],

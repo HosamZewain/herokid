@@ -15,7 +15,7 @@
             'name' => $faq->question,
             'acceptedAnswer' => [
                 '@type' => 'Answer',
-                'text' => $faq->answer,
+                'text' => $faq->customer_answer,
             ],
         ])->values()->all(),
     ];
@@ -54,7 +54,7 @@
                                 </svg>
                             </button>
                             <div id="{{ $faqAnswerId }}" data-faq-answer class="px-6 pb-4 pt-2 text-gray-600 border-t border-gray-100 bg-gray-50" hidden>
-                                {{ $faq->answer }}
+                                {{ $faq->customer_answer }}
                             </div>
                         </div>
                     @endforeach

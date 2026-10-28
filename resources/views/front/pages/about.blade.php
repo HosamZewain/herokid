@@ -169,8 +169,8 @@
                 <article class="rounded-3xl border border-slate-200 p-7 sm:p-9">
                     <h2 class="text-2xl font-black text-slate-950">السعر والتوصيل قبل الطلب</h2>
                     <p class="mt-5 leading-8 text-slate-600">
-                        يظهر سعر كل قصة أو منتج بوضوح في صفحة الاختيار والسلة. تكلفة التوصيل تُعرض قبل إرسال الطلب، ومدة الوصول المتوقعة هي
-                        <strong class="text-slate-900">{{ delivery_range() }}</strong>.
+                        يظهر سعر كل قصة أو منتج بوضوح في صفحة الاختيار والسلة. تكلفة التوصيل تُعرض قبل إرسال الطلب.
+                        <strong class="text-slate-900">{{ app(\App\Services\Catalog\CustomerKnowledge::class)->policy('delivery') ?: delivery_range() }}</strong>.
                     </p>
                     <a href="{{ route('packages') }}" class="mt-5 inline-flex font-black text-indigo-700 underline decoration-2 underline-offset-8 hover:text-indigo-900">استكشف باقات HeroKid</a>
                 </article>

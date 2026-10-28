@@ -35,6 +35,9 @@ use App\Http\Middleware\EnsureMobileGuestScope;
 use App\Http\Middleware\EnsureStudioAccess;
 use Illuminate\Support\Facades\Route;
 
+Route::get('feeds/robodesk/{feed}', \App\Http\Controllers\Api\RoboDeskFeedController::class)
+    ->whereIn('feed', ['catalog', 'guide'])->middleware('throttle:30,1')->name('feeds.robodesk');
+
 Route::prefix('studio')->name('studio.')->group(function (): void {
     Route::post('auth/login', [StudioAuthController::class, 'login'])->middleware('throttle:20,1')->name('auth.login');
     Route::middleware(['auth:sanctum', EnsureStudioAccess::class, 'throttle:120,1'])->group(function (): void {

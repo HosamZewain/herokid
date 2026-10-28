@@ -3,7 +3,7 @@
         $steps = collect(range(1, 5))->map(fn ($number) => [
             'number' => $number,
             'title' => \App\Support\PublicExperienceCopy::value("hiw_step{$number}_title"),
-            'desc' => \App\Support\PublicExperienceCopy::value("hiw_step{$number}_desc"),
+            'desc' => app(\App\Services\Catalog\CustomerKnowledge::class)->render(\App\Support\PublicExperienceCopy::value("hiw_step{$number}_desc")),
             'bullets' => array_filter(array_map(fn ($bullet) => \App\Support\PublicExperienceCopy::value("hiw_step{$number}_bullet{$bullet}"), range(1, 3))),
             'image' => \App\Support\Seo::imageUrl(setting("img_hiw_step{$number}", \App\Support\SiteImages::path("img_hiw_step{$number}"))),
         ]);

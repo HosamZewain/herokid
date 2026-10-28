@@ -49,7 +49,7 @@
 
                 <section>
                     <h2 class="text-2xl font-bold text-slate-900 mb-4">٤. التسليم والشحن</h2>
-                    <p class="text-slate-600 mb-3">مدة التسليم المتوقعة {{ delivery_range() }} من تاريخ تأكيد الدفع. المدد المذكورة تقريبية ولا تُعدّ ضماناً ملزماً. في حالات التأخير، سنُخطرك فوراً عبر الواتساب أو البريد الإلكتروني.</p>
+                    <p class="text-slate-600 mb-3">{{ app(\App\Services\Catalog\CustomerKnowledge::class)->policy('delivery') ?: delivery_range() }} المدد المذكورة تقريبية ولا تُعدّ ضماناً ملزماً. في حالات التأخير، سنُخطرك فوراً عبر الواتساب أو البريد الإلكتروني.</p>
                 </section>
 
                 <section>
