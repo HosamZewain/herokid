@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryCountry;
+use App\Services\Cart\ShippingDiscountService;
 use Illuminate\Http\JsonResponse;
 
 class BootstrapController extends Controller
 {
     public function __invoke(): JsonResponse
     {
+        $shipping = app(ShippingDiscountService::class);
+        $shippingConfiguration = $shipping->configuration();
         $countries = DeliveryCountry::query()
             ->where('active', true)
             ->with(['activeGovernorates:id,delivery_country_id,name,delivery_fee'])
@@ -20,11 +23,11 @@ class BootstrapController extends Controller
                 'name' => $country->name,
                 'code' => $country->code,
                 'currency' => 'EGP',
-                'delivery_fee' => $country->delivery_fee,
+                'delivery_fee' => $shipping->feeCents((int) round($country->delivery_fee * 100), $shippingConfiguration) / 100,
                 'governorates' => $country->activeGovernorates->map(fn ($governorate): array => [
                     'id' => $governorate->id,
                     'name' => $governorate->name,
-                    'delivery_fee' => (float) ($governorate->delivery_fee ?? $country->delivery_fee),
+                    'delivery_fee' => $shipping->feeCents((int) round(($governorate->delivery_fee ?? $country->delivery_fee) * 100), $shippingConfiguration) / 100,
                 ])->values(),
             ]);
 

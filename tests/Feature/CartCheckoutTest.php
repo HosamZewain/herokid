@@ -312,9 +312,9 @@ class CartCheckoutTest extends TestCase
             ->assertSee('يرجى إدخال عمر الطفل')
             ->assertSee('يرجى اختيار جنس الطفل')
             ->assertSee('يرجى رفع صورتين واضحتين للطفل على الأقل')
-            ->assertSee('اختيار ٢ أو ٣ صور')
+            ->assertSee('اختيار '.\App\Services\Catalog\CustomerKnowledge::photoCount())
             ->assertSee('لم يتم اختيار صور')
-            ->assertSee('ارفع صورتين أو ٣ صور واضحة للوجه')
+            ->assertSee('ارفع '.\App\Services\Catalog\CustomerKnowledge::photoCount().' واضحة للوجه')
             ->assertDontSee('صورتان مطلوبتان، والصورة الثالثة اختيارية')
             ->assertDontSee('تقبل صور JPG وPNG وWebP وHEIC/HEIF')
             ->assertDontSee('سيتم رفع كل صورة وحدها قبل إرسال الطلب')
@@ -381,7 +381,7 @@ class CartCheckoutTest extends TestCase
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertSee('صيغة الصورة غير مدعومة')
-            ->assertSee('اختيار ٢ أو ٣ صور');
+            ->assertSee('اختيار '.\App\Services\Catalog\CustomerKnowledge::photoCount());
     }
 
     public function test_story_cart_accepts_mobile_image_formats_up_to_15_mb_each(): void

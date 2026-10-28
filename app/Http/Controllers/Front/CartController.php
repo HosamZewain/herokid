@@ -11,6 +11,7 @@ use App\Services\Bosta\BostaCheckoutAddressService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\CheckoutFormDraft;
 use App\Services\Cart\FreeShippingOfferService;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\Cart\StoryCartItemBuilder;
 use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
@@ -77,6 +78,7 @@ class CartController extends Controller
             'discount' => $promoQuote['discount_cents'] / 100,
             'promoCode' => $promoQuote['promo'],
             'shippingOffer' => app(FreeShippingOfferService::class)->active(),
+            'shippingDiscount' => app(ShippingDiscountService::class)->configuration(),
             'deliveryFee' => $this->defaultDeliveryFee(),
             'deliveryCountries' => $deliveryCountries,
             'savedDeliveryDetails' => $this->savedDeliveryDetails(),

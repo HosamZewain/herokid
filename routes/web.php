@@ -973,6 +973,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::patch('mobile-operations/promo-codes/{promoCode}', [MobileOperationsController::class, 'updatePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.update');
     Route::patch('mobile-operations/privacy-requests/{privacyRequest}', [MobileOperationsController::class, 'updatePrivacyRequest'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.privacy-requests.update');
     Route::put('discount-codes/free-shipping', [\App\Http\Controllers\Admin\FreeShippingOfferController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.free-shipping');
+    Route::put('discount-codes/shipping-discount', [\App\Http\Controllers\Admin\ShippingDiscountController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.shipping-discount');
     Route::get('discount-codes', [DiscountCodeController::class, 'index'])->middleware('permission:store.discount_codes.view')->name('discount-codes.index');
     Route::post('discount-codes', [DiscountCodeController::class, 'store'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.store');
     Route::get('discount-codes/{discountCode}/edit', [DiscountCodeController::class, 'edit'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.edit');

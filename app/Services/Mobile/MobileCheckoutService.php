@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
 use App\Services\Orders\OrderSceneTextService;
@@ -47,7 +48,7 @@ class MobileCheckoutService
             User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             [$address, $country, $governorate] = $this->deliveryAddress($user, $addressUuid);
             $cart = $this->checkoutCart($user);
-            $deliveryCents = (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
+            $deliveryCents = app(ShippingDiscountService::class)->feeCents((int) round($governorate->effectiveDeliveryFee() * 100));
             $cart = $this->carts->reprice($cart, $deliveryCents);
             $this->lockCommerceRows($cart);
             $cart = $this->carts->reprice($cart, $deliveryCents);
@@ -91,7 +92,7 @@ class MobileCheckoutService
                 [$address, $country, $governorate] = $this->deliveryAddress($user, $data['address_id']);
                 $cart = $this->checkoutCart($user);
 
-                $deliveryCents = (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
+                $deliveryCents = app(ShippingDiscountService::class)->feeCents((int) round($governorate->effectiveDeliveryFee() * 100));
                 $cart = $this->carts->reprice($cart, $deliveryCents);
 
                 $this->lockCommerceRows($cart);
@@ -579,6 +580,8 @@ class MobileCheckoutService
             'cart_items_count' => $itemCount,
             'subtotal' => $cart->subtotal_cents / 100,
             'delivery_fee' => $cart->delivery_cents / 100,
+            'original_delivery_fee' => $governorate->effectiveDeliveryFee(),
+            'shipping_discount' => max(0, (int) round($governorate->effectiveDeliveryFee() * 100) - $cart->delivery_cents) / 100,
             'discount' => $cart->discount_cents / 100,
             'total' => $cart->total_cents / 100,
             'payment_required' => $paymentMethod !== 'cash_on_delivery',

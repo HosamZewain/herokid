@@ -8,7 +8,7 @@
     $discount = $discount ?? 0;
     $originalDeliveryFee = $deliveryFee;
     $shippingEligible = $shippingOffer && $subtotal > 0 && (int) round(max(0, $subtotal - $discount) * 100) >= $shippingOffer['minimum_cents'];
-    $deliveryFee = $shippingEligible ? 0 : $deliveryFee;
+    $deliveryFee = $shippingEligible ? 0 : app(\App\Services\Cart\ShippingDiscountService::class)->feeCents((int) round($deliveryFee * 100), $shippingDiscount) / 100;
     $total = max(0, $subtotal - $discount) + $deliveryFee;
     $defaultCountry = $deliveryCountries->firstWhere('code', 'EG') ?? $deliveryCountries->first();
     $savedDeliveryDetails = $savedDeliveryDetails ?? [];
@@ -26,6 +26,9 @@
 
 <div class="min-h-[70vh] bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+        @if($shippingDiscount['enabled'] && $shippingDiscount['value'] > 0)
+            <p class="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 font-bold text-indigo-800">خصم تلقائي على الشحن: {{ $shippingDiscount['type'] === 'percent' ? ($shippingDiscount['value'] / 100).'%' : format_money($shippingDiscount['value'] / 100) }} لكل المحافظات. يظهر السعر بعد الخصم عند اختيار المحافظة، بحد أدنى صفر.</p>
+        @endif
         @if($shippingOffer)
             <div data-free-shipping-banner role="status" aria-live="polite" class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-right font-bold text-emerald-800">
                 شحن مجاني تلقائيًا للطلبات بقيمة {{ format_money($shippingOffer['minimum_cents'] / 100) }} أو أكثر بعد الخصومات.
@@ -593,9 +596,10 @@
             let discount = Number(@json((float) $discount));
             const appliedPromoCode = @json($promoCode?->code);
             const shippingOffer = @json($shippingOffer);
+            const shippingDiscount = @json($shippingDiscount);
             const shippingClockOffset = Number(@json(now()->valueOf())) - Date.now();
             let lastDeliveryFee = Number(@json((float) $originalDeliveryFee));
-            const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 0 });
+            const formatMoney = (value) => Math.max(0, Number(value || 0)).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
             const requiredFieldMessage = 'يرجى إكمال هذا الحقل.';
 
             checkoutForm?.addEventListener('invalid', (event) => {
@@ -624,15 +628,19 @@
                 const activeOffer = shippingOffer && Date.now() + shippingClockOffset < Date.parse(shippingOffer.ends_at);
                 const remaining = activeOffer ? Math.max(0, shippingOffer.minimum_cents - Math.round(Math.max(0, subtotal - discount) * 100)) : 0;
                 const freeShipping = activeOffer && subtotal > 0 && remaining === 0;
-                fee = freeShipping ? 0 : lastDeliveryFee;
+                const baseCents = Math.round(lastDeliveryFee * 100);
+                const discountCents = !shippingDiscount.enabled ? 0 : (shippingDiscount.type === 'percent'
+                    ? Math.round(baseCents * Math.min(10000, shippingDiscount.value) / 10000) : shippingDiscount.value);
+                fee = freeShipping ? 0 : Math.max(0, baseCents - discountCents) / 100;
                 const expectedFee = checkoutForm?.querySelector('[name="expected_delivery_fee"]');
                 if (expectedFee) expectedFee.value = Number(fee).toFixed(2);
                 document.querySelectorAll('[data-free-shipping-banner]').forEach(node => { node.hidden = !activeOffer; });
                 document.querySelectorAll('[data-free-shipping-progress]').forEach(node => {
                     node.textContent = freeShipping ? 'تم تطبيق الشحن المجاني على طلبك.' : `أضف بقيمة ${(remaining / 100).toLocaleString('ar-EG', { maximumFractionDigits: 2 })} جنيه للاستفادة من الشحن المجاني.`;
                 });
-                document.querySelectorAll('[data-shipping-saving]').forEach(node => { node.hidden = !freeShipping || lastDeliveryFee <= 0; });
-                document.querySelectorAll('[data-original-delivery-fee], [data-shipping-discount]').forEach(node => { node.textContent = formatMoney(lastDeliveryFee); });
+                document.querySelectorAll('[data-shipping-saving]').forEach(node => { node.hidden = fee >= lastDeliveryFee; });
+                document.querySelectorAll('[data-original-delivery-fee]').forEach(node => { node.textContent = formatMoney(lastDeliveryFee); });
+                document.querySelectorAll('[data-shipping-discount]').forEach(node => { node.textContent = formatMoney(lastDeliveryFee - fee); });
                 document.querySelectorAll('[data-cart-subtotal]').forEach((node) => {
                     node.textContent = `${formatMoney(subtotal)} {{ setting('currency_label', $settings['currency_label'] ?? '') }}`;
                 });

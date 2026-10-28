@@ -2,7 +2,7 @@
     <div class="bg-slate-950 p-4 text-right text-white sm:p-6">
         <p class="text-xs font-bold text-indigo-200 sm:text-sm">ملخص الطلب قبل إدخال العنوان</p>
         <p class="mt-1 text-2xl font-black sm:mt-2 sm:text-3xl">
-            <span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span>
+            <span data-cart-total>{{ format_money($total, false) }}</span>
             {{ setting('currency_label', $settings['currency_label'] ?? '') }}
         </p>
         <p class="mt-1 hidden text-sm text-slate-300 sm:block">السعر كامل ظاهر الآن، ولا يوجد دفع في هذه الخطوة.</p>
@@ -20,21 +20,21 @@
         @endif
         <div class="rounded-xl bg-slate-50 p-2 text-right sm:rounded-2xl sm:p-4">
             <span class="mb-1 block text-[11px] leading-4 text-slate-500 sm:text-sm">مصاريف التوصيل</span>
-            <span data-shipping-saving @if(!$shippingEligible || $originalDeliveryFee <= 0) hidden @endif class="text-xs text-slate-500"><del><span data-original-delivery-fee>{{ arabic_number(number_format($originalDeliveryFee, 0)) }}</span> ج.م</del><br></span>
+            <span data-shipping-saving @if($deliveryFee >= $originalDeliveryFee) hidden @endif class="text-xs text-slate-500"><del><span data-original-delivery-fee>{{ format_money($originalDeliveryFee, false) }}</span> ج.م</del><br></span>
             <span class="text-xs font-black text-slate-950 sm:text-sm">
-                <span data-delivery-fee>{{ arabic_number(number_format($deliveryFee, 0)) }}</span>
+                <span data-delivery-fee>{{ format_money($deliveryFee, false) }}</span>
                 {{ setting('currency_label', $settings['currency_label'] ?? '') }}
             </span>
         </div>
         <div class="rounded-xl bg-indigo-50 p-2 text-right sm:rounded-2xl sm:p-4">
             <span class="mb-1 block text-[11px] font-bold leading-4 text-indigo-500 sm:text-sm">الإجمالي</span>
             <span class="text-sm font-black text-indigo-700 sm:text-xl">
-                <span data-cart-total>{{ arabic_number(number_format($total, 0)) }}</span>
+                <span data-cart-total>{{ format_money($total, false) }}</span>
                 {{ setting('currency_label', $settings['currency_label'] ?? '') }}
             </span>
         </div>
     </div>
-    <p data-shipping-saving @if(!$shippingEligible || $originalDeliveryFee <= 0) hidden @endif class="px-4 pb-3 text-sm font-bold text-emerald-700">خصم الشحن المجاني: −<span data-shipping-discount>{{ arabic_number(number_format($originalDeliveryFee, 0)) }}</span> ج.م — مخصوم من الإجمالي تلقائيًا.</p>
+    <p data-shipping-saving @if($deliveryFee >= $originalDeliveryFee) hidden @endif class="px-4 pb-3 text-sm font-bold text-emerald-700">خصم الشحن: −<span data-shipping-discount>{{ format_money($originalDeliveryFee - $deliveryFee, false) }}</span> ج.م — مخصوم من الإجمالي تلقائيًا.</p>
     <div class="border-t border-slate-100 p-3 sm:p-5">
         @if($promoCode)
             <div class="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">

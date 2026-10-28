@@ -12,6 +12,7 @@
         @endif
 
         @can('store.discount_codes.manage')
+            @include('admin.discount-codes._shipping-discount')
             @include('admin.discount-codes._free-shipping')
             <section class="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm lg:p-8">
                 <div class="mb-6">

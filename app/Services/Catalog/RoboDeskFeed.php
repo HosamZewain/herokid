@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\Story;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\Pricing\StoryPricingService;
 use App\Support\ProductPersonalizationSchema;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -265,7 +266,9 @@ class RoboDeskFeed
         }
         $fees = DeliveryGovernorate::query()->with('country')->where('active', true)->whereHas('country', fn ($q) => $q->where('active', true)
             ->where(fn ($country) => $country->whereIn('code', ['EG', 'EGY'])->orWhere('name', 'مصر')))->orderBy('name')->get();
-        $add('guide', 'shipping-fees', 'رسوم التوصيل حسب المحافظة', $fees->map(fn ($g) => $g->name.': '.CustomerKnowledge::money($g->effectiveDeliveryFee()).' ج.م')->all());
+        $shipping = app(ShippingDiscountService::class);
+        $shippingConfiguration = $shipping->configuration();
+        $add('guide', 'shipping-fees', 'رسوم التوصيل حسب المحافظة', $fees->map(fn ($g) => $g->name.': '.CustomerKnowledge::money($shipping->feeCents((int) round($g->effectiveDeliveryFee() * 100), $shippingConfiguration) / 100).' ج.م')->all());
         foreach (FaqItem::query()->where('active', true)->orderBy('id')->get() as $faq) {
             $add('guide', 'faq-'.substr(hash('sha256', $faq->question), 0, 16), $faq->question, [$this->copy->render($faq->answer)], '/faq');
         }

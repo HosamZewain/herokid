@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\MobilePromoCode;
 use App\Services\Cart\FreeShippingOfferService;
+use App\Services\Cart\ShippingDiscountService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,8 +23,9 @@ class DiscountCodeController extends Controller
             ->paginate(25);
 
         $shippingOffer = app(FreeShippingOfferService::class)->configuration();
+        $shippingDiscount = app(ShippingDiscountService::class)->configuration();
 
-        return view('admin.discount-codes.index', compact('codes', 'shippingOffer'));
+        return view('admin.discount-codes.index', compact('codes', 'shippingOffer', 'shippingDiscount'));
     }
 
     public function edit(MobilePromoCode $discountCode): View

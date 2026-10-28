@@ -38,11 +38,14 @@ class FreeShippingOfferService
         $offer = $this->active();
         $deliveryCents = max(0, $deliveryCents);
         $eligible = $offer && $subtotalCents > 0 && max(0, $subtotalCents - $discountCents) >= $offer['minimum_cents'];
+        $discount = app(ShippingDiscountService::class)->configuration();
+        $finalCents = $eligible ? 0 : app(ShippingDiscountService::class)->feeCents($deliveryCents, $discount);
 
         return [
             'original_delivery_fee' => $deliveryCents / 100,
-            'shipping_discount' => $eligible ? $deliveryCents / 100 : 0,
-            'delivery_fee' => $eligible ? 0 : $deliveryCents / 100,
+            'shipping_discount' => ($deliveryCents - $finalCents) / 100,
+            'delivery_fee' => $finalCents / 100,
+            'general_shipping_discount' => $discount['enabled'] ? $discount : null,
             'free_shipping_offer' => $eligible ? $offer : null,
         ];
     }

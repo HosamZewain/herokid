@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -16,6 +19,26 @@ use Tests\TestCase;
 class MobileCheckoutQuoteTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_shipping_discount_updates_quote_and_confirmation_and_preserves_retry_snapshot(): void
+    {
+        [, $address, $governorate] = $this->setupCart();
+        $governorate->update(['delivery_fee' => 150]);
+        $oldQuote = $this->postJson('/api/v1/checkout/quote', ['address_id' => $address->uuid])->assertOk()->json('data.fingerprint');
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'percent', 'value' => 3000])]);
+        $this->postJson('/api/v1/checkout', $this->checkoutPayload($address, $oldQuote))->assertUnprocessable()->assertJsonValidationErrors('quote_fingerprint');
+        $quote = $this->postJson('/api/v1/checkout/quote', ['address_id' => $address->uuid])->assertOk()
+            ->assertJsonPath('data.totals.delivery', 105)->assertJsonPath('data.totals.total', 305)->json('data.fingerprint');
+        $payload = $this->checkoutPayload($address, $quote);
+        $this->postJson('/api/v1/checkout', $payload)->assertCreated()->assertJsonPath('data.totals.total', 305);
+        $order = Order::firstOrFail();
+        $this->assertEquals(105, $order->delivery_details['delivery_fee']);
+        $this->assertEquals(45, $order->delivery_details['shipping_discount']);
+        Setting::where('key', ShippingDiscountService::KEY)->delete();
+        $this->postJson('/api/v1/checkout', $payload)->assertCreated()->assertJsonPath('data.totals.total', 305);
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertEquals(150, $governorate->fresh()->delivery_fee);
+    }
 
     private function setupCart(): array
     {

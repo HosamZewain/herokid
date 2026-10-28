@@ -12,6 +12,7 @@ use App\Models\ProductCategory;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Cart\FreeShippingOfferService;
+use App\Services\Cart\ShippingDiscountService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,6 +20,35 @@ use Tests\TestCase;
 class WebsiteDiscountCodeTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_general_shipping_discount_is_displayed_and_saved_once_without_changing_old_orders(): void
+    {
+        $product = $this->product(50000);
+        [$country, $governorate] = $this->delivery(150);
+        $this->withSession(['cart.items' => $this->cart($product)])
+            ->post(route('checkout.store'), $this->checkoutPayload($country, $governorate, '01012345678'))->assertRedirect(route('checkout.success'));
+        $old = Order::firstOrFail()->toArray();
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'fixed', 'value' => 3000])]);
+        $this->withSession(['cart.items' => $this->cart($product)])->get(route('cart.index'))->assertOk()->assertSee('خصم تلقائي على الشحن')->assertSee('خصم الشحن:');
+        $payload = [...$this->checkoutPayload($country, $governorate, '01012345679'), 'expected_delivery_fee' => 120, 'delivery_fee' => 1];
+        $this->post(route('checkout.store'), $payload)->assertRedirect(route('checkout.success'));
+        $new = Order::latest('id')->firstOrFail();
+        $this->assertEquals(120, $new->delivery_details['delivery_fee']);
+        $this->assertEquals(150, $new->delivery_details['original_delivery_fee']);
+        $this->assertEquals(30, $new->delivery_details['shipping_discount']);
+        $this->assertEquals(620, $new->delivery_details['total']);
+        $this->assertSame($old, Order::findOrFail($old['id'])->toArray());
+        $this->assertEquals(150, $governorate->fresh()->delivery_fee);
+    }
+
+    public function test_changed_general_shipping_discount_requires_new_review(): void
+    {
+        $product = $this->product(50000);
+        [$country, $governorate] = $this->delivery(100);
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'percent', 'value' => 3000])]);
+        $this->withSession(['cart.items' => $this->cart($product)])->post(route('checkout.store'), [...$this->checkoutPayload($country, $governorate, '01012345678'), 'expected_delivery_fee' => 100])->assertSessionHasErrors('expected_delivery_fee');
+        $this->assertDatabaseCount('orders', 0);
+    }
 
     public function test_free_shipping_admin_schedule_uses_cairo_time_and_requires_management_permission(): void
     {
