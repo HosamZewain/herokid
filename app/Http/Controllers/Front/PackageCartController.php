@@ -8,6 +8,7 @@ use App\Models\Story;
 use App\Services\Cart\CartTrackingService;
 use App\Services\Cart\PackagePersonalizationService;
 use App\Services\Cart\StoryCartItemBuilder;
+use App\Services\Catalog\CustomerKnowledge;
 use App\Services\Pricing\PackagePricingService;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Services\Uploads\UploadValidationException;
@@ -50,6 +51,8 @@ class PackageCartController extends Controller
             ])->all()]);
         }
         $allowedStoryIds = $pricingPackage->availableStoriesQuery()->pluck('stories.id')->all();
+        $minimumPhotos = (int) config('photo_uploads.min_files', 2);
+        $maximumPhotos = (int) config('photo_uploads.max_files', 3);
 
         $rules = [
             'stories' => ['required', 'array', 'size:'.$pricingPackage->story_count],
@@ -57,9 +60,9 @@ class PackageCartController extends Controller
             'stories.*.child_name' => ['required', 'string', 'max:255'],
             'stories.*.child_age' => ['required', 'integer', Rule::in(StoryAgeOptions::forPersonalization())],
             'stories.*.child_gender' => ['required', Rule::in(['boy', 'girl'])],
-            'stories.*.photo_upload_ids' => ['nullable', 'array', 'min:2', 'max:3'],
+            'stories.*.photo_upload_ids' => ['nullable', 'array', 'min:'.$minimumPhotos, 'max:'.$maximumPhotos],
             'stories.*.photo_upload_ids.*' => ['string', 'uuid'],
-            'stories.*.photos' => ['nullable', 'array', 'min:2', 'max:3'],
+            'stories.*.photos' => ['nullable', 'array', 'min:'.$minimumPhotos, 'max:'.$maximumPhotos],
             'stories.*.photos.*' => ['required', 'file', 'max:'.((int) config('photo_uploads.max_size_mb', 15) * 1024), function (string $attribute, mixed $value, \Closure $fail): void {
                 if (! $value instanceof UploadedFile || ! $value->isValid() || ! in_array(strtolower($value->getClientOriginalExtension()), self::EXTENSIONS, true)) {
                     $fail('ارفع صور JPG أو PNG أو WebP أو HEIC/HEIF صحيحة.');
@@ -74,10 +77,10 @@ class PackageCartController extends Controller
             'stories.*.child_name.required' => 'اكتب اسم الطفل لكل قصة.',
             'stories.*.child_age.required' => 'اختر عمر الطفل لكل قصة.',
             'stories.*.child_gender.required' => 'اختر جنس الطفل لكل قصة.',
-            'stories.*.photo_upload_ids.min' => 'ارفع صورتين على الأقل لكل قصة.',
-            'stories.*.photo_upload_ids.max' => 'الحد الأقصى ٣ صور لكل قصة.',
-            'stories.*.photos.min' => 'ارفع صورتين على الأقل لكل قصة.',
-            'stories.*.photos.max' => 'الحد الأقصى ٣ صور لكل قصة.',
+            'stories.*.photo_upload_ids.min' => 'ارفع '.$minimumPhotos.' صور على الأقل لكل قصة.',
+            'stories.*.photo_upload_ids.max' => 'الحد الأقصى '.$maximumPhotos.' صور لكل قصة.',
+            'stories.*.photos.min' => 'ارفع '.$minimumPhotos.' صور على الأقل لكل قصة.',
+            'stories.*.photos.max' => 'الحد الأقصى '.$maximumPhotos.' صور لكل قصة.',
         ];
 
         if ($pricingPackage->story_count === 0) {
@@ -85,12 +88,12 @@ class PackageCartController extends Controller
         }
 
         $validator = Validator::make($request->all(), $rules, $messages);
-        $validator->after(function ($validator) use ($request, $pricingPackage): void {
+        $validator->after(function ($validator) use ($request, $pricingPackage, $minimumPhotos): void {
             for ($index = 0; $index < $pricingPackage->story_count; $index++) {
-                if (count((array) $request->input("stories.$index.photo_upload_ids", [])) >= 2 || count((array) $request->file("stories.$index.photos", [])) >= 2) {
+                if (count((array) $request->input("stories.$index.photo_upload_ids", [])) >= $minimumPhotos || count((array) $request->file("stories.$index.photos", [])) >= $minimumPhotos) {
                     continue;
                 }
-                $validator->errors()->add("stories.$index.photo_upload_ids", 'ارفع صورتين أو ٣ صور واضحة لكل قصة.');
+                $validator->errors()->add("stories.$index.photo_upload_ids", 'ارفع '.CustomerKnowledge::photoCount().' واضحة لكل قصة.');
             }
         });
         $validated = $validator->validate();
@@ -101,7 +104,7 @@ class PackageCartController extends Controller
         try {
             foreach ($storyInputs as $input) {
                 if (! $sharedChild && ($input['photo_upload_ids'] ?? []) !== []) {
-                    $uploads->validatedUploadedIds($request, $input['photo_upload_ids'], 2, 3);
+                    $uploads->validatedUploadedIds($request, $input['photo_upload_ids'], $minimumPhotos, $maximumPhotos);
                 }
             }
             if ($sharedChild && ! empty($childData['photo_upload_ids'])) {

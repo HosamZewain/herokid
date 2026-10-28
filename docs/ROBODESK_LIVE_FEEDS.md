@@ -77,7 +77,47 @@ Live counts are only confirmed by the post-deploy check, not by fixture counts.
 The reference export had 83 stories, 26 products and 7 packages; current publishing
 status can legitimately change those numbers.
 
-## Pre-deploy verification (2026-10-28)
+## Feed-review follow-up
+
+The next pinned deployment also runs `robodesk:refine-knowledge --apply` once.
+It privately backs up and changes only `bak-hdy-hyrokyd` from 925.50 to 926 EGP
+(accepts an already-926 price). An unexpected price or missing package stops the
+deployment for review. Subsequent deployments preserve later admin price edits.
+Existing orders, item price snapshots and payment events are untouched. All feed
+references and savings use the same package DB price; at components total 1234,
+the saving becomes 308 EGP. No new schema migration is required.
+
+Story/football/shop/package photo labels now read the same `photo_uploads.min_files`
+and `max_files` as the feed. Football's server/browser validation and package story
+photo validation use that config too. Product-specific photo limits inside a package
+remain independent. Story summaries end at the last complete sentence within the target, or keep
+the first complete sentence/full unpunctuated text rather than cutting a sentence.
+Activity book age indexes are consolidated; single-story selection, package plurals,
+category headings and the overview's story-price label are corrected.
+
+The locked frontend dependency install reported 14 existing dependency advisories
+(2 critical, 8 high, 3 moderate, 1 low). No dependency/lock-file upgrade is included
+in this scoped content fix; those need separate dependency review.
+
+### Follow-up verification (2026-10-28)
+
+- 123 Laravel feature tests / 3,407 assertions passed on isolated in-memory SQLite
+  with Docker networking disabled. Includes actual five-photo football/package
+  submissions, independent product photo limits, all 83 story package mentions,
+  integer gift pricing, savings, unchanged historical order/payment snapshots,
+  configuration-driven photo copy and complete-sentence summaries.
+- 20 Node tests passed (5 frontend photo-validation cases and 15 deployment tests).
+  Vite build, Laravel config/route/view cache compilation, Bash syntax and whitespace
+  checks passed. Existing built assets are retained for older cached pages.
+- Local HTTP fixtures returned 116 catalog articles across three pages and 36 guide
+  articles; the slowest page was 0.308 seconds. The checker confirmed gift price 926,
+  saving 308 and 83 matching story mentions. Browser QA confirmed these amounts and
+  the shared 2–5 photo labels. Six activity books sharing one age index are separately
+  covered by a feature test. These are isolated checks, not production verification.
+- Run the public checker after deploying this follow-up; it now also checks gift
+  price consistency, saving arithmetic and obsolete activity-age index IDs.
+
+## Initial release pre-deploy verification (2026-10-28)
 
 - 156 focused Laravel feature tests / 3,520 assertions passed against isolated
   in-memory SQLite, including catalog, packages, FAQ/CMS, checkout, mobile catalog,

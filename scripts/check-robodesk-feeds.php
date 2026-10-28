@@ -7,6 +7,7 @@ if (! in_array($base, ['https://hero-kid.com', 'http://127.0.0.1:8108'], true)) 
 }
 $expected = ['id', 'type', 'sku', 'name', 'description', 'price', 'currency', 'stock', 'url', 'image', 'updated_at', 'rag_text'];
 $report = [];
+$articles = [];
 foreach (['catalog', 'guide'] as $feed) {
     $ids = [];
     $counts = [];
@@ -37,8 +38,9 @@ foreach (['catalog', 'guide'] as $feed) {
                 throw new RuntimeException('Fields or duplicate ID: '.$item['id']);
             }
             $ids[$item['id']] = true;
+            $articles[$item['id']] = $item;
             $counts[$item['type']] = ($counts[$item['type']] ?? 0) + 1;
-            if (preg_match('/تنبيه|تعارض|لا تؤكد|المصدر|تاريخ التحقق|<[^>]+>/u', $item['rag_text'])) {
+            if (preg_match('/تنبيه|تعارض|لا تؤكد|المصدر|تاريخ التحقق|بتختار 1 قصص|قصص قصص|<[^>]+>/u', $item['rag_text'])) {
                 throw new RuntimeException('Article requires content correction: '.$item['id']);
             }
             if (mb_strlen($item['description']) > 1000) {
@@ -73,5 +75,34 @@ foreach (['catalog', 'guide'] as $feed) {
     }
     $report[$feed] = ['counts' => $counts, 'total' => count($ids), 'pages' => $pages, 'last_next_page_url' => null,
         'slowest_page_seconds' => round($slowest, 3), 'longest_rag_characters' => $longest];
+}
+$gift = $articles['package:bak-hdy-hyrokyd'] ?? null;
+if ($gift) {
+    $price = (float) $gift['price'];
+    if (floor($price) !== $price) {
+        throw new RuntimeException('Gift package still has a fractional price.');
+    }
+    $mentions = 0;
+    foreach ($articles as $item) {
+        if ($item['type'] !== 'story' || ! str_contains($item['rag_text'], '«'.$gift['name'].'»')) {
+            continue;
+        }
+        if (! preg_match('/«'.preg_quote($gift['name'], '/').'»[^\n]*? بـ ([0-9.]+) ج\.م/u', $item['rag_text'], $match) || (float) $match[1] !== $price) {
+            throw new RuntimeException('Gift price differs in story: '.$item['id']);
+        }
+        $mentions++;
+    }
+    $saving = null;
+    if (preg_match('/بدل ([0-9.]+) ج\.م لو اتشروا منفصلين — توفير ([0-9.]+) ج\.م/u', $gift['rag_text'], $match)) {
+        $saving = (float) $match[2];
+        if ((int) round(((float) $match[1] - $price) * 100) !== (int) round($saving * 100)) {
+            throw new RuntimeException('Gift saving does not equal components minus price.');
+        }
+    }
+    $report['gift_package'] = ['price' => $price, 'saving' => $saving, 'story_mentions_checked' => $mentions];
+}
+$report['activity_index_articles'] = count(array_filter(array_keys($articles), fn ($id) => str_starts_with($id, 'index:activity-books-')));
+if (array_filter(array_keys($articles), fn ($id) => str_starts_with($id, 'index:activities-age-'))) {
+    throw new RuntimeException('Old separate activity-age indexes are still served.');
 }
 echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL;

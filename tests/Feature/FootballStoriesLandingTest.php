@@ -70,7 +70,7 @@ class FootballStoriesLandingTest extends TestCase
         $this->get(route('football-stories.index'))
             ->assertSee('اختر قصة كرة قدم واحدة على الأقل للمتابعة.')
             ->assertSee('اكتب اسم الطفل الأول.')
-            ->assertSee('ارفع صورتين واضحتين للطفل على الأقل.');
+            ->assertSee('ارفع 2 صور واضحة للطفل على الأقل.');
     }
 
     public function test_one_child_and_one_photo_set_create_multiple_story_cart_items_with_the_correct_total(): void
@@ -128,6 +128,17 @@ class FootballStoriesLandingTest extends TestCase
         }
 
         $this->assertCount(1, session('cart.items'));
+    }
+
+    public function test_configured_five_photos_are_accepted_by_the_football_form(): void
+    {
+        config(['photo_uploads.min_files' => 2, 'photo_uploads.max_files' => 5]);
+        $story = $this->footballStory('football-five', 'قصة الصور الخمس', 399);
+        $this->get(route('football-stories.index'))->assertOk()->assertSee('ارفع 2–5 صور')->assertSee('٠ / ٥');
+        [$sessionToken, $photoIds] = $this->uploadedPhotos(5);
+        $this->post(route('football-stories.store'), $this->landingPayload([$story->id], $sessionToken, $photoIds))
+            ->assertSessionHasNoErrors()->assertRedirect(route('cart.index'));
+        $this->assertCount(5, collect(session('cart.items'))->first()['uploaded_photos']);
     }
 
     public function test_three_photos_are_allowed_but_a_fourth_photo_is_rejected(): void

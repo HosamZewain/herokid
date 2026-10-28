@@ -18,7 +18,9 @@ class PackagePersonalizationService
                 'child_name' => ['enabled' => true, 'required' => true],
                 'child_age' => ['enabled' => true, 'required' => true],
                 'child_gender' => ['enabled' => true, 'required' => true],
-                'photos' => ['enabled' => true, 'required' => true, 'min_files' => 2, 'max_files' => 3],
+                'photos' => ['enabled' => true, 'required' => true,
+                    'min_files' => (int) config('photo_uploads.min_files', 2),
+                    'max_files' => (int) config('photo_uploads.max_files', 3)],
             ]]);
         }
         $fields = [];

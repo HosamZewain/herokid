@@ -103,11 +103,11 @@ class RoboDeskFeed
         $lines = [
             'قصة «'.$story->title.'» — قصة مخصصة باسم طفلك وصورة وشه، بالعربي أو الإنجليزي.',
             'البطل: '.$this->gender($story).'. السن المناسب: '.CustomerKnowledge::text($story->age_range ?: 'كل الأعمار').'. التصنيف: '.$story->categories->pluck('name')->implode('، ').'.',
-            'عن القصة: '.CustomerKnowledge::text($story->short_desc ?: $story->full_desc, 220),
+            'عن القصة: '.CustomerKnowledge::sentences($story->short_desc ?: $story->full_desc),
             'الدرس المستفاد: '.CustomerKnowledge::text($story->lesson_value, 100),
             $this->priceLine($snapshot['effective_price'], $snapshot['regular_price']),
             $packages ? 'متاحة كمان في الباقات: '.$packages : null,
-            'للطلب: اسم الطفل وعمره و'.config('photo_uploads.min_files', 2).'–'.config('photo_uploads.max_files', 3).' صور واضحة للوجه، وبنبعتلك معاينة قبل الطباعة.',
+            'للطلب: اسم الطفل وعمره و'.CustomerKnowledge::photoCount().' واضحة للوجه، وبنبعتلك معاينة قبل الطباعة.',
         ];
         // This is a public category, not a guess about the child's gender from a name.
         if ($story->categories->contains(fn ($category) => str_contains($category->name, 'كرة القدم'))
@@ -156,7 +156,8 @@ class RoboDeskFeed
         $url = $this->url('/shop/package/'.$package->slug);
         $lines = ['«'.$package->name.'»: '.CustomerKnowledge::text($package->description, 220)];
         if ($package->story_count > 0) {
-            $lines[] = 'بتختار '.$package->story_count.' قصص '.($package->applies_to_all_stories ? 'من أي قصة من الـ '.$pool->count().' قصة' : 'من القصص دي بس: '.$pool->pluck('title')->implode('، ')).'.';
+            $pick = $package->story_count === 1 ? 'قصة واحدة' : $package->story_count.' قصص';
+            $lines[] = 'بتختار '.$pick.' '.($package->applies_to_all_stories ? 'من أي قصة من الـ '.$pool->count().' قصة' : 'من القصص دي بس: '.$pool->pluck('title')->implode('، ')).'.';
         }
         if ($package->items->isNotEmpty()) {
             $lines[] = 'وكمان فيها: '.$package->items->map(fn ($item) => $item->quantity.' × '.$item->product?->name_ar.($item->variant ? ' — '.$item->variant->name_ar : ''))->implode('؛ ').'.';
@@ -226,13 +227,14 @@ class RoboDeskFeed
             }
         };
         $add('index', 'overview', 'دليل كتالوج HeroKid', [
-            $this->stories->count().' قصة، '.$this->products->count().' منتج، '.$this->packages->count().' باقة.',
+            $this->stories->count().' قصة، '.$this->products->count().' منتج، '.$this->packages->count().($this->packages->count() >= 3 && $this->packages->count() <= 10 ? ' باقات.' : ' باقة.'),
             'تصنيفات القصص: '.$this->stories->flatMap->categories->pluck('name')->unique()->implode('، '),
             'تصنيفات المنتجات: '.$this->products->pluck('category.name_ar')->unique()->implode('، '),
-            ...$this->stories->filter(fn ($s) => $this->pricing->hasActiveOffer($s))->map(fn ($s) => $this->priceLine($this->pricing->effectivePrice($s), $this->pricing->regularPrice($s)))->unique()->values()->all(),
+            ...$this->stories->map(fn ($s) => str_replace('السعر:', 'سعر القصة المخصصة:', $this->priceLine($this->pricing->effectivePrice($s), $this->pricing->regularPrice($s))))->unique()->values()->all(),
         ]);
         foreach ($this->stories->flatMap->categories->unique('id') as $category) {
-            $add('index', 'stories-category-'.$category->slug, 'قصص '.$category->name, $this->stories->filter(fn ($s) => $s->categories->contains('id', $category->id))->map(fn ($s) => $this->storyLine($s))->values()->all());
+            $title = 'قصص '.preg_replace('/^(?:قصص\s+)+/u', '', CustomerKnowledge::text($category->name));
+            $add('index', 'stories-category-'.$category->slug, $title, $this->stories->filter(fn ($s) => $s->categories->contains('id', $category->id))->map(fn ($s) => $this->storyLine($s))->values()->all());
         }
         foreach ($this->stories->groupBy(fn ($s) => $s->age_range ?: 'كل الأعمار') as $age => $stories) {
             $add('index', 'stories-age-'.substr(hash('sha256', $age), 0, 12), 'قصص سن '.$age, $stories->map(fn ($s) => $this->storyLine($s))->values()->all());
@@ -245,10 +247,9 @@ class RoboDeskFeed
             $category = $products->first()->category;
             $add('index', 'products-'.$category->slug, 'منتجات '.$category->name_ar, $products->map(fn ($p) => '«'.$p->name_ar.'» — '.CustomerKnowledge::text($p->ageLabel()).' — '.CustomerKnowledge::text($p->short_description_ar, 100).' — '.CustomerKnowledge::money($p->effectivePriceCents($p->activeVariants->first()) / 100).' ج.م')->values()->all());
         }
-        foreach ($this->products->filter(fn ($p) => preg_match('/المتاهات|الألغاز/u', $p->name_ar))->groupBy(fn ($p) => $p->ageLabel()) as $age => $activities) {
-            $add('index', 'activities-age-'.substr(hash('sha256', $age), 0, 12), 'كتب الأنشطة والمستويات لسن '.CustomerKnowledge::text($age),
-                $activities->map(fn ($p) => '«'.$p->name_ar.'» — '.CustomerKnowledge::text($p->ageLabel()).' — '.CustomerKnowledge::money($p->effectivePriceCents($p->activeVariants->first()) / 100).' ج.م')->values()->all());
-        }
+        $activities = $this->products->filter(fn ($p) => preg_match('/المتاهات|الألغاز/u', $p->name_ar));
+        $add('index', 'activity-books', 'كتب الأنشطة — المستويات والأعمار',
+            $activities->map(fn ($p) => '«'.$p->name_ar.'» — '.CustomerKnowledge::text($p->ageLabel()).' — '.CustomerKnowledge::money($p->effectivePriceCents($p->activeVariants->first()) / 100).' ج.م')->values()->all());
         $settings = Setting::query()->pluck('value', 'key');
         $steps = [];
         foreach (range(1, 5) as $step) {

@@ -156,6 +156,21 @@ class SharedChildPackagesTest extends TestCase
         $this->assertSame(70001, (int) OrderItem::sum('total_price_cents'));
     }
 
+    public function test_story_package_photo_count_uses_config_without_changing_product_limits(): void
+    {
+        Storage::fake('local');
+        config(['photo_uploads.min_files' => 2, 'photo_uploads.max_files' => 5]);
+        [$package, $story] = $this->bundle();
+        $this->get(route('shop.package.show', $package))->assertOk()->assertSee('من 2 إلى 5 صور');
+        $input = $this->childInput(5);
+        $this->post(route('cart.packages.store', $package), [...$input, 'stories' => [['story_id' => $story->id]]])
+            ->assertSessionHasNoErrors()->assertRedirect(route('cart.index'));
+        $cart = collect(session('cart.items'))->sole();
+        $this->assertCount(5, $cart['package_stories'][0]['uploaded_photos']);
+        $this->assertCount(3, $cart['package_products'][0]['uploaded_photos']);
+        $this->assertCount(1, $cart['package_products'][1]['uploaded_photos']);
+    }
+
     public function test_product_only_package_photo_cleanup_and_permission_boundaries(): void
     {
         Storage::fake('local');

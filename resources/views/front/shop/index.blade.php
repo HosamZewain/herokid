@@ -96,7 +96,7 @@
             @if($isStoriesAlias)
                 <div class="mb-5 hidden flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-sm text-indigo-900 sm:flex"
                     data-stories-mobile-hidden-intro>
-                    <p><strong>اختر قصة طفلك مباشرة.</strong> كل قصة مخصصة تحتاج بيانات الطفل وصورتين أو ٣ صور واضحة.</p>
+                    <p><strong>اختر قصة طفلك مباشرة.</strong> كل قصة مخصصة تحتاج بيانات الطفل و{{ \App\Services\Catalog\CustomerKnowledge::photoCount() }} واضحة.</p>
                     <a href="{{ route('shop.index') }}" class="font-black text-indigo-700 hover:text-indigo-900">عرض القصص والمنتجات</a>
                 </div>
             @endif
@@ -105,7 +105,7 @@
                 data-store-path-explainer>
                 <div class="rounded-2xl bg-pink-50 px-4 py-3">
                     <p class="font-black text-pink-900">قصة مخصصة</p>
-                    <p class="mt-1 text-xs leading-5 text-pink-700">تحتاج بيانات الطفل وصورتين أو ٣ صور، ثم نراجع الطلب ونتواصل معك.</p>
+                    <p class="mt-1 text-xs leading-5 text-pink-700">تحتاج بيانات الطفل و{{ \App\Services\Catalog\CustomerKnowledge::photoCount() }}، ثم نراجع الطلب ونتواصل معك.</p>
                 </div>
                 <div class="rounded-2xl bg-indigo-50 px-4 py-3">
                     <p class="font-black text-indigo-900">منتج جاهز</p>

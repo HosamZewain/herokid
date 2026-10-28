@@ -3,15 +3,20 @@
 namespace Tests\Feature;
 
 use App\Models\FaqItem;
+use App\Models\Order;
+use App\Models\OrderPaymentEvent;
 use App\Models\PricingPackage;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Setting;
 use App\Models\Story;
+use App\Models\StoryCategory;
 use App\Services\Catalog\CustomerKnowledge;
+use App\Services\Catalog\RoboDeskFeedCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class RoboDeskKnowledgeFeedTest extends TestCase
@@ -38,6 +43,114 @@ class RoboDeskKnowledgeFeedTest extends TestCase
     {
         return PricingPackage::create(array_merge(['name' => 'باقة '.$number, 'slug' => 'package-'.$number, 'price' => 899,
             'regular_price' => 9999, 'story_count' => 3, 'active' => true, 'show_in_store' => true, 'applies_to_all_stories' => true], $extra));
+    }
+
+    public function test_gift_price_correction_updates_every_story_and_saving_once(): void
+    {
+        Storage::fake('local');
+        foreach (range(1, 83) as $n) {
+            $this->story($n);
+        }
+        $fixed = $this->product(1, ['price_cents' => 83500]);
+        $gift = $this->package(1, ['slug' => 'bak-hdy-hyrokyd', 'name' => 'باقة هدية هيروكيد', 'story_count' => 1, 'price' => 925.5]);
+        $gift->items()->create(['product_id' => $fixed->id, 'quantity' => 1]);
+        $oldOrder = Order::create(['order_number' => 'TEST-OLD-GIFT', 'checkout_group_key' => 'old-gift',
+            'parent_name' => 'Synthetic Customer', 'status' => 'new', 'paid_amount_cents' => 92550,
+            'delivery_details' => ['total' => 925.5]]);
+        $oldOrder->items()->create(['item_type' => 'story', 'title' => 'Old gift snapshot', 'quantity' => 1,
+            'unit_price_cents' => 92550, 'total_price_cents' => 92550]);
+        OrderPaymentEvent::create(['event_uuid' => Str::uuid(),
+            'checkout_group_key' => 'old-gift', 'order_id' => $oldOrder->id, 'event_type' => 'payment_received',
+            'previous_status' => 'unpaid', 'new_status' => 'paid',
+            'source' => 'synthetic_test', 'previous_paid_amount_cents' => 0, 'new_paid_amount_cents' => 92550,
+            'amount_delta_cents' => 92550, 'affects_collection_stats' => true, 'occurred_at' => now()]);
+        $orders = DB::table('orders')->get()->toJson();
+        $payments = DB::table('order_payment_events')->get()->toJson();
+        $orderItems = $oldOrder->items()->get()->toJson();
+        $this->getJson('/api/feeds/robodesk/catalog')->assertOk(); // Warm the old cache.
+        $this->artisan('robodesk:refine-knowledge')->assertSuccessful();
+        $this->assertEquals(925.5, $gift->fresh()->price);
+        $this->artisan('robodesk:refine-knowledge', ['--apply' => true])->assertSuccessful();
+        $this->assertEquals(926, $gift->fresh()->price);
+        $items = collect();
+        foreach ([1, 2] as $page) {
+            $items = $items->concat($this->getJson('/api/feeds/robodesk/catalog?page='.$page)->assertOk()->json('data'));
+        }
+        $package = $items->firstWhere('type', 'package');
+        $this->assertEquals(926, $package['price']);
+        $this->assertStringContainsString('توفير 308 ج.م', $package['rag_text']);
+        $this->assertStringContainsString('بتختار قصة واحدة', $package['rag_text']);
+        $this->assertCount(83, $items->where('type', 'story'));
+        foreach ($items->where('type', 'story') as $story) {
+            $this->assertStringContainsString('بـ 926 ج.م', $story['rag_text']);
+            $this->assertStringNotContainsString('925.5', $story['rag_text']);
+        }
+        $guide = $this->getJson('/api/feeds/robodesk/guide')->assertOk()->getContent();
+        $this->assertStringNotContainsString('925.5', $guide);
+        $this->get('/shop/package/bak-hdy-hyrokyd')->assertOk()->assertSee('٩٢٦')->assertDontSee('٩٢٥');
+        $this->assertSame($orders, DB::table('orders')->get()->toJson());
+        $this->assertSame($payments, DB::table('order_payment_events')->get()->toJson());
+        $this->assertSame($orderItems, $oldOrder->items()->get()->toJson());
+        $this->assertCount(1, Storage::disk('local')->allFiles('private/robodesk-content'));
+        $gift->update(['price' => 950]);
+        $this->artisan('robodesk:refine-knowledge', ['--apply' => true])->assertSuccessful();
+        $this->assertEquals(950, $gift->fresh()->price);
+    }
+
+    public function test_gift_correction_stops_when_the_price_has_changed(): void
+    {
+        $gift = $this->package(1, ['slug' => 'bak-hdy-hyrokyd', 'price' => 999]);
+        $this->artisan('robodesk:refine-knowledge', ['--apply' => true])->assertFailed();
+        $this->assertEquals(999, $gift->fresh()->price);
+        $this->assertFalse(Setting::where('key', 'robodesk_gift_integer_price_v1')->exists());
+    }
+
+    public function test_story_photo_copy_and_feed_use_the_same_config(): void
+    {
+        $story = $this->story();
+        foreach ([3, 5] as $max) {
+            config(['photo_uploads.min_files' => 2, 'photo_uploads.max_files' => $max]);
+            RoboDeskFeedCache::invalidate();
+            $this->get('/stories/'.$story->slug)->assertOk()->assertSee('ارفع 2–'.$max.' صور')->assertSee('اختيار 2–'.$max.' صور')->assertDontSee('صورتين أو ٣');
+            $this->get('/shop')->assertOk()->assertSee('2–'.$max.' صور')->assertDontSee('صورتين أو ٣');
+            $item = $this->getJson('/api/feeds/robodesk/catalog')->assertOk()->json('data.0');
+            $this->assertStringContainsString('2–'.$max.' صور واضحة', $item['rag_text']);
+        }
+    }
+
+    public function test_descriptions_end_at_a_sentence_and_guide_wording_is_clear(): void
+    {
+        $first = str_repeat('رحلة جميلة ', 10).'تنتهي بدرس مفيد.';
+        $description = $first.' '.str_repeat('ثم يكتشف الطفل لغزًا ', 20).'يا ترى ماذا سيحدث؟';
+        $story = $this->story(1, ['short_desc' => $description]);
+        $category = StoryCategory::create(['name' => 'قصص كرة القدم', 'slug' => 'football']);
+        $story->categories()->attach($category);
+        foreach (range(1, 7) as $n) {
+            $this->package($n);
+        }
+        foreach (['3-5', '4-7', '8-12', '5-7', '7-9', '9-12'] as $n => $age) {
+            $this->product($n + 1, ['name_ar' => 'كتاب الألغاز - المستوى '.($n + 1), 'age_groups' => [$age]]);
+        }
+        foreach (['story_global_price_enabled' => '1', 'story_regular_price' => '499', 'story_offer_enabled' => '1', 'story_offer_price' => '399'] as $key => $value) {
+            Setting::updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+        $items = collect($this->getJson('/api/feeds/robodesk/catalog')->assertOk()->json('data'));
+        $this->assertStringContainsString('عن القصة: '.$first."\n", $items->firstWhere('type', 'story')['rag_text']);
+        $longSentence = str_repeat('مغامرة جميلة ', 30).'النهاية؟';
+        $this->assertSame($longSentence, CustomerKnowledge::sentences($longSentence));
+        $unpunctuated = str_repeat('مغامرة جميلة ', 30);
+        $this->assertSame(trim($unpunctuated), CustomerKnowledge::sentences($unpunctuated));
+        $guide = collect($this->getJson('/api/feeds/robodesk/guide')->assertOk()->json('data'));
+        $overview = $guide->firstWhere('id', 'index:overview-1')['rag_text'];
+        $this->assertStringContainsString('7 باقات', $overview);
+        $this->assertStringContainsString('سعر القصة المخصصة: 399 ج.م بدل 499 ج.م (عرض خاص)', $overview);
+        $this->assertStringNotContainsString('قصص قصص', $guide->toJson(JSON_UNESCAPED_UNICODE));
+        $activities = $guide->filter(fn ($item) => str_starts_with($item['id'], 'index:activity-books-'));
+        $this->assertCount(1, $activities);
+        foreach (range(1, 6) as $n) {
+            $this->assertStringContainsString('المستوى '.$n, $activities->first()['rag_text']);
+        }
+        $this->assertFalse($guide->contains(fn ($item) => str_starts_with($item['id'], 'index:activities-age-')));
     }
 
     public function test_full_catalog_paginates_without_duplicates_and_has_only_public_fields(): void

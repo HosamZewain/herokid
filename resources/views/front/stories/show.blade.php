@@ -325,7 +325,7 @@
                                     <div class="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-3 text-right">
                                         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
                                             <span class="rounded-full bg-pink-500 px-2.5 py-1 text-xs font-black text-white">مطلوب</span>
-                                            <p class="font-bold text-indigo-800">📸 ارفع صورتين أو ٣ صور واضحة للوجه</p>
+                                            <p class="font-bold text-indigo-800">📸 ارفع {{ \App\Services\Catalog\CustomerKnowledge::photoCount() }} واضحة للوجه</p>
                                         </div>
                                         <input type="file" id="photos" multiple
                                             accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
@@ -335,7 +335,7 @@
                                         <div class="flex flex-col gap-2 sm:flex-row-reverse sm:items-center">
                                             <label for="photos"
                                                 class="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700">
-                                                اختيار ٢ أو ٣ صور
+                                                اختيار {{ \App\Services\Catalog\CustomerKnowledge::photoCount() }}
                                             </label>
                                             <span class="text-sm font-semibold text-slate-500" data-photo-label>
                                                 لم يتم اختيار صور

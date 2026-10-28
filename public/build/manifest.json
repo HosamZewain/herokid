@@ -1,13 +1,13 @@
 {
-  "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js": {
-    "file": "assets/heic-to-lXPrQE7P.js",
-    "name": "heic-to",
-    "src": "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js",
-    "isDynamicEntry": true
-  },
   "_pdf.worker.min-DQioOMWc.js": {
     "file": "assets/pdf.worker.min-DQioOMWc.js",
     "name": "pdf.worker.min"
+  },
+  "node_modules/heic-to/dist/csp/heic-to.js": {
+    "file": "assets/heic-to-lXPrQE7P.js",
+    "name": "heic-to",
+    "src": "node_modules/heic-to/dist/csp/heic-to.js",
+    "isDynamicEntry": true
   },
   "resources/css/app-download.css": {
     "file": "assets/app-download-dg8q9jcF.css",
@@ -19,7 +19,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-Ch9ufJxw.css",
+    "file": "assets/app-DKBoxxtW.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -61,12 +61,12 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-Dn3SlOwd.js",
+    "file": "assets/app-D-wMeBtf.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
-      "../../../Users/hosam/Desktop/dev/HeroKid/HeroKid/node_modules/heic-to/dist/csp/heic-to.js",
+      "node_modules/heic-to/dist/csp/heic-to.js",
       "resources/js/studio-settings-editor.js",
       "resources/js/admin-conversations.js",
       "resources/js/booklet-reader.js",

@@ -23,6 +23,34 @@ class CustomerKnowledge
         return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
     }
 
+    public static function photoCount(): string
+    {
+        $min = (int) config('photo_uploads.min_files', 2);
+        $max = (int) config('photo_uploads.max_files', 3);
+
+        return ($min === $max ? (string) $min : $min.'–'.$max).' صور';
+    }
+
+    /** Keep a complete sentence, even when the first sentence exceeds the target. */
+    public static function sentences(?string $value, int $target = 220): string
+    {
+        $text = self::text($value, PHP_INT_MAX);
+        if (mb_strlen($text) <= $target) {
+            return $text;
+        }
+        preg_match_all('/.*?[.!?؟](?=\s|$)/u', $text, $matches);
+        $summary = '';
+        foreach ($matches[0] as $sentence) {
+            $candidate = trim($summary.' '.$sentence);
+            if (mb_strlen($candidate) > $target) {
+                break;
+            }
+            $summary = $candidate;
+        }
+
+        return $summary !== '' ? $summary : trim($matches[0][0] ?? $text);
+    }
+
     public function policy(string $key): string
     {
         if (! in_array($key, ['payment', 'delivery', 'privacy', 'photos', 'preview', 'tracking', 'library', 'identity'], true)) {

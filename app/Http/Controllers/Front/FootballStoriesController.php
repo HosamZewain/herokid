@@ -58,8 +58,8 @@ class FootballStoriesController extends Controller
                 'uploadUrl' => route('photo-uploads.store'),
                 'previewUrlTemplate' => route('photo-uploads.show', ['publicId' => '__ID__']),
                 'deleteUrlTemplate' => route('photo-uploads.destroy', ['publicId' => '__ID__']),
-                'minimumFiles' => 2,
-                'maxFiles' => 3,
+                'minimumFiles' => (int) config('photo_uploads.min_files', 2),
+                'maxFiles' => (int) config('photo_uploads.max_files', 3),
                 'maxSizeMb' => (int) config('photo_uploads.max_size_mb', 15),
                 'concurrency' => (int) config('photo_uploads.concurrency', 2),
                 'maxLongEdge' => (int) config('photo_uploads.max_long_edge', 2560),
@@ -74,7 +74,8 @@ class FootballStoriesController extends Controller
         TemporaryPhotoUploadService $uploads,
         StoryCartItemBuilder $itemBuilder,
     ) {
-        $maximumPhotos = 3;
+        $minimumPhotos = (int) config('photo_uploads.min_files', 2);
+        $maximumPhotos = (int) config('photo_uploads.max_files', 3);
         $validated = $request->validate([
             'story_ids' => ['required', 'array', 'min:1'],
             'story_ids.*' => ['required', 'integer', 'distinct'],
@@ -85,7 +86,7 @@ class FootballStoriesController extends Controller
             'interests' => ['nullable', 'string', 'max:500'],
             'parent_notes' => ['nullable', 'string', 'max:1000'],
             'upload_session_token' => ['required', 'string'],
-            'photo_upload_ids' => ['required', 'array', 'min:2', 'max:'.$maximumPhotos],
+            'photo_upload_ids' => ['required', 'array', 'min:'.$minimumPhotos, 'max:'.$maximumPhotos],
             'photo_upload_ids.*' => ['required', 'uuid', 'distinct'],
         ], [
             'story_ids.required' => 'اختر قصة كرة قدم واحدة على الأقل للمتابعة.',
@@ -104,9 +105,9 @@ class FootballStoriesController extends Controller
             'interests.max' => 'الاهتمامات يجب ألا تزيد عن ٥٠٠ حرف.',
             'parent_notes.max' => 'الملاحظات يجب ألا تزيد عن ١٠٠٠ حرف.',
             'upload_session_token.required' => 'انتهت جلسة رفع الصور. حدّث الصفحة وحاول مرة أخرى.',
-            'photo_upload_ids.required' => 'ارفع صورتين واضحتين للطفل على الأقل.',
+            'photo_upload_ids.required' => 'ارفع '.$minimumPhotos.' صور واضحة للطفل على الأقل.',
             'photo_upload_ids.array' => 'صور الطفل المرفوعة غير صالحة.',
-            'photo_upload_ids.min' => 'ارفع صورتين واضحتين للطفل على الأقل.',
+            'photo_upload_ids.min' => 'ارفع '.$minimumPhotos.' صور واضحة للطفل على الأقل.',
             'photo_upload_ids.max' => 'يمكنك رفع '.$maximumPhotos.' صور كحد أقصى.',
             'photo_upload_ids.*.uuid' => 'إحدى الصور المرفوعة غير صالحة. احذفها وارفعها مرة أخرى.',
             'photo_upload_ids.*.distinct' => 'تم إرسال الصورة نفسها أكثر من مرة.',

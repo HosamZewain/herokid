@@ -139,7 +139,7 @@
                 <div class="grid grid-cols-3 gap-2 sm:gap-3">
                     @foreach([
                         ['١', 'اختار القصص', 'اختار قصة واحدة أو أكثر لنفس الطفل.'],
-                        ['٢', 'أضف بيانات الطفل', 'اكتب البيانات مرة واحدة وارفع صورتين أو ٣ صور.'],
+                        ['٢', 'أضف بيانات الطفل', 'اكتب البيانات مرة واحدة وارفع '.\App\Services\Catalog\CustomerKnowledge::photoCount().'.'],
                         ['٣', 'أدخل التوصيل', 'راجع السعر والشحن ثم أرسل الطلب للمراجعة.'],
                     ] as [$number, $title, $copy])
                         <div class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-center sm:flex-row sm:items-start sm:gap-3 sm:rounded-2xl sm:p-4 sm:text-right">
@@ -302,15 +302,15 @@
                         <div class="sm:col-span-2 rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4" data-football-photo-uploader>
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h3 class="font-black text-indigo-950">ارفع صورتين أو ٣ صور واضحة للوجه <span class="text-red-500">*</span></h3>
+                                    <h3 class="font-black text-indigo-950">ارفع {{ \App\Services\Catalog\CustomerKnowledge::photoCount() }} واضحة للوجه <span class="text-red-500">*</span></h3>
                                     <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">وجه واضح، إضاءة جيدة، وبدون فلاتر. تعدد الزوايا يساعدنا على الحفاظ على ملامح الطفل.</p>
                                 </div>
-                                <span data-football-photo-count class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">٠ / ٣</span>
+                                <span data-football-photo-count class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">٠ / {{ arabic_number($photoUploadConfig['maxFiles']) }}</span>
                             </div>
                             <input type="file" id="football_photos" multiple accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" class="sr-only" data-football-photo-input>
                             <div data-football-photo-ids></div>
                             <label for="football_photos" class="mt-4 inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-5 font-black text-white transition hover:bg-indigo-700 focus-within:ring-4 focus-within:ring-indigo-200">
-                                اختيار صورتين أو ٣ صور
+                                اختيار {{ \App\Services\Catalog\CustomerKnowledge::photoCount() }}
                             </label>
                             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" data-football-photo-queue aria-live="polite"></div>
                             <div data-football-photo-error role="alert" class="mt-3 hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"></div>

@@ -392,6 +392,8 @@ async function initializePhotoUploader(form, trackEventCallback) {
 }
 
 function initializeValidation(form, selectedCards, isSubmitting, setSubmitting) {
+    const uploadConfig = JSON.parse(form.querySelector('[data-football-upload-config]')?.textContent || '{}');
+    const minimumPhotos = Number(uploadConfig.minimumFiles || 2);
     function clearClientErrors() {
         form.querySelectorAll('[data-client-error]').forEach((node) => node.remove());
         form.querySelectorAll('[aria-invalid="true"][data-client-invalid]').forEach((field) => {
@@ -429,7 +431,7 @@ function initializeValidation(form, selectedCards, isSubmitting, setSubmitting) 
         if (!name?.value.trim()) errors.push([name, 'اكتب اسم الطفل الأول.']);
         if (!age?.value) errors.push([age, 'اختر عمر الطفل.']);
         if (!gender) errors.push([form.querySelector('[name="child_gender"]'), 'اختر جنس الطفل.']);
-        if (photoInputs.length < 2) errors.push([form.querySelector('[data-football-photo-uploader]'), 'ارفع صورتين واضحتين للطفل على الأقل وانتظر اكتمال الرفع.']);
+        if (photoInputs.length < minimumPhotos) errors.push([form.querySelector('[data-football-photo-uploader]'), `ارفع ${minimumPhotos} صور واضحة للطفل على الأقل وانتظر اكتمال الرفع.`]);
 
         if (errors.length > 0) {
             event.preventDefault();
