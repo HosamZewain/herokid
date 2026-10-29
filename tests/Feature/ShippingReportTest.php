@@ -67,11 +67,92 @@ class ShippingReportTest extends TestCase
         $this->log($second);
         $this->log($first, '2026-10-08 10:00:00');
         $report = $this->report();
-        $this->assertSame(['shipments' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8, 'total_cents' => 71000, 'items_net_cents' => 71000, 'paid_cents' => 0, 'remaining_cents' => 71000], $report['summary']);
+        $this->assertSame(['shipments' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8, 'total_cents' => 71000, 'items_net_cents' => 71000, 'products_net_cents' => 50000, 'stories_net_cents' => 20000, 'add_ons_net_cents' => 1000, 'unclassified_net_cents' => 0, 'paid_cents' => 0, 'remaining_cents' => 71000], $report['summary']);
         $this->assertCount(4, $report['rows']->first()['items']);
         $this->assertSame(8, $report['teams']->first()['contents']->sum('quantity'));
         $this->assertSame(8, $report['teams']->first()['items']);
         $this->assertSame(8, $report['daily']->count());
+    }
+
+    public function test_employee_daily_net_values_reconcile_mixed_categories_and_replicated_discount(): void
+    {
+        $employee = User::factory()->create(['role' => 'admin']);
+        $first = $this->order('NET-MIXED', 2, ['discount_cents' => 6000, 'delivery_details' => ['delivery_fee' => 90]]);
+        $second = $this->order('NET-MIXED', 1, ['discount_cents' => 6000, 'delivery_details' => ['delivery_fee' => 90]]);
+        $second->items()->delete();
+        $second->items()->create(['item_type' => 'story', 'title' => 'Synthetic Story', 'quantity' => 3, 'unit_price_cents' => 10000, 'total_price_cents' => 30000]);
+        $second->items()->create(['item_type' => 'add_on', 'title' => 'Synthetic Extra', 'quantity' => 2, 'unit_price_cents' => 5000, 'total_price_cents' => 10000]);
+        $this->log($first, '2026-10-02 10:00:00');
+        $this->log($second, '2026-10-02 10:00:00');
+        $later = $this->order('NET-LATER', 1, ['discount_cents' => 1000, 'delivery_details' => ['delivery_fee' => 70]]);
+        $this->log($later);
+        foreach (['NET-MIXED', 'NET-LATER'] as $key) {
+            OrderGroupAssignment::create(['checkout_group_key' => $key, 'assigned_to_user_id' => $employee->id, 'assigned_at' => now()]);
+        }
+        $this->log($this->order('OTHER-EMPLOYEE', 20));
+        $filters = ['employee' => (string) $employee->id, 'day' => '2026-10-02'];
+        $report = $this->report($filters);
+        $this->assertSame(63000, $report['summary']['items_net_cents']);
+        $this->assertSame(2, $report['summary']['shipments']);
+        $this->assertSame(54000, $report['selected_summary']['items_net_cents']);
+        $daily = $report['daily']->keyBy('day');
+        $this->assertCount(8, $daily);
+        $this->assertSame(1, $daily['2026-10-02']['shipments']);
+        $this->assertSame(3, $daily['2026-10-02']['stories']);
+        $this->assertSame(2, $daily['2026-10-02']['products']);
+        $this->assertSame(27000, $daily['2026-10-02']['stories_net_cents']);
+        $this->assertSame(18000, $daily['2026-10-02']['products_net_cents']);
+        $this->assertSame(9000, $daily['2026-10-02']['add_ons_net_cents']);
+        $this->assertSame(9000, $daily['2026-10-08']['items_net_cents']);
+        $this->assertSame(0, $daily['2026-10-03']['items_net_cents']);
+        $this->assertSame(0, $daily['2026-10-03']['shipments']);
+        $this->assertSame($report['summary']['items_net_cents'], $daily->sum('items_net_cents'));
+        $row = $report['rows']->first();
+        $this->assertSame(6000, $row['discount_cents']);
+        $this->assertSame(54000, $row['items_net_cents']);
+        $this->assertSame(63000, $row['total_cents']); // Invoice balance still includes shipping.
+        $this->get(route('admin.shipping-report.index', $filters + ['from' => '2026-10-01', 'to' => '2026-10-08']))
+            ->assertOk()->assertSee('الشحن يوم بيوم')->assertSee('بدون الشحن وبعد الخصومات الفعلية')
+            ->assertSee('إجمالي الفترة')->assertDontSee('شاملة الشحن');
+    }
+
+    public function test_category_allocation_reconciles_rounding_free_items_and_full_discounts(): void
+    {
+        foreach ([0, 1, 2, 3, 10] as $discount) {
+            $order = $this->order('ROUND-'.$discount, 1, ['discount_cents' => $discount]);
+            $order->items()->update(['unit_price_cents' => 1, 'total_price_cents' => 1]);
+            foreach (['story', 'add_on'] as $type) {
+                $order->items()->create(['item_type' => $type, 'title' => 'Synthetic Cent', 'quantity' => 1, 'unit_price_cents' => 1, 'total_price_cents' => 1]);
+            }
+            $this->log($order);
+        }
+        $free = $this->order('FREE', 1);
+        $free->items()->update(['unit_price_cents' => 0, 'total_price_cents' => 0]);
+        $this->log($free);
+        $rows = $this->report()['rows']->keyBy('key');
+        foreach ($rows as $row) {
+            $this->assertSame($row['items_net_cents'], $row['stories_net_cents'] + $row['products_net_cents'] + $row['add_ons_net_cents'] + $row['unclassified_net_cents']);
+        }
+        $this->assertSame(1, $rows['ROUND-1']['stories_net_cents']);
+        $this->assertSame(1, $rows['ROUND-1']['products_net_cents']);
+        $this->assertSame(0, $rows['ROUND-1']['add_ons_net_cents']);
+        $this->assertSame(0, $rows['ROUND-10']['items_net_cents']);
+        $this->assertSame(0, $rows['FREE']['items_net_cents']);
+    }
+
+    public function test_legacy_values_use_recorded_story_price_and_preserve_unclassified_value(): void
+    {
+        $story = Story::create(['title' => 'Synthetic Legacy', 'slug' => 'net-legacy', 'price' => 999]);
+        $order = $this->order('LEGACY-NET', 1, ['story_id' => $story->id, 'delivery_details' => ['item_price' => 200, 'delivery_fee' => 60], 'discount_cents' => 2500]);
+        $order->items()->delete();
+        $this->log($order);
+        $unknown = $this->order('UNKNOWN-NET', 1, ['delivery_details' => ['item_price' => 50], 'discount_cents' => 1000]);
+        $unknown->items()->delete();
+        $this->log($unknown);
+        $rows = $this->report()['rows']->keyBy('key');
+        $this->assertSame(17500, $rows['LEGACY-NET']['stories_net_cents']);
+        $this->assertSame(4000, $rows['UNKNOWN-NET']['unclassified_net_cents']);
+        $this->assertSame(0, $rows['UNKNOWN-NET']['products_net_cents']);
     }
 
     public function test_provider_dispatch_time_wins_over_local_sync_time_and_creation_is_not_shipping(): void
@@ -212,7 +293,7 @@ class ShippingReportTest extends TestCase
         $filters = ['from' => '2026-10-01', 'to' => '2026-10-08', 'employee' => (string) $employee->id];
         $report = $this->report($filters + ['day' => null]);
         $this->assertNull($report['day']);
-        $this->assertSame(3, $report['summary']['shipments']);
+        $this->assertSame(2, $report['summary']['shipments']);
         $this->assertSame(2, $report['selected_summary']['shipments']);
         $this->assertSame(50000, $report['selected_summary']['total_cents']);
         $this->assertEqualsCanonicalizing(['PERIOD-A', 'PERIOD-B'], $report['rows']->pluck('key')->all());

@@ -42,7 +42,12 @@ class AdminShippingReportService
         $facts->each(function ($row): void {
             $row->day = AppDateTime::format($row->shipped_at, 'Y-m-d');
         });
-        $daily = $facts->groupBy('day')->map(fn (Collection $rows, string $date): array => [
+        $items = $this->items($facts->pluck('key'), $canViewValues);
+        if ($canViewValues) {
+            $this->allocateCategoryValues($facts, $items);
+        }
+        $employeeFacts = $facts->filter(fn ($row) => $employee === null || (string) ($row->assignee_id ?? 'unassigned') === $employee)->values();
+        $daily = $employeeFacts->groupBy('day')->map(fn (Collection $rows, string $date): array => [
             'day' => $date, ...$this->totals($rows),
         ]);
         // Include zero days, so a missing day is not mistaken for missing data.
@@ -54,7 +59,6 @@ class AdminShippingReportService
         }
         $selected = $facts->filter(fn ($row) => ($day === null || $row->day === $day)
             && ($employee === null || (string) ($row->assignee_id ?? 'unassigned') === $employee))->values();
-        $items = $this->items($facts->pluck('key'));
         $teams = $facts->groupBy(fn ($row) => $row->assignee_id ?? 'unassigned')->map(function (Collection $rows) use ($items): array {
             $products = $rows->flatMap(fn ($row) => $items->get($row->key, collect()));
 
@@ -69,7 +73,7 @@ class AdminShippingReportService
         $rows = new LengthAwarePaginator($pageRows, $selected->count(), 25, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
         return compact('from', 'to', 'day', 'employee', 'canViewValues', 'teams', 'rows') + [
-            'daily' => $daily->sortKeysDesc()->values(), 'summary' => $this->totals($facts),
+            'daily' => $daily->sortKeysDesc()->values(), 'summary' => $this->totals($employeeFacts),
             'selected_summary' => $this->totals($selected),
             'undated' => DB::query()->fromSub($this->factsQuery(), 'shipments')->whereNull('shipped_at')->where('has_shipping_progress', '>', 0)->count(),
         ];
@@ -82,6 +86,10 @@ class AdminShippingReportService
             'items' => (int) $rows->sum('product_quantity') + (int) $rows->sum('story_quantity') + (int) $rows->sum('add_on_quantity'),
             'total_cents' => (int) $rows->sum('total_cents'),
             'items_net_cents' => (int) $rows->sum('items_net_cents'),
+            'products_net_cents' => (int) $rows->sum('products_net_cents'),
+            'stories_net_cents' => (int) $rows->sum('stories_net_cents'),
+            'add_ons_net_cents' => (int) $rows->sum('add_ons_net_cents'),
+            'unclassified_net_cents' => (int) $rows->sum('unclassified_net_cents'),
             'paid_cents' => (int) $rows->sum('paid_cents'),
             'remaining_cents' => (int) $rows->sum('remaining_cents')];
     }
@@ -123,6 +131,42 @@ class AdminShippingReportService
             $row->total_cents = (int) $money->total_cents;
             $row->paid_cents = max(0, (int) $money->paid_amount_cents);
             $row->remaining_cents = max(0, $row->total_cents - $row->paid_cents);
+        }
+    }
+
+    /** Allocate the recorded checkout discount proportionally, reconciling every cent.
+     * Item totals already include item pricing; only the stored checkout discount is deducted.
+     * Largest remainders break ties in the stable category order below.
+     */
+    private function allocateCategoryValues(Collection $facts, Collection $items): void
+    {
+        foreach ($facts as $row) {
+            $gross = ['stories' => 0, 'products' => 0, 'add_ons' => 0, 'unclassified' => 0];
+            foreach ($items->get($row->key, collect()) as $item) {
+                $category = match ($item->item_type) {
+                    'story' => 'stories', 'product' => 'products', default => 'add_ons',
+                };
+                $gross[$category] += (int) $item->gross_cents;
+            }
+            // Historical orders without items/story must not silently disappear from values.
+            $gross['unclassified'] = $row->items_cents - array_sum($gross);
+            abort_if(min($gross) < 0, 409, 'تغيّرت قيم عناصر الطلب أثناء إعداد التقرير. أعد تحميل الصفحة.');
+            $net = $remainders = [];
+            foreach ($gross as $category => $cents) {
+                $numerator = $cents * $row->items_net_cents;
+                $net[$category] = $row->items_cents > 0 ? intdiv($numerator, $row->items_cents) : 0;
+                $remainders[$category] = $row->items_cents > 0 ? $numerator % $row->items_cents : 0;
+            }
+            arsort($remainders, SORT_NUMERIC);
+            $remaining = $row->items_net_cents - array_sum($net);
+            foreach (array_keys($remainders) as $category) {
+                if ($remaining-- > 0) {
+                    $net[$category]++;
+                }
+            }
+            foreach ($net as $category => $cents) {
+                $row->{$category.'_net_cents'} = $cents;
+            }
         }
     }
 
@@ -183,7 +227,7 @@ class AdminShippingReportService
                 a.assigned_to_user_id as assignee_id, u.name as assignee_name");
     }
 
-    private function items(Collection $keys): Collection
+    private function items(Collection $keys, bool $withValues): Collection
     {
         $items = collect();
         foreach ($keys->chunk(200) as $batch) {
@@ -192,7 +236,19 @@ class AdminShippingReportService
                 ->selectRaw($this->groupKey('o')." as checkout_key, o.id as order_id,
                     COALESCE(i.item_type, 'story') as item_type, i.product_id, COALESCE(i.story_id, o.story_id) as story_id,
                     COALESCE(i.title, story.title, 'قصة') as title, COALESCE(i.quantity, 1) as quantity")
-                ->where(fn ($q) => $q->whereNotNull('i.id')->orWhereNotNull('o.story_id'))->orderBy('o.id')->orderBy('i.id')->get();
+                ->where(fn ($q) => $q->whereNotNull('i.id')->orWhereNotNull('o.story_id'))->orderBy('o.id')->orderBy('i.id');
+            if ($withValues) {
+                $query->addSelect('i.id as item_id', 'i.total_price_cents', 'o.delivery_details', 'story.price as story_price');
+            }
+            $query = $query->get();
+            if ($withValues) {
+                $query->each(function ($item): void {
+                    $delivery = json_decode($item->delivery_details ?? '{}', true) ?: [];
+                    $item->gross_cents = $item->item_id !== null ? (int) $item->total_price_cents
+                        : (int) round((float) ($delivery['item_price'] ?? $item->story_price ?? 0) * 100);
+                    unset($item->delivery_details, $item->story_price, $item->total_price_cents, $item->item_id);
+                });
+            }
             $items = $items->concat($query);
         }
 
