@@ -110,7 +110,9 @@ class AdminOrderGroupService
         $stats = null;
 
         if ($includeStatistics) {
-            $allKeys = (clone $query)->select('checkout_group_key')->distinct()->toBase();
+            // Resolve the filtered checkout set once: embedding this filter twice in the
+            // financial aggregate makes MySQL repeatedly evaluate its catalog predicates.
+            $allKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
             $stats = app(OrderFinancialStatistics::class)->summarize($allKeys, $includeDeleted);
         }
 
