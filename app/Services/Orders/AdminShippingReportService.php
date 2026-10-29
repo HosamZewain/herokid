@@ -75,6 +75,7 @@ class AdminShippingReportService
         return compact('from', 'to', 'day', 'employee', 'canViewValues', 'teams', 'rows') + [
             'daily' => $daily->sortKeysDesc()->values(), 'summary' => $this->totals($employeeFacts),
             'selected_summary' => $this->totals($selected),
+            'sku_breakdown' => $this->skuBreakdown($selected, $items, $canViewValues),
             'undated' => DB::query()->fromSub($this->factsQuery(), 'shipments')->whereNull('shipped_at')->where('has_shipping_progress', '>', 0)->count(),
         ];
     }
@@ -143,9 +144,7 @@ class AdminShippingReportService
         foreach ($facts as $row) {
             $gross = ['stories' => 0, 'products' => 0, 'add_ons' => 0, 'unclassified' => 0];
             foreach ($items->get($row->key, collect()) as $item) {
-                $category = match ($item->item_type) {
-                    'story' => 'stories', 'product' => 'products', default => 'add_ons',
-                };
+                $category = $this->itemCategory($item);
                 $gross[$category] += (int) $item->gross_cents;
             }
             // Historical orders without items/story must not silently disappear from values.
@@ -166,8 +165,53 @@ class AdminShippingReportService
             }
             foreach ($net as $category => $cents) {
                 $row->{$category.'_net_cents'} = $cents;
+                $lines = $items->get($row->key, collect())->filter(fn ($item) => $this->itemCategory($item) === $category)->values();
+                $shares = $lineRemainders = [];
+                foreach ($lines as $index => $item) {
+                    $numerator = (int) $item->gross_cents * $cents;
+                    $shares[$index] = $gross[$category] > 0 ? intdiv($numerator, $gross[$category]) : 0;
+                    $lineRemainders[$index] = $gross[$category] > 0 ? $numerator % $gross[$category] : 0;
+                }
+                arsort($lineRemainders, SORT_NUMERIC);
+                $left = $cents - array_sum($shares);
+                foreach (array_keys($lineRemainders) as $index) {
+                    if ($left-- > 0) {
+                        $shares[$index]++;
+                    }
+                }
+                foreach ($lines as $index => $item) {
+                    $item->net_cents = $shares[$index];
+                }
             }
         }
+    }
+
+    private function itemCategory(object $item): string
+    {
+        return match ($item->item_type) {
+            'story' => 'stories', 'product' => 'products', default => 'add_ons',
+        };
+    }
+
+    /** Aggregate the entire selection, not just the current order page. */
+    private function skuBreakdown(Collection $facts, Collection $items, bool $withValues): Collection
+    {
+        $rows = $facts->flatMap(fn ($row) => $items->get($row->key, collect()))
+            ->groupBy(fn ($item) => $item->sku_group_key)
+            ->map(function (Collection $lines) use ($withValues): array {
+                $first = $lines->first();
+                $row = ['title' => $first->display_title, 'sku' => $first->sku, 'quantity' => (int) $lines->sum('quantity')];
+                if ($withValues) {
+                    $row['net_cents'] = (int) $lines->sum('net_cents');
+                }
+
+                return $row;
+            })->sortBy('title')->values();
+        if ($withValues && $facts->sum('unclassified_net_cents') > 0) {
+            $rows->push(['title' => 'قيمة بلا محتويات موثقة', 'sku' => null, 'quantity' => 0, 'net_cents' => (int) $facts->sum('unclassified_net_cents')]);
+        }
+
+        return $rows;
     }
 
     private function groupKey(string $alias): string
@@ -234,13 +278,27 @@ class AdminShippingReportService
             $query = DB::table('orders as o')->whereNull('o.deleted_at')->whereIn(DB::raw($this->groupKey('o')), $batch)
                 ->leftJoin('order_items as i', 'i.order_id', '=', 'o.id')->leftJoin('stories as story', 'story.id', '=', 'o.story_id')
                 ->selectRaw($this->groupKey('o')." as checkout_key, o.id as order_id,
-                    COALESCE(i.item_type, 'story') as item_type, i.product_id, COALESCE(i.story_id, o.story_id) as story_id,
+                    COALESCE(i.item_type, 'story') as item_type, i.product_id, i.product_variant_id, i.sku, i.variant_snapshot, COALESCE(i.story_id, o.story_id) as story_id,
                     COALESCE(i.title, story.title, 'قصة') as title, COALESCE(i.quantity, 1) as quantity")
                 ->where(fn ($q) => $q->whereNotNull('i.id')->orWhereNotNull('o.story_id'))->orderBy('o.id')->orderBy('i.id');
             if ($withValues) {
                 $query->addSelect('i.id as item_id', 'i.total_price_cents', 'o.delivery_details', 'story.price as story_price');
             }
             $query = $query->get();
+            $query->each(function ($item): void {
+                $variant = json_decode($item->variant_snapshot ?? '{}', true);
+                $variant = is_array($variant) ? $variant : [];
+                $variantId = $item->product_variant_id ?? ($variant['id'] ?? null);
+                $variantName = trim((string) ($variant['name_ar'] ?? $variant['name_en'] ?? ''));
+                $item->sku = trim((string) ($variant['sku'] ?? '')) ?: (trim((string) $item->sku) ?: null);
+                $identity = $item->item_type === 'story' ? $item->story_id : $item->product_id;
+                $item->sku_group_key = json_encode([$item->item_type, $identity === null ? null : (string) $identity, $variantId === null ? null : (string) $variantId, $item->sku,
+                    $variantId === null ? $variantName : null,
+                    $identity === null && $item->sku === null ? $item->title : null]);
+                $item->display_title = $variantName !== '' && ! str_contains($item->title, $variantName)
+                    ? $item->title.' — '.$variantName : $item->title;
+                unset($item->variant_snapshot);
+            });
             if ($withValues) {
                 $query->each(function ($item): void {
                     $delivery = json_decode($item->delivery_details ?? '{}', true) ?: [];

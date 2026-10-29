@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderStatusDefinition;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminShippingReportService;
@@ -149,10 +150,70 @@ class ShippingReportTest extends TestCase
         $unknown = $this->order('UNKNOWN-NET', 1, ['delivery_details' => ['item_price' => 50], 'discount_cents' => 1000]);
         $unknown->items()->delete();
         $this->log($unknown);
-        $rows = $this->report()['rows']->keyBy('key');
+        $report = $this->report();
+        $rows = $report['rows']->keyBy('key');
+        $this->assertSame(21500, $report['sku_breakdown']->sum('net_cents'));
         $this->assertSame(17500, $rows['LEGACY-NET']['stories_net_cents']);
         $this->assertSame(4000, $rows['UNKNOWN-NET']['unclassified_net_cents']);
         $this->assertSame(0, $rows['UNKNOWN-NET']['products_net_cents']);
+    }
+
+    public function test_sku_breakdown_groups_the_full_employee_selection_and_keeps_variants_separate(): void
+    {
+        $employee = User::factory()->create(['role' => 'admin']);
+        $product = Product::create(['name_ar' => 'Synthetic Puzzle', 'slug' => 'sku-puzzle', 'price_cents' => 10000]);
+        $small = $product->variants()->create(['name_ar' => 'Small', 'sku' => 'PUZ-S']);
+        $large = $product->variants()->create(['name_ar' => 'Large', 'sku' => 'PUZ-L']);
+        for ($i = 0; $i < 26; $i++) {
+            $order = $this->order('SKU-'.$i, 2, ['discount_cents' => 2000, 'delivery_details' => ['delivery_fee' => 70]]);
+            $order->items()->update(['product_id' => $product->id, 'product_variant_id' => $small->id, 'sku' => 'PUZ-S', 'title' => $i % 2 ? 'Renamed Puzzle' : 'Synthetic Puzzle']);
+            $this->log($order, $i === 0 ? '2026-10-02 10:00:00' : '2026-10-08 10:00:00');
+            OrderGroupAssignment::create(['checkout_group_key' => $order->checkout_group_key, 'assigned_to_user_id' => $employee->id, 'assigned_at' => now()]);
+        }
+        $other = $this->order('OTHER-SKU', 5);
+        $other->items()->update(['product_id' => $product->id, 'product_variant_id' => $small->id, 'sku' => 'PUZ-S']);
+        $this->log($other);
+        $order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'product_variant_id' => $large->id,
+            'sku' => 'PUZ-L', 'title' => 'Synthetic Puzzle', 'variant_snapshot' => ['id' => $large->id, 'name_ar' => 'Large'],
+            'quantity' => 1, 'unit_price_cents' => 20000, 'total_price_cents' => 20000]);
+        $filters = ['employee' => (string) $employee->id, 'day' => null, 'page' => 2];
+        $report = $this->report($filters);
+        $this->assertCount(1, $report['rows']);
+        $breakdown = $report['sku_breakdown']->keyBy('sku');
+        $this->assertCount(2, $breakdown);
+        $this->assertSame(52, $breakdown['PUZ-S']['quantity']);
+        $this->assertSame(469000, $breakdown['PUZ-S']['net_cents']);
+        $this->assertSame(19000, $breakdown['PUZ-L']['net_cents']);
+        $this->assertSame('Synthetic Puzzle — Large', $breakdown['PUZ-L']['title']);
+        $this->assertSame($report['selected_summary']['items_net_cents'], $breakdown->sum('net_cents'));
+        $day = $this->report(['employee' => (string) $employee->id, 'day' => '2026-10-02']);
+        $this->assertSame(2, $day['sku_breakdown']->sum('quantity'));
+        $this->assertSame(18000, $day['sku_breakdown']->sum('net_cents'));
+        $response = $this->get(route('admin.shipping-report.index', ['employee' => $employee->id]));
+        $response->assertOk()->assertSee('عرض تفاصيل الأوردرات')->assertSee('تجميع المنتجات والقصص');
+        $this->assertMatchesRegularExpression('/<details id="shipment-details"\s+class=/', $response->getContent());
+    }
+
+    public function test_sku_breakdown_preserves_deleted_variant_snapshots_and_exact_cent_totals(): void
+    {
+        $order = $this->order('SNAPSHOT-SKU', 1, ['discount_cents' => 1]);
+        $order->items()->delete();
+        foreach ([['S', 'Small', 1], ['S', 'Small', 1], ['L', 'Large', 1], [null, 'Legacy Large', 0]] as [$sku, $variant, $price]) {
+            $order->items()->create(['item_type' => 'product', 'title' => 'Archived Puzzle', 'sku' => 'PARENT',
+                'variant_snapshot' => ['sku' => $sku, 'name_ar' => $variant], 'quantity' => 1,
+                'unit_price_cents' => $price, 'total_price_cents' => $price]);
+        }
+        $story = Story::create(['title' => 'Synthetic Salah', 'slug' => 'sku-salah', 'price' => 100]);
+        $order->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => $story->title,
+            'quantity' => 3, 'unit_price_cents' => 1, 'total_price_cents' => 3]);
+        $this->log($order);
+        $report = $this->report();
+        $this->assertCount(4, $report['sku_breakdown']);
+        $this->assertSame(2, $report['sku_breakdown']->firstWhere('sku', 'S')['quantity']);
+        $this->assertSame(3, $report['sku_breakdown']->firstWhere('title', 'Synthetic Salah')['quantity']);
+        $this->assertSame(5, $report['sku_breakdown']->sum('net_cents'));
+        $this->assertSame($report['summary']['stories_net_cents'], $report['sku_breakdown']->firstWhere('title', 'Synthetic Salah')['net_cents']);
+        $this->assertSame($report['summary']['products_net_cents'], $report['sku_breakdown']->whereNotNull('sku')->sum('net_cents'));
     }
 
     public function test_provider_dispatch_time_wins_over_local_sync_time_and_creation_is_not_shipping(): void
@@ -300,7 +361,7 @@ class ShippingReportTest extends TestCase
         $this->assertSame(2, $report['teams']->firstWhere('id', (string) $employee->id)['shipments']);
         $this->get(route('admin.shipping-report.index', $filters))->assertOk()
             ->assertViewHas('report', fn ($data) => $data['rows']->pluck('key')->sort()->values()->all() === ['PERIOD-A', 'PERIOD-B'])
-            ->assertSee(route('admin.shipping-report.index', $filters).'#shipment-details');
+            ->assertSee(route('admin.shipping-report.index', $filters).'#sku-breakdown');
         $day = $this->report($filters);
         $this->assertSame(1, $day['selected_summary']['shipments']);
         $this->assertSame(2, $day['teams']->firstWhere('id', (string) $employee->id)['shipments']);
@@ -394,6 +455,7 @@ class ShippingReportTest extends TestCase
         $report = $this->report();
         $this->assertFalse($report['canViewValues']);
         $this->assertArrayNotHasKey('total_cents', $report['rows']->first());
+        $this->assertArrayNotHasKey('net_cents', $report['sku_breakdown']->first());
         $this->get('/admin/shipping-report')->assertOk()->assertSee('Synthetic Stickers')
             ->assertDontSee('قيمة الأوردرات خلال الفترة')->assertDontSee('مدفوع:')->assertDontSee('ج.م');
     }

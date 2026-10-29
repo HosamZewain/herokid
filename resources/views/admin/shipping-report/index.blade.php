@@ -43,13 +43,13 @@
 
         <section id="shipping-daily" class="scroll-mt-24 overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm">
             <div class="p-5"><h3 class="text-lg font-black">الشحن يوم بيوم — {{ $scopeName }}</h3>
-                <p class="mt-1 text-sm text-gray-500">كل أيام الفترة {{ $report['from'] }} إلى {{ $report['to'] }}. اضغط على اليوم لعرض أوردراته. اختيار يوم يفلتر التفاصيل فقط؛ الملخص والجدول يشملان الفترة كاملة.</p>
+                <p class="mt-1 text-sm text-gray-500">كل أيام الفترة {{ $report['from'] }} إلى {{ $report['to'] }}. اضغط على اليوم لعرض تجميع منتجاته وأوردراته. اختيار يوم يفلتر التجميع والتفاصيل فقط؛ الملخص والجدول يشملان الفترة كاملة.</p>
                 @if($report['canViewValues'])<p class="mt-2 text-xs leading-6 text-gray-500">كل القيم بدون الشحن وبعد الخصومات الفعلية. خصم الأوردر موزّع على القصص والمنتجات والإضافات بنسبة قيمة كل قسم، مع تسوية فروق القرش؛ مجموع الأقسام يساوي صافي الأوردرات.</p>@endif
             </div>
             <div class="max-h-96 overflow-auto"><table class="w-full text-right text-sm">
                 <thead class="sticky top-0 bg-indigo-50 text-indigo-900"><tr><th class="p-3">اليوم</th><th class="p-3">الشحنات</th><th class="p-3">القصص — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">المنتجات — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">الإضافات — العدد @if($report['canViewValues']) / الصافي @endif</th>@if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<th class="p-3">قيمة غير مصنفة</th>@endif @if($report['canViewValues'])<th class="p-3">الإجمالي الصافي</th>@endif</tr></thead>
                 <tbody>@foreach($report['daily'] as $row)<tr class="border-t border-gray-100 {{ $row['day'] === $report['day'] ? 'bg-indigo-50' : '' }}">
-                    <td class="whitespace-nowrap p-3"><a class="font-bold text-indigo-600 underline" href="{{ route('admin.shipping-report.index', $period + ['day' => $row['day'], 'employee' => $report['employee']]) }}#shipment-details">{{ $row['day'] }}</a></td>
+                    <td class="whitespace-nowrap p-3"><a class="font-bold text-indigo-600 underline" href="{{ route('admin.shipping-report.index', $period + ['day' => $row['day'], 'employee' => $report['employee']]) }}#sku-breakdown">{{ $row['day'] }}</a></td>
                     <td class="p-3 font-bold">{{ $row['shipments'] }}</td>
                     @foreach(['stories', 'products', 'add_ons'] as $key)<td class="whitespace-nowrap p-3"><span class="font-bold">{{ $row[$key] }}</span>@if($report['canViewValues'])<span class="mt-1 block text-sm text-gray-600">{{ $money($row[$key.'_net_cents']) }}</span>@endif</td>@endforeach
                     @if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<td class="whitespace-nowrap p-3">{{ $money($row['unclassified_net_cents']) }}</td>@endif
@@ -69,7 +69,7 @@
                 <thead class="bg-indigo-50 text-indigo-900"><tr><th class="p-4">الموظف المسؤول حاليًا</th><th class="p-4">الأوردرات</th><th class="p-4">القطع / النسخ</th>@if($report['canViewValues'])<th class="p-4">صافي الأوردرات بدون الشحن وبعد الخصم</th>@endif</tr></thead>
                 <tbody>@forelse($report['teams'] as $team)
                     <tr class="border-t border-gray-100 {{ $report['employee'] === $team['id'] ? 'bg-indigo-50' : '' }}">
-                        <th scope="row" class="p-4"><a class="font-black text-indigo-700 underline underline-offset-4 hover:text-indigo-900" href="{{ route('admin.shipping-report.index', $period + ['employee' => $team['id']]) }}#shipment-details">{{ $team['name'] }}</a></th>
+                        <th scope="row" class="p-4"><a class="font-black text-indigo-700 underline underline-offset-4 hover:text-indigo-900" href="{{ route('admin.shipping-report.index', $period + ['employee' => $team['id']]) }}#sku-breakdown">{{ $team['name'] }}</a></th>
                         <td class="p-4 text-lg font-black">{{ $team['shipments'] }}</td><td class="p-4">{{ $team['items'] }}</td>
                         @if($report['canViewValues'])<td class="whitespace-nowrap p-4 font-black">{{ $money($team['items_net_cents']) }}</td>@endif
                     </tr>
@@ -77,11 +77,26 @@
             </table></div>
         </section>
 
-        <section id="shipment-details" class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+        <section id="sku-breakdown" class="scroll-mt-24 overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm">
+            <div class="p-5"><h3 class="text-lg font-black">تجميع المنتجات والقصص — {{ $scopeName }}</h3>
+                <p class="mt-1 text-sm text-gray-500">{{ $report['day'] ?: $report['from'].' إلى '.$report['to'] }} — كل الكميات المشحونة في الاختيار، مجمّعة حسب المنتج أو القصة والاختيار / SKU.</p>
+                @if($report['canViewValues'])<p class="mt-2 text-xs text-gray-500">القيمة بدون الشحن وبعد الخصومات الفعلية، موزّعة نسبيًا مع تسوية فروق القرش. المقاسات والاختيارات المختلفة تظهر في صفوف منفصلة.</p>@endif
+            </div>
+            <div class="overflow-x-auto"><table class="w-full text-right text-sm">
+                <thead class="bg-indigo-50 text-indigo-900"><tr><th class="p-4">المنتج / القصة (SKU)</th><th class="p-4">العدد</th>@if($report['canViewValues'])<th class="p-4">القيمة</th>@endif</tr></thead>
+                <tbody>@forelse($report['sku_breakdown'] as $item)
+                    <tr class="border-t border-gray-100"><th scope="row" class="p-4 font-bold">{{ $item['title'] }}@if($item['sku'])<span dir="ltr" class="mt-1 block text-xs font-normal text-gray-500">{{ $item['sku'] }}</span>@endif</th><td class="p-4 font-bold">{{ $item['quantity'] }}</td>@if($report['canViewValues'])<td class="whitespace-nowrap p-4 font-bold">{{ $money($item['net_cents']) }}</td>@endif</tr>
+                @empty<tr><td colspan="{{ $report['canViewValues'] ? 3 : 2 }}" class="p-8 text-center text-gray-500">لا توجد منتجات أو قصص مشحونة في الاختيار.</td></tr>@endforelse</tbody>
+                <tfoot class="bg-indigo-50 font-black"><tr><th class="p-4">الإجمالي</th><td class="p-4">{{ $report['selected_summary']['items'] }}</td>@if($report['canViewValues'])<td class="whitespace-nowrap p-4">{{ $money($report['selected_summary']['items_net_cents']) }}</td>@endif</tr></tfoot>
+            </table></div>
+        </section>
+
+        <details id="shipment-details" @if($report['rows']->currentPage() > 1) open @endif class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+            <summary class="cursor-pointer p-5 text-lg font-black">عرض تفاصيل الأوردرات</summary>
             <div class="flex flex-wrap items-start justify-between gap-3 p-5">
                 <div><h3 class="text-lg font-black">تفاصيل الأوردرات — {{ $report['employee'] === null ? 'كل الموظفين' : ($selectedEmployee['name'] ?? 'الموظف المحدد') }}</h3><p class="mt-1 text-sm text-gray-500">{{ $report['day'] ?: $report['from'].' إلى '.$report['to'] }}</p></div>
                 <div class="text-sm font-bold text-gray-600"><p>{{ $report['selected_summary']['shipments'] }} شحنة · {{ $report['selected_summary']['items'] }} قطعة / نسخة</p>@if($report['canViewValues'])<p class="mt-1 text-indigo-700">الصافي بدون الشحن وبعد الخصم: {{ $money($report['selected_summary']['items_net_cents']) }}</p><p class="mt-1 text-xs">المدفوع حاليًا: {{ $money($report['selected_summary']['paid_cents']) }} · المتبقي: {{ $money($report['selected_summary']['remaining_cents']) }}</p>@endif</div>
-                @if($report['employee'] !== null || $report['day'] !== null)<a class="text-sm font-bold text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period) }}#shipment-details">عرض كل أوردرات الفترة</a>@endif
+                @if($report['employee'] !== null || $report['day'] !== null)<a class="text-sm font-bold text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period) }}#sku-breakdown">عرض كل أوردرات الفترة</a>@endif
             </div>
             @if($report['canViewValues'])<p class="px-5 pb-4 text-xs text-gray-500">قيمة الأوردر المعروضة بدون الشحن وبعد خصم الخصومات المسجلة مرة واحدة لكل عملية شراء. المدفوع والمتبقي أرصدة الفاتورة الحالية وتشمل الشحن؛ وليست تحصيلًا خلال الفترة.</p>@endif
             <div class="overflow-x-auto"><table class="w-full text-right text-sm">
@@ -90,7 +105,7 @@
                     <td class="p-4 font-black text-indigo-600">@can('orders.view')<a class="underline" href="{{ route('admin.orders.groups.show', $row['representative_id']) }}">{{ $row['short_reference'] ?: $row['key'] }}</a>@else{{ $row['short_reference'] ?: $row['key'] }}@endcan</td>
                     <td class="whitespace-nowrap p-4">{{ \App\Support\AppDateTime::format($row['shipped_at'], 'Y-m-d H:i') }}<span class="mt-1 block text-xs text-gray-400">{{ $row['date_source'] === 'bosta' ? 'حدث بوسطة' : 'سجل حالة الشحن' }}</span><span class="mt-2 inline-block rounded-lg bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-800">{{ $row['current_shipping_status'] === 'mixed' ? 'مشحون / مسلّم' : \App\Support\OrderStatusRegistry::label('shipping', $row['current_shipping_status']) }}</span></td>
                     <td class="p-4"><span dir="ltr">{{ $row['tracking_number'] ?: '—' }}</span></td>
-                    <td class="p-4 font-bold"><a class="text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period + ['employee' => (string) ($row['assignee_id'] ?? 'unassigned')]) }}#shipment-details">{{ $row['assignee_name'] ?: 'غير مسند' }}</a></td>
+                    <td class="p-4 font-bold"><a class="text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period + ['employee' => (string) ($row['assignee_id'] ?? 'unassigned')]) }}#sku-breakdown">{{ $row['assignee_name'] ?: 'غير مسند' }}</a></td>
                     <td class="min-w-64 p-4"><ul class="space-y-2">@foreach($row['items'] as $item)<li class="flex justify-between gap-4"><span>{{ $item->title }}</span><span class="whitespace-nowrap font-black">× {{ $item->quantity }}</span></li>@endforeach</ul></td>
                     @if($report['canViewValues'])
                         <td class="whitespace-nowrap p-4"><p class="font-black text-indigo-800">{{ $money($row['items_net_cents']) }}</p><div class="mt-2 space-y-1 text-xs text-gray-500"><p>العناصر: {{ $money($row['items_cents']) }}</p><p>الخصم: {{ $money($row['discount_cents']) }}</p></div></td>
@@ -99,7 +114,7 @@
                 </tr>@empty<tr><td colspan="{{ $report['canViewValues'] ? 7 : 5 }}" class="p-8 text-center text-gray-500">لا توجد أوردرات مطابقة للموظف والفترة المختارين.</td></tr>@endforelse</tbody>
             </table></div>
             <div class="border-t border-gray-100 p-5">{{ $report['rows']->links() }}</div>
-        </section>
+        </details>
 
 
     </div>
