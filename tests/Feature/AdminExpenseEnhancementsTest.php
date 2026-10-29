@@ -154,6 +154,7 @@ class AdminExpenseEnhancementsTest extends TestCase
 
     public function test_multiple_private_invoices_are_appended_and_legacy_attachment_is_preserved(): void
     {
+        Storage::fake('local');
         Storage::fake('s3_private');
         config(['media.private_disk' => 's3_private']);
         $admin = $this->admin(['expenses.create_expense', 'expenses.edit', 'expenses.view', 'expenses.view_attachments', 'expenses.download_attachments', 'expenses.export']);
@@ -173,11 +174,12 @@ class AdminExpenseEnhancementsTest extends TestCase
         $this->assertCount(3, $transaction->attachments);
         $this->assertSame($oldIds, $transaction->attachments->take(2)->modelKeys());
         $this->assertSame('123.45', $transaction->amount);
-        Storage::disk('s3_private')->assertExists($legacyPath);
+        Storage::disk('local')->assertExists($legacyPath);
+        Storage::disk('s3_private')->assertDirectoryEmpty('/');
         foreach ($transaction->attachments as $attachment) {
-            $this->assertSame('s3_private', $attachment->disk);
+            $this->assertSame('local', $attachment->disk);
             $this->assertSame($admin->id, $attachment->uploaded_by_user_id);
-            Storage::disk('s3_private')->assertExists($attachment->path);
+            Storage::disk('local')->assertExists($attachment->path);
             $this->get(route('admin.expenses.attachments.show', [$transaction, $attachment]))->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
             $this->get(route('admin.expenses.attachments.download', [$transaction, $attachment]))->assertOk()->assertDownload($attachment->original_name);
         }
@@ -190,7 +192,7 @@ class AdminExpenseEnhancementsTest extends TestCase
     public function test_multiple_attachments_are_optional_and_hostinger_default_is_local(): void
     {
         Storage::fake('local');
-        $this->assertSame('local', config('media.private_disk'));
+        $this->assertSame('local', config('media.expenses_disk'));
         $admin = $this->admin(['expenses.create_income']);
         $this->actingAs($admin)->post(route('admin.expenses.store'), $this->payload('income'))->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseCount('expense_attachments', 0);

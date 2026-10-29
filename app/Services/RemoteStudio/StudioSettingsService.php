@@ -7,6 +7,7 @@ use App\Models\StudioAsset;
 use App\Models\StudioSettingsRevision;
 use App\Models\User;
 use App\Services\Ai\AiProviderCredentialService;
+use App\Services\Storage\MediaStorage;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -129,7 +130,7 @@ class StudioSettingsService
         $disk = Storage::disk('studio_private');
 
         return $disk->exists($asset->path) && $disk->size($asset->path) === (int) $asset->bytes
-            && hash_equals($asset->checksum, hash_file('sha256', $disk->path($asset->path)));
+            && hash_equals($asset->checksum, app(MediaStorage::class)->checksum('studio_private', $asset->path));
     }
 
     public function publishedAsset(string $id): StudioAsset

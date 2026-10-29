@@ -30,7 +30,15 @@ return [
 
     'disks' => [
 
-        'studio_private' => [
+        // Keep logical Studio paths stable; the AWS copies live below this
+        // dedicated prefix, NOT directly below s3_private's private/ prefix.
+        'studio_private' => env('STUDIO_PRIVATE_DRIVER', 'local') === 'scoped' ? [
+            'driver' => 'scoped',
+            'disk' => 's3',
+            'prefix' => 'private/studio-private',
+            'visibility' => 'private',
+            'throw' => true,
+        ] : [
             'driver' => 'local',
             'root' => storage_path('app/studio-private'),
             'serve' => false,

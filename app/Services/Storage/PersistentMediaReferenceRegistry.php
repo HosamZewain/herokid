@@ -15,6 +15,7 @@ class PersistentMediaReferenceRegistry
     public function references(): array
     {
         return array_values(array_filter([
+            $this->reference('library_stories', 'LibraryStory', 'disk', ['pdf_path', 'cover_path']),
             $this->reference('order_attachments', 'OrderAttachment', 'disk', 'path'),
             $this->reference('temporary_photo_uploads', 'TemporaryPhotoUpload', 'disk', 'path'),
             $this->reference('temporary_photo_uploads', 'TemporaryPhotoUpload prepared', 'prepared_disk', 'prepared_path'),
@@ -46,7 +47,8 @@ class PersistentMediaReferenceRegistry
         return array_values(array_filter([
             $this->implicit('orders', 'Order photos', 'private', [], ['uploaded_photos']),
             $this->implicit('story_attachments', 'StoryAttachment', 'private', ['path']),
-            $this->implicit('expense_transactions', 'ExpenseTransaction', 'private', ['attachment_path']),
+            // Expenses are intentionally excluded from S3 verification/migration:
+            // legacy paths use media.expenses_disk, attachment rows keep their own disk.
             $this->implicit('child_identity_generation_attempts', 'ChildIdentityGenerationAttempt share cards', 'private', [
                 'share_feed_card_path', 'share_story_card_path', 'share_og_card_path',
             ]),

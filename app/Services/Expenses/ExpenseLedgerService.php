@@ -260,7 +260,7 @@ class ExpenseLedgerService
     private function storeFile(ExpenseTransaction $transaction, UploadedFile $file, array &$storedFiles): array
     {
         $extension = strtolower($file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'bin');
-        $disk = (string) config('media.private_disk', 'local');
+        $disk = (string) config('media.expenses_disk', 'local');
         $path = $file->storeAs(
             'expenses/transactions/'.$transaction->id,
             Str::uuid().'.'.$extension,
@@ -305,7 +305,7 @@ class ExpenseLedgerService
     private function replaceAttachment(ExpenseTransaction $transaction, UploadedFile $file, array &$storedFiles): void
     {
         $oldPath = $transaction->attachment_path;
-        $disk = (string) config('media.private_disk', 'local');
+        $disk = (string) config('media.expenses_disk', 'local');
         $this->storeAttachment($transaction, $file, $storedFiles);
 
         if ($oldPath && $oldPath !== $transaction->attachment_path) {

@@ -19,4 +19,7 @@ return [
     | use Laravel's local driver and must never be configured as S3.
     */
     'processing_disk' => env('PROCESSING_DISK', 'local'),
+
+    // Financial attachments stay on EC2 even when private production media is on S3.
+    'expenses_disk' => env('EXPENSES_MEDIA_DISK', 'local'),
 ];
