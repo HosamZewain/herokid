@@ -43,6 +43,8 @@ class AppDateTime
 
     public static function utcEndOfDay(string $date): CarbonImmutable
     {
-        return CarbonImmutable::parse($date, static::timezone())->endOfDay()->utc();
+        // The last local hour can occur twice when DST ends. Resolve the next
+        // calendar midnight first, then subtract in UTC to include both hours.
+        return CarbonImmutable::parse($date, static::timezone())->addDay()->startOfDay()->utc()->subMicrosecond();
     }
 }

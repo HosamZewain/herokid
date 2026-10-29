@@ -18,9 +18,9 @@ class LocalCartAnalyticsRepository
         $today = now($timezone)->startOfDay();
         $yesterday = now($timezone)->subDay()->startOfDay();
         $todayStart = $today->copy()->utc();
-        $todayEnd = $today->copy()->endOfDay()->utc();
+        $todayEnd = AppDateTime::utcEndOfDay($today->toDateString());
         $yesterdayStart = $yesterday->copy()->utc();
-        $yesterdayEnd = $yesterday->copy()->endOfDay()->utc();
+        $yesterdayEnd = AppDateTime::utcEndOfDay($yesterday->toDateString());
 
         return [
             'purchases_today' => $this->metricCard(

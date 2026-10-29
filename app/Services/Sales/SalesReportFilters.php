@@ -107,7 +107,7 @@ class SalesReportFilters
 
     public function localEnd(): CarbonImmutable
     {
-        return CarbonImmutable::parse($this->endDate, AppDateTime::timezone())->endOfDay();
+        return AppDateTime::utcEndOfDay($this->endDate)->setTimezone(AppDateTime::timezone());
     }
 
     public function previousPeriod(): self

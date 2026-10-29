@@ -57,6 +57,18 @@ class ShippingReportTest extends TestCase
             'business_reference' => $order->order_number, 'business_location_id' => 'synthetic', 'tracking_number' => 'TEST-'.$order->id, 'creation_status' => 'created']);
     }
 
+    public function test_cairo_repeated_hour_is_included_once_in_shipping_day(): void
+    {
+        $this->log($this->order('DST-FIRST', 1), '2026-10-29 20:30:00');
+        $this->log($this->order('DST-SECOND', 1), '2026-10-29 21:30:00');
+        $this->log($this->order('DST-NEXT-DAY', 1), '2026-10-29 22:00:00');
+        $report = $this->report(['from' => '2026-10-29', 'to' => '2026-10-29', 'day' => '2026-10-29']);
+        $this->assertSame(2, $report['summary']['shipments']);
+        $this->assertSame(20000, $report['summary']['items_net_cents']);
+        $this->assertSame(2, $report['daily']->first()['shipments']);
+        $this->assertSame(2, $report['rows']->total());
+    }
+
     public function test_daily_quantities_count_checkout_once_and_break_down_mixed_contents(): void
     {
         $first = $this->order('MIXED', 3);

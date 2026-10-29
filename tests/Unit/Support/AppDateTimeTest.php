@@ -26,6 +26,23 @@ class AppDateTimeTest extends TestCase
         $this->assertSame('2026-08-31 20:59:59.999999', AppDateTime::utcEndOfDay('2026-08-31')->format('Y-m-d H:i:s.u'));
     }
 
+    public function test_cairo_transition_days_include_the_whole_calendar_day(): void
+    {
+        config(['display.timezone' => 'Africa/Cairo', 'orders.display_timezone' => 'Africa/Cairo']);
+        foreach ([['2026-10-29', '2026-10-29 21:59:59.999999', 25],
+            ['2026-10-30', '2026-10-30 21:59:59.999999', 24],
+            ['2026-04-24', '2026-04-24 20:59:59.999999', 23]] as [$day, $end, $hours]) {
+            foreach ([AppDateTime::class, OrderDateTime::class] as $helper) {
+                $this->assertSame($end, $helper::utcEndOfDay($day)->format('Y-m-d H:i:s.u'));
+                $this->assertEquals($hours, $helper::utcStartOfDay($day)->diffInHours($helper::utcEndOfDay($day)->addMicrosecond()));
+            }
+        }
+        foreach (['2026-10-29 20:30:00', '2026-10-29 21:30:00'] as $utc) {
+            $this->assertSame('2026-10-29 23:30', AppDateTime::format($utc, 'Y-m-d H:i'));
+            $this->assertTrue(CarbonImmutable::parse($utc, 'UTC')->betweenIncluded(AppDateTime::utcStartOfDay('2026-10-29'), AppDateTime::utcEndOfDay('2026-10-29')));
+        }
+    }
+
     public function test_legacy_order_timezone_override_remains_supported(): void
     {
         config([
