@@ -22,11 +22,14 @@ class ShippingDiscountTest extends TestCase
         $this->assertSame(10000, $service->feeCents(10000));
         foreach ([['fixed', 3000, 10000, 7000], ['fixed', 3000, 15000, 12000],
             ['percent', 3000, 10000, 7000], ['percent', 3000, 15000, 10500],
-            ['percent', 1250, 9999, 8749], ['fixed', 3000, 2000, 0],
-            ['percent', 10000, 15000, 0], ['fixed', 3000, 0, 0]] as [$type, $value, $base, $expected]) {
+            ['percent', 1250, 9999, 8800], ['fixed', 3000, 2000, 0],
+            ['percent', 3500, 8100, 5300], ['percent', 3500, 8000, 5200],
+            ['fixed', 3000, 8240, 5300], ['fixed', 3000, 8250, 5300],
+            ['fixed', 3000, 8266, 5300], ['fixed', 3000, 8201, 5300],
+            ['fixed', 3000, 8200, 5200], ['percent', 10000, 15000, 0], ['fixed', 3000, 0, 0]] as [$type, $value, $base, $expected]) {
             $this->assertSame($expected, $service->feeCents($base, ['enabled' => true, 'type' => $type, 'value' => $value]));
         }
-        $this->assertSame(15000, $service->feeCents(15000, ['enabled' => false, 'type' => 'fixed', 'value' => 3000]));
+        $this->assertSame(15001, $service->feeCents(15001, ['enabled' => false, 'type' => 'fixed', 'value' => 3000]));
     }
 
     public function test_admin_permissions_validation_and_audit(): void

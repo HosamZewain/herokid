@@ -59,4 +59,4 @@ A candidate file was loaded explicitly by a private diagnostic CLI process in `/
 2. Measure actual post-deploy navigation, errors and FPM saturation before deciding whether the previously prepared fourth FPM child is still needed.
 3. Separately reduce duplicated/hidden order-list markup while preserving status, permissions and mobile/desktop behavior. Do not combine that larger UI change with this first fix.
 
-Deployment requires approval for this new change. Existing runtime and infrastructure remain untouched; there are no new recurring AWS resources or services.
+The owner subsequently approved deploying this fix together with upward shipping-fee rounding; see the combined release notes. At the time of this diagnostic report the fix remained prepared. Existing runtime and infrastructure remain untouched; there are no new recurring AWS resources or services.

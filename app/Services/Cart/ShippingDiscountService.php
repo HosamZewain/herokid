@@ -27,6 +27,7 @@ class ShippingDiscountService
             ? (int) round($baseCents * min(10000, $value) / 10000)
             : $value;
 
-        return max(0, $baseCents - $discount);
+        // Charge whole pounds after the discount, always rounding the payable fee up.
+        return intdiv(max(0, $baseCents - $discount) + 99, 100) * 100;
     }
 }

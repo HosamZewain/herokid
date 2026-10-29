@@ -631,7 +631,9 @@
                 const baseCents = Math.round(lastDeliveryFee * 100);
                 const discountCents = !shippingDiscount.enabled ? 0 : (shippingDiscount.type === 'percent'
                     ? Math.round(baseCents * Math.min(10000, shippingDiscount.value) / 10000) : shippingDiscount.value);
-                fee = freeShipping ? 0 : Math.max(0, baseCents - discountCents) / 100;
+                const discountedCents = Math.max(0, baseCents - discountCents);
+                fee = freeShipping ? 0 : (shippingDiscount.enabled
+                    ? Math.ceil(discountedCents / 100) : discountedCents / 100);
                 const expectedFee = checkoutForm?.querySelector('[name="expected_delivery_fee"]');
                 if (expectedFee) expectedFee.value = Number(fee).toFixed(2);
                 document.querySelectorAll('[data-free-shipping-banner]').forEach(node => { node.hidden = !activeOffer; });

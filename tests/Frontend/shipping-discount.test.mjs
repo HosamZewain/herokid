@@ -6,17 +6,21 @@ import vm from 'node:vm';
 const view = readFileSync(new URL('../../resources/views/front/cart/index.blade.php', import.meta.url), 'utf8');
 const calculation = view.slice(view.indexOf('function updateTotals(fee)'), view.indexOf('function filterGovernorates()'));
 
-for (const [type, value, fee, expected, free] of [
+for (const [type, value, fee, expected, free, enabled = true] of [
     ['fixed', 3000, 100, 70, false], ['fixed', 3000, 150, 120, false],
     ['percent', 3000, 100, 70, false], ['percent', 3000, 150, 105, false],
-    ['fixed', 3000, 20, 0, false], ['percent', 1250, 99.99, 87.49, false],
+    ['fixed', 3000, 20, 0, false], ['percent', 1250, 99.99, 88, false],
     ['fixed', 3000, 150, 0, true],
+    ['percent', 3500, 81, 53, false], ['percent', 3500, 80, 52, false],
+    ['fixed', 3000, 82.4, 53, false], ['fixed', 3000, 82.5, 53, false],
+    ['fixed', 3000, 82.66, 53, false], ['fixed', 3000, 82.01, 53, false],
+    ['fixed', 3000, 82, 52, false], ['fixed', 3000, 82.66, 82.66, false, false], ['percent', 10000, 150, 0, false],
 ]) {
     test(`cart ${type} ${value}: ${fee} becomes ${expected}, free=${free}`, () => {
         const nodes = new Map();
         const field = {};
         const context = vm.createContext({
-            shippingDiscount: { enabled: true, type, value },
+            shippingDiscount: { enabled, type, value },
             shippingOffer: free ? { minimum_cents: 10000, ends_at: '2099-01-01T00:00:00Z' } : null,
             shippingClockOffset: 0, subtotal: 200, discount: 0, lastDeliveryFee: 0,
             checkoutForm: { querySelector: () => field },
