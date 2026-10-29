@@ -6,6 +6,7 @@ use App\Models\BostaShipment;
 use App\Models\Order;
 use App\Models\OrderGroupAssignment;
 use App\Models\OrderStatusDefinition;
+use App\Models\Permission;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AdminShippingReportService;
@@ -66,7 +67,7 @@ class ShippingReportTest extends TestCase
         $this->log($second);
         $this->log($first, '2026-10-08 10:00:00');
         $report = $this->report();
-        $this->assertSame(['shipments' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8], $report['summary']);
+        $this->assertSame(['shipments' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8, 'total_cents' => 71000, 'items_net_cents' => 71000, 'paid_cents' => 0, 'remaining_cents' => 71000], $report['summary']);
         $this->assertCount(4, $report['rows']->first()['items']);
         $this->assertSame(8, $report['teams']->first()['contents']->sum('quantity'));
         $this->assertSame(8, $report['teams']->first()['items']);
@@ -90,11 +91,13 @@ class ShippingReportTest extends TestCase
         $this->assertSame('2026-10-07 08:00:00', $report['rows']->first()['shipped_at']);
     }
 
-    public function test_cairo_day_boundary_and_returned_shipments_keep_original_dispatch_date(): void
+    public function test_cairo_day_boundary_uses_shipping_date_and_excludes_returned_shipments(): void
     {
-        $order = $this->order('BOUNDARY', 2, ['shipping_status' => 'returned', 'created_at' => '2026-09-01 08:00:00']);
+        $order = $this->order('BOUNDARY', 2, ['shipping_status' => 'delivered', 'created_at' => '2026-09-01 08:00:00']);
         $this->log($order, '2026-10-07 21:30:00'); // 00:30 Cairo on October 8.
-        $this->log($order, '2026-10-08 10:00:00', 'returned');
+        $this->log($order, '2026-10-08 10:00:00', 'delivered');
+        $returned = $this->order('RETURNED', 9, ['shipping_status' => 'returned']);
+        $this->log($returned);
         $report = $this->report();
         $this->assertSame(1, $report['selected_summary']['shipments']);
         $this->assertSame('2026-10-08', $report['rows']->first()['day']);
@@ -196,5 +199,138 @@ class ShippingReportTest extends TestCase
         $this->assertSame(5, $report['summary']['products']);
         $this->assertSame(['order:'.$first->id, 'order:'.$second->id], $report['rows']->getCollection()->pluck('key')->sort()->values()->all());
         $this->assertSame([2, 3], $report['rows']->getCollection()->pluck('product_quantity')->map(fn ($value) => (int) $value)->sort()->values()->all());
+    }
+
+    public function test_employee_summary_covers_the_period_and_click_filters_all_their_orders(): void
+    {
+        $employee = User::factory()->create(['role' => 'admin', 'name' => 'Synthetic Period Employee']);
+        foreach ([['PERIOD-A', '2026-10-02 10:00:00', 2], ['PERIOD-B', '2026-10-08 10:00:00', 3]] as [$key, $date, $qty]) {
+            $this->log($this->order($key, $qty), $date);
+            OrderGroupAssignment::create(['checkout_group_key' => $key, 'assigned_to_user_id' => $employee->id, 'assigned_at' => now()]);
+        }
+        $this->log($this->order('UNASSIGNED', 4));
+        $filters = ['from' => '2026-10-01', 'to' => '2026-10-08', 'employee' => (string) $employee->id];
+        $report = $this->report($filters + ['day' => null]);
+        $this->assertNull($report['day']);
+        $this->assertSame(3, $report['summary']['shipments']);
+        $this->assertSame(2, $report['selected_summary']['shipments']);
+        $this->assertSame(50000, $report['selected_summary']['total_cents']);
+        $this->assertEqualsCanonicalizing(['PERIOD-A', 'PERIOD-B'], $report['rows']->pluck('key')->all());
+        $this->assertSame(2, $report['teams']->firstWhere('id', (string) $employee->id)['shipments']);
+        $this->get(route('admin.shipping-report.index', $filters))->assertOk()
+            ->assertViewHas('report', fn ($data) => $data['rows']->pluck('key')->sort()->values()->all() === ['PERIOD-A', 'PERIOD-B'])
+            ->assertSee(route('admin.shipping-report.index', $filters).'#shipment-details');
+        $day = $this->report($filters);
+        $this->assertSame(1, $day['selected_summary']['shipments']);
+        $this->assertSame(2, $day['teams']->firstWhere('id', (string) $employee->id)['shipments']);
+        $unassigned = $this->report(['employee' => 'unassigned', 'day' => null]);
+        $this->assertSame(['UNASSIGNED'], $unassigned['rows']->pluck('key')->all());
+    }
+
+    public function test_current_employee_gets_credit_after_reassignment_even_when_shipping_was_earlier(): void
+    {
+        $first = User::factory()->create(['role' => 'admin']);
+        $current = User::factory()->create(['role' => 'admin']);
+        $this->log($this->order('REASSIGNED'), '2026-10-02 10:00:00');
+        $assignment = OrderGroupAssignment::create(['checkout_group_key' => 'REASSIGNED', 'assigned_to_user_id' => $first->id, 'assigned_at' => '2026-10-01 08:00:00']);
+        $this->assertSame((string) $first->id, $this->report(['day' => null])['teams']->first()['id']);
+        $assignment->update(['assigned_to_user_id' => $current->id, 'assigned_at' => now()]);
+        $report = $this->report(['day' => null]);
+        $this->assertSame((string) $current->id, $report['teams']->first()['id']);
+        $this->assertSame(0, $this->report(['day' => null, 'employee' => (string) $first->id])['rows']->total());
+        $this->assertSame(1, $this->report(['day' => null, 'employee' => (string) $current->id])['rows']->total());
+    }
+
+    public function test_delivery_does_not_create_another_shipping_credit_and_partial_groups_are_excluded(): void
+    {
+        $order = $this->order('DELIVERED', attributes: ['shipping_status' => 'delivered']);
+        $this->log($order, '2026-10-02 08:00:00');
+        $this->log($order, '2026-10-08 08:00:00', 'delivered');
+        $this->log($this->order('PARTIAL', 3));
+        $this->order('PARTIAL', 7, ['shipping_status' => 'not_ready']);
+        $this->log($this->order('MIXED-QUALIFIED', 2));
+        $this->order('MIXED-QUALIFIED', 1, ['shipping_status' => 'delivered']);
+        foreach (['returned', 'cancelled', 'shipment_created', 'not_ready'] as $status) {
+            $this->log($this->order('EXCLUDED-'.$status, 9, ['shipping_status' => $status]));
+        }
+        $report = $this->report(['day' => null]);
+        $this->assertSame(2, $report['summary']['shipments']);
+        $this->assertSame(5, $report['summary']['products']);
+        $this->assertSame('mixed', $report['rows']->firstWhere('key', 'MIXED-QUALIFIED')['current_shipping_status']);
+        $this->assertSame(['MIXED-QUALIFIED'], $this->report(['from' => '2026-10-08'])['rows']->pluck('key')->all());
+    }
+
+    public function test_checkout_values_count_shipping_discount_and_paid_balance_once(): void
+    {
+        $first = $this->order('MONEY', 2, ['delivery_details' => ['delivery_fee' => 60], 'discount_cents' => 2500, 'paid_amount_cents' => 10000]);
+        $second = $this->order('MONEY', 3, ['delivery_details' => ['delivery_fee' => 60], 'discount_cents' => 2500, 'paid_amount_cents' => 10000]);
+        $this->log($first);
+        $this->log($second);
+        $row = $this->report()['rows']->first();
+        $this->assertSame(50000, $row['items_cents']);
+        $this->assertSame(6000, $row['delivery_cents']);
+        $this->assertSame(2500, $row['discount_cents']);
+        $this->assertSame(47500, $row['items_net_cents']);
+        $this->assertSame(53500, $row['total_cents']);
+        $this->assertSame(10000, $row['paid_cents']);
+        $this->assertSame(43500, $row['remaining_cents']);
+        $this->get('/admin/shipping-report')->assertOk()->assertSee('قيمة الأوردرات خلال الفترة')->assertDontSee('ج.م ج.م');
+        $first->update(['paid_amount_cents' => 60000]);
+        $this->assertSame(0, $this->report()['selected_summary']['remaining_cents']);
+    }
+
+    public function test_legacy_empty_keys_use_separate_balances_and_saved_story_price(): void
+    {
+        $story = Story::create(['title' => 'Legacy Price', 'slug' => 'legacy-price', 'price' => 100]);
+        $one = $this->order('', 2, ['delivery_details' => ['delivery_fee' => 12.34], 'discount_cents' => 1234, 'paid_amount_cents' => 10000]);
+        $two = $this->order('', 1, ['story_id' => $story->id, 'delivery_details' => ['item_price' => 150.25, 'delivery_fee' => 20.55]]);
+        $two->items()->delete();
+        DB::table('orders')->whereIn('id', [$one->id, $two->id])->update(['checkout_group_key' => '']);
+        $this->log($one);
+        $this->log($two);
+        $rows = $this->report()['rows']->keyBy('representative_id');
+        $this->assertSame(20000, $rows[$one->id]['total_cents']);
+        $this->assertSame(10000, $rows[$one->id]['remaining_cents']);
+        $this->assertSame(17080, $rows[$two->id]['total_cents']);
+        $this->assertSame(15025, $rows[$two->id]['items_cents']);
+    }
+
+    public function test_merged_source_never_creates_duplicate_kpi_or_financial_balance(): void
+    {
+        $this->log($this->order('MERGED-SOURCE', 8));
+        $this->log($this->order('MERGED-TARGET', 3));
+        DB::table('order_group_merge_aliases')->insert(['source_checkout_group_key' => 'MERGED-SOURCE', 'target_checkout_group_key' => 'MERGED-TARGET', 'reason' => 'Synthetic merge', 'merged_at' => now()]);
+        $report = $this->report();
+        $this->assertSame(['MERGED-TARGET'], $report['rows']->pluck('key')->all());
+        $this->assertSame(30000, $report['summary']['total_cents']);
+    }
+
+    public function test_shipping_only_permission_does_not_grant_financial_access(): void
+    {
+        $this->log($this->order('LIMITED', 2));
+        $this->admin->permissions()->sync(Permission::where('key', 'shipping_reports.view')->pluck('id'));
+        $this->admin->unsetRelation('permissions');
+        $report = $this->report();
+        $this->assertFalse($report['canViewValues']);
+        $this->assertArrayNotHasKey('total_cents', $report['rows']->first());
+        $this->get('/admin/shipping-report')->assertOk()->assertSee('Synthetic Stickers')
+            ->assertDontSee('قيمة الأوردرات خلال الفترة')->assertDontSee('مدفوع:')->assertDontSee('ج.م');
+    }
+
+    public function test_employee_filter_is_validated_and_pagination_keeps_period_and_employee(): void
+    {
+        foreach (['-1', '0', 'unknown', '1 OR 1=1'] as $value) {
+            $this->get('/admin/shipping-report?employee='.urlencode($value))->assertSessionHasErrors('employee');
+        }
+        $this->get('/admin/shipping-report?employee[]=1')->assertSessionHasErrors('employee');
+        for ($i = 0; $i < 26; $i++) {
+            $this->log($this->order('FILTERED-'.$i, 1));
+        }
+        $report = $this->report(['employee' => 'unassigned', 'day' => null, 'page' => 2]);
+        $this->assertCount(1, $report['rows']);
+        $this->assertSame(26, $report['selected_summary']['shipments']);
+        $this->assertStringContainsString('employee=unassigned', $report['rows']->url(1));
+        $this->assertStringContainsString('from=2026-10-01', $report['rows']->url(1));
+        $this->assertStringContainsString('to=2026-10-08', $report['rows']->url(1));
     }
 }
