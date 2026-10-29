@@ -24,7 +24,7 @@ class PersistentMediaReferenceRegistry
             $this->reference('child_identity_photos', 'ChildIdentityPhoto AI input', 'ai_input_disk', 'ai_input_path'),
             $this->reference('child_identity_generation_attempts', 'ChildIdentityGenerationAttempt', 'output_disk', ['output_storage_path', 'preview_storage_path']),
             $this->reference('child_identity_shares', 'ChildIdentityShare', 'card_disk', ['feed_card_path', 'story_card_path', 'og_card_path']),
-            $this->reference('child_identity_attempt_photo', 'ChildIdentityAttemptPhoto', 'disk', 'path'),
+            $this->reference('child_identity_attempt_photos', 'ChildIdentityAttemptPhoto', 'disk', 'path'),
             $this->reference('order_previews', 'OrderPreview', 'disk', 'file_path'),
             $this->reference('mobile_uploads', 'MobileUpload', 'disk', 'path'),
             $this->reference('child_profile_photos', 'ChildProfilePhoto', 'disk', 'path'),

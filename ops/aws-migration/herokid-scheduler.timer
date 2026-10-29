@@ -1,0 +1,8 @@
+[Unit]
+Description=HeroKid production scheduler each minute (install disabled until GO-LIVE)
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Unit=herokid-scheduler.service
+[Install]
+WantedBy=timers.target

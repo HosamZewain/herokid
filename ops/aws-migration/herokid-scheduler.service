@@ -1,0 +1,10 @@
+[Unit]
+Description=HeroKid production scheduler (GO-LIVE gated)
+After=mysql.service redis-server.service
+ConditionPathExists=/etc/herokid/GO_LIVE_APPROVED
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/var/www/herokid
+ExecStart=/usr/bin/php artisan schedule:run
+TimeoutStartSec=900
