@@ -110,6 +110,7 @@ class OrderConfirmationService
                     'confirmation_method' => $method,
                 ]),
             ]);
+            $request->update(['last_error' => null]);
             $message->update(['confirmation_event_id' => $request->id]);
             foreach ($orders as $order) {
                 $order->forceFill(['status' => 'new_confirmed'])->save();

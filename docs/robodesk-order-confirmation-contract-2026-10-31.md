@@ -38,7 +38,7 @@ A durable compare-and-set claims the event before even closing a conversation; d
 
 ## Polling and correlation
 
-Reuse the existing conversation refresh queue/scheduler and `GET /messagesByPhone` with its saved `after` cursor. All customer data remains local to existing protected storage. Metadata is encrypted alongside existing encrypted messages and omitted from UI/API serialization.
+Reuse the existing conversation refresh queue/scheduler. For every phone with an eligible awaiting-confirmation send (succeeded/processing/unknown), call `GET /messagesByPhone` **without `after`, with `limit=50` on every refresh**. Ordinary history without pending confirmation retains its existing delta/full-reconciliation behavior. All customer data remains local to existing protected storage. Metadata is encrypted alongside existing encrypted messages and omitted from UI/API serialization.
 
 New generic message fields, with explicit `null` when unavailable:
 
@@ -46,14 +46,19 @@ New generic message fields, with explicit `null` when unavailable:
 - `replyTo`: original template wamid for a button/reply.
 - `templateName`: name on an outbound template message.
 
-Existing fields used: `id`, `interactionId`, `direction`, `text`, `date`, `channel`, `attachments`. `date` must be an unambiguous ISO-8601 instant with offset/Z, preserving source milliseconds. Missing new fields are NOT treated as explicit null: old responses cannot silently enable typed matching.
+RoboDesk clarified from deployed code: `limit` counts the newest interactions, not messages. All messages of those interactions are returned oldest-first. A date-based `after` cursor misses delayed/retried Meta webhooks whose source timestamp predates the cursor; confirmations therefore never depend on that cursor. Saved message `id` deduplicates rereads, and the durable consumed-message marker prevents repeat order changes. The latest 50 interactions are a bounded provider window, not a guarantee of all historical conversations.
+
+Outbound `channelId` is exactly the send receipt wamid; `templateName` is recorded independently of category lookup. Outbound `interactionId` is inferred by RoboDesk from interaction time windows. If observed outbound evidence disagrees with the receipt interaction, keep the request accepted-but-awaiting-review, show **تأكيد يحتاج مراجعة**, and do not confirm/retry sending. Different *inbound* interaction on an exact original-wamid reply is still allowed.
+
+Existing fields used: `id`, `interactionId`, `direction`, `text`, `date`, `channel`, `attachments`. `date` must be an unambiguous ISO-8601 instant with offset/Z, preserving source milliseconds. Outbound timestamps are RoboDesk post-Meta-acceptance instants; inbound Meta timestamps have second precision (`.000`). Missing new fields are NOT treated as explicit null: old responses cannot silently enable typed matching.
 
 A candidate is inbound `direction:in`, trimmed text exactly `تأكيد الطلب`:
 
 - Non-null `replyTo`: match exactly one successfully sent HeroKid request by its original wamid and phone. Different inbound interaction is allowed. If replyTo does not match a stored sent template for this phone, treat it as typed confirmation and apply the interaction rule below. Ordinary quoted messages can also populate replyTo; outbound AI/flow replies must never be treated as customer confirmations.
 - Null or non-template `replyTo`: same interaction, latest actual `herokid_order_confirmation` template strictly before the inbound message. Use the saved outbound message's wamid and timestamp, then match the known send receipt and phone. Do not use mutable conversation variable `2`, latest order for a phone, or local HTTP receipt time as the template's send time.
 - Typed matching waits for outbound template evidence in history. If that message is outside the provider history window, absent, untracked, or tied for latest timestamp, hold for reconciliation; never guess or fall back to an earlier order. This stricter evidence rule prevents cross-order confirmation.
-- Saved messages are reconsidered on subsequent empty delta pages, so an inbound message read just before receipt persistence is not lost. Cursor/history/confirmation changes commit in the same DB transaction. Invalid metadata cannot advance the cursor.
+- A typed/ordinary quoted confirmation in the same source second as a template is ambiguous: hold for review rather than choose an older template. An exact original-wamid reply supplies causal evidence and may confirm within that same second; the eligibility lower bound includes the whole source second.
+- Saved messages are reconsidered on subsequent rereads, so an inbound message read just before receipt persistence is not lost. Cursor/history/confirmation changes commit in the same DB transaction. Invalid metadata cannot advance the cursor.
 - Original confirmation timestamp/logs are idempotent. No regression after cancellation, deletion, contact change or later order progress. History is preserved; no customer messages or old events are deleted.
 
 Current normal polling cadence remains **10 minutes per active phone plus scheduler/queue/backoff delays**, with the existing global ceiling of 20 requests/minute. This is not instantaneous confirmation or a guaranteed latency. No extra timer/resource or parallel poll loop. Existing history refresh permissions remain. No callback endpoint is added; legacy `order.confirmed` webhook events are rejected.
@@ -62,7 +67,7 @@ Current normal polling cadence remains **10 minutes per active phone plus schedu
 
 No current authorization to deploy or send. Baseline AWS SHA reverified `46f8e3e260dc6319845e1f309218340837178d70`.
 
-1. Field rollout is reported confirmed by the RoboDesk agent in the owner's latest update. Preserve that evidence; still verify actual outbound templateName/wamid/interaction/time during the approved pilot and clarify cursor completeness before broad activation. Local mocks alone do not prove provider behavior.
+1. Field rollout is reported confirmed by the RoboDesk agent in the owner's latest update. Preserve that evidence; still verify actual outbound templateName/wamid/interaction/time during the approved pilot The provider cursor limitation is now understood and handled by full-window reads; verify the first real template evidence during the approved pilot. Local mocks alone do not prove provider behavior.
 2. Revalidate live code/drift, private recovery checkpoint and fresh off-instance backup. Review exact release diff. Apply only the status-definition migration and encrypted-message-metadata migration by explicit path; no unrelated pending migrations or history backfill. Additive down methods retain referenced evidence.
 3. Keep legacy `ROBODESK_ENABLED=false`; no inbound/outbound secret needed. Existing encrypted conversation settings remain unchanged. New switches default disabled, contract false, audience trial with empty allowlist.
 4. After owner approval for a defined pilot, use `ROBODESK_CONFIRMATION_AUDIENCE=trial` and `ROBODESK_CONFIRMATION_TRIAL_PHONE_HASHES=<comma-separated SHA256 of canonical +E164 approved phone(s)>`. Provision securely, never put actual numbers in reports. Empty/malformed allowlist blocks readiness. Capture a fresh `MAX(orders.id)` INCLUDING deleted rows as `ROBODESK_CONFIRMATION_AFTER_ORDER_ID`. Set enabled/contract flags only after those gates pass. The pilot authorizes closing any open conversation for its approved number and sending one new-order template; no synthetic production order should be created without explicit authorization.

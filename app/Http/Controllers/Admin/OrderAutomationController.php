@@ -34,7 +34,7 @@ class OrderAutomationController extends Controller
             'confirmationCounts' => (clone $requests)->select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
             'confirmedCount' => (clone $requests)->whereHas('confirmationWorkflow', fn ($q) => $q->where('confirmation_status', 'confirmed'))->count(),
             'confirmationRequests' => (clone $requests)->with(['order:id,order_number', 'confirmationWorkflow:id,checkout_group_key,confirmation_status,confirmed_at'])->latest('id')->limit(20)
-                ->get(['id', 'order_id', 'checkout_group_key', 'status', 'attempts', 'created_at', 'processed_at']),
+                ->get(['id', 'order_id', 'checkout_group_key', 'status', 'attempts', 'created_at', 'processed_at', 'last_error']),
             'workflows' => OrderAutomation::with('revision')->get(),
             'runs' => OrderAutomationRun::with('order')->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->latest('id')->paginate(25),
         ]);

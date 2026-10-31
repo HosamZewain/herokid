@@ -29,15 +29,15 @@ class RoboDeskConversationHistoryProvider implements ConversationHistoryProvider
         return base64_encode('base64:'.$email.':'.$hash);
     }
 
-    public function fetch(string $phone, ?string $after = null): ConversationHistoryPage
+    public function fetch(string $phone, ?string $after = null, bool $confirmationWindow = false): ConversationHistoryPage
     {
         $settings = RoboDeskConversationSetting::find(1);
         if (! $settings?->enabled || ! filled($settings->email) || ! filled($settings->password)) {
             throw new RuntimeException('setup_required');
         }
         // Fixed trusted host: no administrator-supplied URL or redirect/SSRF path.
-        $query = ['phone' => ltrim($phone, '+'), 'channel' => 'WhatsApp', 'limit' => $settings->conversation_limit];
-        if ($after !== null) {
+        $query = ['phone' => ltrim($phone, '+'), 'channel' => 'WhatsApp', 'limit' => $confirmationWindow ? 50 : $settings->conversation_limit];
+        if ($after !== null && ! $confirmationWindow) {
             $query['after'] = $after;
         }
         $response = Http::acceptJson()->withHeaders([

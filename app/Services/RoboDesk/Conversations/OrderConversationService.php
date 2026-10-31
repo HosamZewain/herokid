@@ -100,7 +100,11 @@ class OrderConversationService
             $interval = max(600, (int) config('robodesk.conversations.full_reconciliation_interval_seconds', 3600));
             $full = $full || ! $existing?->sync_cursor || ! $existing?->last_full_synced_at
                 || $existing->last_full_synced_at->lte(now()->subSeconds($interval));
-            $page = $this->provider->fetch($phone, $full ? null : $existing->sync_cursor);
+            $confirmationWindow = app(OrderConfirmationPoller::class)->needsFullWindow($phone);
+            $full = $full || $confirmationWindow;
+            // Delayed Meta webhooks can predate a date-based cursor. Every poll
+            // awaiting confirmation rereads the newest 50 interactions in full.
+            $page = $this->provider->fetch($phone, $full ? null : $existing->sync_cursor, $confirmationWindow);
             [$rows, $links] = $this->validate($page, $phone);
             DB::transaction(function () use ($rows, $phone, $account, $hash, $page, $full): void {
                 $conversation = WhatsAppConversation::firstOrCreate(['account_key' => $account, 'phone_hash' => $hash], ['phone' => $phone]);

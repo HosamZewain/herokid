@@ -6,5 +6,5 @@ interface ConversationHistoryProvider
 {
     public function configured(): bool;
 
-    public function fetch(string $phone, ?string $after = null): ConversationHistoryPage;
+    public function fetch(string $phone, ?string $after = null, bool $confirmationWindow = false): ConversationHistoryPage;
 }

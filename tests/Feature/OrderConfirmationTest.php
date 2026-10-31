@@ -334,7 +334,8 @@ class OrderConfirmationTest extends TestCase
         $this->messages = [];
         $this->sync($order);
         $this->assertSame('new_confirmed', $order->fresh()->status);
-        Http::assertSent(fn ($r) => str_contains($r->url(), 'after=early-click'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'after='));
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'limit=50'));
         $raw = DB::table('whatsapp_conversation_messages')->first();
         $this->assertStringNotContainsString($receipt['message_id'], $raw->provider_metadata);
         $this->assertArrayNotHasKey('provider_metadata', WhatsAppConversationMessage::firstOrFail()->toArray());
@@ -482,6 +483,80 @@ class OrderConfirmationTest extends TestCase
         }
         $this->assertDatabaseCount('whatsapp_conversations', 0);
         $this->assertSame('new', $order->fresh()->status);
+    }
+
+    public function test_pending_confirmation_always_reads_full_fifty_interactions_and_recovers_backdated_inbound(): void
+    {
+        RoboDeskConversationSetting::find(1)->update(['conversation_limit' => 20]);
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event), $this->message('newer-ai-cursor', [
+            'direction' => 'out', 'text' => 'AI response', 'date' => now()->addSeconds(5)->toISOString()])];
+        $late = $this->message('delayed-webhook', ['replyTo' => $event->fresh()->response_payload['message_id'],
+            'date' => now()->addSeconds(4)->toISOString()]);
+        $this->sync($order);
+        $this->assertSame('newer-ai-cursor', WhatsAppConversation::firstOrFail()->sync_cursor);
+        $this->assertSame('new', $order->fresh()->status);
+        $this->messages = [$this->messages[0], $late, $this->messages[1]];
+        $this->sync($order);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'after='));
+        $polls = Http::recorded()->filter(fn ($pair) => str_contains($pair[0]->url(), 'limit='));
+        $this->assertCount(2, $polls);
+        foreach ($polls as [$request]) {
+            $this->assertStringContainsString('limit=50', $request->url());
+        }
+        $this->sync($order);
+        $this->assertSame(1, $order->statusLogs()->where('status', 'new_confirmed')->count());
+    }
+
+    public function test_exact_reply_accepts_second_precision_even_when_send_started_later_in_same_second(): void
+    {
+        $this->travel(500)->milliseconds();
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event, ['date' => now()->addMilliseconds(100)->toISOString()]),
+            $this->message('same-second-button', ['replyTo' => $event->fresh()->response_payload['message_id'],
+                'date' => now()->startOfSecond()->toISOString()])];
+        $this->sync($order);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+    }
+
+    public function test_typed_same_second_as_template_requires_review_and_never_falls_back_to_older_order(): void
+    {
+        $one = $this->order('CHK-SECOND-ONE');
+        $first = $this->request($one);
+        $this->send($first);
+        $a = $this->template($first);
+        $this->travel(5)->seconds();
+        $two = $this->order('CHK-SECOND-TWO');
+        $second = $this->request($two);
+        $this->send($second);
+        $this->messages = [$a, $this->template($second, ['date' => now()->addMilliseconds(600)->toISOString()]),
+            $this->message('same-second-typed', ['date' => now()->startOfSecond()->toISOString()])];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new', $two->fresh()->status);
+        $this->assertSame('confirmation_review:typed_same_second', $second->fresh()->last_error);
+    }
+
+    public function test_derived_template_interaction_mismatch_is_reviewed_for_both_reply_and_typed_text(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event, ['interactionId' => 'wrong-derived-interaction']),
+            $this->message('button-mismatch', ['replyTo' => $event->fresh()->response_payload['message_id']]),
+            $this->message('typed-mismatch')];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+        $this->assertSame('succeeded', $event->fresh()->status);
+        $this->assertSame('confirmation_review:template_interaction_mismatch', $event->fresh()->last_error);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $admin->permissions()->sync(Permission::whereIn('key', ['orders.view', 'order_automation.view'])->pluck('id'));
+        $this->actingAs($admin)->get('/admin/order-automation')->assertOk()->assertSee('تأكيد يحتاج مراجعة');
     }
 
     public function test_template_total_is_after_discount_including_shipping(): void
