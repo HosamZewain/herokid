@@ -208,7 +208,7 @@ class BostaController extends Controller
         } catch (Throwable $exception) {
             Log::warning('Bosta request requires review', ['exception_type' => $exception::class]);
 
-            return back()->withErrors(['shipments' => 'تعذر إنشاء طلب الاستلام في Bosta. لم يتم تسجيل Pickup غير مكتمل.']);
+            return back()->withErrors(['shipments' => 'تعذر إتمام طلب الاستلام. راجع سجل المحاولات وBosta قبل إعادة الطلب لتجنب التكرار.']);
         }
 
         return back()->with('success', 'تم إنشاء طلب الاستلام في Bosta وربطه بالشحنات المختارة.');
