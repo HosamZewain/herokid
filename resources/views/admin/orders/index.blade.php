@@ -279,6 +279,8 @@
                 </form>
             </div>
 
+            @include('admin.orders._operational-statistics')
+
             @can('orders.statistics.view')
             <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
@@ -321,6 +323,8 @@
                 </div>
             </section>
 
+            @endcan
+
             @if($activeTags->isNotEmpty())
                 <section aria-label="العلامات النشطة على الطلبات" class="rounded-2xl border border-fuchsia-100 bg-white px-4 py-3 shadow-sm">
                     <div class="flex flex-wrap items-center gap-2">
@@ -341,7 +345,6 @@
                     </div>
                 </section>
             @endif
-            @endcan
 
             <div class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
                 <div class="divide-y divide-gray-100 md:hidden">

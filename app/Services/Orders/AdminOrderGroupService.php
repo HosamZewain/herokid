@@ -109,20 +109,19 @@ class AdminOrderGroupService
 
         $stats = null;
 
+        // Share the resolved checkout keys across cards: repeating nested catalog
+        // and lifecycle predicates inside each aggregate is expensive on MySQL.
+        $allKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
         if ($includeStatistics) {
-            // Resolve the filtered checkout set once: embedding this filter twice in the
-            // financial aggregate makes MySQL repeatedly evaluate its catalog predicates.
-            $allKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
             $stats = app(OrderFinancialStatistics::class)->summarize($allKeys, $includeDeleted);
         }
 
-        $activeTags = $includeStatistics
-            ? $this->activeTagCounts($request, $includeDeleted, $catalogType, $lifecycle)
-            : collect();
+        $activeTags = $this->activeTagCounts($request, $includeDeleted, $catalogType, $lifecycle, $request->filled('tag_id') ? null : $allKeys);
 
         return [
             'groups' => $groups,
             'stats' => $stats,
+            'operationalStats' => $this->operationalStatistics($request, $allKeys, $includeDeleted, $catalogType, $lifecycle),
             'trash' => $request->query('view') === 'trash',
             'catalogType' => $catalogType,
             'lifecycle' => $lifecycle,
@@ -151,20 +150,78 @@ class AdminOrderGroupService
         ];
     }
 
+    /** Count the results of each card's link without querying financial aggregates. */
+    private function operationalStatistics(Request $request, Collection $matchingKeys, bool $includeDeleted, string $catalogType, string $lifecycle): array
+    {
+        $activeRequest = $request->duplicate(array_merge($request->except(['page', 'view']), ['lifecycle' => 'active']));
+        $activeKeys = $lifecycle === 'active' ? $matchingKeys : $this->groupedFilteredQuery($activeRequest, false, $catalogType, 'active')
+            ->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        if (! $request->filled('assignment') || $request->query('assignment') === 'unassigned') {
+            $unassigned = Order::query()->whereIn('checkout_group_key', $activeKeys)
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('order_group_assignments')
+                    ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'))
+                ->distinct()->count('checkout_group_key');
+        } else {
+            $unassignedRequest = $activeRequest->duplicate(array_merge($activeRequest->query(), ['assignment' => 'unassigned']));
+            $unassigned = $this->groupedFilteredQuery($unassignedRequest, false, $catalogType, 'active')
+                ->distinct()->count('checkout_group_key');
+        }
+
+        // Status cards replace only the order-status filter. Count the same child
+        // status matches as the existing list filter, including mixed checkouts.
+        $statusRequest = $request->duplicate($request->except(['status', 'page']));
+        $statusRows = $this->filteredQuery($statusRequest, $includeDeleted, $catalogType, $lifecycle);
+        if ($includeDeleted) {
+            $statusRows->where(fn ($q) => $q->whereNull('orders.deleted_at')->orWhereNotExists(fn ($live) => $live
+                ->selectRaw('1')->from('orders as operational_live')
+                ->whereColumn('operational_live.checkout_group_key', 'orders.checkout_group_key')
+                ->whereNull('operational_live.deleted_at')));
+        }
+        $byStatus = collect();
+        $mixed = 0;
+        $statusRows->select(['checkout_group_key', 'status'])->distinct()->toBase()->get()
+            ->groupBy('checkout_group_key')->each(function ($rows) use ($byStatus, &$mixed): void {
+                $statuses = $rows->pluck('status')->filter()->unique();
+                foreach ($statuses as $status) {
+                    $byStatus->put($status, (int) $byStatus->get($status, 0) + 1);
+                }
+                if ($statuses->count() > 1) {
+                    $mixed++;
+                }
+            });
+        $byStatus->put('mixed', $mixed);
+        $labels = OrderStatusRegistry::labels(OrderStatusRegistry::TYPE_ORDER);
+        foreach ($byStatus->keys() as $status) {
+            if ($status !== 'mixed' && ! array_key_exists($status, $labels)) {
+                $labels[$status] = OrderStatusRegistry::label(OrderStatusRegistry::TYPE_ORDER, $status);
+            }
+        }
+        $labels['mixed'] = 'حالات متعددة';
+
+        return [
+            'active_checkouts' => $activeKeys->count(),
+            'unassigned_checkouts' => (int) $unassigned,
+            'statuses' => collect($labels)->map(fn ($label, $status) => [
+                'key' => $status, 'label' => $label, 'count' => (int) $byStatus->get($status, 0),
+            ])->values()->all(),
+        ];
+    }
+
     /** @return Collection<int, OrderTag> */
     private function activeTagCounts(
         Request $request,
         bool $includeDeleted,
         string $catalogType,
         string $lifecycle,
+        ?Collection $resolvedKeys = null,
     ): Collection {
-        $matchingCheckoutKeys = $this->groupedFilteredQuery(
+        $matchingCheckoutKeys = $resolvedKeys ?? $this->groupedFilteredQuery(
             $request,
             $includeDeleted,
             $catalogType,
             $lifecycle,
             applyTagFilter: false,
-        )->select('checkout_group_key')->distinct();
+        )->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
 
         return OrderTag::query()
             ->join('order_checkout_reference_tag as active_tag_assignments', 'active_tag_assignments.order_tag_id', '=', 'order_tags.id')
