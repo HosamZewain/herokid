@@ -1,10 +1,14 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 19:05 UTC / 21:05 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 21:02 UTC / 23:02 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Identity/payment continuation — prepared, not live
+## Identity/payment continuation — deployed; owner trial blocked at AI
 
-31 October2026: [payment-tolerant identity contexts and read-only candidate preflight](automation-identity-payment-readiness-2026-10-31.md) are prepared on `codex/order-process-trial-readiness`. Live SHA remains `07cc053`; no new deployment, activation, permission grant or paid/message trial. Recording a real payment must not invalidate identity preview/confirmation; pricing/contact/media changes still stop for review. Trial requires an owner-selected story order, exact scope/budget/recipient review and activation authority. Existing pending execute-only permission approval is not activation approval.
+31 October 2026,20:50:10 UTC: **`ed028006b3079c2bfe91cc6bd3d82bfcc261cf99`** deployed after explicit owner approval to publish and run one full test. Payment-tolerant identity contexts and read-only preflight are live. All eight changed hashes, PHP8.3 syntax, HTTPS/home/cart and service checks passed; no maintenance or migrations. [Trial evidence and exact stop boundary](automation-owner-identity-trial-2026-10-31.md).
+
+Owner test **HK10-633 (2701)** was created using canonical admin creation with two verified copies of an existing public demo image, no customer photos. Confirmation was delivered once and the owner's real response changed it to `new_confirmed`. Workflow8/revision1, run1, identity task1 reached canonical generation attempt656; it failed20:55:10 UTC with no output, billing unknown, original provider diagnostics unavailable. **Do not retry/reset/replay attempt656 or claim identity success.** Run is blocked for review; there are no other process runs or enabled workflows. A second potentially billable attempt requires a new explicit decision acknowledging uncertainty.
+
+Trial runtime is pinned to order2701/workflow8, after_order_id2700, legacy confirmation owner retained. Only owner1 received temporary activate/execute rights for this bounded trial. Two new Supervisor programs use existing EC2 and `autostart=false`; AI timeout240 < lease270 < retry_after300, provider timeout180/one attempt. Trial config does not enable other customer workflows. Preserve run/attempt/order/media and restore temporary permissions/config when the trial closes. Checkpoint `/home/ubuntu/herokid-before-ed02800` includes pretrial config and rights evidence; off-instance production backup `herokid-20261031T205022Z.sql.gz`,41,329,927 bytes, local/S3 SHA256 verified. No payment, shipping or printing was executed.
 
 ## Order message history and safe manual resend — deployed31 October2026
 
@@ -54,9 +58,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`07cc0535673d59f8492d91adb1390f09573c6664`**, detached HEAD |
+| Live release verified by SSH | **`ed028006b3079c2bfe91cc6bd3d82bfcc261cf99`**, detached HEAD |
 | Release branch | `codex/order-process-trial-readiness`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `daae3bd537bc80c6675d7acc923f74b3275b9123` (Bosta lifecycle); see retry/schema rollback boundaries above |
+| Previous release | `07cc0535673d59f8492d91adb1390f09573c6664` (message history); preserve process context v2 and trial side effects |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |

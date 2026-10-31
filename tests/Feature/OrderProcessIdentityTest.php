@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Exceptions\GptImageException;
 use App\Jobs\GenerateProcessIdentity;
 use App\Models\AiModel;
 use App\Models\AiProvider;
@@ -32,7 +33,9 @@ use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\OrderPaymentService;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -397,6 +400,41 @@ class OrderProcessIdentityTest extends TestCase
         $this->assertSame('uncertain', $task->fresh()->status);
         $this->assertSame('unknown', $task->fresh()->attempt->billing_status);
         $this->assertSame('blocked', $run->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_provider_failure_diagnostics_are_retained_without_sensitive_response_or_retry(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $response = new \Illuminate\Http\Client\Response(new Response(429, [], '{"error":{"message":"private customer payload"}}'));
+        $error = new GptImageException('private exception text', 'insufficient_quota', 'req_synthetic', true,
+            new RequestException($response));
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow($error);
+        $task = OrderProcessIdentity::firstOrFail();
+        app(ProcessIdentityService::class)->generate($task->id);
+        app(ProcessIdentityService::class)->generate($task->id);
+        $attempt = $task->fresh()->attempt;
+        $this->assertSame('req_synthetic', $attempt->api_request_id);
+        $this->assertSame(['provider_error_code' => 'insufficient_quota', 'provider_request_id' => 'req_synthetic', 'provider_http_status' => 429], $attempt->response_metadata['failure_diagnostics']);
+        $this->assertStringNotContainsString('private', json_encode($attempt->response_metadata));
+        $this->assertSame('unknown', $attempt->billing_status);
+        $this->assertSame('uncertain', $task->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_provider_diagnostic_identifiers_reject_unstructured_and_overlong_values(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(
+            new GptImageException('private payload', 'private customer email@example.com', str_repeat('x', 121), true));
+        $task = OrderProcessIdentity::firstOrFail();
+        app(ProcessIdentityService::class)->generate($task->id);
+        $attempt = $task->fresh()->attempt;
+        $this->assertNull($attempt->api_request_id);
+        $this->assertSame(['provider_error_code' => null, 'provider_request_id' => null, 'provider_http_status' => null], $attempt->response_metadata['failure_diagnostics']);
+        $this->assertSame('unknown', $attempt->billing_status);
         Http::assertNothingSent();
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services\OrderAutomation\Process;
 
 use App\DTOs\Ai\GptImageRequest;
+use App\Exceptions\GptImageException;
 use App\Jobs\GenerateProcessIdentity;
 use App\Models\AiModel;
 use App\Models\ChildIdentityRequest;
@@ -17,6 +18,7 @@ use App\Services\ChildIdentity\ChildIdentityAggregateService;
 use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\OrderAutomation\WorkflowInputs;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -172,15 +174,35 @@ class ProcessIdentityService
                 $task->update(['status' => $valid ? 'succeeded' : 'uncertain', 'lease_until' => null]);
                 app(ChildIdentityAggregateService::class)->recalculate($task->attempt->identityRequest);
             });
-        } catch (Throwable) {
-            DB::transaction(function () use ($task, $submitted) {
+        } catch (Throwable $error) {
+            // Preserve diagnostics without storing provider bodies, prompts or customer data.
+            // A diagnostic receipt does not establish billing or permit an automatic retry.
+            $diagnostics = $this->failureDiagnostics($error);
+            DB::transaction(function () use ($task, $submitted, $diagnostics) {
                 OrderProcessRun::lockForUpdate()->findOrFail($task->run_id);
                 $task = OrderProcessIdentity::lockForUpdate()->findOrFail($task->id);
                 $task->update(['status' => $submitted ? 'uncertain' : 'blocked', 'error_code' => $submitted ? 'identity_result_uncertain' : 'identity_inputs_failed']);
                 $task->attempt->update(['status' => 'failed', 'completed_at' => now(), 'billing_status' => $submitted ? 'unknown' : 'not_billable',
-                    'cost_usd' => $submitted ? null : 0, 'cost_calculation_method' => $submitted ? 'unknown' : 'calculated', 'error_code' => $task->error_code]);
+                    'cost_usd' => $submitted ? null : 0, 'cost_calculation_method' => $submitted ? 'unknown' : 'calculated', 'error_code' => $task->error_code,
+                    'api_request_id' => $diagnostics['provider_request_id'],
+                    'response_metadata' => array_merge($task->attempt->response_metadata ?? [], ['failure_diagnostics' => $diagnostics])]);
             });
         }
+    }
+
+    private function failureDiagnostics(Throwable $error): array
+    {
+        $safeIdentifier = static fn (?string $value): ?string => $value !== null
+            && preg_match('/\A[A-Za-z0-9_.:-]{1,120}\z/D', $value) === 1 ? $value : null;
+        $providerError = $error instanceof GptImageException ? $error : null;
+        $previous = $providerError?->getPrevious();
+        $httpStatus = $previous instanceof RequestException ? $previous->response->status() : null;
+
+        return [
+            'provider_error_code' => $safeIdentifier($providerError?->errorCode),
+            'provider_request_id' => $safeIdentifier($providerError?->providerRequestId),
+            'provider_http_status' => $httpStatus !== null && $httpStatus >= 100 && $httpStatus <= 599 ? $httpStatus : null,
+        ];
     }
 
     public function ready(OrderProcessRun $run): bool

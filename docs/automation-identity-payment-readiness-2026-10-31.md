@@ -1,6 +1,6 @@
 # Identity review and payment readiness — 31 October 2026
 
-Status: **prepared, not deployed or activated**. This continues the owner-requested automation work after message-history release `07cc0535673d59f8492d91adb1390f09573c6664`, with documentation base `524627e`. Current isolated branch: `codex/order-process-trial-readiness`.
+Status: **deployed as ed02800 at20:50:10 UTC; authorized owner trial attempted and blocked at AI**. See [current trial evidence](automation-owner-identity-trial-2026-10-31.md). The preparation/approval descriptions below are historical, superseded by that report. This continues the owner-requested automation work after message-history release `07cc0535673d59f8492d91adb1390f09573c6664`, with documentation base `524627e`. Current isolated branch: `codex/order-process-trial-readiness`.
 
 ## Revalidated production
 
