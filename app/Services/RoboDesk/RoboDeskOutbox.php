@@ -31,8 +31,8 @@ class RoboDeskOutbox
                 'aggregate_id' => $checkoutGroupKey ?: ($orderId ? (string) $orderId : null),
                 'checkout_group_key' => $checkoutGroupKey,
                 'order_id' => $orderId,
-                'status' => $allowed && config('robodesk.enabled')
-                    && ($eventType === 'order.pending_confirmation' || filled(config('robodesk.outbound_secret'))) ? 'pending' : 'held',
+                'status' => $allowed && ($eventType === 'order.pending_confirmation'
+                    || (config('robodesk.enabled') && filled(config('robodesk.outbound_secret')))) ? 'pending' : 'held',
                 'payload' => $payload,
                 'available_at' => now(),
             ],

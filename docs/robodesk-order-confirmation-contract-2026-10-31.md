@@ -1,139 +1,74 @@
-# HeroKid ↔ RoboDesk: customer order confirmation, phase 1
+# HeroKid order confirmation — polling contract, 31 October 2026
 
-Prepared 31 October 2026. **Not deployed or enabled.** This is an implementation handoff to RoboDesk's agent, not authorization to send real customer messages.
+**Prepared, not deployed or enabled. Supersedes the earlier callback/HMAC proposal entirely.** Technical evidence below is the owner's relayed RoboDesk code inspection, not a live send verified by HeroKid. RoboDesk's agent subsequently confirmed the three message fields live on production using real-number read-only checks; HeroKid has not made a real template send. The first populated templateName for this template remains to be observed during the approved pilot. No HeroKid-specific RoboDesk code, callback, shared HMAC secret or AI interception is required.
 
-## Verified facts and scope
+## Scope
 
-The owner relayed RoboDesk's code/Meta inspection on 31 October: `herokid_order_confirmation`, template id `1089097637507714`, UTILITY, APPROVED, Meta language `ar`; RoboDesk must receive **`ar-EG`** (plain `ar` falls back to English). Four POSITIONAL variables: customer name, order number, details, numeric value including delivery after discounts. Button **تأكيد الطلب** is QUICK_REPLY with no variable. RoboDesk receives its text and the original template message id, but has no callback rule yet.
+One confirmation per checkout, all its currently `new` parts move together to `new_confirmed`. Labels: **طلب جديد غير مؤكد → طلب جديد مؤكد**. Deleted/cancelled/advanced orders or changed customer phones cannot be confirmed. No payments, generation, shipping, acknowledgement message or other automation is triggered. RoboDesk's normal AI acknowledgement is not evidence that HeroKid has already updated the order.
 
-The presumed `/api/integrations/herokid/v1/events` endpoint does **not** exist on RoboDesk. Phase one does not use it. Existing HeroKid encrypted conversation credentials authenticate the actual send endpoint. Reading conversations already works; HeroKid's HMAC inbound-event integration was separately disabled/unconfigured at the read-only inspection.
+## Send sequence
 
-Only `new` → `new_confirmed` is allowed through this confirmation endpoint. Display labels: **طلب جديد غير مؤكد** → **طلب جديد مؤكد**. Every active part of the same checkout transitions together, one confirmation per purchase. No payment, shipping, generation, preview approval or rejection action is enabled by this phase.
+Use existing HeroKid encrypted conversation-user credentials and the existing Authorization algorithm. Trusted base `https://hero-kid.robodesk.ai/api/conversation`; no redirects or credential logging.
 
-## 1. Outbound template API (existing RoboDesk API)
+1. `GET /messagesByPhone?phone=2010XXXXXXXX&channel=WhatsApp`. Verify returned phone. Read `interactions[].id` and boolean `closed`; `_id` is NOT the lookup field.
+2. Close open interactions (including agent/AI conversations, as the owner specified): `POST /close`:
+   ```json
+   {"closeData":{"conversations":[{"_id":"synthetic-open-id"}],"isBulk":true},"note":null}
+   ```
+   Require successful HTTP and literal boolean `success:true`. Failed/uncertain close stops the sequence; do not send afterwards.
+3. `POST /start/sendMsg`:
+   ```json
+   {
+     "channel":"WhatsApp",
+     "to":"2010XXXXXXXX",
+     "language":"ar-EG",
+     "templateMessage":"تأكيد طلب HeroKid HK10-22",
+     "template":{
+       "templateName":"herokid_order_confirmation",
+       "text":"$1 $2 $3 $4",
+       "data":["اسم العميل","HK10-22","قصة × 1 · كتاب تلوين × 2","450.00"]
+     }
+   }
+   ```
+   Do not send `procedureId`. Meta template language is `ar`, but RoboDesk needs `ar-EG`. Approved template ID `1089097637507714`, UTILITY, four positional variables: customer, exact short order reference, product/story details with quantities, numeric after-discount total INCLUDING shipping. The template supplies currency/shipping wording itself.
+4. Retain only response top-level `_id` as `interaction_id`, `channelId` as `message_id`. Both must be present; wamid begins `wamid.`. Acceptance is not delivery.
+5. Exact HTTP 501 plain text `Customer already have another interaction`: known no-send race, repeat lookup/close/send once. Second identical 501 is blocked. HTTP 409: disabled template, blocked. Any other error/timeout/invalid receipt: uncertain, no automatic retry. No provider idempotency exists. Never retry using absence of matching text in a limited history window as proof of no send.
 
-`POST https://hero-kid.robodesk.ai/api/conversation/start/sendMsg`
+A durable compare-and-set claims the event before even closing a conversation; duplicate delivery cannot repeat an attempted event. Same-phone send sequences and history sync share the existing contact lock. At most six 15-second HTTP calls, job timeout 110 seconds, contact lock 130 seconds; reservation retry must exceed these (existing documented Redis retry 960 seconds, reverify on release). Lock contention before a claim only redispatches unattempted work. Worker crashes leave processing evidence requiring review, never automatic resend.
 
-Existing conversation-user Authorization, generated by the existing HeroKid adapter; never disclose or log it.
+## Polling and correlation
 
-```json
-{
-  "channel": "WhatsApp",
-  "to": "2010XXXXXXXX",
-  "language": "ar-EG",
-  "templateMessage": "تأكيد طلب HeroKid HK10-22",
-  "template": {
-    "templateName": "herokid_order_confirmation",
-    "text": "$1 $2 $3 $4",
-    "data": ["اسم العميل", "HK10-22", "قصة كرة القدم × 1 · كتاب تلوين × 2", "450.00"]
-  }
-}
-```
+Reuse the existing conversation refresh queue/scheduler and `GET /messagesByPhone` with its saved `after` cursor. All customer data remains local to existing protected storage. Metadata is encrypted alongside existing encrypted messages and omitted from UI/API serialization.
 
-Use the exact supplied short order reference (variable 2), quantities and total. Do not append currency/shipping wording to variable 4: the approved template already supplies it. Do not add customer photos/child identities/private links to this request.
+New generic message fields, with explicit `null` when unavailable:
 
-Verified by RoboDesk's agent from code: call **without `procedureId`**. HTTP 200 arrives after Meta acceptance and returns the conversation document. Retain only top-level `channelId` (original template wamid) and `_id` (interaction id). Example:
+- `channelId`: this message's wamid.
+- `replyTo`: original template wamid for a button/reply.
+- `templateName`: name on an outbound template message.
 
-```json
-{"_id":"synthetic-interaction-id","channelId":"wamid.ORIGINAL_TEMPLATE_MESSAGE"}
-```
+Existing fields used: `id`, `interactionId`, `direction`, `text`, `date`, `channel`, `attachments`. `date` must be an unambiguous ISO-8601 instant with offset/Z, preserving source milliseconds. Missing new fields are NOT treated as explicit null: old responses cannot silently enable typed matching.
 
-Do not retain/log the rest of the response (conversation, customer and procedure details). If either id is absent, the result is uncertain, not a successful receipt.
+A candidate is inbound `direction:in`, trimmed text exactly `تأكيد الطلب`:
 
-**Known activation blocker:** HTTP 501 with plain text `Customer already have another interaction` means no message was sent because a conversation is already open. This is common and must be supported by RoboDesk before activating phase one for all customers. Never close an existing conversation, change its procedure, or start a duplicate interaction as a workaround. HTTP 409 means the template is disabled; show an internal blocked state. Other errors/timeouts/malformed receipts are conservatively uncertain.
+- Non-null `replyTo`: match exactly one successfully sent HeroKid request by its original wamid and phone. Different inbound interaction is allowed. If replyTo does not match a stored sent template for this phone, treat it as typed confirmation and apply the interaction rule below. Ordinary quoted messages can also populate replyTo; outbound AI/flow replies must never be treated as customer confirmations.
+- Null or non-template `replyTo`: same interaction, latest actual `herokid_order_confirmation` template strictly before the inbound message. Use the saved outbound message's wamid and timestamp, then match the known send receipt and phone. Do not use mutable conversation variable `2`, latest order for a phone, or local HTTP receipt time as the template's send time.
+- Typed matching waits for outbound template evidence in history. If that message is outside the provider history window, absent, untracked, or tied for latest timestamp, hold for reconciliation; never guess or fall back to an earlier order. This stricter evidence rule prevents cross-order confirmation.
+- Saved messages are reconsidered on subsequent empty delta pages, so an inbound message read just before receipt persistence is not lost. Cursor/history/confirmation changes commit in the same DB transaction. Invalid metadata cannot advance the cursor.
+- Original confirmation timestamp/logs are idempotent. No regression after cancellation, deletion, contact change or later order progress. History is preserved; no customer messages or old events are deleted.
 
-**No provider idempotency exists.** HeroKid durably claims each send before HTTP, tries once, and records uncertain outcomes for reconciliation. It does not automatically retry timeouts, ambiguous responses, crashed attempts or old held events. A timeout retry can send twice (including after an interaction closes), so the suggestion to retry “no answer” is intentionally not adopted. Unknown/processing/attempted events cannot be released through the generic retry button.
+Current normal polling cadence remains **10 minutes per active phone plus scheduler/queue/backoff delays**, with the existing global ceiling of 20 requests/minute. This is not instantaneous confirmation or a guaranteed latency. No extra timer/resource or parallel poll loop. Existing history refresh permissions remain. No callback endpoint is added; legacy `order.confirmed` webhook events are rejected.
 
-`ROBODESK_CONFIRMATION_CONTRACT_READY` remains false until RoboDesk supports open interactions and implements/tests the quick-reply callback. If a new endpoint or opt-in parameter is added, return its exact contract before enabling or changing the HeroKid adapter. Do not pretend it already exists.
+## Deployment and activation gates
 
-## 2. Required RoboDesk quick-reply handler
+No current authorization to deploy or send. Baseline AWS SHA reverified `46f8e3e260dc6319845e1f309218340837178d70`.
 
-Implement at the inbound WhatsApp webhook stage, before ordinary AI handling:
+1. Field rollout is reported confirmed by the RoboDesk agent in the owner's latest update. Preserve that evidence; still verify actual outbound templateName/wamid/interaction/time during the approved pilot and clarify cursor completeness before broad activation. Local mocks alone do not prove provider behavior.
+2. Revalidate live code/drift, private recovery checkpoint and fresh off-instance backup. Review exact release diff. Apply only the status-definition migration and encrypted-message-metadata migration by explicit path; no unrelated pending migrations or history backfill. Additive down methods retain referenced evidence.
+3. Keep legacy `ROBODESK_ENABLED=false`; no inbound/outbound secret needed. Existing encrypted conversation settings remain unchanged. New switches default disabled, contract false, audience trial with empty allowlist.
+4. After owner approval for a defined pilot, use `ROBODESK_CONFIRMATION_AUDIENCE=trial` and `ROBODESK_CONFIRMATION_TRIAL_PHONE_HASHES=<comma-separated SHA256 of canonical +E164 approved phone(s)>`. Provision securely, never put actual numbers in reports. Empty/malformed allowlist blocks readiness. Capture a fresh `MAX(orders.id)` INCLUDING deleted rows as `ROBODESK_CONFIRMATION_AFTER_ORDER_ID`. Set enabled/contract flags only after those gates pass. The pilot authorizes closing any open conversation for its approved number and sending one new-order template; no synthetic production order should be created without explicit authorization.
+5. `ROBODESK_CONFIRMATION_AUDIENCE=all_new` requires separate explicit broad activation approval. Creation-time eligibility and the fresh boundary prevent replay of old held events and checkouts. Orders created while disabled/outside the pilot stay held permanently unless separately reviewed; no catch-up sweep.
+6. Rebuild relevant config/routes/Blade caches narrowly; gracefully refresh only default and conversation workers after checking in-flight work and timeouts. Preserve stopped order automation/AI workers. Revalidate scheduler, protected encrypted data, exact SHA/hashes, HTTPS, UI and new logs.
+7. Observe HTTP receipt, actual matching polling evidence and the DB status transition separately. Do not call AI acknowledgement or provider acceptance proof of completion. No paid synthetic send needed for local validation.
+8. Kill switch: disable `ROBODESK_CONFIRMATION_ENABLED`, refresh cached config/affected workers gracefully; both sending and confirmation processing stop, ordinary conversation history continues. In-flight actions may finish. Retain all messages, requests, new statuses and metadata. Review unknown/processing sends with RoboDesk; never blind retry. Code rollback must preserve DB evidence and new status references, not restore an old database.
 
-1. Verify the existing Meta webhook and extract the actual sender, inbound message id, quick-reply text and replied-to template message id. Do not trust free text claiming an order number.
-2. Preserve `context.id` / stored `replyTo` directly from the inbound webhook as the original template wamid, plus interaction `_id`. `messagesByPhone` does not expose these ids; it is not used for this callback. Identify the specific outgoing `herokid_order_confirmation` message by the **original template message id**; read variable 2 from that saved outgoing message. Do **not** read the mutable conversation variable `2`, choose the latest order, or use a phone-only lookup. Two orders for one phone must stay independent.
-3. Only the actual QUICK_REPLY **تأكيد الطلب** for that template triggers confirmation. A typed identical sentence does not qualify. Do not also send it to AI or trigger other workflows.
-4. Persist one callback UUID for each inbound WhatsApp message id. Retry the same callback id/body; refresh only the authentication timestamp/signature. Keep a durable callback receipt and bounded retry/backoff.
-5. Call the signed HeroKid endpoint below. Mark confirmed only after 202 or the idempotent 200 receipt. On auth/validation/conflict errors, expose a safe internal review state rather than asserting success to the customer.
-6. No live send/callback against a customer order for development testing. Use synthetic fixtures and mocked Meta/HTTP. Request owner approval for any real controlled pilot.
-
-## 3. HeroKid callback endpoint (prepared; pending deployment)
-
-`POST https://hero-kid.com/api/integrations/robodesk/v1/order-confirmations`
-
-Content-Type: application/json
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "order_number": "HK10-22",
-  "template_message_id": "wamid.ORIGINAL_OUTBOUND_TEMPLATE_MESSAGE",
-  "interaction_id": "synthetic-interaction-id",
-  "sender_phone": "2010XXXXXXXX",
-  "message_id": "wamid.INBOUND_BUTTON_CLICK",
-  "contact_id": "optional-provider-contact-id",
-  "conversation_id": "optional-provider-conversation-id"
-}
-```
-
-`id`: UUID, stable across retries of this particular button click. The five binding fields (`order_number`, `template_message_id`, `interaction_id`, `sender_phone`, `message_id`) are required. Optional contact/conversation ids must be strings ≤255 characters. Sender comes from verified WhatsApp metadata, not AI output or the conversation's latest customer-entered text.
-
-**There is no caller-selectable target status.** HeroKid fixes the first transition to `new_confirmed`. Unrelated `target_status` input cannot ship/deliver/cancel an order.
-
-### Signature
-
-Use a new dedicated shared inbound secret, provisioned securely between the two servers. Do not put it in a URL, Git, chat, browser storage or logs. This is separate from RoboDesk's encrypted conversation-user password and from the unused legacy outbound-event secret.
-
-Headers:
-
-- `X-RoboDesk-Timestamp`: current Unix seconds (UTC).
-- `X-RoboDesk-Event-Id`: exactly the body `id`.
-- `X-RoboDesk-Signature`: lowercase hex HMAC-SHA256 described below.
-
-```text
-body_hash = SHA256_HEX(exact raw UTF-8 JSON request body)
-signed_text = timestamp + "." + event_id + "." + body_hash
-signature = HMAC_SHA256_HEX(shared_inbound_secret, signed_text)
-```
-
-Do not parse/re-encode the body after calculating its signature. Timestamp tolerance is 300 seconds. Refresh timestamp/signature on a later retry; keep the same body and event id.
-
-### Responses and state rules
-
-- `202 {"accepted":true}`: confirmation handled atomically. First valid click records confirmation and changes all `new` checkout parts to `new_confirmed`.
-- `200 {"accepted":true,"duplicate":true}`: same callback already committed; do not repeat side effects.
-- A second valid click with a new UUID is harmless: the original confirmation timestamp/logs remain; a later workflow state is never regressed.
-- `401`: missing/invalid/expired signature. Correct credentials/clock, never bypass verification.
-- `403`: sender does not match the phone stored on the sent template.
-- `409`: unknown/mismatched original message, changed customer phone, deleted/merged/cancelled/advanced checkout, or reused callback id with different content. Review the message mapping; never fallback to another order. A just-sent receipt may race the outbound HTTP response: a small bounded retry of the same callback is safe, followed by review if unresolved.
-- `422`: missing/invalid fields or action outside confirmation-only scope.
-- `503`: HeroKid inbound integration disabled. Preserve callback for later reconciliation; do not claim success.
-
-The receipt and order updates commit in one DB transaction. Matching original-message locks serialize simultaneous different callback UUIDs. No stale `processing` receipt can permanently acknowledge an uncommitted business change.
-
-## 4. Acceptance required from RoboDesk agent
-
-Return (without secrets/customer payloads):
-
-- Implement sending this approved template inside an existing open interaction; return the actual endpoint/request/response contract. Preserve normal AI conversations; do not close/recreate them. If the current endpoint changes, keep its normal callers compatible.
-- Preserve the actual template wamid and interaction id in the receipt, including the open-interaction case. No provider-side idempotency exists today; if adding it, document and test it explicitly.
-- Exact callback implementation location, durable message→order binding, AI interception behavior and retry policy.
-- Synthetic tests: two orders/same phone, duplicate click, delayed click after cancellation/advancement, wrong sender, wrong original message, unavailable HeroKid, and callback retries.
-- Secure configuration location for the shared inbound secret (path/key name only).
-
-## 5. HeroKid rollout gates — owner approval required
-
-Code is isolated from the dirty primary checkout and based on live `46f8e3e260dc6319845e1f309218340837178d70`. Nothing in this document activates sending.
-
-After both sides' contract/tests pass and the owner approves deployment/activation:
-
-1. Revalidate live SHA/drift and a fresh off-instance DB backup (status-definition migration changes reference data).
-2. Apply only `2026_10_31_120000_add_confirmed_new_order_status.php`; it relabels `new` and adds `new_confirmed`. No order/status history is rewritten. Keep the new definition on code rollback; never delete historical references.
-3. Preserve the existing encrypted RoboDesk conversation settings. Provision `ROBODESK_INBOUND_SECRET` securely, leave the unused outbound-event secret unset.
-4. Prepare `ROBODESK_ENABLED=true`, `ROBODESK_CONFIRMATION_ONLY=true`, `ROBODESK_CONFIRMATION_ENABLED=true`, `ROBODESK_CONFIRMATION_CONTRACT_READY=true`, and `ROBODESK_CONFIRMATION_AFTER_ORDER_ID=<fresh MAX(orders.id), including deleted>`. No fixed id is supplied here. Publish current config/route/Blade caches narrowly and gracefully refresh only affected default workers, preserving in-flight jobs. Do not start the stopped order-automation/AI workers.
-5. The boundary and `eligible_at_creation` marker jointly prevent historical sends and additions to older checkouts. At read-only inspection, 1,961 historical confirmation events were held; preserve them without replay.
-6. No pre-activation catch-up: events created while disabled stay held. Do not silently sweep them later. Reconcile any activation-boundary orders separately with owner approval.
-7. Observe new real orders read-only, receipt mapping, callback logs/status transitions, queue failures and the new `/admin/order-automation` panel. Do not label provider HTTP acceptance as WhatsApp delivery.
-8. Kill switch: disable confirmation sending and gracefully refresh affected cached config/workers; in-flight sends may finish. Keep signed inbound confirmation available for already-sent messages unless a security incident requires stopping it too. Unknown/processing attempts require provider reconciliation, never a blind send retry.
-
-No new recurring AWS resources. WhatsApp template sends can incur existing Meta/RoboDesk usage charges; not a zero-message-cost claim.
+Zero new recurring AWS infrastructure. Existing Meta/RoboDesk template usage charges still apply when activated; encrypted metadata occupies existing DB/backup storage.

@@ -11,12 +11,15 @@ return [
     'confirmation_only' => (bool) env('ROBODESK_CONFIRMATION_ONLY', true),
     'confirmation' => [
         'enabled' => (bool) env('ROBODESK_CONFIRMATION_ENABLED', false),
+        // Default to a bounded owner-approved pilot, never all customers by accident.
+        'audience' => env('ROBODESK_CONFIRMATION_AUDIENCE', 'trial'),
+        'trial_phone_hashes' => array_values(array_filter(explode(',', (string) env('ROBODESK_CONFIRMATION_TRIAL_PHONE_HASHES', '')))),
         // Capture MAX(orders.id), including deleted rows, immediately before activation.
         'after_order_id' => env('ROBODESK_CONFIRMATION_AFTER_ORDER_ID'),
         'template' => 'herokid_order_confirmation',
         // RoboDesk maps ar-EG to Meta ar; sending ar directly falls back to English.
         'language' => 'ar-EG',
-        // Enable only after message-id receipt + quick-reply callback contract is verified.
+        // Enable only after message-id receipt + polling metadata contract is verified.
         'contract_ready' => (bool) env('ROBODESK_CONFIRMATION_CONTRACT_READY', false),
     ],
     'events_path' => '/api/integrations/herokid/v1/events',

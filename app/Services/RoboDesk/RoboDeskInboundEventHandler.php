@@ -27,7 +27,7 @@ class RoboDeskInboundEventHandler
 
     private function confirmCheckout(array $data): void
     {
-        app(OrderConfirmationService::class)->confirm($data);
+        throw ValidationException::withMessages(['type' => 'Order confirmation uses polling only.']);
     }
 
     private function rejectCheckout(array $data): void

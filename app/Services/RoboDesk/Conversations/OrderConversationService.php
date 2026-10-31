@@ -5,6 +5,7 @@ namespace App\Services\RoboDesk\Conversations;
 use App\Models\Order;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\RoboDesk\OrderConfirmationPoller;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +45,8 @@ class OrderConversationService
             if ($before !== null) {
                 $cursor = $conversation->messages()->find($before);
                 abort_unless($cursor, 422, 'مؤشر المحادثة غير صالح.');
-                $cursorDate = $cursor->sent_at->format('Y-m-d H:i:s.v');
+                // Preserve stored precision for equal-time pagination on SQLite and MySQL.
+                $cursorDate = $cursor->getRawOriginal('sent_at');
                 $query->where(fn ($q) => $q->where('sent_at', '<', $cursorDate)
                     ->orWhere(fn ($q) => $q->where('sent_at', $cursorDate)->where('id', '<', $cursor->id)));
             }
@@ -114,6 +116,7 @@ class OrderConversationService
                         $message->fill($row)->save();
                     }
                 }
+                app(OrderConfirmationPoller::class)->process($conversation);
                 // A limited v1 window is never grounds for removing older saved messages.
                 $changes = ['last_synced_at' => now(), 'sync_state' => 'ready', 'error_code' => null];
                 if ($full || $page->cursorReset) {
@@ -199,6 +202,17 @@ class OrderConversationService
                 // Provider metadata is opaque plain text, not an authorization enum.
                 'sender_type' => $this->plain($raw['senderType'] ?? null, 64),
                 'delivery_status' => $this->plain($raw['status'] ?? null, 20)];
+            // Absent fields are not equivalent to explicit null (typed confirmation).
+            $row['provider_metadata'] = [
+                'contract_fields_present' => count(array_intersect(['channelId', 'replyTo', 'templateName'], array_keys($raw))) === 3,
+                'channelId' => $this->plain($raw['channelId'] ?? null, 512),
+                'replyTo' => $this->plain($raw['replyTo'] ?? null, 512),
+                'templateName' => $this->plain($raw['templateName'] ?? null, 255),
+                'interactionId' => $this->plain($raw['interactionId'] ?? null, 255),
+            ];
+            if ($row['provider_metadata']['contract_fields_present'] && ! preg_match('/(?:Z|[+-]\d{2}:\d{2})$/i', $raw['date'])) {
+                throw new RuntimeException('invalid_provider_response');
+            }
             $row['fingerprint'] = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             $rows[$hash] = $row;
         }

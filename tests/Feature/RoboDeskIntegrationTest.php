@@ -2,19 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\SendRoboDeskEventJob;
 use App\Models\Order;
-use App\Models\RoboDeskConversationSetting;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
 use App\Services\RoboDesk\PaymentProofService;
-use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Services\RoboDesk\RoboDeskOutbox;
 use App\Services\RoboDesk\RoboDeskSignature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -41,59 +36,15 @@ class RoboDeskIntegrationTest extends TestCase
         $this->getJson('/api/integrations/robodesk/v1/health')->assertStatus(503);
     }
 
-    public function test_signed_confirmation_updates_the_checkout_once_and_duplicate_delivery_is_idempotent(): void
+    public function test_signed_legacy_confirmation_is_rejected_even_if_legacy_integration_enabled(): void
     {
-        config()->set('robodesk.enabled', true);
-        config()->set('robodesk.inbound_secret', 'inbound-test-secret');
-        config()->set('robodesk.outbound_secret', '');
-
-        Queue::fake();
-        config(['queue.default' => 'redis']);
-        config(['robodesk.outbound_secret' => 'outbound-test-secret', 'robodesk.confirmation.enabled' => true,
-            'robodesk.confirmation.language' => 'ar-EG', 'robodesk.confirmation.contract_ready' => true, 'robodesk.confirmation.after_order_id' => 0]);
-        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only']);
-        Http::fake(['*' => Http::response(['channelId' => 'wamid.synthetic', '_id' => 'interaction-synthetic'], 200)]);
-        $order = $this->order('CHK-ROBODESK-CONFIRM');
-        $request = RoboDeskIntegrationEvent::where('checkout_group_key', $order->checkout_group_key)->firstOrFail();
-        (new SendRoboDeskEventJob($request->id))->handle(app(RoboDeskSignature::class), app(RoboDeskCheckoutPayload::class));
-        $eventId = (string) Str::uuid();
-        $payload = [
-            'id' => $eventId,
-            'type' => 'order.confirmed',
-            'occurred_at' => now()->toIso8601String(),
-            'data' => [
-                'checkout_reference' => $order->checkout_group_key,
-                'order_number' => $order->checkoutReference->short_reference,
-                'template_message_id' => 'wamid.synthetic',
-                'interaction_id' => 'interaction-synthetic', 'sender_phone' => '01501188884',
-                'message_id' => 'wa-click-1',
-                'contact_id' => 'contact-test',
-                'conversation_id' => 'conversation-test',
-                'comment' => 'تم التأكيد',
-            ],
-        ];
-
-        $first = $this->signedJson('/api/integrations/robodesk/v1/events', $payload);
-        $first->assertAccepted()->assertJson(['accepted' => true]);
-
-        $this->assertSame('new_confirmed', $order->refresh()->status);
-        $this->assertDatabaseHas('checkout_customer_workflows', [
-            'checkout_group_key' => $order->checkout_group_key,
-            'confirmation_status' => 'confirmed',
-            'robodesk_contact_id' => 'contact-test',
-        ]);
-        $this->assertDatabaseHas('order_status_logs', [
-            'order_id' => $order->id,
-            'status_type' => 'order',
-            'status' => 'new_confirmed',
-        ]);
-
-        $this->signedJson('/api/integrations/robodesk/v1/events', $payload)
-            ->assertOk()
-            ->assertJson(['accepted' => true, 'duplicate' => true]);
-
-        $this->assertSame(1, RoboDeskIntegrationEvent::query()->where('event_id', $eventId)->count());
-        $this->assertSame(1, $order->statusLogs()->where('status', 'new_confirmed')->count());
+        config(['robodesk.enabled' => true, 'robodesk.inbound_secret' => 'inbound-test-secret', 'robodesk.confirmation_only' => false]);
+        $order = $this->order('CHK-LEGACY');
+        $payload = ['id' => (string) Str::uuid(), 'type' => 'order.confirmed', 'data' => ['checkout_reference' => $order->checkout_group_key]];
+        $this->signedJson('/api/integrations/robodesk/v1/events', $payload)->assertUnprocessable();
+        $this->assertSame('new', $order->fresh()->status);
+        $this->assertDatabaseCount('checkout_customer_workflows', 0);
+        $this->assertFalse(collect(app('router')->getRoutes())->contains(fn ($route) => str_ends_with($route->uri(), '/order-confirmations')));
     }
 
     public function test_payment_proof_is_private_and_never_marks_the_checkout_paid_automatically(): void

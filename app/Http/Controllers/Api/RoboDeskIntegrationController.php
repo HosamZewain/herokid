@@ -32,16 +32,6 @@ class RoboDeskIntegrationController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
-    public function confirmOrder(Request $request, RoboDeskInboundEventHandler $handler): JsonResponse
-    {
-        // HMAC middleware has already checked the original raw body.
-        $request->merge(['type' => 'order.confirmed', 'data' => $request->only([
-            'order_number', 'template_message_id', 'interaction_id', 'sender_phone', 'message_id', 'contact_id', 'conversation_id',
-        ])]);
-
-        return $this->event($request, $handler);
-    }
-
     public function event(Request $request, RoboDeskInboundEventHandler $handler): JsonResponse
     {
         $data = $request->validate([
@@ -57,7 +47,7 @@ class RoboDeskIntegrationController extends Controller
 
         abort_unless(hash_equals((string) $request->header('X-RoboDesk-Event-Id'), (string) $data['id']), 422, 'Event id mismatch.');
 
-        abort_if(config('robodesk.confirmation_only') && $data['type'] !== 'order.confirmed', 422, 'Only order confirmation is enabled.');
+        abort_if(config('robodesk.confirmation_only') || $data['type'] === 'order.confirmed', 422, 'Order confirmation uses polling only.');
 
         return DB::transaction(function () use ($handler, $data): JsonResponse {
             $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
@@ -91,13 +81,6 @@ class RoboDeskIntegrationController extends Controller
             // Receipt and business mutation commit together. A crash cannot leave a
             // permanent “processing” receipt that falsely acknowledges later retries.
             $handler->handle($data['type'], $data['data']);
-            if ($data['type'] === 'order.confirmed') {
-                $key = RoboDeskIntegrationEvent::where('direction', 'outbound')->where('event_type', 'order.pending_confirmation')
-                    ->where('payload->display_reference', $data['data']['order_number'])
-                    ->where('response_payload->message_id', $data['data']['template_message_id'])->value('checkout_group_key');
-                $event->checkout_group_key = $key;
-                $event->aggregate_id = $key;
-            }
             $event->fill(['status' => 'succeeded', 'processed_at' => now()])->save();
 
             return response()->json(['accepted' => true], 202);

@@ -5,15 +5,18 @@ namespace Tests\Feature;
 use App\Jobs\SendOrderConfirmationJob;
 use App\Models\CheckoutCustomerWorkflow;
 use App\Models\Order;
-use App\Models\OrderCheckoutReference;
 use App\Models\Permission;
 use App\Models\RoboDeskConversationSetting;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
+use App\Models\WhatsAppConversation;
+use App\Models\WhatsAppConversationMessage;
+use App\Services\RoboDesk\Conversations\OrderConversationService;
 use App\Services\RoboDesk\RoboDeskOutbox;
-use App\Services\RoboDesk\RoboDeskSignature;
 use App\Support\OrderStatusRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -24,26 +27,40 @@ class OrderConfirmationTest extends TestCase
 {
     use RefreshDatabase;
 
-    private int $deliveryFailures = 0;
+    private array $messages = [];
 
-    private int $receiptSequence = 1;
+    private array $interactions = [];
 
-    private mixed $responseOverride = null;
+    private array $sendResponses = [];
+
+    private mixed $closeResponse = null;
+
+    private int $sequence = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(now()->utc()->startOfDay());
+        Cache::flush();
         Queue::fake();
-        config(['queue.default' => 'redis']);
+        config(['queue.default' => 'redis', 'robodesk.enabled' => false,
+            'robodesk.inbound_secret' => '', 'robodesk.outbound_secret' => '',
+            'robodesk.confirmation.enabled' => true, 'robodesk.confirmation.contract_ready' => true,
+            'robodesk.confirmation.after_order_id' => 0, 'robodesk.confirmation.audience' => 'all_new', 'robodesk.confirmation_only' => true]);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only', 'conversation_limit' => 50]);
         Http::preventStrayRequests();
-        Http::fake(['https://hero-kid.robodesk.ai/*' => fn () => $this->responseOverride ?? ($this->deliveryFailures-- > 0
-            ? Http::response(['private' => 'do-not-log'], 500)
-            : Http::response(['channelId' => 'wamid.synthetic.'.$this->receiptSequence++, '_id' => 'interaction-synthetic'], 200))]);
-        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only']);
-        config(['robodesk.enabled' => true, 'robodesk.confirmation.enabled' => true,
-            'robodesk.confirmation.language' => 'ar-EG', 'robodesk.confirmation.contract_ready' => true, 'robodesk.confirmation.after_order_id' => 0,
-            'robodesk.inbound_secret' => 'synthetic-inbound', 'robodesk.outbound_secret' => 'synthetic-outbound',
-            'robodesk.base_url' => 'https://robodesk.test', 'robodesk.confirmation_only' => true]);
+        Http::fake(['https://hero-kid.robodesk.ai/*' => function ($request) {
+            if (str_contains($request->url(), '/messagesByPhone')) {
+                return Http::response(['phone' => '201000000001', 'interactions' => $this->interactions, 'messages' => $this->messages]);
+            }
+            if (str_ends_with($request->url(), '/close')) {
+                return $this->closeResponse ?? Http::response(['success' => true]);
+            }
+            if (str_ends_with($request->url(), '/start/sendMsg')) {
+                return array_shift($this->sendResponses) ?? Http::response(['channelId' => 'wamid.synthetic.'.++$this->sequence, '_id' => 'interaction-synthetic']);
+            }
+            throw new \RuntimeException('Unexpected test HTTP request');
+        }]);
     }
 
     private function order(string $key = 'CHK-SYNTHETIC', string $status = 'new'): Order
@@ -64,259 +81,427 @@ class OrderConfirmationTest extends TestCase
         app()->call([new SendOrderConfirmationJob($event->id), 'handle']);
     }
 
-    private function payload(RoboDeskIntegrationEvent $event, array $overrides = []): array
+    private function message(string $id, array $changes = []): array
     {
-        return ['id' => (string) Str::uuid(), 'type' => 'order.confirmed', 'data' => array_merge([
-            'order_number' => OrderCheckoutReference::where('checkout_group_key', $event->checkout_group_key)->value('short_reference'),
-            'template_message_id' => $event->fresh()->response_payload['message_id'] ?? 'wamid.not-sent',
-            'interaction_id' => 'interaction-synthetic', 'sender_phone' => '201000000001', 'message_id' => 'synthetic-button-click',
-        ], $overrides)];
+        return $changes + ['id' => $id, 'direction' => 'in', 'text' => 'تأكيد الطلب', 'type' => 'text',
+            'date' => now()->utc()->addSeconds(2)->toISOString(), 'channel' => 'WhatsApp', 'attachments' => [],
+            'interactionId' => 'interaction-synthetic', 'channelId' => 'wamid.inbound.'.$id,
+            'replyTo' => null, 'templateName' => null];
     }
 
-    private function postConfirmation(array $payload, ?string $signature = null, ?string $timestamp = null, string $uri = '/api/integrations/robodesk/v1/events')
+    private function template(RoboDeskIntegrationEvent $event, array $changes = []): array
     {
-        $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $timestamp ??= (string) now()->timestamp;
-        $signature ??= app(RoboDeskSignature::class)->sign($body, $timestamp, $payload['id'], 'synthetic-inbound');
-
-        return $this->call('POST', $uri, [], [], [], [
-            'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
-            'HTTP_X_ROBODESK_TIMESTAMP' => $timestamp, 'HTTP_X_ROBODESK_EVENT_ID' => $payload['id'],
-            'HTTP_X_ROBODESK_SIGNATURE' => $signature,
-        ], $body);
+        return $this->message('template-'.$event->id, $changes + ['direction' => 'out', 'text' => 'Synthetic template',
+            'date' => now()->utc()->addSecond()->toISOString(),
+            'channelId' => $event->fresh()->response_payload['message_id'], 'templateName' => 'herokid_order_confirmation']);
     }
 
-    public function test_group_queues_once_and_sends_exact_template_with_short_reference(): void
+    private function sync(Order $order): void
+    {
+        $this->travel(20)->seconds();
+        app(OrderConversationService::class)->sync($order);
+    }
+
+    public function test_group_sends_once_exact_template_without_hmac_or_legacy_event_api(): void
     {
         $one = $this->order();
-        $two = $this->order();
+        $this->order();
         $event = $this->request($one);
         Queue::assertPushed(SendOrderConfirmationJob::class, 1);
         $this->send($event);
         $this->send($event->fresh());
-        Http::assertSentCount(1);
-        Http::assertSent(function ($request) use ($one): bool {
-            return $request->url() === 'https://hero-kid.robodesk.ai/api/conversation/start/sendMsg'
-                && $request['channel'] === 'WhatsApp' && $request['to'] === '201000000001'
-                && $request['language'] === 'ar-EG'
-                && $request['template']['templateName'] === 'herokid_order_confirmation'
-                && $request['template']['text'] === '$1 $2 $3 $4'
-                && $request['template']['data'][1] === $one->checkoutReference->short_reference
-                && count($request['template']['data']) === 4;
-        });
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')
+            && $r['language'] === 'ar-EG' && $r['to'] === '201000000001' && ! isset($r['procedureId'])
+            && $r['template']['data'][1] === $one->checkoutReference->short_reference
+            && count($r['template']['data']) === 4);
         $this->assertCount(2, $event->fresh()->payload['order_numbers']);
         $this->assertSame('طلب جديد غير مؤكد', OrderStatusRegistry::label('order', 'new'));
         $this->assertSame('طلب جديد مؤكد', OrderStatusRegistry::label('order', 'new_confirmed'));
+        $this->assertFalse(app('router')->getRoutes()->hasNamedRoute('api.robodesk.order-confirmations.store'));
     }
 
-    public function test_confirmation_changes_all_parts_once_without_payments_or_automation(): void
+    public function test_open_conversations_use_id_and_close_success_before_send(): void
+    {
+        $this->interactions = [['id' => 'open-agent', 'closed' => false], ['id' => 'closed-ai', 'closed' => true]];
+        $event = $this->request($this->order());
+        $this->send($event);
+        $this->assertSame('succeeded', $event->fresh()->status);
+        $requests = Http::recorded()->map(fn ($pair) => $pair[0])->values();
+        $this->assertStringContainsString('/messagesByPhone', $requests[0]->url());
+        $this->assertStringEndsWith('/close', $requests[1]->url());
+        $this->assertSame(['closeData' => ['conversations' => [['_id' => 'open-agent']], 'isBulk' => true], 'note' => null], $requests[1]->data());
+        $this->assertStringEndsWith('/start/sendMsg', $requests[2]->url());
+    }
+
+    public function test_close_failure_and_legacy_underscore_id_never_send(): void
+    {
+        $this->interactions = [['id' => 'open', 'closed' => false]];
+        $this->closeResponse = Http::response(['success' => false]);
+        $one = $this->request($this->order('CHK-CLOSE'));
+        $this->send($one);
+        $this->assertSame('unknown', $one->fresh()->status);
+        $this->interactions = [['_id' => 'wrong-field', 'closed' => false]];
+        $two = $this->request($this->order('CHK-ID'));
+        $this->send($two);
+        $this->assertSame('unknown', $two->fresh()->status);
+        Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg'));
+    }
+
+    public function test_exact_501_is_retried_once_only_with_fresh_lookup_and_close(): void
+    {
+        $this->interactions = [['id' => 'open', 'closed' => false]];
+        $this->sendResponses = [Http::response('Customer already have another interaction', 501)];
+        $one = $this->request($this->order('CHK-RACE-ONE'));
+        $this->send($one);
+        $this->assertSame('succeeded', $one->fresh()->status);
+        Http::assertSentCount(6);
+        $this->sendResponses = array_fill(0, 2, Http::response('Customer already have another interaction', 501));
+        $two = $this->request($this->order('CHK-RACE-TWO'));
+        $this->send($two);
+        $this->send($two->fresh());
+        $this->assertSame('blocked', $two->fresh()->status);
+        $this->assertSame('conversation_race_retry_exhausted', $two->fresh()->last_error);
+        Http::assertSentCount(12);
+    }
+
+    public function test_other_errors_missing_receipts_and_timeouts_are_never_resent(): void
+    {
+        foreach ([Http::response('private-do-not-log', 500), Http::failedConnection(), Http::response(['_id' => 'no-wamid']),
+            Http::response('different-501', 501), Http::response('disabled', 409)] as $i => $response) {
+            $this->sendResponses = [$response];
+            $event = $this->request($this->order('CHK-FAIL-'.$i));
+            $this->send($event);
+            $this->send($event->fresh());
+            $this->assertSame($i === 4 ? 'blocked' : 'unknown', $event->fresh()->status);
+            $this->assertSame(1, $event->fresh()->attempts);
+            $this->assertStringNotContainsString('private-do-not-log', $event->fresh()->last_error);
+        }
+        $this->expectException(HttpException::class);
+        app(RoboDeskOutbox::class)->release($event->fresh());
+    }
+
+    public function test_same_phone_send_waits_for_contact_lock_without_claim_or_external_call(): void
+    {
+        $event = $this->request($this->order());
+        $lock = Cache::lock('robodesk-history:'.hash('sha256', 'primary'.hash('sha256', '+201000000001')), 130);
+        $lock->get();
+        $this->send($event);
+        Http::assertNothingSent();
+        $this->assertSame(0, $event->fresh()->attempts);
+        Queue::assertPushed(SendOrderConfirmationJob::class, 2);
+        $lock->release();
+        $this->send($event);
+        $this->assertSame('succeeded', $event->fresh()->status);
+    }
+
+    public function test_reply_confirms_all_parts_across_interactions_once_without_payment_or_ai(): void
     {
         $one = $this->order();
         $two = $this->order();
         $event = $this->request($one);
         $this->send($event);
-        $payload = $this->payload($event);
-        $this->postConfirmation($payload)->assertAccepted();
-        $confirmedAt = CheckoutCustomerWorkflow::firstOrFail()->confirmed_at->toISOString();
-        $this->postConfirmation($payload)->assertOk()->assertJson(['duplicate' => true]);
-        $this->travel(5)->minutes();
-        $this->postConfirmation($this->payload($event))->assertAccepted();
-        $this->assertSame($confirmedAt, CheckoutCustomerWorkflow::firstOrFail()->confirmed_at->toISOString());
+        $this->messages = [$this->message('click', ['replyTo' => $event->fresh()->response_payload['message_id'], 'interactionId' => 'new-conversation'])];
+        $this->sync($one);
+        $confirmed = CheckoutCustomerWorkflow::firstOrFail()->confirmed_at->toISOString();
+        $this->messages = [];
+        $this->sync($one);
+        $this->assertSame($confirmed, CheckoutCustomerWorkflow::firstOrFail()->confirmed_at->toISOString());
         foreach ([$one, $two] as $order) {
-            $this->assertSame('new_confirmed', $order->refresh()->status);
-            $this->assertSame('unpaid', $order->payment_status);
+            $this->assertSame('new_confirmed', $order->fresh()->status);
+            $this->assertSame('unpaid', $order->fresh()->payment_status);
             $this->assertSame(1, $order->statusLogs()->where('status', 'new_confirmed')->count());
         }
         $this->assertDatabaseCount('order_automation_runs', 0);
         Queue::assertPushed(SendOrderConfirmationJob::class, 1);
         $one->updateQuietly(['status' => 'generating']);
-        $this->postConfirmation($this->payload($event))->assertAccepted();
-        $this->assertSame('generating', $one->refresh()->status);
+        $this->sync($one);
+        $this->assertSame('generating', $one->fresh()->status);
     }
 
-    public function test_missing_or_invalid_signature_and_expired_signature_are_rejected(): void
+    public function test_two_orders_reply_uses_exact_wamid_and_typed_uses_latest_prior_template(): void
     {
-        $event = $this->request($this->order());
+        $one = $this->order('CHK-ONE');
+        $two = $this->order('CHK-TWO');
+        $first = $this->request($one);
+        $second = $this->request($two);
+        $this->send($first);
+        $a = $this->template($first);
+        $this->travel(5)->seconds();
+        $this->send($second);
+        $b = $this->template($second);
+        $this->messages = [$a, $b, $this->message('typed', ['text' => "  تأكيد الطلب \n"])];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new_confirmed', $two->fresh()->status);
+        $this->messages = [$this->message('click-older', ['replyTo' => $first->fresh()->response_payload['message_id'], 'interactionId' => 'other-interaction'])];
+        $this->sync($one);
+        $this->assertSame('new_confirmed', $one->fresh()->status);
+    }
+
+    public function test_typed_before_second_template_matches_first_and_later_template_does_not_steal_it(): void
+    {
+        $one = $this->order('CHK-ONE');
+        $first = $this->request($one);
+        $this->send($first);
+        $a = $this->template($first);
+        $typed = $this->message('typed-before-second');
+        $this->travel(5)->seconds();
+        $two = $this->order('CHK-TWO');
+        $second = $this->request($two);
+        $this->send($second);
+        $this->messages = [$a, $typed, $this->template($second)];
+        $this->sync($one);
+        $this->assertSame('new_confirmed', $one->fresh()->status);
+        $this->assertSame('new', $two->fresh()->status);
+    }
+
+    public function test_missing_fields_outbound_messages_and_wrong_text_cannot_confirm(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
         $this->send($event);
-        $payload = $this->payload($event);
-        $this->postJson('/api/integrations/robodesk/v1/events', $payload)->assertUnauthorized();
-        $this->postConfirmation($payload, 'bad')->assertUnauthorized();
-        $this->postConfirmation($payload, null, (string) now()->subMinutes(10)->timestamp)->assertUnauthorized();
+        $missing = $this->message('old-contract');
+        unset($missing['replyTo']);
+        $this->messages = [$this->template($event), $missing,
+            $this->message('other-text', ['text' => 'تمام']),
+            $this->message('outbound', ['direction' => 'out', 'replyTo' => $event->fresh()->response_payload['message_id']]),
+            $this->message('wrong-interaction', ['interactionId' => 'other'])];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
         $this->assertDatabaseCount('checkout_customer_workflows', 0);
     }
 
-    public function test_callback_requires_sent_request_correct_phone_checkout_and_button_message(): void
+    public function test_quoting_an_unrelated_message_falls_back_to_latest_prior_template_in_same_interaction(): void
     {
-        $event = $this->request($this->order());
-        $this->postConfirmation($this->payload($event))->assertStatus(409);
-        $this->send($event);
-        $this->postConfirmation($this->payload($event, ['interaction_id' => 'interaction-synthetic', 'sender_phone' => '201000000002']))->assertForbidden();
-        $this->postConfirmation($this->payload($event, ['order_number' => 'HK-OTHER']))->assertStatus(409);
-        $this->postConfirmation($this->payload($event, ['message_id' => '']))->assertUnprocessable();
-        $this->postConfirmation($this->payload($event, ['template_message_id' => 'wamid.other']))->assertStatus(409);
-        $this->assertDatabaseCount('checkout_customer_workflows', 0);
+        $one = $this->order('CHK-QUOTE-ONE');
+        $two = $this->order('CHK-QUOTE-TWO');
+        $first = $this->request($one);
+        $second = $this->request($two);
+        $this->send($first);
+        $a = $this->template($first);
+        $this->travel(5)->seconds();
+        $this->send($second);
+        $this->messages = [$a, $this->template($second),
+            $this->message('quoted-other', ['replyTo' => 'wamid.old-normal-message'])];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new_confirmed', $two->fresh()->status);
+        $this->assertSame('typed', CheckoutCustomerWorkflow::firstOrFail()->metadata['confirmation_method']);
     }
 
-    public function test_late_confirmations_never_reopen_or_regress_modified_or_deleted_orders(): void
+    public function test_unknown_reply_without_same_interaction_template_does_not_confirm(): void
     {
-        foreach (['cancelled', 'generating', 'shipped', 'deleted'] as $status) {
-            $order = $this->order('CHK-'.$status);
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event),
+            $this->message('quote-wrong-interaction', ['replyTo' => 'wamid.unrelated', 'interactionId' => 'different-interaction'])];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+    }
+
+    public function test_typed_requires_actual_outbound_template_and_untracked_latest_template_blocks_fallback(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $typed = $this->message('typed');
+        $this->messages = [$typed];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+        $this->messages = [$this->template($event, ['date' => now()->subSeconds(19)->toISOString()]),
+            $this->message('untracked-template', ['direction' => 'out', 'channelId' => 'wamid.untracked',
+                'templateName' => 'herokid_order_confirmation', 'date' => now()->subMilliseconds(18500)->toISOString()]),
+            $this->message('typed-new')];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+    }
+
+    public function test_saved_message_is_reprocessed_when_receipt_arrives_after_cursor_advanced(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $event = $event->fresh();
+        $receipt = $event->response_payload;
+        $event->update(['status' => 'processing', 'response_payload' => null]);
+        $this->messages = [$this->message('early-click', ['replyTo' => $receipt['message_id']])];
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+        $this->assertSame('early-click', WhatsAppConversation::firstOrFail()->sync_cursor);
+        $event->update(['status' => 'succeeded', 'response_payload' => $receipt]);
+        $this->messages = [];
+        $this->sync($order);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'after=early-click'));
+        $raw = DB::table('whatsapp_conversation_messages')->first();
+        $this->assertStringNotContainsString($receipt['message_id'], $raw->provider_metadata);
+        $this->assertArrayNotHasKey('provider_metadata', WhatsAppConversationMessage::firstOrFail()->toArray());
+    }
+
+    public function test_cancelled_advanced_deleted_or_changed_phone_never_confirms(): void
+    {
+        foreach (['cancelled', 'generating', 'shipped', 'deleted', 'phone'] as $state) {
+            $order = $this->order('CHK-'.$state);
             $event = $this->request($order);
             $this->send($event);
-            $status === 'deleted' ? $order->delete() : $order->updateQuietly(['status' => $status]);
-            $this->postConfirmation($this->payload($event))->assertStatus(409);
-            $this->assertSame($status === 'deleted' ? 'new' : $status, $order->fresh()->status);
+            $this->messages = [$this->message('click-'.$state, ['replyTo' => $event->fresh()->response_payload['message_id']])];
+            if ($state === 'deleted') {
+                $order->delete();
+            } elseif ($state === 'phone') {
+                $order->updateQuietly(['delivery_details' => ['phone' => '01000000002']]);
+            } else {
+                $order->updateQuietly(['status' => $state]);
+            }
+            // Another order on the same phone drives the normal contact polling.
+            $driver = $this->order('CHK-DRIVER-'.$state);
+            $this->sync($driver);
         }
         $this->assertDatabaseCount('checkout_customer_workflows', 0);
     }
 
-    public function test_changed_contact_prevents_confirmation(): void
-    {
-        $order = $this->order();
-        $event = $this->request($order);
-        $this->send($event);
-        $order->updateQuietly(['delivery_details' => ['phone' => '01000000002']]);
-        $this->postConfirmation($this->payload($event))->assertStatus(409);
-        $this->assertSame('new', $order->fresh()->status);
-    }
-
-    public function test_duplicate_callback_id_with_different_content_is_rejected(): void
-    {
-        $event = $this->request($this->order());
-        $this->send($event);
-        $payload = $this->payload($event);
-        $this->postConfirmation($payload)->assertAccepted();
-        $payload['data']['order_number'] = 'another-checkout';
-        $this->postConfirmation($payload)->assertStatus(409);
-        $payload['id'] = $event->event_id;
-        $this->postConfirmation($payload)->assertStatus(409);
-    }
-
-    public function test_activation_is_future_only_and_kill_switch_stops_queued_sends(): void
+    public function test_historical_orders_boundary_kill_switch_and_contract_gate_prevent_sends(): void
     {
         config(['robodesk.confirmation.enabled' => false]);
         $old = $this->order('CHK-OLD');
         config(['robodesk.confirmation.enabled' => true, 'robodesk.confirmation.after_order_id' => $old->id]);
-        $this->order('CHK-OLD'); // Adding a child to an old checkout must not send confirmation.
+        $this->order('CHK-OLD');
         $this->send($this->request($old));
         $new = $this->order('CHK-NEW');
         config(['robodesk.confirmation.enabled' => false]);
         $this->send($this->request($new));
+        foreach ([['robodesk.confirmation.after_order_id' => null], ['robodesk.confirmation.contract_ready' => false],
+            ['queue.default' => 'sync'], ['robodesk.confirmation.language' => 'ar']] as $i => $bad) {
+            config(['robodesk.confirmation.enabled' => true, 'robodesk.confirmation.after_order_id' => 0,
+                'robodesk.confirmation.contract_ready' => true, 'queue.default' => 'redis', 'robodesk.confirmation.language' => 'ar-EG']);
+            config($bad);
+            $this->send($this->request($this->order('CHK-GATE-'.$i)));
+        }
         Http::assertNothingSent();
     }
 
-    public function test_no_sends_without_explicit_boundary_and_language_or_after_status_change(): void
-    {
-        config(['robodesk.confirmation.after_order_id' => null]);
-        $this->send($this->request($this->order('CHK-NO-BOUNDARY')));
-        config(['robodesk.confirmation.after_order_id' => 0, 'robodesk.confirmation.language' => '']);
-        $this->send($this->request($this->order('CHK-NO-LANGUAGE')));
-        config(['robodesk.confirmation.language' => 'ar']);
-        $order = $this->order('CHK-LATE');
-        $order->updateQuietly(['status' => 'cancelled']);
-        $this->send($this->request($order));
-        Http::assertNothingSent();
-    }
-
-    public function test_confirmation_only_mode_does_not_activate_other_event_types(): void
-    {
-        $order = $this->order();
-        $order->update(['status' => 'under_review']);
-        $event = RoboDeskIntegrationEvent::where('event_type', 'order.workflow_updated')->firstOrFail();
-        $this->send($event);
-        Http::assertNothingSent();
-        $payload = $this->payload($this->request($order));
-        $payload['type'] = 'order.rejected';
-        $this->postConfirmation($payload)->assertUnprocessable();
-        $this->assertSame('under_review', $order->fresh()->status);
-    }
-
-    public function test_uncertain_send_is_never_retried_and_errors_are_sanitized(): void
-    {
-        $this->deliveryFailures = 1;
-        $order = $this->order();
-        $event = $this->request($order);
-        $this->send($event);
-        $this->assertSame('unknown', $event->fresh()->status);
-        $this->assertStringNotContainsString('do-not-log', $event->fresh()->last_error);
-        $this->send($event->fresh());
-        Http::assertSentCount(1);
-        $this->assertSame(1, $event->fresh()->attempts);
-        $this->expectException(HttpException::class);
-        app(RoboDeskOutbox::class)->release($event->fresh());
-    }
-
-    public function test_flat_confirmation_endpoint_fixes_target_status_and_checks_signed_original_body(): void
+    public function test_kill_switch_stops_confirmation_and_old_events_are_not_eligible(): void
     {
         $order = $this->order();
         $event = $this->request($order);
         $this->send($event);
-        $envelope = $this->payload($event);
-        $flat = ['id' => $envelope['id'], ...$envelope['data'], 'target_status' => 'delivered'];
-        $this->postConfirmation($flat, null, null, '/api/integrations/robodesk/v1/order-confirmations')->assertAccepted();
-        $this->assertSame('new_confirmed', $order->fresh()->status);
+        $this->messages = [$this->message('click', ['replyTo' => $event->fresh()->response_payload['message_id']])];
+        config(['robodesk.confirmation.enabled' => false]);
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
+        config(['robodesk.confirmation.enabled' => true]);
+        $payload = $event->fresh()->payload;
+        $payload['confirmation']['eligible_at_creation'] = false;
+        $event->update(['payload' => $payload]);
+        $this->sync($order);
+        $this->assertSame('new', $order->fresh()->status);
     }
 
-    public function test_template_uses_quantity_and_total_after_discount_including_delivery(): void
+    public function test_trial_requires_explicit_phone_allowlist_and_does_not_capture_other_customers(): void
+    {
+        config(['robodesk.confirmation.audience' => 'trial', 'robodesk.confirmation.trial_phone_hashes' => []]);
+        $old = $this->order('CHK-EMPTY-TRIAL');
+        $this->assertSame('held', $this->request($old)->status);
+        config(['robodesk.confirmation.trial_phone_hashes' => [hash('sha256', '+201000000002')]]);
+        $other = $this->order('CHK-NOT-IN-TRIAL');
+        $this->send($this->request($other));
+        Http::assertNothingSent();
+        config(['robodesk.confirmation.trial_phone_hashes' => [hash('sha256', '+201000000001')]]);
+        $this->send($this->request($old));
+        $this->send($this->request($other));
+        Http::assertNothingSent();
+        $new = $this->request($this->order('CHK-APPROVED-TRIAL'));
+        $this->send($new);
+        $this->assertSame('succeeded', $new->fresh()->status);
+    }
+
+    public function test_ambiguous_typed_template_timestamp_never_guesses(): void
+    {
+        $one = $this->order('CHK-TIE-ONE');
+        $two = $this->order('CHK-TIE-TWO');
+        $first = $this->request($one);
+        $second = $this->request($two);
+        $this->send($first);
+        $this->send($second);
+        $this->messages = [$this->template($first), $this->template($second), $this->message('typed-tie')];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new', $two->fresh()->status);
+    }
+
+    public function test_one_inbound_message_cannot_confirm_two_orders_after_provider_history_changes(): void
+    {
+        $one = $this->order('CHK-CONSUME-ONE');
+        $two = $this->order('CHK-CONSUME-TWO');
+        $first = $this->request($one);
+        $second = $this->request($two);
+        $this->send($first);
+        $this->send($second);
+        $this->messages = [$this->message('same-inbound', ['replyTo' => $first->fresh()->response_payload['message_id']])];
+        $this->sync($one);
+        $this->assertSame('new_confirmed', $one->fresh()->status);
+        $this->messages[0]['replyTo'] = $second->fresh()->response_payload['message_id'];
+        $this->sync($one);
+        $this->assertSame('new', $two->fresh()->status);
+        $this->assertDatabaseCount('checkout_customer_workflows', 1);
+    }
+
+    public function test_typed_waits_for_missing_second_template_evidence(): void
+    {
+        $one = $this->order('CHK-MISSING-ONE');
+        $two = $this->order('CHK-MISSING-TWO');
+        $first = $this->request($one);
+        $second = $this->request($two);
+        $this->send($first);
+        $a = $this->template($first);
+        $this->travel(5)->seconds();
+        $this->send($second);
+        $b = $this->template($second);
+        $this->messages = [$a, $this->message('typed-before-history-complete')];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new', $two->fresh()->status);
+        $this->messages = [$b];
+        $this->sync($one);
+        $this->assertSame('new', $one->fresh()->status);
+        $this->assertSame('new_confirmed', $two->fresh()->status);
+    }
+
+    public function test_invalid_poll_metadata_rolls_back_without_advancing_cursor(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->message('invalid', ['replyTo' => ['bad-type']])];
+        try {
+            $this->sync($order);
+            $this->fail('Malformed metadata was accepted');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('invalid_provider_response', $exception->getMessage());
+        }
+        $this->assertDatabaseCount('whatsapp_conversations', 0);
+        $this->assertSame('new', $order->fresh()->status);
+    }
+
+    public function test_template_total_is_after_discount_including_shipping(): void
     {
         $order = $this->order();
         $order->items()->create(['item_type' => 'product', 'title' => 'كتاب تلوين', 'quantity' => 2,
             'unit_price_cents' => 10000, 'total_price_cents' => 20000]);
         $order->updateQuietly(['discount_cents' => 3000]);
         $this->send($this->request($order));
-        Http::assertSent(fn ($request) => $request['template']['data'][2] === 'كتاب تلوين × 2'
-            && $request['template']['data'][3] === '220.00');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')
+            && $r['template']['data'][2] === 'كتاب تلوين × 2' && $r['template']['data'][3] === '220.00');
     }
 
-    public function test_contract_readiness_and_async_queue_are_required(): void
-    {
-        config(['robodesk.confirmation.contract_ready' => false]);
-        $this->send($this->request($this->order('CHK-NO-CONTRACT')));
-        config(['robodesk.confirmation.contract_ready' => true, 'queue.default' => 'sync']);
-        $this->send($this->request($this->order('CHK-SYNC')));
-        Http::assertNothingSent();
-    }
-
-    public function test_open_conversation_and_disabled_template_are_blocked_without_retries(): void
-    {
-        foreach ([501 => 'Customer already have another interaction', 409 => 'Template disabled'] as $status => $body) {
-            $this->responseOverride = Http::response($body, $status);
-            $event = $this->request($this->order('CHK-HTTP-'.$status));
-            $this->send($event);
-            $this->send($event->fresh());
-            $this->assertSame('blocked', $event->fresh()->status);
-            $this->assertSame(1, $event->fresh()->attempts);
-        }
-        Http::assertSentCount(2);
-    }
-
-    public function test_timeout_or_receipt_without_wamid_is_unknown_and_never_resent(): void
-    {
-        foreach ([Http::failedConnection(), Http::response(['_id' => 'interaction-synthetic'], 200)] as $i => $response) {
-            $this->responseOverride = $response;
-            $event = $this->request($this->order('CHK-UNKNOWN-'.$i));
-            $this->send($event);
-            $this->send($event->fresh());
-            $this->assertSame('unknown', $event->fresh()->status);
-            $this->assertSame(1, $event->fresh()->attempts);
-        }
-    }
-
-    public function test_interaction_id_must_match_original_template_receipt(): void
-    {
-        $event = $this->request($this->order());
-        $this->send($event);
-        $this->postConfirmation($this->payload($event, ['interaction_id' => 'another-interaction']))->assertStatus(409);
-        $this->assertDatabaseCount('checkout_customer_workflows', 0);
-    }
-
-    public function test_automation_page_explains_confirmation_and_retains_existing_permissions(): void
+    public function test_automation_page_preserves_permissions_and_explains_typed_polling(): void
     {
         $order = $this->order();
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $admin->permissions()->sync(Permission::whereIn('key', ['orders.view', 'order_automation.view'])->pluck('id'));
         $this->actingAs($admin)->get('/admin/order-automation')->assertOk()->assertSee('تأكيد الطلب عبر واتساب')
-            ->assertSee('طلب جديد غير مؤكد')->assertSee('طلب جديد مؤكد')->assertSee($order->order_number);
+            ->assertSee('كتابة نفس العبارة')->assertSee('قراءة التأكيدات دورية')->assertSee($order->order_number);
         $admin->permissions()->sync(Permission::where('key', 'order_automation.view')->pluck('id'));
         $admin->unsetRelation('permissions');
         $this->get('/admin/order-automation')->assertOk()->assertDontSee($order->order_number);

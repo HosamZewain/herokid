@@ -2,15 +2,16 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="confirmation-heading" class="text-xl font-bold">تأكيد الطلب عبر واتساب</h2>
         <span class="rounded-full px-4 py-2 {{ $confirmationReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
-            {{ $confirmationReady ? 'مفعّل للطلبات الجديدة فقط' : 'الإرسال غير مفعّل — الربط قيد التجهيز' }}
+            {{ $confirmationReady ? (config('robodesk.confirmation.audience') === 'trial' ? 'تجربة محدودة للأرقام المعتمدة فقط' : 'مفعّل للطلبات الجديدة فقط') : 'الإرسال غير مفعّل — الربط قيد التجهيز' }}
         </span>
     </div>
     <ol class="grid gap-3 md:grid-cols-3">
         <li class="rounded-xl bg-blue-50 p-4"><strong>١. طلب جديد غير مؤكد</strong><p class="mt-2 text-sm">يصل الطلب وتُجهّز له رسالة واحدة لكل عملية شراء، حتى لو تضم أكثر من قصة أو منتج.</p></li>
-        <li class="rounded-xl bg-violet-50 p-4"><strong>٢. رسالة تأكيد على واتساب</strong><p class="mt-2 text-sm">يرسل RoboDesk قالب التأكيد المعتمد، بتفاصيل الطلب وقيمته بعد الخصم وشاملة الشحن.</p></li>
-        <li class="rounded-xl bg-emerald-50 p-4"><strong>٣. طلب جديد مؤكد</strong><p class="mt-2 text-sm">ضغط العميل على «تأكيد الطلب» يحدّث حالة الطلب ويسجل التأكيد. لا يبدأ توليدًا أو شحنًا أو دفعًا.</p></li>
+        <li class="rounded-xl bg-violet-50 p-4"><strong>٢. رسالة تأكيد على واتساب</strong><p class="mt-2 text-sm">تُغلق محادثة العميل المفتوحة أولًا، ثم يرسل RoboDesk قالب التأكيد المعتمد، بتفاصيل الطلب وقيمته بعد الخصم وشاملة الشحن.</p></li>
+        <li class="rounded-xl bg-emerald-50 p-4"><strong>٣. طلب جديد مؤكد</strong><p class="mt-2 text-sm">ضغط العميل على «تأكيد الطلب» أو كتابة نفس العبارة يسجل التأكيد عند تحديث المحادثة. لا يبدأ توليدًا أو شحنًا أو دفعًا.</p></li>
     </ol>
-    <p class="text-sm text-gray-600">القالب: <bdi>herokid_order_confirmation</bdi>. القالب معتمد؛ تفعيل الإرسال ينتظر اكتمال الربط مع RoboDesk. الرسائل القديمة لا تُرسل عند التفعيل، والتأكيد المتأخر لا يعيد الطلب إلى مرحلة سابقة.</p>
+    <p class="text-sm text-gray-600">القالب: <bdi>herokid_order_confirmation</bdi>. القالب معتمد؛ التفعيل ينتظر التحقق من حقول ربط الرسائل في RoboDesk والموافقة على التجربة. الرسائل القديمة لا تُرسل عند التفعيل، والتأكيد المتأخر لا يعيد الطلب إلى مرحلة سابقة.</p>
+    <p class="text-sm text-gray-600">قراءة التأكيدات دورية وليست فورية: المحادثات النشطة تُحدّث عادة كل ١٠ دقائق، وقد تتأخر مع ضغط الطابور. لا تُعاد الرسالة تلقائيًا عند الشك في نتيجة الإرسال.</p>
     @can('orders.view')
         @php($confirmationLabels = ['held' => 'محجوزة دون إرسال', 'pending' => 'في انتظار الإرسال', 'processing' => 'جارٍ التسليم إلى RoboDesk', 'succeeded' => 'قبلها RoboDesk', 'failed' => 'تحتاج مراجعة', 'unknown' => 'نتيجة الإرسال غير مؤكدة', 'blocked' => 'الإرسال متوقف ويحتاج تدخل'])
         <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
