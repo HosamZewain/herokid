@@ -1,6 +1,12 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 21:02 UTC / 23:02 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 21:04 UTC / 23:04 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+
+## Identity failure diagnostics — deployed31 October2026
+
+**Current live SHA `9ff04df5eee62fb83652f4449983302e37b2d679`**, verified21:04 UTC; deployed21:02:59 UTC without maintenance. Future failures retain safe provider code/request ID/HTTP status. No change to uncertain billing, no retry or historical attempt rewrite.36 tests/288 assertions on each isolated SQLite/MySQL, PHP8.3 lint; all five deployed hashes match. Only the two trial process workers were gracefully refreshed. Existing configuration unchanged, authenticated HK10-633 page shows confirmed/delivered, scheduler successful, all four required workers running. Bounded observation since20:50:10:482 HTTP requests, zero5xx/new Laravel errors;81 historical failed jobs unchanged.
+
+Checkpoint `/home/ubuntu/herokid-before-9ff04df`, baseed02800. Trial remains blocked, original attempt656 untouched. One-additional-attempt recovery packet `/tmp/herokid-identity-diagnostics-release/prepare-second-attempt.php` prepared and read-only checked; **not executed, awaiting explicit approval acknowledging unknown first-attempt billing**. Preserve canonical attempt656 and audit any future new attempt. No broader customer activation.
 
 ## Identity/payment continuation — deployed; owner trial blocked at AI
 
@@ -58,9 +64,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`ed028006b3079c2bfe91cc6bd3d82bfcc261cf99`**, detached HEAD |
+| Live release verified by SSH | **`9ff04df5eee62fb83652f4449983302e37b2d679`**, detached HEAD |
 | Release branch | `codex/order-process-trial-readiness`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `07cc0535673d59f8492d91adb1390f09573c6664` (message history); preserve process context v2 and trial side effects |
+| Previous release | `ed028006b3079c2bfe91cc6bd3d82bfcc261cf99`; preserve process context v2 and trial side effects |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
