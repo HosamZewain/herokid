@@ -3,9 +3,11 @@
 namespace App\Jobs;
 
 use App\Models\RoboDeskIntegrationEvent;
+use App\Models\User;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationService;
 use App\Services\RoboDesk\OrderConfirmationTransport;
+use App\Services\RoboDesk\OrderMessageRetry;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,12 +35,28 @@ class SendOrderConfirmationJob implements ShouldQueue
             || $event->status !== 'pending' || $event->attempts > 0) {
             return;
         }
+        $retryActor = data_get($event->payload, 'manual_retry.requested_by');
+        if ($retryActor && ! OrderMessageRetry::authorized(User::find($retryActor))) {
+            $event->update(['status' => 'held', 'last_error' => 'Retry permission revoked.']);
+
+            return;
+        }
+        $parentId = data_get($event->payload, 'manual_retry.parent_id');
+        if ($parentId) {
+            $parent = RoboDeskIntegrationEvent::find($parentId);
+            if (! $parent || $parent->checkout_group_key !== $event->checkout_group_key
+                || ! OrderMessageRetry::failed($parent->status, $parent->last_error, $parent->response_payload)) {
+                $event->update(['status' => 'held', 'last_error' => 'Previous attempt is no longer a verified failure.']);
+
+                return;
+            }
+        }
         if (! $confirmations->canSend($event)) {
             $event->update(['status' => 'held', 'last_error' => 'Confirmation is not eligible for sending.']);
 
             return;
         }
-        $data = array_merge($checkouts->build($event->checkout_group_key), $event->payload ?? []);
+        $data = array_replace_recursive($checkouts->build($event->checkout_group_key), $event->payload ?? []);
         unset($data['children'], $data['instapay_url'], $data['amounts']['paid'], $data['amounts']['remaining']);
         $account = (string) config('robodesk.conversations.account_key', 'primary');
         // Same contact lock as history sync: serialize two orders and receipt persistence.
@@ -55,7 +73,7 @@ class SendOrderConfirmationJob implements ShouldQueue
 
                 return;
             }
-            $fresh = array_merge($checkouts->build($event->checkout_group_key), $event->payload ?? []);
+            $fresh = array_replace_recursive($checkouts->build($event->checkout_group_key), $event->payload ?? []);
             if ($fresh['customer']['phone'] !== $data['customer']['phone']) {
                 $event->update(['status' => 'held', 'last_error' => 'Checkout contact changed before sending.']);
 

@@ -432,6 +432,9 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('orders/{order}/message-retry', \App\Http\Controllers\Admin\OrderMessageRetryController::class)
+        ->middleware(['permission:orders.view', 'permission:orders.update', 'permission:order_automation.execute', 'throttle:5,1'])
+        ->name('orders.message-retry');
     Route::prefix('order-automation')->name('order-automation.')->middleware('permission:order_automation.view')->group(function (): void {
         $controller = \App\Http\Controllers\Admin\OrderAutomationController::class;
         Route::get('/', [$controller, 'index'])->name('index');

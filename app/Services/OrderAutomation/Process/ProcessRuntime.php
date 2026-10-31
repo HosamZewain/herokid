@@ -3,15 +3,18 @@
 namespace App\Services\OrderAutomation\Process;
 
 use App\Jobs\AdvanceOrderProcess;
+use App\Jobs\RetryOrderProcessMessage;
 use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderProcessEvent;
+use App\Models\OrderProcessMessageAttempt;
 use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
+use App\Services\RoboDesk\OrderMessageRetry;
 use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Support\AdminActivityLogger;
 use App\Support\Phone;
@@ -23,7 +26,7 @@ use Throwable;
 
 class ProcessRuntime
 {
-    public const STATES = ['queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_identity' => 'جاري توليد الهويات', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
+    public const STATES = ['retry_queued' => 'إعادة إرسال في الانتظار', 'queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_identity' => 'جاري توليد الهويات', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
 
     public function __construct(private ProcessLivePolicy $policy, private ProcessOrderContext $contexts) {}
 
@@ -94,9 +97,10 @@ class ProcessRuntime
             if ($run->status === 'sending') {
                 DB::transaction(function () use ($run) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
-                    $step = $run->steps()->where('node_id', $run->node_id)->first();
+                    $step = $run->steps()->where('type', 'whatsapp')->where('status', 'processing')->first();
                     if ($run->status === 'sending' && $step?->lease_until?->isPast()) {
                         $step->update(['status' => 'uncertain']);
+                        $step->messageAttempts()->where('status', 'processing')->update(['status' => 'uncertain', 'error_code' => 'send_receipt_missing']);
                         $run->update(['status' => 'uncertain', 'error_code' => 'send_receipt_missing']);
                     }
                 });
@@ -208,7 +212,9 @@ class ProcessRuntime
                                 $run->next_at = now()->addSeconds(150);
                                 $run->save();
 
-                                return ['run_id' => $run->id, 'step_id' => $step->id, 'lock' => $lock];
+                                $attempt = $step->messageAttempts()->create(['number' => 1, 'status' => 'processing', 'started_at' => $step->started_at]);
+
+                                return ['run_id' => $run->id, 'step_id' => $step->id, 'attempt_id' => $attempt->id, 'lock' => $lock];
                             } catch (Throwable $e) {
                                 $lock->release();
                                 throw $e;
@@ -279,6 +285,60 @@ class ProcessRuntime
         }
     }
 
+    public function retryMessage(int $runId, int $stepId, int $attemptId, int $version): void
+    {
+        $run = OrderProcessRun::findOrFail($runId);
+        $lock = Cache::lock('robodesk-history:'.hash('sha256', $run->account_key.hash('sha256', '+'.$run->context['phone'])), 130);
+        if (! $lock->get()) {
+            // No provider effect yet; only the same pending attempt may be requeued.
+            RetryOrderProcessMessage::dispatch($runId, $stepId, $attemptId, $version)->delay(now()->addSeconds(30));
+
+            return;
+        }
+        try {
+            $claim = DB::transaction(function () use ($runId, $stepId, $attemptId, $version, $lock) {
+                $run = OrderProcessRun::lockForUpdate()->findOrFail($runId);
+                $step = OrderProcessStep::where('run_id', $runId)->lockForUpdate()->findOrFail($stepId);
+                $attempt = $step->messageAttempts()->lockForUpdate()->findOrFail($attemptId);
+                if ($run->version !== $version || $run->status !== 'retry_queued' || $step->status !== 'retry_pending' || $attempt->status !== 'pending') {
+                    return null;
+                }
+                try {
+                    if (! $this->policy->enabled() || ! $run->automation->enabled || ! OrderMessageRetry::authorized(User::find($attempt->requested_by))) {
+                        throw new RuntimeException('retry_authority_changed');
+                    }
+                    $previous = $step->messageAttempts()->where('number', $attempt->number - 1)->first();
+                    if (! $previous || ! OrderMessageRetry::failed($previous->status === 'completed' ? 'succeeded' : $previous->status, $previous->error_code, $previous->receipt)) {
+                        throw new RuntimeException('retry_failure_changed');
+                    }
+                    $this->policy->check($run->revision->definition);
+                    $this->guard($run);
+                    $node = $this->node($run);
+                    $resumeWait = $node['type'] === 'wait_response' && $node['config']['message_node'] === $step->node_id;
+                    if ((! $resumeWait && $run->node_id !== $step->node_id) || ($resumeWait && (! $run->wait_until || $run->wait_until->isPast()))) {
+                        throw new RuntimeException('retry_context_changed');
+                    }
+                } catch (Throwable) {
+                    $attempt->update(['status' => 'cancelled', 'error_code' => 'retry_context_changed', 'completed_at' => now()]);
+                    $step->update(['status' => 'blocked']);
+                    $run->update(['status' => 'blocked', 'error_code' => 'retry_context_changed', 'version' => $run->version + 1]);
+
+                    return null;
+                }
+                $attempt->update(['status' => 'processing', 'started_at' => now()]);
+                $step->update(['status' => 'processing', 'started_at' => now(), 'lease_until' => now()->addSeconds(150)]);
+                $run->update(['status' => 'sending', 'next_at' => now()->addSeconds(150)]);
+
+                return ['run_id' => $runId, 'step_id' => $stepId, 'attempt_id' => $attemptId, 'resume_wait' => $resumeWait, 'lock' => $lock];
+            });
+            if ($claim) {
+                $this->send($claim);
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
     private function send(array $claim): void
     {
         try {
@@ -294,7 +354,7 @@ class ProcessRuntime
                 if ($data['customer']['phone'] !== $run->context['phone']) {
                     throw new OrderConfirmationSendException('contact_changed');
                 }
-                $template = $this->node($run)['config']['template'];
+                $template = data_get(collect($run->revision->definition['nodes'])->firstWhere('id', $step->node_id), 'config.template');
                 if ($template === ProcessTemplates::IDENTITY) {
                     $url = app(ProcessIdentityService::class)->previewUrl($run);
                     $fields = [$data['customer']['name'], $data['display_reference'], implode('، ', $data['stories']), implode('، ', $data['children']),
@@ -303,20 +363,27 @@ class ProcessRuntime
                 } else {
                     $receipt = app(OrderConfirmationTransport::class)->send($data);
                 }
-                DB::transaction(function () use ($run, $step, $receipt) {
+                DB::transaction(function () use ($run, $step, $receipt, $claim) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
                     $step = OrderProcessStep::lockForUpdate()->findOrFail($step->id);
+                    OrderProcessMessageAttempt::findOrFail($claim['attempt_id'])->update(['status' => 'completed', 'receipt' => $receipt, 'completed_at' => now()]);
                     // Save a late receipt, but never overwrite cancellation/uncertain review.
                     $step->update(['receipt' => $receipt, 'status' => 'completed', 'completed_at' => now()]);
                     if ($run->status === 'sending') {
-                        $this->move($run, $this->node($run)['next']);
+                        if ($claim['resume_wait'] ?? false) {
+                            $run->update(['status' => 'waiting_response', 'error_code' => null, 'version' => $run->version + 1, 'next_at' => now()->addMinutes(10)]);
+                        } else {
+                            $this->move($run, $this->node($run)['next']);
+                        }
                     }
                 });
             } catch (Throwable $exception) {
-                DB::transaction(function () use ($run, $step, $exception) {
+                DB::transaction(function () use ($run, $step, $exception, $claim) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
                     $status = $exception instanceof OrderConfirmationSendException ? 'blocked' : 'uncertain';
                     $step->update(['status' => $status]);
+                    OrderProcessMessageAttempt::findOrFail($claim['attempt_id'])->update(['status' => $status,
+                        'error_code' => $exception instanceof OrderConfirmationSendException ? $exception->reason : 'send_result_uncertain', 'completed_at' => now()]);
                     if ($run->status === 'sending') {
                         $run->update(['status' => $status, 'error_code' => $exception instanceof OrderConfirmationSendException ? $exception->reason : 'send_result_uncertain']);
                     }

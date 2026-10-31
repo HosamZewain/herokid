@@ -15,6 +15,7 @@ use App\Models\WhatsAppConversation;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
 use App\Services\OrderAutomation\Process\ProcessEvents;
 use App\Services\OrderAutomation\Process\ProcessLivePolicy;
+use App\Services\OrderAutomation\Process\ProcessMessageRetry;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\RoboDesk\Conversations\OrderConversationService;
@@ -40,6 +41,10 @@ class OrderProcessRuntimeTest extends TestCase
 
     private bool $uncertain = false;
 
+    private bool $sendDisabled = false;
+
+    private string $sendWamid = 'wamid.synthetic';
+
     private array $historyMessages = [];
 
     protected function setUp(): void
@@ -63,7 +68,7 @@ class OrderProcessRuntimeTest extends TestCase
                 return Http::response(['phone' => '201000000001', 'interactions' => [], 'messages' => $this->historyMessages]);
             }
             if (str_contains($request->url(), '/start/sendMsg')) {
-                return $this->uncertain ? Http::response('unknown', 500) : Http::response(['_id' => 'interaction-synthetic', 'channelId' => 'wamid.synthetic']);
+                return $this->sendDisabled ? Http::response('disabled', 409) : ($this->uncertain ? Http::response('unknown', 500) : Http::response(['_id' => 'interaction-synthetic', 'channelId' => $this->sendWamid]));
             }
             throw new \RuntimeException('Unexpected external request');
         }]);
@@ -124,6 +129,76 @@ class OrderProcessRuntimeTest extends TestCase
             'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.inbound', 'replyTo' => 'wamid.synthetic', 'templateName' => null, 'interactionId' => 'interaction-synthetic']], $overrides));
 
         return $c;
+    }
+
+    public function test_process_failed_delivery_retry_retains_attempts_and_accepts_old_template_reply_once(): void
+    {
+        $run = $this->waiting();
+        $step = $run->steps()->where('type', 'whatsapp')->sole();
+        $receipt = $step->receipt + ['delivery' => ['status' => 'failed']];
+        $step->update(['receipt' => $receipt]);
+        $step->messageAttempts()->first()->update(['receipt' => $receipt]);
+        $service = app(ProcessMessageRetry::class);
+        $this->assertTrue($service->eligible($step->fresh()));
+        $service->retry($run->order, $step->id, $this->actor, $run->version, 'إعادة المحاولة الفاشلة');
+        $attempt = $step->messageAttempts()->latest('number')->first();
+        $this->assertFalse($service->eligible($step->fresh()));
+        $version = $run->fresh()->version;
+        $this->sendWamid = 'wamid.second';
+        app(ProcessRuntime::class)->retryMessage($run->id, $step->id, $attempt->id, $version);
+        app(ProcessRuntime::class)->retryMessage($run->id, $step->id, $attempt->id, $version);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertSame('wamid.second', data_get($step->fresh()->receipt, 'message_id'));
+        $this->assertSame('wamid.synthetic', data_get($step->messageAttempts()->oldest('number')->first()->receipt, 'message_id'));
+        $this->assertCount(2, Http::recorded(fn ($r) => str_contains($r->url(), '/start/sendMsg')));
+        $conversation = $this->history($run);
+        app(ProcessResponsePoller::class)->process($conversation);
+        app(ProcessResponsePoller::class)->process($conversation);
+        $this->assertSame('running', $run->fresh()->status);
+        $this->assertDatabaseCount('order_process_responses', 1);
+        $this->assertSame('wamid.second', data_get($step->fresh()->receipt, 'message_id'));
+        $this->assertDatabaseCount('order_process_identities', 0);
+    }
+
+    public function test_process_retry_blocks_uncertain_and_rechecks_permissions_after_queueing(): void
+    {
+        $run = $this->waiting();
+        $step = $run->steps()->where('type', 'whatsapp')->sole();
+        $service = app(ProcessMessageRetry::class);
+        $this->assertFalse($service->eligible($step));
+        $receipt = $step->receipt + ['delivery' => ['status' => 'failed']];
+        $step->update(['receipt' => $receipt]);
+        $step->messageAttempts()->first()->update(['receipt' => $receipt]);
+        $service->retry($run->order, $step->id, $this->actor, $run->version, 'طلب إعادة المحاولة');
+        $attempt = $step->messageAttempts()->latest('number')->first();
+        $this->actor->permissions()->detach();
+        app(ProcessRuntime::class)->retryMessage($run->id, $step->id, $attempt->id, $run->fresh()->version);
+        $this->assertSame('cancelled', $attempt->fresh()->status);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertCount(1, Http::recorded(fn ($r) => str_contains($r->url(), '/start/sendMsg')));
+        $step->update(['status' => 'uncertain']);
+        $run->update(['status' => 'uncertain']);
+        $this->assertFalse($service->eligible($step->fresh()));
+    }
+
+    public function test_blocked_process_send_can_be_manually_retried_without_replaying_prior_steps(): void
+    {
+        $run = $this->enroll();
+        $this->sendDisabled = true;
+        app(ProcessRuntime::class)->advance($run->id);
+        $run->refresh();
+        $step = $run->steps()->where('type', 'whatsapp')->sole();
+        $this->assertSame('blocked', $run->status);
+        app(ProcessMessageRetry::class)->retry($run->order, $step->id, $this->actor, $run->version, 'القالب متاح الآن');
+        $attempt = $step->messageAttempts()->latest('number')->first();
+        $this->sendDisabled = false;
+        $this->sendWamid = 'wamid.retry';
+        app(ProcessRuntime::class)->retryMessage($run->id, $step->id, $attempt->id, $run->fresh()->version);
+        $this->assertSame('running', $run->fresh()->status);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertSame(2, $step->messageAttempts()->count());
+        $this->assertSame('template_disabled', $step->messageAttempts()->oldest('number')->first()->error_code);
     }
 
     public function test_trial_enrolls_only_one_pinned_checkout_and_workflow(): void

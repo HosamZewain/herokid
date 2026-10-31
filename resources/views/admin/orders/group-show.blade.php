@@ -289,6 +289,8 @@
                 </aside>
             </section>
 
+            @include('admin.orders._message-history')
+
             @can('bosta.view')
                 <details class="rounded-2xl border border-sky-200 bg-sky-50/60" data-order-shipping-disclosure>
                     <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-black text-sky-900 [&::-webkit-details-marker]:hidden">

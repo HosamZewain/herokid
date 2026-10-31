@@ -25,6 +25,7 @@ use App\Support\AdminPermissionRegistry;
 use App\Support\RequestSettings;
 use App\Support\Seo;
 use App\View\Composers\BostaOrderViewComposer;
+use App\View\Composers\OrderMessageHistoryComposer;
 use App\View\Composers\PublicImageViewComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -68,6 +69,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer(['admin.orders.show', 'admin.orders.group-show'], BostaOrderViewComposer::class);
+        View::composer(['admin.orders.show', 'admin.orders.group-show'], OrderMessageHistoryComposer::class);
 
         Gate::before(function ($user, string $ability): ?bool {
             if (AdminPermissionRegistry::has($ability)) {

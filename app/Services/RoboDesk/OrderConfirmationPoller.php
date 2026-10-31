@@ -74,7 +74,8 @@ class OrderConfirmationPoller
             }
         }
         $processReceipts = Schema::hasTable('order_process_runs')
-            ? OrderProcessStep::where('type', 'whatsapp')->whereHas('run', fn ($q) => $q->where('account_key', $conversation->account_key)->where('phone_hash', $conversation->phone_hash))->get()
+            ? OrderProcessStep::where('type', 'whatsapp')->whereHas('run', fn ($q) => $q->where('account_key', $conversation->account_key)->where('phone_hash', $conversation->phone_hash))->with('messageAttempts')->get()
+                ->flatMap(fn ($step) => collect([$step])->concat($step->messageAttempts))
             : collect();
         foreach ($messages as $message) {
             $meta = $message->provider_metadata ?? [];

@@ -16,7 +16,7 @@ class ProcessResponsePoller
     public function needsFullWindow(string $phone): bool
     {
         return app(ProcessLivePolicy::class)->enabled() && OrderProcessRun::where('account_key', config('robodesk.conversations.account_key', 'primary'))
-            ->where('phone_hash', hash('sha256', '+'.ltrim($phone, '+')))->whereIn('status', ['sending', 'running', 'waiting_response', 'uncertain'])->exists();
+            ->where('phone_hash', hash('sha256', '+'.ltrim($phone, '+')))->whereIn('status', ['sending', 'running', 'waiting_response', 'uncertain', 'retry_queued'])->exists();
     }
 
     public function process(WhatsAppConversation $conversation): void
@@ -29,7 +29,21 @@ class ProcessResponsePoller
         if ($pending->isEmpty()) {
             return;
         }
-        $steps = OrderProcessStep::whereIn('run_id', $runs->pluck('id'))->where('type', 'whatsapp')->get();
+        $steps = OrderProcessStep::whereIn('run_id', $runs->pluck('id'))->where('type', 'whatsapp')->with('messageAttempts')->get()->flatMap(function ($step) {
+            if ($step->messageAttempts->isEmpty()) {
+                return [$step];
+            }
+
+            return $step->messageAttempts->map(function ($attempt) use ($step) {
+                $copy = clone $step;
+                $copy->receipt = $attempt->receipt;
+                $copy->status = $attempt->status;
+                $copy->started_at = $attempt->started_at;
+                $copy->setRelation('messageAttempt', $attempt);
+
+                return $copy;
+            });
+        });
         $messages = $conversation->messages()->where('sent_at', '>=', $pending->min('created_at'))->orderBy('sent_at')->orderBy('id')->get();
         $templates = $messages->filter(fn ($m) => $m->direction === 'outbound' && data_get($m->provider_metadata, 'contract_fields_present') === true && filled(data_get($m->provider_metadata, 'templateName')) && filled(data_get($m->provider_metadata, 'channelId')));
         foreach ($steps->where('status', 'completed') as $sent) {
@@ -43,7 +57,18 @@ class ProcessResponsePoller
             if ($evidence->count() === 1) {
                 $receipt = $sent->receipt;
                 $receipt['delivery'] = TemplateDelivery::normalize(data_get($evidence->first()->provider_metadata, 'delivery'));
-                $sent->update(['receipt' => $receipt]);
+                if ($sent->relationLoaded('messageAttempt')) {
+                    $sent->messageAttempt->update(['receipt' => $receipt]);
+                    DB::transaction(function () use ($sent, $receipt) {
+                        $current = OrderProcessStep::lockForUpdate()->findOrFail($sent->id);
+                        if (data_get($current->receipt, 'message_id') === data_get($receipt, 'message_id')) {
+                            $current->update(['receipt' => $receipt]);
+                        }
+                    });
+                    $sent->receipt = $receipt;
+                } else {
+                    $sent->update(['receipt' => $receipt]);
+                }
             }
         }
         foreach ($messages as $message) {

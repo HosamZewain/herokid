@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
 use App\Services\RoboDesk\Conversations\OrderConversationService;
+use App\Services\RoboDesk\OrderMessageHistory;
+use App\Services\RoboDesk\OrderMessageRetry;
 use App\Services\RoboDesk\RoboDeskOutbox;
 use App\Support\OrderStatusRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,6 +106,111 @@ class OrderConfirmationTest extends TestCase
     {
         $this->travel(20)->seconds();
         app(OrderConversationService::class)->sync($order);
+    }
+
+    private function retryActor(): User
+    {
+        $actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'order_automation.execute'])->pluck('id'));
+
+        return $actor;
+    }
+
+    public function test_failed_delivery_manual_retry_preserves_receipt_and_only_sends_once(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $receipt = $event->fresh()->response_payload + ['delivery' => ['status' => 'failed']];
+        $event->update(['response_payload' => $receipt]);
+        $actor = $this->retryActor();
+        $service = app(OrderMessageRetry::class);
+        $retry = $service->retry($order, $event->id, $actor, 'طلب الموظف إعادة المحاولة');
+        $this->assertEquals($receipt, $event->fresh()->response_payload);
+        $this->assertFalse($service->eligible($event->fresh()));
+        $this->assertSame('pending', $retry->status);
+        $this->send($retry);
+        $this->send($retry);
+        $this->assertSame('succeeded', $retry->fresh()->status);
+        $this->assertSame('عميل تجريبي', data_get($retry->fresh()->payload, 'customer.name'));
+        $this->assertCount(2, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+        $stage = app(OrderMessageHistory::class)->stages($order, $actor)->sole();
+        $this->assertSame(2, $stage['count']);
+        $this->assertCount(2, $stage['attempts']);
+        $this->assertSame('فشل التسليم — تواصل بقناة أخرى', $stage['attempts'][0]['delivery']);
+        $this->assertSame('قبلها RoboDesk', $stage['attempts'][1]['send']);
+        // A late tap on the first template still confirms the same checkout once.
+        $this->messages = [$this->template($event), $this->message('late-confirm', ['replyTo' => $receipt['message_id']])];
+        $this->sync($order);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+        $this->assertSame(1, $order->statusLogs()->where('status', 'new_confirmed')->count());
+    }
+
+    public function test_retry_endpoint_rejects_uncertain_accepted_other_order_and_unauthorized_requests(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $actor = $this->retryActor();
+        $this->actingAs($actor);
+        $data = ['source' => 'confirmation', 'source_id' => $event->id, 'version' => 0, 'reason' => 'محاولة يدوية', 'confirm' => '1'];
+        foreach (['unknown', 'processing', 'succeeded', 'pending', 'held'] as $status) {
+            $event->update(['status' => $status]);
+            $this->post(route('admin.orders.message-retry', $order), $data)->assertStatus(422);
+        }
+        $this->travel(61)->seconds();
+        $event->update(['status' => 'blocked', 'last_error' => 'template_disabled', 'attempts' => 1]);
+        $other = $this->order('OTHER-CHECKOUT');
+        $this->post(route('admin.orders.message-retry', $other), $data)->assertNotFound();
+        $actor->permissions()->detach(Permission::where('key', 'order_automation.execute')->value('id'));
+        $actor->unsetRelation('permissions');
+        $this->post(route('admin.orders.message-retry', $order), $data)->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_retry_revalidates_current_state_and_revoked_permission_before_provider_call(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $event->update(['status' => 'blocked', 'last_error' => 'template_disabled', 'attempts' => 1]);
+        $actor = $this->retryActor();
+        $retry = app(OrderMessageRetry::class)->retry($order, $event->id, $actor, 'تم إصلاح القالب');
+        $actor->permissions()->detach();
+        $this->send($retry);
+        $this->assertSame('held', $retry->fresh()->status);
+        $order->update(['status' => 'new_confirmed']);
+        $this->assertFalse(app(OrderMessageRetry::class)->eligible($event->fresh()));
+        Http::assertNothingSent();
+    }
+
+    public function test_queued_retry_does_not_send_when_original_delivery_recovers(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $receipt = $event->fresh()->response_payload;
+        $event->update(['response_payload' => $receipt + ['delivery' => ['status' => 'failed']]]);
+        $retry = app(OrderMessageRetry::class)->retry($order, $event->id, $this->retryActor(), 'إعادة رسالة فاشلة');
+        $event->update(['response_payload' => $receipt + ['delivery' => ['status' => 'delivered']]]);
+        $this->send($retry);
+        $this->assertSame('held', $retry->fresh()->status);
+        $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+    }
+
+    public function test_order_history_is_visible_without_bosta_permission_and_contains_no_private_receipts(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $event->update(['response_payload' => ['message_id' => 'wamid.PRIVATE', 'interaction_id' => 'PRIVATE_INTERACTION', 'delivery' => ['status' => 'failed']]]);
+        $actor = $this->retryActor();
+        $this->actingAs($actor);
+        $this->get(route('admin.orders.groups.show', $order->id))->assertOk()
+            ->assertSee('سجل رسائل الأوتوميشن')->assertSee('قبلها RoboDesk')->assertSee('فشل التسليم')
+            ->assertSee('إعادة إرسال المحاولة الفاشلة')->assertDontSee('wamid.PRIVATE')->assertDontSee('PRIVATE_INTERACTION');
+        $actor->permissions()->detach(Permission::where('key', 'order_automation.execute')->value('id'));
+        $actor->unsetRelation('permissions');
+        $this->get(route('admin.orders.groups.show', $order->id))->assertOk()
+            ->assertSee('سجل رسائل الأوتوميشن')->assertDontSee('إعادة إرسال المحاولة الفاشلة');
     }
 
     public function test_delivery_receipt_updates_without_resend_or_order_changes(): void
