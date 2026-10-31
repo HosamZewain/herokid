@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 19:05 UTC / 21:05 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Identity/payment continuation — prepared, not live
+
+31 October2026: [payment-tolerant identity contexts and read-only candidate preflight](automation-identity-payment-readiness-2026-10-31.md) are prepared on `codex/order-process-trial-readiness`. Live SHA remains `07cc053`; no new deployment, activation, permission grant or paid/message trial. Recording a real payment must not invalidate identity preview/confirmation; pricing/contact/media changes still stop for review. Trial requires an owner-selected story order, exact scope/budget/recipient review and activation authority. Existing pending execute-only permission approval is not activation approval.
+
 ## Order message history and safe manual resend — deployed31 October2026
 
 **Live application SHA: `07cc0535673d59f8492d91adb1390f09573c6664`**, owner-approved. Maintenance19:03:25–19:03:30 UTC /21:03 Cairo,5 seconds. Both checkout and individual-order pages show each automation message stage, send acceptance, delivery, attempt count/history and guarded manual resend of verified failures. Unknown outcomes never automatically resend. New additive encrypted process-attempt ledger preserves old template correlation; manual retries do not replay AI generation or earlier steps.

@@ -19,8 +19,11 @@ class ProcessOrderContext
         return $orders;
     }
 
-    public function snapshot(Collection $orders): array
+    public function snapshot(Collection $orders, int $version = 2): array
     {
+        if (! in_array($version, [1, 2], true)) {
+            throw new RuntimeException('context_version_unsupported');
+        }
         $phones = $orders->map(fn ($o) => Phone::forWhatsApp((string) data_get($o->delivery_details, 'phone')))->unique();
         if ($phones->count() !== 1 || ! Phone::isValidMobile($phones->first())) {
             throw new RuntimeException('contact_invalid');
@@ -30,7 +33,19 @@ class ProcessOrderContext
         $status = $orders->pluck('status')->unique();
         $facts = $orders->map(fn ($o) => $o->only(['id', 'parent_name', 'story_id', 'status', 'shipping_status', 'printing_status', 'payment_status', 'paid_amount_cents', 'discount_cents', 'delivery_details', 'uploaded_photos', 'child_name', 'child_age', 'child_gender', 'story_price', 'child_identity_request_id', 'child_identity_approved_attempt_id']))->all();
 
-        return ['order_ids' => $orders->pluck('id')->all(), 'phone' => $phones->first(), 'status' => $status->count() === 1 ? $status->first() : 'mixed',
+        if ($version === 2) {
+            // Payments are expected while identities are being reviewed. Keep prices,
+            // discounts, contact details and source media immutable, not the ledger balance.
+            foreach ($facts as &$fact) {
+                unset($fact['payment_status'], $fact['paid_amount_cents']);
+                foreach (['payment_status', 'payment_method', 'paid_amount', 'remaining_amount'] as $field) {
+                    unset($fact['delivery_details'][$field]);
+                }
+            }
+            unset($fact);
+        }
+
+        return ['fingerprint_version' => $version, 'order_ids' => $orders->pluck('id')->all(), 'phone' => $phones->first(), 'status' => $status->count() === 1 ? $status->first() : 'mixed',
             'type' => $types->count() === 1 ? $types->first() : 'mixed', 'fingerprint' => hash('sha256', json_encode([$facts, $lines], JSON_THROW_ON_ERROR)),
             'story_ids' => $orders->pluck('story_id')->filter()->unique()->values()->all(), 'product_ids' => collect($lines)->pluck('product_id')->filter()->unique()->values()->all()];
     }

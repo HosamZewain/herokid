@@ -20,13 +20,18 @@ use App\Models\User;
 use App\Models\WhatsAppConversation;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
+use App\Services\Cart\CartTrackingService;
 use App\Services\ChildIdentity\ChildIdentityAttemptService;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
+use App\Services\OrderAutomation\Process\ProcessIdentityPreflight;
 use App\Services\OrderAutomation\Process\ProcessIdentityService;
+use App\Services\OrderAutomation\Process\ProcessOrderContext;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\OrderAutomation\WorkflowInputs;
+use App\Services\Orders\OrderPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -182,6 +187,184 @@ class OrderProcessIdentityTest extends TestCase
         }
     }
 
+    public function test_recorded_deposit_during_identity_review_keeps_preview_and_confirmation_valid(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $order = OrderProcessIdentity::firstOrFail()->order;
+        app(OrderPaymentService::class)->updateGroup(
+            $order, 'partially_paid', 75, 'نقدي', $this->actor, request(),
+        );
+        $ledgerCount = DB::table('order_payment_events')->count();
+        $this->assertGreaterThan(0, $ledgerCount);
+        $this->mock(CartTrackingService::class)->shouldNotReceive('captureAttribution');
+        $this->get(app(ProcessIdentityService::class)->previewUrl($run))->assertOk();
+        $this->reply($run);
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $this->assertNotNull($order->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(7500, (int) $order->fresh()->paid_amount_cents);
+        $this->assertSame('partially_paid', $order->fresh()->payment_status);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+        $this->assertSame($ledgerCount, DB::table('order_payment_events')->count());
+        $this->assertDatabaseCount('order_process_responses', 1);
+    }
+
+    public function test_preview_message_uses_current_balance_after_payment_before_send(): void
+    {
+        $run = $this->generated();
+        $order = OrderProcessIdentity::firstOrFail()->order;
+        app(OrderPaymentService::class)->updateGroup(
+            $order, 'partially_paid', 75, 'نقدي', $this->actor, request(),
+        );
+        app(ProcessRuntime::class)->advance($run->id);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'start/sendMsg')
+            && $r['template']['data'][6] === '150.00' && $r['template']['data'][7] === '75.00');
+        $this->assertSame('running', $run->fresh()->status);
+    }
+
+    public function test_payment_tolerance_does_not_allow_changed_price_discount_contact_or_identity_inputs(): void
+    {
+        $run = $this->generated();
+        $order = OrderProcessIdentity::firstOrFail()->order;
+        $original = $order->getAttributes();
+        $changes = [
+            ['discount_cents' => 100],
+            ['delivery_details' => array_replace($order->delivery_details, ['phone' => '01000000002'])],
+            ['delivery_details' => array_replace($order->delivery_details, ['delivery_fee' => 100])],
+            ['child_name' => 'طفل آخر'],
+            ['uploaded_photos' => ['child-photos/another.png']],
+            ['status' => 'cancelled'],
+        ];
+        foreach ($changes as $change) {
+            $order->forceFill($change)->saveQuietly();
+            try {
+                app(ProcessRuntime::class)->guard($run->fresh());
+                $this->fail('Changed '.array_key_first($change).' was accepted.');
+            } catch (\RuntimeException $e) {
+                $this->assertSame('inputs_changed', $e->getMessage());
+            } finally {
+                $order->setRawAttributes($original)->saveQuietly();
+            }
+        }
+        $item = $order->items()->firstOrFail();
+        $item->update(['quantity' => 2, 'total_price_cents' => 20000]);
+        $this->expectExceptionMessage('inputs_changed');
+        app(ProcessRuntime::class)->guard($run->fresh());
+    }
+
+    public function test_preexisting_unversioned_context_keeps_strict_payment_guard(): void
+    {
+        $run = $this->generated();
+        $contexts = app(ProcessOrderContext::class);
+        $context = $contexts->snapshot($contexts->orders($run->checkout_key), 1);
+        unset($context['fingerprint_version']);
+        $run->update(['context' => $context + ['actor_id' => $this->actor->id]]);
+        app(ProcessRuntime::class)->guard($run->fresh());
+        $order = OrderProcessIdentity::firstOrFail()->order;
+        app(OrderPaymentService::class)->updateGroup(
+            $order, 'partially_paid', 75, 'نقدي', $this->actor, request(),
+        );
+        $this->expectExceptionMessage('inputs_changed');
+        app(ProcessRuntime::class)->guard($run->fresh());
+    }
+
+    private function preflightCandidate(): Order
+    {
+        $run = $this->enroll();
+        $source = Order::findOrFail($run->order_id);
+        $order = $source->replicate();
+        $key = 'SYNTHETIC-PREFLIGHT-'.Str::uuid();
+        $order->order_number = 'TEST-'.Str::random(8);
+        $order->checkout_group_key = $key;
+        $order->delivery_details = array_replace($source->delivery_details, ['checkout_group' => $key]);
+        $order->saveQuietly();
+        foreach ($source->items as $item) {
+            $copy = $item->replicate();
+            $copy->order_id = $order->id;
+            $copy->save();
+        }
+
+        return $order;
+    }
+
+    public function test_identity_preflight_is_read_only_redacted_and_not_an_activation_permit(): void
+    {
+        $order = $this->preflightCandidate();
+        config(['order_process.enabled' => false, 'order_process.identity_enabled' => false, 'order_process.identity_template_ready' => false]);
+        Queue::fake();
+        $writes = [];
+        DB::listen(function ($query) use (&$writes) {
+            if (preg_match('/^\s*(insert|update|delete|replace|alter|create|drop)\b/i', $query->sql)) {
+                $writes[] = $query->sql;
+            }
+        });
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        $report = app(ProcessIdentityPreflight::class)->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $this->assertTrue($report['candidate_valid'], json_encode($report['blockers']));
+        $this->assertFalse($report['execution_authorized']);
+        $this->assertFalse($report['external_delivery_and_workers_verified']);
+        $this->assertFalse($report['gates']['process_enabled']);
+        $this->assertSame(1, $report['verified_photo_count']);
+        $this->assertEquals(0.1, $report['estimated_usd_per_identity']);
+        foreach (['01000000001', '201000000001', 'طفل', 'عميل', 'child-photos/', 'synthetic-not-a-real-key', 'https://'] as $private) {
+            $this->assertStringNotContainsString($private, json_encode($report, JSON_UNESCAPED_UNICODE));
+        }
+        $this->assertSame([], $writes);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        $this->artisan('order-process:identity-preflight', ['order' => $order->id, '--automation' => $this->workflow->id, '--actor' => $this->actor->id])->assertSuccessful();
+        $this->assertSame([], $writes);
+        $this->assertFalse(config('order_process.enabled'));
+    }
+
+    public function test_preflight_definition_fingerprint_ignores_object_key_order_but_detects_content_changes(): void
+    {
+        $order = $this->preflightCandidate();
+        $service = app(ProcessIdentityPreflight::class);
+        $before = $service->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $revision = $this->workflow->revision;
+        $definition = array_reverse($revision->definition, true);
+        $definition['nodes'][0] = array_reverse($definition['nodes'][0], true);
+        $revision->update(['definition' => $definition]);
+        $reordered = $service->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $this->assertTrue($reordered['candidate_valid']);
+        $this->assertSame($before['definition_fingerprint'], $reordered['definition_fingerprint']);
+        $definition['nodes'][0]['config']['budget_usd'] = 0.5;
+        $revision->update(['definition' => $definition]);
+        $changed = $service->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $this->assertNotSame($before['definition_fingerprint'], $changed['definition_fingerprint']);
+        Http::assertNothingSent();
+    }
+
+    public function test_identity_preflight_blocks_missing_permission_and_does_not_read_photos(): void
+    {
+        $order = $this->preflightCandidate();
+        $this->actor->permissions()->detach(Permission::where('key', 'order_automation.execute')->value('id'));
+        $this->mock(WorkflowInputs::class)->shouldNotReceive('capture');
+        $report = app(ProcessIdentityPreflight::class)->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $this->assertFalse($report['candidate_valid']);
+        $this->assertContains('actor_permissions_missing', $report['blockers']);
+        $this->assertArrayNotHasKey('verified_photo_count', $report);
+        Http::assertNothingSent();
+    }
+
+    public function test_identity_preflight_blocks_existing_process_and_corrupt_photo(): void
+    {
+        $run = $this->enroll();
+        $service = app(ProcessIdentityPreflight::class);
+        $report = $service->inspect($run->order_id, $this->workflow->id, $this->actor->id);
+        $this->assertContains('existing_process_or_identity_claim', $report['blockers']);
+        $order = $this->preflightCandidate();
+        Storage::disk('local')->put('child-photos/identity.png', 'not an image');
+        $report = $service->inspect($order->id, $this->workflow->id, $this->actor->id);
+        $this->assertContains('identity_inputs_unavailable', $report['blockers']);
+        $this->assertFalse($report['candidate_valid']);
+        Http::assertNothingSent();
+    }
+
     public function test_typed_identity_confirmation_uses_same_interaction_evidence(): void
     {
         $run = $this->generated();
@@ -262,7 +445,7 @@ class OrderProcessIdentityTest extends TestCase
     {
         $run = $this->generated();
         $url = app(ProcessIdentityService::class)->previewUrl($run);
-        $this->mock(\App\Services\Cart\CartTrackingService::class)->shouldNotReceive('captureAttribution');
+        $this->mock(CartTrackingService::class)->shouldNotReceive('captureAttribution');
         $this->get($url)->assertOk()->assertSee('طفل 0')->assertDontSee('01000000001')->assertDontSee('01111822277')->assertHeader('Referrer-Policy', 'no-referrer');
         $this->get(route('order-process.identity-preview', $run))->assertForbidden();
         $this->get(str_replace('/'.$run->id.'?', '/999999?', $url))->assertNotFound();

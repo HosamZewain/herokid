@@ -408,7 +408,7 @@ class ProcessRuntime
         if (! $this->policy->authorized($authority)) {
             throw new RuntimeException('actor_revoked');
         }
-        $snapshot = $this->contexts->snapshot($this->contexts->orders($run->checkout_key, DB::transactionLevel() > 0));
+        $snapshot = $this->contexts->snapshot($this->contexts->orders($run->checkout_key, DB::transactionLevel() > 0), (int) ($run->context['fingerprint_version'] ?? 1));
         if (! hash_equals($run->context['fingerprint'], $snapshot['fingerprint'])) {
             throw new RuntimeException('inputs_changed');
         }
