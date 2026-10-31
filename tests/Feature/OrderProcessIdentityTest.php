@@ -1,0 +1,484 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\DTOs\Ai\GptImageRequest;
+use App\DTOs\Ai\GptImageResult;
+use App\Jobs\GenerateProcessIdentity;
+use App\Models\AiModel;
+use App\Models\AiProvider;
+use App\Models\Order;
+use App\Models\OrderAutomation;
+use App\Models\OrderAutomationRevision;
+use App\Models\OrderAutomationRun;
+use App\Models\OrderProcessIdentity;
+use App\Models\OrderProcessRun;
+use App\Models\Permission;
+use App\Models\RoboDeskConversationSetting;
+use App\Models\Story;
+use App\Models\User;
+use App\Models\WhatsAppConversation;
+use App\Services\Ai\AiProviderCredentialService;
+use App\Services\Ai\GptImageClient;
+use App\Services\ChildIdentity\ChildIdentityAttemptService;
+use App\Services\OrderAutomation\Process\ProcessDefinition;
+use App\Services\OrderAutomation\Process\ProcessIdentityService;
+use App\Services\OrderAutomation\Process\ProcessResponsePoller;
+use App\Services\OrderAutomation\Process\ProcessRuntime;
+use App\Services\OrderAutomation\Process\ProcessSimulator;
+use App\Services\OrderAutomation\Process\ProcessTemplates;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\TestCase;
+
+class OrderProcessIdentityTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $actor;
+
+    private OrderAutomation $workflow;
+
+    private Story $story;
+
+    private string $png;
+
+    private bool $sendUncertain = false;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(now()->utc()->startOfDay());
+        Http::preventStrayRequests();
+        Queue::fake();
+        Cache::flush();
+        Storage::fake('local');
+        Storage::fake('public');
+        config(['media.private_disk' => 'local', 'order_process.enabled' => true, 'order_process.after_order_id' => 0,
+            'order_process.confirmation_owner' => 'legacy', 'order_process.identity_enabled' => true,
+            'order_process.identity_template_ready' => true, 'order_process.identity_budget_usd' => 1,
+            'robodesk.enabled' => false, 'robodesk.confirmation.enabled' => false]);
+        $this->actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $this->actor->permissions()->sync(Permission::whereIn('key', ['order_automation.view', 'order_automation.manage', 'order_automation.activate', 'order_automation.execute', 'orders.view', 'orders.update', 'orders.photos.view'])->pluck('id'));
+        $this->story = Story::create(['title' => 'قصة اختبار', 'slug' => 'identity-process-test', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
+        ob_start();
+        imagepng(imagecreatetruecolor(2, 2));
+        $this->png = ob_get_clean();
+        Storage::disk('local')->put('child-photos/identity.png', $this->png);
+        $provider = AiProvider::firstOrCreate(['driver' => 'openai'], ['name' => 'OpenAI', 'display_name' => 'OpenAI']);
+        $provider->update(['is_active' => true]);
+        $model = $provider->models()->firstOrCreate(['code' => 'gpt-image-2'], ['display_name' => 'Synthetic model']);
+        $model->update(['is_active' => true, 'generation_capabilities_json' => ['character_sheet'], 'estimated_cost_amount' => '0.1', 'estimated_cost_currency' => 'USD']);
+        app(AiProviderCredentialService::class)->save($provider, 'synthetic-not-a-real-key');
+        $d = app(ProcessDefinition::class)->validate(ProcessDefinition::defaults('identity'));
+        $this->workflow = OrderAutomation::create(['name' => 'مسار هوية وهمي', 'draft' => $d]);
+        $r = OrderAutomationRevision::create(['automation_id' => $this->workflow->id, 'definition' => $d, 'checksum' => hash('sha256', json_encode($d)), 'published_by' => $this->actor->id, 'created_at' => now()]);
+        $this->workflow->update(['revision_id' => $r->id]);
+        app(ProcessRuntime::class)->activate($this->workflow, $this->actor, true);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only']);
+        Http::fake(['https://hero-kid.robodesk.ai/*' => fn ($request) => str_contains($request->url(), 'messagesByPhone')
+            ? Http::response(['phone' => '201000000001', 'interactions' => [], 'messages' => []])
+            : ($this->sendUncertain ? Http::response('unknown', 500) : Http::response(['_id' => 'identity-interaction', 'channelId' => 'wamid.identity']))]);
+    }
+
+    private function enroll(int $count = 1): OrderProcessRun
+    {
+        $key = 'SYNTHETIC-'.Str::uuid();
+        DB::transaction(function () use ($count, $key) {
+            for ($i = 0; $i < $count; $i++) {
+                $order = Order::create(['order_number' => 'TEST-'.Str::random(8), 'checkout_group_key' => $key, 'story_id' => $this->story->id, 'parent_name' => 'عميل اختبار',
+                    'child_name' => 'طفل '.$i, 'child_age' => 5, 'child_gender' => 'boy', 'status' => 'new', 'uploaded_photos' => ['child-photos/identity.png'],
+                    'delivery_details' => ['checkout_group' => $key, 'phone' => '01000000001', 'delivery_fee' => 50]]);
+                $order->items()->create(['item_type' => 'story', 'story_id' => $this->story->id, 'title' => 'قصة اختبار', 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+                $order->update(['status' => 'new_confirmed']);
+            }
+        });
+        app(ProcessRuntime::class)->tick();
+
+        return OrderProcessRun::where('checkout_key', $key)->firstOrFail();
+    }
+
+    private function generated(int $count = 1): OrderProcessRun
+    {
+        $run = $this->enroll($count);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->times($count)->withArgs(function (GptImageRequest $request) {
+            $this->assertSame(1, $request->maxAttempts);
+            $this->assertCount(1, $request->inputImages);
+            $this->assertStringContainsString('data:image/png;base64,', $request->inputImages[0]);
+            $this->assertStringNotContainsString('https://', $request->prompt);
+
+            return true;
+        })->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-receipt', ['cost_usd' => 0.1], []));
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_identity', $run->fresh()->status, $run->fresh()->error_code ?? '');
+        foreach (OrderProcessIdentity::all() as $task) {
+            app(ProcessIdentityService::class)->generate($task->id);
+            app(ProcessIdentityService::class)->generate($task->id);
+            $this->assertSame('succeeded', $task->fresh()->status, $task->fresh()->error_code ?? '');
+        }
+        app(ProcessRuntime::class)->advance($run->id);
+
+        return $run->fresh();
+    }
+
+    private function reply(OrderProcessRun $run, string $text = 'تأكيد الهوية', ?string $replyTo = 'wamid.identity'): void
+    {
+        $conversation = WhatsAppConversation::create(['account_key' => $run->account_key, 'phone_hash' => $run->phone_hash, 'phone' => '+201000000001']);
+        $base = ['remote_id' => 'template', 'remote_hash' => hash('sha256', 'template'), 'fingerprint' => hash('sha256', 'template'), 'direction' => 'outbound', 'body' => 'معاينة هوية', 'kind' => 'text', 'sent_at' => now(),
+            'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.identity', 'replyTo' => null, 'templateName' => ProcessTemplates::IDENTITY, 'interactionId' => 'identity-interaction']];
+        $conversation->messages()->create($base);
+        $this->travel(3)->seconds();
+        $conversation->messages()->create(array_replace($base, ['remote_id' => 'reply', 'remote_hash' => hash('sha256', 'reply'), 'fingerprint' => hash('sha256', 'reply'), 'direction' => 'inbound', 'body' => $text, 'sent_at' => now(),
+            'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.reply', 'replyTo' => $replyTo, 'templateName' => null, 'interactionId' => 'identity-interaction']]));
+        app(ProcessResponsePoller::class)->process($conversation);
+        app(ProcessResponsePoller::class)->process($conversation);
+    }
+
+    public function test_multi_child_generation_is_deduplicated_private_unapproved_and_accounted(): void
+    {
+        $run = $this->generated(2);
+        $this->assertSame('preview', $run->node_id);
+        $this->assertDatabaseCount('order_process_identities', 2);
+        foreach (OrderProcessIdentity::all() as $task) {
+            $a = $task->attempt;
+            $this->assertSame('automation', $a->initiated_by);
+            $this->assertSame('0.100000', $a->cost_usd);
+            $this->assertSame(hash('sha256', $this->png), $a->output_checksum);
+            $this->assertNull($a->identityRequest->approved_attempt_id);
+            $this->assertNull($a->identityRequest->consent_accepted_at);
+            $this->assertNull($task->order->child_identity_approved_attempt_id);
+            Storage::disk('local')->assertExists($a->output_storage_path);
+        }
+        Http::assertNothingSent();
+        Queue::assertPushed(GenerateProcessIdentity::class, 2);
+    }
+
+    public function test_preview_template_reply_approves_exact_outputs_once_without_marking_paid(): void
+    {
+        $run = $this->generated(2);
+        app(ProcessRuntime::class)->advance($run->id);
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'start/sendMsg') && $r['language'] === 'ar-EG' && $r['template']['templateName'] === ProcessTemplates::IDENTITY
+            && count($r['template']['data']) === 8 && is_numeric($r['template']['data'][6]) && is_numeric($r['template']['data'][7]) && ! isset($r['procedureId']));
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->reply($run);
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $this->assertDatabaseCount('order_process_responses', 1);
+        foreach (OrderProcessIdentity::all() as $task) {
+            $this->assertSame($task->attempt_id, $task->order->child_identity_approved_attempt_id);
+            $this->assertSame($task->attempt_id, $task->attempt->identityRequest->approved_attempt_id);
+            $this->assertSame(0, (int) $task->order->paid_amount_cents);
+            $this->assertSame('new_confirmed', $task->order->status);
+        }
+    }
+
+    public function test_typed_identity_confirmation_uses_same_interaction_evidence(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->reply($run, ' تأكيد الهوية ', null);
+        $this->assertSame('approve', $run->fresh()->node_id);
+    }
+
+    public function test_revision_request_goes_to_staff_without_identity_approval(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->reply($run, 'طلب تعديل الهوية');
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $this->assertNull(OrderProcessIdentity::first()->order->child_identity_approved_attempt_id);
+    }
+
+    public function test_uncertain_ai_result_is_never_resubmitted(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('timeout synthetic'));
+        $task = OrderProcessIdentity::firstOrFail();
+        app(ProcessIdentityService::class)->generate($task->id);
+        app(ProcessIdentityService::class)->generate($task->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('uncertain', $task->fresh()->status);
+        $this->assertSame('unknown', $task->fresh()->attempt->billing_status);
+        $this->assertSame('blocked', $run->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_changed_photo_bytes_stop_generation_before_billable_call(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        Storage::disk('local')->put('child-photos/identity.png', 'changed');
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::firstOrFail()->id);
+        $this->assertSame('blocked', OrderProcessIdentity::first()->status);
+    }
+
+    public function test_changed_phone_stops_generation_and_no_message_is_sent(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $run->order->update(['delivery_details' => ['phone' => '01000000002']]);
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::firstOrFail()->id);
+        $this->assertSame('blocked', OrderProcessIdentity::first()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_unknown_or_insufficient_budget_never_creates_generation(): void
+    {
+        $run = $this->enroll(2);
+        config(['order_process.identity_budget_usd' => 0.15]);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('identity_budget_required', $run->fresh()->error_code);
+        $this->assertDatabaseCount('order_process_identities', 0);
+        Queue::assertNotPushed(GenerateProcessIdentity::class);
+    }
+
+    public function test_expired_processing_lease_blocks_without_retry(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        OrderProcessIdentity::first()->update(['status' => 'processing', 'lease_until' => now()->subSecond()]);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertSame('identity_requires_review', $run->fresh()->error_code);
+    }
+
+    public function test_preview_signatures_expiry_tampering_and_no_customer_financial_data(): void
+    {
+        $run = $this->generated();
+        $url = app(ProcessIdentityService::class)->previewUrl($run);
+        $this->mock(\App\Services\Cart\CartTrackingService::class)->shouldNotReceive('captureAttribution');
+        $this->get($url)->assertOk()->assertSee('طفل 0')->assertDontSee('01000000001')->assertDontSee('01111822277')->assertHeader('Referrer-Policy', 'no-referrer');
+        $this->get(route('order-process.identity-preview', $run))->assertForbidden();
+        $this->get(str_replace('/'.$run->id.'?', '/999999?', $url))->assertNotFound();
+        $task = OrderProcessIdentity::first();
+        $image = URL::temporarySignedRoute('order-process.identity-image', now()->addMinute(), ['run' => $run->id, 'identity' => $task->id]);
+        $this->get($image)->assertOk()->assertHeader('Content-Type', 'image/png');
+        Storage::disk('local')->put($task->attempt->output_storage_path, 'changed');
+        $this->get($image)->assertNotFound();
+        $this->travel(36)->days();
+        $this->get($url)->assertForbidden();
+    }
+
+    public function test_simulation_covers_identity_approval_and_manual_payment_gate_without_external_actions(): void
+    {
+        $simulator = app(ProcessSimulator::class);
+        $run = $simulator->start($this->workflow, $this->actor, (string) Str::uuid(), ['event' => 'status_entered', 'previous_status' => 'new', 'status' => 'new_confirmed', 'items' => [['type' => 'story', 'catalog_id' => $this->story->id]]]);
+        $this->assertSame('waiting_response', $run->status);
+        $run = $simulator->respond($run->fresh(), $run->fresh()->version, 'approve_identity');
+        $this->assertTrue($run->context['identity_approved']);
+        $this->assertSame('waiting_staff', $run->status);
+        $this->assertDatabaseCount('order_process_identities', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_live_activation_requires_independent_template_readiness(): void
+    {
+        app(ProcessRuntime::class)->activate($this->workflow, $this->actor, false);
+        config(['order_process.identity_template_ready' => false]);
+        $this->expectException(ValidationException::class);
+        app(ProcessRuntime::class)->activate($this->workflow, $this->actor, true);
+    }
+
+    public function test_revoked_photo_access_blocks_paid_work(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->actor->permissions()->detach(Permission::where('key', 'orders.photos.view')->value('id'));
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::first()->id);
+        $this->assertSame('blocked', OrderProcessIdentity::first()->status);
+    }
+
+    public function test_input_change_during_generation_preserves_output_but_does_not_publish_it(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturnUsing(function () use ($run) {
+            $run->order->update(['child_name' => 'اسم مختلف']);
+
+            return new GptImageResult($this->png, 'png', 'image/png', 'synthetic-receipt', ['cost_usd' => 0.1], []);
+        });
+        $task = OrderProcessIdentity::first();
+        app(ProcessIdentityService::class)->generate($task->id);
+        $task->refresh();
+        $this->assertSame('uncertain', $task->status);
+        $this->assertSame('succeeded', $task->attempt->status);
+        $this->assertSame('0.100000', $task->attempt->cost_usd);
+        $this->assertNull($task->order->child_identity_approved_attempt_id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_cannot_approve_without_consumed_identity_confirmation(): void
+    {
+        $run = $this->generated();
+        // Even a malformed/administratively changed node pointer cannot invent a decision.
+        $run->update(['node_id' => 'approve']);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('identity_approval_missing', $run->fresh()->error_code);
+        $this->assertNull(OrderProcessIdentity::first()->order->child_identity_approved_attempt_id);
+    }
+
+    public function test_wrong_template_history_never_approves_identity(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $conversation = WhatsAppConversation::create(['account_key' => $run->account_key, 'phone_hash' => $run->phone_hash, 'phone' => '+201000000001']);
+        foreach (['outbound', 'inbound'] as $direction) {
+            $conversation->messages()->create(['remote_id' => $direction, 'remote_hash' => hash('sha256', $direction), 'fingerprint' => hash('sha256', $direction),
+                'direction' => $direction, 'body' => 'تأكيد الهوية', 'kind' => 'text', 'sent_at' => now(),
+                'provider_metadata' => ['contract_fields_present' => true, 'channelId' => $direction === 'outbound' ? 'wamid.identity' : 'wamid.reply',
+                    'replyTo' => $direction === 'inbound' ? 'wamid.identity' : null, 'templateName' => 'herokid_order_confirmation', 'interactionId' => 'identity-interaction']]);
+            $this->travel(3)->seconds();
+        }
+        app(ProcessResponsePoller::class)->process($conversation);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertDatabaseCount('order_process_responses', 0);
+    }
+
+    public function test_uncertain_template_send_never_repeats_or_approves(): void
+    {
+        $run = $this->generated();
+        $this->sendUncertain = true;
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('uncertain', $run->fresh()->status);
+        Http::assertSentCount(2);
+        $this->assertNull(OrderProcessIdentity::first()->order->child_identity_approved_attempt_id);
+    }
+
+    public function test_missing_output_cannot_be_approved_after_customer_reply(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->reply($run);
+        $task = OrderProcessIdentity::first();
+        Storage::disk('local')->delete($task->attempt->output_storage_path);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertNull($task->order->child_identity_approved_attempt_id);
+    }
+
+    public function test_invalid_template_mapping_and_missing_generation_are_rejected(): void
+    {
+        foreach (['mapping', 'generation'] as $mode) {
+            $d = ProcessDefinition::defaults('identity');
+            if ($mode === 'mapping') {
+                $d['nodes'][1]['config']['variables'] = array_reverse(ProcessTemplates::IDENTITY_FIELDS);
+            } else {
+                array_shift($d['nodes']);
+            }
+            try {
+                app(ProcessDefinition::class)->validate($d);
+                $this->fail('Invalid graph accepted');
+            } catch (ValidationException) {
+                $this->assertTrue(true);
+            }
+        }
+    }
+
+    public function test_second_workflow_cannot_repeat_paid_generation_for_same_order(): void
+    {
+        $run = $this->generated();
+        $run->update(['status' => 'cancelled', 'active_key' => null]);
+        $second = $run->replicate(['enrollment_key', 'active_key']);
+        $second->enrollment_key = hash('sha256', 'another workflow');
+        $second->status = 'queued';
+        $second->node_id = 'generate';
+        $second->save();
+        app(ProcessRuntime::class)->advance($second->id);
+        $this->assertSame('identity_already_claimed', $second->fresh()->error_code);
+        $this->assertDatabaseCount('order_process_identities', 1);
+    }
+
+    public function test_existing_legacy_identity_claim_prevents_new_paid_attempt(): void
+    {
+        $run = $this->enroll();
+        OrderAutomationRun::create(['automation_id' => $this->workflow->id, 'revision_id' => $this->workflow->revision_id,
+            'order_id' => $run->order_id, 'request_key' => 'synthetic-legacy', 'live_key' => 'story-identity:'.$run->order_id,
+            'dry_run' => false, 'trial' => false, 'status' => 'queued', 'steps' => [], 'context' => []]);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('identity_already_claimed', $run->fresh()->error_code);
+        $this->assertDatabaseCount('order_process_identities', 0);
+    }
+
+    public function test_manual_generation_cannot_duplicate_unresolved_process_attempt(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        $task = OrderProcessIdentity::first();
+        $this->expectException(ValidationException::class);
+        app(ChildIdentityAttemptService::class)->create($task->attempt->identityRequest, (string) Str::uuid(), 'admin', $this->actor);
+    }
+
+    public function test_unknown_cost_and_non_usd_estimate_block_before_generation(): void
+    {
+        $run = $this->enroll();
+        AiModel::where('code', 'gpt-image-2')->update(['estimated_cost_currency' => 'EGP']);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('identity_budget_required', $run->fresh()->error_code);
+        $this->assertDatabaseCount('order_process_identities', 0);
+    }
+
+    public function test_new_preset_editor_and_live_page_render_for_authorized_manager(): void
+    {
+        $this->actingAs($this->actor);
+        $this->get(route('admin.order-automation.process.edit', $this->workflow))->assertOk()->assertSee(ProcessTemplates::IDENTITY)->assertSee('توليد هوية الطفل وحفظها');
+        $this->get(route('admin.order-automation.process.live', $this->workflow))->assertOk();
+        $this->post(route('admin.order-automation.process.create'), ['name' => 'مسار هوية إضافي', 'preset' => 'identity'])->assertRedirect();
+    }
+
+    public function test_failed_preview_delivery_is_visible_without_retry_or_autoapproval(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->reply($run, 'رسالة عادية');
+        $conversation = WhatsAppConversation::first();
+        $template = $conversation->messages()->where('direction', 'outbound')->first();
+        $metadata = $template->provider_metadata;
+        $metadata['delivery'] = ['status' => 'failed', 'failureCategory' => 'Unreachable'];
+        $template->update(['provider_metadata' => $metadata]);
+        app(ProcessResponsePoller::class)->process($conversation);
+        app(ProcessResponsePoller::class)->process($conversation);
+        $this->assertSame('failed', data_get($run->steps()->where('type', 'whatsapp')->first()->receipt, 'delivery.status'));
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertNull(OrderProcessIdentity::first()->attempt->identityRequest->approved_attempt_id);
+        $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+        $this->actingAs($this->actor)->get(route('admin.order-automation.process.live', $this->workflow))->assertOk()->assertSee('فشل التسليم');
+    }
+
+    public function test_staff_stop_cannot_release_uncertain_paid_identity_claim(): void
+    {
+        $run = $this->enroll();
+        app(ProcessRuntime::class)->advance($run->id);
+        OrderProcessIdentity::first()->update(['status' => 'uncertain']);
+        $run->refresh()->update(['status' => 'blocked']);
+        try {
+            app(ProcessRuntime::class)->staffAction($run, $this->actor, $run->version, 'stop', 'Synthetic stop');
+            $this->fail('Uncertain paid attempt must retain its claim');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+        }
+        $this->assertNotNull($run->fresh()->active_key);
+    }
+}

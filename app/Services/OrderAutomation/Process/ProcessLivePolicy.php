@@ -43,13 +43,22 @@ class ProcessLivePolicy
             $errors[] = 'التنفيذ الحالي يدعم نطاق عملية الشراء؛ تنفيذ وحدات القصص والمنتجات يحتاج ربط الإنتاج.';
         }
         foreach ($definition['nodes'] ?? [] as $node) {
+            if (in_array($node['type'], ['generate_identity', 'approve_identity'], true)
+                && (! config('order_process.identity_enabled') || (float) config('order_process.identity_budget_usd') <= 0
+                    || config('queue.connections.order-process-ai.retry_after') <= 270
+                    || $definition['conditions']['type'] !== 'story' || $definition['conditions']['status'] !== 'new_confirmed')) {
+                $errors[] = 'توليد الهوية يحتاج تفعيلًا مستقلًا وميزانية وعامل التوليد وطلبات قصص مؤكدة.';
+            }
             if ($node['type'] === 'whatsapp') {
-                if (! $this->ownerReady() || $node['config']['template'] !== 'herokid_order_confirmation'
-                    || $node['config']['variables'] !== array_keys(ProcessDefinition::VARIABLES)) {
-                    $errors[] = 'نقل ملكية التأكيد مطلوب؛ القالب المعتمد للتنفيذ حاليًا هو قالب تأكيد الطلب فقط.';
-                }
-                if ($definition['conditions']['status'] !== 'new') {
-                    $errors[] = 'قالب تأكيد الطلب يرسل للطلبات الجديدة غير المؤكدة فقط.';
+                $template = $node['config']['template'];
+                if (! ProcessTemplates::fields($template) || $node['config']['variables'] !== ProcessTemplates::fields($template)) {
+                    $errors[] = 'القالب أو ترتيب متغيراته غير معتمد للتنفيذ.';
+                } elseif ($template === ProcessTemplates::IDENTITY) {
+                    if (! config('order_process.identity_template_ready') || ! config('order_process.identity_enabled')) {
+                        $errors[] = 'قالب معاينة الهوية يحتاج تأكيد موافقة ميتا ومزامنته مع روبوديسك وتفعيل الإرسال.';
+                    }
+                } elseif (! $this->ownerReady() || $definition['conditions']['status'] !== 'new') {
+                    $errors[] = 'نقل ملكية التأكيد مطلوب؛ قالب التأكيد للطلبات الجديدة غير المؤكدة فقط.';
                 }
             }
             if ($node['type'] === 'change_status' && ! in_array([$node['config']['from'], $node['config']['to']], [['new', 'new_confirmed'], ['new_confirmed', 'under_review']], true)) {
@@ -65,7 +74,9 @@ class ProcessLivePolicy
     {
         $actor = User::find($automation->process_activated_by);
 
-        return $actor && $actor->is_active && $actor->role === 'admin'
+        $needsPhotos = collect($automation->revision?->definition['nodes'] ?? [])->contains(fn ($n) => in_array($n['type'], ['generate_identity', 'approve_identity'], true));
+
+        return $actor && (! $needsPhotos || $actor->hasPermission('orders.photos.view')) && $actor->is_active && $actor->role === 'admin'
             && collect(['order_automation.view', 'order_automation.activate', 'order_automation.execute', 'orders.view', 'orders.update'])
                 ->every(fn ($permission) => $actor->hasPermission($permission));
     }

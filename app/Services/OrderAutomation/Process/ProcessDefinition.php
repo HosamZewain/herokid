@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 /** Schema 2 describes processes; schema 1 remains owned by the legacy identity runner. */
 class ProcessDefinition
 {
-    public const TYPES = ['whatsapp' => 'إرسال قالب واتساب', 'wait_response' => 'انتظار رد العميل', 'change_status' => 'تغيير حالة الطلب', 'condition' => 'شرط وتفرّع', 'manual_review' => 'مراجعة موظف', 'end' => 'إنهاء المسار'];
+    public const TYPES = ['generate_identity' => 'توليد هوية الطفل وحفظها', 'approve_identity' => 'اعتماد الهوية من رد العميل', 'whatsapp' => 'إرسال قالب واتساب', 'wait_response' => 'انتظار رد العميل', 'change_status' => 'تغيير حالة الطلب', 'condition' => 'شرط وتفرّع', 'manual_review' => 'مراجعة موظف', 'end' => 'إنهاء المسار'];
 
     public const VARIABLES = ['customer_name' => 'اسم العميل', 'order_reference' => 'رقم الطلب', 'order_details' => 'تفاصيل المنتجات والقصص', 'order_total' => 'القيمة بعد الخصم شاملة الشحن'];
 
@@ -28,6 +28,21 @@ class ProcessDefinition
                 ], 'timeout_next' => 'review']],
                 ['id' => 'confirmed', 'type' => 'change_status', 'label' => 'تأكيد الطلب', 'config' => ['from' => 'new', 'to' => 'new_confirmed'], 'next' => 'finish'],
                 ['id' => 'review', 'type' => 'manual_review', 'label' => 'مراجعة الرفض أو عدم الرد', 'config' => ['instructions' => 'راجع حالة الطلب مع العميل قبل أي إلغاء.'], 'next' => 'finish'],
+                ['id' => 'finish', 'type' => 'end', 'label' => 'نهاية المسار', 'config' => []],
+            ];
+        }
+
+        if ($preset === 'identity') {
+            $base['trigger'] = 'status_entered';
+            $base['conditions']['type'] = 'story';
+            $base['conditions']['status'] = 'new_confirmed';
+            $base['nodes'] = [
+                ['id' => 'generate', 'type' => 'generate_identity', 'label' => 'توليد هوية لكل طفل وحفظها للمراجعة', 'config' => ['budget_usd' => 1], 'next' => 'preview'],
+                ['id' => 'preview', 'type' => 'whatsapp', 'label' => 'معاينة الهوية وطلب الدفع', 'config' => ['template' => ProcessTemplates::IDENTITY, 'language' => 'ar-EG', 'variables' => ProcessTemplates::IDENTITY_FIELDS], 'next' => 'response'],
+                ['id' => 'response', 'type' => 'wait_response', 'label' => 'انتظار اعتماد الهوية', 'config' => ['message_node' => 'preview', 'timeout_hours' => 48,
+                    'cases' => [['key' => 'approve_identity', 'text' => 'تأكيد الهوية', 'next' => 'approve'], ['key' => 'revise_identity', 'text' => 'طلب تعديل الهوية', 'next' => 'review']], 'timeout_next' => 'review']],
+                ['id' => 'approve', 'type' => 'approve_identity', 'label' => 'اعتماد الهوية فقط', 'config' => ['response_node' => 'response'], 'next' => 'review'],
+                ['id' => 'review', 'type' => 'manual_review', 'label' => 'مراجعة الدفع أو التعديلات', 'config' => ['instructions' => 'راجع رد العميل وإثبات التحويل وسجّل الدفعة الفعلية من شاشة المدفوعات. تأكيد الهوية لا يثبت الدفع؛ لا تستكمل الإنتاج قبل المراجعة.'], 'next' => 'finish'],
                 ['id' => 'finish', 'type' => 'end', 'label' => 'نهاية المسار', 'config' => []],
             ];
         }
@@ -69,11 +84,13 @@ class ProcessDefinition
         $edges = [];
         foreach ($d['nodes'] as $i => &$node) {
             $rules = match ($node['type']) {
-                'whatsapp' => ['template' => 'required|string|max:120|regex:/^[a-zA-Z0-9_]+$/', 'language' => 'required|in:ar-EG', 'variables' => 'present|array|max:10', 'variables.*' => ['required', Rule::in(array_keys(self::VARIABLES))]],
+                'whatsapp' => ['template' => 'required|string|max:120|regex:/^[a-zA-Z0-9_]+$/', 'language' => 'required|in:ar-EG', 'variables' => 'present|array|max:10', 'variables.*' => ['required', Rule::in(array_keys(self::VARIABLES + ProcessTemplates::EXTRA_VARIABLES))]],
                 'wait_response' => ['message_node' => 'required|string|max:40', 'timeout_hours' => 'required|integer|min:1|max:720', 'timeout_next' => 'required|string|max:40', 'cases' => 'required|array|min:1|max:5', 'cases.*' => 'array:key,text,next', 'cases.*.key' => 'required|string|regex:/^[a-z][a-z0-9_]{0,39}$/|distinct', 'cases.*.text' => 'required|string|max:120|distinct', 'cases.*.next' => 'required|string|max:40'],
                 'change_status' => ['from' => ['required', Rule::in($statuses)], 'to' => ['required', Rule::in($statuses)]],
                 'condition' => ['field' => 'required|in:status,type', 'value' => 'required|string|max:100', 'yes' => 'required|string|max:40', 'no' => 'required|string|max:40'],
                 'manual_review' => ['instructions' => 'required|string|max:500'],
+                'generate_identity' => ['budget_usd' => 'required|numeric|min:0.001|max:20'],
+                'approve_identity' => ['response_node' => 'required|string|max:40'],
                 'end' => [],
             };
             $allowed = array_filter(array_keys($rules), fn ($key) => ! str_contains($key, '.'));
@@ -82,7 +99,7 @@ class ProcessDefinition
             }
             $node['config'] = Validator::make($node['config'], $rules)->validate();
             $c = $node['config'];
-            if ($node['type'] === 'whatsapp' && (! array_is_list($c['variables']) || ($c['template'] === 'herokid_order_confirmation' && $c['variables'] !== array_keys(self::VARIABLES)))) {
+            if ($node['type'] === 'whatsapp' && (! array_is_list($c['variables']) || (ProcessTemplates::fields($c['template']) !== null && $c['variables'] !== ProcessTemplates::fields($c['template'])))) {
                 $this->fail("nodes.$i.config.variables", 'قالب التأكيد يتطلب الاسم، رقم الطلب، التفاصيل، ثم القيمة بنفس الترتيب.');
             }
             if ($node['type'] === 'condition' && ! in_array($c['value'], $c['field'] === 'status' ? $statuses : ['story', 'product', 'mixed'], true)) {
@@ -133,6 +150,20 @@ class ProcessDefinition
                 $send = collect($d['nodes'])->firstWhere('id', $ref);
                 if (! $send || $send['type'] !== 'whatsapp' || ! in_array($ref, $ancestors[$node['id']], true)) {
                     $this->fail("nodes.$i.config.message_node", 'الانتظار لازم يرتبط برسالة يتم إرسالها في كل مسار يصل إليه.');
+                }
+            }
+            if ($node['type'] === 'whatsapp' && $node['config']['template'] === ProcessTemplates::IDENTITY) {
+                if (! collect($d['nodes'])->contains(fn ($n) => $n['type'] === 'generate_identity' && in_array($n['id'], $ancestors[$node['id']], true))) {
+                    $this->fail("nodes.$i", 'رسالة الهوية تحتاج توليدًا محفوظًا في كل مسار يصل إليها.');
+                }
+            }
+            if ($node['type'] === 'approve_identity') {
+                $wait = collect($d['nodes'])->firstWhere('id', $node['config']['response_node']);
+                $send = $wait && $wait['type'] === 'wait_response' ? collect($d['nodes'])->firstWhere('id', $wait['config']['message_node']) : null;
+                $approval = $wait ? collect($wait['config']['cases'] ?? [])->firstWhere('text', 'تأكيد الهوية') : null;
+                if (! $wait || ! in_array($wait['id'], $ancestors[$node['id']], true) || ! $send || $send['config']['template'] !== ProcessTemplates::IDENTITY
+                    || ! $approval || $approval['text'] !== 'تأكيد الهوية') {
+                    $this->fail("nodes.$i", 'اعتماد الهوية يحتاج رد تأكيد الهوية المرتبط بقالب المعاينة.');
                 }
             }
             foreach ($edges[$node['id']] as $next) {

@@ -28,7 +28,7 @@ class ProcessOrderContext
         $lines = $orders->flatMap(fn ($o) => $o->items->map(fn ($i) => $i->only(['id', 'order_id', 'item_type', 'story_id', 'product_id', 'product_variant_id', 'title', 'quantity', 'unit_price_cents', 'total_price_cents'])))->all();
         $types = $orders->flatMap(fn ($o) => [$o->story_id ? 'story' : 'product'])->merge(collect($lines)->map(fn ($i) => $i['item_type'] === 'story' ? 'story' : 'product'))->unique();
         $status = $orders->pluck('status')->unique();
-        $facts = $orders->map(fn ($o) => $o->only(['id', 'parent_name', 'story_id', 'status', 'shipping_status', 'printing_status', 'payment_status', 'paid_amount_cents', 'discount_cents', 'delivery_details', 'uploaded_photos', 'child_name', 'child_age', 'child_gender', 'story_price']))->all();
+        $facts = $orders->map(fn ($o) => $o->only(['id', 'parent_name', 'story_id', 'status', 'shipping_status', 'printing_status', 'payment_status', 'paid_amount_cents', 'discount_cents', 'delivery_details', 'uploaded_photos', 'child_name', 'child_age', 'child_gender', 'story_price', 'child_identity_request_id', 'child_identity_approved_attempt_id']))->all();
 
         return ['order_ids' => $orders->pluck('id')->all(), 'phone' => $phones->first(), 'status' => $status->count() === 1 ? $status->first() : 'mixed',
             'type' => $types->count() === 1 ? $types->first() : 'mixed', 'fingerprint' => hash('sha256', json_encode([$facts, $lines], JSON_THROW_ON_ERROR)),

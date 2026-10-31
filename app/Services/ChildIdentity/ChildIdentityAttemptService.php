@@ -5,8 +5,10 @@ namespace App\Services\ChildIdentity;
 use App\Jobs\GenerateChildIdentityAttemptJob;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityRequest;
+use App\Models\OrderProcessIdentity;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -31,6 +33,12 @@ class ChildIdentityAttemptService
 
             if ($existing) {
                 return ['attempt' => $existing, 'error' => null];
+            }
+
+            if (Schema::hasTable('order_process_identities')
+                && OrderProcessIdentity::whereHas('attempt', fn ($q) => $q->where('child_identity_request_id', $locked->id))
+                    ->where(fn ($q) => $q->whereIn('status', ['queued', 'processing', 'uncertain'])->orWhereHas('run', fn ($r) => $r->whereNotIn('status', ['completed', 'cancelled'])))->exists()) {
+                throw ValidationException::withMessages(['generation' => 'الهوية مرتبطة بمسار عمليات جارٍ أو نتيجة غير مؤكدة؛ راجع التشغيل قبل إنشاء محاولة أخرى.']);
             }
 
             [$provider, $model] = $this->settings->providerAndModel();

@@ -1,7 +1,7 @@
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const types = {whatsapp:'إرسال قالب واتساب',wait_response:'انتظار رد العميل',change_status:'تغيير حالة الطلب',condition:'شرط وتفرّع',manual_review:'مراجعة موظف',end:'إنهاء المسار'};
+const types = {generate_identity:'توليد هوية الطفل وحفظها',approve_identity:'اعتماد الهوية من رد العميل',whatsapp:'إرسال قالب واتساب',wait_response:'انتظار رد العميل',change_status:'تغيير حالة الطلب',condition:'شرط وتفرّع',manual_review:'مراجعة موظف',end:'إنهاء المسار'};
 export function newNode(type, id) {
-    const config = {whatsapp:{template:'herokid_order_confirmation',language:'ar-EG',variables:['customer_name','order_reference','order_details','order_total']},wait_response:{message_node:'',timeout_hours:24,cases:[{key:'confirm',text:'تأكيد الطلب',next:''}],timeout_next:''},change_status:{from:'new',to:'new_confirmed'},condition:{field:'status',value:'new_confirmed',yes:'',no:''},manual_review:{instructions:'راجع الطلب قبل المتابعة.'},end:{}}[type];
+    const config = {generate_identity:{budget_usd:1},approve_identity:{response_node:''},whatsapp:{template:'herokid_order_confirmation',language:'ar-EG',variables:['customer_name','order_reference','order_details','order_total']},wait_response:{message_node:'',timeout_hours:24,cases:[{key:'confirm',text:'تأكيد الطلب',next:''}],timeout_next:''},change_status:{from:'new',to:'new_confirmed'},condition:{field:'status',value:'new_confirmed',yes:'',no:''},manual_review:{instructions:'راجع الطلب قبل المتابعة.'},end:{}}[type];
     return {id,type,label:types[type],config:structuredClone(config),...(type === 'end' || type === 'wait_response' || type === 'condition' ? {} : {next:''})};
 }
 export function initializeProcessBuilder(root) {
@@ -16,7 +16,7 @@ export function initializeProcessBuilder(root) {
     const save = () => { hidden.value = JSON.stringify(definition); };
     const options = (entries, current) => Object.entries(entries).map(([value,label]) => `<option value="${escape(value)}" ${String(value)===String(current)?'selected':''}>${escape(label)}</option>`).join('');
     const select = (path, label, entries, current) => `<label class="block text-sm font-bold">${escape(label)}<select data-field="${path}" class="mt-2 w-full rounded-lg border-gray-300">${options(entries,current)}</select></label>`;
-    const input = (path, label, value, type='text') => `<label class="block text-sm font-bold">${escape(label)}<input data-field="${path}" ${path==='config.template'?'list="process-templates"':''} type="${type}" value="${escape(value)}" ${type==='number'?'min="1" max="720"':'maxlength="500"'} class="mt-2 w-full rounded-lg border-gray-300"></label>`;
+    const input = (path, label, value, type='text') => `<label class="block text-sm font-bold">${escape(label)}<input data-field="${path}" ${path==='config.template'?'list="process-templates"':''} type="${type}" value="${escape(value)}" ${type==='number'?'min="0.001" max="720" step="any"':'maxlength="500"'} class="mt-2 w-full rounded-lg border-gray-300"></label>`;
     const targets = i => Object.fromEntries([['','اختر الخطوة التالية'], ...definition.nodes.slice(i+1).map((n,j)=>[n.id,`${i+j+2}. ${n.label}`])]);
     const render = () => {
         list.innerHTML = definition.nodes.map((n,i)=> {
@@ -24,6 +24,10 @@ export function initializeProcessBuilder(root) {
             if(n.type==='whatsapp') {
                 fields=input('config.template','اسم القالب',c.template)+`<p class="text-sm text-slate-500">اللغة: العربية — ar-EG. القوالب المخصصة متاحة لتصميم المحاكاة؛ تحتاج تحققًا قبل التشغيل الحقيقي.</p>`;
                 fields+=`<div class="space-y-2 md:col-span-2"><p class="font-bold">متغيرات القالب بالترتيب</p>${c.variables.map((v,j)=>`<div class="flex items-end gap-2">${select(`config.variables.${j}`,`المتغير ${j+1}`,variables,v)}<button type="button" data-command="variable-remove" data-position="${j}" class="rounded border px-3 py-2">حذف</button></div>`).join('')}<button type="button" data-command="variable-add" class="text-indigo-700">+ متغير</button></div>`;
+            } else if(n.type==='generate_identity') {
+                fields=input('config.budget_usd','ميزانية تقديرية قصوى بالدولار لكل عملية شراء',c.budget_usd,'number')+'<p class="text-sm text-slate-500">توليد واحد لكل طفل، من صور الأوردر والبرومبت الحالي. النتيجة تنتظر موافقة العميل؛ التفعيل الفعلي يحتاج ميزانية وعامل توليد.</p>';
+            } else if(n.type==='approve_identity') {
+                fields=select('config.response_node','خطوة رد العميل على معاينة الهوية',Object.fromEntries([['','اختر انتظارًا سابقًا'],...definition.nodes.slice(0,i).filter(n=>n.type==='wait_response').map(n=>[n.id,n.label])]),c.response_node);
             } else if(n.type==='wait_response') {
                 fields=select('config.message_node','الرسالة المرتبط بها الرد',Object.fromEntries([['','اختر رسالة سابقة'],...definition.nodes.slice(0,i).filter(n=>n.type==='whatsapp').map(n=>[n.id,n.label])]),c.message_node)+input('config.timeout_hours','مهلة الرد بالساعات',c.timeout_hours,'number');
                 fields+=`<div class="space-y-3 md:col-span-2">${c.cases.map((b,j)=>`<div class="grid gap-3 rounded-xl bg-emerald-50 p-3 md:grid-cols-3">${input(`config.cases.${j}.text`,'إذا كان الرد',b.text)}${select(`config.cases.${j}.next`,'انتقل إلى',next,b.next)}<button type="button" data-command="case-remove" data-position="${j}" class="text-red-700">حذف الفرع</button></div>`).join('')}<button type="button" data-command="case-add" class="text-indigo-700">+ فرع رد</button></div>`;
@@ -74,6 +78,12 @@ export function initializeProcessBuilder(root) {
         save();
     });
     list.addEventListener('change', event=> {
+        if(event.target.dataset.field==='config.template') {
+            const node=definition.nodes.find(n=>n.id===event.target.closest('[data-node]')?.dataset.node);
+            if(node?.config.template==='herokid_identity_review_payment') node.config.variables=['customer_name','order_reference','story_names','child_names','product_names','identity_preview_url','order_total','remaining_amount'];
+            if(node?.config.template==='herokid_order_confirmation') node.config.variables=['customer_name','order_reference','order_details','order_total'];
+            render();
+        }
         if(event.target.dataset.field==='label') {
             for (const select of list.querySelectorAll('select[data-field]')) {
                 if (!['next','config.yes','config.no','config.timeout_next','config.message_node'].includes(select.dataset.field) && !select.dataset.field.endsWith('.next')) continue;

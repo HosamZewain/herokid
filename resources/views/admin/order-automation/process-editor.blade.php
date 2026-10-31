@@ -26,16 +26,16 @@
                 </div>
                 <p class="text-sm text-slate-500">يكفي وجود عنصر مطابق لشروط النوع والأصناف. نطاق عملية الشراء ينفذ مرة واحدة؛ نطاق العناصر يستهدف العناصر المطابقة فقط. انتقال الحالة حدث مستقل، وليس تكرارًا للتشغيل طوال وجود الطلب في الحالة.</p>
             </div>
-            <div data-process-builder data-initial="{{ json_encode($definition, JSON_UNESCAPED_UNICODE) }}" data-statuses="{{ json_encode($statuses, JSON_UNESCAPED_UNICODE) }}" data-variables="{{ json_encode(\App\Services\OrderAutomation\Process\ProcessDefinition::VARIABLES, JSON_UNESCAPED_UNICODE) }}" class="space-y-4">
+            <div data-process-builder data-initial="{{ json_encode($definition, JSON_UNESCAPED_UNICODE) }}" data-statuses="{{ json_encode($statuses, JSON_UNESCAPED_UNICODE) }}" data-variables="{{ json_encode(\App\Services\OrderAutomation\Process\ProcessDefinition::VARIABLES + \App\Services\OrderAutomation\Process\ProcessTemplates::EXTRA_VARIABLES, JSON_UNESCAPED_UNICODE) }}" class="space-y-4">
                 <h2 class="text-xl font-bold">٢. خطوات المسار وفروعه</h2>
                 <p class="text-sm text-slate-500">كل خطوة تحدد الخطوة التالية. الفروع تتجه لخطوات لاحقة؛ راجع الروابط بعد الحذف أو إعادة الترتيب.</p>
-                <datalist id="process-templates"><option value="herokid_order_confirmation">قالب تأكيد الطلب</option></datalist>
+                <datalist id="process-templates"><option value="herokid_order_confirmation">قالب تأكيد الطلب</option><option value="herokid_identity_review_payment">معاينة الهوية والدفع</option></datalist>
                 <div data-nodes class="space-y-3"></div>
                 <div class="flex flex-wrap gap-3 rounded-xl border border-dashed border-indigo-300 bg-indigo-50 p-4">
                     <select data-new-type aria-label="نوع الخطوة الجديدة" class="rounded-lg border-gray-300">@foreach(\App\Services\OrderAutomation\Process\ProcessDefinition::TYPES as $key=>$label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>
                     <button type="button" data-add class="rounded-lg bg-indigo-600 px-4 py-2 font-bold text-white">+ إضافة خطوة</button>
                 </div>
-                <p class="text-sm text-slate-500">خطوات توليد الهوية وحفظها واعتماد الدفع هتضاف بعد ربطها بخدماتها ومراجعة قواعدها؛ مش متاحة للتنفيذ في النسخة دي.</p>
+                <p class="text-sm text-slate-500">توليد الهوية وحفظها واعتمادها متاح للتصميم والمحاكاة. التشغيل الفعلي له تفعيل وميزانية منفصلان. مراجعة الدفع تظل خطوة موظف، ولا يغيّر رد واتساب رصيد الطلب.</p>
             </div>
             <noscript><p>فعّل JavaScript لاستخدام محرر الخطوات.</p></noscript>
             <button data-save disabled class="rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white disabled:opacity-40">حفظ المسودة</button>
@@ -50,7 +50,7 @@
             <h2 class="text-xl font-bold">٤. محاكاة النسخة #{{ $workflow->revision_id }} ببيانات وهمية</h2><p class="text-sm text-slate-500">لا تُدخل رقم طلب أو بيانات عميل. القيمة الافتراضية للقالب في المحاكاة 450 جنيه.</p>
             <input type="hidden" name="request_id" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
             <div class="grid gap-4 md:grid-cols-2">
-                <label>الحدث<select name="fixture[event]" class="mt-2 w-full rounded-lg border-gray-300"><option value="checkout_created">وصول طلب جديد</option><option value="status_entered">انتقال حالة</option></select></label>
+                <label>الحدث<select name="fixture[event]" class="mt-2 w-full rounded-lg border-gray-300"><option value="checkout_created" @selected(data_get($workflow->revision->definition,'trigger')==='checkout_created')>وصول طلب جديد</option><option value="status_entered" @selected(data_get($workflow->revision->definition,'trigger')==='status_entered')>انتقال حالة</option></select></label>
                 <label>الحالة<select name="fixture[status]" class="mt-2 w-full rounded-lg border-gray-300">@foreach($statuses as $key=>$label)<option value="{{ $key }}" @selected($key===data_get($workflow->revision->definition,'conditions.status'))>{{ $label }}</option>@endforeach</select></label>
                 <label>الحالة السابقة — لحدث انتقال الحالة<select name="fixture[previous_status]" class="mt-2 w-full rounded-lg border-gray-300"><option value="">لا توجد</option>@foreach($statuses as $key=>$label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></label>
                 <label>نوع العنصر التجريبي<select name="fixture[items][0][type]" class="mt-2 w-full rounded-lg border-gray-300"><option value="story">قصة</option><option value="product">منتج</option></select></label>

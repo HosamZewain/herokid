@@ -57,6 +57,22 @@ class OrderConfirmationPoller
         $ambiguousRequests = $requests->filter(fn ($request) => $templates->contains(fn ($template) => data_get($template->provider_metadata, 'channelId') === data_get($request->response_payload, 'message_id')
             && data_get($template->provider_metadata, 'interactionId') !== data_get($request->response_payload, 'interaction_id')));
         $this->review($ambiguousRequests, 'template_interaction_mismatch');
+        foreach ($pending as $request) {
+            $evidence = $templates->filter(fn ($m) => data_get($m->provider_metadata, 'channelId') === data_get($request->response_payload, 'message_id')
+                && data_get($m->provider_metadata, 'interactionId') === data_get($request->response_payload, 'interaction_id'));
+            if ($evidence->count() !== 1) {
+                continue;
+            }
+            $delivery = TemplateDelivery::normalize(data_get($evidence->first()->provider_metadata, 'delivery'));
+            $receipt = $request->response_payload;
+            $receipt['delivery'] = $delivery;
+            $request->update(['response_payload' => $receipt]);
+            if ($delivery['status'] === 'failed') {
+                $this->review(collect([$request]), 'delivery_failed');
+            } elseif ($delivery['status'] === 'delivered' && $request->last_error === 'confirmation_review:delivery_failed') {
+                $request->update(['last_error' => null]);
+            }
+        }
         $processReceipts = Schema::hasTable('order_process_runs')
             ? OrderProcessStep::where('type', 'whatsapp')->whereHas('run', fn ($q) => $q->where('account_key', $conversation->account_key)->where('phone_hash', $conversation->phone_hash))->get()
             : collect();

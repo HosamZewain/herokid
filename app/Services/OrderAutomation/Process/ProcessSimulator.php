@@ -88,6 +88,9 @@ class ProcessSimulator
             } else {
                 $case = collect($node['config']['cases'])->firstWhere('key', $decision);
                 abort_unless($case || $decision === '__timeout', 422);
+                $context = $run->context;
+                $context['decisions'][$node['id']] = $decision;
+                $run->context = $context;
                 $run->node_id = $decision === '__timeout' ? $node['config']['timeout_next'] : $case['next'];
                 $run->status = 'running';
             }
@@ -119,7 +122,7 @@ class ProcessSimulator
             $result = ['result' => 'simulated'];
             switch ($node['type']) {
                 case 'whatsapp':
-                    $variables = ['customer_name' => 'عميل تجريبي', 'order_reference' => 'DEMO-001', 'order_details' => 'محتويات تجريبية', 'order_total' => '450'];
+                    $variables = ['customer_name' => 'عميل تجريبي', 'order_reference' => 'DEMO-001', 'order_details' => 'محتويات تجريبية', 'order_total' => '450', 'story_names' => 'قصة وهمية', 'child_names' => 'طفل تجريبي', 'product_names' => 'منتج تجريبي', 'identity_preview_url' => 'https://example.invalid/identity-preview', 'remaining_amount' => '225'];
                     $context['messages'][$node['id']] = 'demo:'.$run->id.':'.$node['id'];
                     $result += ['template' => $c['template'], 'language' => $c['language'], 'variables' => array_map(fn ($field) => $variables[$field], $c['variables'])];
                     break;
@@ -140,6 +143,20 @@ class ProcessSimulator
                     }
                     $context['status'] = $c['to'];
                     $result += ['from' => $c['from'], 'to' => $c['to'], 'scope' => $definition['scope'], 'matched_count' => count($context['matched_items'])];
+                    break;
+                case 'generate_identity':
+                    $context['identity_generated'] = true;
+                    $result += ['generated_identities' => count(array_filter($context['matched_items'], fn ($i) => $i['type'] === 'story')), 'budget_usd' => $c['budget_usd']];
+                    break;
+                case 'approve_identity':
+                    $wait = $nodes[$c['response_node']];
+                    $approval = collect($wait['config']['cases'])->firstWhere('text', 'تأكيد الهوية');
+                    if (empty($context['identity_generated']) || ! $approval || ($context['decisions'][$c['response_node']] ?? null) !== $approval['key']) {
+                        $run->status = 'blocked';
+                        $result['result'] = 'identity_approval_missing';
+                        break;
+                    }
+                    $context['identity_approved'] = true;
                     break;
                 case 'condition':
                     $matched = $context[$c['field']] === $c['value'];

@@ -23,7 +23,7 @@ use Throwable;
 
 class ProcessRuntime
 {
-    public const STATES = ['queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
+    public const STATES = ['queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_identity' => 'جاري توليد الهويات', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
 
     public function __construct(private ProcessLivePolicy $policy, private ProcessOrderContext $contexts) {}
 
@@ -89,7 +89,7 @@ class ProcessRuntime
                 return $enrolled;
             });
         }
-        foreach (OrderProcessRun::whereIn('status', ['queued', 'running', 'sending', 'waiting_response'])->where(fn ($q) => $q->where('status', 'sending')->orWhereHas('automation', fn ($a) => $a->where('enabled', true)))->where(fn ($q) => $q->whereNull('next_at')->orWhere('next_at', '<=', now()))->orderBy('id')->limit(100)->get() as $run) {
+        foreach (OrderProcessRun::whereIn('status', ['queued', 'running', 'sending', 'waiting_response', 'waiting_identity'])->where(fn ($q) => $q->where('status', 'sending')->orWhereHas('automation', fn ($a) => $a->where('enabled', true)))->where(fn ($q) => $q->whereNull('next_at')->orWhere('next_at', '<=', now()))->orderBy('id')->limit(100)->get() as $run) {
             if ($run->status === 'sending') {
                 DB::transaction(function () use ($run) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
@@ -102,7 +102,7 @@ class ProcessRuntime
             } else {
                 DB::transaction(function () use ($run) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
-                    if (! in_array($run->status, ['queued', 'running', 'waiting_response'], true) || ($run->next_at && $run->next_at->isFuture()) || ! $run->automation->enabled) {
+                    if (! in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_identity'], true) || ($run->next_at && $run->next_at->isFuture()) || ! $run->automation->enabled) {
                         return;
                     }
                     $run->update(['next_at' => now()->addSeconds(180)]);
@@ -121,7 +121,7 @@ class ProcessRuntime
         }
         $send = DB::transaction(function () use ($id) {
             $run = OrderProcessRun::lockForUpdate()->find($id);
-            if (! $run || ! in_array($run->status, ['queued', 'running', 'waiting_response'], true) || ! $run->automation->enabled) {
+            if (! $run || ! in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_identity'], true) || ! $run->automation->enabled) {
                 return null;
             }
             try {
@@ -138,6 +138,16 @@ class ProcessRuntime
                     $run->active_key = $active;
                     $node = $this->node($run);
                     $step = $run->steps()->firstOrCreate(['node_id' => $node['id']], ['type' => $node['type'], 'status' => 'pending']);
+                    if ($run->status === 'waiting_identity') {
+                        if (app(ProcessIdentityService::class)->ready($run)) {
+                            $step->update(['status' => 'completed', 'completed_at' => now()]);
+                            $this->move($run, $node['next']);
+                        } else {
+                            $run->update(['next_at' => now()->addMinute()]);
+                        }
+
+                        return null;
+                    }
                     if ($run->status === 'waiting_response') {
                         // Timeout never cancels or assumes a customer decision. Templates may arrive late.
                         if ($run->wait_until?->isPast()) {
@@ -155,11 +165,22 @@ class ProcessRuntime
                     }
                     $c = $node['config'];
                     switch ($node['type']) {
+                        case 'generate_identity':
+                            app(ProcessIdentityService::class)->prepare($run, $step, $c);
+
+                            return null;
+                        case 'approve_identity':
+                            app(ProcessIdentityService::class)->approve($run, $c);
+                            break;
                         case 'whatsapp':
-                            if (! $this->policy->ownerReady() || $run->context['status'] !== 'new') {
+                            $identityMessage = $c['template'] === ProcessTemplates::IDENTITY;
+                            if ($identityMessage && ! app(ProcessIdentityService::class)->ready($run)) {
+                                throw new RuntimeException('identity_requires_review');
+                            }
+                            if (! $identityMessage && (! $this->policy->ownerReady() || $run->context['status'] !== 'new')) {
                                 throw new RuntimeException('confirmation_owner_or_state');
                             }
-                            if (RoboDeskIntegrationEvent::where('event_type', 'order.pending_confirmation')->where('checkout_group_key', $run->checkout_key)->exists()) {
+                            if (! $identityMessage && RoboDeskIntegrationEvent::where('event_type', 'order.pending_confirmation')->where('checkout_group_key', $run->checkout_key)->exists()) {
                                 throw new RuntimeException('legacy_confirmation_exists');
                             }
                             if (RoboDeskIntegrationEvent::where('event_type', 'order.pending_confirmation')
@@ -168,7 +189,7 @@ class ProcessRuntime
                                 ->with('order:id,delivery_details')->get()->contains(fn ($e) => Phone::forWhatsApp(data_get($e->order?->delivery_details, 'phone')) === $run->context['phone'])) {
                                 throw new RuntimeException('legacy_confirmation_pending');
                             }
-                            $effect = hash('sha256', 'order-confirmation:'.$run->checkout_key);
+                            $effect = hash('sha256', ($identityMessage ? 'identity-preview:' : 'order-confirmation:').$run->checkout_key);
                             if (OrderProcessStep::where('effect_key', $effect)->exists()) {
                                 throw new RuntimeException('confirmation_already_claimed');
                             }
@@ -243,7 +264,7 @@ class ProcessRuntime
             } catch (ValidationException) {
                 $run->refresh()->update(['status' => 'blocked', 'error_code' => 'live_policy_changed']);
             } catch (RuntimeException $exception) {
-                $allowed = ['order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action'];
+                $allowed = ['order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action', 'identity_disabled', 'identity_scope_incomplete', 'identity_provider_unavailable', 'identity_budget_required', 'identity_already_claimed', 'identity_existing_review', 'identity_requires_review', 'identity_approval_missing', 'missing_inputs', 'invalid_photo', 'photo_too_large'];
                 if (! in_array($exception->getMessage(), $allowed, true)) {
                     throw $exception;
                 }
@@ -263,15 +284,24 @@ class ProcessRuntime
             $run = OrderProcessRun::findOrFail($claim['run_id']);
             $step = OrderProcessStep::findOrFail($claim['step_id']);
             try {
-                if (! $this->policy->enabled() || ! $this->policy->ownerReady() || ! $run->automation->enabled) {
+                if (! $this->policy->enabled() || ! $run->automation->enabled) {
                     throw new OrderConfirmationSendException('paused_before_send');
                 }
+                $this->policy->check($run->revision->definition);
                 $this->guard($run);
                 $data = app(RoboDeskCheckoutPayload::class)->build($run->checkout_key);
                 if ($data['customer']['phone'] !== $run->context['phone']) {
                     throw new OrderConfirmationSendException('contact_changed');
                 }
-                $receipt = app(OrderConfirmationTransport::class)->send($data);
+                $template = $this->node($run)['config']['template'];
+                if ($template === ProcessTemplates::IDENTITY) {
+                    $url = app(ProcessIdentityService::class)->previewUrl($run);
+                    $fields = [$data['customer']['name'], $data['display_reference'], implode('، ', $data['stories']), implode('، ', $data['children']),
+                        implode('، ', $data['products']) ?: 'لا توجد منتجات إضافية', $url, number_format($data['amounts']['total'], 2, '.', ''), number_format($data['amounts']['remaining'], 2, '.', '')];
+                    $receipt = app(OrderConfirmationTransport::class)->sendTemplate($data['customer']['phone'], $template, $fields, 'معاينة هوية طلب HeroKid '.$data['display_reference']);
+                } else {
+                    $receipt = app(OrderConfirmationTransport::class)->send($data);
+                }
                 DB::transaction(function () use ($run, $step, $receipt) {
                     $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
                     $step = OrderProcessStep::lockForUpdate()->findOrFail($step->id);
@@ -302,6 +332,7 @@ class ProcessRuntime
             throw new RuntimeException('inputs_changed');
         }
         $authority = clone $run->automation;
+        $authority->setRelation('revision', $run->revision);
         $authority->process_activated_by = $run->context['actor_id'];
         if (! $this->policy->authorized($authority)) {
             throw new RuntimeException('actor_revoked');
@@ -335,6 +366,7 @@ class ProcessRuntime
             $run = OrderProcessRun::lockForUpdate()->findOrFail($run->id);
             abort_unless($run->version === $version, 409);
             if ($action === 'stop') {
+                abort_if($run->identities()->whereIn('status', ['processing', 'uncertain'])->exists(), 422, 'محاولة الهوية الجارية أو غير المؤكدة تحتاج تسوية قبل تحرير الحجز.');
                 abort_unless(in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_staff', 'blocked'], true), 422, 'الإرسال الجاري أو غير المؤكد يحتاج تسوية قبل إنهاء الحجز.');
                 $run->update(['status' => 'cancelled', 'active_key' => null, 'version' => $run->version + 1]);
             } else {

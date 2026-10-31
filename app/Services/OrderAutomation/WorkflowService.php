@@ -7,9 +7,11 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderProcessIdentity;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class WorkflowService
@@ -67,6 +69,8 @@ class WorkflowService
             // Serialize across different workflows too: the same story/child must not generate twice.
             $order = Order::lockForUpdate()->findOrFail($order->id);
             abort_unless(app(WorkflowInputs::class)->eligible($order, $locked->revision->definition), 422, 'الطلب غير مناسب لهذا المسار أو له هوية معتمدة بالفعل.');
+            abort_if(! $dry && Schema::hasTable('order_process_identities')
+                && OrderProcessIdentity::where('order_id', $order->id)->exists(), 422, 'هذا الطلب له محاولة هوية محجوزة في مسار العمليات؛ راجع نتيجتها قبل توليد جديد.');
             $key = 'story-identity:'.$order->id;
             if (! $dry && ($existing = OrderAutomationRun::where('live_key', $key)->first())) {
                 return $existing;

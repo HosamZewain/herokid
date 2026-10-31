@@ -4,6 +4,8 @@
 
 ## Prepared process-builder increment — 31 October 2026 (not live)
 
+**Latest prepared continuation:** identity generation/registration, private preview, correlated identity approval and RoboDesk template delivery receipts are implemented on the isolated builder branch, with execution/AI/template gates off by default. No deployment or activation occurred. See [scope, template contract, tests, costs and recovery gates](automation-identity-preview-runtime-2026-10-31.md). Meta identity template was last observed pending review. The production SHA remains the separately verified `adfaffa9841c79a16dd3d37383e2f3209a6736f1`; code preparation is not a live release.
+
 `codex/automation-process-builder` prepares a schema-2 workflow designer and durable synthetic simulator. It does **not** replace or activate the live confirmation service. Production SHA was re-read as `adfaffa9841c79a16dd3d37383e2f3209a6736f1` at implementation start; no production mutations were made. The new additive simulation-table migration and schema-2 isolation/rollback constraints must be reviewed before a separately approved deployment. See [implementation, verification and remaining work](automation-process-builder-implementation-2026-10-31.md). This is the first builder/simulation increment, not a completed general live execution engine.
 
 ## Prepared execution continuation and live confirmation observation — 31 October 2026

@@ -33,7 +33,7 @@ class SecurityAndCacheHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
-        $isIsolatedMedia = $request->routeIs(['booklet-previews.*', 'media-library.public', 'conversation-reply-media', 'story-library.read', 'story-library.document', 'story-library.cover', 'api.story-library.document']);
+        $isIsolatedMedia = $request->routeIs(['order-process.identity-*', 'booklet-previews.*', 'media-library.public', 'conversation-reply-media', 'story-library.read', 'story-library.document', 'story-library.cover', 'api.story-library.document']);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', $isIsolatedMedia ? 'no-referrer' : 'strict-origin-when-cross-origin');
@@ -105,6 +105,7 @@ class SecurityAndCacheHeaders
     {
         return $request->routeIs([
             'admin.*',
+            'order-process.identity-*',
             'app.metrics.*',
             'app.store',
             'story-library.*',

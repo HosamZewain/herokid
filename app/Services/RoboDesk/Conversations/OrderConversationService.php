@@ -7,6 +7,7 @@ use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\RoboDesk\OrderConfirmationPoller;
+use App\Services\RoboDesk\TemplateDelivery;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +74,7 @@ class OrderConversationService
                 'id' => $message->id, 'direction' => $message->direction, 'kind' => $message->kind,
                 'text' => $message->body, 'date' => $message->sent_at->toISOString(),
                 'status' => $message->delivery_status, 'agent_name' => $message->sender_name,
+                'delivery' => TemplateDelivery::normalize(data_get($message->provider_metadata, 'delivery')),
                 'sender_type' => $message->sender_type,
                 'employee_name' => $message->employee_name,
                 'attachments' => collect($message->attachments ?? [])->map(fn ($attachment, $index) => $attachment + (
@@ -216,6 +218,8 @@ class OrderConversationService
                 'replyTo' => $this->plain($raw['replyTo'] ?? null, 512),
                 'templateName' => $this->plain($raw['templateName'] ?? null, 255),
                 'interactionId' => $this->plain($raw['interactionId'] ?? null, 255),
+                'delivery' => TemplateDelivery::normalize(
+                    $raw['direction'] === 'out' && filled($raw['templateName'] ?? null) ? ($raw['delivery'] ?? null) : null),
             ];
             if ($row['provider_metadata']['contract_fields_present'] && ! preg_match('/(?:Z|[+-]\d{2}:\d{2})$/i', $raw['date'])) {
                 throw new RuntimeException('invalid_provider_response');

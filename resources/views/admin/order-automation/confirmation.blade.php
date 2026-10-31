@@ -21,12 +21,12 @@
             @endforeach
         </div>
         <h3 class="font-bold">آخر طلبات إرسال التأكيد</h3>
-        <p class="text-sm text-gray-500">قبول RoboDesk للرسالة ليس إثبات وصولها للعميل؛ حالة واتساب النهائية تُراجع في RoboDesk. السجل هنا يعرض المسار الجديد فقط.</p>
-        <div class="overflow-x-auto"><table class="w-full text-right text-sm"><thead><tr><th class="p-3">الطلب</th><th>حالة الإرسال</th><th>تأكيد العميل</th><th>المحاولات</th><th>وقت الإنشاء</th></tr></thead><tbody>
+        <p class="text-sm text-gray-500">التسليم حسب آخر قراءة كاملة من RoboDesk. قبول الإرسال لا يثبت الوصول، والحالة المجهولة ليست نجاحًا. فشل التسليم يحتاج متابعة بقناة أخرى دون إعادة إرسال تلقائية.</p>
+        <div class="overflow-x-auto"><table class="w-full text-right text-sm"><thead><tr><th class="p-3">الطلب</th><th>حالة الإرسال</th><th>التسليم للعميل</th><th>تأكيد العميل</th><th>المحاولات</th><th>وقت الإنشاء</th></tr></thead><tbody>
         @forelse($confirmationRequests as $confirmationRequest)
-            <tr class="border-t"><td class="p-3">{{ $confirmationRequest->order?->order_number ?? '—' }}</td><td>{{ $confirmationLabels[$confirmationRequest->status] ?? $confirmationRequest->status }}</td><td>{{ $confirmationRequest->confirmationWorkflow?->confirmation_status === 'confirmed' ? 'مؤكد' : (str_starts_with($confirmationRequest->last_error ?? '', 'confirmation_review:') ? 'تأكيد يحتاج مراجعة' : 'لم يؤكد بعد') }}</td><td>{{ $confirmationRequest->attempts }}</td><td>{{ \App\Support\AppDateTime::format($confirmationRequest->created_at, 'd/m/Y H:i') }}</td></tr>
+            <tr class="border-t"><td class="p-3">{{ $confirmationRequest->order?->order_number ?? '—' }}</td><td>{{ $confirmationLabels[$confirmationRequest->status] ?? $confirmationRequest->status }}</td><td class="{{ data_get($confirmationRequest->response_payload, 'delivery.status') === 'failed' ? 'text-red-700 font-bold' : '' }}">{{ \App\Services\RoboDesk\TemplateDelivery::label(data_get($confirmationRequest->response_payload, 'delivery.status')) }}</td><td>{{ $confirmationRequest->confirmationWorkflow?->confirmation_status === 'confirmed' ? 'مؤكد' : (str_starts_with($confirmationRequest->last_error ?? '', 'confirmation_review:') ? 'تأكيد يحتاج مراجعة' : 'لم يؤكد بعد') }}</td><td>{{ $confirmationRequest->attempts }}</td><td>{{ \App\Support\AppDateTime::format($confirmationRequest->created_at, 'd/m/Y H:i') }}</td></tr>
         @empty
-            <tr><td colspan="5" class="p-4 text-gray-500">لا توجد رسائل في مسار التأكيد الجديد بعد.</td></tr>
+            <tr><td colspan="6" class="p-4 text-gray-500">لا توجد رسائل في مسار التأكيد الجديد بعد.</td></tr>
         @endforelse
         </tbody></table></div>
     @endcan

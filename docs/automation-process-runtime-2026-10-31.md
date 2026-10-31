@@ -1,5 +1,7 @@
 # Process execution increment — prepared, not live
 
+**Later prepared continuation:** [identity generation, private preview and delivery receipts](automation-identity-preview-runtime-2026-10-31.md) supersedes the identity-adapter/template limitations below. This document records the preceding runtime increment; neither increment is deployed or activated.
+
 31 October 2026. Branch `codex/automation-process-builder`, based on the builder/simulator increment `e8489e9b329dd74219bdfdc1a28dcc71116ff185`.
 
 ## Implemented

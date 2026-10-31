@@ -1,0 +1,16 @@
+; PREPARED ONLY. Requires separate activation approval and measured memory capacity.
+; Uses existing EC2/Redis; no new AWS resources. 240s job < 270s lease < 300s retry.
+[program:herokid-order-process-ai]
+command=/usr/bin/php8.3 /var/www/herokid/artisan queue:work order-process-ai --queue=order-process-ai --sleep=3 --tries=1 --timeout=240 --memory=256 --max-time=3600
+directory=/var/www/herokid
+user=www-data
+numprocs=1
+autostart=false
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=300
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/herokid-order-process-ai.log
+stdout_logfile_maxbytes=5MB
+stdout_logfile_backups=2

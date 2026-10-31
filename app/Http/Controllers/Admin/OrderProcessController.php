@@ -23,7 +23,7 @@ class OrderProcessController extends Controller
 {
     public function create(Request $request): mixed
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'preset' => 'required|in:blank,confirmation']);
+        $data = $request->validate(['name' => 'required|string|max:150', 'preset' => 'required|in:blank,confirmation,identity']);
         $workflow = OrderAutomation::create(['name' => $data['name'], 'draft' => ProcessDefinition::defaults($data['preset'])]);
         AdminActivityLogger::log('order_process.created', 'إنشاء مسار عمليات', $workflow);
 
@@ -115,7 +115,7 @@ class OrderProcessController extends Controller
 
         return view('admin.order-automation.process-live', [
             'workflow' => $automation, 'runtimeReady' => $policy->enabled(), 'limitations' => $limitations,
-            'runs' => OrderProcessRun::where('automation_id', $automation->id)->with(['order:id,order_number', 'steps', 'revision'])->latest('id')->paginate(20),
+            'runs' => OrderProcessRun::where('automation_id', $automation->id)->with(['order:id,order_number', 'steps', 'revision', 'identities:id,run_id,status'])->latest('id')->paginate(20),
             'counts' => OrderProcessRun::where('automation_id', $automation->id)->select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
         ]);
     }

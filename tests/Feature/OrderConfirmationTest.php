@@ -106,6 +106,58 @@ class OrderConfirmationTest extends TestCase
         app(OrderConversationService::class)->sync($order);
     }
 
+    public function test_delivery_receipt_updates_without_resend_or_order_changes(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        foreach (['sent', 'failed', 'delivered', null] as $status) {
+            $this->messages = [$this->template($event, ['status' => 'delivered', 'delivery' => $status ? [
+                'status' => $status, 'failureCategory' => 'Unreachable', 'reason' => 'PRIVATE_PROVIDER_REASON',
+            ] : null])];
+            $this->sync($order);
+            $this->assertSame($status ?? 'unknown', data_get($event->fresh()->response_payload, 'delivery.status'));
+            $this->assertSame('new', $order->fresh()->status);
+            $this->assertSame('succeeded', $event->fresh()->status);
+            $this->assertSame(1, $event->fresh()->attempts);
+            $this->assertStringNotContainsString('PRIVATE_PROVIDER_REASON', json_encode($event->fresh()->toArray()));
+            if ($status === 'failed') {
+                $this->assertSame('confirmation_review:delivery_failed', $event->fresh()->last_error);
+            }
+            if ($status === 'delivered') {
+                $this->assertNull($event->fresh()->last_error);
+            }
+        }
+        $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'after='));
+        $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
+    }
+
+    public function test_delivery_must_match_template_wamid_and_interaction_and_never_confirms_itself(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event, ['channelId' => 'wamid.unrelated', 'delivery' => ['status' => 'failed']])];
+        $this->sync($order);
+        $this->assertNull(data_get($event->fresh()->response_payload, 'delivery'));
+        $this->assertSame('new', $order->fresh()->status);
+        $this->messages = [$this->template($event, ['interactionId' => 'wrong', 'delivery' => ['status' => 'failed']])];
+        $this->sync($order);
+        $this->assertNull(data_get($event->fresh()->response_payload, 'delivery'));
+    }
+
+    public function test_valid_customer_confirmation_is_not_overridden_by_old_failed_delivery_receipt(): void
+    {
+        $order = $this->order();
+        $event = $this->request($order);
+        $this->send($event);
+        $this->messages = [$this->template($event, ['delivery' => ['status' => 'failed']]),
+            $this->message('valid-confirmation', ['replyTo' => $event->fresh()->response_payload['message_id']])];
+        $this->sync($order);
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+    }
+
     public function test_group_sends_once_exact_template_without_hmac_or_legacy_event_api(): void
     {
         $one = $this->order();

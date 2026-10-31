@@ -5,7 +5,7 @@
         @can('order_automation.manage')
         <form method="POST" action="{{ route('admin.order-automation.process.create') }}" class="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-5">@csrf
             <label class="flex-1">اسم الأوتوميشن<input name="name" required maxlength="150" placeholder="مثال: تأكيد الطلب" class="mt-2 w-full rounded-lg border-gray-300"></label>
-            <label>ابدأ من<select name="preset" class="mt-2 block rounded-lg border-gray-300"><option value="blank">مسار فارغ</option><option value="confirmation">نموذج تأكيد الطلب</option></select></label>
+            <label>ابدأ من<select name="preset" class="mt-2 block rounded-lg border-gray-300"><option value="blank">مسار فارغ</option><option value="confirmation">نموذج تأكيد الطلب</option><option value="identity">توليد الهوية ومعاينتها ومراجعة الدفع</option></select></label>
             <button class="rounded-lg bg-indigo-600 px-5 py-3 font-bold text-white">+ إنشاء أوتوميشن جديد</button>
         </form>
         @endcan

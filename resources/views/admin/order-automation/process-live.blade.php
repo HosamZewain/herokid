@@ -24,8 +24,12 @@
         <details class="rounded-2xl border bg-white p-5">
             <summary class="cursor-pointer font-bold">تشغيل #{{ $run->id }} · {{ $run->order?->order_number }} · {{ \App\Services\OrderAutomation\Process\ProcessRuntime::STATES[$run->status] ?? $run->status }}</summary>
             <p class="mt-3">نسخة #{{ $run->revision_id }} · {{ $run->created_at->timezone('Africa/Cairo')->format('Y-m-d H:i') }}</p>
+            @if($run->identities->isNotEmpty())<p class="mt-3">هويات هذا الطلب: {{ $run->identities->where('status','succeeded')->count() }} مكتملة من {{ $run->identities->count() }}. اعتماد الهوية منفصل عن إثبات الدفع.</p>@endif
             @if($run->error_code)<p class="mt-2 rounded-lg bg-amber-50 p-3">توقف للمراجعة: <code>{{ $run->error_code }}</code>. لا تعِد الإرسال قبل فحص نتيجته.</p>@endif
             <ol class="my-4 space-y-2">@foreach($run->steps as $step)<li>{{ collect($run->revision->definition['nodes'])->firstWhere('id', $step->node_id)['label'] ?? $step->node_id }} — {{ ['pending'=>'منتظرة','processing'=>'قيد التنفيذ','waiting'=>'انتظار','completed'=>'مكتملة','timed_out'=>'انتهت مهلة الانتظار','blocked'=>'متوقفة للمراجعة','uncertain'=>'نتيجة غير مؤكدة'][$step->status] ?? $step->status }}</li>@endforeach</ol>
+            @foreach($run->steps->where('type','whatsapp')->where('status','completed') as $messageStep)
+                <p class="mb-3 rounded-lg p-3 {{ data_get($messageStep->receipt,'delivery.status') === 'failed' ? 'bg-red-50 text-red-800' : 'bg-slate-50 text-slate-700' }}">{{ collect($run->revision->definition['nodes'])->firstWhere('id',$messageStep->node_id)['label'] ?? $messageStep->node_id }}: {{ \App\Services\RoboDesk\TemplateDelivery::label(data_get($messageStep->receipt,'delivery.status')) }}. لا تتم إعادة الإرسال تلقائيًا.</p>
+            @endforeach
             @if(auth()->user()->hasPermission('order_automation.execute') && auth()->user()->hasPermission('orders.update') && in_array($run->status,['queued','running','waiting_response','waiting_staff','blocked']))
             <form method="POST" action="{{ route('admin.order-automation.process.action', $run) }}" class="flex flex-wrap items-center gap-3">@csrf
                 <input type="hidden" name="version" value="{{ $run->version }}"><input name="reason" required minlength="5" maxlength="500" placeholder="سبب الإجراء — بدون بيانات حساسة" aria-label="سبب الإجراء" class="rounded-lg border-gray-300">

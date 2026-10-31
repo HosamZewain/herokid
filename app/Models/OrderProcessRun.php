@@ -27,6 +27,11 @@ class OrderProcessRun extends Model
         return $this->belongsTo(Order::class)->withTrashed();
     }
 
+    public function identities()
+    {
+        return $this->hasMany(OrderProcessIdentity::class, 'run_id');
+    }
+
     public function steps()
     {
         return $this->hasMany(OrderProcessStep::class, 'run_id');

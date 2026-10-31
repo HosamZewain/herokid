@@ -176,6 +176,23 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->getJson(route('admin.orders.conversation.show', $order))->assertOk()->assertJsonPath('messages.0.sender_type', $senderType);
     }
 
+    public function test_delivery_is_template_only_unknown_is_not_success_and_reasons_are_not_exposed(): void
+    {
+        $this->enable();
+        $order = $this->order();
+        $this->fake([
+            $this->message('failed-template', ['templateName' => 'herokid_order_confirmation', 'delivery' => ['status' => 'failed', 'reason' => 'PRIVATE_REASON', 'failureCategory' => 'Unreachable']]),
+            $this->message('null-template', ['templateName' => 'herokid_order_confirmation', 'delivery' => null]),
+            $this->message('unrecognized-template', ['templateName' => 'herokid_order_confirmation', 'delivery' => ['status' => 'surprise']]),
+            $this->message('inbound', ['direction' => 'in', 'templateName' => 'herokid_order_confirmation', 'delivery' => ['status' => 'delivered']]),
+            $this->message('ordinary', ['delivery' => ['status' => 'delivered']]),
+        ]);
+        $response = $this->sync($order)->assertOk()->assertDontSee('PRIVATE_REASON');
+        $this->assertSame(['failed', 'unknown', 'unknown', 'unknown', 'unknown'], array_column(array_column($response->json('messages'), 'delivery'), 'status'));
+        $this->assertSame('Unreachable', $response->json('messages.0.delivery.failureCategory'));
+        $this->assertStringNotContainsString('PRIVATE_REASON', (string) WhatsAppConversationMessage::first()->getRawOriginal('provider_metadata'));
+    }
+
     public function test_invalid_sender_type_preserves_existing_history_and_cursor_atomically(): void
     {
         $this->enable();

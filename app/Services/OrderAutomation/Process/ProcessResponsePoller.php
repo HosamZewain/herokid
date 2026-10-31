@@ -7,6 +7,7 @@ use App\Models\OrderProcessStep;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\RoboDesk\TemplateDelivery;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -31,6 +32,20 @@ class ProcessResponsePoller
         $steps = OrderProcessStep::whereIn('run_id', $runs->pluck('id'))->where('type', 'whatsapp')->get();
         $messages = $conversation->messages()->where('sent_at', '>=', $pending->min('created_at'))->orderBy('sent_at')->orderBy('id')->get();
         $templates = $messages->filter(fn ($m) => $m->direction === 'outbound' && data_get($m->provider_metadata, 'contract_fields_present') === true && filled(data_get($m->provider_metadata, 'templateName')) && filled(data_get($m->provider_metadata, 'channelId')));
+        foreach ($steps->where('status', 'completed') as $sent) {
+            $run = $pending->firstWhere('id', $sent->run_id);
+            if (! $run) {
+                continue;
+            }
+            $evidence = $templates->filter(fn ($m) => data_get($m->provider_metadata, 'channelId') === data_get($sent->receipt, 'message_id')
+                && data_get($m->provider_metadata, 'interactionId') === data_get($sent->receipt, 'interaction_id')
+                && data_get($m->provider_metadata, 'templateName') === data_get(collect($run->revision->definition['nodes'])->firstWhere('id', $sent->node_id), 'config.template'));
+            if ($evidence->count() === 1) {
+                $receipt = $sent->receipt;
+                $receipt['delivery'] = TemplateDelivery::normalize(data_get($evidence->first()->provider_metadata, 'delivery'));
+                $sent->update(['receipt' => $receipt]);
+            }
+        }
         foreach ($messages as $message) {
             $meta = $message->provider_metadata ?? [];
             if ($message->direction !== 'inbound' || $message->confirmation_event_id !== null || $message->sent_at->isFuture() || ($meta['contract_fields_present'] ?? false) !== true) {
@@ -76,7 +91,7 @@ class ProcessResponsePoller
             }
             $evidence = $templates->filter(fn ($m) => data_get($m->provider_metadata, 'channelId') === data_get($sent->receipt, 'message_id'));
             if ($evidence->count() !== 1 || data_get($evidence->first()->provider_metadata, 'interactionId') !== data_get($sent->receipt, 'interaction_id')
-                || data_get($evidence->first()->provider_metadata, 'templateName') !== 'herokid_order_confirmation'
+                || data_get($evidence->first()->provider_metadata, 'templateName') !== data_get(collect($run->revision->definition['nodes'])->firstWhere('id', $sent->node_id), 'config.template')
                 || $evidence->first()->sent_at->gte($message->sent_at->startOfSecond()->addSecond())) {
                 continue;
             }
@@ -120,7 +135,7 @@ class ProcessResponsePoller
             }
             DB::table('order_process_responses')->insert(['run_id' => $run->id, 'step_id' => $step->id, 'message_id' => $message->id, 'decision' => $case['key'], 'created_at' => now(), 'updated_at' => now()]);
             $step->update(['status' => 'completed', 'completed_at' => now()]);
-            app(ProcessRuntime::class)->move($run,$case['next']);
+            app(ProcessRuntime::class)->move($run, $case['next']);
         });
     }
 }
