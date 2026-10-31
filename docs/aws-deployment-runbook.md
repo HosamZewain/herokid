@@ -1,6 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 18:01 UTC / 20:01 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 19:05 UTC / 21:05 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+
+## Order message history and safe manual resend — deployed31 October2026
+
+**Live application SHA: `07cc0535673d59f8492d91adb1390f09573c6664`**, owner-approved. Maintenance19:03:25–19:03:30 UTC /21:03 Cairo,5 seconds. Both checkout and individual-order pages show each automation message stage, send acceptance, delivery, attempt count/history and guarded manual resend of verified failures. Unknown outcomes never automatically resend. New additive encrypted process-attempt ledger preserves old template correlation; manual retries do not replay AI generation or earlier steps.
+
+129 tests/655 assertions passed on each isolated SQLite/MySQL; PHP8.3 syntax/build and synthetic browser passed. Live authenticated UI verified unknown, failed-delivery and delivered states plus attempt details. All27 changed-file hashes matched; .env/cached config unchanged; exact additive migration only. Default and conversation workers gracefully refreshed; existing scheduler restored/successful. Immediate32-request observation: zero5xx/new Laravel errors,81 failedjobs unchanged, default ready/reserved0.2694 orders/3385 payment events preserved in the bounded check. No live retry/message/paid AI test.
+
+**Resend permission remains explicit:** requires orders.view, orders.update and order_automation.execute. Owner user1 currently lacks execute, so can see history but not use the resend form. No permission grants were part of deployment. Do not silently grant general automation execution to solve this; obtain a specific authorization. Process/identity/template gates remain OFF, legacy future-order confirmation stays ON. Trial scope guard is installed but inactive; no process/AI worker enabled.
+
+Checkpoint `/home/ubuntu/herokid-messages-before-07cc053`; off-instance backup `herokid-20261031T185735Z.sql.gz`,41,223,863 bytes, local/S3 size+SHA256 verified. Preserve the additive attempt table and queued/uncertain effects when considering code rollback; old code cannot correlate archived process attempts. [Scope, tests, readiness and recovery](order-message-history-and-retry-2026-10-31.md). Documentation successor may be ahead of the deployed application SHA.
 
 ## Bosta shipment lifecycle, automatic Pickup and all-story previews — deployed 31 October 2026
 
@@ -40,9 +50,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`daae3bd537bc80c6675d7acc923f74b3275b9123`**, detached HEAD |
-| Release branch | `codex/bosta-shipment-lifecycle`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `004be8a84d09597ce037ce3ce4e6d0ee7f742ed0` (daily shipping team report); see schema rollback boundary above |
+| Live release verified by SSH | **`07cc0535673d59f8492d91adb1390f09573c6664`**, detached HEAD |
+| Release branch | `codex/order-process-trial-readiness`, published to GitHub; documentation successor is not the live code SHA |
+| Previous release | `daae3bd537bc80c6675d7acc923f74b3275b9123` (Bosta lifecycle); see retry/schema rollback boundaries above |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
