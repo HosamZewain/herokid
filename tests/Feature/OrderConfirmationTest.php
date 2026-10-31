@@ -35,6 +35,10 @@ class OrderConfirmationTest extends TestCase
 
     private mixed $closeResponse = null;
 
+    private array $historyResponses = [];
+
+    private array $closeResponses = [];
+
     private int $sequence = 0;
 
     protected function setUp(): void
@@ -51,10 +55,10 @@ class OrderConfirmationTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://hero-kid.robodesk.ai/*' => function ($request) {
             if (str_contains($request->url(), '/messagesByPhone')) {
-                return Http::response(['phone' => '201000000001', 'interactions' => $this->interactions, 'messages' => $this->messages]);
+                return array_shift($this->historyResponses) ?? Http::response(['phone' => '201000000001', 'interactions' => $this->interactions, 'messages' => $this->messages]);
             }
             if (str_ends_with($request->url(), '/close')) {
-                return $this->closeResponse ?? Http::response(['success' => true]);
+                return array_shift($this->closeResponses) ?? $this->closeResponse ?? Http::response(['success' => true]);
             }
             if (str_ends_with($request->url(), '/start/sendMsg')) {
                 return array_shift($this->sendResponses) ?? Http::response(['channelId' => 'wamid.synthetic.'.++$this->sequence, '_id' => 'interaction-synthetic']);
@@ -130,7 +134,7 @@ class OrderConfirmationTest extends TestCase
         $requests = Http::recorded()->map(fn ($pair) => $pair[0])->values();
         $this->assertStringContainsString('/messagesByPhone', $requests[0]->url());
         $this->assertStringEndsWith('/close', $requests[1]->url());
-        $this->assertSame(['closeData' => ['conversations' => [['_id' => 'open-agent']], 'isBulk' => true], 'note' => null], $requests[1]->data());
+        $this->assertSame(['closeData' => ['conversations' => [['_id' => 'open-agent']], 'isBulk' => true, 'status' => 'completed', 'statusType' => 'completed'], 'note' => null], $requests[1]->data());
         $this->assertStringEndsWith('/start/sendMsg', $requests[2]->url());
     }
 
@@ -146,6 +150,73 @@ class OrderConfirmationTest extends TestCase
         $this->send($two);
         $this->assertSame('unknown', $two->fresh()->status);
         Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg'));
+    }
+
+    public function test_close_500_recovery_reads_again_and_closes_only_current_open_ids(): void
+    {
+        $this->historyResponses = [
+            Http::response(['phone' => '201000000001', 'interactions' => [['id' => 'old', 'closed' => false]]]),
+            Http::response(['phone' => '201000000001', 'interactions' => [['id' => 'old', 'closed' => true], ['id' => 'current', 'closed' => false]]]),
+        ];
+        $this->closeResponses = [Http::response('private error', 500)];
+        $event = $this->request($this->order());
+        $this->send($event);
+        $this->assertSame('succeeded', $event->fresh()->status);
+        $paths = Http::recorded()->map(fn ($p) => parse_url($p[0]->url(), PHP_URL_PATH))->all();
+        $this->assertSame(['/api/conversation/messagesByPhone', '/api/conversation/close', '/api/conversation/messagesByPhone', '/api/conversation/close', '/api/conversation/start/sendMsg'], $paths);
+        $this->assertSame([['_id' => 'current']], Http::recorded()[3][0]['closeData']['conversations']);
+    }
+
+    public function test_close_timeout_with_successful_reconciliation_does_not_close_again(): void
+    {
+        $this->historyResponses = [
+            Http::response(['phone' => '201000000001', 'interactions' => [['id' => 'old', 'closed' => false]]]),
+            Http::response(['phone' => '201000000001', 'interactions' => [['id' => 'old', 'closed' => true]]]),
+        ];
+        $this->closeResponses = [Http::failedConnection()];
+        $event = $this->request($this->order());
+        $this->send($event);
+        $this->assertSame('succeeded', $event->fresh()->status);
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg'));
+        $this->assertCount(2, Http::recorded(fn ($r) => str_contains($r->url(), '/messagesByPhone')));
+    }
+
+    public function test_two_close_failures_stop_without_send_and_reexecution_does_nothing(): void
+    {
+        $this->interactions = [['id' => 'open', 'closed' => false]];
+        $this->closeResponse = Http::response('private error', 500);
+        $event = $this->request($this->order());
+        $this->send($event);
+        $this->send($event->fresh());
+        Http::assertSentCount(4);
+        Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg'));
+        $this->assertSame('unknown', $event->fresh()->status);
+        $this->assertSame(1, $event->fresh()->attempts);
+    }
+
+    public function test_close_recovery_cannot_create_another_retry_after_uncertain_send(): void
+    {
+        $this->interactions = [['id' => 'open', 'closed' => false]];
+        $this->closeResponses = [Http::response('temporary', 500)];
+        $this->sendResponses = [Http::response('private error', 500)];
+        $event = $this->request($this->order());
+        $this->send($event);
+        $this->send($event->fresh());
+        $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+        Http::assertSentCount(5);
+        $this->assertSame('unknown', $event->fresh()->status);
+    }
+
+    public function test_close_recovery_budget_is_shared_across_the_safe_501_retry(): void
+    {
+        $this->interactions = [['id' => 'open', 'closed' => false]];
+        $this->closeResponses = [Http::response('temporary', 500), Http::response(['success' => true]), Http::response('temporary', 500)];
+        $this->sendResponses = [Http::response('Customer already have another interaction', 501)];
+        $event = $this->request($this->order());
+        $this->send($event);
+        Http::assertSentCount(7);
+        $this->assertCount(1, Http::recorded(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')));
+        $this->assertSame('unknown', $event->fresh()->status);
     }
 
     public function test_exact_501_is_retried_once_only_with_fresh_lookup_and_close(): void

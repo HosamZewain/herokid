@@ -13,9 +13,9 @@ Use existing HeroKid encrypted conversation-user credentials and the existing Au
 1. `GET /messagesByPhone?phone=2010XXXXXXXX&channel=WhatsApp`. Verify returned phone. Read `interactions[].id` and boolean `closed`; `_id` is NOT the lookup field.
 2. Close open interactions (including agent/AI conversations, as the owner specified): `POST /close`:
    ```json
-   {"closeData":{"conversations":[{"_id":"synthetic-open-id"}],"isBulk":true},"note":null}
+   {"closeData":{"conversations":[{"_id":"synthetic-open-id"}],"isBulk":true,"status":"completed","statusType":"completed"},"note":null}
    ```
-   Require successful HTTP and literal boolean `success:true`. Failed/uncertain close stops the sequence; do not send afterwards.
+   Require successful HTTP and literal boolean `success:true`. On a close error/timeout, reread history; if no conversation is open, continue, otherwise retry the current open IDs once. A second close failure stops for review. One close-recovery budget is shared across the entire send sequence, including a safe 501 race retry. This recovery applies only to close, never an uncertain sendMsg.
 3. `POST /start/sendMsg`:
    ```json
    {
@@ -34,7 +34,7 @@ Use existing HeroKid encrypted conversation-user credentials and the existing Au
 4. Retain only response top-level `_id` as `interaction_id`, `channelId` as `message_id`. Both must be present; wamid begins `wamid.`. Acceptance is not delivery.
 5. Exact HTTP 501 plain text `Customer already have another interaction`: known no-send race, repeat lookup/close/send once. Second identical 501 is blocked. HTTP 409: disabled template, blocked. Any other error/timeout/invalid receipt: uncertain, no automatic retry. No provider idempotency exists. Never retry using absence of matching text in a limited history window as proof of no send.
 
-A durable compare-and-set claims the event before even closing a conversation; duplicate delivery cannot repeat an attempted event. Same-phone send sequences and history sync share the existing contact lock. At most six 15-second HTTP calls, job timeout 110 seconds, contact lock 130 seconds; reservation retry must exceed these (existing documented Redis retry 960 seconds, reverify on release). Lock contention before a claim only redispatches unattempted work. Worker crashes leave processing evidence requiring review, never automatic resend.
+A durable compare-and-set claims the event before even closing a conversation; duplicate delivery cannot repeat an attempted event. Same-phone send sequences and history sync share the existing contact lock. At most eight 12-second HTTP calls (96 seconds), job timeout 110 seconds, contact lock 130 seconds; reservation retry must exceed these (existing documented Redis retry 960 seconds, reverify on release). Lock contention before a claim only redispatches unattempted work. Worker crashes leave processing evidence requiring review, never automatic resend.
 
 ## Polling and correlation
 

@@ -5,6 +5,8 @@ namespace App\Services\RoboDesk;
 use App\Models\RoboDeskConversationSetting;
 use App\Services\RoboDesk\Conversations\ConversationPhone;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -18,30 +20,30 @@ class OrderConfirmationTransport
         }
         $http = Http::acceptJson()->withHeaders([
             'Authorization' => RoboDeskConversationHistoryProvider::authorization($settings->email, $settings->password),
-        ])->connectTimeout(3)->timeout(15)->withOptions(['allow_redirects' => false]);
+        ])->connectTimeout(3)->timeout(12)->withOptions(['allow_redirects' => false]);
         $base = 'https://hero-kid.robodesk.ai/api/conversation';
+        // At most eight requests (96s) including one close recovery and one safe 501 retry.
+        // Keep below the job's 110s timeout and the shared contact lock's 130s lease.
+        $closeRecoveryUsed = false;
         for ($attempt = 0; $attempt < 2; $attempt++) {
-            $history = $http->get($base.'/messagesByPhone', ['phone' => $data['customer']['phone'], 'channel' => 'WhatsApp']);
-            $interactions = $history->json('interactions');
-            if (! $history->successful() || ltrim((string) ConversationPhone::canonical($history->json('phone')), '+') !== $data['customer']['phone']
-                || ! is_array($interactions) || ! array_is_list($interactions) || count($interactions) > 1000) {
-                throw new RuntimeException('confirmation_history_uncertain');
-            }
-            $open = [];
-            foreach ($interactions as $interaction) {
-                if (! is_array($interaction) || ! is_bool($interaction['closed'] ?? null)
-                    || ! is_string($interaction['id'] ?? null) || $interaction['id'] === '' || strlen($interaction['id']) > 255) {
-                    throw new RuntimeException('confirmation_history_uncertain');
+            $open = $this->openInteractions($http, $base, $data['customer']['phone']);
+            while ($open !== []) {
+                try {
+                    $closed = $http->post($base.'/close', ['closeData' => [
+                        'conversations' => $open, 'isBulk' => true,
+                        'status' => 'completed', 'statusType' => 'completed',
+                    ], 'note' => null]);
+                    if ($closed->successful() && $closed->json('success') === true) {
+                        break;
+                    }
+                } catch (ConnectionException) {
+                    // Closing sends no message. Re-read before the single recovery attempt.
                 }
-                if ($interaction['closed'] === false) {
-                    $open[] = ['_id' => $interaction['id']];
-                }
-            }
-            if ($open !== []) {
-                $closed = $http->post($base.'/close', ['closeData' => ['conversations' => $open, 'isBulk' => true], 'note' => null]);
-                if (! $closed->successful() || $closed->json('success') !== true) {
+                if ($closeRecoveryUsed) {
                     throw new RuntimeException('confirmation_close_uncertain');
                 }
+                $closeRecoveryUsed = true;
+                $open = $this->openInteractions($http, $base, $data['customer']['phone']);
             }
             $response = $http->post($base.'/start/sendMsg', [
                 'channel' => 'WhatsApp', 'to' => $data['customer']['phone'], 'language' => 'ar-EG',
@@ -74,4 +76,27 @@ class OrderConfirmationTransport
         }
         throw new RuntimeException('confirmation_send_uncertain');
     }
+
+    private function openInteractions(PendingRequest $http, string $base, string $phone): array
+    {
+        $history = $http->get($base.'/messagesByPhone', ['phone' => $phone, 'channel' => 'WhatsApp']);
+        $interactions = $history->json('interactions');
+        if (! $history->successful() || ltrim((string) ConversationPhone::canonical($history->json('phone')), '+') !== $phone
+            || ! is_array($interactions) || ! array_is_list($interactions) || count($interactions) > 1000) {
+            throw new RuntimeException('confirmation_history_uncertain');
+        }
+        $open = [];
+        foreach ($interactions as $interaction) {
+            if (! is_array($interaction) || ! is_bool($interaction['closed'] ?? null)
+                || ! is_string($interaction['id'] ?? null) || $interaction['id'] === '' || strlen($interaction['id']) > 255) {
+                throw new RuntimeException('confirmation_history_uncertain');
+            }
+            if ($interaction['closed'] === false) {
+                $open[] = ['_id' => $interaction['id']];
+            }
+        }
+
+        return $open;
+    }
+
 }
