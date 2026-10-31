@@ -1,10 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 14:54 UTC / 16:54 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 15:55 UTC / 17:55 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+
+## Daily shipping team responsibility — deployed31 October2026
+
+**Live SHA: `004be8a84d09597ce037ce3ce4e6d0ee7f742ed0`,15:53:37–15:53:39 UTC /17:53 Cairo.** Daily shipment rows show current employee counts; selecting a day restores the dedicated team breakdown while period summaries and SKU details remain.37 tests/312 assertions passed on each isolated SQLite/MySQL, PHP8.3 lint/build and live day/employee drill-down verified. No new migrations, provider calls or worker/configuration changes. Checkpoint `/home/ubuntu/herokid-shipping-daily-before-004be8a`; rollback basefd04fdc. [Implementation, release and pickup reconciliation](shipping-daily-team-restoration-2026-10-31.md).
+
+Bosta is functioning on AWS. Completed pickup92957545:29 packages,29 linked shipments, all29 included in31 October report, none missing. Dispatch timestamp15:40:17 UTC, first receipt15:41:07, pickup sync15:43:32. No manual status change or replay. Observed current attribution: nora13/Gana10/Aisha1/unassigned5.
 
 ## Process builder, identity adapters and monthly chart — deployed 31 October 2026
 
-**Live application SHA: `fd04fdce4f877b419b291041a66fbb8c6b7d299e`, deployed14:51:23–14:51:34 UTC /16:51 Cairo.** Named designer/simulator, guarded runtime and identity adapters, delivery-receipt visibility and the six-month dashboard chart are installed. **Execution/identity/template flags remain OFF, confirmation owner remains legacy** with existing future-order confirmation enabled. No new process worker, paid identity call or historical send. Meta identity template is now active/quality pending; RoboDesk catalogue/trial verification is still outstanding. [Deployment, tests, checkpoint and activation boundaries](aws-process-dashboard-deployment-2026-10-31.md).
+**Previous application SHA: `fd04fdce4f877b419b291041a66fbb8c6b7d299e`, deployed14:51:23–14:51:34 UTC /16:51 Cairo.** Named designer/simulator, guarded runtime and identity adapters, delivery-receipt visibility and the six-month dashboard chart are installed. **Execution/identity/template flags remain OFF, confirmation owner remains legacy** with existing future-order confirmation enabled. No new process worker, paid identity call or historical send. Meta identity template is now active/quality pending; RoboDesk catalogue/trial verification is still outstanding. [Deployment, tests, checkpoint and activation boundaries](aws-process-dashboard-deployment-2026-10-31.md).
 
 The prior builder/runtime preparation notes are historical. [Builder scope](automation-process-builder-implementation-2026-10-31.md), [runtime](automation-process-runtime-2026-10-31.md), [identity and delivery](automation-identity-preview-runtime-2026-10-31.md), [monthly chart definitions](dashboard-month-comparison-2026-10-31.md). Code is deployed; enabling new live effects is a separate gated operation.
 
@@ -22,9 +28,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`fd04fdce4f877b419b291041a66fbb8c6b7d299e`**, detached HEAD |
-| Release branch | `codex/automation-process-builder`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `adfaffa9841c79a16dd3d37383e2f3209a6736f1` (confirmation activation status) |
+| Live release verified by SSH | **`004be8a84d09597ce037ce3ce4e6d0ee7f742ed0`**, detached HEAD |
+| Release branch | `codex/shipping-daily-team-breakdown`, published to GitHub; documentation successor is not the live code SHA |
+| Previous release | `fd04fdce4f877b419b291041a66fbb8c6b7d299e` (process builder and monthly chart) |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
