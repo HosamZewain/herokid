@@ -11,3 +11,9 @@ Evidence: `/tmp/herokid-tags-preview/desktop.png`, `/tmp/herokid-tags-preview/mo
 ## Production verification
 
 All seven changed-file hashes matched. .env/config hashes unchanged; FPM graceful reload and Blade cache only. No maintenance, migration, worker restart, messaging, queue or automation activation. Authenticated owner browser saw 15 tags, one row, approximately 49px high. Clicking under-review filtered 15 checkouts and reflected the chosen status; returned to general orders afterward. Deployed screenshot `/tmp/herokid-tags-release/deployed-tags.png` shows the filtered view. Public home/up/cart/new CSS 200; immediate 43-request log window had zero 5xx and zero Laravel errors. Failed jobs stayed 81; default/conversation queues had no waiting/reserved jobs, workers running, scheduler successful. Checkpoint `/home/ubuntu/herokid-tags-before-20261031`, archive verified, rollback code base `4b566cfb91d3da7b8795be0716163db19222ad41`.
+
+## Prepared follow-up: wrapping instead of horizontal scroll
+
+Owner requested automatic wrapping while preserving chip sizes, colors and filter behavior. Branch `codex/order-status-tags-wrap` changes only the Blade container from nowrap/overflow-x-auto to flex-wrap and replaces scrolling instructions/region label. Individual chip classes and links are unchanged. Not yet deployed; the previously approved deployed SHA remains `157e8fa`.
+
+Verification: 4 tests / 294 assertions passed; Vite build/manifest verified, no asset diff and no removed historical files. Synthetic browser render: 2 rows at normal desktop width, 11 rows at 390px; every chip still 38px high and neither container has horizontal overflow. Screenshot `/tmp/herokid-tags-release/wrap-desktop.png` contains synthetic data. No production changes or outbound integration requests.

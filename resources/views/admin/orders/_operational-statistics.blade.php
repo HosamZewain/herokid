@@ -1,9 +1,9 @@
 <section aria-label="متابعة أعداد الطلبات" class="space-y-3" data-order-operational-statistics>
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-sm font-black text-gray-800">متابعة الطلبات</h3>
-        <p class="text-xs text-gray-500">اضغط على الحالة لعرض طلباتها · اسحب أفقيًا لباقي الحالات</p>
+        <p class="text-xs text-gray-500">اضغط على الحالة لعرض طلباتها · مع الاحتفاظ بباقي الفلاتر</p>
     </div>
-    <div class="flex flex-nowrap items-center gap-2 overflow-x-auto p-1 pb-2" tabindex="0" role="region" aria-label="فلاتر متابعة الطلبات — تمرير أفقي" data-order-operational-tags>
+    <div class="flex flex-wrap items-center gap-2 p-1 pb-2" role="region" aria-label="فلاتر متابعة الطلبات" data-order-operational-tags>
         <a href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'view', 'lifecycle']), ['lifecycle' => 'active'])) }}" class="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">
             <span>إجمالي الطلبات النشطة</span>
             <span class="rounded-full bg-white/70 px-2 py-0.5 font-black tabular-nums">{{ number_format($operationalStats['active_checkouts']) }}</span>
