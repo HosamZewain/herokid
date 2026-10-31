@@ -1,10 +1,22 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 15:55 UTC / 17:55 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 18:01 UTC / 20:01 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+
+## Bosta shipment lifecycle, automatic Pickup and all-story previews — deployed 31 October 2026
+
+**Live application SHA: `daae3bd537bc80c6675d7acc923f74b3275b9123`**, approved by the owner. Maintenance17:57:43–17:57:49 UTC (6 seconds). Exact migration `2026_10_31_180000_support_bosta_shipment_attempts` applied; order/payment/shipment/Pickup counts preserved. Route/Blade caches refreshed, FPM gracefully reloaded; default worker gracefully stopped/restarted for changed Pickup sync code, scheduler timer restored. Environment and cached config unchanged; all27 changed-file hashes verified. No external shipment/cancellation/Pickup test mutation.
+
+Current and historical labels are separate. Provider-confirmed cancellation/terminal-state verification permits a new label from current order data; uncertain outcomes block retries. Report uses earliest documented dispatch across attempts and one current shipment. `preview_scenes_url` now includes every valid story preview in the checkout, newline-separated.
+
+**Automatic Pickup enabled17:58:35 UTC**, owner user1, configured location/contact copied securely from latest successful Pickup266. Existing scheduler executes14:30 Africa/Cairo except Friday; next due1 November14:30 Cairo /12:30 UTC. Only eligible current shipment-created checkouts; duplicate/uncertain requests blocked. If provider does not offer the same date, stop for review rather than silently change date. No actual scheduled collection has run yet. Settings and last result are in `/admin/bosta`; no new AWS resources.
+
+96 tests/746 assertions passed on each isolated SQLite/MySQL; PHP8.3 lint/build and synthetic browser passed. Production authenticated Bosta page loaded dates, enabled schedule and cancellation/replacement controls. Read-only production probe:20 multi-story checkouts/51 preview links correct; pickup92957545's29 shipments still included in dispatch report;2690 orders,3381 payment events,909 shipments,69 pickups,81 historical failedjobs. Immediate observation70 HTTP requests/zero5xx/zero Laravel errors; default ready/reserved0, scheduler successful. These are bounded observations, not a real provider mutation test.
+
+Recovery checkpoint `/home/ubuntu/herokid-bosta-before-daae3bd`; verified off-instance backup `herokid-20261031T175412Z.sql.gz`. **Do not blindly roll back to004be8a once replacement attempts exist:** old code assumes one lifetime label. Preserve schema/history; disable automatic Pickup and forward-fix or use a reviewed compatible rollback. No old DB restoration. [Full release notes](bosta-shipment-lifecycle-2026-10-31.md). Documentation successor may be ahead of the deployed application SHA.
 
 ## Daily shipping team responsibility — deployed31 October2026
 
-**Live SHA: `004be8a84d09597ce037ce3ce4e6d0ee7f742ed0`,15:53:37–15:53:39 UTC /17:53 Cairo.** Daily shipment rows show current employee counts; selecting a day restores the dedicated team breakdown while period summaries and SKU details remain.37 tests/312 assertions passed on each isolated SQLite/MySQL, PHP8.3 lint/build and live day/employee drill-down verified. No new migrations, provider calls or worker/configuration changes. Checkpoint `/home/ubuntu/herokid-shipping-daily-before-004be8a`; rollback basefd04fdc. [Implementation, release and pickup reconciliation](shipping-daily-team-restoration-2026-10-31.md).
+**Previous SHA: `004be8a84d09597ce037ce3ce4e6d0ee7f742ed0`,15:53:37–15:53:39 UTC /17:53 Cairo.** Daily shipment rows show current employee counts; selecting a day restores the dedicated team breakdown while period summaries and SKU details remain.37 tests/312 assertions passed on each isolated SQLite/MySQL, PHP8.3 lint/build and live day/employee drill-down verified. No new migrations, provider calls or worker/configuration changes. Checkpoint `/home/ubuntu/herokid-shipping-daily-before-004be8a`; rollback basefd04fdc. [Implementation, release and pickup reconciliation](shipping-daily-team-restoration-2026-10-31.md).
 
 Bosta is functioning on AWS. Completed pickup92957545:29 packages,29 linked shipments, all29 included in31 October report, none missing. Dispatch timestamp15:40:17 UTC, first receipt15:41:07, pickup sync15:43:32. No manual status change or replay. Observed current attribution: nora13/Gana10/Aisha1/unassigned5.
 
@@ -28,9 +40,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`004be8a84d09597ce037ce3ce4e6d0ee7f742ed0`**, detached HEAD |
-| Release branch | `codex/shipping-daily-team-breakdown`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `fd04fdce4f877b419b291041a66fbb8c6b7d299e` (process builder and monthly chart) |
+| Live release verified by SSH | **`daae3bd537bc80c6675d7acc923f74b3275b9123`**, detached HEAD |
+| Release branch | `codex/bosta-shipment-lifecycle`, published to GitHub; documentation successor is not the live code SHA |
+| Previous release | `004be8a84d09597ce037ce3ce4e6d0ee7f742ed0` (daily shipping team report); see schema rollback boundary above |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |

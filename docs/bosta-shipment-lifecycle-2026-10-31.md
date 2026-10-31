@@ -28,3 +28,11 @@ Backup verified before deployment: `herokid-20261031T175412Z.sql.gz`, 41,168,972
 **Rollback boundary:** after any replacement exists, old code is incompatible with multiple shipment attempts. Preserve schema/history, disable automatic Pickup if needed and forward-fix or use a reviewed history-compatible rollback. Never restore the old DB or blindly roll back the migration. The migration refuses to drop shipment history.
 
 Deployment result and activation will be appended after verification. No additional AWS resources are introduced; real authorized Bosta collections remain subject to the existing provider charges.
+
+## Verified production result
+
+Deployed `daae3bd537bc80c6675d7acc923f74b3275b9123` at17:57 UTC. Maintenance17:57:43–17:57:49 UTC, six seconds. Checkpoint `/home/ubuntu/herokid-bosta-before-daae3bd`. Exact migration completed833ms;27 changed-file hashes matched, environment/config unchanged. Only default worker gracefully refreshed; scheduler restored and successful. Public home/health/cart200, www redirects to apex.
+
+Activated automatic Pickup17:58:35 UTC using verified owner1 and existing Pickup266's location/contact, without exposing contact data or invoking the command. Next schedule1 November14:30 Cairo (12:30 UTC); Friday excluded. No previous jobs were replayed and no provider write was tested.
+
+Authenticated browser verified the enabled settings, available date options and per-order cancellation/replacement controls. Production read-only verification checked20 multi-story checkouts with51 preview links and all29 shipments of Pickup92957545 still in the dispatch report. Counts after migration:2690 orders,3381 payment events,909 shipments,69 pickups,81 historical failedjobs; no missing current shipment keys. Initial post-maintenance window70 requests/zero5xx/zero Laravel errors; default ready/reserved0. Actual first automatic collection remains unobserved, and same-day availability remains a provider gate.
