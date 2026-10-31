@@ -9,6 +9,7 @@ Users with existing order-list access can see active tag counts and operational 
 - Active orders card: switches lifecycle to active, removes trash/page, preserves other filters.
 - Unclaimed orders card: active orders without a group assignment, replaces assignment filter with unassigned, removes trash/page, preserves other filters. This means unclaimed by staff, not undelivered to the customer.
 - One card per active order-status definition, including zero values, plus retired statuses with matching records and mixed status.
+- Status cards use the existing status-registry background/text colors (including custom statuses), with readable labels and counts. Colored preview and a fresh production build were verified after the owner requested this visual follow-up; no query/permission behavior changed.
 - Every card is a keyboard-accessible GET link. Status cards replace the order-status filter and reset pagination; all other filters remain.
 - Counts represent each link's results. Each checkout counts once within a status; mixed checkouts can appear in multiple status cards. Status counts therefore must not be summed as a total. Other workflow filters retain the existing list's same-row matching semantics. Cancelled counts can be zero within the active tab; choose all/cancelled to include cancelled orders.
 - Active tags retain existing facet behavior (ignore the currently selected tag only), including distinct checkout counts.

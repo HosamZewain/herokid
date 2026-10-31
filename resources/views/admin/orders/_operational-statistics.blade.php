@@ -16,9 +16,9 @@
     </div>
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         @foreach($operationalStats['statuses'] as $statusCount)
-            <a href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'status']), ['status' => [$statusCount['key']]])) }}" class="block rounded-2xl border border-gray-100 bg-white p-4 transition hover:border-indigo-200 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600" data-order-status="{{ $statusCount['key'] }}">
-                <p class="text-xs font-black text-gray-600">{{ $statusCount['label'] }}</p>
-                <p class="mt-2 text-2xl font-black text-gray-900">{{ number_format($statusCount['count']) }}</p>
+            <a href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'status']), ['status' => [$statusCount['key']]])) }}" class="block rounded-2xl border border-black/5 p-4 transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 {{ \App\Support\OrderStatusRegistry::color(\App\Support\OrderStatusRegistry::TYPE_ORDER, $statusCount['key']) }}" data-order-status="{{ $statusCount['key'] }}">
+                <p class="text-xs font-black">{{ $statusCount['label'] }}</p>
+                <p class="mt-2 text-2xl font-black">{{ number_format($statusCount['count']) }}</p>
             </a>
         @endforeach
     </div>
