@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 12:04 UTC / 14:04 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Prepared process-builder increment — 31 October 2026 (not live)
+
+`codex/automation-process-builder` prepares a schema-2 workflow designer and durable synthetic simulator. It does **not** replace or activate the live confirmation service. Production SHA was re-read as `adfaffa9841c79a16dd3d37383e2f3209a6736f1` at implementation start; no production mutations were made. The new additive simulation-table migration and schema-2 isolation/rollback constraints must be reviewed before a separately approved deployment. See [implementation, verification and remaining work](automation-process-builder-implementation-2026-10-31.md). This is the first builder/simulation increment, not a completed general live execution engine.
+
 ## 1. Current environment and release
 
 | Item | Value / status |

@@ -33,6 +33,7 @@ class WorkflowService
         DB::transaction(function () use ($automation, $enabled, $actor): void {
             $locked = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
             if ($enabled) {
+                abort_unless(($locked->revision?->definition['schema'] ?? 1) === 1 && ($locked->draft['schema'] ?? 1) === 1, 422, 'مسارات العمليات الجديدة متاحة للمحاكاة فقط حاليًا.');
                 if (! config('order_automation.enabled')) {
                     throw ValidationException::withMessages(['enabled' => 'التشغيل العام مقفول على الخادم. يمكن إجراء تجربة منفردة فقط.']);
                 }
@@ -55,6 +56,7 @@ class WorkflowService
         return DB::transaction(function () use ($automation, $order, $dry, $trial, $actor, $requestKey): OrderAutomationRun {
             $locked = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
             abort_unless($locked->revision_id, 422, 'انشر نسخة أولًا.');
+            abort_unless(($locked->revision->definition['schema'] ?? 1) === 1, 422, 'استخدم محاكاة مسار العمليات.');
             abort_unless($dry || $trial || ($locked->enabled && config('order_automation.enabled')), 422);
             $existing = OrderAutomationRun::where('request_key', $requestKey)->first();
             if ($existing) {
@@ -86,7 +88,7 @@ class WorkflowService
             foreach (OrderAutomation::where('enabled', true)->whereNotNull('revision_id')->get() as $automation) {
                 DB::transaction(function () use ($automation, &$count): void {
                     $workflow = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
-                    if (! $workflow->enabled) {
+                    if (! $workflow->enabled || ($workflow->revision?->definition['schema'] ?? 1) !== 1) {
                         return;
                     }
                     $orders = Order::where('id', '>', $workflow->scan_after_id)->orderBy('id')->limit(100)->get();

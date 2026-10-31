@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderProcessSimulation;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
 use App\Services\OrderAutomation\WorkflowDefinition;
@@ -36,6 +37,7 @@ class OrderAutomationController extends Controller
             'confirmationRequests' => (clone $requests)->with(['order:id,order_number', 'confirmationWorkflow:id,checkout_group_key,confirmation_status,confirmed_at'])->latest('id')->limit(20)
                 ->get(['id', 'order_id', 'checkout_group_key', 'status', 'attempts', 'created_at', 'processed_at', 'last_error']),
             'workflows' => OrderAutomation::with('revision')->get(),
+            'processCounts' => OrderProcessSimulation::select('automation_id', 'status')->selectRaw('count(*) as total')->groupBy('automation_id', 'status')->get()->groupBy('automation_id'),
             'runs' => OrderAutomationRun::with('order')->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->latest('id')->paginate(25),
         ]);
     }
@@ -51,6 +53,10 @@ class OrderAutomationController extends Controller
 
     public function edit(OrderAutomation $automation): mixed
     {
+        if (($automation->draft['schema'] ?? 1) === 2) {
+            return redirect()->route('admin.order-automation.process.edit', $automation);
+        }
+
         return view('admin.order-automation.edit', ['workflow' => $automation, 'definition' => $automation->draft,
             'models' => AiModel::with('provider')->where('is_active', true)->get()->filter(fn ($model) => $model->supportsCapability('character_sheet')),
             'stories' => Story::orderBy('title')->get(['id', 'title']),
@@ -59,6 +65,7 @@ class OrderAutomationController extends Controller
 
     public function save(Request $request, OrderAutomation $automation): mixed
     {
+        abort_unless(($automation->draft['schema'] ?? 1) === 1, 422);
         $data = $request->validate(['name' => 'required|string|max:150', 'draft_version' => 'required|integer', 'definition' => 'required|array']);
         $definition = app(WorkflowDefinition::class)->validate(array_replace(WorkflowDefinition::defaults(), $data['definition']));
         DB::transaction(function () use ($automation, $data, $definition): void {

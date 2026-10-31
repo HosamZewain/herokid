@@ -22,6 +22,11 @@ class WorkflowRunner
             if (! $run || ! in_array($run->status, ['queued', 'waiting_inputs', 'polling', 'generating'], true) || $run->lease_until?->isFuture()) {
                 return null;
             }
+            if (($run->revision->definition['schema'] ?? 1) !== 1) {
+                $run->update(['status' => 'blocked', 'error_code' => 'unsupported_schema']);
+
+                return null;
+            }
             if ($run->status === 'generating') {
                 $run->update(['status' => 'uncertain', 'error_code' => 'provider_unknown']);
 

@@ -439,6 +439,16 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
         Route::get('runs/{run}', [$controller, 'show'])->middleware('permission:orders.view')->name('runs.show');
         Route::get('runs/{run}/image', [$controller, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('runs.image');
         Route::post('runs/{run}/action', [$controller, 'action'])->middleware(['permission:orders.view', 'permission:orders.photos.view', 'permission:order_automation.execute', 'throttle:10,1'])->name('runs.action');
+        Route::prefix('process')->name('process.')->middleware('permission:order_automation.manage')->group(function (): void {
+            $process = \App\Http\Controllers\Admin\OrderProcessController::class;
+            Route::post('/', [$process, 'create'])->name('create');
+            Route::get('simulations/{simulation}', [$process, 'show'])->name('simulation');
+            Route::post('simulations/{simulation}', [$process, 'respond'])->middleware('throttle:30,1')->name('respond');
+            Route::get('{automation}/edit', [$process, 'edit'])->name('edit');
+            Route::put('{automation}', [$process, 'save'])->name('save');
+            Route::post('{automation}/publish', [$process, 'publish'])->name('publish');
+            Route::post('{automation}/simulate', [$process, 'simulate'])->middleware('throttle:10,1')->name('simulate');
+        });
         Route::get('{automation}/edit', [$controller, 'edit'])->middleware('permission:order_automation.manage')->name('edit');
         Route::put('{automation}', [$controller, 'save'])->middleware('permission:order_automation.manage')->name('save');
         Route::post('{automation}/publish', [$controller, 'publish'])->middleware('permission:order_automation.manage')->name('publish');

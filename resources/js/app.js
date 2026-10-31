@@ -31,6 +31,10 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    const processBuilder = document.querySelector('[data-process-builder]');
+    if (processBuilder) {
+        import('./order-process-builder').then(({ initializeProcessBuilder }) => initializeProcessBuilder(processBuilder));
+    }
     const studioSettings = document.querySelector('[data-studio-settings-editor]');
     if (studioSettings) {
         import('./studio-settings-editor').then(({ initializeStudioSettingsEditor }) => initializeStudioSettingsEditor(studioSettings));
