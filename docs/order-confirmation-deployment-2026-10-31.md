@@ -1,6 +1,8 @@
 # Order confirmation deployment and approved pilot — 31 October 2026
 
-## Actual live state
+**Superseded current status:** close recovery deployed as e55dcbd; approved pilot confirmed successfully at11:52:10 UTC. Global sending remains off. See [latest result](confirmation-close-recovery-2026-10-31.md). The following preserves the initial deployment/incident evidence.
+
+## Initial deployment state
 
 AWS was independently verified at `4b566cfb91d3da7b8795be0716163db19222ad41` (detached), from `46f8e3e260dc6319845e1f309218340837178d70`. Owner approved deployment and the pilot, supplied a test number securely, then explicitly approved one synthetic production order. The primary dirty development checkout was not deployed.
 

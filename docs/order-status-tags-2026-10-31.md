@@ -14,6 +14,6 @@ All seven changed-file hashes matched. .env/config hashes unchanged; FPM gracefu
 
 ## Prepared follow-up: wrapping instead of horizontal scroll
 
-Owner requested automatic wrapping while preserving chip sizes, colors and filter behavior. Branch `codex/order-status-tags-wrap` changes only the Blade container from nowrap/overflow-x-auto to flex-wrap and replaces scrolling instructions/region label. Individual chip classes and links are unchanged. Not yet deployed; the previously approved deployed SHA remains `157e8fa`.
+Owner requested automatic wrapping while preserving chip sizes, colors and filter behavior. Branch `codex/order-status-tags-wrap` changes only the Blade container from nowrap/overflow-x-auto to flex-wrap and replaces scrolling instructions/region label. Individual chip classes and links are unchanged. Now deployed in `e55dcbd4eb1a67fd6ca2dad84cf6618dd30ba263` at11:50:39–11:50:43 UTC, alongside the approved close recovery. Production browser verified two rows without horizontal overflow.
 
 Verification: 4 tests / 294 assertions passed; Vite build/manifest verified, no asset diff and no removed historical files. Synthetic browser render: 2 rows at normal desktop width, 11 rows at 390px; every chip still 38px high and neither container has horizontal overflow. Screenshot `/tmp/herokid-tags-release/wrap-desktop.png` contains synthetic data. No production changes or outbound integration requests.

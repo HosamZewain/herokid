@@ -1,6 +1,6 @@
 # Order confirmation implementation — 31 October 2026
 
-Status: **deployed 31 October at SHA 4b566cfb91d3da7b8795be0716163db19222ad41; general sending disabled**. Owner-approved one-order pilot HK10-614 stopped at RoboDesk close HTTP 500 before template send. No automatic retry. See [actual deployment and pilot report](order-confirmation-deployment-2026-10-31.md), including the resolved deployment permission incident. The implementation description below originated before deployment.
+Status: **live in e55dcbd4eb1a67fd6ca2dad84cf6618dd30ba263; approved pilot HK10-614 passed, broad sending disabled**. The original close500 was recovered after review; exactly one template sent and customer button reply confirmed the order once. See [latest evidence and activation gates](confirmation-close-recovery-2026-10-31.md).
 
 This revision supersedes prepared callback commit `6ef4cfbe5f345c8cd913e3ecc0657e744a9f6b6c`. It implements the owner's relayed final polling contract and subsequent quoted-message correction. The RoboDesk agent reports `channelId`, `replyTo`, `templateName` now live on production; HeroKid has not independently sent a real confirmation template. No callback/HMAC or tenant-specific RoboDesk change remains required.
 
