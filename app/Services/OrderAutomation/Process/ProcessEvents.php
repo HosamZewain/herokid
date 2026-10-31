@@ -23,7 +23,8 @@ class ProcessEvents
 
     private function record(Order $order, string $type, string $key, array $data): void
     {
-        if (! app(ProcessLivePolicy::class)->enabled() || $order->id <= (int) config('order_process.after_order_id')) {
+        if (! app(ProcessLivePolicy::class)->enabled() || $order->id <= (int) config('order_process.after_order_id')
+            || ! app(ProcessLivePolicy::class)->allowsCheckout($order->checkoutGroupKey())) {
             return;
         }
         // Callers must finalize/write the order and outbox in the same transaction.

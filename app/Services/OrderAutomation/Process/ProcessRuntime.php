@@ -33,7 +33,7 @@ class ProcessRuntime
             $automation = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
             abort_if($revisionId !== null && $revisionId !== (int) $automation->revision_id, 409);
             if ($enabled) {
-                abort_unless($this->policy->enabled() && $automation->revision_id, 422, 'التنفيذ الفعلي مقفول على الخادم أو لا توجد نسخة محفوظة.');
+                abort_unless($this->policy->enabled() && $this->policy->allowsAutomation($automation->id) && $automation->revision_id, 422, 'التنفيذ الفعلي مقفول على الخادم أو لا توجد نسخة محفوظة.');
                 $this->policy->check($automation->revision->definition);
                 $automation->process_activated_by = $actor->id;
                 abort_unless($this->policy->authorized($automation), 403);
@@ -63,7 +63,8 @@ class ProcessRuntime
                 foreach (OrderAutomation::where('enabled', true)->whereNotNull('process_after_event_id')->orderBy('id')->get() as $automation) {
                     $automation = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
                     $d = $automation->revision?->definition;
-                    if (! $automation->enabled || $event->id <= $automation->process_after_event_id || ! $d || ($d['schema'] ?? 1) !== 2 || $d['trigger'] !== $event->type || $d['conditions']['status'] !== ($event->data['status'] ?? null)) {
+                    if (! $this->policy->allowsAutomation($automation->id) || ! $this->policy->allowsCheckout($event->checkout_key)
+                        || ! $automation->enabled || $event->id <= $automation->process_after_event_id || ! $d || ($d['schema'] ?? 1) !== 2 || $d['trigger'] !== $event->type || $d['conditions']['status'] !== ($event->data['status'] ?? null)) {
                         continue;
                     }
                     try {
@@ -264,7 +265,7 @@ class ProcessRuntime
             } catch (ValidationException) {
                 $run->refresh()->update(['status' => 'blocked', 'error_code' => 'live_policy_changed']);
             } catch (RuntimeException $exception) {
-                $allowed = ['order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action', 'identity_disabled', 'identity_scope_incomplete', 'identity_provider_unavailable', 'identity_budget_required', 'identity_already_claimed', 'identity_existing_review', 'identity_requires_review', 'identity_approval_missing', 'missing_inputs', 'invalid_photo', 'photo_too_large'];
+                $allowed = ['trial_scope_changed', 'order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action', 'identity_disabled', 'identity_scope_incomplete', 'identity_provider_unavailable', 'identity_budget_required', 'identity_already_claimed', 'identity_existing_review', 'identity_requires_review', 'identity_approval_missing', 'missing_inputs', 'invalid_photo', 'photo_too_large'];
                 if (! in_array($exception->getMessage(), $allowed, true)) {
                     throw $exception;
                 }
@@ -328,6 +329,9 @@ class ProcessRuntime
 
     public function guard(OrderProcessRun $run): void
     {
+        if (! $this->policy->allowsAutomation($run->automation_id) || ! $this->policy->allowsCheckout($run->checkout_key)) {
+            throw new RuntimeException('trial_scope_changed');
+        }
         if ($run->account_key !== config('robodesk.conversations.account_key', 'primary')) {
             throw new RuntimeException('inputs_changed');
         }

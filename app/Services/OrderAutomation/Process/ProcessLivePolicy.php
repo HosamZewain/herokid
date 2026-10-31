@@ -15,8 +15,34 @@ class ProcessLivePolicy
     {
         $floor = config('order_process.after_order_id');
 
-        return config('order_process.enabled') && $floor !== null && ctype_digit((string) $floor)
+        $mode = config('order_process.enrollment_mode', 'all_new');
+        $trialReady = $mode === 'all_new' || ($mode === 'trial'
+            && ctype_digit((string) config('order_process.trial_order_id')) && (int) config('order_process.trial_order_id') > 0
+            && ctype_digit((string) config('order_process.trial_automation_id')) && (int) config('order_process.trial_automation_id') > 0);
+
+        return $trialReady && config('order_process.enabled') && $floor !== null && ctype_digit((string) $floor)
             && config('queue.connections.order-process.driver') === 'redis';
+    }
+
+    public function allowsAutomation(int $id): bool
+    {
+        return config('order_process.enrollment_mode', 'all_new') === 'all_new'
+            || (config('order_process.enrollment_mode') === 'trial' && $id === (int) config('order_process.trial_automation_id'));
+    }
+
+    public function allowsCheckout(string $key): bool
+    {
+        if (config('order_process.enrollment_mode', 'all_new') === 'all_new') {
+            return true;
+        }
+        if (config('order_process.enrollment_mode') !== 'trial') {
+            return false;
+        }
+        // Include deleted siblings: the trial must never silently omit part of a checkout.
+        $orders = Order::withTrashed()->where('checkout_group_key', $key)->get(['id', 'deleted_at']);
+
+        return $orders->count() === 1 && ! $orders->first()->trashed()
+            && $orders->first()->id === (int) config('order_process.trial_order_id');
     }
 
     public function ownerReady(): bool
@@ -28,7 +54,7 @@ class ProcessLivePolicy
     {
         $floor = config('order_process.after_order_id');
         // Pausing execution must not silently re-enable the legacy sender.
-        if (config('order_process.confirmation_owner') === 'process' && $floor !== null && ctype_digit((string) $floor) && $order->id > (int) $floor) {
+        if (config('order_process.confirmation_owner') === 'process' && $floor !== null && ctype_digit((string) $floor) && $order->id > (int) $floor && $this->allowsCheckout($order->checkoutGroupKey())) {
             return true;
         }
 

@@ -126,6 +126,54 @@ class OrderProcessRuntimeTest extends TestCase
         return $c;
     }
 
+    public function test_trial_enrolls_only_one_pinned_checkout_and_workflow(): void
+    {
+        $otherWorkflow = $this->workflow(ProcessDefinition::defaults('confirmation'));
+        $chosen = $this->order(false);
+        $other = $this->order(false);
+        config(['order_process.enrollment_mode' => 'trial', 'order_process.trial_order_id' => $chosen->id,
+            'order_process.trial_automation_id' => $this->workflow->id]);
+        DB::transaction(function () use ($chosen, $other): void {
+            app(ProcessEvents::class)->checkoutCompleted($chosen);
+            app(ProcessEvents::class)->checkoutCompleted($other);
+        });
+        $this->assertDatabaseCount('order_process_events', 1);
+        $this->assertSame(1, app(ProcessRuntime::class)->tick());
+        $run = OrderProcessRun::sole();
+        $this->assertSame($chosen->id, $run->order_id);
+        $this->assertSame($this->workflow->id, $run->automation_id);
+        $this->assertFalse(app(ProcessLivePolicy::class)->ownsConfirmation($other));
+        Http::assertNothingSent();
+    }
+
+    public function test_trial_blocks_an_existing_run_after_scope_changes(): void
+    {
+        $run = $this->enroll();
+        config(['order_process.enrollment_mode' => 'trial', 'order_process.trial_order_id' => $run->order_id + 100,
+            'order_process.trial_automation_id' => $run->automation_id]);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_trial_rejects_missing_configuration_and_checkouts_with_added_siblings(): void
+    {
+        config(['order_process.enrollment_mode' => 'trial']);
+        $this->assertFalse(app(ProcessLivePolicy::class)->enabled());
+        $chosen = $this->order(false);
+        config(['order_process.trial_order_id' => $chosen->id, 'order_process.trial_automation_id' => $this->workflow->id]);
+        $this->assertTrue(app(ProcessLivePolicy::class)->enabled());
+        $this->assertTrue(app(ProcessLivePolicy::class)->allowsCheckout($chosen->checkoutGroupKey()));
+        $sibling = $this->order(false);
+        $sibling->update(['checkout_group_key' => $chosen->checkout_group_key]);
+        $this->assertFalse(app(ProcessLivePolicy::class)->allowsCheckout($chosen->checkoutGroupKey()));
+        $sibling->delete();
+        $this->assertFalse(app(ProcessLivePolicy::class)->allowsCheckout($chosen->checkoutGroupKey()));
+        config(['order_process.enrollment_mode' => 'typo']);
+        $this->assertFalse(app(ProcessLivePolicy::class)->enabled());
+        Http::assertNothingSent();
+    }
+
     public function test_disabled_engine_has_no_events_no_jobs_and_preserves_legacy_owner(): void
     {
         config(['order_process.enabled' => false, 'order_process.confirmation_owner' => 'legacy']);
