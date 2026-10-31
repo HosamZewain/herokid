@@ -28,7 +28,7 @@ class OrderWhatsAppMessageService
         'payment_status' => 'حالة الدفع',
         'order_status' => 'حالة الطلب',
         'preview_url' => 'رابط معاينة الطلب (كتاب أو منتجات)',
-        'preview_scenes_url' => 'رابط معاينة المشاهد',
+        'preview_scenes_url' => 'روابط معاينة مشاهد كل القصص (كل رابط في سطر)',
         'product_preview_url' => 'رابط معرض معاينة المنتجات',
         'customer_preview_url' => 'رابط المعاينة المناسب للعميل',
         'payment_url' => 'رابط الدفع المجهز في إعداد RoboDesk',
@@ -72,7 +72,7 @@ class OrderWhatsAppMessageService
                 if (
                     $template['id'] === 'preview'
                     && $variables['customer_preview_url'] !== ''
-                    && ! Str::contains($template['message'], ['{{preview_url}}', '{{customer_preview_url}}', '{{product_preview_url}}'])
+                    && ! Str::contains($template['message'], ['{{preview_url}}', '{{preview_scenes_url}}', '{{customer_preview_url}}', '{{product_preview_url}}'])
                 ) {
                     $body .= "\n\nرابط المعاينة:\n".$variables['customer_preview_url'];
                 }
@@ -92,10 +92,15 @@ class OrderWhatsAppMessageService
     public function variablesForGroup(array $group): array
     {
         $orders = collect($group['active_orders'] ?? $group['orders'] ?? []);
-        $preview = $orders
+        $previews = $orders
             ->pluck('bookletPreview')
-            ->filter(fn ($item): bool => $item && $item->status === 'active' && $item->current_version_id)
-            ->first();
+            ->filter(fn ($item): bool => $item && $item->status === 'active' && $item->current_version_id);
+        $preview = $previews->first();
+        $previewScenesUrls = $previews
+            ->map(fn ($item): ?string => $item->publicScenesUrl())
+            ->filter()
+            ->unique()
+            ->implode("\n");
         $productPreviewGallery = $orders
             ->pluck('productPreviewGallery')
             ->filter(fn ($item): bool => $item && $item->status === 'active')
@@ -131,7 +136,7 @@ class OrderWhatsAppMessageService
             'payment_status' => (string) ($group['payment_status_label'] ?? ''),
             'order_status' => (string) ($group['status_label'] ?? ''),
             'preview_url' => (string) ($customerPreviewUrl ?? ''),
-            'preview_scenes_url' => (string) ($preview?->publicScenesUrl() ?? ''),
+            'preview_scenes_url' => $previewScenesUrls,
             'product_preview_url' => (string) ($productPreviewUrl ?? ''),
             'customer_preview_url' => (string) ($customerPreviewUrl ?? ''),
             'payment_url' => (string) config('robodesk.instapay_url', ''),
