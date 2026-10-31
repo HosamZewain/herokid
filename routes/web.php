@@ -444,6 +444,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
             Route::post('/', [$process, 'create'])->name('create');
             Route::get('simulations/{simulation}', [$process, 'show'])->name('simulation');
             Route::post('simulations/{simulation}', [$process, 'respond'])->middleware('throttle:30,1')->name('respond');
+            Route::get('{automation}/live', [$process, 'live'])->middleware('permission:orders.view')->name('live');
+            Route::post('{automation}/activate', [$process, 'activate'])->middleware(['permission:order_automation.activate', 'permission:order_automation.execute', 'permission:orders.view', 'permission:orders.update', 'throttle:10,1'])->name('activate');
+            Route::post('runs/{run}/action', [$process, 'action'])->middleware(['permission:order_automation.execute', 'permission:orders.view', 'permission:orders.update', 'throttle:10,1'])->name('action');
             Route::get('{automation}/edit', [$process, 'edit'])->name('edit');
             Route::put('{automation}', [$process, 'save'])->name('save');
             Route::post('{automation}/publish', [$process, 'publish'])->name('publish');

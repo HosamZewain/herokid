@@ -1,0 +1,16 @@
+; PREPARED ONLY. Install/start only after separate deployment and activation approval.
+; Existing EC2 + Redis. Do not enable this by running supervisorctl update globally.
+[program:herokid-order-process]
+command=/usr/bin/php8.3 /var/www/herokid/artisan queue:work order-process --queue=order-process --sleep=3 --tries=1 --timeout=110 --memory=192 --max-time=3600
+directory=/var/www/herokid
+user=www-data
+numprocs=1
+autostart=false
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=180
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/herokid-order-process.log
+stdout_logfile_maxbytes=5MB
+stdout_logfile_backups=2

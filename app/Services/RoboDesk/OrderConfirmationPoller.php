@@ -2,9 +2,11 @@
 
 namespace App\Services\RoboDesk;
 
+use App\Models\OrderProcessStep;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversation;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Schema;
 
 class OrderConfirmationPoller
 {
@@ -55,6 +57,9 @@ class OrderConfirmationPoller
         $ambiguousRequests = $requests->filter(fn ($request) => $templates->contains(fn ($template) => data_get($template->provider_metadata, 'channelId') === data_get($request->response_payload, 'message_id')
             && data_get($template->provider_metadata, 'interactionId') !== data_get($request->response_payload, 'interaction_id')));
         $this->review($ambiguousRequests, 'template_interaction_mismatch');
+        $processReceipts = Schema::hasTable('order_process_runs')
+            ? OrderProcessStep::where('type', 'whatsapp')->whereHas('run', fn ($q) => $q->where('account_key', $conversation->account_key)->where('phone_hash', $conversation->phone_hash))->get()
+            : collect();
         foreach ($messages as $message) {
             $meta = $message->provider_metadata ?? [];
             if ($message->confirmation_event_id !== null || $message->sent_at->isFuture() || $message->direction !== 'inbound' || trim((string) $message->body) !== 'تأكيد الطلب'
@@ -62,6 +67,12 @@ class OrderConfirmationPoller
                 continue;
             }
             $wamid = $meta['replyTo'];
+            if ($wamid && $processReceipts->contains(fn ($step) => data_get($step->receipt, 'message_id') === $wamid)) {
+                continue;
+            }
+            if ($processReceipts->contains(fn ($step) => in_array($step->status, ['processing', 'uncertain'], true))) {
+                continue;
+            }
             $messageEnd = $message->sent_at->startOfSecond()->addSecond();
             $knownReply = $wamid !== null && $requests->contains(fn ($request) => data_get($request->response_payload, 'message_id') === $wamid);
             // A quote of another message is ordinary typed confirmation, not a

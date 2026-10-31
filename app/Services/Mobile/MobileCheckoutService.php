@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\Cart\ShippingDiscountService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\OrderAutomation\Process\ProcessEvents;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
 use App\Support\OrderPaymentStatus;
@@ -148,6 +149,8 @@ class MobileCheckoutService
                 $attempt->forceFill(['status' => 'completed', 'response_payload' => $payload, 'completed_at' => now()])->save();
                 $cart->forceFill(['status' => 'converted', 'converted_at' => now(), 'last_activity_at' => now()])->save();
                 $this->redeemPromo($cart, $attempt, $user);
+
+                app(ProcessEvents::class)->checkoutCompleted($orders[0]);
 
                 return $payload;
             }, 3);

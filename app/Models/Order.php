@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Services\OrderAutomation\Process\ProcessEvents;
+use App\Services\OrderAutomation\Process\ProcessLivePolicy;
 use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\Orders\OrderShortReferenceService;
 use App\Support\MarketingAttribution;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Order extends Model
 {
@@ -24,8 +27,18 @@ class Order extends Model
         'deleted_at' => 'datetime',
     ];
 
+    public function save(array $options = [])
+    {
+        if (app(ProcessLivePolicy::class)->enabled()) {
+            return DB::transaction(fn () => parent::save($options));
+        }
+
+        return parent::save($options);
+    }
+
     protected static function booted(): void
     {
+        static::updated(fn (Order $order) => app(ProcessEvents::class)->statusChanged($order));
         static::created(function (Order $order): void {
             if (blank($order->checkout_group_key)) {
                 $order->forceFill([

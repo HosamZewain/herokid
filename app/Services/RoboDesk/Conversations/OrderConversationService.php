@@ -5,6 +5,7 @@ namespace App\Services\RoboDesk\Conversations;
 use App\Models\Order;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\RoboDesk\OrderConfirmationPoller;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -100,7 +101,8 @@ class OrderConversationService
             $interval = max(600, (int) config('robodesk.conversations.full_reconciliation_interval_seconds', 3600));
             $full = $full || ! $existing?->sync_cursor || ! $existing?->last_full_synced_at
                 || $existing->last_full_synced_at->lte(now()->subSeconds($interval));
-            $confirmationWindow = app(OrderConfirmationPoller::class)->needsFullWindow($phone);
+            $confirmationWindow = app(OrderConfirmationPoller::class)->needsFullWindow($phone)
+                || app(ProcessResponsePoller::class)->needsFullWindow($phone);
             $full = $full || $confirmationWindow;
             // Delayed Meta webhooks can predate a date-based cursor. Every poll
             // awaiting confirmation rereads the newest 50 interactions in full.
@@ -121,6 +123,7 @@ class OrderConversationService
                     }
                 }
                 app(OrderConfirmationPoller::class)->process($conversation);
+                app(ProcessResponsePoller::class)->process($conversation);
                 // A limited v1 window is never grounds for removing older saved messages.
                 $changes = ['last_synced_at' => now(), 'sync_state' => 'ready', 'error_code' => null];
                 if ($full || $page->cursorReset) {

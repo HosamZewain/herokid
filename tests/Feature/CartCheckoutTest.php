@@ -22,6 +22,18 @@ class CartCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_process_outbox_records_one_completed_web_checkout(): void
+    {
+        Http::preventStrayRequests();
+        \Illuminate\Support\Facades\Queue::fake();
+        config(['order_process.enabled' => true, 'order_process.after_order_id' => 0, 'order_process.confirmation_owner' => 'process']);
+        $this->test_checkout_keeps_independent_story_languages_and_correct_scene_text();
+        $this->assertDatabaseCount('order_process_events', 1);
+        $this->assertDatabaseCount('orders', 2);
+        $this->assertDatabaseHas('order_process_events', ['type' => 'checkout_created', 'status' => 'pending']);
+        $this->assertDatabaseCount('robodesk_integration_events', 0);
+    }
+
     public function test_checkout_keeps_independent_story_languages_and_correct_scene_text(): void
     {
         Storage::fake('local');

@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\OrderAutomation\Process\ProcessEvents;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
 use App\Support\AdminActivityLogger;
@@ -355,6 +356,8 @@ class AdminOrderCreationService
                         $this->photoUploads->append($orders[(int) $position], $input['photos']);
                     }
                 }
+
+                app(ProcessEvents::class)->checkoutCompleted($firstOrder->fresh());
 
                 return [
                     'representative' => $firstOrder->fresh(),

@@ -16,6 +16,8 @@ use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -30,6 +32,17 @@ class MobileCommerceApiTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         Setting::query()->updateOrCreate(['key' => 'story_global_price_enabled'], ['value' => '0']);
+    }
+
+    public function test_process_outbox_records_mobile_checkout_once(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake();
+        config(['order_process.enabled' => true, 'order_process.after_order_id' => 0, 'order_process.confirmation_owner' => 'process']);
+        $this->test_cash_on_delivery_checkout_creates_existing_orders_once_and_copies_private_photos();
+        $this->assertDatabaseCount('order_process_events', 1);
+        $this->assertDatabaseHas('order_process_events', ['type' => 'checkout_created', 'status' => 'pending']);
+        $this->assertDatabaseCount('robodesk_integration_events', 0);
     }
 
     public function test_cart_uses_server_prices_is_idempotent_and_keeps_personalization_encrypted(): void

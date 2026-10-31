@@ -8,7 +8,8 @@
         <a class="text-indigo-700 underline" href="{{ route('admin.order-automation.index') }}">← كل مسارات الأتمتة</a>
         @if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
         @if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</p>@endif
-        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>بيئة بناء ومحاكاة</strong> — تقدر تحفظ المسار وتختبر فروعه ببيانات وهمية. الخطوات هنا لا ترسل رسائل ولا تغيّر طلبات حقيقية. تشغيل تأكيد الطلب الحالي مستقل ولم يتغير.</div>
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><strong>بيئة بناء ومحاكاة</strong> — تقدر تحفظ المسار وتختبر فروعه ببيانات وهمية. المحاكاة لا ترسل رسائل ولا تغيّر طلبات حقيقية. التنفيذ على العملاء له تفعيل مستقل وشروط جاهزية.</div>
+        @if(auth()->user()->hasPermission('orders.view'))<a class="inline-block rounded-lg border bg-white px-4 py-2 text-indigo-700" href="{{ route('admin.order-automation.process.live', $workflow) }}">التنفيذ الفعلي والإحصائيات</a>@endif
         <form method="POST" action="{{ route('admin.order-automation.process.save', $workflow) }}" class="space-y-6">@csrf @method('PUT')
             <input type="hidden" name="draft_version" value="{{ $workflow->draft_version }}">
             <input type="hidden" name="definition_json" value="{{ json_encode($editing, JSON_UNESCAPED_UNICODE) }}">

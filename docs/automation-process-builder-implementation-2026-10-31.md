@@ -3,6 +3,8 @@
 Date: 31 October 2026. Branch: `codex/automation-process-builder`.
 Status: **prepared and tested locally; not deployed or activated**.
 
+Continuation: the [execution increment](automation-process-runtime-2026-10-31.md) now implements the event outbox, guarded runtime, response waits and separate live-history controls. The original increment notes below are retained as historical scope; the continuation supersedes their execution-engine TODOs.
+
 ## Delivered
 
 - `/admin/order-automation` now presents a workflow list and new-workflow creation as the main interface. Existing confirmation operation has its own card/details; legacy identity settings remain available.

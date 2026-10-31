@@ -268,3 +268,8 @@ Artisan::command('order-automation:tick', function (\App\Services\OrderAutomatio
     $this->info('New workflow runs: '.$workflows->tick());
 })->purpose('Admit new orders and recover safe workflow steps; never resubmit uncertain generation');
 Schedule::command('order-automation:tick')->everyMinute()->withoutOverlapping(10);
+
+Artisan::command('order-process:tick', function (\App\Services\OrderAutomation\Process\ProcessRuntime $runtime) {
+    $this->info('New process runs: '.$runtime->tick());
+})->purpose('Advance explicitly enabled processes; never retry uncertain sends');
+Schedule::command('order-process:tick')->everyMinute()->withoutOverlapping(10);

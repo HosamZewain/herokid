@@ -6,6 +6,12 @@
 
 `codex/automation-process-builder` prepares a schema-2 workflow designer and durable synthetic simulator. It does **not** replace or activate the live confirmation service. Production SHA was re-read as `adfaffa9841c79a16dd3d37383e2f3209a6736f1` at implementation start; no production mutations were made. The new additive simulation-table migration and schema-2 isolation/rollback constraints must be reviewed before a separately approved deployment. See [implementation, verification and remaining work](automation-process-builder-implementation-2026-10-31.md). This is the first builder/simulation increment, not a completed general live execution engine.
 
+## Prepared execution continuation and live confirmation observation — 31 October 2026
+
+The same isolated branch now includes an event outbox, guarded process runtime, confirmation transport/waits, status handoff and operational history. **Not deployed, not activated; no new worker or customer action.** See [runtime scope, tests and activation/rollback gates](automation-process-runtime-2026-10-31.md). Global defaults stay off/legacy; the simulator and execution migrations are additive. Arbitrary templates, per-item production and AI/payment adapters remain unavailable for live execution.
+
+Read-only production inspection at13:44–13:46UTC revalidated SHA `adfaffa9841c79a16dd3d37383e2f3209a6736f1`. HK10-618 is confirmed exactly once. HK10-619's current phone differs from its send-time phone, explaining why the current-contact background read is not its awaiting-confirmation read. HK10-616 has a provider-reported131026 delivery failure; HK10-620 delivery is unverified/pending. No retries or edits. See [five-order reconciliation and polling capacity](confirmation-first-five-production-review-2026-10-31.md).
+
 ## 1. Current environment and release
 
 | Item | Value / status |

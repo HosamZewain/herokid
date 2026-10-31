@@ -45,6 +45,11 @@ return [
         ],
 
         // Separate reservation window; do not change existing workers' behavior.
+        'order-process' => [
+            'driver' => 'redis', 'connection' => 'default', 'queue' => 'order-process',
+            'retry_after' => 180, 'block_for' => null, 'after_commit' => true,
+        ],
+
         'order-automation' => [
             'driver' => 'database',
             'connection' => env('DB_QUEUE_CONNECTION'),

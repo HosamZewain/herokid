@@ -17,6 +17,8 @@ use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -43,6 +45,18 @@ class AdminOrderFullEditTest extends TestCase
             ->where('name', 'القاهرة')
             ->firstOrFail();
         $this->governorate->update(['delivery_fee' => 50, 'active' => true]);
+    }
+
+    public function test_process_outbox_records_final_admin_checkout(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake();
+        config(['order_process.enabled' => true, 'order_process.after_order_id' => 0, 'order_process.confirmation_owner' => 'process']);
+        $this->createCheckout();
+        $this->assertDatabaseCount('order_process_events', 1);
+        $this->assertGreaterThan(1, Order::count());
+        $this->assertDatabaseHas('order_process_events', ['type' => 'checkout_created', 'status' => 'pending']);
+        $this->assertDatabaseCount('robodesk_integration_events', 0);
     }
 
     public function test_admin_can_open_creation_form_as_full_checkout_editor(): void

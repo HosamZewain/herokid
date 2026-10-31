@@ -21,6 +21,7 @@ use App\Services\Cart\WebsiteCartPricingService;
 use App\Services\Cart\WebsitePromoCodeService;
 use App\Services\ChildIdentity\ChildIdentityEventLogger;
 use App\Services\Notifications\AdminNotificationDispatcher;
+use App\Services\OrderAutomation\Process\ProcessEvents;
 use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
@@ -533,6 +534,7 @@ class CheckoutController extends Controller
                     throw new \RuntimeException('No purchasable cart items remain.');
                 }
                 $submissions->complete($submission['key'], $orderIds);
+                app(ProcessEvents::class)->checkoutCompleted(Order::findOrFail($orderIds[0]));
             });
         } catch (\RuntimeException) {
             return redirect()->route('cart.index')->with('error', 'بعض المنتجات لم تعد متاحة بالكمية المطلوبة. يرجى مراجعة السلة.');

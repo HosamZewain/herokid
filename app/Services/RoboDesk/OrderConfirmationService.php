@@ -6,9 +6,11 @@ use App\Models\CheckoutCustomerWorkflow;
 use App\Models\Order;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\OrderAutomation\Process\ProcessLivePolicy;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
 use App\Support\Phone;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class OrderConfirmationService
 {
@@ -41,6 +43,10 @@ class OrderConfirmationService
 
     public function register(Order $order): void
     {
+        // Explicit future-order handoff only. Existing receipts and pending sends stay legacy-owned.
+        if (app(ProcessLivePolicy::class)->ownsConfirmation($order)) {
+            return;
+        }
         app(RoboDeskOutbox::class)->queue(
             'order.pending_confirmation',
             'order.pending_confirmation:'.$order->checkoutGroupKey(),
@@ -83,7 +89,7 @@ class OrderConfirmationService
     {
         DB::transaction(function () use ($request, $message, $phone, $method): void {
             $message = WhatsAppConversationMessage::whereKey($message->id)->lockForUpdate()->firstOrFail();
-            if ($message->confirmation_event_id !== null) {
+            if ($message->confirmation_event_id !== null || (Schema::hasTable('order_process_responses') && DB::table('order_process_responses')->where('message_id', $message->id)->exists())) {
                 return;
             }
             $request = RoboDeskIntegrationEvent::whereKey($request->id)->lockForUpdate()->firstOrFail();

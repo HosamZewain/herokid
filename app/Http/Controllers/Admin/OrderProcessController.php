@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
+use App\Models\OrderProcessRun;
 use App\Models\OrderProcessSimulation;
 use App\Models\Product;
 use App\Models\Story;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
+use App\Services\OrderAutomation\Process\ProcessLivePolicy;
+use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
@@ -65,6 +68,7 @@ class OrderProcessController extends Controller
         DB::transaction(function () use ($automation, $request, $data, $definition) {
             $locked = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
             abort_unless($locked->draft_version === (int) $data['draft_version'], 409);
+            abort_if($locked->enabled, 422, 'أوقف المسار قبل حفظ نسخة جديدة؛ التشغيلات الحالية تحتفظ بنسختها.');
             $clean = $definition->validate($locked->draft);
             $revision = OrderAutomationRevision::create(['automation_id' => $locked->id, 'definition' => $clean,
                 'checksum' => hash('sha256', json_encode($clean, JSON_THROW_ON_ERROR)), 'published_by' => $request->user()->id, 'created_at' => now()]);
@@ -95,6 +99,42 @@ class OrderProcessController extends Controller
         $simulator->respond($simulation, $data['version'], $data['decision']);
 
         return back()->with('success', 'تمت متابعة المحاكاة بدون تنفيذ خارجي.');
+    }
+
+    public function live(OrderAutomation $automation, ProcessLivePolicy $policy): mixed
+    {
+        $this->guard($automation);
+        $limitations = [];
+        if ($automation->revision) {
+            try {
+                $policy->check($automation->revision->definition);
+            } catch (ValidationException $exception) {
+                $limitations = $exception->validator->errors()->all();
+            }
+        }
+
+        return view('admin.order-automation.process-live', [
+            'workflow' => $automation, 'runtimeReady' => $policy->enabled(), 'limitations' => $limitations,
+            'runs' => OrderProcessRun::where('automation_id', $automation->id)->with(['order:id,order_number', 'steps', 'revision'])->latest('id')->paginate(20),
+            'counts' => OrderProcessRun::where('automation_id', $automation->id)->select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
+        ]);
+    }
+
+    public function activate(Request $request, OrderAutomation $automation, ProcessRuntime $runtime): mixed
+    {
+        $this->guard($automation);
+        $data = $request->validate(['enabled' => 'required|boolean', 'confirmed' => 'required|accepted', 'revision_id' => 'required|integer|min:1']);
+        $runtime->activate($automation, $request->user(), (bool) $data['enabled'], (int) $data['revision_id']);
+
+        return back()->with('success', $data['enabled'] ? 'تم تفعيل المسار للأحداث التالية فقط.' : 'تم إيقاف المسار. الإرسال الذي بدأ بالفعل قد يكتمل؛ لا تعِد إرساله.');
+    }
+
+    public function action(Request $request, OrderProcessRun $run, ProcessRuntime $runtime): mixed
+    {
+        $data = $request->validate(['version' => 'required|integer|min:1', 'action' => 'required|in:stop,continue', 'reason' => 'required|string|min:5|max:500']);
+        $runtime->staffAction($run, $request->user(), (int) $data['version'], $data['action'], $data['reason']);
+
+        return back()->with('success', 'تم تسجيل الإجراء ومتابعة المسار.');
     }
 
     private function guard(OrderAutomation $automation): void
