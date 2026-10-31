@@ -1,6 +1,6 @@
 # Order confirmation implementation — 31 October 2026
 
-Status: **prepared locally; not deployed, no real sends or conversation closes, no production settings/data changed**. Branch `codex/order-confirmation`, based on AWS `46f8e3e260dc6319845e1f309218340837178d70` (reverified by SSH). Primary dirty workspace preserved. Earlier deployment approval applied to operational cards, not this integration change.
+Status: **deployed 31 October at SHA 4b566cfb91d3da7b8795be0716163db19222ad41; general sending disabled**. Owner-approved one-order pilot HK10-614 stopped at RoboDesk close HTTP 500 before template send. No automatic retry. See [actual deployment and pilot report](order-confirmation-deployment-2026-10-31.md), including the resolved deployment permission incident. The implementation description below originated before deployment.
 
 This revision supersedes prepared callback commit `6ef4cfbe5f345c8cd913e3ecc0657e744a9f6b6c`. It implements the owner's relayed final polling contract and subsequent quoted-message correction. The RoboDesk agent reports `channelId`, `replyTo`, `templateName` now live on production; HeroKid has not independently sent a real confirmation template. No callback/HMAC or tenant-specific RoboDesk change remains required.
 
