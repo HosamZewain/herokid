@@ -1,4 +1,7 @@
-# Process execution increment — prepared, not live
+# Process execution increment
+
+**Deployment update,31 October14:54 UTC:** this code is now installed on AWS in `fd04fdc`. The designer/simulator is available; generic execution and identity AI remain disabled. Existing legacy confirmation remains active. Meta identity template is active/quality pending; RoboDesk catalogue and approved trial remain outstanding. [Verified deployment and recovery](aws-process-dashboard-deployment-2026-10-31.md). The preparation narrative below records the earlier implementation stage.
+
 
 **Later prepared continuation:** [identity generation, private preview and delivery receipts](automation-identity-preview-runtime-2026-10-31.md) supersedes the identity-adapter/template limitations below. This document records the preceding runtime increment; neither increment is deployed or activated.
 

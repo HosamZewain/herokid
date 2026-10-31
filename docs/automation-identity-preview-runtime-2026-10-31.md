@@ -1,4 +1,7 @@
-# Identity generation, preview and delivery receipts — prepared, not deployed
+# Identity generation, preview and delivery receipts
+
+**Deployment update,31 October14:54 UTC:** this code is now installed on AWS in `fd04fdc`. The designer/simulator is available; generic execution and identity AI remain disabled. Existing legacy confirmation remains active. Meta identity template is active/quality pending; RoboDesk catalogue and approved trial remain outstanding. [Verified deployment and recovery](aws-process-dashboard-deployment-2026-10-31.md). The preparation narrative below records the earlier implementation stage.
+
 
 31 October 2026. Isolated branch `codex/automation-process-builder`, continuing `5cccb56068aa4a84d2a8a6362b9fb08287c5e842`. Production was re-read during this work as `adfaffa9841c79a16dd3d37383e2f3209a6736f1`. No production code, configuration, orders, workers or files were changed. No real AI call, customer message, payment or shipping action was performed.
 
