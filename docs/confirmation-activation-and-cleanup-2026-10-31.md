@@ -25,3 +25,9 @@ Order rows remained **2,681** across the cleanup transaction. The successful pil
 The owner-approved pilot proved one real template, customer button reply, new_confirmed transition and idempotence before activation. Activation health/config/scheduler checks are read-only; no extra production checkout was created. First ordinary post-activation order remains to be observed naturally if none has arrived at final check. This report does not claim a paid payment/shipping/AI test.
 
 A stale preactivation sentence in the panel was replaced with a description conditional on actual readiness; no behavior change. Isolated confirmation suite33 tests/132 assertions passed, asset build unchanged. Live code SHA and final bounded health results are recorded in the deployment runbook after verification.
+
+## Final verification at12:04 UTC
+
+Current deployed SHA `adfaffa9841c79a16dd3d37383e2f3209a6736f1`. Status-description view follow-up completed12:03:26 UTC; seven file hashes matched and active .env/cached-config hashes remained unchanged. Code checkpoint `/home/ubuntu/herokid-activation-status-before-20261031`, code rollbacke55dcbd (does not disable integration settings). Authenticated panel shows future-order activation enabled, held0, confirmed pilot1; screenshot `/tmp/herokid-confirmation-activation/active-confirmation.png`.
+
+Read-only gates reconfirmed ready=true, cutoff2683, no history authentication pause, deleted reviewed-ID set absent, legacy disabled/confirmation-only. Both Redis workers healthy; scheduler last successful run12:04 UTC.350 observed HTTP requests since activation, zero5xx and zero new Laravel errors. Failed-job baseline81 unchanged. No new post-boundary confirmation events yet; first natural ordinary order remains unobserved. No further synthetic send was performed.

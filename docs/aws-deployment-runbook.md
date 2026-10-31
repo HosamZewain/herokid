@@ -1,6 +1,6 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 11:54 UTC / 13:54 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 12:04 UTC / 14:04 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
 ## 1. Current environment and release
 
@@ -14,12 +14,16 @@
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`e55dcbd4eb1a67fd6ca2dad84cf6618dd30ba263`**, detached HEAD |
-| Release branch | `codex/confirmation-close-recovery`; preserved as a local ref; no claim of GitHub publication |
-| Previous release | `157e8faea212506f48f0fef99eda0f46f3dbf7a8` (single-row Tags) |
+| Live release verified by SSH | **`adfaffa9841c79a16dd3d37383e2f3209a6736f1`**, detached HEAD |
+| Release branch | `codex/confirmation-activation-status`; preserved as a local ref; no claim of GitHub publication |
+| Previous release | `e55dcbd4eb1a67fd6ca2dad84cf6618dd30ba263` (wrapped Tags and close recovery) |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
+
+**Current operational state:** confirmation is enabled for future orders only (all_new, after_order_id2683) from **31 October 2026 11:57:33 UTC / 13:57 Cairo**, with owner approval. Legacy integration remains disabled and confirmation_only=true. Exactly1,962 old held/unattempted confirmation event records were deleted at12:01:16 UTC after a verified private recovery archive; all2,681 order rows and the successful pilot were preserved. No historical sends/retries. Activation checkpoint `/home/ubuntu/herokid-confirmation-activation-before-20261031`; recovery archive `/var/backups/herokid/confirmation-held-cleanup-20261031.json.gz` is0600. Do not rerun the pre-cleanup baseline-equality gate without the recorded cleanup exception. See [scope and evidence](confirmation-activation-and-cleanup-2026-10-31.md).
+
+The latest code release **adfaffa9841c79a16dd3d37383e2f3209a6736f1**, completed **12:03:26 UTC / 14:03 Cairo**, updates the panel's stale preactivation sentence to reflect readiness and carries operational documentation. No new job/route/schema change or worker refresh for this view-only follow-up; FPM/Blade refreshed and active env/config hashes unchanged. Code checkpoint `/home/ubuntu/herokid-activation-status-before-20261031`, rollback basee55dcbd. Seven changed-file hashes and public HTTPS/home/up/cart/CSS verified. The confirmation suite passed33 tests/132 assertions and build had no asset diff. Authenticated panel shows enabled, zero historical held records and the successful pilot. Post-activation observation through12:04 UTC:350 HTTP requests, zero5xx/new Laravel errors,81 historical failed jobs unchanged, both workers running, scheduler succeeded at12:04. No ordinary order had arrived above the activation boundary yet; do not claim a naturally occurring post-activation customer lifecycle has been observed. Documentation successor `codex/confirmation-activation-cleanup-handoff` is separate from live code.
 
 The **wrapping Tags + confirmation close recovery** release is live, SHA `e55dcbd4eb1a67fd6ca2dad84cf6618dd30ba263`, deployed **31 October11:50:39–11:50:43 UTC / 13:50 Cairo**. Tags now wrap without horizontal scrolling, preserving chip sizes/colors/filter links. Close requests explicitly include completed status/statusType; one close recovery re-reads current open IDs; uncertain sendMsg still never retries. 42 tests /444 assertions passed on each isolated SQLite/MySQL, PHP8.3 lint and unchanged asset build verified. All eight deployment hashes matched, env/config unchanged; FPM/Blade refreshed, only default worker gracefully refreshed. No maintenance/schema change. First96-request observation: zero5xx/new Laravel errors, failedjobs81. Checkpoint `/home/ubuntu/herokid-close-before-20261031`, code rollback base157e8fa; preserve pilot/event/DB evidence.
 

@@ -1,6 +1,6 @@
 # Order confirmation deployment and approved pilot — 31 October 2026
 
-**Superseded current status:** close recovery deployed as e55dcbd; approved pilot confirmed successfully at11:52:10 UTC. Global sending remains off. See [latest result](confirmation-close-recovery-2026-10-31.md). The following preserves the initial deployment/incident evidence.
+**Superseded current status:** close recovery deployed as e55dcbd; approved pilot confirmed successfully at11:52:10 UTC. Future-order sending was subsequently approved and enabled, and old held event records cleaned up. See [current activation result](confirmation-activation-and-cleanup-2026-10-31.md). The following preserves the initial deployment/incident evidence.
 
 ## Initial deployment state
 
