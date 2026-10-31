@@ -1,6 +1,6 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 11:38 UTC / 13:38 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 11:42 UTC / 13:42 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
 ## 1. Current environment and release
 
@@ -14,14 +14,16 @@
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`4b566cfb91d3da7b8795be0716163db19222ad41`**, detached HEAD |
-| Release branch | `codex/order-confirmation`; preserved as a local ref; no claim of GitHub publication |
-| Previous release | `46f8e3e260dc6319845e1f309218340837178d70` (operational cards) |
+| Live release verified by SSH | **`157e8faea212506f48f0fef99eda0f46f3dbf7a8`**, detached HEAD |
+| Release branch | `codex/order-status-tags`; preserved as a local ref; no claim of GitHub publication |
+| Previous release | `4b566cfb91d3da7b8795be0716163db19222ad41` (confirmation code; general sending disabled) |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
 
-The **order-confirmation** release is live with global sending disabled; the approved single pilot is blocked by RoboDesk close HTTP 500 before sending. Recovery and the resolved deployment incident are documented [here](order-confirmation-deployment-2026-10-31.md). Compact status Tags are a separate prepared change, not yet deployed.
+The **order-confirmation** release is live with global sending disabled; the approved single pilot is blocked by RoboDesk close HTTP 500 before sending. Recovery and the resolved deployment incident are documented [here](order-confirmation-deployment-2026-10-31.md). Compact status Tags were subsequently deployed as documented below.
+
+The **compact operational status Tags** release was explicitly approved and deployed **31 October 2026 11:39:49–11:39:51 UTC / 13:39 Cairo**, SHA `157e8faea212506f48f0fef99eda0f46f3dbf7a8`. One non-wrapping colored row, horizontally scrollable, with count badges and unchanged filter URLs/permissions. Authenticated production verification: 15 links on one row, height approximately 49px; clicking the under-review tag opened the correct status filter with 15 matching checkouts. Existing isolated statistics tests passed (4 tests / 294 assertions), build/manifest validated and historical assets preserved. All seven deployment file hashes matched; .env and cached configuration hashes unchanged. Graceful FPM reload and Blade cache only, no migrations, maintenance, worker restarts, configuration activation or external sends. Public home/health/cart/CSS HTTP 200. Immediate bounded window: 43 requests, zero HTTP 5xx and zero Laravel errors; failed jobs stayed 81, both required workers running and scheduler successful. Private code checkpoint `/home/ubuntu/herokid-tags-before-20261031`; code rollback base `4b566cfb91d3da7b8795be0716163db19222ad41`, preserve DB/queues/config. See [Tags validation](order-status-tags-2026-10-31.md). Documentation successor `codex/order-status-tags-deployment-handoff` is not the deployed code SHA.
 
 The **colored operational order cards + dashboard reordering** release was explicitly approved (“ارفع وانشر”) and deployed **31 October 2026, 09:37:51–09:37:57 UTC / 11:37 Cairo**, SHA `46f8e3e260dc6319845e1f309218340837178d70`. Existing order-list users now see active tags and linked count-only cards for active/unclaimed checkouts and each order status. Financial summary permissions remain unchanged; per-order invoice fields are unchanged. Every status-card count matches its filter URL; counts across different statuses may overlap for mixed checkouts. Dashboard: today, month, current all-period operations, then remaining sections; today's payment detail immediately before management notes.
 

@@ -39,4 +39,4 @@ Private code/environment/config checkpoint: `/home/ubuntu/herokid-confirmation-b
 
 ## Separate UI request
 
-Compact order-status Tags are prepared in `codex/order-status-tags` on top of the live confirmation release. They are not included in the above deployed SHA and require approval for this new production change under AGENTS.md. Links, counts and permissions remain unchanged; one horizontal row with overflow scrolling. See its implementation note for validation.
+Compact order-status Tags were later approved and deployed as SHA `157e8faea212506f48f0fef99eda0f46f3dbf7a8` at 11:39:49–11:39:51 UTC. No change to the blocked pilot or disabled global confirmation settings. See [Tags deployment evidence](order-status-tags-2026-10-31.md).
