@@ -18,7 +18,21 @@ class BostaShipment extends Model
         'is_confirmed_delivery' => 'boolean',
         'delivery_promise_date' => 'datetime',
         'last_event_at' => 'datetime',
+        'superseded_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $shipment): void {
+            $shipment->active_checkout_key = $shipment->superseded_at || $shipment->deleted_at
+                ? null : $shipment->checkout_group_key;
+        });
+    }
+
+    public function scopeCurrent(Builder $query): Builder
+    {
+        return $query->whereNull('superseded_at');
+    }
 
     public function order()
     {
@@ -47,7 +61,7 @@ class BostaShipment extends Model
 
     public function scopeAwaitingPickup(Builder $query): Builder
     {
-        return $query
+        return $query->current()->where('creation_status', 'created')->whereNull('cancellation_status')
             ->whereDoesntHave('activePickups')
             ->where(fn (Builder $status) => $status
                 ->whereNull('shipping_status')
@@ -73,7 +87,8 @@ class BostaShipment extends Model
             ? $this->activePickups->isNotEmpty()
             : $this->activePickups()->exists();
 
-        return ! $hasPickup && ! $this->hasProviderPickupEvidence();
+        return ! $this->superseded_at && ! $this->cancellation_status && $this->creation_status === 'created'
+            && ! $hasPickup && ! $this->hasProviderPickupEvidence();
     }
 
     public function hasProviderPickupEvidence(): bool

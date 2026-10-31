@@ -4,6 +4,7 @@ namespace App\Services\Bosta;
 
 use App\Models\BostaShipment;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -14,19 +15,23 @@ class BostaWebhookService
     public function handle(array $payload): BostaShipment
     {
         return DB::transaction(function () use ($payload): BostaShipment {
-            $shipment = BostaShipment::query()
-                ->where(function ($query) use ($payload): void {
-                    if (filled($payload['_id'] ?? null)) {
-                        $query->orWhere('bosta_delivery_id', $payload['_id']);
-                    }
-                    if (filled($payload['trackingNumber'] ?? null)) {
-                        $query->orWhere('tracking_number', $payload['trackingNumber']);
-                    }
-                    if (filled($payload['businessReference'] ?? null)) {
-                        $query->orWhere('business_reference', $payload['businessReference']);
-                    }
-                })
-                ->lockForUpdate()->firstOrFail();
+            // Provider identifiers take precedence. A reused checkout reference must
+            // never attach an old shipment event to its replacement.
+            $query = BostaShipment::query();
+            if (filled($payload['_id'] ?? null)) {
+                $query->where('bosta_delivery_id', $payload['_id']);
+            } elseif (filled($payload['trackingNumber'] ?? null)) {
+                $query->where('tracking_number', $payload['trackingNumber']);
+            } else {
+                $query->where('business_reference', $payload['businessReference'] ?? '');
+                if ((clone $query)->count() !== 1) {
+                    throw (new ModelNotFoundException)->setModel(BostaShipment::class);
+                }
+            }
+            $shipment = $query->lockForUpdate()->firstOrFail();
+            if (filled($payload['trackingNumber'] ?? null) && $shipment->tracking_number !== (string) $payload['trackingNumber']) {
+                throw (new ModelNotFoundException)->setModel(BostaShipment::class);
+            }
 
             $eventKey = hash('sha256', implode('|', [
                 $shipment->id,
@@ -40,7 +45,7 @@ class BostaWebhookService
                 'payload' => Arr::only($payload, ['_id', 'trackingNumber', 'state', 'type', 'cod', 'timeStamp', 'isConfirmedDelivery', 'deliveryPromiseDate', 'exceptionReason', 'exceptionCode', 'businessReference', 'numberOfAttempts']),
             ]);
 
-            if ($event->wasRecentlyCreated) {
+            if ($event->wasRecentlyCreated && (! $shipment->last_event_at || $event->occurred_at->gte($shipment->last_event_at))) {
                 $behavior = $this->behavior((int) ($payload['state'] ?? 0));
                 $shipment->forceFill([
                     'state_code' => $payload['state'] ?? $shipment->state_code,
@@ -54,7 +59,7 @@ class BostaWebhookService
                     'last_event_at' => $event->occurred_at,
                 ])->save();
 
-                if ($behavior) {
+                if ($behavior && ! $shipment->superseded_at && ! $shipment->cancellation_status) {
                     $this->shippingStatuses->updateCheckout($shipment->checkout_group_key, $behavior, 'تحديث تلقائي من Bosta (الحالة '.$shipment->state_code.').');
                 }
             }
@@ -66,7 +71,8 @@ class BostaWebhookService
     private function behavior(int $state): ?string
     {
         return match ($state) {
-            10, 11, 20 => 'ready',
+            10, 11 => 'shipment_created',
+            20 => 'ready',
             21, 22, 23, 24, 25, 30, 40, 41 => 'shipped',
             45 => 'delivered',
             46, 60 => 'returned',

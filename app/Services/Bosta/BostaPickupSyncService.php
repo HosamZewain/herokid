@@ -105,10 +105,25 @@ class BostaPickupSyncService
         $deliveryIds = $this->identifiers($data, '_id', 'deliveryIds');
 
         return DB::transaction(function () use ($data, $pickupId, $scheduledDate, $trackingNumbers, $deliveryIds): array {
-            $pickup = BostaPickup::query()
-                ->where('bosta_pickup_id', $pickupId)
-                ->lockForUpdate()
-                ->first() ?: new BostaPickup(['uuid' => (string) Str::uuid()]);
+            $pickup = BostaPickup::query()->where('bosta_pickup_id', $pickupId)->lockForUpdate()->first();
+            if (! $pickup && $scheduledDate && ($trackingNumbers !== [] || $deliveryIds !== [])) {
+                // Reconcile a timed-out request only with an exact shipment-set match,
+                // date and location. Never infer success from a nearby timestamp.
+                $candidates = BostaPickup::query()->whereNull('bosta_pickup_id')
+                    ->whereIn('status', ['submitting', 'uncertain'])->whereDate('scheduled_date', $scheduledDate)
+                    ->where('business_location_id', $data['businessLocationId'] ?? '')->with('shipments')->lockForUpdate()->get()
+                    ->filter(function (BostaPickup $candidate) use ($trackingNumbers, $deliveryIds): bool {
+                        $tracking = $candidate->shipments->pluck('tracking_number')->filter()->unique()->sort()->values()->all();
+                        $ids = $candidate->shipments->pluck('bosta_delivery_id')->filter()->unique()->sort()->values()->all();
+
+                        return ($tracking !== [] && $tracking === collect($trackingNumbers)->sort()->values()->all())
+                            || ($ids !== [] && $ids === collect($deliveryIds)->sort()->values()->all());
+                    });
+                if ($candidates->count() === 1) {
+                    $pickup = $candidates->first();
+                }
+            }
+            $pickup ??= new BostaPickup(['uuid' => (string) Str::uuid()]);
             $source = $pickup->created_by_user_id ? 'herokid' : 'bosta_dashboard';
             $providerResponse = Arr::only($data, [
                 '_id', 'puid', 'state', 'type', 'scheduledDate', 'scheduledTimeSlot',
@@ -117,8 +132,10 @@ class BostaPickupSyncService
             $providerResponse['source'] = $source;
             $providerResponse['synced_at'] = now()->toIso8601String();
 
+            $status = (string) ($data['state'] ?? $pickup->status ?? 'requested');
             $pickup->forceFill([
                 'bosta_pickup_id' => $pickupId,
+                'last_error' => null,
                 'scheduled_date' => $scheduledDate ?: $pickup->scheduled_date,
                 'business_location_id' => (string) ($data['businessLocationId'] ?? $pickup->business_location_id ?? config('bosta.business_location_id')),
                 'contact_name' => (string) data_get($data, 'contactPerson.name', $pickup->contact_name ?: 'Bosta'),
@@ -126,7 +143,8 @@ class BostaPickupSyncService
                 'notes' => $data['notes'] ?? $pickup->notes,
                 'number_of_parcels' => (int) ($data['numberOfParcels'] ?? max(count($trackingNumbers), count($deliveryIds), (int) ($data['pickedUpPackages'] ?? 0))),
                 'package_type' => (string) ($data['packageType'] ?? $pickup->package_type ?? 'Normal'),
-                'status' => (string) ($data['state'] ?? $pickup->status ?? 'requested'),
+                'status' => $status,
+                'active_slot_key' => in_array(strtolower(trim($status)), ['canceled', 'cancelled', 'terminated'], true) ? null : $pickup->active_slot_key,
                 'provider_response' => $providerResponse,
             ])->save();
 

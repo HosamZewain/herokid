@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Support\AdminActivityLogger;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -37,11 +38,11 @@ class BostaShipmentService
 
             $this->eligibility->ensureEligible($orders);
 
-            $existing = BostaShipment::query()->where('checkout_group_key', $group['key'])->lockForUpdate()->first();
+            $existing = BostaShipment::query()->current()->where('checkout_group_key', $group['key'])->lockForUpdate()->first();
             if ($existing?->bosta_delivery_id) {
                 throw ValidationException::withMessages(['order' => 'تم إنشاء شحنة Bosta لهذه العملية بالفعل.']);
             }
-            if ($existing?->creation_status === 'pending' && $existing->updated_at?->isAfter(now()->subMinutes(10))) {
+            if ($existing && in_array($existing->creation_status, ['pending', 'uncertain'], true)) {
                 throw ValidationException::withMessages(['order' => 'إنشاء شحنة Bosta لهذه العملية جارٍ بالفعل. انتظر قليلًا قبل إعادة المحاولة.']);
             }
 
@@ -107,6 +108,9 @@ class BostaShipmentService
         try {
             $response = $this->client->createDelivery($payload);
             $data = data_get($response, 'data', $response);
+            if (($response['success'] ?? true) !== true || blank(data_get($data, '_id') ?: data_get($data, 'id'))) {
+                throw new \RuntimeException('Bosta response requires reconciliation.');
+            }
             $shipment->forceFill([
                 'bosta_delivery_id' => data_get($data, '_id') ?: data_get($data, 'id'),
                 'tracking_number' => data_get($data, 'trackingNumber'),
@@ -120,8 +124,9 @@ class BostaShipmentService
             }
         } catch (Throwable $exception) {
             $shipment->forceFill([
-                'creation_status' => 'failed',
-                'last_error' => mb_substr($exception->getMessage(), 0, 2000),
+                'creation_status' => $exception instanceof RequestException
+                    && in_array($exception->response->status(), [400, 401, 403, 422], true) ? 'failed' : 'uncertain',
+                'last_error' => 'Provider request failed; result requires verification.',
             ])->save();
 
             AdminActivityLogger::log('bosta.shipment.failed', 'تعذر إنشاء شحنة Bosta للعملية '.$shipment->business_reference, $representative, [

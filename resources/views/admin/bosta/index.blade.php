@@ -44,6 +44,26 @@
             </div>
         @endif
 
+        @can('admin_users.permissions.manage')
+            @can('bosta.create_pickup')
+                <details class="rounded-2xl border border-indigo-100 bg-white p-5">
+                    <summary class="cursor-pointer font-black text-indigo-800">الاستلام التلقائي · {{ $automaticPickup['enabled'] ? 'مفعّل' : 'متوقف' }}</summary>
+                    <p class="mt-3 text-sm leading-7 text-gray-600">كل يوم الساعة ٢:٣٠ ظهرًا بتوقيت القاهرة، ما عدا الجمعة. للشحنات الحالية بحالة «تم إنشاء شحنة» فقط، وغير المرتبطة بطلب استلام. لا يتم إنشاء طلب فارغ أو تكرار طلب موجود، ولا نقل الموعد تلقائيًا ليوم آخر إذا رفضته Bosta.</p>
+                    <form method="POST" action="{{ route('admin.bosta.automatic-pickup.update') }}" class="mt-4 grid gap-3 md:grid-cols-2">
+                        @csrf @method('PUT')
+                        <label class="text-sm font-bold">مسؤول التسليم<input name="contact_name" value="{{ $automaticPickup['contact_name'] }}" required class="mt-1 w-full rounded-xl border-gray-300"></label>
+                        <label class="text-sm font-bold">موبايل المسؤول<input name="contact_phone" value="{{ $automaticPickup['contact_phone'] }}" required class="mt-1 w-full rounded-xl border-gray-300"></label>
+                        <label class="text-sm font-bold">التشغيل<select name="enabled" class="mt-1 w-full rounded-xl border-gray-300"><option value="0" @selected(! $automaticPickup['enabled'])>متوقف</option><option value="1" @selected($automaticPickup['enabled'])>مفعّل</option></select></label>
+                        <button class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">حفظ إعدادات الاستلام التلقائي</button>
+                    </form>
+                    @if($automaticPickupResult)
+                        <p class="mt-3 text-xs text-gray-600">آخر تشغيل: {{ $automaticPickupResult['at'] ?? '' }} · {{ ['created' => 'تم إنشاء الاستلام', 'no_eligible_shipments' => 'لا توجد شحنات مؤهلة', 'review_required' => 'يحتاج مراجعة سجل الاستلام وBosta', 'authorization_missing' => 'صلاحية المسؤول غير متاحة'][$automaticPickupResult['status'] ?? ''] ?? 'راجع سجل الاستلام' }}</p>
+                        @if($automaticPickupResult['message'] ?? null)<p class="mt-2 text-sm text-amber-800">{{ $automaticPickupResult['message'] }}</p>@endif
+                    @endif
+                </details>
+            @endcan
+        @endcan
+
         @if($pickupSyncWarning)
             <div class="rounded-2xl bg-amber-50 p-4 font-bold text-amber-900">{{ $pickupSyncWarning }}</div>
         @elseif(request()->boolean('refresh_pickups') && $pickupSyncResult)
@@ -239,7 +259,7 @@
                     @if($tab === 'active')
                         @can('bosta.create_pickup')
                             <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                <label class="text-sm font-bold">تاريخ الاستلام<input type="date" name="scheduled_date" value="{{ now()->addDay()->toDateString() }}" class="mt-1 w-full rounded-xl border-gray-300" required></label>
+                                <label class="text-sm font-bold">تاريخ الاستلام المتاح لدى Bosta<select name="scheduled_date" data-bosta-pickup-dates data-url="{{ route('admin.bosta.pickups.dates') }}" data-selected="{{ old('scheduled_date') }}" class="mt-1 w-full rounded-xl border-gray-300" required><option value="">تحميل المواعيد…</option></select><button type="button" data-bosta-reload-dates class="mt-1 text-xs text-indigo-700">تحديث المواعيد</button></label>
                                 <label class="text-sm font-bold">مسؤول التسليم<input name="contact_name" class="mt-1 w-full rounded-xl border-gray-300" required></label>
                                 <label class="text-sm font-bold">الهاتف<input name="contact_phone" inputmode="tel" class="mt-1 w-full rounded-xl border-gray-300" required></label>
                                 <label class="text-sm font-bold">ملاحظة<input name="notes" class="mt-1 w-full rounded-xl border-gray-300"></label>
@@ -277,7 +297,8 @@
                     @foreach($pickups as $pickup)
                         <div class="rounded-2xl bg-gray-50 p-4">
                             <b>{{ $pickup->scheduled_date->format('d/m/Y') }}</b> · {{ $pickup->number_of_parcels }} شحنة<br>
-                            <span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }} · {{ $pickup->created_by_user_id ? 'من HeroKid' : 'من لوحة Bosta' }}</span>
+                            <span class="text-sm text-gray-500">{{ $pickup->contact_name }} · {{ $pickup->bosta_pickup_id ?: 'قيد التجهيز' }} · {{ $pickup->created_by_user_id ? 'من HeroKid' : 'من لوحة Bosta' }} · {{ $pickup->status }}</span>
+                            @if($pickup->last_error)<p class="mt-2 text-xs text-red-700">محاولة {{ $pickup->id }}: {{ $pickup->last_error }} — راجع Bosta قبل إعادة المحاولة.</p>@endif
                         </div>
                     @endforeach
                 </div>
@@ -288,6 +309,27 @@
     @if($tab === 'active')
         <script>
             document.addEventListener('DOMContentLoaded', () => {
+                const dates = document.querySelector('[data-bosta-pickup-dates]');
+                const loadDates = async () => {
+                    if (!dates) return;
+                    dates.disabled = true;
+                    const previous = dates.value || dates.dataset.selected;
+                    dates.replaceChildren(new Option('تحميل المواعيد…', ''));
+                    try {
+                        const response = await fetch(dates.dataset.url, {headers: {'Accept': 'application/json'}});
+                        if (!response.ok) throw new Error('dates unavailable');
+                        const data = await response.json();
+                        dates.replaceChildren(new Option('اختر موعد الاستلام', ''));
+                        for (const date of data.dates || []) {
+                            if (/^\d{4}-\d{2}-\d{2}$/.test(date)) dates.add(new Option(date, date));
+                        }
+                        if (previous && Array.from(dates.options).some(option => option.value === previous)) dates.value = previous;
+                    } catch {
+                        dates.replaceChildren(new Option('تعذر تحميل المواعيد — اضغط تحديث المواعيد', ''));
+                    } finally { dates.disabled = false; }
+                };
+                document.querySelector('[data-bosta-reload-dates]')?.addEventListener('click', loadDates);
+                loadDates();
                 const selectAll = document.querySelector('[data-select-all-pickup]');
                 const shipmentCheckboxes = Array.from(document.querySelectorAll('[data-pickup-shipment]'));
 

@@ -38,7 +38,7 @@ class BostaOrderViewComposer
             return;
         }
 
-        $shipment = BostaShipment::query()
+        $shipment = BostaShipment::query()->current()
             ->with('pickups')
             ->where('checkout_group_key', $group['key'])
             ->latest()
@@ -79,6 +79,7 @@ class BostaOrderViewComposer
 
         $view->with([
             'bostaShipment' => $shipment,
+            'bostaShipmentHistory' => BostaShipment::query()->where('checkout_group_key', $group['key'])->whereNotNull('superseded_at')->latest('id')->get(),
             'bostaEligible' => $eligible,
             'bostaConfigured' => $configured,
             'bostaCities' => $cities,

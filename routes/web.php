@@ -781,6 +781,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('bosta/cities', [BostaController::class, 'cities'])->middleware('permission:bosta.view')->name('bosta.cities');
     Route::get('bosta/districts', [BostaController::class, 'districts'])->middleware('permission:bosta.view')->name('bosta.districts');
     Route::post('bosta/shipments/{representative}', [BostaController::class, 'createShipment'])->whereNumber('representative')->middleware('permission:bosta.create_shipment')->name('bosta.shipments.store');
+    Route::post('bosta/shipment-attempts/{shipment}/release', [BostaController::class, 'releaseShipment'])->middleware('permission:bosta.create_shipment')->name('bosta.shipments.release');
+    Route::put('bosta/automatic-pickup', [BostaController::class, 'saveAutomaticPickup'])->middleware(['permission:bosta.create_pickup', 'permission:admin_users.permissions.manage'])->name('bosta.automatic-pickup.update');
+    Route::get('bosta/pickup-dates', [BostaController::class, 'pickupDates'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.dates');
     Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');
     Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');

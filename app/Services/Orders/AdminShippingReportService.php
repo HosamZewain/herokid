@@ -269,8 +269,8 @@ class AdminShippingReportService
             ->select('historical.checkout_key')->selectRaw('MIN(l.created_at) as shipped_at')->groupBy('historical.checkout_key');
         // These are the same dispatched/in-transit states used by BostaWebhookService.
         // Delivered/returned/cancelled events alone do not establish a dispatch date.
-        $events = DB::table('bosta_shipment_events')->whereIn('state_code', [21, 22, 23, 24, 25, 30, 40, 41])
-            ->whereNotNull('occurred_at')->selectRaw('bosta_shipment_id, MIN(occurred_at) as shipped_at')->groupBy('bosta_shipment_id');
+        $events = DB::table('bosta_shipment_events as e')->join('bosta_shipments as history', 'history.id', '=', 'e.bosta_shipment_id')->whereNull('history.deleted_at')->whereIn('e.state_code', [21, 22, 23, 24, 25, 30, 40, 41])
+            ->whereNotNull('e.occurred_at')->selectRaw('history.checkout_group_key, MIN(e.occurred_at) as shipped_at')->groupBy('history.checkout_group_key');
         $itemCounts = DB::table('order_items')->selectRaw("order_id, COUNT(*) as item_count,
             SUM(CASE WHEN item_type = 'product' THEN quantity ELSE 0 END) as product_quantity,
             SUM(CASE WHEN item_type = 'story' THEN quantity ELSE 0 END) as story_quantity,
@@ -291,8 +291,8 @@ class AdminShippingReportService
 
         return DB::query()->fromSub($groups, 'g')
             ->leftJoinSub($logs, 'logs', 'logs.checkout_key', '=', 'g.checkout_key')
-            ->leftJoin('bosta_shipments as s', fn ($join) => $join->on('s.checkout_group_key', '=', 'g.checkout_key')->whereNull('s.deleted_at'))
-            ->leftJoinSub($events, 'events', 'events.bosta_shipment_id', '=', 's.id')
+            ->leftJoin('bosta_shipments as s', fn ($join) => $join->on('s.checkout_group_key', '=', 'g.checkout_key')->whereNull('s.deleted_at')->whereNull('s.superseded_at'))
+            ->leftJoinSub($events, 'events', 'events.checkout_group_key', '=', 'g.checkout_key')
             ->leftJoin('order_group_assignments as a', 'a.checkout_group_key', '=', 'g.checkout_key')
             ->leftJoin('users as u', 'u.id', '=', 'a.assigned_to_user_id')
             ->leftJoin('order_checkout_references as r', 'r.checkout_group_key', '=', 'g.checkout_key')

@@ -15,7 +15,7 @@ class BostaShipmentEligibilityService
     {
         $readyShippingStatuses = $this->readyShippingStatuses();
         $cancelledOrderStatuses = $this->cancelledOrderStatuses();
-        $shippedGroups = BostaShipment::query()
+        $shippedGroups = BostaShipment::query()->current()
             ->whereNotNull('bosta_delivery_id')
             ->pluck('checkout_group_key')
             ->all();

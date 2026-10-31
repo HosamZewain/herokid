@@ -273,3 +273,13 @@ Artisan::command('order-process:tick', function (\App\Services\OrderAutomation\P
     $this->info('New process runs: '.$runtime->tick());
 })->purpose('Advance explicitly enabled processes; never retry uncertain sends');
 Schedule::command('order-process:tick')->everyMinute()->withoutOverlapping(10);
+
+Artisan::command('bosta:automatic-pickup', function (\App\Services\Bosta\BostaAutomaticPickupService $service) {
+    $result = $service->run();
+    $this->info($result);
+
+    return in_array($result, ['review_required', 'authorization_missing'], true) ? 1 : 0;
+})->purpose('Request one eligible pickup at 14:30 Cairo, except Friday, only when explicitly enabled');
+
+Schedule::command('bosta:automatic-pickup')->dailyAt('14:30')->timezone('Africa/Cairo')
+    ->days([0, 1, 2, 3, 4, 6])->withoutOverlapping(15);

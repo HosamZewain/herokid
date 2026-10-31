@@ -23,11 +23,11 @@ class BostaPickup extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->whereRaw('LOWER(bosta_pickups.status) NOT IN (?, ?, ?)', ['canceled', 'cancelled', 'terminated']);
+        return $query->whereRaw('LOWER(bosta_pickups.status) NOT IN (?, ?, ?, ?)', ['canceled', 'cancelled', 'terminated', 'failed']);
     }
 
     public function isActive(): bool
     {
-        return ! in_array(strtolower(trim((string) $this->status)), ['canceled', 'cancelled', 'terminated'], true);
+        return ! in_array(strtolower(trim((string) $this->status)), ['canceled', 'cancelled', 'terminated', 'failed'], true);
     }
 }

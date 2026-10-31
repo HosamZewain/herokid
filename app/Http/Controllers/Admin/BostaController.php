@@ -7,15 +7,22 @@ use App\Jobs\SyncBostaPickups;
 use App\Models\BostaPickup;
 use App\Models\BostaShipment;
 use App\Models\Order;
+use App\Models\Setting;
 use App\Services\Bosta\BostaAddressCatalogService;
+use App\Services\Bosta\BostaAutomaticPickupService;
 use App\Services\Bosta\BostaClient;
 use App\Services\Bosta\BostaPickupService;
 use App\Services\Bosta\BostaPickupSyncService;
 use App\Services\Bosta\BostaShipmentEligibilityService;
+use App\Services\Bosta\BostaShipmentReplacementService;
 use App\Services\Bosta\BostaShipmentService;
+use App\Support\AdminActivityLogger;
+use App\Support\Phone;
+use App\Support\RequestSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -33,6 +40,18 @@ class BostaController extends Controller
         abort_unless($catalog->findCityById($values['city_id']), 422, 'محافظة Bosta غير صالحة.');
 
         return response()->json(['districts' => $catalog->districts($values['city_id'])]);
+    }
+
+    public function pickupDates(BostaClient $client): JsonResponse
+    {
+        try {
+            $dates = data_get($client->availablePickupDates(), 'data', []);
+            $dates = collect(is_array($dates) ? $dates : [])->filter(fn ($date) => is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date))->values();
+
+            return response()->json(['dates' => $dates]);
+        } catch (Throwable) {
+            return response()->json(['message' => 'تعذر تحميل مواعيد Bosta. حاول مجددًا.'], 502);
+        }
     }
 
     public function index(
@@ -68,7 +87,7 @@ class BostaController extends Controller
         $tab = $filters['tab'] ?? 'active';
         $perPage = (int) ($filters['per_page'] ?? 50);
         $baseShipments = BostaShipment::query()
-            ->where('creation_status', 'created')
+            ->current()->where('creation_status', 'created')
             ->whereNotNull('tracking_number');
 
         $activeCount = (clone $baseShipments)
@@ -127,6 +146,8 @@ class BostaController extends Controller
             ->appends($request->except('page', 'refresh_pickups'));
 
         return view('admin.bosta.index', [
+            'automaticPickup' => app(BostaAutomaticPickupService::class)->settings(),
+            'automaticPickupResult' => json_decode((string) Setting::where('key', BostaAutomaticPickupService::SETTING_KEY.'_last_result')->value('value'), true),
             'configured' => $configured ?? false,
             'shipments' => $shipments,
             'shipmentStatuses' => $shipmentStatuses,
@@ -162,9 +183,9 @@ class BostaController extends Controller
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
-            report($exception);
+            Log::warning('Bosta request requires review', ['exception_type' => $exception::class]);
 
-            return back()->withErrors(['order' => 'تعذر إنشاء الشحنة في Bosta. تم حفظ المحاولة ويمكن إعادة المحاولة لاحقًا.']);
+            return back()->withErrors(['order' => 'تعذر إنشاء الشحنة في Bosta. تم حفظ المحاولة؛ إذا كانت النتيجة غير مؤكدة راجع Bosta قبل أي إعادة إرسال.']);
         }
 
         return back()->with('success', 'تم إنشاء الشحنة في Bosta. رقم التتبع: '.($shipment->tracking_number ?: 'قيد التجهيز'));
@@ -175,7 +196,7 @@ class BostaController extends Controller
         $values = $request->validate([
             'shipments' => ['required', 'array', 'min:1'],
             'shipments.*' => ['integer', 'distinct', 'exists:bosta_shipments,id'],
-            'scheduled_date' => ['required', 'date', 'after_or_equal:today'],
+            'scheduled_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.now('Africa/Cairo')->toDateString()],
             'contact_name' => ['required', 'string', 'max:120'],
             'contact_phone' => ['required', 'string', 'max:30'],
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -185,12 +206,47 @@ class BostaController extends Controller
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
-            report($exception);
+            Log::warning('Bosta request requires review', ['exception_type' => $exception::class]);
 
             return back()->withErrors(['shipments' => 'تعذر إنشاء طلب الاستلام في Bosta. لم يتم تسجيل Pickup غير مكتمل.']);
         }
 
         return back()->with('success', 'تم إنشاء طلب الاستلام في Bosta وربطه بالشحنات المختارة.');
+    }
+
+    public function releaseShipment(Request $request, BostaShipment $shipment, BostaShipmentReplacementService $service)
+    {
+        $values = $request->validate([
+            'action' => ['required', Rule::in(['cancel', 'reship'])],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+        try {
+            $service->release($shipment, $values['action'], $values['reason'], $request->user(), $request);
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable) {
+            return back()->withErrors(['order' => 'تعذر التحقق من Bosta. لم نُتح إنشاء بوليصة بديلة.']);
+        }
+
+        return back()->with('success', 'تم حفظ البوليصة السابقة. راجع بيانات الأوردر الحالية وأنشئ الشحنة الجديدة من النموذج.');
+    }
+
+    public function saveAutomaticPickup(Request $request)
+    {
+        $values = $request->validate([
+            'enabled' => ['required', 'boolean'], 'contact_name' => ['required', 'string', 'max:120'],
+            'contact_phone' => ['required', 'string', 'max:30'],
+        ]);
+        if (! preg_match('/^201[0125]\d{8}$/', (string) Phone::forWhatsApp($values['contact_phone']))) {
+            throw ValidationException::withMessages(['contact_phone' => 'رقم موبايل مسؤول التسليم غير صحيح.']);
+        }
+        $values['enabled'] = $request->boolean('enabled');
+        $values['authorized_by'] = $request->user()->id;
+        Setting::updateOrCreate(['key' => BostaAutomaticPickupService::SETTING_KEY], ['value' => json_encode($values)]);
+        RequestSettings::forget();
+        AdminActivityLogger::log('bosta.automatic_pickup.updated', 'تحديث الاستلام التلقائي.', null, ['enabled' => $values['enabled']], $request->user(), $request);
+
+        return back()->with('success', 'تم حفظ إعدادات الاستلام التلقائي.');
     }
 
     public function awb(Request $request, BostaClient $client)
@@ -200,7 +256,7 @@ class BostaController extends Controller
             'shipments.*' => ['integer', 'distinct', 'exists:bosta_shipments,id'],
             'awb_type' => ['nullable', Rule::in(['A4', 'A6'])],
         ]);
-        $tracking = BostaShipment::query()->whereIn('id', $values['shipments'])->pluck('tracking_number')->filter()->values()->all();
+        $tracking = BostaShipment::query()->current()->where('creation_status', 'created')->whereNull('cancellation_status')->whereIn('id', $values['shipments'])->pluck('tracking_number')->filter()->values()->all();
         abort_if($tracking === [], 422, 'لا توجد أرقام تتبع صالحة.');
         $response = $client->createAwb($tracking, 'ar', $values['awb_type'] ?? 'A6');
         $content = data_get($response, 'data.file')

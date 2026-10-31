@@ -28,6 +28,7 @@ class BostaIntegrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Http::preventStrayRequests();
 
         $this->admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         config()->set([
@@ -107,7 +108,7 @@ class BostaIntegrationTest extends TestCase
                 'otherName' => 'القاهرة',
             ]]]),
             '*/deliveries?apiVersion=1' => Http::sequence()
-                ->push(['message' => 'temporary failure'], 500)
+                ->push(['message' => 'invalid address'], 422)
                 ->push(['data' => ['_id' => 'delivery-retry', 'trackingNumber' => 'TRACK-RETRY']], 200),
         ]);
 
@@ -227,6 +228,8 @@ class BostaIntegrationTest extends TestCase
             'business_location_id' => 'location-123',
         ]);
         Http::fake([
+            '*/pickups/available-dates*' => Http::response(['data' => [now()->addDay()->toDateString()]]),
+            '*/pickups/creationValidity' => Http::response(['data' => ['valid' => true]]),
             '*/pickups' => Http::response(['data' => [
                 '_id' => 'pickup-123',
                 'state' => 'Requested',

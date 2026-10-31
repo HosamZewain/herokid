@@ -57,6 +57,22 @@ class ShippingReportTest extends TestCase
             'business_reference' => $order->order_number, 'business_location_id' => 'synthetic', 'tracking_number' => 'TEST-'.$order->id, 'creation_status' => 'created']);
     }
 
+    public function test_replacement_shipments_preserve_first_dispatch_and_do_not_duplicate_checkout_kpi(): void
+    {
+        $order = $this->order('REPLACED', 3);
+        $old = $this->shipment($order);
+        $old->events()->create(['event_key' => 'old-dispatch', 'state_code' => 21, 'occurred_at' => '2026-10-02 09:00:00', 'payload' => []]);
+        $old->update(['superseded_at' => now(), 'replacement_reason' => 'Returned']);
+        $replacement = BostaShipment::create(['checkout_group_key' => $order->checkout_group_key, 'order_id' => $order->id,
+            'business_reference' => $order->order_number, 'business_location_id' => 'synthetic', 'tracking_number' => 'NEW-TRACK', 'creation_status' => 'created']);
+        $replacement->events()->create(['event_key' => 'new-dispatch', 'state_code' => 21, 'occurred_at' => '2026-10-08 09:00:00', 'payload' => []]);
+        $report = $this->report(['day' => '2026-10-02']);
+        $this->assertSame(1, $report['summary']['shipments']);
+        $this->assertSame(3, $report['summary']['products']);
+        $this->assertSame(1, $report['rows']->total());
+        $this->assertSame(0, $this->report(['from' => '2026-10-08'])['summary']['shipments']);
+    }
+
     public function test_cairo_repeated_hour_is_included_once_in_shipping_day(): void
     {
         $this->log($this->order('DST-FIRST', 1), '2026-10-29 20:30:00');
