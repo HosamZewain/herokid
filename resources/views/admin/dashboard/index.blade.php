@@ -196,6 +196,8 @@
                 <p class="text-sm text-slate-600">ضمن رصيد الطلبات النشطة مبلغ زائد عن قيمة بعض الطلبات: {{ format_report_money($operationsStats['excess_paid_cents'] / 100) }}. القيمة = المدفوع + المتبقي − الرصيد الزائد.</p>
             @endif
 
+            @include('admin.dashboard.month-comparison')
+
             <section aria-labelledby="seven-day-dashboard-heading" class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                     <div class="text-right">

@@ -1,0 +1,14 @@
+# Month Over Month dashboard comparison
+
+31 October 2026. Owner requested implementation and deployment together with the prepared automation work. Deployment evidence is recorded separately in the AWS runbook after verification.
+
+One interactive line chart shows the current Cairo calendar month and five preceding months. The current month is explicitly incomplete (through now). It follows today's/month's/current-operations sections; the daily payment movements table remains immediately before management notes. Only users with the existing `dashboard.statistics.view` permission receive the chart or its financial data; the comparison service is not called without that permission.
+
+Definitions:
+- Purchase count: one checkout on its original earliest creation date, same grouping/history/merge exclusions as existing monthly dashboard facts. Deleted/cancelled history remains included, active replacements preferred. Products include physical product/add-on quantities; a mixed checkout contributes to both quantity lines but only one purchase.
+- Average order value: current net item value after recorded discounts, excluding shipping, divided by that month's checkout count. No orders means no average (a gap, not a fabricated zero).
+- **Owner selected dispatch-date shipping**, not purchase-cohort shipping. Reuses the shipping report's canonical evidence: earliest documented Bosta dispatch, otherwise local shipped transition; only currently shipped/delivered checkouts whose active parts qualify. One credit per checkout. Includes orders purchased in earlier months. No created/updated/delivery-date substitution. Undated shipped/delivered purchases are counted separately across all periods and warned about. Returns are excluded by existing shipping-report rules.
+
+The chart uses a count axis and a separate EGP axis, named/color-coded lines, show/hide controls, keyboard/touch month selection, and the same values in a collapsible table. The shipping line can exceed purchase count because the date cohorts differ. No third-party chart/CDN dependency, new service, scheduled job or cache layer was added. Facts are queried for the six-month window in one pass, not six full dashboards or per-order model hydration; shipping evidence is reused without hydrating customer/financial report payloads.
+
+Validation: 51 dashboard/month/shipping/management-note tests, 322 assertions passed on both SQLite and isolated MySQL. Two local chart browser tests passed (series toggling, keyboard navigation, finite coordinates, 390/320px overflow checks). Synthetic full Blade/asset visual checks at 1440px and 390px passed. Build/manifest and PHP 8.3 syntax checks passed. An additional 63 checkout/web/mobile/admin regressions, 744 assertions passed on both databases for the combined release. All fixtures are synthetic and external requests are blocked. No production orders or real provider actions were created by testing.

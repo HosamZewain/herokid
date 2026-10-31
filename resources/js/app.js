@@ -31,6 +31,10 @@ window.HeroKidAnalytics = Object.freeze({
 window.HeroKidStoryCover = storyCoverRecovery;
 
 document.addEventListener('DOMContentLoaded', () => {
+    const monthComparison = document.querySelector('[data-month-comparison]');
+    if (monthComparison) {
+        import('./dashboard-month-comparison').then(({ initializeMonthComparison }) => initializeMonthComparison(monthComparison));
+    }
     const processBuilder = document.querySelector('[data-process-builder]');
     if (processBuilder) {
         import('./order-process-builder').then(({ initializeProcessBuilder }) => initializeProcessBuilder(processBuilder));

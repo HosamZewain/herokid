@@ -13,6 +13,18 @@ use Illuminate\Support\Facades\DB;
 
 class AdminShippingReportService
 {
+    /** Read-only aggregate evidence for the permission-guarded dashboard. */
+    public function dispatchDatesBetween(CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $base = DB::query()->fromSub($this->factsQuery(), 'shipments')->where('has_shipping_progress', 1);
+
+        return [
+            'dates' => (clone $base)->whereBetween('shipped_at', [$from, $to])
+                ->select('key')->selectRaw('MIN(shipped_at) as shipped_at')->groupBy('key')->pluck('shipped_at', 'key'),
+            'undated' => (clone $base)->whereNull('shipped_at')->distinct()->count('key'),
+        ];
+    }
+
     /** @param list<int>|null $assigneeIds Trusted caller scope; null preserves the shipping report. */
     public function report(Request $request, ?array $assigneeIds = null): array
     {

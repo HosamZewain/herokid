@@ -10,7 +10,9 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\Analytics\Ga4AnalyticsRepository;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\DashboardMonthComparison;
 use App\Support\AdminActivityLogger;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +41,9 @@ class DashboardController extends Controller
         $orderRecordCounts = data_get($orderStats, 'records');
         $todayStats = data_get($orderStats, 'today');
         $monthStats = data_get($orderStats, 'month');
+        $comparison = $canViewStatistics ? app(DashboardMonthComparison::class)->summarize(CarbonImmutable::now()) : null;
+        $monthComparison = $comparison['months'] ?? null;
+        $monthComparisonUndated = $comparison['undated_shipments'] ?? null;
         $operationsStats = data_get($orderStats, 'operations');
         $lastSevenDaysStats = data_get($orderStats, 'last_seven_days', []);
 
@@ -61,7 +66,7 @@ class DashboardController extends Controller
             'totalOrders', 'newOrders', 'pendingPreview', 'shippedOrders', 'deliveredOrders',
             'totalStories', 'activeStories', 'totalUsers', 'unreadMessages',
             'recentOrders', 'analyticsWidget', 'orderRecordCounts', 'todayStats', 'operationsStats',
-            'lastSevenDaysStats', 'monthStats', 'canViewStatistics', 'managementNotes'
+            'lastSevenDaysStats', 'monthStats', 'monthComparison', 'monthComparisonUndated', 'canViewStatistics', 'managementNotes'
         ));
     }
 

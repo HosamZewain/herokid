@@ -61,12 +61,13 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-CRH0rjbA.js",
+    "file": "assets/app-RPC2FMOu.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
     "dynamicImports": [
       "node_modules/heic-to/dist/csp/heic-to.js",
+      "resources/js/dashboard-month-comparison.js",
       "resources/js/order-process-builder.js",
       "resources/js/studio-settings-editor.js",
       "resources/js/admin-conversations.js",
@@ -82,6 +83,12 @@
     "imports": [
       "_pdf.worker.min-DQioOMWc.js"
     ]
+  },
+  "resources/js/dashboard-month-comparison.js": {
+    "file": "assets/dashboard-month-comparison-DlhaDISb.js",
+    "name": "dashboard-month-comparison",
+    "src": "resources/js/dashboard-month-comparison.js",
+    "isDynamicEntry": true
   },
   "resources/js/order-process-builder.js": {
     "file": "assets/order-process-builder-yATP9yFq.js",
