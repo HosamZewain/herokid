@@ -64,13 +64,13 @@ class AdminShippingReportService
         }
         $employeeFacts = $facts->filter(fn ($row) => $employee === null || (string) ($row->assignee_id ?? 'unassigned') === $employee)->values();
         $daily = $employeeFacts->groupBy('day')->map(fn (Collection $rows, string $date): array => [
-            'day' => $date, ...$this->totals($rows),
+            'day' => $date, ...$this->totals($rows), 'teams' => $this->teamTotals($rows),
         ]);
         // Include zero days, so a missing day is not mistaken for missing data.
         for ($date = CarbonImmutable::parse($from); $date->toDateString() <= $to; $date = $date->addDay()) {
             $key = $date->toDateString();
             if (! $daily->has($key)) {
-                $daily->put($key, ['day' => $key, ...$this->totals(collect())]);
+                $daily->put($key, ['day' => $key, ...$this->totals(collect()), 'teams' => collect()]);
             }
         }
         $selected = $facts->filter(fn ($row) => ($day === null || $row->day === $day)
@@ -91,9 +91,21 @@ class AdminShippingReportService
         return compact('from', 'to', 'day', 'employee', 'canViewValues', 'teams', 'rows') + [
             'daily' => $daily->sortKeysDesc()->values(), 'summary' => $this->totals($employeeFacts),
             'selected_summary' => $this->totals($selected),
+            'day_teams' => $day === null ? collect() : $this->teamTotals($selected),
             'sku_breakdown' => $this->skuBreakdown($selected, $items, $canViewValues),
             'undated' => DB::query()->fromSub(clone $base, 'shipments')->whereNull('shipped_at')->where('has_shipping_progress', '>', 0)->count(),
         ];
+    }
+
+    /** Current assignee attribution from the same deduplicated shipping facts; no extra queries. */
+    private function teamTotals(Collection $rows): Collection
+    {
+        return $rows->groupBy(fn ($row) => $row->assignee_id ?? 'unassigned')
+            ->map(fn (Collection $team): array => [
+                'id' => (string) ($team->first()->assignee_id ?? 'unassigned'),
+                'name' => $team->first()->assignee_name ?? 'غير مسند',
+                ...$this->totals($team),
+            ])->sortBy('name')->values();
     }
 
     private function totals(Collection $rows): array

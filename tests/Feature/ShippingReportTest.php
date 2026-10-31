@@ -381,6 +381,52 @@ class ShippingReportTest extends TestCase
         $this->assertSame(['UNASSIGNED'], $unassigned['rows']->pluck('key')->all());
     }
 
+    public function test_daily_team_breakdown_reconciles_checkouts_and_day_drilldown_preserves_period_totals(): void
+    {
+        $alice = User::factory()->create(['role' => 'admin', 'name' => 'Synthetic Alice']);
+        $bob = User::factory()->create(['role' => 'admin', 'name' => 'Synthetic Bob']);
+        foreach ([['TEAM-A', '2026-10-02 10:00:00', $alice], ['TEAM-B', '2026-10-08 10:00:00', $alice], ['TEAM-C', '2026-10-08 10:00:00', $bob]] as [$key, $date, $employee]) {
+            $this->log($this->order($key), $date);
+            OrderGroupAssignment::create(['checkout_group_key' => $key, 'assigned_to_user_id' => $employee->id, 'assigned_at' => now()]);
+        }
+        // Another child in the same checkout is not a second shipment.
+        $this->log($this->order('TEAM-B', 3, ['shipping_status' => 'delivered']));
+        $this->log($this->order('TEAM-UNASSIGNED'));
+        $report = $this->report();
+        $daily = $report['daily']->keyBy('day');
+        $this->assertSame(4, $report['summary']['shipments']);
+        $this->assertSame(3, $report['selected_summary']['shipments']);
+        $this->assertSame(3, $report['day_teams']->sum('shipments'));
+        $this->assertSame(2, $report['teams']->firstWhere('id', (string) $alice->id)['shipments']);
+        $this->assertSame(1, $report['day_teams']->firstWhere('id', (string) $alice->id)['shipments']);
+        $this->assertSame(1, $report['day_teams']->firstWhere('id', 'unassigned')['shipments']);
+        $this->assertSame(0, $daily['2026-10-03']['teams']->count());
+        foreach ($daily as $row) {
+            $this->assertSame($row['shipments'], $row['teams']->sum('shipments'));
+            $this->assertSame($row['items_net_cents'], $row['teams']->sum('items_net_cents'));
+        }
+        $this->assertSame($report['selected_summary']['items_net_cents'], $report['day_teams']->sum('items_net_cents'));
+        $filtered = $this->report(['employee' => (string) $alice->id]);
+        $this->assertSame([(string) $alice->id], $filtered['day_teams']->pluck('id')->all());
+        $this->assertSame(1, $filtered['daily']->firstWhere('day', '2026-10-08')['shipments']);
+        $this->assertSame([], $this->report(['day' => '2026-10-03'])['day_teams']->all());
+        $this->assertSame([], $this->report(['day' => null])['day_teams']->all());
+        $link = route('admin.shipping-report.index', ['from' => '2026-10-01', 'to' => '2026-10-08', 'day' => '2026-10-08', 'employee' => $alice->id]);
+        $response = $this->get('/admin/shipping-report?from=2026-10-01&to=2026-10-08&day=2026-10-08');
+        $response->assertOk()->assertSee('مسؤولية التيم — 2026-10-08')->assertSee('إجمالي اليوم')
+            ->assertSee($link.'#shipping-day-team')->assertSee($link.'#sku-breakdown')
+            ->assertSee('مقارنة كل الموظفين خلال الفترة')->assertSee('تجميع المنتجات والقصص')->assertSee('عرض تفاصيل الأوردرات');
+        $this->get($link)->assertOk()->assertViewHas('report', fn ($data) => $data['rows']->total() === 1 && $data['rows']->first()['key'] === 'TEAM-B');
+        $this->get('/admin/shipping-report?from=2026-10-01&to=2026-10-08&day=2026-10-03')->assertOk()->assertSee('لا توجد شحنات للموظف واليوم المختارين.');
+
+        // Reassignment affects daily attribution too, without altering dispatch evidence.
+        OrderGroupAssignment::where('checkout_group_key', 'TEAM-B')->update(['assigned_to_user_id' => $bob->id]);
+        $reassigned = $this->report();
+        $this->assertNull($reassigned['day_teams']->firstWhere('id', (string) $alice->id));
+        $this->assertSame(2, $reassigned['day_teams']->firstWhere('id', (string) $bob->id)['shipments']);
+        $this->assertSame(3, $reassigned['daily']->firstWhere('day', '2026-10-08')['teams']->sum('shipments'));
+    }
+
     public function test_current_employee_gets_credit_after_reassignment_even_when_shipping_was_earlier(): void
     {
         $first = User::factory()->create(['role' => 'admin']);
@@ -470,6 +516,9 @@ class ShippingReportTest extends TestCase
         $this->assertArrayNotHasKey('net_cents', $report['sku_breakdown']->first());
         $this->get('/admin/shipping-report')->assertOk()->assertSee('Synthetic Stickers')
             ->assertDontSee('قيمة الأوردرات خلال الفترة')->assertDontSee('مدفوع:')->assertDontSee('ج.م');
+        $this->get('/admin/shipping-report?from=2026-10-01&to=2026-10-08&day=2026-10-08')->assertOk()
+            ->assertSee('مسؤولية التيم — 2026-10-08')->assertSee('شحنات اليوم')
+            ->assertDontSee('صافي أوردرات اليوم')->assertDontSee('ج.م');
     }
 
     public function test_employee_filter_is_validated_and_pagination_keeps_period_and_employee(): void

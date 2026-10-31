@@ -43,25 +43,47 @@
 
         <section id="shipping-daily" class="scroll-mt-24 overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm">
             <div class="p-5"><h3 class="text-lg font-black">الشحن يوم بيوم — {{ $scopeName }}</h3>
-                <p class="mt-1 text-sm text-gray-500">كل أيام الفترة {{ $report['from'] }} إلى {{ $report['to'] }}. اضغط على اليوم لعرض تجميع منتجاته وأوردراته. اختيار يوم يفلتر التجميع والتفاصيل فقط؛ الملخص والجدول يشملان الفترة كاملة.</p>
+                <p class="mt-1 text-sm text-gray-500">كل أيام الفترة {{ $report['from'] }} إلى {{ $report['to'] }}. بجوار كل يوم توزيع شحناته على المسؤولين الحاليين. اضغط اليوم لعرض مسؤولية التيم فيه، أو اسم الموظف لعرض منتجاته وأوردراته في ذلك اليوم. ملخص الفترة والمقارنة العامة يظلان للفترة كاملة.</p>
                 @if($report['canViewValues'])<p class="mt-2 text-xs leading-6 text-gray-500">كل القيم بدون الشحن وبعد الخصومات الفعلية. خصم الأوردر موزّع على القصص والمنتجات والإضافات بنسبة قيمة كل قسم، مع تسوية فروق القرش؛ مجموع الأقسام يساوي صافي الأوردرات.</p>@endif
             </div>
             <div class="max-h-96 overflow-auto"><table class="w-full text-right text-sm">
-                <thead class="sticky top-0 bg-indigo-50 text-indigo-900"><tr><th class="p-3">اليوم</th><th class="p-3">الشحنات</th><th class="p-3">القصص — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">المنتجات — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">الإضافات — العدد @if($report['canViewValues']) / الصافي @endif</th>@if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<th class="p-3">قيمة غير مصنفة</th>@endif @if($report['canViewValues'])<th class="p-3">الإجمالي الصافي</th>@endif</tr></thead>
+                <thead class="sticky top-0 bg-indigo-50 text-indigo-900"><tr><th class="p-3">اليوم</th><th class="p-3">الشحنات</th><th class="p-3">مسؤولية التيم — عدد الشحنات</th><th class="p-3">القصص — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">المنتجات — العدد @if($report['canViewValues']) / الصافي @endif</th><th class="p-3">الإضافات — العدد @if($report['canViewValues']) / الصافي @endif</th>@if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<th class="p-3">قيمة غير مصنفة</th>@endif @if($report['canViewValues'])<th class="p-3">الإجمالي الصافي</th>@endif</tr></thead>
                 <tbody>@foreach($report['daily'] as $row)<tr class="border-t border-gray-100 {{ $row['day'] === $report['day'] ? 'bg-indigo-50' : '' }}">
-                    <td class="whitespace-nowrap p-3"><a class="font-bold text-indigo-600 underline" href="{{ route('admin.shipping-report.index', $period + ['day' => $row['day'], 'employee' => $report['employee']]) }}#sku-breakdown">{{ $row['day'] }}</a></td>
+                    <td class="whitespace-nowrap p-3"><a class="font-bold text-indigo-600 underline" href="{{ route('admin.shipping-report.index', $period + ['day' => $row['day'], 'employee' => $report['employee']]) }}#shipping-day-team">{{ $row['day'] }}</a></td>
                     <td class="p-3 font-bold">{{ $row['shipments'] }}</td>
+                    <td class="min-w-64 p-3"><div class="flex flex-wrap gap-2">
+                        @forelse($row['teams'] as $team)
+                            <a class="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100" href="{{ route('admin.shipping-report.index', $period + ['day' => $row['day'], 'employee' => $team['id']]) }}#shipping-day-team">{{ $team['name'] }}: {{ $team['shipments'] }} شحنة</a>
+                        @empty<span class="text-xs text-gray-400">لا توجد شحنات</span>@endforelse
+                    </div></td>
                     @foreach(['stories', 'products', 'add_ons'] as $key)<td class="whitespace-nowrap p-3"><span class="font-bold">{{ $row[$key] }}</span>@if($report['canViewValues'])<span class="mt-1 block text-sm text-gray-600">{{ $money($row[$key.'_net_cents']) }}</span>@endif</td>@endforeach
                     @if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<td class="whitespace-nowrap p-3">{{ $money($row['unclassified_net_cents']) }}</td>@endif
                     @if($report['canViewValues'])<td class="whitespace-nowrap p-3 font-black text-indigo-800">{{ $money($row['items_net_cents']) }}</td>@endif
                 </tr>@endforeach</tbody>
-                <tfoot class="sticky bottom-0 border-t border-indigo-100 bg-indigo-50 font-black"><tr><th class="p-3">إجمالي الفترة</th><td class="p-3">{{ $report['summary']['shipments'] }}</td>
+                <tfoot class="sticky bottom-0 border-t border-indigo-100 bg-indigo-50 font-black"><tr><th class="p-3">إجمالي الفترة</th><td class="p-3">{{ $report['summary']['shipments'] }}</td><td class="p-3 text-xs">حسب المسؤول الحالي</td>
                     @foreach(['stories', 'products', 'add_ons'] as $key)<td class="whitespace-nowrap p-3">{{ $report['summary'][$key] }} @if($report['canViewValues'])<span class="mt-1 block text-xs">{{ $money($report['summary'][$key.'_net_cents']) }}</span>@endif</td>@endforeach
                     @if($report['canViewValues'] && $report['summary']['unclassified_net_cents'])<td class="whitespace-nowrap p-3">{{ $money($report['summary']['unclassified_net_cents']) }}</td>@endif
                     @if($report['canViewValues'])<td class="whitespace-nowrap p-3">{{ $money($report['summary']['items_net_cents']) }}</td>@endif
                 </tr></tfoot>
             </table></div>
         </section>
+
+        @if($report['day'] !== null)
+        <section id="shipping-day-team" class="scroll-mt-24 overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm" aria-label="مسؤولية التيم في اليوم المختار">
+            <div class="p-5"><h3 class="text-lg font-black">مسؤولية التيم — {{ $report['day'] }}</h3>
+                <p class="mt-1 text-sm text-gray-500">{{ $scopeName }} · {{ $report['selected_summary']['shipments'] }} شحنة في هذا اليوم فقط. المسؤول الحالي عن الطلب، وليس منشئ الشحنة.</p>
+                <a class="mt-2 inline-block text-sm font-bold text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period + ['employee' => $report['employee']]) }}#shipping-daily">الرجوع لكل أيام الفترة</a>
+            </div>
+            <div class="overflow-x-auto"><table class="w-full text-right text-sm">
+                <thead class="bg-indigo-50 text-indigo-900"><tr><th class="p-4">الموظف المسؤول حاليًا</th><th class="p-4">شحنات اليوم</th><th class="p-4">القطع / النسخ</th>@if($report['canViewValues'])<th class="p-4">صافي أوردرات اليوم بدون الشحن وبعد الخصم</th>@endif</tr></thead>
+                <tbody>@forelse($report['day_teams'] as $team)
+                    <tr class="border-t border-gray-100"><th scope="row" class="p-4"><a class="font-black text-indigo-700 underline" href="{{ route('admin.shipping-report.index', $period + ['day' => $report['day'], 'employee' => $team['id']]) }}#sku-breakdown">{{ $team['name'] }}</a></th>
+                        <td class="p-4 text-lg font-black">{{ $team['shipments'] }}</td><td class="p-4">{{ $team['items'] }}</td>@if($report['canViewValues'])<td class="whitespace-nowrap p-4 font-black">{{ $money($team['items_net_cents']) }}</td>@endif</tr>
+                @empty<tr><td colspan="{{ $report['canViewValues'] ? 4 : 3 }}" class="p-8 text-center text-gray-500">لا توجد شحنات للموظف واليوم المختارين.</td></tr>@endforelse</tbody>
+                <tfoot class="bg-indigo-50 font-black"><tr><th class="p-4">إجمالي اليوم</th><td class="p-4">{{ $report['selected_summary']['shipments'] }}</td><td class="p-4">{{ $report['selected_summary']['items'] }}</td>@if($report['canViewValues'])<td class="whitespace-nowrap p-4">{{ $money($report['selected_summary']['items_net_cents']) }}</td>@endif</tr></tfoot>
+            </table></div>
+        </section>
+        @endif
 
         <section class="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm" aria-label="ملخص الموظفين خلال الفترة">
             <div class="p-5"><h3 class="text-lg font-black">مقارنة كل الموظفين خلال الفترة</h3><p class="mt-1 text-sm text-gray-500">{{ $report['from'] }} إلى {{ $report['to'] }} — اضغط على اسم الموظف لعرض كل أوردراته المشحونة والمسلّمة في الفترة.</p></div>
