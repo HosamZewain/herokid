@@ -112,7 +112,7 @@ class AdminPermissionsTest extends TestCase
             ->assertSee('تفاصيل حركات الدفع اليوم')
             ->assertSee('آخر 7 أيام')
             ->assertSee('إجمالي عمليات الشراء')
-            ->assertSee('المتبقي تحصيله')
+            ->assertSee('المتبقي من الطلبات النشطة')
             ->assertSee('ملخص Google Analytics');
     }
 
@@ -201,7 +201,9 @@ class AdminPermissionsTest extends TestCase
             ->get(route('admin.orders.index'))
             ->assertOk()
             ->assertSee('الطلبات والإنتاج')
-            ->assertDontSee('التقارير')
+            ->assertSee('تقرير أداء الموظفين')
+            ->assertDontSee('تقرير المبيعات')
+            ->assertDontSee('تحليلات الموقع')
             ->assertDontSee('المالية')
             ->assertDontSee('الكتالوج والعملاء')
             ->assertDontSee('الإدارة والأمان');

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
+use App\Http\Controllers\Admin\EmployeePerformanceReportController;
 use App\Http\Controllers\Admin\AdminMediaLibraryController;
 use App\Http\Controllers\Admin\AdminMediaUploadController;
 use App\Http\Controllers\Admin\AdminRoleController;
@@ -527,6 +528,9 @@ Route::middleware(['auth', 'is_admin', 'admin_audit'])->prefix('admin')->name('a
     Route::get('sales-report/export', [SalesReportController::class, 'export'])
         ->middleware(['permission:sales_reports.view', 'throttle:10,1'])
         ->name('sales-report.export');
+    Route::get('employee-performance', [EmployeePerformanceReportController::class, 'index'])
+        ->name('employee-performance.index');
+
     Route::get('shipping-report', [ShippingReportController::class, 'index'])
         ->middleware('permission:shipping_reports.view')
         ->name('shipping-report.index');

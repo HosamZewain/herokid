@@ -80,7 +80,7 @@ class ShippingReportTest extends TestCase
         $this->log($second);
         $this->log($first, '2026-10-08 10:00:00');
         $report = $this->report();
-        $this->assertSame(['shipments' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8, 'total_cents' => 71000, 'items_net_cents' => 71000, 'products_net_cents' => 50000, 'stories_net_cents' => 20000, 'add_ons_net_cents' => 1000, 'unclassified_net_cents' => 0, 'paid_cents' => 0, 'remaining_cents' => 71000], $report['summary']);
+        $this->assertSame(['shipments' => 1, 'delivered' => 0, 'in_transit' => 1, 'products' => 5, 'stories' => 2, 'add_ons' => 1, 'items' => 8, 'total_cents' => 71000, 'items_net_cents' => 71000, 'products_net_cents' => 50000, 'stories_net_cents' => 20000, 'add_ons_net_cents' => 1000, 'unclassified_net_cents' => 0, 'paid_cents' => 0, 'remaining_cents' => 71000], $report['summary']);
         $this->assertCount(4, $report['rows']->first()['items']);
         $this->assertSame(8, $report['teams']->first()['contents']->sum('quantity'));
         $this->assertSame(8, $report['teams']->first()['items']);

@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class AdminShippingReportService
 {
-    public function report(Request $request): array
+    /** @param list<int>|null $assigneeIds Trusted caller scope; null preserves the shipping report. */
+    public function report(Request $request, ?array $assigneeIds = null): array
     {
         $today = AppDateTime::display(now())->toDateString();
         $filters = $request->validate([
@@ -32,6 +33,9 @@ class AdminShippingReportService
         abort_if($day !== null && ($day < $from || $day > $to), 422, 'اليوم المختار يجب أن يكون داخل فترة التقرير.');
 
         $base = $this->factsQuery();
+        if ($assigneeIds !== null) {
+            $base->whereIn('a.assigned_to_user_id', $assigneeIds);
+        }
         $facts = DB::query()->fromSub($base, 'shipments')
             ->where('has_shipping_progress', 1)
             ->whereBetween('shipped_at', [AppDateTime::utcStartOfDay($from), AppDateTime::utcEndOfDay($to)])
@@ -76,13 +80,14 @@ class AdminShippingReportService
             'daily' => $daily->sortKeysDesc()->values(), 'summary' => $this->totals($employeeFacts),
             'selected_summary' => $this->totals($selected),
             'sku_breakdown' => $this->skuBreakdown($selected, $items, $canViewValues),
-            'undated' => DB::query()->fromSub($this->factsQuery(), 'shipments')->whereNull('shipped_at')->where('has_shipping_progress', '>', 0)->count(),
+            'undated' => DB::query()->fromSub(clone $base, 'shipments')->whereNull('shipped_at')->where('has_shipping_progress', '>', 0)->count(),
         ];
     }
 
     private function totals(Collection $rows): array
     {
-        return ['shipments' => $rows->count(), 'products' => (int) $rows->sum('product_quantity'),
+        return ['shipments' => $rows->count(), 'delivered' => (int) $rows->sum('is_delivered'),
+            'in_transit' => $rows->count() - (int) $rows->sum('is_delivered'), 'products' => (int) $rows->sum('product_quantity'),
             'stories' => (int) $rows->sum('story_quantity'), 'add_ons' => (int) $rows->sum('add_on_quantity'),
             'items' => (int) $rows->sum('product_quantity') + (int) $rows->sum('story_quantity') + (int) $rows->sum('add_on_quantity'),
             'total_cents' => (int) $rows->sum('total_cents'),
@@ -232,8 +237,9 @@ class AdminShippingReportService
     private function factsQuery(): Builder
     {
         $shipped = array_unique(array_merge(['shipped'], OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'shipped', false)));
-        $progress = array_unique(array_merge($shipped, ['delivered'],
-            OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'delivered', false)));
+        $delivered = array_unique(array_merge(['delivered'], OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_SHIPPING, 'delivered', false)));
+        $deliveredPlaceholders = implode(',', array_fill(0, count($delivered), '?'));
+        $progress = array_unique(array_merge($shipped, $delivered));
         $logs = DB::table('order_status_logs as l')->joinSub($this->keyedOrders(), 'historical', 'historical.id', '=', 'l.order_id')
             ->where('l.status_type', 'shipping')->whereIn('l.status', $shipped)
             ->select('historical.checkout_key')->selectRaw('MIN(l.created_at) as shipped_at')->groupBy('historical.checkout_key');
@@ -255,6 +261,7 @@ class AdminShippingReportService
                 SUM(CASE WHEN COALESCE(ic.item_count, 0) = 0 AND o.story_id IS NOT NULL THEN 1 ELSE COALESCE(ic.story_quantity, 0) END) as story_quantity,
                 SUM(COALESCE(ic.add_on_quantity, 0)) as add_on_quantity')
             ->selectRaw("MIN(CASE WHEN o.shipping_status IN ({$placeholders}) THEN 1 ELSE 0 END) as has_shipping_progress", $progress)
+            ->selectRaw("MIN(CASE WHEN o.shipping_status IN ({$deliveredPlaceholders}) THEN 1 ELSE 0 END) as is_delivered", $delivered)
             ->selectRaw("CASE WHEN COUNT(DISTINCT o.shipping_status) = 1 THEN MAX(o.shipping_status) ELSE 'mixed' END as current_shipping_status")
             ->groupBy('o.checkout_key');
 
