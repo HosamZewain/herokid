@@ -1,6 +1,8 @@
 <x-admin-layout>
     <x-slot name="header"><h1 class="text-2xl font-bold">أتمتة الطلبات</h1></x-slot>
     <div class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
+        @include('admin.order-automation.confirmation')
+        <details class="rounded-2xl border bg-white p-5"><summary class="cursor-pointer font-bold">مسارات التوليد السابقة وإعداداتها</summary>
         @include('admin.order-automation.notice')
         <p class="rounded-xl bg-blue-50 p-4">ابدأ بمحاكاة بدون تكلفة، ثم جرّب طلبًا واحدًا. التشغيل التلقائي {{ config('order_automation.enabled') ? 'مسموح من الخادم، ويحتاج تفعيل المسار' : 'مقفول من الخادم' }}. الطلبات القديمة لا تبدأ تلقائيًا.</p>
         @can('order_automation.manage')
@@ -24,5 +26,6 @@
         @forelse($runs as $run)<tr class="border-t"><td class="p-3">@can('orders.view')<a class="text-indigo-700 underline" href="{{ route('admin.order-automation.runs.show', $run) }}">#{{ $run->id }}</a>@else #{{ $run->id }} @endcan</td><td>{{ $run->order?->order_number }}</td><td>{{ $run->dry_run ? 'محاكاة' : ($run->trial ? 'تجربة منفردة' : 'تلقائي') }}</td><td>{{ \App\Services\OrderAutomation\WorkflowPresentation::status($run->status) }}</td><td>{{ $run->step_index }}</td></tr>
         @empty<tr><td colspan="5" class="p-6">لا توجد تشغيلات بعد.</td></tr>@endforelse
         </tbody></table></div>{{ $runs->links() }}
+        </details>
     </div>
 </x-admin-layout>

@@ -29,7 +29,7 @@ class RoboDeskIntegrationController extends Controller
 
     public function retry(RoboDeskIntegrationEvent $event, RoboDeskOutbox $outbox): RedirectResponse
     {
-        abort_unless(config('robodesk.enabled') && filled(config('robodesk.outbound_secret')), 422, 'أضف بيانات الاعتماد وفعّل التكامل أولاً.');
+        abort_unless(config('robodesk.enabled') && ($event->event_type === 'order.pending_confirmation' || filled(config('robodesk.outbound_secret'))), 422, 'أضف بيانات الاعتماد وفعّل التكامل أولاً.');
         $outbox->release($event);
 
         return back()->with('success', 'تمت إعادة الحدث إلى قائمة الإرسال.');

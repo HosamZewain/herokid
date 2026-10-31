@@ -177,7 +177,8 @@ class OrderStatusRegistry
     public static function fallbackDefinitions(): array
     {
         return [
-            [self::TYPE_ORDER, 'new', 'طلب جديد', 'blue', 'standard'],
+            [self::TYPE_ORDER, 'new', 'طلب جديد غير مؤكد', 'blue', 'standard'],
+            [self::TYPE_ORDER, 'new_confirmed', 'طلب جديد مؤكد', 'emerald', 'standard'],
             [self::TYPE_ORDER, 'under_review', 'قيد المراجعة', 'amber', 'standard'],
             [self::TYPE_ORDER, 'generating', 'جاري التوليد', 'violet', 'standard'],
             [self::TYPE_ORDER, 'ready_preview', 'جاهز للمعاينة', 'purple', 'standard'],

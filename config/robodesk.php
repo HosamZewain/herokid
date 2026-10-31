@@ -7,6 +7,18 @@ return [
     */
     'enabled' => (bool) env('ROBODESK_ENABLED', false),
     'base_url' => rtrim((string) env('ROBODESK_BASE_URL', 'https://herokid.robodesk.ai'), '/'),
+    // Phase one cannot activate preview, payment or AI workflows accidentally.
+    'confirmation_only' => (bool) env('ROBODESK_CONFIRMATION_ONLY', true),
+    'confirmation' => [
+        'enabled' => (bool) env('ROBODESK_CONFIRMATION_ENABLED', false),
+        // Capture MAX(orders.id), including deleted rows, immediately before activation.
+        'after_order_id' => env('ROBODESK_CONFIRMATION_AFTER_ORDER_ID'),
+        'template' => 'herokid_order_confirmation',
+        // RoboDesk maps ar-EG to Meta ar; sending ar directly falls back to English.
+        'language' => 'ar-EG',
+        // Enable only after message-id receipt + quick-reply callback contract is verified.
+        'contract_ready' => (bool) env('ROBODESK_CONFIRMATION_CONTRACT_READY', false),
+    ],
     'events_path' => '/api/integrations/herokid/v1/events',
     'whatsapp_number' => (string) env('ROBODESK_WHATSAPP_NUMBER', '01501188884'),
     'inbound_secret' => (string) env('ROBODESK_INBOUND_SECRET', ''),

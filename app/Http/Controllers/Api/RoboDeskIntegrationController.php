@@ -9,6 +9,7 @@ use App\Services\RoboDesk\RoboDeskCheckoutPayload;
 use App\Services\RoboDesk\RoboDeskInboundEventHandler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class RoboDeskIntegrationController extends Controller
@@ -25,8 +26,20 @@ class RoboDeskIntegrationController extends Controller
 
     public function checkout(string $checkoutReference, RoboDeskCheckoutPayload $payload): JsonResponse
     {
+        abort_if(config('robodesk.confirmation_only'), 403, 'Checkout retrieval is outside confirmation-only scope.');
+
         return response()->json(['data' => $payload->build($checkoutReference)])
             ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function confirmOrder(Request $request, RoboDeskInboundEventHandler $handler): JsonResponse
+    {
+        // HMAC middleware has already checked the original raw body.
+        $request->merge(['type' => 'order.confirmed', 'data' => $request->only([
+            'order_number', 'template_message_id', 'interaction_id', 'sender_phone', 'message_id', 'contact_id', 'conversation_id',
+        ])]);
+
+        return $this->event($request, $handler);
     }
 
     public function event(Request $request, RoboDeskInboundEventHandler $handler): JsonResponse
@@ -44,43 +57,56 @@ class RoboDeskIntegrationController extends Controller
 
         abort_unless(hash_equals((string) $request->header('X-RoboDesk-Event-Id'), (string) $data['id']), 422, 'Event id mismatch.');
 
-        $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
-            'direction' => 'inbound',
-            'event_type' => $data['type'],
-            'aggregate_type' => 'checkout',
-            'aggregate_id' => data_get($data, 'data.checkout_reference'),
-            'checkout_group_key' => data_get($data, 'data.checkout_reference'),
-            'status' => 'processing',
-            'attempts' => 1,
-            'payload' => $data['data'],
-        ]);
+        abort_if(config('robodesk.confirmation_only') && $data['type'] !== 'order.confirmed', 422, 'Only order confirmation is enabled.');
 
-        if (! $event->wasRecentlyCreated && $event->status !== 'failed') {
-            return response()->json(['accepted' => true, 'duplicate' => true]);
-        }
-
-        if (! $event->wasRecentlyCreated) {
-            $event->increment('attempts');
-            $event->forceFill([
+        return DB::transaction(function () use ($handler, $data): JsonResponse {
+            $event = RoboDeskIntegrationEvent::query()->firstOrCreate(['event_id' => $data['id']], [
+                'direction' => 'inbound',
+                'event_type' => $data['type'],
+                'aggregate_type' => 'checkout',
+                'aggregate_id' => data_get($data, 'data.checkout_reference'),
+                'checkout_group_key' => data_get($data, 'data.checkout_reference'),
                 'status' => 'processing',
-                'last_error' => null,
+                'attempts' => 1,
                 'payload' => $data['data'],
-            ])->save();
-        }
+            ]);
 
-        try {
+            $event = RoboDeskIntegrationEvent::query()->lockForUpdate()->findOrFail($event->id);
+            abort_unless($event->direction === 'inbound' && $event->event_type === $data['type']
+                && $event->payload == $data['data'], 409, 'Event id was already used for different content.');
+
+            if ($event->status === 'succeeded') {
+                return response()->json(['accepted' => true, 'duplicate' => true]);
+            }
+
+            if ($event->status === 'failed') {
+                $event->increment('attempts');
+                $event->forceFill([
+                    'status' => 'processing',
+                    'last_error' => null,
+                    'payload' => $data['data'],
+                ])->save();
+            }
+
+            // Receipt and business mutation commit together. A crash cannot leave a
+            // permanent “processing” receipt that falsely acknowledges later retries.
             $handler->handle($data['type'], $data['data']);
-            $event->update(['status' => 'succeeded', 'processed_at' => now()]);
-        } catch (\Throwable $exception) {
-            $event->update(['status' => 'failed', 'last_error' => mb_substr($exception->getMessage(), 0, 2000)]);
-            throw $exception;
-        }
+            if ($data['type'] === 'order.confirmed') {
+                $key = RoboDeskIntegrationEvent::where('direction', 'outbound')->where('event_type', 'order.pending_confirmation')
+                    ->where('payload->display_reference', $data['data']['order_number'])
+                    ->where('response_payload->message_id', $data['data']['template_message_id'])->value('checkout_group_key');
+                $event->checkout_group_key = $key;
+                $event->aggregate_id = $key;
+            }
+            $event->fill(['status' => 'succeeded', 'processed_at' => now()])->save();
 
-        return response()->json(['accepted' => true], 202);
+            return response()->json(['accepted' => true], 202);
+        });
     }
 
     public function paymentProof(Request $request, PaymentProofService $proofs): JsonResponse
     {
+        abort_if(config('robodesk.confirmation_only'), 422, 'Payment proofs are not enabled in confirmation-only mode.');
         $validated = $request->validate([
             'checkout_reference' => ['required', 'string', 'max:255'],
             'proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.(max(1, (int) config('robodesk.payment_proof_max_mb')) * 1024)],

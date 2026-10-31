@@ -34,6 +34,18 @@ class SendRoboDeskEventJob implements ShouldQueue
             return;
         }
 
+        if ($event->event_type === 'order.pending_confirmation') {
+            // This workflow uses RoboDesk's actual template-send API, not the legacy events path.
+            app()->call([new SendOrderConfirmationJob($event->id), 'handle']);
+
+            return;
+        }
+        if (config('robodesk.confirmation_only')) {
+            $event->update(['status' => 'held']);
+
+            return;
+        }
+
         if (! config('robodesk.enabled') || blank(config('robodesk.outbound_secret'))) {
             $event->update(['status' => 'held', 'last_error' => 'Integration is disabled or missing its outbound secret.']);
 

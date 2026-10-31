@@ -9,9 +9,11 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
 use App\Services\OrderAutomation\WorkflowDefinition;
 use App\Services\OrderAutomation\WorkflowService;
+use App\Services\RoboDesk\OrderConfirmationService;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +23,21 @@ class OrderAutomationController extends Controller
 {
     public function index(): mixed
     {
-        return view('admin.order-automation.index', ['workflows' => OrderAutomation::with('revision')->get(), 'runs' => OrderAutomationRun::with('order')->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->latest('id')->paginate(25)]);
+        $confirmation = app(OrderConfirmationService::class);
+        $requests = RoboDeskIntegrationEvent::query()
+            ->where('direction', 'outbound')->where('event_type', 'order.pending_confirmation')
+            ->where('payload->confirmation->protocol', 1)
+            ->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'));
+
+        return view('admin.order-automation.index', [
+            'confirmationReady' => $confirmation->ready(),
+            'confirmationCounts' => (clone $requests)->select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
+            'confirmedCount' => (clone $requests)->whereHas('confirmationWorkflow', fn ($q) => $q->where('confirmation_status', 'confirmed'))->count(),
+            'confirmationRequests' => (clone $requests)->with(['order:id,order_number', 'confirmationWorkflow:id,checkout_group_key,confirmation_status,confirmed_at'])->latest('id')->limit(20)
+                ->get(['id', 'order_id', 'checkout_group_key', 'status', 'attempts', 'created_at', 'processed_at']),
+            'workflows' => OrderAutomation::with('revision')->get(),
+            'runs' => OrderAutomationRun::with('order')->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->latest('id')->paginate(25),
+        ]);
     }
 
     public function create(Request $request): mixed

@@ -13,8 +13,14 @@ class RoboDeskCheckoutPayload
         $representative = Order::query()->where('checkout_group_key', $checkoutGroupKey)->orderBy('id')->firstOrFail();
         $group = app(AdminOrderGroupService::class)->findByRepresentative($representative->id);
 
+        $details = $group['display_story_orders']->map(fn (Order $order): string => ($order->items->firstWhere('item_type', 'story')?->title ?: $order->story?->title ?: 'قصة مخصصة')
+            .' × '.max(1, (int) $order->items->where('item_type', 'story')->sum('quantity')))
+            ->concat($group['direct_products']->concat($group['add_ons'])->map(fn ($item): string => $item->title.' × '.max(1, (int) $item->quantity)));
+
         return [
+            'order_details' => $details->implode(' · '),
             'checkout_reference' => $checkoutGroupKey,
+            'display_reference' => $group['short_reference'] ?: $group['order_numbers'][0],
             'order_numbers' => $group['order_numbers'],
             'customer' => [
                 'name' => $group['customer_name'],

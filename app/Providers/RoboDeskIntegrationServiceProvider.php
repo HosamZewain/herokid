@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Services\RoboDesk\Conversations\ConversationAccess;
 use App\Services\RoboDesk\Conversations\ConversationHistoryProvider;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
+use App\Services\RoboDesk\OrderConfirmationService;
 use App\Services\RoboDesk\RoboDeskOutbox;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -48,12 +49,7 @@ class RoboDeskIntegrationServiceProvider extends ServiceProvider
                 return;
             }
 
-            app(RoboDeskOutbox::class)->queue(
-                'order.pending_confirmation',
-                'order.pending_confirmation:'.$order->checkoutGroupKey(),
-                $order->checkoutGroupKey(),
-                $order->id,
-            );
+            app(OrderConfirmationService::class)->register($order);
         });
 
         Order::updated(function (Order $order): void {

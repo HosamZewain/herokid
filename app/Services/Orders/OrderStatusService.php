@@ -18,6 +18,7 @@ class OrderStatusService
 
     public const STATUSES = [
         'new',
+        'new_confirmed',
         'under_review',
         'generating',
         'preview_uploaded',

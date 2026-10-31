@@ -27,18 +27,7 @@ class RoboDeskInboundEventHandler
 
     private function confirmCheckout(array $data): void
     {
-        $key = $this->checkoutKey($data);
-        CheckoutCustomerWorkflow::query()->updateOrCreate(['checkout_group_key' => $key], [
-            'confirmation_status' => 'confirmed',
-            'confirmed_at' => now(),
-            'rejected_at' => null,
-            'customer_comment' => $data['comment'] ?? null,
-            'robodesk_contact_id' => $data['contact_id'] ?? null,
-            'robodesk_conversation_id' => $data['conversation_id'] ?? null,
-            'last_customer_activity_at' => now(),
-        ]);
-
-        $this->updateOrders($key, 'under_review', 'أكد العميل الطلب عبر RoboDesk.');
+        app(OrderConfirmationService::class)->confirm($data);
     }
 
     private function rejectCheckout(array $data): void
