@@ -231,6 +231,33 @@ class OrderProcessRuntimeTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_grouped_trial_requires_exact_membership_and_rejects_any_drift(): void
+    {
+        $chosen = $this->order(false);
+        $sibling = $this->order(false);
+        $other = $this->order(false);
+        $sibling->update(['checkout_group_key' => $chosen->checkout_group_key]);
+        config(['order_process.enrollment_mode' => 'trial', 'order_process.trial_order_id' => $chosen->id,
+            'order_process.trial_automation_id' => $this->workflow->id,
+            'order_process.trial_checkout_order_ids' => $sibling->id.','.$chosen->id]);
+        $policy = app(ProcessLivePolicy::class);
+        $this->assertTrue($policy->allowsCheckout($chosen->checkoutGroupKey()));
+        $this->assertFalse($policy->allowsCheckout($other->checkoutGroupKey()));
+        DB::transaction(fn () => app(ProcessEvents::class)->checkoutCompleted($chosen));
+        $this->assertSame(1, app(ProcessRuntime::class)->tick());
+        $this->assertSame([$chosen->id, $sibling->id], OrderProcessRun::sole()->context['order_ids']);
+        $other->update(['checkout_group_key' => $chosen->checkout_group_key]);
+        $this->assertFalse($policy->allowsCheckout($chosen->checkoutGroupKey()));
+        $other->delete();
+        $this->assertFalse($policy->allowsCheckout($chosen->checkoutGroupKey()));
+        foreach (['', 'bad', $chosen->id.',', $chosen->id.','.$chosen->id, (string) $sibling->id] as $invalid) {
+            config(['order_process.trial_checkout_order_ids' => $invalid]);
+            $this->assertFalse($policy->enabled());
+            $this->assertFalse($policy->allowsCheckout($chosen->checkoutGroupKey()));
+        }
+        Http::assertNothingSent();
+    }
+
     public function test_trial_rejects_missing_configuration_and_checkouts_with_added_siblings(): void
     {
         config(['order_process.enrollment_mode' => 'trial']);

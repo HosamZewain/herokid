@@ -18,7 +18,7 @@ class ProcessLivePolicy
 
         $mode = config('order_process.enrollment_mode', 'all_new');
         $trialReady = $mode === 'all_new' || ($mode === 'trial'
-            && ctype_digit((string) config('order_process.trial_order_id')) && (int) config('order_process.trial_order_id') > 0
+            && $this->trialOrderIds() !== []
             && ctype_digit((string) config('order_process.trial_automation_id')) && (int) config('order_process.trial_automation_id') > 0);
 
         return $trialReady && config('order_process.enabled') && $floor !== null && ctype_digit((string) $floor)
@@ -40,10 +40,34 @@ class ProcessLivePolicy
             return false;
         }
         // Include deleted siblings: the trial must never silently omit part of a checkout.
-        $orders = Order::withTrashed()->where('checkout_group_key', $key)->get(['id', 'deleted_at']);
+        $orders = Order::withTrashed()->where('checkout_group_key', $key)->orderBy('id')->get(['id', 'deleted_at']);
 
-        return $orders->count() === 1 && ! $orders->first()->trashed()
-            && $orders->first()->id === (int) config('order_process.trial_order_id');
+        return $orders->isNotEmpty() && ! $orders->contains(fn ($order) => $order->trashed())
+            && $orders->pluck('id')->all() === $this->trialOrderIds();
+    }
+
+    private function trialOrderIds(): array
+    {
+        $primary = (string) config('order_process.trial_order_id');
+        if (! ctype_digit($primary) || (int) $primary <= 0) {
+            return [];
+        }
+        $manifest = config('order_process.trial_checkout_order_ids');
+        if ($manifest === null) {
+            return [(int) $primary];
+        }
+        if (! is_string($manifest)) {
+            return [];
+        }
+        $values = array_map('trim', explode(',', $manifest));
+        if (count($values) > 10 || collect($values)->contains(fn ($id) => ! ctype_digit($id) || (int) $id <= 0)) {
+            return [];
+        }
+        $ids = array_map('intval', $values);
+        sort($ids, SORT_NUMERIC);
+
+        // Runtime uses the first checkout row as representative; never silently drop a row.
+        return count(array_unique($ids)) === count($ids) && $ids[0] === (int) $primary ? $ids : [];
     }
 
     public function ownerReady(): bool

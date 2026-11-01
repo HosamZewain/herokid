@@ -65,30 +65,40 @@ class ProcessIdentityPreflight
         if (! app(ProcessLivePolicy::class)->authorized($authority)) {
             $report['blockers'][] = 'actor_permissions_missing';
         }
-        $orders = Order::withTrashed()->where('checkout_group_key', $order->checkoutGroupKey())->get();
+        $orders = Order::withTrashed()->where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->get();
+        $stories = $orders->filter(fn ($candidate) => $candidate->story_id);
         $report['checkout_order_count'] = $orders->count();
-        if ($orders->count() !== 1 || $order->trashed() || ! $order->story_id || $order->status !== 'new_confirmed') {
-            $report['blockers'][] = 'trial_requires_one_confirmed_story_order';
+        $report['checkout_order_ids'] = $orders->pluck('id')->all();
+        $report['identity_count'] = $stories->count();
+        $report['gates']['trial_scope_pinned'] = $report['gates']['trial_scope_pinned']
+            && app(ProcessLivePolicy::class)->allowsCheckout($order->checkoutGroupKey());
+        if ($stories->isEmpty() || $orders->count() > 10
+            || $orders->contains(fn ($candidate) => $candidate->trashed() || $candidate->status !== 'new_confirmed')) {
+            $report['blockers'][] = 'trial_requires_confirmed_story_checkout';
         }
-        if ($definition['conditions']['story_ids'] && ! in_array($order->story_id, $definition['conditions']['story_ids'], true)) {
+        if ($definition['conditions']['story_ids'] && $stories->contains(fn ($candidate) => ! in_array($candidate->story_id, $definition['conditions']['story_ids'], true))) {
             $report['blockers'][] = 'story_outside_workflow';
         }
         if (OrderProcessRun::where('checkout_key', $order->checkoutGroupKey())->exists()
-            || OrderProcessIdentity::where('order_id', $orderId)->exists()
-            || OrderAutomationRun::where('live_key', 'story-identity:'.$orderId)->exists()) {
+            || OrderProcessIdentity::whereIn('order_id', $orders->pluck('id'))->exists()
+            || OrderAutomationRun::whereIn('live_key', $orders->map(fn ($candidate) => 'story-identity:'.$candidate->id))->exists()) {
             $report['blockers'][] = 'existing_process_or_identity_claim';
         }
-        $identity = $order->childIdentityRequest()->withTrashed()->first();
-        if ($identity && ($identity->trashed() || $identity->approved_attempt_id || $identity->orders()->whereKeyNot($orderId)->exists()
-            || $identity->attempts()->where(fn ($q) => $q->whereIn('status', ['pending', 'processing'])->orWhereNotNull('output_storage_path'))->exists())) {
-            $report['blockers'][] = 'existing_identity_requires_review';
+        foreach ($stories as $candidate) {
+            $identity = $candidate->childIdentityRequest()->withTrashed()->first();
+            if ($identity && ($identity->trashed() || $identity->approved_attempt_id || $identity->orders()->whereKeyNot($candidate->id)->exists()
+                || $identity->attempts()->where(fn ($q) => $q->whereIn('status', ['pending', 'processing'])->orWhereNotNull('output_storage_path'))->exists())) {
+                $report['blockers'][] = 'existing_identity_requires_review';
+                break;
+            }
         }
         if (! $report['blockers']) {
             try {
                 $context = app(ProcessOrderContext::class)->snapshot($orders->load('items'));
-                $inputs = app(WorkflowInputs::class)->capture($order, ['story_ids' => $definition['conditions']['story_ids'], 'photo_limit' => 3, 'prompt' => '{{identity_prompt}}']);
-                $report['verified_photo_count'] = count($inputs['photos']);
-                $report['input_fingerprint'] = hash('sha256', $context['fingerprint'].$inputs['fingerprint']);
+                $inputs = $stories->map(fn ($candidate) => app(WorkflowInputs::class)->capture($candidate,
+                    ['story_ids' => $definition['conditions']['story_ids'], 'photo_limit' => 3, 'prompt' => '{{identity_prompt}}']));
+                $report['verified_photo_count'] = $inputs->sum(fn ($input) => count($input['photos']));
+                $report['input_fingerprint'] = hash('sha256', $context['fingerprint'].$inputs->pluck('fingerprint')->implode(''));
             } catch (Throwable) {
                 // Never include exception messages: storage/prompt failures can contain private paths.
                 $report['blockers'][] = 'identity_inputs_unavailable';
@@ -102,11 +112,13 @@ class ProcessIdentityPreflight
             $estimate = app(AiImagePricingService::class)->calculate($model, $settings->size(), $settings->quality(), []);
             $report['model'] = $model->code;
             $report['estimated_usd_per_identity'] = $estimate['cost_usd'];
+            $report['estimated_usd_total'] = $stories->count() * (float) $estimate['cost_usd'];
             $report['estimate_source'] = 'configured_model_pricing_not_vendor_quote_or_hard_cap';
             $report['workflow_budget_usd'] = (float) data_get($generation->first(), 'config.budget_usd', 0);
             $report['configured_budget_usd'] = (float) config('order_process.identity_budget_usd', 0);
             if (strtoupper((string) ($model->estimated_cost_currency ?: 'USD')) !== 'USD' || ! $estimate['cost_usd']
-                || (float) $estimate['cost_usd'] <= 0 || (float) $estimate['cost_usd'] > $report['workflow_budget_usd']) {
+                || (float) $estimate['cost_usd'] <= 0 || $report['estimated_usd_total'] > $report['workflow_budget_usd']
+                || $report['estimated_usd_total'] > $report['configured_budget_usd']) {
                 $report['blockers'][] = 'identity_estimate_or_workflow_budget_invalid';
             }
         }

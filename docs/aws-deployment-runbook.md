@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 13:08 UTC / 15:08 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Next multi-child trial — prepared, not deployed/created (1 November 2026)
+
+Owner requested a new checkout with3 stories for2 children plus a personalized puzzle on a new recipient. Live c66b330/HK11-12 scope remains unchanged. Prepared exact-member trial manifest, aggregate preflight and child/story labels;83 tests passed on each isolated SQLite/MySQL plus final mixed-checkout review regression. Requires deployment approval and second original Maria photo before creation. [Selected catalog entries, source boundary, tests and activation sequence](automation-multi-child-trial-2026-11-01.md).
+
 ## Attachment payment-review signal — deployed, HK11-12 only (1 November 2026)
 
 Live SHA **c66b3302168b635cc3ff436e7b8696f20bf83ce6**. Owner approved code and activation only for order2729/workflow8; no wider activation. Maintenance13:01:18–13:01:20 UTC /15:01 Cairo, exact additive migration applied and21 file hashes verified. Only new review flag changed in env/cached config; existing trial scope and permissions preserved. Four existing affected workers, scheduler and FPM healthy.

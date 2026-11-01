@@ -19,9 +19,9 @@ class ProcessIdentityPreviewController extends Controller
     public function show(Request $request, OrderProcessRun $run)
     {
         $this->guard($run);
-        $tasks = OrderProcessIdentity::where('run_id', $run->id)->with(['order', 'attempt'])->get();
+        $tasks = OrderProcessIdentity::where('run_id', $run->id)->orderBy('order_id')->with(['order.story', 'attempt'])->get();
         abort_unless($tasks->isNotEmpty() && $tasks->every(fn ($t) => $t->status === 'succeeded'), 404);
-        $images = $tasks->map(fn ($task) => ['name' => $task->order->child_name,
+        $images = $tasks->map(fn ($task) => ['name' => $task->order->child_name, 'story' => $task->order->story?->title,
             'url' => URL::temporarySignedRoute('order-process.identity-image', now()->addMinutes(15)->min(Carbon::createFromTimestamp((int) $request->query('expires'))), ['run' => $run->id, 'identity' => $task->id])]);
 
         return response()->view('front.order-process-identity-preview', compact('images'), 200, self::HEADERS);

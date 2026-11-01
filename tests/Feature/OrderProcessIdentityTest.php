@@ -12,10 +12,12 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderPaymentReview;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderStatusDefinition;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\RoboDeskConversationSetting;
 use App\Models\Story;
 use App\Models\User;
@@ -28,6 +30,7 @@ use App\Services\OrderAutomation\Process\ProcessDefinition;
 use App\Services\OrderAutomation\Process\ProcessIdentityPreflight;
 use App\Services\OrderAutomation\Process\ProcessIdentityService;
 use App\Services\OrderAutomation\Process\ProcessOrderContext;
+use App\Services\OrderAutomation\Process\ProcessPaymentReview;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessSimulator;
@@ -196,6 +199,123 @@ class OrderProcessIdentityTest extends TestCase
             $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $task->order->status);
             $this->assertSame(1, $task->order->statusLogs()->where('status', ProcessIdentityService::APPROVED_ORDER_STATUS)->count());
         }
+    }
+
+    public function test_pinned_three_story_two_child_checkout_with_personalized_product_completes_as_one_process(): void
+    {
+        $first = $this->preflightCandidate();
+        $orders = collect([$first]);
+        foreach ([1, 2] as $index) {
+            $copy = $first->replicate();
+            $copy->order_number = 'TEST-'.Str::random(8);
+            $copy->saveQuietly();
+            $item = $first->items()->first()->replicate();
+            $item->order_id = $copy->id;
+            $item->save();
+            $orders->push($copy);
+        }
+        foreach ($orders as $index => $order) {
+            $story = Story::create(['title' => 'قصة تركيب '.$index, 'slug' => 'mixed-trial-'.$index,
+                'language' => 'ar', 'gender' => 'girl', 'price' => 100, 'active' => true]);
+            $order->forceFill(['story_id' => $story->id, 'child_name' => $index < 2 ? 'طفلة أ' : 'طفلة ب',
+                'child_age' => $index < 2 ? 7 : 3, 'child_gender' => 'girl'])->saveQuietly();
+            $order->items()->update(['story_id' => $story->id, 'title' => $story->title]);
+        }
+        $youngest = $orders->last();
+        ob_start();
+        $secondImage = imagecreatetruecolor(3, 3);
+        imagepng($secondImage);
+        $secondPhoto = ob_get_clean();
+        Storage::disk('local')->put('child-photos/second-child.png', $secondPhoto);
+        $youngest->forceFill(['uploaded_photos' => ['child-photos/second-child.png']])->saveQuietly();
+        $productOrder = $youngest->replicate();
+        $productOrder->order_number = 'TEST-'.Str::random(8);
+        $productOrder->story_id = null;
+        $productOrder->saveQuietly();
+        $product = Product::create(['name_ar' => 'بازل اختبار', 'slug' => 'synthetic-linked-puzzle', 'is_active' => true]);
+        $puzzle = $productOrder->items()->create(['item_type' => 'product', 'product_id' => $product->id,
+            'personalization_mode' => 'collect_child_details', 'title' => 'بازل اختبار',
+            'quantity' => 1, 'unit_price_cents' => 5000, 'total_price_cents' => 5000,
+            'personalization_snapshot' => ['child_name' => 'طفلة ب', 'child_age' => 3, 'child_gender' => 'girl']]);
+        config(['order_process.enrollment_mode' => 'trial', 'order_process.trial_order_id' => $first->id,
+            'order_process.trial_checkout_order_ids' => $orders->pluck('id')->push($productOrder->id)->implode(','),
+            'order_process.trial_automation_id' => $this->workflow->id]);
+        $report = app(ProcessIdentityPreflight::class)->inspect($first->id, $this->workflow->id, $this->actor->id);
+        $this->assertTrue($report['candidate_valid'], json_encode($report['blockers']));
+        $this->assertTrue($report['gates']['trial_scope_pinned']);
+        $this->assertSame(3, $report['identity_count']);
+        $this->assertSame(4, $report['checkout_order_count']);
+        $youngest->forceFill(['uploaded_photos' => ['child-photos/missing.png']])->saveQuietly();
+        $this->assertContains('identity_inputs_unavailable', app(ProcessIdentityPreflight::class)->inspect($first->id, $this->workflow->id, $this->actor->id)['blockers']);
+        $youngest->forceFill(['uploaded_photos' => ['child-photos/second-child.png']])->saveQuietly();
+        $this->assertEqualsWithDelta(0.3, $report['estimated_usd_total'], 0.00001);
+        config(['order_process.identity_budget_usd' => 0.2]);
+        $this->assertFalse(app(ProcessIdentityPreflight::class)->inspect($first->id, $this->workflow->id, $this->actor->id)['candidate_valid']);
+        config(['order_process.identity_budget_usd' => 1]);
+        // Simulate the real confirmation event; fixtures already have confirmed status.
+        DB::transaction(function () use ($first): void {
+            $first->update(['status' => 'new']);
+            $first->update(['status' => 'new_confirmed']);
+        });
+        app(ProcessRuntime::class)->tick();
+        $run = OrderProcessRun::where('checkout_key', $first->checkoutGroupKey())->sole();
+        $prompts = [];
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->times(3)->withArgs(function (GptImageRequest $request) use (&$prompts, $secondPhoto) {
+            $prompts[] = $request->prompt;
+            $expected = str_contains($request->prompt, 'طفلة ب') ? $secondPhoto : $this->png;
+            $this->assertSame(['data:image/png;base64,'.base64_encode($expected)], $request->inputImages);
+
+            return $request->maxAttempts === 1;
+        })->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-multi', ['cost_usd' => 0.1], []));
+        app(ProcessRuntime::class)->advance($run->id);
+        foreach ($run->identities as $task) {
+            app(ProcessIdentityService::class)->generate($task->id);
+            app(ProcessIdentityService::class)->generate($task->id);
+        }
+        $this->assertCount(3, $prompts);
+        $this->assertSame(2, collect($prompts)->filter(fn ($prompt) => str_contains($prompt, 'طفلة أ'))->count());
+        $this->assertSame(1, collect($prompts)->filter(fn ($prompt) => str_contains($prompt, 'طفلة ب'))->count());
+        app(ProcessRuntime::class)->advance($run->id);
+        $url = app(ProcessIdentityService::class)->previewUrl($run->fresh());
+        $this->get($url)->assertOk()->assertSee('قصة تركيب 0')->assertSee('قصة تركيب 1')->assertSee('قصة تركيب 2')->assertSee('طفلة أ')->assertSee('طفلة ب');
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/start/sendMsg')
+            && str_contains($request['template']['data'][4], 'بازل اختبار'));
+        $this->reply($run);
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_staff', $run->fresh()->status, $run->fresh()->error_code ?? '');
+        $this->assertSame(1, $run->steps()->where('type', 'whatsapp')->sole()->messageAttempts()->count());
+        $this->assertSame(3, $run->identities()->count());
+        foreach ($orders as $order) {
+            $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $order->fresh()->status);
+            $this->assertNotNull($order->fresh()->child_identity_approved_attempt_id);
+            $this->assertSame(0, (int) $order->fresh()->paid_amount_cents);
+        }
+        $this->assertSame($productOrder->id, $puzzle->fresh()->order_id);
+        $this->assertSame('new_confirmed', $productOrder->fresh()->status);
+        $this->assertNull($productOrder->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(0, (int) $productOrder->fresh()->paid_amount_cents);
+        $this->assertSame('طفلة ب', $puzzle->fresh()->personalization_snapshot['child_name']);
+        $this->assertCount(1, Http::recorded(fn ($request) => str_contains($request->url(), '/start/sendMsg')));
+        $this->get($url)->assertOk();
+        config(['order_process.payment_review_enabled' => true]);
+        $conversation = WhatsAppConversation::where('phone_hash', $run->phone_hash)->sole();
+        $conversation->messages()->create(['remote_id' => 'multi-attachment', 'remote_hash' => hash('sha256', 'multi-attachment'),
+            'fingerprint' => hash('sha256', 'multi-attachment'), 'direction' => 'inbound', 'kind' => 'image',
+            'attachments' => [['name' => 'synthetic.png']], 'sent_at' => now(),
+            'provider_metadata' => ['interactionId' => 'identity-interaction', 'channelId' => 'wamid.multi-attachment']]);
+        $reviewer = app(ProcessPaymentReview::class);
+        $this->assertTrue($reviewer->needsFullWindow($run->context['phone']));
+        $reviewer->process($conversation);
+        $reviewer->process($conversation);
+        $this->assertDatabaseCount('order_payment_reviews', 1);
+        $this->assertDatabaseCount('order_payment_review_signals', 1);
+        $this->assertSame($run->id, OrderPaymentReview::sole()->run_id);
+        $this->assertSame(0, (int) Order::where('checkout_group_key', $run->checkout_key)->sum('paid_amount_cents'));
+        $this->assertSame('waiting_staff', $run->fresh()->status);
     }
 
     public function test_disabling_approval_status_blocks_before_identity_or_status_is_changed(): void
