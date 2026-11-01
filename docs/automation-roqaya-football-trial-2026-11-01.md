@@ -33,3 +33,13 @@ Exactly one canonical generation attempt678 ran11:00:15–11:01:04 UTC and succe
 Signed preview HTTP200, image HTTP200 with matching checksum, invalid signature403. Scheduler sent exactly one preview and reached waiting_response/response by11:02 UTC; provider message ID present. Delivery receipt was not yet known at that observation. Owner asked to review the preview and press the identity confirmation button on HK11-12. Current order remains new_confirmed until that genuine response is consumed; approved identity unset, paid0, failedjobs81 unchanged. No payment/shipping/printing or scene generation. Next check: actual identity reply correlation, new RoboDesk acknowledgment, one costomer_confirmed status log and unchanged ledger.
 
 At11:03:20 UTC, full history sync verified preview delivery **delivered**. Run still waiting_response, responses0, one canonical attempt and one preview send, both process queues empty. No further generation or resend.
+
+## Identity approval passed — 1 November 2026, 13:05 Cairo
+
+Owner confirmed pressing the identity button. Actual inbound message12952 at11:03:19 UTC has replyTo exactly matching the preview template's stored wamid. Actual RoboDesk outbound12953 at11:03:24.929 says exactly: «استلمنا موافقتك على هوية الطفل 💛 هنراجع الدفع قبل استكمال الطلب». No generic clarification observed for this response.
+
+Full canonical history sync consumed one response; process worker approved attempt678 and changed order2729 to **costomer_confirmed** at11:05:13 UTC /13:05:13 Cairo. Both order and canonical identity reference678; one approval event (source robodesk_process), one matching order-status log, one preview attempt. Run2 reached waiting_staff/review, paid0. A second full history sync preserved these counts and the original approval time; both process queues empty, failedjobs81 unchanged. Exactly one generation attempt throughout. No payment, shipping, printing, scene generation or broader activation.
+
+Private output checksum and signed preview/image routes verified again after approval:200/200 and tampered signature403. The pre-send previewUrl helper intentionally requires unapproved generation eligibility and cannot mint a new send URL after approval; the post-approval read check used a short-lived signed route directly, with no resend or status mutation. No secret URLs logged.
+
+This bounded owner trial passed through identity approval and correct RoboDesk acknowledgment. Financial review/receipt handling, revision branch and downstream production were not exercised. Trial runtime/temporary owner authority remain scoped pending closure or a separately approved broader rollout. Live code unchanged ae52dcb; documentation successor is not a new deployment.
