@@ -1,0 +1,9 @@
+# Codex scene progress and downloads — prepared 1 November 2026
+
+Prepared, not deployed. Base live application a24f34a25eb3be4f8b3e4e1a52b81b370f160dfa; isolated branch codex/manual-codex-scenes-trial. Owner requested automatic scene refresh, actual S3 verification and download all.
+
+Progress polls an authenticated read-only fragment every ten seconds while the page is visible. Only scene results change; unrelated order forms retain input. Unchanged result versions preserve DOM; network failures retain images and retry. No generation/collector invocation from GET. Download takes the current run's saved scenes, checks original S3 bytes against stored SHA256 and returns numbered PNGs in a private temporary ZIP deleted after sending. Empty/cross-order access is rejected, incomplete runs include only saved scenes and display their count. No public S3 URL or new dependency.
+
+Validation: 15 feature tests/64 assertions on isolated SQLite, network disabled, storage fake; one Node polling behavior test (updates, unchanged DOM, outage recovery, hidden tab). PHP8.3 syntax passes; release-lockfile Vite build byte-identical, all prior hashed assets restored. Production PHP ZipArchive available. No schema/config/worker changes required. Publication should refresh route/Blade cache and gracefully reload FPM only; leave Codex service and active generation untouched.
+
+Live read-only S3 evidence at 20:08:49 UTC: run c43c1278-3589-433b-9ed3-6b3b8b1ddedc / order2754 had eight saved scenes. Each object read through s3_private (s3 driver, private prefix, herokid-prod-media-2026) matched its saved SHA256; all eight OrderAttachments referenced the same path and s3_private disk. Status running; nine scenes observed at20:10:52 UTC. No replay, new generation, customer message or production mutation performed.

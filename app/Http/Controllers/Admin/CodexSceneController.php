@@ -27,6 +27,58 @@ class CodexSceneController extends Controller
         return back()->with('success', 'تم طلب الإيقاف. انتظر تأكيد توقف Codex قبل استكمال العمل.');
     }
 
+    public function progress(Order $order)
+    {
+        $codexRuns = CodexSceneRun::where('order_id', $order->id)->latest()->limit(3)->get();
+        $html = view('admin.orders._codex-scenes-progress', compact('order', 'codexRuns'))->render();
+
+        return response()->json(['html' => $html, 'version' => hash('sha256', $html)])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function download(Order $order, CodexSceneRun $run)
+    {
+        abort_unless($run->order_id === $order->id, 404);
+        $scenes = $run->scenes ?? [];
+        abort_unless(count($scenes), 404);
+        ksort($scenes, SORT_NUMERIC);
+        $path = tempnam(sys_get_temp_dir(), 'codex-scenes-');
+        abort_if($path === false, 503);
+        $zip = new \ZipArchive;
+        $opened = false;
+        try {
+            if ($zip->open($path, \ZipArchive::OVERWRITE) !== true) {
+                throw new \RuntimeException('Cannot prepare scene archive.');
+            }
+            $opened = true;
+            foreach ($scenes as $number => $scene) {
+                $bytes = Storage::disk('s3_private')->get($scene['path']);
+                if (! is_string($bytes) || ! hash_equals($scene['sha256'], hash('sha256', $bytes))) {
+                    throw new \RuntimeException('Scene storage verification failed.');
+                }
+                if (! $zip->addFromString(sprintf('scene-%02d.png', $number), $bytes)) {
+                    throw new \RuntimeException('Cannot add scene to archive.');
+                }
+            }
+            if (! $zip->close()) {
+                throw new \RuntimeException('Cannot finalize scene archive.');
+            }
+            $opened = false;
+            clearstatcache(true, $path);
+
+            return response()->download($path, 'order-'.$order->id.'-scenes-'.$run->id.'.zip', [
+                'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+            ])->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            if ($opened) {
+                $zip->close();
+            }
+            @unlink($path);
+            report($e);
+            abort(503, 'تعذر تجهيز تحميل المشاهد؛ حاول مرة أخرى.');
+        }
+    }
+
     public function image(Order $order, CodexSceneRun $run, int $scene)
     {
         abort_unless($run->order_id === $order->id, 404);

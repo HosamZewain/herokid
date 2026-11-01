@@ -17,23 +17,46 @@
             <button class="mt-3 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white">توليد مشاهد القصة عبر Codex</button>
         </form>
     @endif
-    @foreach($codexRuns as $codexRun)
-        <div class="mt-4 rounded-xl border bg-white p-3">
-            <p class="text-sm font-black">{{ ['preparing'=>'تجهيز الملفات','queued'=>'في انتظار Codex','running'=>'جاري توليد المشاهد','completed'=>'اكتملت المشاهد — راجعها قبل تجهيز Studio','uncertain'=>'تحتاج مراجعة — لن نكرر التوليد تلقائيًا','stopping'=>'جارٍ الإيقاف','stopped'=>'متوقفة'][$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / 13</p>
-            <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }} · حدّث الصفحة لمتابعة المشاهد الجديدة.</p>
-            @if($codexRun->active_slot)
-                <form method="POST" action="{{ route('admin.orders.codex-scenes.stop',[$order,$codexRun]) }}" class="mt-2">@csrf<button class="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">إيقاف التجربة والاحتفاظ بالمشاهد</button></form>
-            @endif
-            <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                @foreach($codexRun->scenes ?? [] as $sceneNumber=>$sceneData)
-                    <a href="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber]) }}" target="_blank" rel="noopener" class="rounded-lg border p-2">
-                        <img src="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber]) }}" alt="مشهد {{ $sceneNumber }} — {{ $order->child_name }}" class="w-full rounded-lg" loading="lazy">
-                        <span class="text-xs font-bold">مشهد {{ $sceneNumber }} · {{ $sceneData['width'] }} × {{ $sceneData['height'] }}</span>
-                    </a>
-                @endforeach
-            </div>
-        </div>
-    @endforeach
+    <p data-codex-refresh-note class="mt-2 text-xs text-gray-500" aria-live="polite">تتحدث المشاهد وحالة التوليد تلقائيًا كل 10 ثوانٍ.</p>
+    <div data-codex-progress data-url="{{ route('admin.orders.codex-scenes.progress',$order) }}">
+        @include('admin.orders._codex-scenes-progress')
+    </div>
 </section>
 @endcan
 @endcan
+
+@once
+@push('scripts')
+<script>
+(() => {
+    const panels = [...document.querySelectorAll('[data-codex-progress]')];
+    const refresh = async () => {
+        if (!document.hidden) {
+            for (const panel of panels) {
+                const note = panel.parentElement.querySelector('[data-codex-refresh-note]');
+                try {
+                    const response = await fetch(panel.dataset.url, {
+                        headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store',
+                        signal: AbortSignal.timeout(15000),
+                    });
+                    if (!response.ok || response.redirected) throw new Error('refresh');
+                    const data = await response.json();
+                    if (typeof data.html !== 'string') throw new Error('refresh');
+                    // Keep existing images/forms intact when nothing has changed.
+                    if (panel.dataset.version !== data.version) {
+                        panel.innerHTML = data.html;
+                        panel.dataset.version = data.version;
+                    }
+                    note.textContent = 'تتحدث المشاهد وحالة التوليد تلقائيًا كل 10 ثوانٍ.';
+                } catch (_) {
+                    note.textContent = 'تعذر تحديث المشاهد مؤقتًا؛ سنحاول تلقائيًا. الصور الحالية محفوظة.';
+                }
+            }
+        }
+        window.setTimeout(refresh, 10000);
+    };
+    window.setTimeout(refresh, 10000);
+})();
+</script>
+@endpush
+@endonce

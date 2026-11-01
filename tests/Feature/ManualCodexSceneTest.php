@@ -87,6 +87,60 @@ class ManualCodexSceneTest extends TestCase
         file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
     }
 
+    public function test_progress_renders_saved_scenes_without_exposing_private_snapshot(): void
+    {
+        $run = $this->start();
+        $this->sceneOutput($run, 1);
+        app(ManualSceneService::class)->collect($run);
+        $response = $this->actingAs($this->actor)->getJson(route('admin.orders.codex-scenes.progress', $this->order));
+        $response->assertOk()->assertJsonStructure(['html', 'version']);
+        $this->assertStringContainsString('1 / 13', $response->json('html'));
+        $this->assertStringContainsString('تحميل الكل', $response->json('html'));
+        $this->assertStringNotContainsString('synthetic/identity.png', $response->getContent());
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_download_contains_numbered_original_s3_bytes_and_is_order_scoped(): void
+    {
+        $run = $this->start();
+        $this->sceneOutput($run, 2);
+        $this->sceneOutput($run, 1);
+        app(ManualSceneService::class)->collect($run);
+        $response = $this->actingAs($this->actor)->get(route('admin.orders.codex-scenes.download', [$this->order, $run]));
+        $response->assertOk()->assertDownload();
+        $path = $response->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new \ZipArchive;
+            $this->assertTrue($zip->open($path));
+            $this->assertSame(2, $zip->numFiles);
+            $this->assertSame('scene-01.png', $zip->getNameIndex(0));
+            $this->assertSame('scene-02.png', $zip->getNameIndex(1));
+            $this->assertSame($this->png(1), $zip->getFromName('scene-01.png'));
+            $this->assertSame($this->png(2), $zip->getFromName('scene-02.png'));
+            $zip->close();
+        } finally {
+            @unlink($path);
+        }
+        $other = Order::create(['order_number' => 'SYNTHETIC-OTHER', 'parent_name' => 'Synthetic']);
+        $this->get(route('admin.orders.codex-scenes.download', [$other, $run]))->assertNotFound();
+        $this->actingAs(User::factory()->create())->get(route('admin.orders.codex-scenes.download', [$this->order, $run]))->assertForbidden();
+        $this->getJson(route('admin.orders.codex-scenes.progress', $this->order))->assertForbidden();
+    }
+
+    public function test_empty_or_corrupt_archive_cannot_be_downloaded(): void
+    {
+        $run = $this->start();
+        $this->actingAs($this->actor)->get(route('admin.orders.codex-scenes.download', [$this->order, $run]))->assertNotFound();
+        $this->sceneOutput($run, 1);
+        app(ManualSceneService::class)->collect($run);
+        $scene = $run->fresh()->scenes['1'];
+        Storage::disk('s3_private')->put($scene['path'], 'corrupt');
+        $this->get(route('admin.orders.codex-scenes.download', [$this->order, $run]))->assertStatus(503);
+        $this->assertDatabaseCount('order_attachments', 1);
+    }
+
     public function test_staff_can_start_codex_during_manual_hold_without_resuming_identity_flow(): void
     {
         DB::table('order_automation_holds')->insert([

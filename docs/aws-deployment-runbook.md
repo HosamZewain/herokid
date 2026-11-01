@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 19:51 UTC / 21:51 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Live Codex progress and ZIP — prepared, not deployed (1 November 2026)
+
+Automatic scene-only refresh and numbered original-PNG ZIP download are prepared and tested. Eight existing generated images were read from private S3 and all checksums/attachment references matched at20:08:49UTC. No worker/generation changes or deployment performed. [Scope and verification](codex-scenes-live-download-2026-11-01.md).
+
 ## Payment saves and manual Automation handoff — deployed 1 November 2026
 
 Owner explicitly authorized completion and immediate publication. Application **a24f34a25eb3be4f8b3e4e1a52b81b370f160dfa** deployed **19:49:31–19:49:34 UTC /21:49 Cairo**, three seconds maintenance. All21 changed-file hashes verified; existing source drift, prior hashed assets, `.env` and cached config preserved. Only additive migration `2026_11_01_203000_create_order_automation_holds.php` applied. Route/Blade caches rebuilt, FPM gracefully reloaded, four affected workers drained/refreshed and scheduler restored; dedicated Codex worker left running.
