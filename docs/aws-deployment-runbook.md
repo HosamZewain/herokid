@@ -2,9 +2,9 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 10:07 UTC / 12:07 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Roqaya football trial — 1 November 2026, awaiting customer confirmation
+## Roqaya football trial — 1 November 2026, awaiting identity approval
 
-Owner authorized a fresh trial using supplied photos and confirmed age7. Created **HK11-12/order2729**, Arabic girls' football story57, two original private photo hashes verified, unpaid489EGP. RoboDesk prompt version16 production/latest was independently verified in its authenticated UI. Confirmation event22926 accepted once and delivered; awaiting the owner's actual tap, no identity generation yet.
+Owner authorized a fresh trial using supplied photos and confirmed age7. Created **HK11-12/order2729**, Arabic girls' football story57, two original private photo hashes verified, unpaid489EGP. RoboDesk prompt version16 production/latest was independently verified in its authenticated UI. Confirmation event22926 accepted once and delivered; actual owner reply at10:58:40 UTC was consumed once. Run2/task2 generated canonical identity678 in one attempt11:00:15–11:01:04 UTC (estimated0.041USD). Private output and signed preview verified; one preview accepted by11:02 UTC, run waiting_response. Awaiting actual identity approval; no payment or production action.
 
 Live code unchanged at **ae52dcb**. Existing workflow8/revision1 remains the only enabled process; trial_order_id now2729 and after_order_id2728, legacy confirmation ownership and other configuration unchanged. Checkpoint `/home/ubuntu/herokid-before-roqaya-trial-20261101`; four relevant workers and scheduler restored/healthy after scoped config refresh. Old HK10-633/run1 remains preserved at manual review. No payment/shipping/printing, broader activation or new resources. [Trial evidence, preparation recoveries and continuation boundary](automation-roqaya-football-trial-2026-11-01.md).
 
