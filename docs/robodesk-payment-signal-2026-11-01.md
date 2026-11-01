@@ -1,4 +1,4 @@
-# Attachment-based payment review — prepared 1 November 2026
+# Attachment-based payment review — deployed 1 November 2026
 
 ## Owner-approved behavior
 
@@ -20,8 +20,12 @@ Supersedes the proposed receipt-classification integration. RoboDesk adds no fie
 
 ## Production boundary and deployment packet
 
-Read-only SSH still reports live ae52dcbdf50a56f4ec3c454fa3f065df4e0f1e26. This work is prepared/unpublished to production. No order/payment mutation, worker refresh, configuration activation or message send performed. A deployment approval is required for this new code and additive migration; a scoped activation approval must identify whether to enable only current trial2729/workflow8 (recommended first) or broader operation. Do not silently activate it from a code deployment.
+Owner explicitly approved release **c66b3302168b635cc3ff436e7b8696f20bf83ce6** and activation only for **HK11-12/order2729/workflow8**. Deployed1November13:01:18–13:01:20 UTC (15:01 Cairo), two seconds of maintenance. Exact additive migration2026_11_01_140000 applied; all21 changed-file hashes verified. Environment/cached configuration comparison proves only ORDER_PROCESS_PAYMENT_REVIEW_ENABLED changed to true; existing trial scope, boundary2728, credentials, budgets and permissions preserved. Route/Blade caches rebuilt, FPM gracefully reloaded; four existing affected workers and scheduler restored and healthy.
 
-Authorized rollout should preserve code/env/config checkpoints and a verified off-instance backup, run only migration2026_11_01_140000, refresh routes/Blade/FPM and gracefully refresh only the affected conversation worker. The process workers also need refresh if cached config activation changes. Apply the new flag without changing existing scope/ownership/budget/credentials. Verify actual SHA/hashes, authenticated panel/permissions, public HTTPS, new logs, stable payment ledger and one signal per original message. For the trial, old transfer screenshots are intentional test attachments and must never be recorded as real money. No replay of sends/generation is needed: a scoped full history reread can observe existing trial attachments once after approval.
+Approved full history sync observed exactly3 attachment messages and created one pending review for run2 at13:04 UTC. A second full read kept3 signals and one review: no duplicate. No reviews for other orders. Authenticated checkout UI shows the pending-review panel,3 messages and the guarded close form. Paid balance remains0/unpaid, order status costomer_confirmed, approved identity678, one identity generation, one preview attempt and one consumed identity response. No receipt file copy, outbound message, AI generation or payment write occurred. Review remains open for staff.
+
+Public HTTPS home/up/cart200 and www-to-apex redirect passed. Scheduler Result=success; process queues ready/reserved0; historical failed jobs81 unchanged. Bounded observation after deployment:448 requests/zero5xx. One preparation CLI error was logged before deployment because www-data could not traverse the staging home directory; migration had not run. Copied the reviewed migration to readable /tmp staging and resumed successfully. No subsequent application errors observed; no production directory permissions were broadened.
+
+Private recovery checkpoint **/home/ubuntu/herokid-before-c66b330** retains source/env/config and before-state evidence. Backup **herokid-20261101T125837Z.sql.gz**,42,556,012bytes, gzip verified and uploaded to existing private/database-backups S3 prefix. Local SHA256 and S3 metadata match **e5ac1f2369a1c1b1e418c405d0d89254c38cb8a095515a140e3583b883288078**. No restore test in this rollout. No new recurring AWS resources; existing storage usage only.
 
 Recovery: disable the new flag and preserve review/signal tables and audits; roll back only code/config through the runbook if required. Do not drop tables, replace the DB or undo real financial transactions. This feature never invokes the legacy approveProof handler that incorrectly assumes full payment and advances printing for this workflow.

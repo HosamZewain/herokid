@@ -1,10 +1,14 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 10:07 UTC / 12:07 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 13:08 UTC / 15:08 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Attachment payment-review signal — prepared, not deployed (1 November 2026)
+## Attachment payment-review signal — deployed, HK11-12 only (1 November 2026)
 
-Owner/RoboDesk finalized an existing-fields-only contract: inbound attachments after the matching identity preview mark a human review; no classification, receipt upload, callback or automatic financial write. The previously prepared classifier has been removed. New order review panel, message deduplication, guarded manual close and continued full polling through waiting_staff are prepared; additive tables and default-OFF ORDER_PROCESS_PAYMENT_REVIEW_ENABLED flag. Live code remains ae52dcb (revalidated by SSH). No production changes. [Implementation, tests, approval/activation and recovery boundaries](robodesk-payment-signal-2026-11-01.md).
+Live SHA **c66b3302168b635cc3ff436e7b8696f20bf83ce6**. Owner approved code and activation only for order2729/workflow8; no wider activation. Maintenance13:01:18–13:01:20 UTC /15:01 Cairo, exact additive migration applied and21 file hashes verified. Only new review flag changed in env/cached config; existing trial scope and permissions preserved. Four existing affected workers, scheduler and FPM healthy.
+
+Full history reread created one pending review with3 attachment-message signals. Repeat read confirmed deduplication; other reviews0. Authenticated order panel verified. Identity678 remains approved/costomer_confirmed, paid0/unpaid, one generation/preview/response; no messages, AI, receipt copies or payments. HTTPS200, scheduler success,81 historical failed jobs unchanged,448 postdeploy requests/zero5xx. One corrected staging-path CLI error occurred before deployment; no later application errors observed.
+
+Recovery **/home/ubuntu/herokid-before-c66b330**; off-instance backup **herokid-20261101T125837Z.sql.gz**,42,556,012bytes, matching local/S3 checksum. Preserve review tables/history on rollback. [Implementation, tests, evidence and boundaries](robodesk-payment-signal-2026-11-01.md). Documentation successor may be ahead of the live application commit.
 
 ## Roqaya football trial — 1 November 2026, identity approval passed
 
@@ -90,7 +94,7 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`ae52dcbdf50a56f4ec3c454fa3f065df4e0f1e26`**, detached HEAD |
+| Live release verified by SSH | **`c66b3302168b635cc3ff436e7b8696f20bf83ce6`**, detached HEAD |
 | Release branch | `codex/order-process-trial-readiness`, published to GitHub; documentation successor is not the live code SHA |
 | Previous release | `9ff04df5eee62fb83652f4449983302e37b2d679`; preserve process context v2 and trial side effects |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
