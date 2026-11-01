@@ -83,8 +83,106 @@ class ManualCodexSceneTest extends TestCase
         File::ensureDirectoryExists($dir);
         $bytes = $this->png($color ?? $number);
         file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.png', $bytes);
-        file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.json', json_encode(['scene' => $number, 'sha256' => hash('sha256', $bytes)]));
+        file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.json', json_encode(['id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $run->snapshot['identity_checksum'], 'scene' => $number, 'sha256' => hash('sha256', $bytes)]));
         file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
+    }
+
+    private function sibling(string $number = 'SYNTHETIC-SIBLING'): Order
+    {
+        $copy = $this->order->replicate();
+        $copy->order_number = $number;
+        $copy->status = 'costomer_confirmed';
+        $copy->save();
+        return $copy;
+    }
+
+    public function test_automatic_enrollment_handles_paid_siblings_once_and_audits_automation(): void
+    {
+        config(['codex_scenes.automatic' => true]);
+        $this->order->update(['payment_status' => 'partially_paid']);
+        $other = $this->sibling();
+        $other->update(['paid_amount_cents' => 0, 'payment_status' => 'unpaid']);
+        $service = app(ManualSceneService::class);
+        $service->enroll(); $service->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        foreach (CodexSceneRun::all() as $run) {
+            $this->assertSame('waiting_slot', $run->status);
+            $this->assertSame('automatic', $run->source);
+            $this->assertNull($run->requested_by);
+        }
+        $this->assertSame(2, AdminActivityLog::where('action', 'automation.codex_scene_enrolled')->whereNull('user_id')->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_queue_dispatches_two_and_keeps_third_waiting_then_never_reenrolls_stopped_story(): void
+    {
+        $service = app(ManualSceneService::class);
+        $first = $this->start();
+        $second = $service->start($this->sibling('SYNTHETIC-2'), $this->actor);
+        $third = $service->start($this->sibling('SYNTHETIC-3'), $this->actor);
+        $service->tick();
+        $this->assertSame(2, CodexSceneRun::where('status','queued')->count());
+        $this->assertSame(1, CodexSceneRun::where('status','waiting_slot')->count());
+        $waiting = CodexSceneRun::where('status','waiting_slot')->firstOrFail();
+        $service->cancel($waiting, $this->actor);
+        $this->assertSame('stopped', $waiting->fresh()->status);
+        $this->assertNull($waiting->fresh()->active_slot);
+        $this->assertFileDoesNotExist($this->spool.'/inbox/'.$waiting->id.'/manifest.json');
+        config(['codex_scenes.automatic' => true]);
+        $waiting->order->update(['payment_status'=>'partially_paid']);
+        $service->enroll();
+        $this->assertDatabaseCount('codex_scene_runs',3);
+    }
+
+    public function test_auto_respects_manual_hold_review_only_and_completed_production(): void
+    {
+        config(['codex_scenes.automatic' => true]);
+        $this->order->update(['payment_status'=>'pending_review']);
+        app(ManualSceneService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs',0);
+        $this->order->update(['payment_status'=>'paid_in_full','status'=>'ready_preview']);
+        app(ManualSceneService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs',0);
+        $this->order->update(['status'=>'costomer_confirmed']);
+        DB::table('order_automation_holds')->insert(['checkout_key'=>$this->order->checkoutGroupKey(),'user_id'=>$this->actor->id,'fingerprint'=>str_repeat('a',64),'runs'=>'{}','confirmations'=>'{}','created_at'=>now(),'updated_at'=>now()]);
+        app(ManualSceneService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs',0);
+    }
+
+    public function test_payment_removed_while_waiting_prevents_provider_dispatch(): void
+    {
+        config(['codex_scenes.automatic' => true]);
+        $this->order->update(['payment_status'=>'partially_paid']);
+        $service = app(ManualSceneService::class); $service->enroll();
+        $this->order->update(['paid_amount_cents'=>0,'payment_status'=>'unpaid']);
+        $service->tick();
+        $run=CodexSceneRun::firstOrFail();
+        $this->assertSame('uncertain',$run->status);
+        $this->assertFileDoesNotExist($this->spool.'/inbox/'.$run->id.'/manifest.json');
+        Http::assertNothingSent();
+    }
+
+    public function test_output_from_another_story_is_rejected_before_s3_attachment(): void
+    {
+        $run=$this->start(); $this->sceneOutput($run,1);
+        $p=$this->spool.'/outbox/'.$run->id.'/scene-01.json';
+        $meta=json_decode(file_get_contents($p),true); $meta['order_id']=999999;
+        file_put_contents($p,json_encode($meta));
+        app(ManualSceneService::class)->tick();
+        $this->assertSame('uncertain',$run->fresh()->status);
+        $this->assertDatabaseCount('order_attachments',0);
+    }
+
+    public function test_uncertain_result_pauses_new_dispatch_and_monitor_is_authorized(): void
+    {
+        $run=$this->start(); $run->update(['status'=>'uncertain']);
+        $other=app(ManualSceneService::class)->start($this->sibling(),$this->actor);
+        app(ManualSceneService::class)->tick();
+        $this->assertSame('waiting_slot',$other->fresh()->status);
+        $this->actor->permissions()->attach(Permission::where('key','order_automation.view')->firstOrFail());
+        $this->actingAs($this->actor)->get(route('admin.order-automation.codex-scenes'))->assertOk()->assertSee('قصة #'.$this->order->id)->assertSee('تحتاج مراجعة');
+        $this->getJson(route('admin.order-automation.codex-scenes.progress',['status'=>'waiting_slot']))->assertOk()->assertJsonStructure(['html','version']);
+        $this->actingAs(User::factory()->create())->get(route('admin.order-automation.codex-scenes'))->assertForbidden();
     }
 
     public function test_progress_renders_saved_scenes_without_exposing_private_snapshot(): void
@@ -149,7 +247,7 @@ class ManualCodexSceneTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $run = $this->start();
-        $this->assertSame('preparing', $run->status);
+        $this->assertSame('waiting_slot', $run->status);
         $this->assertTrue(app(AutomationAssignment::class)->owns($this->order));
         $this->assertTrue(AutomationHandoff::held($this->order->checkoutGroupKey()));
         Http::assertNothingSent();
@@ -158,7 +256,7 @@ class ManualCodexSceneTest extends TestCase
     public function test_manual_request_accepts_one_cent_reserves_checkout_and_does_not_call_ai(): void
     {
         $run = $this->start();
-        $this->assertSame('preparing', $run->status);
+        $this->assertSame('waiting_slot', $run->status);
         $this->assertSame('generating', $this->order->fresh()->status);
         $this->assertTrue(app(AutomationAssignment::class)->owns($this->order));
         $this->assertStringNotContainsString('Synthetic child', $run->getRawOriginal('snapshot'));

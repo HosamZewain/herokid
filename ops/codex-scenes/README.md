@@ -1,4 +1,19 @@
-# Manual Codex story-scene trial
+# Codex story-scene queue
+
+## Automatic queue — 1 November 2026
+
+Owner authorized automatic generation for existing and future confirmed stories with an approved identity and any actual paid amount, plus a live monitor. `CODEX_SCENES_AUTOMATIC=true` selects eligible stories every scheduled minute; partial/full/without-shipping paid statuses qualify, receipt-review signals do not. Manual holds, prior runs of every status, and stories already in production are excluded. At most50 stories reserve queue positions; two independent story runs dispatch concurrently on the existing server with unchanged resource limits.
+
+Each run retains its own work directory, encrypted snapshot, order id, UUID and identity checksum. Protocol2 requires all those identifiers in each scene metadata record before private S3 persistence. A composite unique active reservation prevents duplicate work on one story while allowing siblings. Codex processes share the existing authenticated account; directory and correlation checks are not a claim of separate OS users per story. No credentials are copied. See official [state configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth).
+
+`/admin/order-automation/codex-scenes` shows status filters/counts, per-story checkout/child, saved scene count, waiting/running duration, completion and order/ZIP links; it refreshes every10seconds. Per-order panels retain live scenes and activity by Automation. Uncertain results pause subsequent dispatch until reviewed/stopped; other running work continues. Waiting work can stop without provider calls. This release does not automatically deliver previews, record payments, print, ship, or add AWS resources.
+
+Schema migration expands the old global reservation to `(order_id,active_slot)` and makes the system initiator nullable. Restart the dedicated worker only while idle. Preserve private cached config, adding only automatic/concurrency fields. Recovery must first disable automatic enrollment, reconcile all active runs and retain outputs/history; do not restore the old global-slot code while multiple runs exist.
+
+Validation:36 PHPUnit tests/219 assertions on SQLite and isolated MySQL,10 fake-CLI Python tests including two simultaneous distinct stories, browser-poll Node check, PHP8.3 syntax checks and isolated Vite build. Real subscription throughput/concurrency limits remain observation-dependent.
+
+## Historical manual trial
+
 
 Owner-approved scope: order-page button only, one story at a time on existing EC2. No automatic enrollment, API-key fallback, customer messaging, payment, printing or shipping. Eligibility: confirmed story, linked successful approved identity, checkout actual paid cents > 0 and no other automation owner. A pending payment-review signal is not a payment.
 

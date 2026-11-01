@@ -2,6 +2,9 @@
     <x-slot name="header"><h1 class="text-2xl font-bold">أتمتة الطلبات</h1></x-slot>
     <div class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
         <div class="flex flex-wrap items-start justify-between gap-4"><div><h2 class="text-2xl font-bold">مسارات العمليات</h2><p class="mt-2 text-slate-500">ابنِ شروط البداية والخطوات وفروع الرد، وراجع نتيجة كل مسار.</p></div><span class="rounded-full bg-indigo-50 px-4 py-2 text-indigo-700">إدارة ومحاكاة وتشغيل المسارات</span></div>
+        @can('orders.view')
+        <a href="{{ route('admin.order-automation.codex-scenes') }}" class="block rounded-2xl border border-indigo-200 bg-indigo-50 p-5 font-bold text-indigo-900">متابعة توليد مشاهد القصص — Codex · الطابور والتقدم والنتائج</a>
+        @endcan
         @can('order_automation.manage')
         <form method="POST" action="{{ route('admin.order-automation.process.create') }}" class="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-5">@csrf
             <label class="flex-1">اسم الأوتوميشن<input name="name" required maxlength="150" placeholder="مثال: تأكيد الطلب" class="mt-2 w-full rounded-lg border-gray-300"></label>

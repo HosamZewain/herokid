@@ -1,5 +1,5 @@
 [Unit]
-Description=HeroKid manual Codex scene trial (single job)
+Description=HeroKid Codex story-scene queue (two concurrent stories)
 After=network-online.target
 Wants=network-online.target
 

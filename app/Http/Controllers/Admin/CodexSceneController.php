@@ -11,12 +11,38 @@ use Illuminate\Support\Facades\Storage;
 
 class CodexSceneController extends Controller
 {
+    public function index(Request $request)
+    {
+        $data = $this->monitorData($request);
+
+        return view('admin.order-automation.codex-scenes', $data);
+    }
+
+    public function monitor(Request $request)
+    {
+        $html = view('admin.order-automation._codex-scene-runs', $this->monitorData($request))->render();
+
+        return response()->json(['html' => $html, 'version' => hash('sha256', $html)])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    private function monitorData(Request $request): array
+    {
+        $status = $request->validate(['status' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(CodexSceneRun::LABELS))]])['status'] ?? null;
+        $runs = CodexSceneRun::with(['order.story', 'order.checkoutReference'])->when($status, fn ($q) => $q->where('status', $status))
+            ->orderByRaw('CASE WHEN active_slot = 1 THEN 0 ELSE 1 END')->latest('created_at')->paginate(25)
+            ->withPath(route('admin.order-automation.codex-scenes'))->appends($request->only('status'));
+
+        return ['sceneRuns' => $runs, 'sceneStatus' => $status, 'sceneCounts' => CodexSceneRun::select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
+            'sceneHealth' => app(ManualSceneService::class)->health()];
+    }
+
     public function start(Request $request, Order $order, ManualSceneService $service)
     {
         $request->validate(['confirm' => ['accepted']]);
         $service->start($order, $request->user());
 
-        return back()->with('success', 'تم تسجيل التجربة اليدوية؛ ستظهر المشاهد هنا تدريجيًا.');
+        return back()->with('success', 'تم تسجيل القصة في طابور التوليد؛ ستظهر المشاهد هنا تدريجيًا.');
     }
 
     public function stop(Request $request, Order $order, CodexSceneRun $run, ManualSceneService $service)

@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 20:19 UTC / 22:19 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Automatic Codex queue — prepared, not yet deployed (1 November 2026)
+
+Owner authorized automatic enrollment for paid/identity-approved stories and concurrent generation with live monitoring. Prepared release adds two concurrent independent stories, per-story reservations, payment/manual-hold gates and `/admin/order-automation/codex-scenes`. At21:05UTC the read-only cohort contained13 eligible stories and3 held exclusions; active generation0. Existing application remains ec91a5a until live verification below is updated. No historical run replay or new AWS resource. See [worker and recovery contract](../ops/codex-scenes/README.md).
+
 ## Live Codex progress and ZIP — deployed 1 November 2026
 
 Owner explicitly approved **ec91a5a086a0f2eb7ee4059b2ab722454970134d**, deployed20:15:40–20:15:42UTC /22:15Cairo without maintenance or worker restart. All9 changed-file hashes matched, previous assets/drift and env/cached config preserved. Route/Blade caches refreshed and FPM gracefully reloaded. Recovery checkpoint `/home/ubuntu/herokid-before-scenes-live-ec91a5a`; basea24f34a. No schema/config/generation changes or replay.

@@ -38,7 +38,7 @@ class WorkerTest(unittest.TestCase):
         self.id = '00000000-0000-4000-8000-000000000001'
         self.inbox = w.SPOOL / 'inbox' / self.id; self.inbox.mkdir()
         (self.inbox / 'identity.img').write_bytes(b'synthetic-reference')
-        (self.inbox / 'manifest.json').write_text(json.dumps({'id':self.id,'scene_count':13,'prompt':'synthetic',
+        (self.inbox / 'manifest.json').write_text(json.dumps({'id':self.id,'order_id':123,'scene_count':13,'prompt':'synthetic',
             'identity_checksum':w.hashlib.sha256(b'synthetic-reference').hexdigest(),
             'texts':[{'scene_number':n,'text':'synthetic'} for n in range(1,14)]}))
         self.sleep = patch.object(w.time,'sleep',lambda _: None); self.sleep.start()
@@ -49,6 +49,38 @@ class WorkerTest(unittest.TestCase):
 
     def state(self):
         return json.loads((w.SPOOL / 'outbox' / self.id / 'status.json').read_text())['status']
+
+    def test_parallel_stories_keep_references_and_output_metadata_separate(self):
+        second = w.SPOOL / 'inbox' / '00000000-0000-4000-8000-000000000002'; second.mkdir()
+        identity = b'other-child-reference'
+        manifest = json.loads((self.inbox/'manifest.json').read_text())
+        manifest.update(id=second.name, order_id=456, identity_checksum=w.hashlib.sha256(identity).hexdigest())
+        (second/'identity.img').write_bytes(identity)
+        (second/'manifest.json').write_text(json.dumps(manifest))
+        with w.concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(w.run_job, inbox) for inbox in [self.inbox, second]]
+            for future in futures: future.result()
+        for inbox, order_id in [(self.inbox,123),(second,456)]:
+            output = w.SPOOL/'outbox'/inbox.name
+            self.assertEqual('completed',json.loads((output/'status.json').read_text())['status'])
+            for n in range(1,14):
+                meta = json.loads((output/f'scene-{n:02d}.json').read_text())
+                self.assertEqual(inbox.name,meta['id']); self.assertEqual(order_id,meta['order_id'])
+                self.assertEqual(w.hashlib.sha256((inbox/'identity.img').read_bytes()).hexdigest(),meta['identity_checksum'])
+            self.assertEqual((inbox/'identity.img').read_bytes(),(w.HOME/'jobs'/inbox.name/'identity.png').read_bytes())
+
+    def test_dispatch_does_not_double_submit_active_work_and_caps_two(self):
+        from concurrent.futures import Future
+        from unittest.mock import Mock
+        pool = Mock(); pool.submit.side_effect = lambda *args: Future()
+        active = {}
+        w.dispatch(pool, active); w.dispatch(pool, active)
+        self.assertEqual(1, pool.submit.call_count)
+        for n in [2,3]:
+            inbox = w.SPOOL/'inbox'/f'00000000-0000-4000-8000-{n:012d}'; inbox.mkdir()
+            (inbox/'manifest.json').write_text('{}')
+        w.dispatch(pool, active)
+        self.assertEqual(2,len(active)); self.assertEqual(2,pool.submit.call_count)
 
     def test_thirteen_outputs_one_call_each_and_restart_never_replays(self):
         w.run_job(self.inbox)

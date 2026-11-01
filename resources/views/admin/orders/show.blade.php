@@ -593,6 +593,9 @@
                     @endcan
 
                     <!-- Product Production Prompts -->
+                    @if($order->story_id && config('codex_scenes.enabled'))
+                        @include('admin.orders._codex-scenes')
+                    @endif
                     @can('orders.production_prompt.manage')
                         @include('admin.orders._product-production-prompts')
                     @endcan

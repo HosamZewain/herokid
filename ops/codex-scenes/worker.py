@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Single-slot manual scene trial. No API keys, enrollment or automatic retries."""
+"""Bounded independent story workers. No API keys or automatic retries."""
+import fcntl
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -14,6 +16,7 @@ from pathlib import Path
 SPOOL = Path(os.environ.get('SCENE_SPOOL', '/var/lib/herokid-codex-spool'))
 HOME = Path(os.environ.get('SCENE_HOME', '/var/lib/herokid-codex'))
 CLI = os.environ.get('SCENE_CLI', '/opt/herokid-codex-cli/0.166.0/node_modules/.bin/codex')
+CONCURRENCY = 2
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 
@@ -89,7 +92,7 @@ def run_job(inbox):
     process = None
     try:
         manifest = json.loads((inbox / 'manifest.json').read_text())
-        if manifest['id'] != job_id or manifest['scene_count'] != 13:
+        if manifest['id'] != job_id or manifest['scene_count'] != 13 or not isinstance(manifest.get('order_id'), int):
             raise ValueError('invalid_manifest')
         texts = manifest['texts']
         if len(texts) != 13 or [s['scene_number'] for s in texts] != list(range(1, 14)):
@@ -158,7 +161,6 @@ def run_job(inbox):
                             process.wait()
                         state('stopped' if (inbox / 'cancel').exists() else 'uncertain', 'interrupted')
                         return
-                    heartbeat()
                     time.sleep(10)
             if process.returncode != 0 or not regular(dest, work):
                 raise ValueError('generation_result_uncertain')
@@ -170,7 +172,7 @@ def run_job(inbox):
             shutil.copyfile(dest, staged)
             staged.chmod(0o640)
             staged.replace(out / dest.name)
-            atomic(out / f'scene-{number:02d}.json', {'scene': number, 'sha256': sha})
+            atomic(out / f'scene-{number:02d}.json', {'id': job_id, 'order_id': manifest['order_id'], 'identity_checksum': manifest['identity_checksum'], 'scene': number, 'sha256': sha})
             state('running')
         state('completed')
     except Exception:
@@ -180,14 +182,41 @@ def run_job(inbox):
         state('uncertain', 'requires_operator_review')
 
 
+def dispatch(pool, active):
+    for key, future in list(active.items()):
+        if future.done():
+            future.result()
+            del active[key]
+    # Oldest staged work first. Never submit a live future twice.
+    inboxes = sorted((SPOOL / 'inbox').iterdir(), key=lambda p: p.stat().st_mtime)
+    for inbox in inboxes:
+        if len(active) >= CONCURRENCY:
+            break
+        if not inbox.is_dir() or inbox.is_symlink() or not UUID.fullmatch(inbox.name) or inbox.name in active:
+            continue
+        status = SPOOL / 'outbox' / inbox.name / 'status.json'
+        if status.exists():
+            prior = json.loads(status.read_text())
+            if prior.get('status') == 'running':
+                atomic(status, {'id': inbox.name, 'status': 'uncertain', 'code': 'worker_interrupted', 'at': time.time()})
+            if not (inbox / 'cancel').exists() or prior.get('status') == 'stopped':
+                continue
+        if not (inbox / 'manifest.json').exists() and not (inbox / 'cancel').exists():
+            continue
+        active[inbox.name] = pool.submit(run_job, inbox)
+
+
 def main():
     (HOME / '.codex/generated_images').mkdir(parents=True, exist_ok=True, mode=0o700)
-    while True:
-        heartbeat()
-        for inbox in sorted((SPOOL / 'inbox').iterdir()):
-            if inbox.is_dir() and not inbox.is_symlink():
-                run_job(inbox)
-        time.sleep(10)
+    # A second service process must never dispatch the same real requests.
+    with (HOME / 'worker.lock').open('w') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
+            active = {}
+            while True:
+                heartbeat()  # One writer, independent of either story's progress.
+                dispatch(pool, active)
+                time.sleep(10)
 
 
 if __name__ == '__main__':

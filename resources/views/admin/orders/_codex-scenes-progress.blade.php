@@ -1,9 +1,10 @@
     @foreach($codexRuns as $codexRun)
         <div class="mt-4 rounded-xl border bg-white p-3">
-            <p class="text-sm font-black">{{ ['preparing'=>'تجهيز الملفات','queued'=>'في انتظار Codex','running'=>'جاري توليد المشاهد','completed'=>'اكتملت المشاهد — راجعها قبل تجهيز Studio','uncertain'=>'تحتاج مراجعة — لن نكرر التوليد تلقائيًا','stopping'=>'جارٍ الإيقاف','stopped'=>'متوقفة'][$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / 13</p>
+            <p class="text-sm font-black">{{ \App\Models\CodexSceneRun::LABELS[$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / 13</p>
             <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }}</p>
+            <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }} · @if($codexRun->started_at)بدء التنفيذ: {{ app_datetime($codexRun->started_at,'h:i A') }}@elseفي انتظار بدء التنفيذ@endif @if($codexRun->finished_at) · الانتهاء: {{ app_datetime($codexRun->finished_at,'h:i A') }}@endif</p>
             @if($codexRun->active_slot)
-                <form method="POST" action="{{ route('admin.orders.codex-scenes.stop',[$order,$codexRun]) }}" class="mt-2">@csrf<button class="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">إيقاف التجربة والاحتفاظ بالمشاهد</button></form>
+                <form method="POST" action="{{ route('admin.orders.codex-scenes.stop',[$order,$codexRun]) }}" class="mt-2">@csrf<button class="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">إيقاف التوليد والاحتفاظ بالمشاهد</button></form>
             @endif
             @if(count($codexRun->scenes ?? []))
                 <a href="{{ route('admin.orders.codex-scenes.download',[$order,$codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل الكل ({{ count($codexRun->scenes) }} / 13) — ZIP</a>

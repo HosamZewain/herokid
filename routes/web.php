@@ -441,6 +441,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::prefix('order-automation')->name('order-automation.')->middleware('permission:order_automation.view')->group(function (): void {
         $controller = \App\Http\Controllers\Admin\OrderAutomationController::class;
         Route::get('/', [$controller, 'index'])->name('index');
+        Route::get('codex-scenes', [\App\Http\Controllers\Admin\CodexSceneController::class, 'index'])->middleware('permission:orders.view')->name('codex-scenes');
+        Route::get('codex-scenes/progress', [\App\Http\Controllers\Admin\CodexSceneController::class, 'monitor'])->middleware('permission:orders.view')->name('codex-scenes.progress');
         Route::post('/', [$controller, 'create'])->middleware('permission:order_automation.manage')->name('create');
         Route::get('runs/{run}', [$controller, 'show'])->middleware('permission:orders.view')->name('runs.show');
         Route::get('runs/{run}/image', [$controller, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('runs.image');

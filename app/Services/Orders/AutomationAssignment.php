@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 /** A system assignee in the existing assignment UI, never an employee account. */
 class AutomationAssignment
 {
-    public function keys(): Builder
+    public function keys(bool $includeScenes = true): Builder
     {
         $runs = DB::table('order_process_runs as owned_run')->select('owned_run.checkout_key')
             ->where(function ($q) {
@@ -57,16 +57,18 @@ class AutomationAssignment
 
         $sceneTrials = DB::table('codex_scene_runs')->select('checkout_key')->where('active_slot', 1);
 
-        return $runs->union($confirmations)->union($evaluating)->union($sceneTrials);
+        $keys = $runs->union($confirmations)->union($evaluating);
+
+        return $includeScenes ? $keys->union($sceneTrials) : $keys;
     }
 
-    public function owns(Order $order): bool
+    public function owns(Order $order, bool $includeScenes = true): bool
     {
         if ($order->trashed()) {
             return false;
         }
 
-        return DB::query()->fromSub($this->keys(), 'automation_owned')
+        return DB::query()->fromSub($this->keys($includeScenes), 'automation_owned')
             ->where('checkout_key', $order->checkoutGroupKey())->exists();
     }
 

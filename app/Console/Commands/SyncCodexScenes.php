@@ -9,7 +9,7 @@ class SyncCodexScenes extends Command
 {
     protected $signature = 'codex-scenes:sync';
 
-    protected $description = 'Stage and import only explicitly requested manual Codex scene trials';
+    protected $description = 'Enroll eligible stories and synchronize the bounded Codex scene queue';
 
     public function handle(ManualSceneService $service): int
     {

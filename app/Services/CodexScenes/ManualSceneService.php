@@ -8,6 +8,7 @@ use App\Models\OrderAttachment;
 use App\Models\User;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
@@ -36,8 +37,11 @@ class ManualSceneService
         if (! $this->health()) {
             return 'Codex غير متصل بالاشتراك حاليًا؛ التوليد غير متاح.';
         }
+        if (CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists()) {
+            return 'هذه القصة موجودة بالفعل في طابور التوليد.';
+        }
         if ($order->trashed() || ! $order->story_id || ! in_array($order->status, ['costomer_confirmed', 'new_confirmed'], true)) {
-            return 'التجربة متاحة لقصة مؤكدة قبل بدء الإنتاج فقط.';
+            return 'التوليد متاح لقصة مؤكدة قبل بدء الإنتاج فقط.';
         }
         $attempt = $order->childIdentityApprovedAttempt;
         if (! $attempt || $attempt->status !== 'succeeded' || ! $attempt->output_storage_path || ! $attempt->output_checksum) {
@@ -46,11 +50,8 @@ class ManualSceneService
         if (! Order::where('checkout_group_key', $order->checkoutGroupKey())->where('paid_amount_cents', '>', 0)->exists()) {
             return 'يلزم تسجيل أي مبلغ مدفوع فعليًا على الطلب.';
         }
-        if (app(AutomationAssignment::class)->owns($order)) {
+        if (app(AutomationAssignment::class)->owns($order, false)) {
             return 'الطلب ما زال تحت مسؤولية مسار آخر.';
-        }
-        if (CodexSceneRun::where('active_slot', 1)->exists()) {
-            return 'هناك تجربة قيد التنفيذ؛ التجربة الحالية تسمح بقصة واحدة في كل مرة.';
         }
 
         return null;
@@ -63,7 +64,7 @@ class ManualSceneService
         return hash('sha256', json_encode([$order->only(['story_id', 'child_name', 'child_age', 'child_gender', 'interests', 'lesson', 'gift_note', 'uploaded_photos', 'child_identity_approved_attempt_id']), $order->childIdentityApprovedAttempt?->output_checksum, $order->story?->updated_at?->toISOString(), $order->productionPromptOverride?->updated_at?->toISOString(), app(OrderSceneTextService::class)->present($order)['scenes']], JSON_UNESCAPED_UNICODE));
     }
 
-    public function start(Order $order, User $user): CodexSceneRun
+    public function start(Order $order, ?User $user = null): CodexSceneRun
     {
         return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($order, $user) {
             return DB::transaction(function () use ($order, $user) {
@@ -71,6 +72,9 @@ class ManualSceneService
                 $order = $rows->firstWhere('id', $order->id);
                 if (! $order || ($reason = $this->reason($order))) {
                     throw ValidationException::withMessages(['codex_scenes' => $reason ?? 'الطلب غير متاح.']);
+                }
+                if ($user === null && (! $this->automaticEligible($order) || CodexSceneRun::where('order_id', $order->id)->exists())) {
+                    throw ValidationException::withMessages(['codex_scenes' => 'القصة غير مؤهلة للتسجيل التلقائي.']);
                 }
                 $texts = app(OrderSceneTextService::class)->present($order);
                 if (! $texts['all_ready'] || count($texts['scenes']) !== 13) {
@@ -82,14 +86,64 @@ class ManualSceneService
                     }
                 }
                 $attempt = $order->childIdentityApprovedAttempt;
-                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user->id, 'status' => 'preparing', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $this->fingerprint($order), 'scenes' => [],
+                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user?->id, 'source' => $user ? 'manual' : 'automatic', 'protocol' => 2, 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $this->fingerprint($order), 'scenes' => [],
                     'snapshot' => ['prompt' => StoryProductionPrompt::forOrder($order), 'texts' => $texts['scenes'], 'identity_disk' => $attempt->output_disk, 'identity_path' => $attempt->output_storage_path, 'identity_checksum' => $attempt->output_checksum]]);
-                $this->setStatus($order, 'generating', 'بدء تجربة المشاهد اليدوية بواسطة Codex.');
-                AdminActivityLogger::log(action: 'order.codex_scenes_requested', description: 'طلب تجربة توليد 13 مشهدًا عبر اشتراك Codex.', subject: $order, properties: ['run_id' => $run->id], admin: $user);
+                $this->setStatus($order, 'generating', 'إضافة القصة إلى طابور توليد مشاهد Codex.');
+                if ($user) {
+                    AdminActivityLogger::log(action: 'order.codex_scenes_requested', description: 'طلب توليد 13 مشهدًا عبر اشتراك Codex.', subject: $order, properties: ['run_id' => $run->id], admin: $user);
+                } else {
+                    AutomationActivity::record($order, 'codex_scene_enrolled', 'تسجيل القصة تلقائيًا بعد اعتماد الهوية وتسجيل دفعة فعلية.', ['run_id' => $run->id]);
+                }
 
                 return $run;
             });
         });
+    }
+
+    public function automaticEligible(Order $order): bool
+    {
+        return config('codex_scenes.automatic') && ! AutomationHandoff::held($order->checkoutGroupKey())
+            && in_array($order->status, ['costomer_confirmed', 'new_confirmed'], true)
+            && $this->hasPayment($order)
+            && ! CodexSceneRun::where('order_id', $order->id)->exists();
+    }
+
+    private function hasPayment(Order $order): bool
+    {
+        return Order::where('checkout_group_key', $order->checkoutGroupKey())->where('paid_amount_cents', '>', 0)
+            ->whereIn('payment_status', ['partially_paid', 'paid_in_full', 'paid_without_shipping'])->exists();
+    }
+
+    public function enroll(): void
+    {
+        if (! config('codex_scenes.automatic') || ! $this->health()) {
+            return;
+        }
+        // No historical retries: one automatic admission per story, including stopped/uncertain work.
+        $room = max(0, 50 - CodexSceneRun::where('active_slot', 1)->count());
+        if ($room === 0) {
+            return;
+        }
+        $query = Order::whereNotNull('story_id')->whereNotNull('child_identity_approved_attempt_id')
+            ->whereIn('status', ['costomer_confirmed', 'new_confirmed'])
+            ->whereNotIn('id', CodexSceneRun::select('order_id'))
+            ->whereNotIn('checkout_group_key', DB::table('order_automation_holds')->select('checkout_key'))
+            ->whereIn('checkout_group_key', Order::select('checkout_group_key')->where('paid_amount_cents', '>', 0)
+                ->whereIn('payment_status', ['partially_paid', 'paid_in_full', 'paid_without_shipping']))
+            ->orderBy('id');
+        $cursor = (int) Cache::get('codex-scenes-enrollment-cursor', 0);
+        $batch = (clone $query)->where('id', '>', $cursor)->limit(min(25, $room))->get();
+        if ($batch->isEmpty()) {
+            $batch = $query->limit(min(25, $room))->get();
+        }
+        foreach ($batch as $order) {
+            try {
+                $this->start($order);
+            } catch (ValidationException $e) {
+                // Eligibility/ownership gates; no provider request or automatic retry.
+            }
+            Cache::put('codex-scenes-enrollment-cursor', $order->id, now()->addDay());
+        }
     }
 
     private function setStatus(Order $order, string $status, string $note): void
@@ -110,6 +164,12 @@ class ManualSceneService
             if (! $run->active_slot) {
                 return;
             }
+            if ($run->status === 'waiting_slot') {
+                $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
+                $this->setStatus($run->order, $run->previous_status, 'إيقاف القصة قبل بدء التوليد.');
+                AdminActivityLogger::log(action: 'order.codex_scenes_stop_requested', description: 'إيقاف القصة من طابور Codex قبل التوليد.', subject: $run->order, properties: ['run_id' => $run->id], admin: $user);
+                return;
+            }
             $dir = config('codex_scenes.spool').'/inbox/'.$run->id;
             if (! is_dir($dir)) {
                 mkdir($dir, 02750, true);
@@ -118,14 +178,27 @@ class ManualSceneService
             file_put_contents($dir.'/cancel', '1');
             chmod($dir.'/cancel', 0640);
             $run->update(['status' => 'stopping']);
-            AdminActivityLogger::log(action: 'order.codex_scenes_stop_requested', description: 'طلب إيقاف تجربة Codex مع الاحتفاظ بالمشاهد المحفوظة.', subject: $run->order, properties: ['run_id' => $run->id], admin: $user);
+            AdminActivityLogger::log(action: 'order.codex_scenes_stop_requested', description: 'طلب إيقاف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.', subject: $run->order, properties: ['run_id' => $run->id], admin: $user);
         });
     }
 
     public function tick(): void
     {
         Cache::lock('codex-scenes-sync', 110)->get(function () {
-            foreach (CodexSceneRun::where('active_slot', 1)->get() as $run) {
+            $this->enroll();
+            foreach (CodexSceneRun::where('active_slot', 1)->orderBy('created_at')->get() as $run) {
+                if ($run->status === 'waiting_slot') {
+                    // An uncertain provider result pauses further dispatch until reviewed.
+                    if (CodexSceneRun::where('active_slot', 1)->where('status', 'uncertain')->exists()
+                        || CodexSceneRun::where('active_slot', 1)->where('status', '!=', 'waiting_slot')->count() >= config('codex_scenes.concurrency', 2)) {
+                        continue;
+                    }
+                    $claimed = CodexSceneRun::whereKey($run->id)->where('active_slot', 1)->where('status', 'waiting_slot')->update(['status' => 'preparing']);
+                    if (! $claimed) {
+                        continue;
+                    }
+                    $run->refresh();
+                }
                 try {
                     if ($run->status === 'preparing') {
                         $this->prepare($run);
@@ -136,7 +209,7 @@ class ManualSceneService
                     $run->refresh();
                     if ($run->status !== 'uncertain') {
                         $run->update(['status' => 'uncertain', 'error_code' => 'sync_requires_review']);
-                        AutomationActivity::record($run->order, 'codex_scene_error', 'تجربة Codex تحتاج مراجعة؛ لن تتم إعادة التوليد تلقائيًا.', ['run_id' => $run->id]);
+                        AutomationActivity::record($run->order, 'codex_scene_error', 'توليد Codex تحتاج مراجعة؛ لن تتم إعادة التوليد تلقائيًا.', ['run_id' => $run->id]);
                         report(new \RuntimeException('Codex scene sync requires review: '.$run->id.' ('.class_basename($e).')'));
                     }
                 }
@@ -150,6 +223,9 @@ class ManualSceneService
         if (! hash_equals($run->fingerprint, $this->fingerprint($order))) {
             throw new \RuntimeException('Input changed');
         }
+        if ($run->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($order->checkoutGroupKey()))) {
+            throw new \RuntimeException('Automatic eligibility changed');
+        }
         $snapshot = $run->snapshot;
         $image = Storage::disk($snapshot['identity_disk'])->get($snapshot['identity_path']);
         if (! hash_equals($snapshot['identity_checksum'], hash('sha256', $image)) || ! @getimagesizefromstring($image)) {
@@ -162,7 +238,7 @@ class ManualSceneService
         }
         file_put_contents($dir.'/identity.img', $image);
         chmod($dir.'/identity.img', 0640);
-        $data = ['id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
+        $data = ['protocol' => $run->protocol, 'id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
         file_put_contents($dir.'/manifest.tmp', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         chmod($dir.'/manifest.tmp', 0640);
         DB::transaction(function () use ($run, $dir) {
@@ -170,9 +246,15 @@ class ManualSceneService
             if ($locked->status !== 'preparing') {
                 return;
             }
+            $rows = Order::where('checkout_group_key', $locked->checkout_key)->orderBy('id')->lockForUpdate()->get();
+            $order = $rows->firstWhere('id', $locked->order_id);
+            if (! $order || ! hash_equals($locked->fingerprint, $this->fingerprint($order))
+                || ($locked->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($locked->checkout_key)))) {
+                throw new \RuntimeException('Eligibility changed before dispatch');
+            }
             rename($dir.'/manifest.tmp', $dir.'/manifest.json');
             $locked->update(['status' => 'queued']);
-            AutomationActivity::record($locked->order, 'codex_scene_queued', 'تجهيز برومبت القصة والهوية المعتمدة لتجربة Codex.', ['run_id' => $locked->id]);
+            AutomationActivity::record($locked->order, 'codex_scene_queued', 'تجهيز برومبت القصة والهوية المعتمدة لتوليد Codex.', ['run_id' => $locked->id]);
         });
     }
 
@@ -203,9 +285,9 @@ class ManualSceneService
             if (($state['status'] ?? '') === 'stopped') {
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 if (! $order->trashed() && $order->status === 'generating') {
-                    $this->setStatus($order, $run->previous_status, 'توقفت تجربة Codex مع الاحتفاظ بالمشاهد المحفوظة.');
+                    $this->setStatus($order, $run->previous_status, 'توقفت توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
                 }
-                AutomationActivity::record($order, 'codex_scene_stopped', 'تم إيقاف تجربة Codex وتحرير الطلب للتيم.', ['run_id' => $run->id]);
+                AutomationActivity::record($order, 'codex_scene_stopped', 'تم إيقاف توليد Codex وتحرير الطلب للتيم.', ['run_id' => $run->id]);
 
                 return;
             }
@@ -227,6 +309,10 @@ class ManualSceneService
                     throw new \RuntimeException('Oversized output');
                 }
                 $meta = json_decode(file_get_contents($metaPath), true, 16, JSON_THROW_ON_ERROR);
+                if ($run->protocol >= 2 && (($meta['id'] ?? '') !== $run->id || ($meta['order_id'] ?? 0) !== $run->order_id
+                    || ($meta['identity_checksum'] ?? '') !== $run->snapshot['identity_checksum'])) {
+                    throw new \RuntimeException('Scene belongs to another story or identity');
+                }
                 $bytes = file_get_contents($path);
                 $sha = hash('sha256', $bytes);
                 $size = @getimagesizefromstring($bytes);
@@ -247,7 +333,7 @@ class ManualSceneService
             }
             $run->scenes = $saved;
             $phase = $state['status'] ?? '';
-            if ($phase === 'running' && in_array($run->status, ['queued', 'preparing'], true)) {
+            if ($phase === 'running' && in_array($run->status, ['queued', 'preparing', 'waiting_slot'], true)) {
                 $run->status = 'running';
                 $run->started_at = now();
             }
@@ -264,7 +350,7 @@ class ManualSceneService
                     $run->status = 'stopped';
                     $run->active_slot = null;
                     $run->finished_at = now();
-                    $this->setStatus($order, $run->previous_status, 'توقفت تجربة Codex مع الاحتفاظ بالمشاهد المحفوظة.');
+                    $this->setStatus($order, $run->previous_status, 'توقفت توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
                 } else {
                     $run->status = 'uncertain';
                     $run->error_code = 'codex_requires_review';
@@ -273,7 +359,7 @@ class ManualSceneService
             $changed = $run->isDirty('status');
             $run->save();
             if ($changed) {
-                AutomationActivity::record($order, 'codex_scene_progress', 'حالة تجربة Codex: '.(['running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
+                AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
             }
         });
     }

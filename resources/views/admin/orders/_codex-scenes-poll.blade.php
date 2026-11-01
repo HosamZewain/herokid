@@ -1,0 +1,35 @@
+@once
+@push('scripts')
+<script>
+(() => {
+    const panels = [...document.querySelectorAll('[data-codex-progress]')];
+    const refresh = async () => {
+        if (!document.hidden) {
+            for (const panel of panels) {
+                const note = panel.parentElement.querySelector('[data-codex-refresh-note]');
+                try {
+                    const response = await fetch(panel.dataset.url, {
+                        headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store',
+                        signal: AbortSignal.timeout(15000),
+                    });
+                    if (!response.ok || response.redirected) throw new Error('refresh');
+                    const data = await response.json();
+                    if (typeof data.html !== 'string') throw new Error('refresh');
+                    // Keep existing images/forms intact when nothing has changed.
+                    if (panel.dataset.version !== data.version) {
+                        panel.innerHTML = data.html;
+                        panel.dataset.version = data.version;
+                    }
+                    note.textContent = 'تتحدث المشاهد وحالة التوليد تلقائيًا كل 10 ثوانٍ.';
+                } catch (_) {
+                    note.textContent = 'تعذر تحديث المشاهد مؤقتًا؛ سنحاول تلقائيًا. الصور الحالية محفوظة.';
+                }
+            }
+        }
+        window.setTimeout(refresh, 10000);
+    };
+    window.setTimeout(refresh, 10000);
+})();
+</script>
+@endpush
+@endonce

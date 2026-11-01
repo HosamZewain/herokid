@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(new URL('../../resources/views/admin/orders/_codex-scenes.blade.php', import.meta.url), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const source = fs.readFileSync(new URL('../../resources/views/admin/orders/_codex-scenes-poll.blade.php', import.meta.url), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 test('polling updates only the scene panel, preserves unchanged DOM and recovers from outages', async () => {
     let callback, calls = 0, writes = 0, fail = false;
     const note = {textContent: ''};
