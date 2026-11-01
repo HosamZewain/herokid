@@ -175,11 +175,15 @@ def run_job(inbox):
             atomic(out / f'scene-{number:02d}.json', {'id': job_id, 'order_id': manifest['order_id'], 'identity_checksum': manifest['identity_checksum'], 'scene': number, 'sha256': sha})
             state('running')
         state('completed')
-    except Exception:
+    except Exception as error:
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)
             process.wait(timeout=20)
-        state('uncertain', 'requires_operator_review')
+        code = str(error)
+        if code in {'oversized_scene', 'invalid_png', 'invalid_dimensions', 'duplicate_scene'}:
+            state('quality_review', code)
+        else:
+            state('uncertain', 'requires_operator_review')
 
 
 def dispatch(pool, active):

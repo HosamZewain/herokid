@@ -190,7 +190,7 @@ class ManualSceneService
                 if ($run->status === 'waiting_slot') {
                     // An uncertain provider result pauses further dispatch until reviewed.
                     if (CodexSceneRun::where('active_slot', 1)->where('status', 'uncertain')->exists()
-                        || CodexSceneRun::where('active_slot', 1)->where('status', '!=', 'waiting_slot')->count() >= config('codex_scenes.concurrency', 2)) {
+                        || CodexSceneRun::where('active_slot', 1)->whereNotIn('status', ['waiting_slot', 'quality_review'])->count() >= config('codex_scenes.concurrency', 2)) {
                         continue;
                     }
                     $claimed = CodexSceneRun::whereKey($run->id)->where('active_slot', 1)->where('status', 'waiting_slot')->update(['status' => 'preparing']);
@@ -285,7 +285,7 @@ class ManualSceneService
             if (($state['status'] ?? '') === 'stopped') {
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 if (! $order->trashed() && $order->status === 'generating') {
-                    $this->setStatus($order, $run->previous_status, 'توقفت توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
+                    $this->setStatus($order, $run->previous_status, 'توقف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
                 }
                 AutomationActivity::record($order, 'codex_scene_stopped', 'تم إيقاف توليد Codex وتحرير الطلب للتيم.', ['run_id' => $run->id]);
 
@@ -337,7 +337,7 @@ class ManualSceneService
                 $run->status = 'running';
                 $run->started_at = now();
             }
-            if (in_array($phase, ['completed', 'stopped', 'failed', 'uncertain'], true)) {
+            if (in_array($phase, ['completed', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
                 if ($phase === 'completed' && count($saved) !== 13) {
                     throw new \RuntimeException('Missing scenes');
                 }
@@ -350,7 +350,10 @@ class ManualSceneService
                     $run->status = 'stopped';
                     $run->active_slot = null;
                     $run->finished_at = now();
-                    $this->setStatus($order, $run->previous_status, 'توقفت توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
+                    $this->setStatus($order, $run->previous_status, 'توقف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
+                } elseif ($phase === 'quality_review' && in_array($state['code'] ?? null, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'], true)) {
+                    $run->status = 'quality_review';
+                    $run->error_code = $state['code'];
                 } else {
                     $run->status = 'uncertain';
                     $run->error_code = 'codex_requires_review';
@@ -359,7 +362,7 @@ class ManualSceneService
             $changed = $run->isDirty('status');
             $run->save();
             if ($changed) {
-                AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
+                AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'quality_review' => 'تحتاج مراجعة جودة: '.(CodexSceneRun::ERRORS[$run->error_code] ?? ''), 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
             }
         });
     }

@@ -236,6 +236,33 @@ class ManualCodexSceneTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_known_quality_failure_keeps_story_owned_without_blocking_other_slots_or_replaying(): void
+    {
+        $service = app(ManualSceneService::class);
+        $failed = $this->start();
+        $failed->update(['created_at' => now()->subMinute()]);
+        $service->start($this->sibling('SYNTHETIC-2'), $this->actor);
+        $service->start($this->sibling('SYNTHETIC-3'), $this->actor);
+        $service->tick();
+        // Model an already finished provider request with a known rejected output.
+        $this->sceneOutput($failed, 1, 'quality_review');
+        $path = $this->spool.'/outbox/'.$failed->id.'/status.json';
+        file_put_contents($path, json_encode(['id'=>$failed->id, 'status'=>'quality_review', 'code'=>'invalid_dimensions']));
+        $service->tick(); $service->tick();
+        $this->assertSame('quality_review', $failed->fresh()->status);
+        $this->assertSame('invalid_dimensions', $failed->fresh()->error_code);
+        $this->assertSame(2, CodexSceneRun::where('status', 'queued')->count());
+        $this->assertSame(1, count($failed->fresh()->scenes));
+        $this->assertTrue(app(AutomationAssignment::class)->owns($this->order));
+        $this->assertDatabaseCount('codex_scene_runs', 3);
+        $this->assertDatabaseCount('order_attachments', 1);
+        $service->cancel($failed, $this->actor);
+        file_put_contents($path, json_encode(['id'=>$failed->id, 'status'=>'stopped']));
+        $service->collect($failed->fresh());
+        $this->assertNull($failed->fresh()->active_slot);
+        Http::assertNothingSent();
+    }
+
     public function test_paid_label_without_actual_money_cannot_auto_enroll(): void
     {
         config(['codex_scenes.automatic' => true]);

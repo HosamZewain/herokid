@@ -18,6 +18,8 @@ p=sys.stdin.read(); n=int(re.search(r'Target scene (\\d+)',p).group(1))
 root=pathlib.Path(sys.argv[sys.argv.index('-C')+1])
 with (root/'calls').open('a') as f: f.write(str(n)+'\\n')
 if (root.parent.parent/'fail').exists(): sys.exit(1)
+if (root.parent.parent/'low-res').exists():
+ (root/f'scene-{n:02d}.png').write_bytes(b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR'+struct.pack('>II',1774,887));sys.exit(0)
 c=lambda t,b:struct.pack('>I',len(b))+t+b+struct.pack('>I',zlib.crc32(t+b))
 color=1 if (root.parent.parent/'duplicate').exists() else n
 b=b'\\x89PNG\\r\\n\\x1a\\n'+c(b'IHDR',struct.pack('>IIBBBBB',1536,1024,8,2,0,0,0))+c(b'IDAT',zlib.compress((b'\\0'+bytes([color,0,0])*1536)*1024))+c(b'IEND',b'')
@@ -97,8 +99,16 @@ class WorkerTest(unittest.TestCase):
 
     def test_duplicate_output_stops_for_review(self):
         (w.HOME/'duplicate').touch(); w.run_job(self.inbox)
-        self.assertEqual('uncertain',self.state())
+        self.assertEqual('quality_review',self.state())
         self.assertEqual('1\n2\n',(w.HOME/'jobs'/self.id/'calls').read_text())
+
+    def test_known_quality_failure_is_specific_and_never_retried(self):
+        (w.HOME/'low-res').touch(); w.run_job(self.inbox); w.run_job(self.inbox)
+        self.assertEqual('quality_review', self.state())
+        state = json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
+        self.assertEqual('invalid_dimensions', state['code'])
+        self.assertEqual('1\n', (w.HOME/'jobs'/self.id/'calls').read_text())
+        self.assertFalse((w.SPOOL/'outbox'/self.id/'scene-01.png').exists())
 
     def test_interrupted_worker_does_not_restart_generation(self):
         w.atomic(w.SPOOL/'outbox'/self.id/'status.json',{'id':self.id,'status':'running'})
