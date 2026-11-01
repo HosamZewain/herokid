@@ -14,6 +14,7 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationHandoff;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
 use App\Services\RoboDesk\OrderMessageRetry;
@@ -28,7 +29,7 @@ use Throwable;
 
 class ProcessRuntime
 {
-    public const STATES = ['retry_queued' => 'إعادة إرسال في الانتظار', 'queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_identity' => 'جاري توليد الهويات', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
+    public const STATES = ['paused' => 'متوقف للعمل اليدوي', 'retry_queued' => 'إعادة إرسال في الانتظار', 'queued' => 'في انتظار التنفيذ', 'running' => 'قيد التنفيذ', 'sending' => 'جاري إرسال القالب', 'waiting_identity' => 'جاري توليد الهويات', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر الموظف', 'completed' => 'مكتمل', 'blocked' => 'يحتاج مراجعة', 'uncertain' => 'نتيجة الإرسال غير مؤكدة', 'cancelled' => 'متوقف'];
 
     public function __construct(private ProcessLivePolicy $policy, private ProcessOrderContext $contexts) {}
 
@@ -58,10 +59,13 @@ class ProcessRuntime
             return 0;
         }
         $count = 0;
-        foreach (OrderProcessEvent::where('status', 'pending')->orderBy('id')->limit(100)->pluck('id') as $id) {
+        foreach (OrderProcessEvent::where('status', 'pending')->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orderBy('id')->limit(100)->pluck('id') as $id) {
             $count += DB::transaction(function () use ($id) {
                 $event = OrderProcessEvent::lockForUpdate()->findOrFail($id);
                 if ($event->status !== 'pending') {
+                    return 0;
+                }
+                if (AutomationHandoff::held($event->checkout_key)) {
                     return 0;
                 }
                 $enrolled = 0;
@@ -78,6 +82,9 @@ class ProcessRuntime
                             continue;
                         }
                         $snapshot = $this->contexts->snapshot($this->contexts->orders($event->checkout_key, true));
+                        if (AutomationHandoff::held($event->checkout_key)) {
+                            continue;
+                        }
                         if (! $this->contexts->matches($d, $snapshot)) {
                             continue;
                         }
@@ -89,6 +96,9 @@ class ProcessRuntime
                     $run = OrderProcessRun::firstOrCreate(['enrollment_key' => $key], ['automation_id' => $automation->id, 'revision_id' => $automation->revision_id, 'event_id' => $event->id, 'order_id' => $snapshot['order_ids'][0],
                         'checkout_key' => $event->checkout_key, 'account_key' => config('robodesk.conversations.account_key', 'primary'), 'phone_hash' => hash('sha256', '+'.$snapshot['phone']), 'node_id' => $d['nodes'][0]['id'], 'status' => 'queued', 'context' => $snapshot + ['actor_id' => $automation->process_activated_by], 'next_at' => now()]);
                     $enrolled += (int) $run->wasRecentlyCreated;
+                }
+                if (AutomationHandoff::held($event->checkout_key)) {
+                    return $enrolled;
                 }
                 $event->update(['status' => 'processed']);
 

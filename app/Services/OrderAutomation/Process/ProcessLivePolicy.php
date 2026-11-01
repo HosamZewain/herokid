@@ -7,6 +7,7 @@ use App\Models\OrderAutomation;
 use App\Models\OrderProcessRun;
 use App\Models\OrderStatusDefinition;
 use App\Models\User;
+use App\Services\Orders\AutomationHandoff;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -33,6 +34,9 @@ class ProcessLivePolicy
 
     public function allowsCheckout(string $key): bool
     {
+        if (AutomationHandoff::held($key)) {
+            return false;
+        }
         if (config('order_process.enrollment_mode', 'all_new') === 'all_new') {
             return true;
         }

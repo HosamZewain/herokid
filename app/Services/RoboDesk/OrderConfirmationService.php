@@ -8,6 +8,7 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversationMessage;
 use App\Services\OrderAutomation\Process\ProcessLivePolicy;
 use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\AutomationHandoff;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
 use App\Support\Phone;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +46,7 @@ class OrderConfirmationService
     public function register(Order $order): void
     {
         // Explicit future-order handoff only. Existing receipts and pending sends stay legacy-owned.
-        if (app(ProcessLivePolicy::class)->ownsConfirmation($order)) {
+        if (AutomationHandoff::held($order->checkoutGroupKey()) || app(ProcessLivePolicy::class)->ownsConfirmation($order)) {
             return;
         }
         app(RoboDeskOutbox::class)->queue(
@@ -65,7 +66,7 @@ class OrderConfirmationService
 
     public function canSend(RoboDeskIntegrationEvent $event): bool
     {
-        if (! $this->ready() || data_get($event->payload, 'confirmation.eligible_at_creation') !== true
+        if (AutomationHandoff::held($event->checkout_group_key) || ! $this->ready() || data_get($event->payload, 'confirmation.eligible_at_creation') !== true
             || $event->order_id <= (int) config('robodesk.confirmation.after_order_id')) {
             return false;
         }

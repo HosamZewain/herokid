@@ -42,4 +42,20 @@
             @endif
         @endcan
     @endif
+    @can('orders.assignment.manage')
+        @if(auth()->user()->hasPermission('orders.update') && !auth()->user()->agent_api_enabled && !($group['trashed'] ?? false))
+            @if($group['automation_manual_hold'] ?? false)
+                <span class="text-xs font-bold text-amber-800">الأوتوميشن متوقف للعمل اليدوي</span>
+                <form method="POST" action="{{ route('admin.orders.groups.assignment.automation', $group['representative_id']) }}" class="inline" onsubmit="return confirm('إعادة متابعة المسار السابق؟ سيتم التحقق من عدم تغيّر بياناته ولن تعاد الخطوات المكتملة.')">
+                    @csrf<input type="hidden" name="action" value="resume">
+                    <button class="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800">إرجاع للأوتوميشن</button>
+                </form>
+            @else
+                <form method="POST" action="{{ route('admin.orders.groups.assignment.automation', $group['representative_id']) }}" class="inline" onsubmit="return confirm('استلام الطلب وإيقاف متابعته الآلية للعمل اليدوي؟ المحاولات الجارية يجب أن تنتهي أولًا. يمكنك بعد ذلك استخدام زر Codex للهوية المعتمدة والمدفوعة.')">
+                    @csrf<input type="hidden" name="action" value="take">
+                    <button class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">استلام يدوي وإيقاف الأوتوميشن</button>
+                </form>
+            @endif
+        @endif
+    @endcan
 </div>

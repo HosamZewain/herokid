@@ -42,6 +42,7 @@ class AutomationAssignment
             ->join('order_automations as candidate_flow', 'candidate_flow.enabled', '=', DB::raw('1'))
             ->join('order_automation_revisions as candidate_revision', 'candidate_revision.id', '=', 'candidate_flow.revision_id')
             ->where('candidate_event.status', 'pending')
+            ->whereNotIn('candidate_event.checkout_key', DB::table('order_automation_holds')->select('checkout_key'))
             ->whereColumn('candidate_event.id', '>', 'candidate_flow.process_after_event_id')
             ->whereColumn('candidate_revision.definition->trigger', 'candidate_event.type')
             ->whereColumn('candidate_revision.definition->conditions->status', 'candidate_event.data->status')

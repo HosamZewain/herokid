@@ -59,6 +59,9 @@ class OrderGroupMergeService
 
             app(AutomationAssignment::class)->assertAvailable($targetOrders->first());
             app(AutomationAssignment::class)->assertAvailable($sourceOrders->first());
+            if (AutomationHandoff::held($sourceKey) && ! AutomationHandoff::held($targetKey)) {
+                throw ValidationException::withMessages(['source_reference' => 'استلم الطلب المستهدف يدويًا وأوقف الأوتوميشن عليه قبل دمج طلب متوقف للعمل اليدوي.']);
+            }
             $this->assertMergeable($targetOrders, $sourceOrders);
 
             $target = $this->groups->present($this->loadForPresentation($targetOrders));

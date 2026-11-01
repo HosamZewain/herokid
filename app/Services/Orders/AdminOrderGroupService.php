@@ -698,6 +698,7 @@ class AdminOrderGroupService
             'marketing_sources' => $report ? [] : $visibleOrders->map(fn (Order $order): array => MarketingAttribution::forOrder($order))->unique(fn (array $source): string => json_encode($source))->values()->all(),
             'source_notes' => $first->source_notes,
             'created_by_admin' => $report ? null : $first->createdByAdmin,
+            'automation_manual_hold' => $first->getAttribute('automation_manual_hold') ?? AutomationHandoff::held($first->checkoutGroupKey()),
             'automation_assigned' => $first->getAttribute('automation_assigned') ?? app(AutomationAssignment::class)->owns($first),
             'assignment' => $first->groupAssignment,
             'assigned_admin' => $first->groupAssignment?->assignee,
@@ -1053,6 +1054,7 @@ class AdminOrderGroupService
 
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($keys);
+        $holdKeys = DB::table('order_automation_holds')->whereIn('checkout_key', $keys)->pluck('checkout_key');
         $automationKeys = DB::query()->fromSub(app(AutomationAssignment::class)->keys(), 'automation_owned')->whereIn('checkout_key', $keys)->pluck('checkout_key');
 
         return $query
@@ -1067,7 +1069,7 @@ class AdminOrderGroupService
             ->orderBy('id')
             ->get()->each(fn (Order $order) => $order->setAttribute(
                 'checkout_first_created_at', $creationDates->get($order->checkout_group_key)
-            )->setAttribute('automation_assigned', ! $order->trashed() && $automationKeys->contains($order->checkout_group_key)));
+            )->setAttribute('automation_manual_hold', $holdKeys->contains($order->checkout_group_key))->setAttribute('automation_assigned', ! $order->trashed() && $automationKeys->contains($order->checkout_group_key)));
     }
 
     private function ordersForStats(Collection $keys, bool $includeDeleted): Collection

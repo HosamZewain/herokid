@@ -23,6 +23,7 @@ class ProcessPaymentReview
     {
         $query = OrderProcessRun::query()->where('account_key', config('robodesk.conversations.account_key', 'primary'))
             ->whereIn('status', ['running', 'waiting_response', 'waiting_staff'])
+            ->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))
             ->where('order_id', '>', (int) config('order_process.after_order_id'))
             ->whereHas('order', fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled')))
             ->whereHas('automation', fn ($q) => $q->where('enabled', true))
@@ -111,6 +112,7 @@ class ProcessPaymentReview
                     if ($review) {
                         $this->syncPaymentStatus($review);
                     }
+
                     return;
                 }
                 $review = OrderPaymentReview::firstOrCreate(['run_id' => $current->id], ['checkout_key' => $current->checkout_key, 'status' => 'pending']);

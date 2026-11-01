@@ -12,8 +12,10 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\OrderSceneTextService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -83,6 +85,20 @@ class ManualCodexSceneTest extends TestCase
         file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.png', $bytes);
         file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.json', json_encode(['scene' => $number, 'sha256' => hash('sha256', $bytes)]));
         file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
+    }
+
+    public function test_staff_can_start_codex_during_manual_hold_without_resuming_identity_flow(): void
+    {
+        DB::table('order_automation_holds')->insert([
+            'checkout_key' => $this->order->checkoutGroupKey(), 'user_id' => $this->actor->id,
+            'fingerprint' => hash('sha256', 'synthetic'), 'runs' => '{}', 'confirmations' => '{}',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $run = $this->start();
+        $this->assertSame('preparing', $run->status);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($this->order));
+        $this->assertTrue(AutomationHandoff::held($this->order->checkoutGroupKey()));
+        Http::assertNothingSent();
     }
 
     public function test_manual_request_accepts_one_cent_reserves_checkout_and_does_not_call_ai(): void
