@@ -1,14 +1,18 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 13:08 UTC / 15:08 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 13:30 UTC / 15:30 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Next multi-child trial — prepared, not deployed/created (1 November 2026)
+## Multi-child trial — deployed, awaiting identity approval (1 November 2026)
 
-Owner requested a new checkout with3 stories for2 children plus a personalized puzzle on a new recipient. Live c66b330/HK11-12 scope remains unchanged. Prepared exact-member trial manifest, aggregate preflight and child/story labels;83 tests passed on each isolated SQLite/MySQL plus final mixed-checkout review regression. Requires deployment approval and second original Maria photo before creation. [Selected catalog entries, source boundary, tests and activation sequence](automation-multi-child-trial-2026-11-01.md).
+Current live application SHA **be4a3c16d08b60f00538b1842e742d5369bec324**. Owner approved release and only the new trial; maintenance13:21:30–13:21:32 UTC, all10 changed hashes verified, no migration/assets changes. Exact trial manifest pins HK11-16/rows2740–2743 to workflow8; previous HK11-12 pending review preserved. Owner explicitly authorized duplicating Maria's supplied photo; original source hashes verified.
 
-## Attachment payment-review signal — deployed, HK11-12 only (1 November 2026)
+Owner's real confirmation changed all four rows to new_confirmed. Three story identities succeeded once (attempts681–683),0.123USD aggregate configured estimate; one combined preview accepted and delivered, run3 waiting_response, paid0. Preview/image HTTPS200, checksums/labels and visual QA passed, invalid signature403. Authenticated checkout verified one attempt per stage. Four affected workers and scheduler healthy, public HTTPS200, no new Laravel log bytes,81 historical failed jobs unchanged. Await real identity approval; no puzzle artwork, payment, printing or shipping.
 
-Live SHA **c66b3302168b635cc3ff436e7b8696f20bf83ce6**. Owner approved code and activation only for order2729/workflow8; no wider activation. Maintenance13:01:18–13:01:20 UTC /15:01 Cairo, exact additive migration applied and21 file hashes verified. Only new review flag changed in env/cached config; existing trial scope and permissions preserved. Four existing affected workers, scheduler and FPM healthy.
+Recovery **/home/ubuntu/herokid-before-be4a3c1**; predeployment off-instance backup **herokid-20261101T132055Z.sql.gz**,42,574,913bytes. [Scope, tests, exact associations and recovery boundaries](automation-multi-child-trial-2026-11-01.md). Documentation successor is distinct from live code.
+
+## Attachment payment-review signal — prior rollout, HK11-12 only (1 November 2026)
+
+Previous release SHA **c66b3302168b635cc3ff436e7b8696f20bf83ce6**; superseded by be4a3c1 above. Owner approved code and activation only for order2729/workflow8; no wider activation. Maintenance13:01:18–13:01:20 UTC /15:01 Cairo, exact additive migration applied and21 file hashes verified. Only new review flag changed in env/cached config; existing trial scope and permissions preserved. Four existing affected workers, scheduler and FPM healthy.
 
 Full history reread created one pending review with3 attachment-message signals. Repeat read confirmed deduplication; other reviews0. Authenticated order panel verified. Identity678 remains approved/costomer_confirmed, paid0/unpaid, one generation/preview/response; no messages, AI, receipt copies or payments. HTTPS200, scheduler success,81 historical failed jobs unchanged,448 postdeploy requests/zero5xx. One corrected staging-path CLI error occurred before deployment; no later application errors observed.
 
