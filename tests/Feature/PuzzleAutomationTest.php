@@ -63,6 +63,36 @@ class PuzzleAutomationTest extends TestCase
             'production_prompt_template' => 'One puzzle for {{child_full_name}}, {{child_age}}. {{child_image_references}}']);
     }
 
+    public function test_scheduler_only_dispatches_one_job_and_worker_generates_without_blocking_scheduler(): void
+    {
+        $this->order();
+        $this->fakeImage();
+        $this->artisan('puzzle-automation:tick')->assertSuccessful();
+        $this->artisan('puzzle-automation:tick')->assertSuccessful();
+        Queue::assertPushed(\App\Jobs\TickPuzzleAutomation::class, 1);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $job = Queue::pushed(\App\Jobs\TickPuzzleAutomation::class)->first();
+        $this->assertSame('order-process-ai', $job->connection);
+        $this->assertSame('order-process-ai', $job->queue);
+        $this->assertSame(1, $job->tries);
+        $this->assertTrue($job->failOnTimeout);
+        $this->assertLessThan(300, $job->timeout);
+        $job->handle(app(PuzzleAutomation::class));
+        $job->handle(app(PuzzleAutomation::class));
+        $this->assertSame('succeeded', PuzzleGeneration::sole()->status);
+        $event = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+            ->first(fn ($event) => str_contains($event->command ?? '', 'puzzle-automation:tick'));
+        $this->assertNotNull($event);
+        $this->assertFalse($event->runInBackground);
+    }
+
+    public function test_disabled_puzzle_scheduler_dispatches_nothing(): void
+    {
+        config(['puzzle_automation.enabled' => false]);
+        $this->artisan('puzzle-automation:tick')->assertSuccessful();
+        Queue::assertNothingPushed();
+    }
+
     private function order(string $name = 'رقية', string $photo = 'a', ?string $key = null): Order
     {
         $order = Order::create(['order_number' => 'TEST-'.Str::random(8), 'checkout_group_key' => $key ?: (string) Str::uuid(),

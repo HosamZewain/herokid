@@ -288,6 +288,10 @@ Schedule::command('bosta:automatic-pickup')->dailyAt('14:30')->timezone('Africa/
 Schedule::command('codex-scenes:sync')->everyMinute()->withoutOverlapping(3);
 
 Artisan::command('puzzle-automation:tick', function (\App\Services\ProductAutomation\PuzzleAutomation $puzzles) {
-    $this->info('New puzzle runs: '.$puzzles->tick());
+    if ($puzzles->enabled()) {
+        \App\Jobs\TickPuzzleAutomation::dispatch();
+    }
+    $this->info('Puzzle automation tick scheduled on the existing AI queue.');
 })->purpose('Generate one confirmed puzzle image; never replay uncertain provider calls');
-Schedule::command('puzzle-automation:tick')->everyMinute()->withoutOverlapping(10)->runInBackground();
+// Keep dispatch in the foreground: systemd ends background children with schedule:run.
+Schedule::command('puzzle-automation:tick')->everyMinute()->withoutOverlapping(10);

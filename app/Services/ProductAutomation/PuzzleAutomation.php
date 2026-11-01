@@ -76,7 +76,7 @@ class PuzzleAutomation
         });
     }
 
-    /** Fresh scheduled process, one provider request at a time, no queue redelivery. */
+    /** Unique single-attempt AI job; durable run state prevents provider replay. */
     public function tick(): int
     {
         if (! $this->enabled()) {
