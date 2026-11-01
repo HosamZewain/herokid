@@ -2,6 +2,16 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 23:00 UTC / 2 November 01:00 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Existing confirmed puzzle enrollment — 2 November 2026 Cairo
+
+Owner explicitly requested: “خلي الطلبات القديمة المؤكدة للبازل تشتغل”. This supersedes the earlier no-backfill scope **for the bounded currently new_confirmed puzzle cohort only**. Read-only audit23:12UTC found13 puzzle items:12 eligible, one manually held. All12 passed the existing canonical prompt/photo/model/estimate preflight with no previous generation or matching/unscoped output. Configured estimate1.98USD total (not a billing guarantee).
+
+Enrolled12 new puzzle runs1–12 across8 checkouts: HK10-627, HK10-628, HK11-5 (3 items), HK11-13, HK11-14, HK10-608 (2), HK10-632 (2), HK11-20. Exact item IDs2910,2911,2930,2931,2932,2948,2949,2960,2961,2963,2964,2968. **HK11-16 /order2743/item2959 remains manually held and has no puzzle run**. No hold removed, old provider request retried or status/payment overwritten.
+
+Reviewed manifest/checkpoint `/home/ubuntu/herokid-puzzle-backfill-20261102/plan.json`, SHA256515a98ba0087b9c8f9a29217a4299c674d571d3a06b429e4b499be5651fa218e; script `/home/ubuntu/herokid-puzzle-backfill.php`, per-item results.jsonl beside manifest. Each enrollment re-locked checkout/item, checked current confirmed status/hold/output/unique run and exact snapshot fingerprint, created a processed puzzle_backfill_authorized event (not a replayed status event), queued the run and logged Automation with batchowner-confirmed-puzzles-20261102. Global event floor94/configuration unchanged; ordinary worker processes the queue. No application deployment or worker restart required; live SHA remains7c9c27012696618ba78696968b60d0b6fc97cecf.
+
+Verified23:15:16UTC:12 enrollment audit records, run1/HK10-627 processing since23:15:07UTC,11 queued, held exclusion preserved,81 historical failedjobs unchanged. Completion and actual puzzle S3 outputs are pending at this observation. Recovery means preserving runs/receipts/output and using guarded manual takeover for queued orders; never delete rows or retry uncertain generation. This enrollment is authorized production fulfillment, not a synthetic test.
+
 ## Puzzle images and story timing — deployed 2 November 2026 Cairo
 
 Owner explicitly authorized both together. **Current deployed application: `7c9c27012696618ba78696968b60d0b6fc97cecf`**, verified23:00UTC1Nov. Combined application47fa19588ffe75907c6de470c923fc61d7ac35fa deployed22:46:37–22:46:45UTC (eight seconds maintenance), then the scoped queue correction7c9c270 deployed22:56:54UTC without maintenance or Codex restart. The timing feature originally prepared as364ee2e is now live; earlier prepared/unapplied paragraphs below are historical.
