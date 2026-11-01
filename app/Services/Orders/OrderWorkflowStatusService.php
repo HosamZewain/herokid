@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class OrderWorkflowStatusService
 {
@@ -37,7 +38,20 @@ class OrderWorkflowStatusService
                 'items.variant:id,product_id,name_ar',
             ]));
 
-            if (filled($values['status'] ?? null)) {
+            // Financial updates remain available while Automation owns production.
+            // Validate before recording money, and skip even no-op production writes.
+            $automationOwned = app(AutomationAssignment::class)->owns($orders->first());
+            if ($automationOwned) {
+                foreach (['status', 'printing_status', 'shipping_status'] as $column) {
+                    if (filled($values[$column] ?? null) && $values[$column] !== $before[$column]) {
+                        throw ValidationException::withMessages([
+                            $column => 'يمكن تسجيل الدفعات أثناء تنفيذ الأوتوميشن. اترك حالات الطلب والطباعة والشحن كما هي لحين تسليم الطلب للتيم.',
+                        ]);
+                    }
+                }
+            }
+
+            if (! $automationOwned && filled($values['status'] ?? null)) {
                 $this->orderStatuses->updateGroup(
                     $orders,
                     $values['status'],
@@ -56,7 +70,7 @@ class OrderWorkflowStatusService
             );
 
             $workflowChanges = [];
-            foreach ($orders as $order) {
+            foreach ($automationOwned ? [] : $orders as $order) {
                 foreach (['printing_status' => 'printing', 'shipping_status' => 'shipping'] as $column => $type) {
                     $oldStatus = $order->{$column};
                     $newStatus = $values[$column];

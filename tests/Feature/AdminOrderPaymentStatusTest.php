@@ -2,11 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderPaymentEvent;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\AutomationAssignment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use LogicException;
 use Tests\TestCase;
 
@@ -250,6 +256,86 @@ class AdminOrderPaymentStatusTest extends TestCase
 
         $this->assertSame('unpaid', $first->refresh()->payment_status);
         $this->assertSame(0, $first->paid_amount_cents);
+    }
+
+    public function test_combined_form_records_payment_while_automation_owns_checkout(): void
+    {
+        [$first, $second] = $this->checkout();
+        $this->reserveForAutomation($first);
+        $values = $this->paymentForm($first);
+        $before = [$first->fresh()->getAttributes(), $second->fresh()->getAttributes()];
+        $eventsBefore = OrderPaymentEvent::count();
+
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.workflow-statuses', $first), $values)
+            ->assertSessionHasNoErrors()->assertSessionHas('success');
+        foreach ([$first->fresh(), $second->fresh()] as $i => $order) {
+            $this->assertSame(20000, $order->paid_amount_cents);
+            $this->assertSame($this->admin->id, $order->payment_updated_by_user_id);
+            foreach (['status', 'printing_status', 'shipping_status'] as $column) {
+                $this->assertSame($before[$i][$column] ?? null, $order->{$column});
+            }
+        }
+        $this->assertTrue(app(AutomationAssignment::class)->owns($first));
+        $this->assertDatabaseHas('order_payment_events', ['actor_user_id' => $this->admin->id, 'amount_delta_cents' => 20000]);
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.workflow-statuses', $first), $values)
+            ->assertSessionHasNoErrors();
+        $this->assertSame($eventsBefore + 1, OrderPaymentEvent::count());
+        $this->assertSame(0, $first->statusLogs()->count());
+    }
+
+    public function test_payment_on_mixed_story_product_statuses_preserves_each_status(): void
+    {
+        [$first, $second] = $this->checkout();
+        $second->updateQuietly(['status' => 'new_confirmed']);
+        $this->reserveForAutomation($first);
+        $values = $this->paymentForm($first);
+        $values['status'] = null;
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.workflow-statuses', $first), $values)
+            ->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertSame('new', $first->fresh()->status);
+        $this->assertSame('new_confirmed', $second->fresh()->status);
+        $this->assertSame(20000, $second->fresh()->paid_amount_cents);
+    }
+
+    public function test_combined_payment_and_production_change_is_rejected_atomically(): void
+    {
+        [$first, $second] = $this->checkout();
+        $this->reserveForAutomation($first);
+        $eventsBefore = OrderPaymentEvent::count();
+        foreach (['status' => 'new_confirmed', 'printing_status' => 'completed', 'shipping_status' => 'shipped'] as $column => $changed) {
+            $values = $this->paymentForm($first);
+            $values[$column] = $changed;
+            $this->actingAs($this->admin)->patch(route('admin.orders.groups.workflow-statuses', $first), $values)
+                ->assertSessionHasErrors($column);
+            $this->assertSame(0, $first->fresh()->paid_amount_cents);
+            $this->assertSame(0, $second->fresh()->paid_amount_cents);
+            $this->assertSame('new', $first->fresh()->status);
+            $this->assertSame($eventsBefore, OrderPaymentEvent::count());
+        }
+    }
+
+    private function reserveForAutomation(Order $order): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake();
+        CodexSceneRun::create([
+            'id' => (string) Str::uuid(), 'order_id' => $order->id,
+            'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $this->admin->id,
+            'status' => 'running', 'active_slot' => 1, 'previous_status' => $order->status,
+            'fingerprint' => hash('sha256', 'synthetic'), 'snapshot' => [], 'scenes' => [],
+        ]);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+    }
+
+    private function paymentForm(Order $order): array
+    {
+        $group = app(AdminOrderGroupService::class)->findByRepresentative($order->id);
+
+        return [
+            'status' => $group['status'], 'printing_status' => $group['printing_status'],
+            'shipping_status' => $group['shipping_status'], 'payment_status' => 'partially_paid',
+            'paid_amount' => 200, 'payment_method' => 'انستاباي',
+        ];
     }
 
     /** @return array{Order, Order} */

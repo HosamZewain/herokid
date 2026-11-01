@@ -20,7 +20,8 @@ class ProtectAutomationOrders
         if ($request->isMethodSafe() && ! $request->routeIs('admin.orders.production-prompt.regenerate')) {
             return $next($request);
         }
-        if ($request->routeIs('admin.orders.groups.payment', 'admin.orders.payment-review.close', 'admin.orders.codex-scenes.stop',
+        // The combined form checks actual production changes under the checkout lock.
+        if ($request->routeIs('admin.orders.groups.workflow-statuses', 'admin.orders.groups.payment', 'admin.orders.payment-review.close', 'admin.orders.codex-scenes.stop',
             'admin.orders.notes.*', 'admin.orders.groups.tags*', 'admin.orders.activity.*', 'admin.orders.message-retry')) {
             return $next($request);
         }
