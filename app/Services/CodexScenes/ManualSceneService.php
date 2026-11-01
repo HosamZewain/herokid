@@ -282,6 +282,10 @@ class ManualSceneService
                 return;
             }
             $order = Order::withTrashed()->lockForUpdate()->findOrFail($run->order_id);
+            $timing = SceneTiming::validated($state['timing'] ?? null, $run);
+            if ($timing !== null) {
+                $run->timing = $timing;
+            }
             if (($state['status'] ?? '') === 'stopped') {
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 if (! $order->trashed() && $order->status === 'generating') {

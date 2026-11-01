@@ -34,7 +34,7 @@ class CodexSceneController extends Controller
             ->withPath(route('admin.order-automation.codex-scenes'))->appends($request->only('status'));
 
         return ['sceneRuns' => $runs, 'sceneStatus' => $status, 'sceneCounts' => CodexSceneRun::select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
-            'sceneHealth' => app(ManualSceneService::class)->health()];
+            'sceneHealth' => app(ManualSceneService::class)->health(), 'sceneTiming' => \App\Services\CodexScenes\SceneTiming::summary()];
     }
 
     public function start(Request $request, Order $order, ManualSceneService $service)

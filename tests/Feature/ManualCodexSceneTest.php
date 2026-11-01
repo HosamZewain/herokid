@@ -87,6 +87,62 @@ class ManualCodexSceneTest extends TestCase
         file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
     }
 
+    public function test_worker_timing_is_preserved_and_excludes_collection_delay(): void
+    {
+        $run = $this->start();
+        $this->travel(30)->seconds();
+        $start = now()->timestamp;
+        $this->sceneOutput($run, 1);
+        $path = $this->spool.'/outbox/'.$run->id.'/status.json';
+        $timing = ['started_at' => $start, 'elapsed_seconds' => 120, 'finished_at' => $start + 120];
+        $this->travel(180)->seconds();
+        file_put_contents($path, json_encode(['id' => $run->id, 'status' => 'quality_review', 'code' => 'invalid_dimensions', 'timing' => $timing]));
+        app(ManualSceneService::class)->collect($run);
+        $run->refresh();
+        $this->assertEquals($timing, $run->timing);
+        $value = \App\Services\CodexScenes\SceneTiming::describe($run);
+        $this->assertSame('00:02:00', $value['duration']);
+        $this->assertSame('00:00:30', $value['wait']);
+        $this->travel(60)->minutes();
+        app(ManualSceneService::class)->collect($run);
+        $this->assertSame('00:02:00', \App\Services\CodexScenes\SceneTiming::describe($run->fresh())['duration']);
+    }
+
+    public function test_timing_rejects_clock_replacement_and_invalid_values(): void
+    {
+        $run = $this->start();
+        $this->travel(30)->seconds();
+        $start = now()->timestamp;
+        $run->timing = ['started_at' => $start, 'elapsed_seconds' => 1];
+        $class = \App\Services\CodexScenes\SceneTiming::class;
+        $this->assertNull($class::validated(['started_at' => $start - 5, 'elapsed_seconds' => 10], $run));
+        $this->assertNull($class::validated(['started_at' => $start, 'elapsed_seconds' => -1], $run));
+        $this->assertNull($class::validated(['started_at' => $start, 'elapsed_seconds' => 10, 'finished_at' => $start + 100], $run));
+        $this->assertNull($class::validated(['started_at' => 'invalid', 'elapsed_seconds' => 10], $run));
+    }
+
+    public function test_completed_average_keeps_legacy_estimates_and_failures_separate(): void
+    {
+        $run = $this->start();
+        $start = now()->timestamp;
+        $run->update(['status' => 'completed', 'active_slot' => null, 'timing' => ['started_at' => $start, 'elapsed_seconds' => 120, 'finished_at' => $start + 120]]);
+        $legacy = $run->replicate();
+        $legacy->id = (string) Str::uuid();
+        $legacy->timing = null;
+        $legacy->started_at = now();
+        $legacy->finished_at = now()->addSeconds(900);
+        $legacy->save();
+        $failed = $run->replicate();
+        $failed->id = (string) Str::uuid();
+        $failed->status = 'quality_review';
+        $failed->timing = ['started_at' => $start, 'elapsed_seconds' => 600, 'finished_at' => $start + 600];
+        $failed->save();
+        $this->assertSame(['count' => 1, 'average' => '00:02:00', 'estimated_count' => 1, 'estimated_average' => '00:15:00'], \App\Services\CodexScenes\SceneTiming::summary());
+        $failed->timing = null;
+        $failed->started_at = now()->subMinutes(5);
+        $this->assertNull(\App\Services\CodexScenes\SceneTiming::describe($failed)['seconds']);
+    }
+
     private function sibling(string $number = 'SYNTHETIC-SIBLING'): Order
     {
         $copy = $this->order->replicate();

@@ -2,7 +2,8 @@
         <div class="mt-4 rounded-xl border bg-white p-3">
             <p class="text-sm font-black">{{ \App\Models\CodexSceneRun::LABELS[$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / 13</p>
             <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }}</p>
-            <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }} · @if($codexRun->started_at)بدء التنفيذ: {{ app_datetime($codexRun->started_at,'h:i A') }}@elseفي انتظار بدء التنفيذ@endif @if($codexRun->finished_at) · الانتهاء: {{ app_datetime($codexRun->finished_at,'h:i A') }}@endif</p>
+            <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }}</p>
+            <div class="mt-2 text-xs text-gray-600">@include('admin.orders._codex-scene-timing', ['timingRun' => $codexRun])</div>
             @if($codexRun->error_code)<p class="mt-2 text-sm text-amber-800">{{ \App\Models\CodexSceneRun::ERRORS[$codexRun->error_code] ?? 'تحتاج المحاولة مراجعة من الفريق.' }}</p>@endif
             @can('orders.production_prompt.manage')
             @if($codexRun->active_slot)

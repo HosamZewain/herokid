@@ -12,7 +12,7 @@ class CodexSceneRun extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['snapshot' => 'encrypted:array', 'scenes' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
+    protected $casts = ['snapshot' => 'encrypted:array', 'timing' => 'array', 'scenes' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
 
     public const LABELS = [
         'waiting_slot' => 'في طابور الانتظار', 'preparing' => 'تجهيز الملفات',

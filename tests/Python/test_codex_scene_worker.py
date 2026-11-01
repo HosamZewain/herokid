@@ -88,9 +88,13 @@ class WorkerTest(unittest.TestCase):
         w.run_job(self.inbox)
         self.assertEqual('completed',self.state())
         self.assertEqual(13,len(list((w.SPOOL/'outbox'/self.id).glob('scene-*.png'))))
+        clock = json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())['timing']
+        self.assertGreater(clock['finished_at'], clock['started_at'])
+        self.assertGreater(clock['elapsed_seconds'], 0)
         calls=(w.HOME/'jobs'/self.id/'calls').read_text()
         w.run_job(self.inbox)
         self.assertEqual(calls,(w.HOME/'jobs'/self.id/'calls').read_text())
+        self.assertEqual(clock, json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())['timing'])
 
     def test_uncertain_generation_not_retried(self):
         (w.HOME/'fail').touch(); w.run_job(self.inbox); w.run_job(self.inbox)
@@ -107,13 +111,19 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual('quality_review', self.state())
         state = json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
         self.assertEqual('invalid_dimensions', state['code'])
+        clock = state['timing']
+        (self.inbox/'cancel').touch(); w.run_job(self.inbox)
+        self.assertEqual(clock, json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())['timing'])
         self.assertEqual('1\n', (w.HOME/'jobs'/self.id/'calls').read_text())
         self.assertFalse((w.SPOOL/'outbox'/self.id/'scene-01.png').exists())
 
     def test_interrupted_worker_does_not_restart_generation(self):
-        w.atomic(w.SPOOL/'outbox'/self.id/'status.json',{'id':self.id,'status':'running'})
+        w.atomic(w.SPOOL/'outbox'/self.id/'status.json',{'id':self.id,'status':'running','timing':{'started_at':123,'elapsed_seconds':1}})
         w.run_job(self.inbox); self.assertEqual('uncertain',self.state())
         self.assertFalse((w.HOME/'jobs').exists())
+        timing = json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())['timing']
+        self.assertEqual({'started_at':123,'elapsed_seconds':1},timing)
+        self.assertNotIn('finished_at', timing)
 
     def test_cancel_acknowledged_without_manifest(self):
         (self.inbox/'manifest.json').unlink(); (self.inbox/'cancel').touch()

@@ -2,6 +2,12 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 21:21 UTC / 23:21 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Full process audit / prepared timing — 2 November 2026 Cairo
+
+Read-only verification22:00–22:12UTC1Nov: live application remains7dafd2148ffb766e7cdaef1db7bd52f16b856b45. Confirmation/general identity/payment-review/Codex flags enabled; workflow8 authorized.19 identities succeeded,14 previews delivered, no approved-identity link mismatch, no current confirmed story without a process, no eligible unenrolled scene story.35 automatic scene objects re-read and verified. Two HK10-597 stories now quality_review (2655:11/13,2653:2/13); other work continues. Confirmation exceptions HK10-616 deliveryfailed, HK10-621 missing send receipt despite delivered template in read-only provider history, and new HK11-26 unknown/no template found in its attempt window. No replay/reconciliation performed. Full details and precise money/handoff boundaries: [audit](story-automation-audit-2026-11-02.md).
+
+Worker timing/HH:MM:SS/average addition is prepared and tested, **unapplied**, with an additive nullable column and a required safe worker drain before refresh. Existing timestamps are collector observations and must remain labeled approximate. No production application/config/worker changes in this audit. Prior recovery checkpoint remains `/home/ubuntu/herokid-before-scene-quality-7dafd21`.
+
 ## Scene queue follow-up review — 1 November 2026
 
 Permission-only follow-up **f9337804ef5c086c1cf7f3c60c706093cd4f9fd5** deployed21:44:49–21:44:50UTC. Four changed hashes matched, env/config unchanged, dedicated worker PID unchanged, no maintenance or worker restart. Recovery `/home/ubuntu/herokid-before-scene-review-f933780`. Generation controls now follow existing production-prompt permissions; monitor link follows automation-view permission. Extended isolated review passed121 tests/759 assertions each SQLite/MySQL; final action-visibility tests passed25/119 SQLite.

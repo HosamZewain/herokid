@@ -72,8 +72,22 @@ def run_job(inbox):
     out.mkdir(exist_ok=True, mode=0o750)
     state_path = out / 'status.json'
 
+    timing = {}
+    monotonic_start = None
+    if state_path.exists():
+        timing = json.loads(state_path.read_text()).get('timing') or {}
+
     def state(status, code=None):
-        atomic(state_path, {'id': job_id, 'status': status, 'code': code, 'at': time.time()})
+        nonlocal monotonic_start
+        at = time.time()
+        if status == 'running' and not timing:
+            monotonic_start = time.monotonic()
+            timing.update({'started_at': at, 'elapsed_seconds': 0})
+        if monotonic_start is not None and 'finished_at' not in timing:
+            timing['elapsed_seconds'] = round(time.monotonic() - monotonic_start, 3)
+            if status in {'completed', 'quality_review', 'stopped', 'uncertain'}:
+                timing['finished_at'] = at
+        atomic(state_path, {'id': job_id, 'status': status, 'code': code, 'at': at, 'timing': timing})
 
     # Cancel is acknowledged even if staging failed before a manifest was published.
     if (inbox / 'cancel').exists():
@@ -202,7 +216,7 @@ def dispatch(pool, active):
         if status.exists():
             prior = json.loads(status.read_text())
             if prior.get('status') == 'running':
-                atomic(status, {'id': inbox.name, 'status': 'uncertain', 'code': 'worker_interrupted', 'at': time.time()})
+                atomic(status, {**prior, 'status': 'uncertain', 'code': 'worker_interrupted', 'at': time.time()})
             if not (inbox / 'cancel').exists() or prior.get('status') == 'stopped':
                 continue
         if not (inbox / 'manifest.json').exists() and not (inbox / 'cancel').exists():
