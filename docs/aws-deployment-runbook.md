@@ -1,6 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 13:48 UTC / 15:48 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 14:19 UTC / 16:19 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+
+## General identity/payment rollout — active 1 November 2026
+
+Owner explicitly approved new orders and existing confirmed orders. Activation completed **14:08:41 UTC / 16:08 Cairo**, on application be4a3c16d08b60f00538b1842e742d5369bec324. Workflow8/revision1 is enabled and renamed **توليد الهوية ومراجعة الدفع**. Scope is all_new with order floor0, event boundary10; prior trial IDs are cleared. Legacy order-confirmation ownership remains unchanged. Future actual confirmed story checkouts can enroll;9 reviewed existing confirmed checkouts were enrolled through9 new uniquely keyed events, not historical replay.11 identities were eligible, configured estimate0.451USD; actual provider billing is not verified.
+
+At14:19:34 UTC, all11 identities succeeded once and all9 combined previews were accepted once; all9 runs await customer response. One delivered receipt observed, others unknown/null. Paid balance remains0 and81 historical failed jobs unchanged. No manual approval, payment, story scene/puzzle production, printing or shipping enabled. Attachment review remains a human-review signal, not proof of payment.
+
+Process/identity/template/payment-review flags are enabled; budget1USD per checkout unchanged. Existing process and AI Supervisor programs now autostart=true, preserving one AI worker and existing timeout/lease/retry ordering. Four affected workers gracefully refreshed; six required services and scheduler healthy. No new AWS resources. Maintenance14:08:40–14:08:44 UTC. Recovery **/home/ubuntu/herokid-before-general-process-20261101** contains private env/config/service/cohort evidence. Fresh verified off-instance backup **herokid-20261101T140149Z.sql.gz**,42,863,459bytes. Never restore the old DB/config blindly after live effects; stop new work safely and preserve runs, attempts, correlations and payment reviews.
+
+Validation:84 runtime/identity/payment-review tests,554 assertions on each isolated SQLite/MySQL;60 builder/automation-page tests,257 assertions on each. A narrow follow-up page correction is prepared to show actual activation and real run counts; deployment verification is recorded separately. [Detailed activation evidence](automation-general-rollout-2026-11-01.md).
 
 ## Multi-child trial — identity approved, attachment review pending (1 November 2026)
 

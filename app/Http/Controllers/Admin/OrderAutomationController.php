@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderProcessRun;
 use App\Models\OrderProcessSimulation;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
@@ -37,6 +38,7 @@ class OrderAutomationController extends Controller
             'confirmationRequests' => (clone $requests)->with(['order:id,order_number', 'confirmationWorkflow:id,checkout_group_key,confirmation_status,confirmed_at'])->latest('id')->limit(20)
                 ->get(['id', 'order_id', 'checkout_group_key', 'status', 'attempts', 'created_at', 'processed_at', 'last_error', 'response_payload']),
             'workflows' => OrderAutomation::with('revision')->get(),
+            'liveProcessCounts' => OrderProcessRun::when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->select('automation_id', 'status')->selectRaw('count(*) as total')->groupBy('automation_id', 'status')->get()->groupBy('automation_id'),
             'processCounts' => OrderProcessSimulation::select('automation_id', 'status')->selectRaw('count(*) as total')->groupBy('automation_id', 'status')->get()->groupBy('automation_id'),
             'runs' => OrderAutomationRun::with('order')->when(! auth()->user()->hasPermission('orders.view'), fn ($q) => $q->whereRaw('1 = 0'))->latest('id')->paginate(25),
         ]);

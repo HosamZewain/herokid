@@ -84,6 +84,21 @@ class OrderProcessBuilderTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_index_distinguishes_general_live_trial_paused_and_draft_states(): void
+    {
+        $this->publish();
+        $this->workflow->update(['enabled' => true]);
+        config(['order_process.enabled' => true, 'order_process.after_order_id' => 0, 'order_process.enrollment_mode' => 'all_new']);
+        $this->get(route('admin.order-automation.index'))->assertOk()->assertSee('مفعّل تلقائيًا')->assertSee('تشغيلات فعلية: 0')->assertDontSee('نسخة للمحاكاة');
+        config(['order_process.enrollment_mode' => 'trial', 'order_process.trial_order_id' => 1, 'order_process.trial_automation_id' => $this->workflow->id]);
+        $this->get(route('admin.order-automation.index'))->assertOk()->assertSee('مفعّل للتجربة المحددة');
+        config(['order_process.enabled' => false]);
+        $this->get(route('admin.order-automation.index'))->assertOk()->assertSee('التشغيل متوقف من الإعدادات')->assertDontSee('مفعّل تلقائيًا');
+        $this->workflow->update(['enabled' => false]);
+        $this->get(route('admin.order-automation.index'))->assertOk()->assertSee('غير مفعّل');
+        Http::assertNothingSent();
+    }
+
     public function test_confirmation_waits_durably_then_completes_once_without_touching_real_orders(): void
     {
         $order = Order::create(['order_number' => 'DO-NOT-TOUCH', 'status' => 'new']);

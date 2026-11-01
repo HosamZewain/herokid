@@ -155,6 +155,40 @@ class OrderProcessIdentityTest extends TestCase
         app(ProcessResponsePoller::class)->process($conversation);
     }
 
+    public function test_general_rollout_uses_new_event_boundary_and_explicit_confirmed_cohort_once(): void
+    {
+        $trial = $this->enroll();
+        $events = [];
+        foreach (['selected', 'unselected'] as $label) {
+            $order = $trial->order->replicate();
+            $order->order_number = 'ROLLOUT-'.$label;
+            $order->checkout_group_key = 'ROLLOUT-'.$label;
+            $order->save();
+            $events[$label] = \App\Models\OrderProcessEvent::create(['event_key' => 'old-'.$label, 'type' => 'status_entered',
+                'order_id' => $order->id, 'checkout_key' => $order->checkout_group_key, 'data' => ['status' => 'new_confirmed'], 'status' => 'pending']);
+        }
+        $boundary = \App\Models\OrderProcessEvent::max('id');
+        $this->workflow->update(['process_after_event_id' => $boundary]);
+        config(['order_process.enrollment_mode' => 'all_new', 'order_process.after_order_id' => 0]);
+        app(ProcessRuntime::class)->tick();
+        $this->assertDatabaseCount('order_process_runs', 1);
+        for ($i = 0; $i < 2; $i++) {
+            \App\Models\OrderProcessEvent::firstOrCreate(['event_key' => 'owner-rollout-selected'], [
+                'type' => 'status_entered', 'order_id' => $events['selected']->order_id,
+                'checkout_key' => $events['selected']->checkout_key, 'data' => ['status' => 'new_confirmed'], 'status' => 'pending']);
+            app(ProcessRuntime::class)->tick();
+        }
+        $this->assertDatabaseCount('order_process_runs', 2);
+        $this->assertDatabaseHas('order_process_runs', ['order_id' => $events['selected']->order_id]);
+        $this->assertDatabaseMissing('order_process_runs', ['order_id' => $events['unselected']->order_id]);
+        $this->assertSame('queued', $trial->fresh()->status);
+        $future = $this->enroll();
+        $this->assertDatabaseCount('order_process_runs', 3);
+        $this->assertGreaterThan($boundary, $future->event_id);
+        $this->assertDatabaseCount('order_process_identities', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_multi_child_generation_is_deduplicated_private_unapproved_and_accounted(): void
     {
         $run = $this->generated(2);
