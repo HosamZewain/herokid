@@ -218,6 +218,9 @@ class OrderConversationService
                 'replyTo' => $this->plain($raw['replyTo'] ?? null, 512),
                 'templateName' => $this->plain($raw['templateName'] ?? null, 255),
                 'interactionId' => $this->plain($raw['interactionId'] ?? null, 255),
+                // Included in the fingerprint: delayed classification updates the same
+                // encrypted message on a full reread without duplicating the message.
+                'classification' => ReceiptClassification::fromMessage($raw),
                 'delivery' => TemplateDelivery::normalize(
                     $raw['direction'] === 'out' && filled($raw['templateName'] ?? null) ? ($raw['delivery'] ?? null) : null),
             ];
