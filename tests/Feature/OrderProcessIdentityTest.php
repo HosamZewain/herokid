@@ -14,6 +14,7 @@ use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
+use App\Models\OrderStatusDefinition;
 use App\Models\Permission;
 use App\Models\RoboDeskConversationSetting;
 use App\Models\Story;
@@ -86,6 +87,7 @@ class OrderProcessIdentityTest extends TestCase
         $model = $provider->models()->firstOrCreate(['code' => 'gpt-image-2'], ['display_name' => 'Synthetic model']);
         $model->update(['is_active' => true, 'generation_capabilities_json' => ['character_sheet'], 'estimated_cost_amount' => '0.1', 'estimated_cost_currency' => 'USD']);
         app(AiProviderCredentialService::class)->save($provider, 'synthetic-not-a-real-key');
+        OrderStatusDefinition::create(['type' => 'order', 'key' => ProcessIdentityService::APPROVED_ORDER_STATUS, 'label_ar' => 'هوية مؤكدة وجاهزة للتوليد', 'color' => 'teal', 'behavior' => 'standard', 'is_active' => true]);
         $d = app(ProcessDefinition::class)->validate(ProcessDefinition::defaults('identity'));
         $this->workflow = OrderAutomation::create(['name' => 'مسار هوية وهمي', 'draft' => $d]);
         $r = OrderAutomationRevision::create(['automation_id' => $this->workflow->id, 'definition' => $d, 'checksum' => hash('sha256', json_encode($d)), 'published_by' => $this->actor->id, 'created_at' => now()]);
@@ -177,17 +179,38 @@ class OrderProcessIdentityTest extends TestCase
             && count($r['template']['data']) === 8 && is_numeric($r['template']['data'][6]) && is_numeric($r['template']['data'][7]) && ! isset($r['procedureId']));
         app(ProcessRuntime::class)->advance($run->id);
         $this->assertSame('waiting_response', $run->fresh()->status);
+        $previewUrl = app(ProcessIdentityService::class)->previewUrl($run);
         $this->reply($run);
         app(ProcessRuntime::class)->advance($run->id);
         app(ProcessRuntime::class)->advance($run->id);
         $this->assertSame('waiting_staff', $run->fresh()->status);
+        app(ProcessResponsePoller::class)->process(WhatsAppConversation::firstOrFail());
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->get($previewUrl)->assertOk();
+        $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $run->fresh()->context['status']);
         $this->assertDatabaseCount('order_process_responses', 1);
         foreach (OrderProcessIdentity::all() as $task) {
             $this->assertSame($task->attempt_id, $task->order->child_identity_approved_attempt_id);
             $this->assertSame($task->attempt_id, $task->attempt->identityRequest->approved_attempt_id);
             $this->assertSame(0, (int) $task->order->paid_amount_cents);
-            $this->assertSame('new_confirmed', $task->order->status);
+            $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $task->order->status);
+            $this->assertSame(1, $task->order->statusLogs()->where('status', ProcessIdentityService::APPROVED_ORDER_STATUS)->count());
         }
+    }
+
+    public function test_disabling_approval_status_blocks_before_identity_or_status_is_changed(): void
+    {
+        $run = $this->generated();
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->reply($run);
+        OrderStatusDefinition::where('key', ProcessIdentityService::APPROVED_ORDER_STATUS)->update(['is_active' => false]);
+        app(ProcessRuntime::class)->advance($run->id);
+        $task = OrderProcessIdentity::firstOrFail();
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertNull($task->order->child_identity_approved_attempt_id);
+        $this->assertSame('new_confirmed', $task->order->status);
+        $this->assertSame(0, $task->order->statusLogs()->where('status', ProcessIdentityService::APPROVED_ORDER_STATUS)->count());
     }
 
     public function test_recorded_deposit_during_identity_review_keeps_preview_and_confirmation_valid(): void
@@ -210,7 +233,7 @@ class OrderProcessIdentityTest extends TestCase
         $this->assertNotNull($order->fresh()->child_identity_approved_attempt_id);
         $this->assertSame(7500, (int) $order->fresh()->paid_amount_cents);
         $this->assertSame('partially_paid', $order->fresh()->payment_status);
-        $this->assertSame('new_confirmed', $order->fresh()->status);
+        $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $order->fresh()->status);
         $this->assertSame($ledgerCount, DB::table('order_payment_events')->count());
         $this->assertDatabaseCount('order_process_responses', 1);
     }
@@ -503,6 +526,7 @@ class OrderProcessIdentityTest extends TestCase
         $this->assertSame('waiting_response', $run->status);
         $run = $simulator->respond($run->fresh(), $run->fresh()->version, 'approve_identity');
         $this->assertTrue($run->context['identity_approved']);
+        $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $run->context['status']);
         $this->assertSame('waiting_staff', $run->status);
         $this->assertDatabaseCount('order_process_identities', 0);
         Http::assertNothingSent();

@@ -157,6 +157,8 @@ class ProcessSimulator
                         break;
                     }
                     $context['identity_approved'] = true;
+                    $result += ['from' => $context['status'], 'to' => ProcessIdentityService::APPROVED_ORDER_STATUS];
+                    $context['status'] = ProcessIdentityService::APPROVED_ORDER_STATUS;
                     break;
                 case 'condition':
                     $matched = $context[$c['field']] === $c['value'];

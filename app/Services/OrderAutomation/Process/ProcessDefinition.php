@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 /** Schema 2 describes processes; schema 1 remains owned by the legacy identity runner. */
 class ProcessDefinition
 {
-    public const TYPES = ['generate_identity' => 'توليد هوية الطفل وحفظها', 'approve_identity' => 'اعتماد الهوية من رد العميل', 'whatsapp' => 'إرسال قالب واتساب', 'wait_response' => 'انتظار رد العميل', 'change_status' => 'تغيير حالة الطلب', 'condition' => 'شرط وتفرّع', 'manual_review' => 'مراجعة موظف', 'end' => 'إنهاء المسار'];
+    public const TYPES = ['generate_identity' => 'توليد هوية الطفل وحفظها', 'approve_identity' => 'اعتماد الهوية وتحديث حالة الطلب', 'whatsapp' => 'إرسال قالب واتساب', 'wait_response' => 'انتظار رد العميل', 'change_status' => 'تغيير حالة الطلب', 'condition' => 'شرط وتفرّع', 'manual_review' => 'مراجعة موظف', 'end' => 'إنهاء المسار'];
 
     public const VARIABLES = ['customer_name' => 'اسم العميل', 'order_reference' => 'رقم الطلب', 'order_details' => 'تفاصيل المنتجات والقصص', 'order_total' => 'القيمة بعد الخصم شاملة الشحن'];
 
@@ -41,7 +41,7 @@ class ProcessDefinition
                 ['id' => 'preview', 'type' => 'whatsapp', 'label' => 'معاينة الهوية وطلب الدفع', 'config' => ['template' => ProcessTemplates::IDENTITY, 'language' => 'ar-EG', 'variables' => ProcessTemplates::IDENTITY_FIELDS], 'next' => 'response'],
                 ['id' => 'response', 'type' => 'wait_response', 'label' => 'انتظار اعتماد الهوية', 'config' => ['message_node' => 'preview', 'timeout_hours' => 48,
                     'cases' => [['key' => 'approve_identity', 'text' => 'تأكيد الهوية', 'next' => 'approve'], ['key' => 'revise_identity', 'text' => 'طلب تعديل الهوية', 'next' => 'review']], 'timeout_next' => 'review']],
-                ['id' => 'approve', 'type' => 'approve_identity', 'label' => 'اعتماد الهوية فقط', 'config' => ['response_node' => 'response'], 'next' => 'review'],
+                ['id' => 'approve', 'type' => 'approve_identity', 'label' => 'اعتماد الهوية وتجهيز الطلب للتوليد', 'config' => ['response_node' => 'response'], 'next' => 'review'],
                 ['id' => 'review', 'type' => 'manual_review', 'label' => 'مراجعة الدفع أو التعديلات', 'config' => ['instructions' => 'راجع رد العميل وإثبات التحويل وسجّل الدفعة الفعلية من شاشة المدفوعات. تأكيد الهوية لا يثبت الدفع؛ لا تستكمل الإنتاج قبل المراجعة.'], 'next' => 'finish'],
                 ['id' => 'finish', 'type' => 'end', 'label' => 'نهاية المسار', 'config' => []],
             ];

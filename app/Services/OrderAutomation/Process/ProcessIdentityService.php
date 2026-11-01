@@ -28,6 +28,9 @@ use Throwable;
 
 class ProcessIdentityService
 {
+    // Existing production status key; keep its spelling to preserve saved references.
+    public const APPROVED_ORDER_STATUS = 'costomer_confirmed';
+
     public function prepare(OrderProcessRun $run, OrderProcessStep $step, array $config): void
     {
         if (! config('order_process.identity_enabled')) {
@@ -266,6 +269,12 @@ class ProcessIdentityService
                 throw new RuntimeException('identity_requires_review');
             }
             app(ChildIdentityApprovalService::class)->approve($identity, $task->attempt, source: 'robodesk_process');
+            $order = $task->order;
+            if ($order->status !== self::APPROVED_ORDER_STATUS) {
+                $order->update(['status' => self::APPROVED_ORDER_STATUS]);
+                $order->statusLogs()->create(['status_type' => 'order', 'status' => self::APPROVED_ORDER_STATUS,
+                    'notes' => 'تأكيد هوية العميل عبر مسار العمليات #'.$run->id]);
+            }
         }
         $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
     }

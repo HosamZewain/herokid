@@ -2,6 +2,14 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 31 October 2026, approximately 21:04 UTC / 23:04 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Owner identity trial —1 November2026, verified through approval
+
+No code deployment this day: live SHA remains **9ff04df5eee62fb83652f4449983302e37b2d679**. After funding OpenAI, the owner explicitly approved exactly one new attempt. Canonical attempt657 ran09:51:05–09:51:36 UTC /11:51 Cairo and succeeded; private S3 checksum verified,1536x1024 PNG. Cost0.041USD is estimated. Original failed attempt656 remains byte-for-byte unchanged with unknown billing. Recovery rows/checksums: `/home/ubuntu/herokid-before-owner-second-2701`.
+
+Scheduler sent one identity-preview message09:52:09 UTC; delivered receipt observed. Real owner confirmation was consumed once and approved identity65709:53:43 UTC /11:53 Cairo. Order2701/HK10-633 and its canonical identity both reference657. Run1 is **waiting_staff / review**, paid balance0, one response, one identity-preview send, both process queues empty. HTTPS preview/image200 with matching bytes; invalid signature403. Authenticated order UI shows both stages delivered and identity linked. No printing/shipping/payment action, no other process run or enabled workflow. Trial config/temporary owner grants remain pinned while manual review is open; no general customer activation.
+
+**Two acceptance issues found:** RoboDesk AI asked what “تأكيد الهوية” meant despite HeroKid successfully consuming it; tenant flow/AI routing needs review. Existing HeroKid approval action leaves business status new_confirmed. Owner now requires costomer_confirmed after approval, independent of financial settlement. That code repair is prepared/tested separately, **not yet live**; no retroactive status mutation or message replay. [RoboDesk handoff](robodesk-identity-review-handoff-2026-11-01.md).
+
 ## Identity failure diagnostics — deployed31 October2026
 
 **Current live SHA `9ff04df5eee62fb83652f4449983302e37b2d679`**, verified21:04 UTC; deployed21:02:59 UTC without maintenance. Future failures retain safe provider code/request ID/HTTP status. No change to uncertain billing, no retry or historical attempt rewrite.36 tests/288 assertions on each isolated SQLite/MySQL, PHP8.3 lint; all five deployed hashes match. Only the two trial process workers were gracefully refreshed. Existing configuration unchanged, authenticated HK10-633 page shows confirmed/delivered, scheduler successful, all four required workers running. Bounded observation since20:50:10:482 HTTP requests, zero5xx/new Laravel errors;81 historical failed jobs unchanged.

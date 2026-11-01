@@ -5,6 +5,7 @@ namespace App\Services\OrderAutomation\Process;
 use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderProcessRun;
+use App\Models\OrderStatusDefinition;
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -69,6 +70,10 @@ class ProcessLivePolicy
             $errors[] = 'التنفيذ الحالي يدعم نطاق عملية الشراء؛ تنفيذ وحدات القصص والمنتجات يحتاج ربط الإنتاج.';
         }
         foreach ($definition['nodes'] ?? [] as $node) {
+            if ($node['type'] === 'approve_identity' && ! OrderStatusDefinition::where('type', 'order')
+                ->where('key', ProcessIdentityService::APPROVED_ORDER_STATUS)->where('is_active', true)->where('behavior', 'standard')->exists()) {
+                $errors[] = 'اعتماد الهوية يحتاج حالة هوية مؤكدة وجاهزة للتوليد مفعلة كحالة تشغيل عادية.';
+            }
             if (in_array($node['type'], ['generate_identity', 'approve_identity'], true)
                 && (! config('order_process.identity_enabled') || (float) config('order_process.identity_budget_usd') <= 0
                     || config('queue.connections.order-process-ai.retry_after') <= 270
