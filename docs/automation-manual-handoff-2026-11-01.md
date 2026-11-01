@@ -23,3 +23,7 @@ Vite built against this checkout's lockfile; manifest targets exist and previous
 Apply only additive migration2026_11_01_203000_create_order_automation_holds.php. Whole transaction deploy/shipping locks; private checkpoint and fresh checksum-verified local/off-instance backup; drain four affected workers and scheduler, short maintenance for source/schema/route/view switch, preserve env/cached config, reload FPM then restore existing workers/timer. No Codex worker restart, resource provisioning or config changes.
 
 Previous application1dc514cae09461aa8d4810f6e37acd79d8e5a231. Once a manual hold exists, older code does not understand it: do not blindly roll back and re-enable automatic sends. Preserve hold rows, paused statuses, run/version/history, provider evidence and payments; forward-fix or reconcile safely before restoring a compatible release. Never restore the old database or drop hold records.
+
+## Verified publication
+
+Application a24f34a25eb3be4f8b3e4e1a52b81b370f160dfa live19:49:34UTC; verification19:50:58UTC. Final MySQL handoff/Codex19tests99assertions; SQLite handoff7/58. Exact21hashes matched, config/env unchanged, private checkpoint /home/ubuntu/herokid-before-handoff-a24f34a. Authenticated controls visible, no business mutation performed. PublicHTTPS200, seven services active, four workers running, scheduler successful, zero new Laravel log bytes. Backup herokid-20261101T194404Z.sql.gz44,031,232bytes checksum verified local/S3.
