@@ -17,6 +17,9 @@ class OrderMessageHistoryComposer
             $order = Order::where('checkout_group_key', $group['key'] ?? '')->first();
         }
         $view->with('messageHistoryOrder', $order);
+        $view->with('orderPaymentReviews', $order instanceof Order && auth()->user()?->hasPermission('orders.view')
+            ? \App\Models\OrderPaymentReview::where('checkout_key', $order->checkoutGroupKey())->with('reviewer:id,name')
+                ->withCount('signals')->withMax('signals', 'id')->latest()->get() : collect());
         $view->with('orderMessageStages', $order instanceof Order && auth()->user()?->hasPermission('orders.view')
             ? app(OrderMessageHistory::class)->stages($order, auth()->user()) : collect());
     }

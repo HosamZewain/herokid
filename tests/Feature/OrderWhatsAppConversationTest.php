@@ -193,48 +193,6 @@ class OrderWhatsAppConversationTest extends TestCase
         $this->assertStringNotContainsString('PRIVATE_REASON', (string) WhatsAppConversationMessage::first()->getRawOriginal('provider_metadata'));
     }
 
-    public function test_delayed_receipt_classification_updates_one_encrypted_message_without_financial_effects(): void
-    {
-        $this->enable();
-        $order = $this->order();
-        $before = $order->refresh()->getRawOriginal();
-        $image = $this->message('receipt-image', ['direction' => 'in', 'type' => 'image', 'text' => '',
-            'attachments' => [['file' => 'synthetic-receipt.png', 'url' => 'https://example.test/private-receipt']],
-            'classification' => null]);
-        $this->fake([$image]);
-        $this->sync($order)->assertOk();
-        $message = WhatsAppConversationMessage::firstOrFail();
-        $originalFingerprint = $message->fingerprint;
-        $version = WhatsAppConversation::first()->inbound_version;
-        $this->assertNull(data_get($message->provider_metadata, 'classification'));
-
-        $image['classification'] = ['type' => 'payment_receipt', 'source' => 'ai', 'at' => '2026-10-09T10:20:05.123Z',
-            'amount' => 440, 'verified' => true, 'note' => 'PRIVATE_UNTRUSTED_NOTE'];
-        for ($i = 0; $i < 2; $i++) {
-            $this->travel(15)->seconds();
-            $this->fake([$image]);
-            app(\App\Services\RoboDesk\Conversations\OrderConversationService::class)->sync($order, null, true);
-            Http::assertSent(fn ($request) => $request->method() === 'GET' && ! isset($request['after']));
-            $this->assertDatabaseCount('whatsapp_conversation_messages', 1);
-            $stored = $message->fresh();
-            $this->assertNotSame($originalFingerprint, $stored->fingerprint);
-            $this->assertSame(['type' => 'payment_receipt', 'source' => 'ai', 'at' => '2026-10-09T10:20:05.123000Z'], data_get($stored->provider_metadata, 'classification'));
-            $this->assertStringNotContainsString('payment_receipt', $stored->getRawOriginal('provider_metadata'));
-            $this->assertStringNotContainsString('PRIVATE_UNTRUSTED_NOTE', json_encode($stored->provider_metadata));
-            $this->assertSame($version, WhatsAppConversation::first()->inbound_version);
-            $this->assertSame($before, $order->refresh()->getRawOriginal());
-            $this->assertDatabaseCount('order_payment_proofs', 0);
-        }
-
-        // A later null means unknown, not a rejection or an approval of payment.
-        $this->travel(15)->seconds();
-        $image['classification'] = null;
-        $this->fake([$image]);
-        app(\App\Services\RoboDesk\Conversations\OrderConversationService::class)->sync($order, null, true);
-        $this->assertNull(data_get($message->fresh()->provider_metadata, 'classification'));
-        $this->assertSame($before, $order->refresh()->getRawOriginal());
-    }
-
     public function test_invalid_sender_type_preserves_existing_history_and_cursor_atomically(): void
     {
         $this->enable();

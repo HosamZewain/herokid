@@ -2,6 +2,7 @@
 
 return [
     // Deployment is not activation. A reviewed worker and future-order boundary are required.
+    'payment_review_enabled' => (bool) env('ORDER_PROCESS_PAYMENT_REVIEW_ENABLED', false),
     'enabled' => (bool) env('ORDER_PROCESS_ENABLED', false),
     // Trial mode is explicitly pinned to one single-order checkout and one workflow.
     'enrollment_mode' => env('ORDER_PROCESS_ENROLLMENT_MODE', 'all_new'),

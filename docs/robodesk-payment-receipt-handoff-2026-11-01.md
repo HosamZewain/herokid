@@ -1,5 +1,7 @@
 # Payment receipt polling handoff — 1 November 2026
 
+**SUPERSEDED:** Owner chose existing inbound attachment signals, no new classification and no receipt upload. See [current implementation](robodesk-payment-signal-2026-11-01.md). The classification adapter described below was prepared but never deployed and has now been removed.
+
 Status: inspected/prepared only. No application deployment, payment write, provider mutation, new message or generation in this investigation. Production code verified ae52dcbdf50a56f4ec3c454fa3f065df4e0f1e26.
 
 ## Observed owner trial

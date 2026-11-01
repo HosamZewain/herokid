@@ -2,9 +2,9 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last release verification: 1 November 2026, approximately 10:07 UTC / 12:07 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Receipt classification adapter — prepared, not deployed (1 November 2026)
+## Attachment payment-review signal — prepared, not deployed (1 November 2026)
 
-Owner requires receipt submission to show payment awaiting staff review without posting a ledger payment. RoboDesk confirmed a proposed per-message `classification` field is not built/deployed yet. A local adapter now preserves allowlisted receipt classification in encrypted history and detects delayed updates without duplicate messages; 40 tests/333 assertions passed on isolated SQLite, PHP8.3 syntax checked. This does not yet create payment proofs, change order/payment status or expand polling. Full receipt association/review/approval remains outstanding and must not reuse the legacy approveProof handler that assumes full payment and advances printing. Live code remains ae52dcb; no production changes or financial writes. [Provider contract, findings and remaining gates](robodesk-payment-receipt-handoff-2026-11-01.md).
+Owner/RoboDesk finalized an existing-fields-only contract: inbound attachments after the matching identity preview mark a human review; no classification, receipt upload, callback or automatic financial write. The previously prepared classifier has been removed. New order review panel, message deduplication, guarded manual close and continued full polling through waiting_staff are prepared; additive tables and default-OFF ORDER_PROCESS_PAYMENT_REVIEW_ENABLED flag. Live code remains ae52dcb (revalidated by SSH). No production changes. [Implementation, tests, approval/activation and recovery boundaries](robodesk-payment-signal-2026-11-01.md).
 
 ## Roqaya football trial — 1 November 2026, identity approval passed
 

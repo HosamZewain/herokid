@@ -44,7 +44,7 @@ class RefreshActiveOrderConversation implements ShouldBeUnique, ShouldQueue
             || Cache::has('robodesk-background-backoff:'.$this->uniqueId())) {
             return;
         }
-        $order = $orders->activeOrdersQuery()->find($this->orderId);
+        $order = app(\App\Services\RoboDesk\Conversations\ActiveConversationRefreshService::class)->ordersToRefresh()->find($this->orderId);
         if (! $order) {
             return;
         }

@@ -11,6 +11,13 @@ class ActiveConversationRefreshService
 {
     public function __construct(private ConversationHistoryProvider $provider, private AdminOrderGroupService $orders) {}
 
+    public function ordersToRefresh(): \Illuminate\Database\Eloquent\Builder
+    {
+        return \App\Models\Order::query()->where(fn ($q) => $q
+            ->whereIn('id', $this->orders->activeOrdersQuery()->select('orders.id'))
+            ->orWhereIn('id', app(\App\Services\OrderAutomation\Process\ProcessPaymentReview::class)->runs()->select('order_id')));
+    }
+
     public function dispatchDue(): int
     {
         if (! $this->provider->configured()
@@ -26,10 +33,10 @@ class ActiveConversationRefreshService
         $cursor = (int) Cache::get($cursorKey, 0);
         $scanSize = max(1, min(500, (int) config('robodesk.conversations.background_scan_size', 100)));
         $batchSize = max(1, min(50, (int) config('robodesk.conversations.background_batch_size', 20)));
-        $orders = $this->orders->activeOrdersQuery()->where('id', '>', $cursor)->orderBy('id')
+        $orders = $this->ordersToRefresh()->where('id', '>', $cursor)->orderBy('id')
             ->limit($scanSize)->get(['id', 'delivery_details']);
         if ($orders->isEmpty() && $cursor > 0) {
-            $orders = $this->orders->activeOrdersQuery()->orderBy('id')->limit($scanSize)->get(['id', 'delivery_details']);
+            $orders = $this->ordersToRefresh()->orderBy('id')->limit($scanSize)->get(['id', 'delivery_details']);
         }
         if ($orders->isEmpty()) {
             Cache::forget($cursorKey);

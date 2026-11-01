@@ -289,7 +289,8 @@
                 </aside>
             </section>
 
-            @include('admin.orders._message-history')
+            @include('admin.orders._payment-review')
+        @include('admin.orders._message-history')
 
             @can('bosta.view')
                 <details class="rounded-2xl border border-sky-200 bg-sky-50/60" data-order-shipping-disclosure>

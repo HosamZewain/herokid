@@ -104,7 +104,8 @@ class OrderConversationService
             $full = $full || ! $existing?->sync_cursor || ! $existing?->last_full_synced_at
                 || $existing->last_full_synced_at->lte(now()->subSeconds($interval));
             $confirmationWindow = app(OrderConfirmationPoller::class)->needsFullWindow($phone)
-                || app(ProcessResponsePoller::class)->needsFullWindow($phone);
+                || app(ProcessResponsePoller::class)->needsFullWindow($phone)
+                || app(\App\Services\OrderAutomation\Process\ProcessPaymentReview::class)->needsFullWindow($phone);
             $full = $full || $confirmationWindow;
             // Delayed Meta webhooks can predate a date-based cursor. Every poll
             // awaiting confirmation rereads the newest 50 interactions in full.
@@ -126,6 +127,7 @@ class OrderConversationService
                 }
                 app(OrderConfirmationPoller::class)->process($conversation);
                 app(ProcessResponsePoller::class)->process($conversation);
+                app(\App\Services\OrderAutomation\Process\ProcessPaymentReview::class)->process($conversation);
                 // A limited v1 window is never grounds for removing older saved messages.
                 $changes = ['last_synced_at' => now(), 'sync_state' => 'ready', 'error_code' => null];
                 if ($full || $page->cursorReset) {
@@ -218,9 +220,6 @@ class OrderConversationService
                 'replyTo' => $this->plain($raw['replyTo'] ?? null, 512),
                 'templateName' => $this->plain($raw['templateName'] ?? null, 255),
                 'interactionId' => $this->plain($raw['interactionId'] ?? null, 255),
-                // Included in the fingerprint: delayed classification updates the same
-                // encrypted message on a full reread without duplicating the message.
-                'classification' => ReceiptClassification::fromMessage($raw),
                 'delivery' => TemplateDelivery::normalize(
                     $raw['direction'] === 'out' && filled($raw['templateName'] ?? null) ? ($raw['delivery'] ?? null) : null),
             ];
