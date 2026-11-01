@@ -1,6 +1,6 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 14:19 UTC / 16:19 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 14:25 UTC / 16:25 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
 ## General identity/payment rollout — active 1 November 2026
 
@@ -10,11 +10,11 @@ At14:19:34 UTC, all11 identities succeeded once and all9 combined previews were 
 
 Process/identity/template/payment-review flags are enabled; budget1USD per checkout unchanged. Existing process and AI Supervisor programs now autostart=true, preserving one AI worker and existing timeout/lease/retry ordering. Four affected workers gracefully refreshed; six required services and scheduler healthy. No new AWS resources. Maintenance14:08:40–14:08:44 UTC. Recovery **/home/ubuntu/herokid-before-general-process-20261101** contains private env/config/service/cohort evidence. Fresh verified off-instance backup **herokid-20261101T140149Z.sql.gz**,42,863,459bytes. Never restore the old DB/config blindly after live effects; stop new work safely and preserve runs, attempts, correlations and payment reviews.
 
-Validation:84 runtime/identity/payment-review tests,554 assertions on each isolated SQLite/MySQL;60 builder/automation-page tests,257 assertions on each. A narrow follow-up page correction is prepared to show actual activation and real run counts; deployment verification is recorded separately. [Detailed activation evidence](automation-general-rollout-2026-11-01.md).
+Validation:84 runtime/identity/payment-review tests,554 assertions on each isolated SQLite/MySQL;60 builder/automation-page tests,257 assertions on each. Follow-up UI deployed **db66e184d5d03c6e62bbae4009c360ba867211b7** at14:23:53UTC without maintenance or worker restart. Seven changed hashes verified, env/config byte-identical, Blade cached and FPM gracefully reloaded. Authenticated page shows مفعّل تلقائيًا and12 actual runs. Public home/healthHTTPS200, six services active, no new Laravel errors through14:25UTC. UI recovery /home/ubuntu/herokid-before-general-ui-db66e18; previous codebe4a3c1, retain newly activated config and all live effects. [Detailed activation evidence](automation-general-rollout-2026-11-01.md).
 
 ## Multi-child trial — identity approved, attachment review pending (1 November 2026)
 
-Current live application SHA **be4a3c16d08b60f00538b1842e742d5369bec324**. Owner approved release and only the new trial; maintenance13:21:30–13:21:32 UTC, all10 changed hashes verified, no migration/assets changes. Exact trial manifest pins HK11-16/rows2740–2743 to workflow8; previous HK11-12 pending review preserved. Owner explicitly authorized duplicating Maria's supplied photo; original source hashes verified.
+Trial application SHA was **be4a3c16d08b60f00538b1842e742d5369bec324**; superseded by the general rollout UI release above. Owner approved release and only the new trial; maintenance13:21:30–13:21:32 UTC, all10 changed hashes verified, no migration/assets changes. Exact trial manifest pins HK11-16/rows2740–2743 to workflow8; previous HK11-12 pending review preserved. Owner explicitly authorized duplicating Maria's supplied photo; original source hashes verified.
 
 Owner's real confirmation changed all four rows to new_confirmed. Three story identities succeeded once (attempts681–683),0.123USD aggregate configured estimate; one combined preview accepted and delivered, run3 waiting_response, paid0. Preview/image HTTPS200, checksums/labels and visual QA passed, invalid signature403. Authenticated checkout verified one attempt per stage. Four affected workers and scheduler healthy, public HTTPS200, no new Laravel log bytes,81 historical failed jobs unchanged. On owner follow-up, scoped full-history sync consumed the actual13:39:57 UTC approval once; worker approved all three stories13:46:03 UTC. Run3 now waiting_staff/review, identities681–683 linked, one pending attachment-review signal, paid0. Authenticated UI verified; checkout header is mixed statuses because standalone puzzle2743 remains new_confirmed. Delay was polling (minimum600seconds plus scan), not rejected correlation; no code/polling change. No puzzle artwork, payment, printing or shipping.
 
@@ -112,9 +112,9 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
 | Production database | **`herokid`**; MySQL and Redis bind locally according to the health audit |
-| Live release verified by SSH | **`c66b3302168b635cc3ff436e7b8696f20bf83ce6`**, detached HEAD |
+| Live release verified by SSH | **`db66e184d5d03c6e62bbae4009c360ba867211b7`**, detached HEAD,1 November14:25UTC |
 | Release branch | `codex/order-process-trial-readiness`, published to GitHub; documentation successor is not the live code SHA |
-| Previous release | `9ff04df5eee62fb83652f4449983302e37b2d679`; preserve process context v2 and trial side effects |
+| Previous release | `be4a3c16d08b60f00538b1842e742d5369bec324`; preserve general activation and live side effects |
 | Upstream repository | `https://github.com/HosamZewain/herokid.git`; inspect local remote configuration before pushing |
 | Production identity | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://hero-kid.com`; retain the existing APP_KEY |
 | Runtime credential source | Existing protected environment/cached configuration and encrypted application settings; IAM role for AWS |
