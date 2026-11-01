@@ -1,10 +1,12 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 19:51 UTC / 21:51 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 20:19 UTC / 22:19 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Live Codex progress and ZIP — prepared, not deployed (1 November 2026)
+## Live Codex progress and ZIP — deployed 1 November 2026
 
-Automatic scene-only refresh and numbered original-PNG ZIP download are prepared and tested. Eight existing generated images were read from private S3 and all checksums/attachment references matched at20:08:49UTC. No worker/generation changes or deployment performed. [Scope and verification](codex-scenes-live-download-2026-11-01.md).
+Owner explicitly approved **ec91a5a086a0f2eb7ee4059b2ab722454970134d**, deployed20:15:40–20:15:42UTC /22:15Cairo without maintenance or worker restart. All9 changed-file hashes matched, previous assets/drift and env/cached config preserved. Route/Blade caches refreshed and FPM gracefully reloaded. Recovery checkpoint `/home/ubuntu/herokid-before-scenes-live-ec91a5a`; basea24f34a. No schema/config/generation changes or replay.
+
+Authenticated checkoutHK11-16 shows automatic progress and ZIP button. Progress GETs return200; actual browser ZIP download is32,751,867bytes with13 numbered PNGs, ZIP integrity passed. All13 S3 objects were read and matched saved SHA256 and attachment paths/disks at20:18:48UTC. Owner-started run c43c1278-3589-433b-9ed3-6b3b8b1ddedc/order2754 completed20:16:04UTC, ready_preview, active slot released:23min34sec from request to persisted completion. Public home/up/cart200, seven services active, scheduler success, zero new Laravel log bytes. [Scope and verification](codex-scenes-live-download-2026-11-01.md). Documentation successor is distinct from live application SHA.
 
 ## Payment saves and manual Automation handoff — deployed 1 November 2026
 

@@ -1,9 +1,12 @@
-# Codex scene progress and downloads — prepared 1 November 2026
+# Codex scene progress and downloads — deployed 1 November 2026
 
-Prepared, not deployed. Base live application a24f34a25eb3be4f8b3e4e1a52b81b370f160dfa; isolated branch codex/manual-codex-scenes-trial. Owner requested automatic scene refresh, actual S3 verification and download all.
+Deployed with explicit owner approval at20:15:40–20:15:42UTC, application ec91a5a086a0f2eb7ee4059b2ab722454970134d. Base live application a24f34a25eb3be4f8b3e4e1a52b81b370f160dfa; isolated branch codex/manual-codex-scenes-trial. Owner requested automatic scene refresh, actual S3 verification and download all.
 
 Progress polls an authenticated read-only fragment every ten seconds while the page is visible. Only scene results change; unrelated order forms retain input. Unchanged result versions preserve DOM; network failures retain images and retry. No generation/collector invocation from GET. Download takes the current run's saved scenes, checks original S3 bytes against stored SHA256 and returns numbered PNGs in a private temporary ZIP deleted after sending. Empty/cross-order access is rejected, incomplete runs include only saved scenes and display their count. No public S3 URL or new dependency.
 
 Validation: 15 feature tests/64 assertions on isolated SQLite, network disabled, storage fake; one Node polling behavior test (updates, unchanged DOM, outage recovery, hidden tab). PHP8.3 syntax passes; release-lockfile Vite build byte-identical, all prior hashed assets restored. Production PHP ZipArchive available. No schema/config/worker changes required. Publication should refresh route/Blade cache and gracefully reload FPM only; leave Codex service and active generation untouched.
 
 Live read-only S3 evidence at 20:08:49 UTC: run c43c1278-3589-433b-9ed3-6b3b8b1ddedc / order2754 had eight saved scenes. Each object read through s3_private (s3 driver, private prefix, herokid-prod-media-2026) matched its saved SHA256; all eight OrderAttachments referenced the same path and s3_private disk. Status running; nine scenes observed at20:10:52 UTC. No replay, new generation, customer message or production mutation performed.
+
+
+Post-deployment: all9 changed hashes and env/config preserved; route/Blade cache and graceful FPM reload only. Seven services active, scheduler successful, public home/up/cart200, no new Laravel log bytes at20:18UTC. Authenticated progress200 and ZIP downloaded via actual UI:32,751,867bytes,13 numbered original PNG entries, integrity verified locally. All13 production S3 reads/checksums/references matched. Actual run completed20:16:04UTC (23m34s from request) and story2754 is ready_preview. Recovery checkpoint /home/ubuntu/herokid-before-scenes-live-ec91a5a; previous codea24f34a, no schema/data rollback necessary for this UI-only change. Browser automation evaluate call timed out before clicking; native UI click succeeded and real downloaded ZIP was validated.
