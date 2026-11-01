@@ -2,11 +2,28 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Order, OrderAutomation, OrderAutomationRevision, OrderProcessEvent, OrderProcessRun, OrderPaymentReview, Permission, User, WhatsAppConversation};
-use App\Services\OrderAutomation\Process\{ProcessDefinition, ProcessLivePolicy, ProcessPaymentReview, ProcessTemplates};
+use App\Models\AdminActivityLog;
+use App\Models\Order;
+use App\Models\OrderAutomation;
+use App\Models\OrderAutomationRevision;
+use App\Models\OrderPaymentReview;
+use App\Models\OrderProcessEvent;
+use App\Models\OrderProcessRun;
+use App\Models\Permission;
+use App\Models\RoboDeskConversationSetting;
+use App\Models\User;
+use App\Models\WhatsAppConversation;
+use App\Services\OrderAutomation\Process\ProcessDefinition;
+use App\Services\OrderAutomation\Process\ProcessPaymentReview;
+use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\RoboDesk\Conversations\ActiveConversationRefreshService;
+use App\Services\RoboDesk\Conversations\OrderConversationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\{Http, Queue};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class ProcessPaymentReviewTest extends TestCase
@@ -14,8 +31,11 @@ class ProcessPaymentReviewTest extends TestCase
     use RefreshDatabase;
 
     private User $actor;
+
     private Order $order;
+
     private OrderProcessRun $run;
+
     private WhatsAppConversation $conversation;
 
     protected function setUp(): void
@@ -58,7 +78,7 @@ class ProcessPaymentReviewTest extends TestCase
         app(ProcessPaymentReview::class)->process($this->conversation);
     }
 
-    public function test_any_attachment_after_preview_marks_review_once_without_money_or_order_effects(): void
+    public function test_attachment_marks_pending_payment_review_once_without_changing_money_or_order_status(): void
     {
         $before = $this->order->fresh()->getRawOriginal();
         $this->message('attachment');
@@ -67,7 +87,11 @@ class ProcessPaymentReviewTest extends TestCase
         $this->assertDatabaseCount('order_payment_reviews', 1);
         $this->assertDatabaseCount('order_payment_review_signals', 1);
         $this->assertSame('pending', OrderPaymentReview::first()->status);
-        $this->assertSame($before, $this->order->fresh()->getRawOriginal());
+        $after = $this->order->fresh();
+        $this->assertSame('pending_review', $after->payment_status);
+        $this->assertSame($before['paid_amount_cents'], $after->getRawOriginal('paid_amount_cents'));
+        $this->assertSame($before['status'], $after->status);
+        $this->assertDatabaseHas('order_payment_events', ['source' => 'automation_payment_review', 'amount_delta_cents' => 0, 'affects_collection_stats' => false]);
         $this->assertSame('waiting_staff', $this->run->fresh()->status);
         $this->assertDatabaseCount('order_payment_proofs', 0);
         Http::assertNothingSent();
@@ -84,6 +108,81 @@ class ProcessPaymentReviewTest extends TestCase
         $this->assertDatabaseCount('order_payment_review_signals', 1);
         $this->assertSame($before, $this->order->fresh()->getRawOriginal());
         $this->assertSame('waiting_response', $this->run->fresh()->status);
+    }
+
+    public function test_automation_audit_is_order_visible_and_deduplicated_on_reread(): void
+    {
+        $this->message('audit-attachment');
+        $this->poll();
+        $logs = AdminActivityLog::where('subject_type', Order::class)->where('subject_id', $this->order->id)->get();
+        $this->assertTrue($logs->contains(fn ($log) => $log->action === 'automation.payment_review' && data_get($log->properties, 'actor_name') === 'Automation' && $log->user_id === null));
+        $count = $logs->count();
+        $this->poll();
+        $this->assertSame($count, AdminActivityLog::where('subject_type', Order::class)->where('subject_id', $this->order->id)->count());
+        $timeline = app(OrderActivityTimelineService::class)->forGroup(['orders' => collect([$this->order])]);
+        $this->assertTrue($timeline['events']->contains(fn ($event) => $event['actor'] === 'Automation' && $event['action'] === 'automation.payment_review'));
+        $this->assertStringNotContainsString('synthetic.png', $logs->toJson());
+    }
+
+    public function test_existing_open_review_adopts_pending_status_without_replaying_signal(): void
+    {
+        $message = $this->message('already-seen');
+        $review = OrderPaymentReview::create(['run_id' => $this->run->id, 'checkout_key' => $this->run->checkout_key, 'status' => 'pending']);
+        $review->signals()->create(['message_id' => $message->id]);
+        $this->actingAs($this->actor);
+        $this->poll();
+        $this->assertSame('pending_review', $this->order->fresh()->payment_status);
+        $this->assertSame(0, (int) $this->order->fresh()->paid_amount_cents);
+        $this->assertDatabaseCount('order_payment_review_signals', 1);
+        $this->assertSame(0, \App\Models\AdminActivityLog::where('action', 'automation.attachment_received')->count());
+        $this->assertSame('Automation', data_get(\App\Models\AdminActivityLog::where('action', 'automation.payment_review')->first()->properties, 'actor_name'));
+        $count = \App\Models\AdminActivityLog::count();
+        $this->poll();
+        $this->assertSame($count, \App\Models\AdminActivityLog::count());
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_message_audit_distinguishes_acceptance_delivery_and_unchanged_rereads(): void
+    {
+        $step = $this->run->steps()->where('type', 'whatsapp')->firstOrFail();
+        $attempt = $step->messageAttempts()->create(['number' => 1, 'status' => 'processing']);
+        $attempt->update(['status' => 'completed', 'receipt' => ['message_id' => 'synthetic']]);
+        $this->assertTrue(AdminActivityLog::where('subject_id', $this->order->id)->get()
+            ->contains(fn ($log) => str_contains($log->description, 'قبلها RoboDesk')));
+        $attempt->update(['receipt' => ['message_id' => 'synthetic', 'delivery' => ['status' => 'failed']]]);
+        $count = AdminActivityLog::count();
+        $attempt->update(['receipt' => ['message_id' => 'synthetic', 'delivery' => ['status' => 'failed']]]);
+        $this->assertSame($count, AdminActivityLog::count());
+        $this->assertSame(1, AdminActivityLog::where('subject_id', $this->order->id)->get()
+            ->filter(fn ($log) => str_contains($log->description, 'فشل التسليم'))->count());
+        DB::beginTransaction();
+        $attempt->update(['receipt' => ['delivery' => ['status' => 'delivered']]]);
+        DB::rollBack();
+        $this->assertSame($count, AdminActivityLog::count());
+    }
+
+    public function test_assignment_stays_automation_until_identity_approval_and_review_signal(): void
+    {
+        $ownership = app(AutomationAssignment::class);
+        $this->run->update(['status' => 'waiting_response']);
+        $this->assertTrue($ownership->owns($this->order));
+        $this->message('receipt-before-identity');
+        $this->poll();
+        $this->assertTrue($ownership->owns($this->order));
+        $this->run->steps()->create(['node_id' => 'approve', 'type' => 'approve_identity', 'status' => 'completed']);
+        $this->run->update(['status' => 'waiting_staff']);
+        $this->assertFalse($ownership->owns($this->order));
+    }
+
+    public function test_approved_identity_waits_for_payment_review_but_manual_revision_does_not(): void
+    {
+        $ownership = app(AutomationAssignment::class);
+        $this->assertFalse($ownership->owns($this->order));
+        $this->run->steps()->create(['node_id' => 'approve', 'type' => 'approve_identity', 'status' => 'completed']);
+        $this->assertTrue($ownership->owns($this->order));
+        $this->order->updateQuietly(['paid_amount_cents' => 12000, 'payment_status' => 'partially_paid']);
+        $this->assertFalse($ownership->owns($this->order));
     }
 
     public function test_plain_text_outbound_and_wrong_interaction_do_not_mark_review(): void
@@ -147,20 +246,21 @@ class ProcessPaymentReviewTest extends TestCase
         $this->poll();
         $this->assertDatabaseCount('order_payment_review_signals', 1);
         $this->assertSame('closed', $review->fresh()->status);
-        $this->assertSame($before, $this->order->fresh()->getRawOriginal());
+        $this->assertSame('unpaid', $this->order->fresh()->payment_status);
+        $this->assertSame(0, (int) $this->order->fresh()->paid_amount_cents);
         $this->assertSame('waiting_staff', $this->run->fresh()->status);
         $this->assertStringNotContainsString('Reviewed manually', $review->fresh()->getRawOriginal('review_note'));
     }
 
     public function test_background_full_read_keeps_waiting_staff_and_ingests_delayed_attachments(): void
     {
-        \App\Models\RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'synthetic']);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'synthetic']);
         $this->conversation->update(['sync_cursor' => 'later-message', 'last_full_synced_at' => now()]);
         Http::fake(['hero-kid.robodesk.ai/*' => Http::response(['phone' => '201000000001', 'messages' => [
             ['id' => 'delayed-attachment', 'direction' => 'in', 'type' => 'image', 'date' => now()->toISOString(), 'text' => '',
                 'channelId' => 'wamid.delayed', 'replyTo' => null, 'templateName' => null, 'interactionId' => 'interaction-one', 'attachments' => [['file' => 'not-necessarily-a-receipt.png']]],
         ]])]);
-        app(\App\Services\RoboDesk\Conversations\OrderConversationService::class)->sync($this->order);
+        app(OrderConversationService::class)->sync($this->order);
         Http::assertSent(fn ($r) => $r->method() === 'GET' && $r['limit'] === 50 && ! isset($r['after']));
         $this->assertDatabaseCount('order_payment_review_signals', 1);
         $this->assertSame('waiting_staff', $this->run->fresh()->status);

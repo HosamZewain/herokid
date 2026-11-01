@@ -206,6 +206,7 @@
                                 <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
                                 <select name="assignment" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل الطلبات</option>
+                                    <option value="automation" @selected(request('assignment') === 'automation')>Automation</option>
                                     <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
                                     <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
                                     <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>

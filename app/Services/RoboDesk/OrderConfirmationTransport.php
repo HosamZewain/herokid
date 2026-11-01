@@ -4,6 +4,7 @@ namespace App\Services\RoboDesk;
 
 use App\Models\RoboDeskConversationSetting;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\Orders\AutomationActivity;
 use App\Services\RoboDesk\Conversations\ConversationPhone;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
 use Illuminate\Http\Client\ConnectionException;
@@ -17,10 +18,10 @@ class OrderConfirmationTransport
     {
         return $this->sendTemplate($data['customer']['phone'], 'herokid_order_confirmation',
             [$data['customer']['name'], $data['display_reference'], $data['order_details'], number_format($data['amounts']['total'], 2, '.', '')],
-            'تأكيد طلب HeroKid '.$data['display_reference']);
+            'تأكيد طلب HeroKid '.$data['display_reference'], $data['checkout_reference'] ?? null);
     }
 
-    public function sendTemplate(string $phone, string $template, array $values, string $summary): array
+    public function sendTemplate(string $phone, string $template, array $values, string $summary, ?string $checkoutKey = null): array
     {
         $fields = ProcessTemplates::fields($template);
         if (! $fields || ! array_is_list($values) || count($values) !== count($fields)
@@ -41,17 +42,20 @@ class OrderConfirmationTransport
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $open = $this->openInteractions($http, $base, $phone);
             while ($open !== []) {
+                $this->activity($checkoutKey, 'conversation_close_started', 'بدء إغلاق المحادثة السابقة قبل إرسال القالب');
                 try {
                     $closed = $http->post($base.'/close', ['closeData' => [
                         'conversations' => $open, 'isBulk' => true,
                         'status' => 'completed', 'statusType' => 'completed',
                     ], 'note' => null]);
                     if ($closed->successful() && $closed->json('success') === true) {
+                        $this->activity($checkoutKey, 'conversation_closed', 'أكد RoboDesk إغلاق المحادثة السابقة');
                         break;
                     }
                 } catch (ConnectionException) {
                     // Closing sends no message. Re-read before the single recovery attempt.
                 }
+                $this->activity($checkoutKey, 'conversation_close_uncertain', 'لم يتأكد إغلاق المحادثة؛ إعادة فحص حالتها قبل أي إرسال');
                 if ($closeRecoveryUsed) {
                     throw new RuntimeException('confirmation_close_uncertain');
                 }
@@ -68,6 +72,7 @@ class OrderConfirmationTransport
             ]);
             // The only safe retry is the exact, documented no-send response.
             if ($response->status() === 501 && trim($response->body()) === 'Customer already have another interaction') {
+                $this->activity($checkoutKey, 'send_not_attempted', 'رفض RoboDesk الإرسال بسبب محادثة مفتوحة؛ لم تُرسل رسالة في هذه المحاولة');
                 if ($attempt === 0) {
                     continue;
                 }
@@ -87,6 +92,13 @@ class OrderConfirmationTransport
             return ['message_id' => $messageId, 'interaction_id' => $interactionId];
         }
         throw new RuntimeException('confirmation_send_uncertain');
+    }
+
+    private function activity(?string $checkoutKey, string $action, string $description): void
+    {
+        if ($checkoutKey) {
+            AutomationActivity::record($checkoutKey, $action, $description, ['stage' => 'تجهيز وإرسال قالب واتساب']);
+        }
     }
 
     private function openInteractions(PendingRequest $http, string $base, string $phone): array

@@ -6,6 +6,7 @@ use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
 use App\Exceptions\GptImageException;
 use App\Jobs\GenerateProcessIdentity;
+use App\Models\AdminActivityLog;
 use App\Models\AiModel;
 use App\Models\AiProvider;
 use App\Models\Order;
@@ -13,6 +14,7 @@ use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
 use App\Models\OrderPaymentReview;
+use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderStatusDefinition;
@@ -36,6 +38,7 @@ use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\OrderAutomation\WorkflowInputs;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\OrderPaymentService;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -119,6 +122,23 @@ class OrderProcessIdentityTest extends TestCase
         return OrderProcessRun::where('checkout_key', $key)->firstOrFail();
     }
 
+    public function test_confirmed_checkout_is_reserved_during_enrollment_and_released_when_not_matched(): void
+    {
+        $order = null;
+        DB::transaction(function () use (&$order) {
+            $order = Order::create(['order_number' => 'TEST-RESERVED', 'checkout_group_key' => 'RESERVED', 'story_id' => $this->story->id,
+                'status' => 'new', 'uploaded_photos' => ['child-photos/identity.png'], 'delivery_details' => ['phone' => '01000000001']]);
+            $order->update(['status' => 'new_confirmed']);
+        });
+        $assignment = app(AutomationAssignment::class);
+        $this->assertTrue($assignment->owns($order));
+        $this->workflow->update(['enabled' => false]);
+        $this->assertFalse($assignment->owns($order));
+        $this->workflow->update(['enabled' => true]);
+        OrderProcessEvent::where('checkout_key', 'RESERVED')->update(['status' => 'processed']);
+        $this->assertFalse($assignment->owns($order));
+    }
+
     private function generated(int $count = 1): OrderProcessRun
     {
         $run = $this->enroll($count);
@@ -164,16 +184,16 @@ class OrderProcessIdentityTest extends TestCase
             $order->order_number = 'ROLLOUT-'.$label;
             $order->checkout_group_key = 'ROLLOUT-'.$label;
             $order->save();
-            $events[$label] = \App\Models\OrderProcessEvent::create(['event_key' => 'old-'.$label, 'type' => 'status_entered',
+            $events[$label] = OrderProcessEvent::create(['event_key' => 'old-'.$label, 'type' => 'status_entered',
                 'order_id' => $order->id, 'checkout_key' => $order->checkout_group_key, 'data' => ['status' => 'new_confirmed'], 'status' => 'pending']);
         }
-        $boundary = \App\Models\OrderProcessEvent::max('id');
+        $boundary = OrderProcessEvent::max('id');
         $this->workflow->update(['process_after_event_id' => $boundary]);
         config(['order_process.enrollment_mode' => 'all_new', 'order_process.after_order_id' => 0]);
         app(ProcessRuntime::class)->tick();
         $this->assertDatabaseCount('order_process_runs', 1);
         for ($i = 0; $i < 2; $i++) {
-            \App\Models\OrderProcessEvent::firstOrCreate(['event_key' => 'owner-rollout-selected'], [
+            OrderProcessEvent::firstOrCreate(['event_key' => 'owner-rollout-selected'], [
                 'type' => 'status_entered', 'order_id' => $events['selected']->order_id,
                 'checkout_key' => $events['selected']->checkout_key, 'data' => ['status' => 'new_confirmed'], 'status' => 'pending']);
             app(ProcessRuntime::class)->tick();
@@ -232,6 +252,10 @@ class OrderProcessIdentityTest extends TestCase
             $this->assertSame(0, (int) $task->order->paid_amount_cents);
             $this->assertSame(ProcessIdentityService::APPROVED_ORDER_STATUS, $task->order->status);
             $this->assertSame(1, $task->order->statusLogs()->where('status', ProcessIdentityService::APPROVED_ORDER_STATUS)->count());
+            $audit = AdminActivityLog::where('subject_id', $task->order_id)->where('action', 'automation.identity_approved')->get();
+            $this->assertCount(1, $audit);
+            $this->assertNull($audit->first()->user_id);
+            $this->assertSame('Automation', data_get($audit->first()->properties, 'actor_name'));
         }
     }
 

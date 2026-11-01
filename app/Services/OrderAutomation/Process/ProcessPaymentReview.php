@@ -8,8 +8,11 @@ use App\Models\OrderPaymentReviewSignal;
 use App\Models\OrderProcessRun;
 use App\Models\User;
 use App\Models\WhatsAppConversation;
+use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\RoboDesk\Conversations\ConversationPhone;
 use App\Support\AdminActivityLogger;
+use App\Support\OrderStatusRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -21,7 +24,7 @@ class ProcessPaymentReview
         $query = OrderProcessRun::query()->where('account_key', config('robodesk.conversations.account_key', 'primary'))
             ->whereIn('status', ['running', 'waiting_response', 'waiting_staff'])
             ->where('order_id', '>', (int) config('order_process.after_order_id'))
-            ->whereHas('order', fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', \App\Support\OrderStatusRegistry::keysForBehavior(\App\Support\OrderStatusRegistry::TYPE_ORDER, 'cancelled')))
+            ->whereHas('order', fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled')))
             ->whereHas('automation', fn ($q) => $q->where('enabled', true))
             ->whereNotIn('id', OrderPaymentReview::select('run_id')->where('status', 'closed'));
         $policy = app(ProcessLivePolicy::class);
@@ -101,16 +104,59 @@ class ProcessPaymentReview
                 }
                 // Message-level locking and uniqueness prevent concurrent cross-order reuse.
                 $message->newQuery()->whereKey($message->id)->lockForUpdate()->firstOrFail();
-                if (OrderPaymentReviewSignal::where('message_id', $message->id)->exists()) {
+                if ($existing = OrderPaymentReviewSignal::where('message_id', $message->id)->first()) {
+                    // Adopt the display status for an already-open review without replaying
+                    // the attachment, sending, generating, or recording any payment.
+                    $review = OrderPaymentReview::whereKey($existing->review_id)->where('run_id', $current->id)->where('status', 'pending')->first();
+                    if ($review) {
+                        $this->syncPaymentStatus($review);
+                    }
                     return;
                 }
                 $review = OrderPaymentReview::firstOrCreate(['run_id' => $current->id], ['checkout_key' => $current->checkout_key, 'status' => 'pending']);
                 if ($review->status !== 'pending') {
                     return;
                 }
+                $firstSignal = $review->wasRecentlyCreated;
                 $review->signals()->create(['message_id' => $message->id]);
+                AutomationActivity::record($current->checkout_key, 'attachment_received', 'وصل مرفق من العميل بعد معاينة الهوية ويحتاج مراجعة الفريق؛ ليس إثباتًا لاعتماد الدفع', ['source_id' => $message->id]);
+                if ($firstSignal && $current->status === 'waiting_staff' && $current->steps()->where('type', 'approve_identity')->where('status', 'completed')->exists()) {
+                    AutomationActivity::record($current->checkout_key, 'handoff', 'تسليم مسؤولية الطلب للفريق بعد تأكيد الهوية ووصول مرفق لمراجعة الدفع');
+                }
+                $this->syncPaymentStatus($review);
             });
         }
+    }
+
+    /** Preserve settled amounts: only zero-balance unpaid checkouts get this status. */
+    public function syncPaymentStatus(OrderPaymentReview $review): void
+    {
+        $orders = Order::where('checkout_group_key', $review->checkout_key)->orderBy('id')->lockForUpdate()->get();
+        if ($orders->isEmpty() || $orders->contains(fn ($order) => (int) $order->paid_amount_cents !== 0)) {
+            return;
+        }
+        $target = $review->status === 'pending' ? 'pending_review' : 'unpaid';
+        if ($orders->contains(fn ($order) => ! in_array($order->payment_status, ['unpaid', 'pending_review'], true))) {
+            return;
+        }
+        $before = $orders->first()->only(['payment_status', 'paid_amount_cents', 'payment_method']);
+        foreach ($orders as $order) {
+            if ($order->payment_status === $target) {
+                continue;
+            }
+            $delivery = $order->delivery_details ?? [];
+            $delivery['payment_status'] = $target;
+            $order->update(['payment_status' => $target, 'delivery_details' => $delivery]);
+            if ($target === 'pending_review') {
+                AutomationActivity::record($order, 'payment_review', 'تغيير حالة الدفع إلى بانتظار مراجعة الدفع دون تسجيل أي مبلغ', ['source_id' => $review->id]);
+            }
+            $order->statusLogs()->create(['status_type' => 'payment', 'status' => $target,
+                'notes' => $target === 'pending_review' ? 'وصل مرفق من العميل لمراجعة الدفع؛ لم يتم تسجيل مبلغ مدفوع.' : 'انتهت مراجعة المرفقات دون تسجيل دفعة.']);
+        }
+        app(OrderPaymentLedgerService::class)->recordTransition(
+            $orders->first(), $before, $orders->first()->only(['payment_status', 'paid_amount_cents', 'payment_method']),
+            'automation_payment_review', metadata: ['review_id' => $review->id], affectsCollectionStats: false,
+        );
     }
 
     private function eligible(OrderProcessRun $run): bool
@@ -137,8 +183,9 @@ class ProcessPaymentReview
             abort_unless($review->status === 'pending', 409, 'تم إنهاء المراجعة بالفعل.');
             abort_unless((int) $review->signals()->max('id') === $seenSignalId, 409, 'وصل مرفق جديد. حدّث الصفحة وراجعه أولاً.');
             $review->update(['status' => 'closed', 'reviewed_by' => $actor->id, 'reviewed_at' => now(), 'review_note' => $note]);
-            AdminActivityLogger::log('order.payment_review_closed', 'إنهاء مراجعة مرفقات العميل دون تسجيل دفعة تلقائية', $review,
-                ['order_id' => $order->id], $actor);
+            $this->syncPaymentStatus($review);
+            AdminActivityLogger::log('order.payment_review_closed', 'إنهاء مراجعة مرفقات العميل دون تسجيل دفعة تلقائية', $order,
+                ['review_id' => $review->id], $actor);
         });
     }
 }

@@ -53,6 +53,7 @@ class OrderStatusService
 
         return DB::transaction(function () use ($order, $status, $notes, $request): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+            app(AutomationAssignment::class)->assertAvailable($locked);
             $oldStatus = $locked->status;
             $oldNotes = $locked->notes;
             $statusChanged = $oldStatus !== $status;

@@ -25,6 +25,7 @@ class OrderAssignmentService
 
         try {
             return DB::transaction(function () use ($representative, $admin, $request, $force, $key): OrderGroupAssignment {
+                app(AutomationAssignment::class)->assertAvailable($representative);
                 $assignment = OrderGroupAssignment::query()
                     ->with('assignee:id,name')
                     ->where('checkout_group_key', $key)
@@ -87,6 +88,7 @@ class OrderAssignmentService
         }
 
         DB::transaction(function () use ($representative, $admin, $request, $force): void {
+            app(AutomationAssignment::class)->assertAvailable($representative);
             $assignment = OrderGroupAssignment::query()
                 ->with('assignee:id,name')
                 ->where('checkout_group_key', $representative->checkoutGroupKey())

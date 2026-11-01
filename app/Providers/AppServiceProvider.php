@@ -6,14 +6,21 @@ use App\Contracts\MobileSocialIdentityVerifier;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\FaqItem;
+use App\Models\OrderPaymentReview;
+use App\Models\OrderProcessIdentity;
+use App\Models\OrderProcessMessageAttempt;
+use App\Models\OrderProcessRun;
+use App\Models\OrderProcessStep;
 use App\Models\PricingPackage;
 use App\Models\PricingPackageProduct;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductVariant;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\StoryCategory;
+use App\Observers\AutomationActivityObserver;
 use App\Observers\PublicCatalogImageObserver;
 use App\Services\Catalog\RoboDeskFeedCache;
 use App\Services\Images\PublicCatalogImageSources;
@@ -48,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        foreach ([OrderProcessRun::class, OrderProcessStep::class,
+            OrderProcessIdentity::class, OrderProcessMessageAttempt::class,
+            RoboDeskIntegrationEvent::class, OrderPaymentReview::class] as $automationModel) {
+            $automationModel::observe(AutomationActivityObserver::class);
+        }
         foreach ([Story::class, Product::class, ProductVariant::class,
             PricingPackage::class, PricingPackageProduct::class, FaqItem::class,
             StoryCategory::class, ProductCategory::class, Setting::class,

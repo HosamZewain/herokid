@@ -75,7 +75,7 @@ class OrderActivityTimelineService
             'id' => $log->id,
             'action' => $log->action,
             'description' => $log->description ?: $this->actionLabel($log->action),
-            'actor' => $log->user?->name ?? 'النظام',
+            'actor' => $log->user?->name ?? (data_get($log->properties, 'actor_name') === 'Automation' ? 'Automation' : 'النظام'),
             'created_at' => $log->created_at,
             'order_reference' => $order ? $this->orderReference($order) : null,
             'category' => $this->category($log->action),
@@ -166,6 +166,9 @@ class OrderActivityTimelineService
         }
 
         foreach ([
+            'stage' => 'المرحلة',
+            'source_id' => 'رقم سجل التنفيذ',
+            'decision' => 'قرار العميل',
             'reason' => 'السبب',
             'admin_notes' => 'ملاحظة الحالة',
             'assigned_to_name' => 'مسؤول الطلب',
@@ -174,6 +177,7 @@ class OrderActivityTimelineService
             'prompt_type_label' => 'نوع البرومبت',
             'product_title' => 'المنتج',
             'story_title' => 'القصة',
+            'child_name' => 'الطفل',
         ] as $key => $label) {
             if (! isset($properties[$key]) || $properties[$key] === '') {
                 continue;

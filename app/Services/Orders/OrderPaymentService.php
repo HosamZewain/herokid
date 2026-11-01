@@ -99,6 +99,9 @@ class OrderPaymentService
                 'paid_amount_cents' => (int) $orders->first()->paid_amount_cents,
                 'payment_method' => $orders->first()->payment_method,
             ];
+            if ($status === OrderPaymentStatus::PENDING_REVIEW && $orders->contains(fn ($order) => (int) $order->paid_amount_cents > 0)) {
+                throw ValidationException::withMessages(['payment_status' => 'احتفظ بحالة ومبلغ الدفعة المسجلة؛ راجع المرفقات من تنبيه مراجعة الدفع.']);
+            }
             // Re-saving the same settled status (e.g. changing its method after
             // a discount) must not silently turn an overpayment into a refund.
             if ($status === $old['payment_status']

@@ -10,6 +10,7 @@ use App\Models\OrderAttachment;
 use App\Models\OrderCheckoutReference;
 use App\Models\OrderItem;
 use App\Models\User;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\OrderStatusService;
 use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
@@ -41,6 +42,7 @@ class AgentCheckoutProductionService
             ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at, MIN(id) as first_order_id')
             ->where('status', 'new')
             ->whereNotNull('checkout_group_key')
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->groupBy('checkout_group_key')
             ->orderBy('first_created_at')
             ->orderBy('first_order_id')
@@ -119,6 +121,7 @@ class AgentCheckoutProductionService
         $groupKeys = Order::query()
             ->where('status', 'new')
             ->whereNotNull('checkout_group_key')
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->distinct()
             ->pluck('checkout_group_key')
             ->map(fn ($key): string => (string) $key)
@@ -187,6 +190,7 @@ class AgentCheckoutProductionService
             ->selectRaw('checkout_group_key, MIN(created_at) as first_created_at, MIN(id) as first_order_id')
             ->whereIn('status', ['new', 'generating'])
             ->whereNotNull('checkout_group_key')
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->groupBy('checkout_group_key')
             ->orderBy('first_created_at')
             ->orderBy('first_order_id')
@@ -247,6 +251,7 @@ class AgentCheckoutProductionService
             ->selectRaw('checkout_group_key, MIN(updated_at) as revision_requested_at, MIN(id) as first_order_id')
             ->where('status', 'revision_requested')
             ->whereNotNull('checkout_group_key')
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->groupBy('checkout_group_key')
             ->orderBy('revision_requested_at')
             ->orderBy('first_order_id')
@@ -562,6 +567,8 @@ class AgentCheckoutProductionService
 
     public function authorizeAttachmentUpload(Order $order, User $agent, ?string $unitKey): string
     {
+
+        $this->assertNotAutomated($order);
         $selection = $this->allowedUnitForOrder($order, $agent, $unitKey);
         if (! in_array($order->status, ['new', 'generating'], true)) {
             throw new AgentApiException('FORBIDDEN', 'Production attachments are not accepted for this order status.', 403);
@@ -573,6 +580,8 @@ class AgentCheckoutProductionService
     /** Authorize an explicit correction without relying on checkout ownership. */
     public function authorizePersonalizationMutation(Order $order, User $agent, string $unitKey): void
     {
+
+        $this->assertNotAutomated($order);
         $this->allowedUnitForOrder($order, $agent, $unitKey);
 
         if (! in_array($order->status, ['generating', 'revision_requested'], true)) {
@@ -630,6 +639,8 @@ class AgentCheckoutProductionService
 
     public function authorizePreviewUpload(Order $order, User $agent, string $type, ?string $unitKey = null): string
     {
+
+        $this->assertNotAutomated($order);
         $unitType = $type === 'booklet' ? 'story' : 'product';
 
         return $this->allowedUnitForOrder($order, $agent, $unitKey, $unitType)['unit']['unit_key'];
@@ -720,7 +731,13 @@ class AgentCheckoutProductionService
         ];
     }
 
-    /** @return Collection<int, Order> */
+    private function assertNotAutomated(Order $order): void
+    {
+        if (app(AutomationAssignment::class)->owns($order)) {
+            throw new AgentApiException('ORDER_IN_AUTOMATION', 'Automation is responsible for this checkout until staff handoff.', 409);
+        }
+    }
+
     private function authorizedOrders(string $reference, User $agent, bool $lock = false): Collection
     {
         $orders = $this->ordersForReference($reference, $lock);
@@ -742,6 +759,9 @@ class AgentCheckoutProductionService
         }
 
         $orders = $query->with($this->relations())->get();
+        if ($lock && $orders->isNotEmpty()) {
+            $this->assertNotAutomated($orders->first());
+        }
         if ($orders->isEmpty()) {
             throw new AgentApiException('CHECKOUT_NOT_FOUND', 'Checkout not found.', 404);
         }
@@ -753,6 +773,7 @@ class AgentCheckoutProductionService
     {
         return Order::query()
             ->where('checkout_group_key', $groupKey)
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->with($this->relations())
             ->orderBy('id')
             ->lockForUpdate()

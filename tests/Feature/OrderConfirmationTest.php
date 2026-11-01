@@ -274,6 +274,7 @@ class OrderConfirmationTest extends TestCase
         $this->send($event);
         $this->send($event->fresh());
         Http::assertSentCount(2);
+        $this->assertSame(1, \App\Models\AdminActivityLog::where('action', 'automation.confirmation_send_started')->count());
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')
             && $r['language'] === 'ar-EG' && $r['to'] === '201000000001' && ! isset($r['procedureId'])
             && $r['template']['data'][1] === $one->checkoutReference->short_reference

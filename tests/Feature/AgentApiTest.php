@@ -10,6 +10,7 @@ use App\Models\OrderGroupAssignment;
 use App\Models\OrderItem;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
@@ -247,6 +248,23 @@ class AgentApiTest extends TestCase
             ->assertJsonPath('error', 'ORDER_NOT_FOUND');
     }
 
+    public function test_automatic_confirmation_reserves_checkout_from_agent_production(): void
+    {
+        $agent = $this->agent();
+        $order = $this->storyOrder('AUTO-RESERVED', 'AUTO-RESERVED-1');
+        RoboDeskIntegrationEvent::create(['event_id' => 'auto-reserved', 'direction' => 'outbound',
+            'event_type' => 'order.pending_confirmation', 'checkout_group_key' => $order->checkoutGroupKey(),
+            'order_id' => $order->id, 'status' => 'succeeded', 'payload' => ['confirmation' => ['eligible_at_creation' => true]]]);
+        $response = $this->withToken($this->token($agent))->postJson('/api/agent/checkouts/acquire-next', [], ['Idempotency-Key' => 'auto-reserved']);
+        $this->assertSame('new', $order->fresh()->status);
+        $this->assertNotSame('generating', $order->fresh()->status);
+        $response->assertOk()->assertJsonPath('reason', 'NO_AVAILABLE_ORDERS');
+        $this->app['auth']->forgetGuards();
+        $this->withToken($this->identityToken($agent))->postJson('/api/agent/checkouts/acquire-next-identity', [], ['Idempotency-Key' => 'auto-reserved-identity'])
+            ->assertOk()->assertJsonPath('reason', 'NO_AVAILABLE_STORY_IDENTITIES');
+        $this->assertSame('new', $order->fresh()->status);
+    }
+
     public function test_acquire_next_atomically_starts_complete_checkout_without_assignment_and_is_retry_safe(): void
     {
         $agent = $this->agent();
@@ -417,7 +435,7 @@ class AgentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('team_notes.0.body', 'Change the school name and regenerate the large sheet.')
             ->assertJsonPath('team_notes.0.author', 'Production Manager');
-        $this->assertStringContainsString('+03:00', $context->json('team_notes.0.created_at'));
+        $this->assertStringContainsString(now()->setTimezone('Africa/Cairo')->format('P'), $context->json('team_notes.0.created_at'));
 
         $this->withToken($token)
             ->postJson('/api/agent/checkouts/acquire-next-revision', [], ['Idempotency-Key' => 'revision-queue-first'])

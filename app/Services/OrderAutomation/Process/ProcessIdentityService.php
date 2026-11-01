@@ -18,6 +18,7 @@ use App\Services\ChildIdentity\ChildIdentityAggregateService;
 use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\OrderAutomation\WorkflowInputs;
+use App\Services\Orders\AutomationActivity;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -272,6 +273,7 @@ class ProcessIdentityService
             $order = $task->order;
             if ($order->status !== self::APPROVED_ORDER_STATUS) {
                 $order->update(['status' => self::APPROVED_ORDER_STATUS]);
+                AutomationActivity::record($order, 'identity_approved', 'اعتماد الهوية بناءً على تأكيد العميل وتغيير الحالة إلى هوية مؤكدة وجاهزة للتوليد', ['source_id' => $task->attempt_id, 'stage' => 'اعتماد هوية الطفل', 'story_title' => $order->story?->title, 'child_name' => $order->child_name]);
                 $order->statusLogs()->create(['status_type' => 'order', 'status' => self::APPROVED_ORDER_STATUS,
                     'notes' => 'تأكيد هوية العميل عبر مسار العمليات #'.$run->id]);
             }

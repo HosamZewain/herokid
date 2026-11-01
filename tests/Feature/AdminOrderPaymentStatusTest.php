@@ -23,6 +23,34 @@ class AdminOrderPaymentStatusTest extends TestCase
         $this->admin = User::factory()->create(['role' => 'admin']);
     }
 
+    public function test_pending_review_is_not_money_and_staff_can_record_real_payment_later(): void
+    {
+        [$first, $second] = $this->checkout();
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.payment', $first->id), [
+            'payment_status' => 'pending_review',
+        ])->assertSessionHas('success');
+        $this->assertSame('pending_review', $first->fresh()->payment_status);
+        $this->assertSame(0, $first->fresh()->paid_amount_cents);
+        $this->assertDatabaseHas('order_payment_events', ['new_status' => 'pending_review', 'amount_delta_cents' => 0, 'affects_collection_stats' => false]);
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.payment', $first->id), [
+            'payment_status' => 'partially_paid', 'paid_amount' => 200, 'payment_method' => 'انستاباي',
+        ])->assertSessionHas('success');
+        $this->assertSame(20000, $first->fresh()->paid_amount_cents);
+        $this->assertSame(20000, $second->fresh()->paid_amount_cents);
+        $this->assertDatabaseHas('order_payment_events', ['previous_status' => 'pending_review', 'amount_delta_cents' => 20000, 'affects_collection_stats' => true, 'actor_user_id' => $this->admin->id]);
+    }
+
+    public function test_pending_review_cannot_erase_an_existing_deposit_on_any_checkout_row(): void
+    {
+        [$first, $second] = $this->checkout();
+        $second->updateQuietly(['paid_amount_cents' => 20000, 'payment_status' => 'partially_paid']);
+        $this->actingAs($this->admin)->patch(route('admin.orders.groups.payment', $first->id), [
+            'payment_status' => 'pending_review',
+        ])->assertSessionHasErrors('payment_status');
+        $this->assertSame(20000, $second->fresh()->paid_amount_cents);
+        $this->assertSame('partially_paid', $second->fresh()->payment_status);
+    }
+
     public function test_partial_payment_is_saved_for_the_whole_checkout_and_remaining_is_shown(): void
     {
         [$first, $second] = $this->checkout();

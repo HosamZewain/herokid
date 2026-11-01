@@ -57,6 +57,8 @@ class OrderGroupMergeService
                 throw ValidationException::withMessages(['source_reference' => 'تعذر العثور على عمليتي الشراء النشطتين.']);
             }
 
+            app(AutomationAssignment::class)->assertAvailable($targetOrders->first());
+            app(AutomationAssignment::class)->assertAvailable($sourceOrders->first());
             $this->assertMergeable($targetOrders, $sourceOrders);
 
             $target = $this->groups->present($this->loadForPresentation($targetOrders));

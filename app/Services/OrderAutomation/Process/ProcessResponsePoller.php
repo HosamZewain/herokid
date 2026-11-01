@@ -7,6 +7,7 @@ use App\Models\OrderProcessStep;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\Orders\AutomationActivity;
 use App\Services\RoboDesk\TemplateDelivery;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -159,6 +160,7 @@ class ProcessResponsePoller
                 return;
             }
             DB::table('order_process_responses')->insert(['run_id' => $run->id, 'step_id' => $step->id, 'message_id' => $message->id, 'decision' => $case['key'], 'created_at' => now(), 'updated_at' => now()]);
+            AutomationActivity::record($run->checkout_key, 'customer_response', 'تسجيل رد العميل على رسالة الأوتوميشن', ['stage' => 'تسجيل رد العميل', 'decision' => $case['text'], 'source_id' => $message->id]);
             $step->update(['status' => 'completed', 'completed_at' => now()]);
             app(ProcessRuntime::class)->move($run, $case['next']);
         });

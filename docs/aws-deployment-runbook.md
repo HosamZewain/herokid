@@ -2,6 +2,12 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 14:25 UTC / 16:25 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Prepared ownership/payment-review/audit update — not deployed (1 November 2026)
+
+The owner requested Automation in the existing assignee field, an explicit pending-payment-review status, comprehensive process review, and per-order activity attribution. This work is prepared on `codex/automation-assignee-payment-review`; it is **not live**. It preserves real employee assignments/KPI attribution and monetary balances, guards conflicting staff/Agent API writes, and records future lifecycle actions in the existing order activity timeline. Existing eligible open reviews adopt the display status on normal subsequent reads without replaying effects. [Implementation, verification and deployment boundaries](automation-assignment-payment-audit-2026-11-01.md).
+
+Read-only revalidation at **15:06:35 UTC /17:06 Cairo**: live application still **db66e184d5d03c6e62bbae4009c360ba867211b7**; 13 process runs (6 waiting_response, 7 waiting_staff), 7 pending reviews (6 with no recorded payment), 81 historical failed jobs. No new code/config/data deployment was performed during this review.
+
 ## General identity/payment rollout — active 1 November 2026
 
 Owner explicitly approved new orders and existing confirmed orders. Activation completed **14:08:41 UTC / 16:08 Cairo**, on application be4a3c16d08b60f00538b1842e742d5369bec324. Workflow8/revision1 is enabled and renamed **توليد الهوية ومراجعة الدفع**. Scope is all_new with order floor0, event boundary10; prior trial IDs are cleared. Legacy order-confirmation ownership remains unchanged. Future actual confirmed story checkouts can enroll;9 reviewed existing confirmed checkouts were enrolled through9 new uniquely keyed events, not historical replay.11 identities were eligible, configured estimate0.451USD; actual provider billing is not verified.

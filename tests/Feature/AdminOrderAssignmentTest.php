@@ -6,8 +6,10 @@ use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\OrderGroupAssignment;
 use App\Models\Permission;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Orders\AutomationAssignment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -45,6 +47,34 @@ class AdminOrderAssignmentTest extends TestCase
             'action' => 'order.assignment_acquired',
             'subject_id' => $first->id,
         ]);
+    }
+
+    public function test_automation_uses_existing_assignee_column_and_filters_without_overwriting_employee(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        [$order] = $this->group();
+        $this->actingAs($admin)->post(route('admin.orders.groups.assignment.acquire', $order));
+        RoboDeskIntegrationEvent::create(['event_id' => 'synthetic-auto', 'direction' => 'outbound', 'event_type' => 'order.pending_confirmation',
+            'checkout_group_key' => $order->checkoutGroupKey(), 'order_id' => $order->id, 'status' => 'succeeded',
+            'payload' => ['confirmation' => ['eligible_at_creation' => true]], 'response_payload' => []]);
+        $ownership = app(AutomationAssignment::class);
+        $this->assertTrue($ownership->owns($order));
+        $this->get(route('admin.orders.index', ['assignment' => 'automation']))->assertOk()->assertSee('🤖 Automation');
+        foreach (['mine', 'unassigned', 'user:'.$admin->id] as $filter) {
+            $rows = $this->get(route('admin.orders.index', ['assignment' => $filter]))->assertOk()->viewData('groups');
+            $this->assertCount(0, $rows->items());
+        }
+        $rows = $this->get(route('admin.orders.index', ['assignment' => 'assigned']))->assertOk()->viewData('groups');
+        $this->assertCount(1, $rows->items());
+        $this->post(route('admin.orders.groups.assignment.takeover', $order))->assertSessionHasErrors('assignment');
+        $this->patch(route('admin.orders.update', $order), ['status' => 'under_review'])->assertSessionHasErrors('assignment');
+        $this->assertSame('new', $order->fresh()->status);
+        $this->delete(route('admin.orders.destroy', $order))->assertSessionHasErrors('assignment');
+        $this->assertFalse($order->fresh()->trashed());
+        $this->assertSame($admin->id, OrderGroupAssignment::first()->assigned_to_user_id);
+        RoboDeskIntegrationEvent::query()->update(['status' => 'failed']);
+        $this->assertFalse($ownership->owns($order));
+        $this->assertSame($admin->id, OrderGroupAssignment::first()->assigned_to_user_id);
     }
 
     public function test_second_admin_cannot_acquire_an_assigned_order_without_manager_takeover(): void

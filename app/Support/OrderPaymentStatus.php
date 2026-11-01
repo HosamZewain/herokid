@@ -6,6 +6,8 @@ class OrderPaymentStatus
 {
     public const UNPAID = 'unpaid';
 
+    public const PENDING_REVIEW = 'pending_review';
+
     public const PARTIALLY_PAID = 'partially_paid';
 
     public const PAID_WITHOUT_SHIPPING = 'paid_without_shipping';
@@ -14,6 +16,7 @@ class OrderPaymentStatus
 
     public const STATUSES = [
         self::UNPAID,
+        self::PENDING_REVIEW,
         self::PARTIALLY_PAID,
         self::PAID_WITHOUT_SHIPPING,
         self::PAID_IN_FULL,

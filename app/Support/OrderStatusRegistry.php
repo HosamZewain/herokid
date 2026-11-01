@@ -190,6 +190,7 @@ class OrderStatusRegistry
             [self::TYPE_ORDER, 'delivered', 'تم التوصيل', 'emerald', 'delivered'],
             [self::TYPE_ORDER, 'cancelled', 'ملغي', 'red', 'cancelled'],
             [self::TYPE_PAYMENT, 'unpaid', 'غير مدفوع', 'slate', 'unpaid'],
+            [self::TYPE_PAYMENT, 'pending_review', 'بانتظار مراجعة الدفع', 'orange', 'unpaid'],
             [self::TYPE_PAYMENT, 'partially_paid', 'مدفوع جزئياً', 'amber', 'partially_paid'],
             [self::TYPE_PAYMENT, 'paid_without_shipping', 'مدفوع بدون شحن', 'blue', 'paid_without_shipping'],
             [self::TYPE_PAYMENT, 'paid_in_full', 'مدفوع كلياً', 'emerald', 'paid_in_full'],

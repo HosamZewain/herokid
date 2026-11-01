@@ -157,7 +157,7 @@ class AdminOrderGroupService
         $activeKeys = $lifecycle === 'active' ? $matchingKeys : $this->groupedFilteredQuery($activeRequest, false, $catalogType, 'active')
             ->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
         if (! $request->filled('assignment') || $request->query('assignment') === 'unassigned') {
-            $unassigned = Order::query()->whereIn('checkout_group_key', $activeKeys)
+            $unassigned = Order::query()->whereIn('checkout_group_key', $activeKeys)->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
                 ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('order_group_assignments')
                     ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'))
                 ->distinct()->count('checkout_group_key');
@@ -408,6 +408,7 @@ class AdminOrderGroupService
             ? 0
             : Order::query()
                 ->whereIn('checkout_group_key', $activeKeys)
+                ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
                 ->whereNotExists(fn ($query) => $query
                     ->selectRaw('1')
                     ->from('order_group_assignments')
@@ -697,6 +698,7 @@ class AdminOrderGroupService
             'marketing_sources' => $report ? [] : $visibleOrders->map(fn (Order $order): array => MarketingAttribution::forOrder($order))->unique(fn (array $source): string => json_encode($source))->values()->all(),
             'source_notes' => $first->source_notes,
             'created_by_admin' => $report ? null : $first->createdByAdmin,
+            'automation_assigned' => $first->getAttribute('automation_assigned') ?? app(AutomationAssignment::class)->owns($first),
             'assignment' => $first->groupAssignment,
             'assigned_admin' => $first->groupAssignment?->assignee,
             'assigned_at' => $first->groupAssignment?->assigned_at,
@@ -868,7 +870,12 @@ class AdminOrderGroupService
         }
 
         $assignment = (string) $request->query('assignment', '');
-        if ($assignment === 'mine' && $request->user()) {
+        if (in_array($assignment, ['mine', 'unassigned'], true) || str_starts_with($assignment, 'user:')) {
+            $query->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys());
+        }
+        if ($assignment === 'automation') {
+            $query->whereIn('checkout_group_key', app(AutomationAssignment::class)->keys());
+        } elseif ($assignment === 'mine' && $request->user()) {
             $query->whereExists(fn ($assigned) => $assigned
                 ->selectRaw('1')
                 ->from('order_group_assignments')
@@ -880,10 +887,10 @@ class AdminOrderGroupService
                 ->from('order_group_assignments')
                 ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
         } elseif ($assignment === 'assigned') {
-            $query->whereExists(fn ($assigned) => $assigned
+            $query->where(fn ($owned) => $owned->whereIn('checkout_group_key', app(AutomationAssignment::class)->keys())->orWhereExists(fn ($assigned) => $assigned
                 ->selectRaw('1')
                 ->from('order_group_assignments')
-                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key')));
         } elseif (preg_match('/\Auser:(\d+)\z/', $assignment, $matches) === 1) {
             $query->whereExists(fn ($assigned) => $assigned
                 ->selectRaw('1')
@@ -1046,6 +1053,7 @@ class AdminOrderGroupService
 
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
         $creationDates = app(CheckoutIntakeStatistics::class)->datesForKeys($keys);
+        $automationKeys = DB::query()->fromSub(app(AutomationAssignment::class)->keys(), 'automation_owned')->whereIn('checkout_key', $keys)->pluck('checkout_key');
 
         return $query
             ->when($report, fn (Builder $query): Builder => $query->select([
@@ -1059,7 +1067,7 @@ class AdminOrderGroupService
             ->orderBy('id')
             ->get()->each(fn (Order $order) => $order->setAttribute(
                 'checkout_first_created_at', $creationDates->get($order->checkout_group_key)
-            ));
+            )->setAttribute('automation_assigned', ! $order->trashed() && $automationKeys->contains($order->checkout_group_key)));
     }
 
     private function ordersForStats(Collection $keys, bool $includeDeleted): Collection

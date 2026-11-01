@@ -12,6 +12,8 @@ use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
+use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
 use App\Services\RoboDesk\OrderMessageRetry;
@@ -100,7 +102,7 @@ class ProcessRuntime
                     $step = $run->steps()->where('type', 'whatsapp')->where('status', 'processing')->first();
                     if ($run->status === 'sending' && $step?->lease_until?->isPast()) {
                         $step->update(['status' => 'uncertain']);
-                        $step->messageAttempts()->where('status', 'processing')->update(['status' => 'uncertain', 'error_code' => 'send_receipt_missing']);
+                        $step->messageAttempts()->where('status', 'processing')->get()->each(fn ($attempt) => $attempt->update(['status' => 'uncertain', 'error_code' => 'send_receipt_missing']));
                         $run->update(['status' => 'uncertain', 'error_code' => 'send_receipt_missing']);
                     }
                 });
@@ -226,6 +228,7 @@ class ProcessRuntime
                             // Only policy-approved early-order transitions; no payment/shipping/AI side effects.
                             foreach ($this->contexts->orders($run->checkout_key, true) as $order) {
                                 $order->update(['status' => $c['to']]);
+                                AutomationActivity::record($order, 'status_changed', 'تغيير حالة الطلب بواسطة الأوتوميشن', ['before' => ['status' => $c['from']], 'after' => ['status' => $c['to']], 'source_id' => $run->id]);
                                 $order->statusLogs()->create(['status_type' => 'order', 'status' => $c['to'], 'notes' => 'مسار العمليات #'.$run->id]);
                             }
                             $run->context = $this->contexts->snapshot($this->contexts->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
@@ -252,6 +255,9 @@ class ProcessRuntime
                             $step->update(['status' => 'waiting', 'started_at' => now()]);
                             $run->status = 'waiting_staff';
                             $run->save();
+                            if (! app(AutomationAssignment::class)->owns($run->order)) {
+                                AutomationActivity::record($run->checkout_key, 'handoff', 'تسليم مسؤولية الطلب للفريق للمراجعة واستكمال العمل');
+                            }
 
                             return null;
                         case 'end':
@@ -359,7 +365,7 @@ class ProcessRuntime
                     $url = app(ProcessIdentityService::class)->previewUrl($run);
                     $fields = [$data['customer']['name'], $data['display_reference'], implode('، ', $data['stories']), implode('، ', $data['children']),
                         implode('، ', $data['products']) ?: 'لا توجد منتجات إضافية', $url, number_format($data['amounts']['total'], 2, '.', ''), number_format($data['amounts']['remaining'], 2, '.', '')];
-                    $receipt = app(OrderConfirmationTransport::class)->sendTemplate($data['customer']['phone'], $template, $fields, 'معاينة هوية طلب HeroKid '.$data['display_reference']);
+                    $receipt = app(OrderConfirmationTransport::class)->sendTemplate($data['customer']['phone'], $template, $fields, 'معاينة هوية طلب HeroKid '.$data['display_reference'], $run->checkout_key);
                 } else {
                     $receipt = app(OrderConfirmationTransport::class)->send($data);
                 }
@@ -443,10 +449,10 @@ class ProcessRuntime
             } else {
                 abort_unless($this->policy->enabled() && $run->automation->enabled && $run->status === 'waiting_staff', 422);
                 $this->guard($run);
-                $run->steps()->where('node_id', $run->node_id)->update(['status' => 'completed', 'completed_at' => now()]);
+                $run->steps()->where('node_id', $run->node_id)->get()->each(fn ($step) => $step->update(['status' => 'completed', 'completed_at' => now()]));
                 $this->move($run, $this->node($run)['next']);
             }
-            AdminActivityLogger::log('order_process.staff_action', 'إجراء موظف على مسار العمليات', $run, ['action' => $action, 'reason' => $reason], $actor);
+            AdminActivityLogger::log('order_process.staff_action', 'إجراء موظف على مسار العمليات', $run->order, ['source_id' => $run->id, 'action' => $action, 'reason' => $reason], $actor);
         });
     }
 }

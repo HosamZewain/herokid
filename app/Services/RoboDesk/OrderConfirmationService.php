@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\WhatsAppConversationMessage;
 use App\Services\OrderAutomation\Process\ProcessLivePolicy;
+use App\Services\Orders\AutomationActivity;
 use App\Services\RoboDesk\Conversations\RoboDeskConversationHistoryProvider;
 use App\Support\Phone;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +121,7 @@ class OrderConfirmationService
             $message->update(['confirmation_event_id' => $request->id]);
             foreach ($orders as $order) {
                 $order->forceFill(['status' => 'new_confirmed'])->save();
+                AutomationActivity::record($order, 'order_confirmed', 'تسجيل تأكيد العميل وتغيير حالة الطلب إلى طلب جديد مؤكد', ['source_id' => $message->id]);
                 $order->statusLogs()->create(['status_type' => 'order', 'status' => 'new_confirmed',
                     'notes' => 'أكد العميل الطلب عبر رسالة تأكيد الطلب في RoboDesk.']);
             }

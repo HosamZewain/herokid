@@ -6,6 +6,7 @@ use App\Exceptions\AgentApiException;
 use App\Models\Order;
 use App\Models\OrderCheckoutReference;
 use App\Models\User;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\OrderChildIdentityPromptService;
 use App\Services\Orders\OrderStatusService;
 use App\Support\AdminActivityLogger;
@@ -36,6 +37,7 @@ class AgentStoryIdentityService
             ->whereNotNull('story_id')
             ->where('status', 'new')
             ->whereNotNull('checkout_group_key')
+            ->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
             ->groupBy('checkout_group_key')
             ->orderBy('first_created_at')
             ->orderBy('first_order_id')
@@ -132,6 +134,9 @@ class AgentStoryIdentityService
             throw new AgentApiException('ORDER_NOT_FOUND', 'Story order not found.', 404);
         }
 
+        if ($forMutation) {
+            $this->assertNotAutomated($order);
+        }
         if ($forMutation && ! in_array($order->status, ['new', 'under_review'], true)) {
             throw new AgentApiException('INVALID_ORDER_STATUS', 'Story identity files can only be changed while identity work is active.', 409);
         }
@@ -278,12 +283,26 @@ class AgentStoryIdentityService
         return $prompt;
     }
 
+    private function assertNotAutomated(Order $order): void
+    {
+        if (app(AutomationAssignment::class)->owns($order)) {
+            throw new AgentApiException('ORDER_IN_AUTOMATION', 'Automation is currently processing this checkout.', 409);
+        }
+    }
+
     private function authorizedOrders(string $reference, User $agent, bool $lock = false): Collection
     {
         $this->assertStoryScope($agent);
         $checkout = OrderCheckoutReference::query()->where('short_reference', $reference)->first();
         if (! $checkout) {
             throw new AgentApiException('CHECKOUT_NOT_FOUND', 'Checkout not found.', 404);
+        }
+
+        if ($lock) {
+            $order = Order::where('checkout_group_key', $checkout->checkout_group_key)->first();
+            if ($order) {
+                $this->assertNotAutomated($order);
+            }
         }
 
         return $this->ordersForKey($checkout->checkout_group_key, $lock);
@@ -293,7 +312,7 @@ class AgentStoryIdentityService
     {
         $query = Order::query()->where('checkout_group_key', $groupKey)->orderBy('id');
         if ($lock) {
-            $query->lockForUpdate();
+            $query->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())->lockForUpdate();
         }
 
         return $query->with([

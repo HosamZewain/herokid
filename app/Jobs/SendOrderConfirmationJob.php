@@ -87,6 +87,8 @@ class SendOrderConfirmationJob implements ShouldQueue
                 ->update(['status' => 'processing', 'attempts' => 1, 'payload' => json_encode($data, JSON_THROW_ON_ERROR)])) {
                 return;
             }
+            $event->refresh();
+            \App\Services\Orders\AutomationActivity::record($event->checkout_group_key, 'confirmation_send_started', 'بدء محاولة إرسال تأكيد الطلب', ['source_id' => $event->id, 'stage' => 'تأكيد الطلب']);
             try {
                 $receipt = $transport->send($data);
                 $event->update(['status' => 'succeeded', 'response_payload' => $receipt, 'processed_at' => now(), 'last_error' => null]);
