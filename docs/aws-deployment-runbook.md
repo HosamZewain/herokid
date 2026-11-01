@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 21:21 UTC / 23:21 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Puzzle images and story timing — prepared 2 November 2026
+
+Owner explicitly authorized deploying both together. Isolated release is based on live7dafd2148ffb766e7cdaef1db7bd52f16b856b45 and incorporates timing364ee2e without unrelated work. At22:33:27UTC, only cached Codex concurrency was temporarily changed2→0 to drain safely; existing generation/collection continued. Checkpoint `/home/ubuntu/herokid-before-puzzle-timing-20261102` preserves private prior env/config. At22:39UTC no story remained running:5completed,4quality_review,5waiting_slot. Do not retry the four quality failures. Restore concurrency2 only after verifying the new worker and preserved bridge state. This paragraph is preparation evidence, not a deployment claim. [Puzzle contract](puzzle-automation-2026-11-02.md).
+
 ## Full process audit / prepared timing — 2 November 2026 Cairo
 
 Read-only verification22:00–22:12UTC1Nov: live application remains7dafd2148ffb766e7cdaef1db7bd52f16b856b45. Confirmation/general identity/payment-review/Codex flags enabled; workflow8 authorized.19 identities succeeded,14 previews delivered, no approved-identity link mismatch, no current confirmed story without a process, no eligible unenrolled scene story.35 automatic scene objects re-read and verified. Two HK10-597 stories now quality_review (2655:11/13,2653:2/13); other work continues. Confirmation exceptions HK10-616 deliveryfailed, HK10-621 missing send receipt despite delivered template in read-only provider history, and new HK11-26 unknown/no template found in its attempt window. No replay/reconciliation performed. Full details and precise money/handoff boundaries: [audit](story-automation-audit-2026-11-02.md).

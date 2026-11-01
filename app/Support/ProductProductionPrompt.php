@@ -32,12 +32,12 @@ class ProductProductionPrompt
     }
 
     /** @return Collection<int, array<string, mixed>> */
-    public static function forItem(OrderItem $item): Collection
+    public static function forItem(OrderItem $item, bool $privateImageInputs = false): Collection
     {
         $definitions = self::componentDefinitionsForItem($item);
         $componentCount = $definitions->count();
 
-        return $definitions->map(function (array $definition) use ($item, $componentCount): array {
+        return $definitions->map(function (array $definition) use ($item, $componentCount, $privateImageInputs): array {
             $componentKey = $definition['stable_key'];
             $unitKey = $componentCount === 1
                 ? 'product:'.$item->id
@@ -52,7 +52,7 @@ class ProductProductionPrompt
                 'quantity_per_item' => $definition['quantity_per_item'],
                 'quantity' => max(1, (int) $item->quantity) * $definition['quantity_per_item'],
                 'unit_key' => $unitKey,
-                'prompt' => self::renderTemplate($item, $definition),
+                'prompt' => self::renderTemplate($item, $definition, $privateImageInputs),
                 'prompt_source' => $definition['source'],
                 'uses_live_template' => str_starts_with($definition['source'], 'live_'),
                 'uses_snapshot' => $definition['source'] === 'order_component_snapshot',
@@ -79,11 +79,11 @@ class ProductProductionPrompt
         return $definition ? self::renderTemplate($item, $definition) : '';
     }
 
-    private static function renderTemplate(OrderItem $item, array $definition): string
+    private static function renderTemplate(OrderItem $item, array $definition, bool $privateImageInputs = false): string
     {
         $item->loadMissing(['order.checkoutReference', 'product']);
         $template = $definition['prompt_template'];
-        $values = self::variablesForItem($item, $definition);
+        $values = self::variablesForItem($item, $definition, $privateImageInputs);
 
         return preg_replace_callback('/{{\s*([a-zA-Z0-9_]+)\s*}}/', function (array $matches) use ($values): string {
             return array_key_exists($matches[1], $values) ? $values[$matches[1]] : $matches[0];
@@ -139,7 +139,7 @@ class ProductProductionPrompt
     }
 
     /** @return array<string, string> */
-    private static function variablesForItem(OrderItem $item, array $definition): array
+    private static function variablesForItem(OrderItem $item, array $definition, bool $privateImageInputs = false): array
     {
         $order = $item->order;
         $snapshot = $item->personalization_snapshot ?? [];
@@ -162,7 +162,7 @@ class ProductProductionPrompt
             'special_notes' => self::optionalValue($notes),
             'photos_count' => (string) count(array_values(array_filter($order->uploaded_photos ?? [], 'is_string'))),
             'preferred_photo' => 'Choose the clearest attached photo unless the order notes explicitly identify another photo.',
-            'child_image_references' => self::childImageReferences($order),
+            'child_image_references' => $privateImageInputs ? 'Use the reference images attached to this request.' : self::childImageReferences($order),
         ];
     }
 

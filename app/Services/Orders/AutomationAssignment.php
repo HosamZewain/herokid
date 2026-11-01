@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Models\Order;
 use App\Services\OrderAutomation\Process\ProcessLivePolicy;
+use App\Services\ProductAutomation\PuzzleAutomation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -57,7 +58,25 @@ class AutomationAssignment
 
         $sceneTrials = DB::table('codex_scene_runs')->select('checkout_key')->where('active_slot', 1);
 
-        $keys = $runs->union($confirmations)->union($evaluating);
+        $puzzles = DB::table('puzzle_generations')->select('checkout_key')
+            ->whereIn('status', ['queued', 'processing', 'uncertain'])
+            ->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'));
+        $keys = $runs->union($confirmations)->union($evaluating)->union($puzzles);
+
+        if (app(PuzzleAutomation::class)->enabled()) {
+            $floor = max((int) config('puzzle_automation.after_event_id'), (int) DB::table('puzzle_automation_cursors')->where('id', 1)->value('event_id'));
+            $pendingPuzzles = DB::table('order_process_events as puzzle_event')->select('puzzle_event.checkout_key')
+                ->join('orders as puzzle_order', 'puzzle_order.checkout_group_key', '=', 'puzzle_event.checkout_key')
+                ->join('order_items as puzzle_item', 'puzzle_item.order_id', '=', 'puzzle_order.id')
+                ->join('products as puzzle_product', 'puzzle_product.id', '=', 'puzzle_item.product_id')
+                ->where('puzzle_event.id', '>', $floor)->where('puzzle_event.type', 'status_entered')
+                ->where('puzzle_event.data->status', 'new_confirmed')->whereNull('puzzle_order.deleted_at')
+                ->whereNotIn('puzzle_order.status', ['new', 'cancelled', 'completed'])
+                ->whereIn('puzzle_product.slug', config('puzzle_automation.product_slugs'))
+                ->whereNotIn('puzzle_event.checkout_key', DB::table('order_automation_holds')->select('checkout_key'))
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('puzzle_generations')->whereColumn('order_item_id', 'puzzle_item.id'));
+            $keys->union($pendingPuzzles);
+        }
 
         return $includeScenes ? $keys->union($sceneTrials) : $keys;
     }

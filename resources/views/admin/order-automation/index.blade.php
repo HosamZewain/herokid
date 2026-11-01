@@ -1,6 +1,9 @@
 <x-admin-layout>
     <x-slot name="header"><h1 class="text-2xl font-bold">أتمتة الطلبات</h1></x-slot>
     <div class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
+        @can('orders.view')
+            @include('admin.orders._puzzle-generations', ['puzzleRuns' => \App\Models\PuzzleGeneration::with('item', 'order.checkoutReference')->latest()->limit(40)->get(), 'puzzleMonitor' => true])
+        @endcan
         <div class="flex flex-wrap items-start justify-between gap-4"><div><h2 class="text-2xl font-bold">مسارات العمليات</h2><p class="mt-2 text-slate-500">ابنِ شروط البداية والخطوات وفروع الرد، وراجع نتيجة كل مسار.</p></div><span class="rounded-full bg-indigo-50 px-4 py-2 text-indigo-700">إدارة ومحاكاة وتشغيل المسارات</span></div>
         @can('orders.view')
         <a href="{{ route('admin.order-automation.codex-scenes') }}" class="block rounded-2xl border border-indigo-200 bg-indigo-50 p-5 font-bold text-indigo-900">متابعة توليد مشاهد القصص — Codex · الطابور والتقدم والنتائج</a>

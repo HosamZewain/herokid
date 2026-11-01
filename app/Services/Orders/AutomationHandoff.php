@@ -6,6 +6,7 @@ use App\Jobs\SendOrderConfirmationJob;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderProcessRun;
+use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Support\AdminActivityLogger;
@@ -53,6 +54,9 @@ class AutomationHandoff
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get();
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
             abort_if($rows->isEmpty(), 404);
+            if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages(['assignment' => 'توليد البازل جارٍ أو نتيجته غير مؤكدة. انتظر اكتماله أو مراجعة المحاولة قبل الاستلام.']);
+            }
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'أوقف تجربة Codex من زر الإيقاف وانتظر تأكيد توقفها، ثم استلم الطلب.']);
             }

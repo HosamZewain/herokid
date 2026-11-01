@@ -592,6 +592,7 @@
                     </div>
                     @endcan
 
+                    @include('admin.orders._puzzle-generations', ['puzzleRuns' => \App\Models\PuzzleGeneration::with('item')->where('checkout_key', $order->checkoutGroupKey())->orderBy('id')->get()])
                     <!-- Product Production Prompts -->
                     @if($order->story_id && config('codex_scenes.enabled'))
                         @include('admin.orders._codex-scenes')

@@ -286,3 +286,8 @@ Schedule::command('bosta:automatic-pickup')->dailyAt('14:30')->timezone('Africa/
 
 // Enroll eligible stories only when automatic mode is enabled; collect manual and automatic runs.
 Schedule::command('codex-scenes:sync')->everyMinute()->withoutOverlapping(3);
+
+Artisan::command('puzzle-automation:tick', function (\App\Services\ProductAutomation\PuzzleAutomation $puzzles) {
+    $this->info('New puzzle runs: '.$puzzles->tick());
+})->purpose('Generate one confirmed puzzle image; never replay uncertain provider calls');
+Schedule::command('puzzle-automation:tick')->everyMinute()->withoutOverlapping(10)->runInBackground();
