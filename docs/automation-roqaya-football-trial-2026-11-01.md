@@ -1,0 +1,25 @@
+# Roqaya football owner trial — 1 November 2026
+
+## Authorization and identity
+
+Owner explicitly requested a new real end-to-end identity trial after RoboDesk's repair, using the two supplied Roqaya photos and a football story. Owner confirmed age7. Existing owner-approved WhatsApp recipient retained; no new customer audience. One identity generation and the two confirmation/preview stages are in scope. Stop at manual payment review; no fabricated payment, printing, shipment or scene generation. Uncertain outcomes must not auto-retry.
+
+Order **HK11-12 / 2729**, child **رقية**, girl,7, Arabic; active story57 **بطلة كرة القدم: مباراة من أجل الفريق**. Created through canonical AdminOrderCreationService at approximately10:47 UTC, marked OWNER-ROQAYA-FOOTBALL-TRIAL-20261101 with explicit no-print/no-ship delivery and parent notes. Current pricing service produced399EGP item +90 delivery =489, paid0; no manual pricing override. Source filenames IMG_4938.jpg and IMG_4686 2.jpg, bytes3,918,680 and3,660,388. Exact originals uploaded via standard private order-photo storage; both stored SHA256 values matched the originals. No child photos, signed URLs or private recipient data committed to Git.
+
+## Verified RoboDesk repair
+
+Authenticated browser read confirmed hero-kid.general **version16**, production/latest, timestamp1November12:42:10 Cairo. Its instructions explicitly recognize confirmation and revision texts with the expected acknowledgments and separate receipt review from verified payment. RoboDesk reports12 synthetic AI checks and unchanged API fields; that report is not proof of this new real trial. The tenant UI was accessible; no RoboDesk configuration was changed by this agent.
+
+## Runtime checkpoint and scope
+
+Live code remains **ae52dcbdf50a56f4ec3c454fa3f065df4e0f1e26**, no code deployment. Existing workflow8/revision1 retained; all other workflows disabled. Trial pin changed from2701 to2729 and after_order_id from2700 to2728. All other environment and cached config settings retained, legacy confirmation owner unchanged, identity estimate0.041USD (estimate, not vendor bill), existing1USD estimate ceiling unchanged. No new permissions or infrastructure.
+
+Private checkpoint `/home/ubuntu/herokid-before-roqaya-trial-20261101` retains original env/config and trial state. Scheduler and four relevant workers paused briefly for coherent config refresh, then restored; FPM graceful reload. All required services/timer and four workers verified active. The old trial HK10-633/run1 remains waiting_staff with original approval/history preserved; moving the pin does not authorize its replay.
+
+Preparation recovery notes: order creation succeeded but the reporting script assumed an unavailable total_cents return key. Recovered the one already-created order by its unique marker, checked identity/photos, and wrote the checkpoint; did not create a duplicate. The repin script stopped at an incorrectly named FPM binary after updating config; validated using /usr/sbin/php-fpm8.3 and immediately resumed all paused workers/timer. Local scripts corrected. No web maintenance or production-data rollback.
+
+## Observed result / current stop
+
+Confirmation event22926: succeeded, one attempt, provider message correlation present, delivery **delivered** after a full history sync. Order remains new awaiting the owner's real confirmation. No identity task or process run for2729 yet; one other existing run only. Historical failed jobs81 unchanged. Authenticated admin verified child/story/age/two images and unpaid amount. Await owner pressing «تأكيد الطلب» specifically for HK11-12, then observe one identity generation, preview delivery, actual identity response, correct RoboDesk acknowledgment and costomer_confirmed status/history. Do not manually fabricate either customer response.
+
+Local operational packet `/tmp/herokid-roqaya-trial-20261101`; remote state `/tmp/herokid-roqaya-state.json` (0600). `status.php` is read-only unless --sync explicitly requests the canonical recipient history sync; registration and repin scripts have already executed and must not be replayed blindly.
