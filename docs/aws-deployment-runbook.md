@@ -1,12 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
-**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 14:25 UTC / 16:25 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
+**Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 15:50 UTC / 17:50 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
-## Prepared ownership/payment-review/audit update — not deployed (1 November 2026)
+## Automation ownership/payment-review/audit — deployed 1 November 2026
 
-The owner requested Automation in the existing assignee field, an explicit pending-payment-review status, comprehensive process review, and per-order activity attribution. This work is prepared on `codex/automation-assignee-payment-review`; it is **not live**. It preserves real employee assignments/KPI attribution and monetary balances, guards conflicting staff/Agent API writes, and records future lifecycle actions in the existing order activity timeline. Existing eligible open reviews adopt the display status on normal subsequent reads without replaying effects. [Implementation, verification and deployment boundaries](automation-assignment-payment-audit-2026-11-01.md).
+Owner explicitly approved **d5618eea80db393c9d03550c9936a64cddd909ef**. Deployed **15:41:50–15:41:52 UTC /17:41 Cairo**, two seconds of maintenance. All36 changed-file hashes matched, source drift and cached assets preserved, env/cached config byte-identical. Only additive migration `2026_11_01_170000_add_pending_payment_review_status.php` applied; route/view caches rebuilt, FPM reloaded, four existing affected workers gracefully refreshed. Services and scheduler healthy; no resources/config/scope changes.
 
-Read-only revalidation at **15:06:35 UTC /17:06 Cairo**: live application still **db66e184d5d03c6e62bbae4009c360ba867211b7**; 13 process runs (6 waiting_response, 7 waiting_staff), 7 pending reviews (6 with no recorded payment), 81 historical failed jobs. No new code/config/data deployment was performed during this review.
+Authenticated verification: list and order detail show Automation for owned checkouts, claim button absent, Automation filter available, payment dropdown includes **بانتظار مراجعة الدفع**. Normal scheduled full read adopted an existing review on HK10-623 at15:43:08UTC with paid0, preserved461EGP balance, and a visible activity entry **بواسطة Automation**. Handoff order remains available to staff. Historical review adoption is asynchronous; HK11-16 had not reached its next full read at15:49UTC. No forced poll, historical replay, message/AI test, receipt copy or payment recording was performed.
+
+At15:49:26UTC:13runs(6waiting_response,7waiting_staff),7pendingreviews,11ownedcheckoutkeys,81historicalfailedjobs unchanged. Public home/up/cartHTTPS200; no new Laravel log bytes/errors through15:49UTC. New activity applies to future actions, without fabricating historical events. [Implementation, isolated tests and limits](automation-assignment-payment-audit-2026-11-01.md).
+
+Recovery **/home/ubuntu/herokid-before-d5618ee**, previous codedb66e184d5d03c6e62bbae4009c360ba867211b7. Verified local/off-instance backup **herokid-20261101T153523Z.sql.gz**,43,739,514bytes, SHA256matched S3metadata. Preserve new status definition, audit/payment-event rows, reviews and all live effects on rollback; older code compatibility must be checked, no DBrestore or migrationrollback. Documentation successor is distinct from deployed application SHA.
 
 ## General identity/payment rollout — active 1 November 2026
 

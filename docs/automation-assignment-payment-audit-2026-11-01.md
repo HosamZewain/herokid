@@ -1,6 +1,6 @@
 # Automation ownership, payment review and order audit — 1 November 2026
 
-Status: **prepared, not deployed**. Isolated branch `codex/automation-assignee-payment-review`, based on documentation commit `ef5a504`; production was independently verified at `db66e184d5d03c6e62bbae4009c360ba867211b7` at 15:06:35 UTC. The main desktop checkout's unrelated work is untouched.
+Status: **deployed with explicit owner approval** as `d5618eea80db393c9d03550c9936a64cddd909ef` at15:41:52UTC /17:41Cairo. Isolated branch `codex/automation-assignee-payment-review`, based on documentation commit `ef5a504`; production was independently verified at `db66e184d5d03c6e62bbae4009c360ba867211b7` at 15:06:35 UTC. The main desktop checkout's unrelated work is untouched.
 
 ## Resulting behavior
 
@@ -30,8 +30,16 @@ Read-only production snapshot: 13 runs (6 waiting_response, 7 waiting_staff), 7 
 
 ## Deployment and recovery plan
 
-Requires scoped deployment authorization under AGENTS.md. Revalidate live SHA, drift, queues and current worker activity; preserve current production env/config and an exact private recovery checkpoint. Apply only `2026_11_01_170000_add_pending_payment_review_status.php`, an additive status-definition migration. Do not rerun other migrations, reset jobs, expand enrollment or change resource/service configuration.
+Scoped deployment authorization was received and executed; the following procedure and boundaries remain the recovery reference. Revalidate live SHA, drift, queues and current worker activity; preserve current production env/config and an exact private recovery checkpoint. Apply only `2026_11_01_170000_add_pending_payment_review_status.php`, an additive status-definition migration. Do not rerun other migrations, reset jobs, expand enrollment or change resource/service configuration.
 
 Refresh route/view caches, check served-file permissions, reload FPM, and gracefully refresh the affected existing confirmation, conversation and process/AI workers without interrupting in-flight generation. Verify exact release SHA/hashes, authenticated order assignee/activity/payment UI, HTTPS, scheduler and bounded new errors. Existing open-review status adoption is normal future polling, not a forced replay.
 
 Rollback code only after checking current effects; preserve the additive status definition, audit rows, payment events, reviews and all current process settings. Migration down intentionally does not delete the referenced financial status. Older code must be checked for compatibility with pending_review before rollback; never restore an older database or blindly restore pre-activation configuration.
+
+## Deployment evidence
+
+Maintenance15:41:50–15:41:52UTC; all36 changed hashes verified, env/cached config identical and known source drift preserved. Only the additive status migration applied, route/view caches rebuilt, FPM reloaded and four affected workers gracefully refreshed. Required services/scheduler healthy; HTTPS home/up/cart200; zero new Laravel log bytes through15:49UTC,81failedjobs unchanged.
+
+Authenticated UI verified Automation assignment and hidden claim button on an owned checkout, filter option, and pending_review payment choice. The normal scheduled read changed existing review HK10-623 at15:43:08UTC; payment balance remained0,461EGP remaining, and its timeline shows the automatic transition by Automation. No forced sync or outbound test. Old review adoption is gradual: owner trial HK11-16 was still unpaid awaiting its next full read at15:49UTC.13processruns(6waiting_response,7waiting_staff),7pendingreviews,11ownedcheckoutkeys at that snapshot.
+
+Private checkpoint `/home/ubuntu/herokid-before-d5618ee`; verified off-instance backup `herokid-20261101T153523Z.sql.gz`(43,739,514bytes). Preserve financial and automation history on rollback; do not restore the old database. Prepared local deployment evidence `/tmp/herokid-automation-audit-deploy-20261101`. Documentation successor is not the deployed code SHA.
