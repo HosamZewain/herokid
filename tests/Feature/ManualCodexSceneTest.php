@@ -185,6 +185,80 @@ class ManualCodexSceneTest extends TestCase
         $this->actingAs(User::factory()->create())->get(route('admin.order-automation.codex-scenes'))->assertForbidden();
     }
 
+    public function test_finished_siblings_release_slots_but_keep_checkout_owned_until_last_story_finishes(): void
+    {
+        $service = app(ManualSceneService::class);
+        $service->start($this->order, $this->actor);
+        $service->start($this->sibling('SYNTHETIC-2'), $this->actor);
+        $service->start($this->sibling('SYNTHETIC-3'), $this->actor);
+        $service->tick();
+        $staged = CodexSceneRun::where('status', 'queued')->get();
+        $this->assertCount(2, $staged);
+        $waiting = CodexSceneRun::where('status', 'waiting_slot')->firstOrFail();
+        foreach ($staged as $run) {
+            foreach (range(1, 13) as $n) {
+                $this->sceneOutput($run, $n, $n === 13 ? 'completed' : 'running');
+            }
+        }
+        $service->tick();
+        $service->tick(); // Collection order must not affect eventual next-slot admission.
+        $this->assertSame('queued', $waiting->fresh()->status);
+        $this->assertSame(1, CodexSceneRun::where('active_slot', 1)->count());
+        foreach ($staged as $run) {
+            $this->assertSame('ready_preview', $run->order->fresh()->status);
+            $this->assertTrue(app(AutomationAssignment::class)->owns($run->order));
+        }
+        foreach (range(1, 13) as $n) {
+            $this->sceneOutput($waiting, $n, $n === 13 ? 'completed' : 'running');
+        }
+        $service->tick();
+        $this->assertFalse(app(AutomationAssignment::class)->owns($this->order));
+        $this->assertDatabaseCount('order_attachments', 39);
+        $service->tick();
+        $this->assertDatabaseCount('order_attachments', 39);
+        $this->assertSame(39, AdminActivityLog::where('action', 'automation.codex_scene_saved')->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_viewing_staff_do_not_see_generation_controls_without_production_permission(): void
+    {
+        $this->actor->permissions()->detach(Permission::where('key', 'orders.production_prompt.manage')->value('id'));
+        $this->actingAs($this->actor->fresh());
+        $html = view('admin.orders._codex-scenes', ['order' => $this->order])->render();
+        $this->assertStringNotContainsString('name="confirm"', $html);
+        $this->assertStringNotContainsString('متابعة طابور القصص', $html);
+        $run = $this->start();
+        $this->getJson(route('admin.orders.codex-scenes.progress', $this->order))->assertOk()
+            ->assertJsonMissingPath('snapshot');
+        $html = view('admin.orders._codex-scenes-progress', ['order' => $this->order, 'codexRuns' => collect([$run])])->render();
+        $this->assertStringNotContainsString('إيقاف التوليد والاحتفاظ بالمشاهد', $html);
+        $this->post(route('admin.orders.codex-scenes.stop', [$this->order, $run]))->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_paid_label_without_actual_money_cannot_auto_enroll(): void
+    {
+        config(['codex_scenes.automatic' => true]);
+        $this->order->update(['payment_status' => 'paid_in_full', 'paid_amount_cents' => 0]);
+        app(ManualSceneService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_wrong_identity_metadata_is_rejected_even_for_the_correct_order(): void
+    {
+        $run = $this->start();
+        $this->sceneOutput($run, 1);
+        $path = $this->spool.'/outbox/'.$run->id.'/scene-01.json';
+        $meta = json_decode(file_get_contents($path), true);
+        $meta['identity_checksum'] = str_repeat('a', 64);
+        file_put_contents($path, json_encode($meta));
+        app(ManualSceneService::class)->tick();
+        $this->assertSame('uncertain', $run->fresh()->status);
+        $this->assertDatabaseCount('order_attachments', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_progress_renders_saved_scenes_without_exposing_private_snapshot(): void
     {
         $run = $this->start();
