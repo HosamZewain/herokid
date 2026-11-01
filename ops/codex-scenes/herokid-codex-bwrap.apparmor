@@ -1,0 +1,7 @@
+# Ubuntu 24.04: permit only this pinned Codex sandbox helper to create its
+# namespaces. Keep system-wide user namespace restrictions and Codex sandbox ON.
+abi <abi/4.0>,
+include <tunables/global>
+profile herokid-codex-bwrap /opt/herokid-codex-cli/0.166.0/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap flags=(unconfined) {
+    userns,
+}

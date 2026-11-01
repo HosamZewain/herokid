@@ -283,3 +283,6 @@ Artisan::command('bosta:automatic-pickup', function (\App\Services\Bosta\BostaAu
 
 Schedule::command('bosta:automatic-pickup')->dailyAt('14:30')->timezone('Africa/Cairo')
     ->days([0, 1, 2, 3, 4, 6])->withoutOverlapping(15);
+
+// Only collects work created by an explicit order-page button; never enrolls orders.
+Schedule::command('codex-scenes:sync')->everyMinute()->withoutOverlapping(3);

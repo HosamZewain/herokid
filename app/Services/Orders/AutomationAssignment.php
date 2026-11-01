@@ -54,7 +54,9 @@ class AutomationAssignment
                 ->where('candidate_event.order_id', (int) config('order_process.trial_order_id'));
         }
 
-        return $runs->union($confirmations)->union($evaluating);
+        $sceneTrials = DB::table('codex_scene_runs')->select('checkout_key')->where('active_slot', 1);
+
+        return $runs->union($confirmations)->union($evaluating)->union($sceneTrials);
     }
 
     public function owns(Order $order): bool

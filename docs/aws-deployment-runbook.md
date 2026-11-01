@@ -2,6 +2,10 @@
 
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 15:50 UTC / 17:50 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
+## Manual Codex scene trial — prepared 1 November 2026
+
+Owner requested an existing-server manual button, not automatic scene enrollment. Official CLI **0.166.0** installed at `/opt/herokid-codex-cli/0.166.0`, separate `herokid-codex` account. Dedicated idle worker service and scoped AppArmor bubblewrap profile are installed; sandbox preflight succeeds. ChatGPT device login is still pending. No image request or order mutation was executed. Application integration is prepared on `codex/manual-codex-scenes-trial`, not yet claimed live in this entry. [Architecture, isolation, tests and rollback boundaries](../ops/codex-scenes/README.md).
+
 ## Automation ownership/payment-review/audit — deployed 1 November 2026
 
 Owner explicitly approved **d5618eea80db393c9d03550c9936a64cddd909ef**. Deployed **15:41:50–15:41:52 UTC /17:41 Cairo**, two seconds of maintenance. All36 changed-file hashes matched, source drift and cached assets preserved, env/cached config byte-identical. Only additive migration `2026_11_01_170000_add_pending_payment_review_status.php` applied; route/view caches rebuilt, FPM reloaded, four existing affected workers gracefully refreshed. Services and scheduler healthy; no resources/config/scope changes.

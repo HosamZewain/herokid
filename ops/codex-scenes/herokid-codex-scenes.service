@@ -1,0 +1,40 @@
+[Unit]
+Description=HeroKid manual Codex scene trial (single job)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=herokid-codex
+Group=herokid-codex-bridge
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/var/lib/herokid-codex
+ExecStartPre=/opt/herokid-codex-cli/0.166.0/node_modules/.bin/codex sandbox /usr/bin/true
+ExecStart=/usr/bin/python3 /opt/herokid-codex-worker/worker.py
+Restart=on-failure
+RestartSec=20
+TimeoutStopSec=30
+KillMode=control-group
+UMask=0027
+Nice=10
+CPUQuota=50%
+MemoryHigh=768M
+MemoryMax=1G
+TasksMax=128
+IOWeight=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/herokid-codex /var/lib/herokid-codex-spool/outbox
+ReadOnlyPaths=/var/lib/herokid-codex-spool/inbox
+InaccessiblePaths=/var/www /var/backups -/run/mysqld -/run/redis
+IPAddressDeny=127.0.0.1/32 169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 ::1/128 fc00::/7 fe80::/10
+
+[Install]
+WantedBy=multi-user.target

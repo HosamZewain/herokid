@@ -515,6 +515,10 @@
                                 'promptType' => 'child_identity',
                             ])
 
+                            @if(config('codex_scenes.enabled'))
+                                @include('admin.orders._codex-scenes')
+                            @endif
+
                             @if($storyPrompt)
                                 @include('admin.orders._inline-production-prompt', [
                                     'promptDomId' => 'story-production-prompt-'.$order->id,
