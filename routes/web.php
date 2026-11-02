@@ -859,6 +859,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::get('orders/{order}/codex-scenes/{run}/download', [\App\Http\Controllers\Admin\CodexSceneController::class, 'download'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.download');
     Route::get('orders/{order}/codex-scenes/{run}/images/{scene}', [\App\Http\Controllers\Admin\CodexSceneController::class, 'image'])->whereNumber('scene')->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.image');
     Route::post('orders/{order}/approved-child-identity', OrderApprovedChildIdentityController::class)->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.approved-child-identity.store');
+    Route::post('orders/{order}/products/{item}/regenerate', [\App\Http\Controllers\Admin\PuzzleGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.products.regenerate');
     Route::get('orders/{order}/puzzle-generations/{run}/image', [\App\Http\Controllers\Admin\PuzzleGenerationController::class, 'image'])->middleware('permission:orders.view')->name('orders.puzzle-image');
 
     Route::post('orders/{order}/attachments', [OrderAttachmentController::class, 'store'])->middleware('permission:orders.update')->name('orders.attachments.store');

@@ -60,7 +60,7 @@ class AutomationAssignment
 
         $puzzles = DB::table('puzzle_generations')->select('checkout_key')
             ->whereIn('status', ['queued', 'processing', 'uncertain'])
-            ->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'));
+            ->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orWhereNotNull('requested_by'));
         $keys = $runs->union($confirmations)->union($evaluating)->union($puzzles);
 
         if (app(PuzzleAutomation::class)->enabled()) {

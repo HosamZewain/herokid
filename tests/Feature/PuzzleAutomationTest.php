@@ -66,10 +66,190 @@ class PuzzleAutomationTest extends TestCase
             'production_prompt_template' => 'One puzzle for {{child_full_name}}, {{child_age}}. {{child_image_references}}']);
     }
 
+    public function test_regenerating_one_of_three_products_uses_updated_inputs_and_preserves_all_history(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $two = $this->order('مارية', 'b', $order->checkoutGroupKey());
+        $three = $this->order('ثالث', 'a', $order->checkoutGroupKey());
+        $seen = [];
+        $this->fakeImage(4, function (GptImageRequest $request) use (&$seen) {
+            $seen[] = $request;
+
+            return true;
+        });
+        $service = app(PuzzleAutomation::class);
+        $service->tick();
+        $service->tick();
+        $service->tick();
+        $oldRuns = PuzzleGeneration::orderBy('id')->get()->map->getAttributes()->all();
+        $oldAttachments = OrderAttachment::orderBy('id')->get()->map->getAttributes()->all();
+        $oldPreviews = OrderPreview::orderBy('id')->get()->map->getAttributes()->all();
+        $this->handoff($order, 'take');
+        $item = $order->items()->first();
+        $item->update(['personalization_snapshot' => ['child_name' => 'رقية', 'parent_notes' => 'NEW blue butterflies'], 'variant_snapshot' => ['size' => '40x30']]);
+        $order->updateQuietly(['uploaded_photos' => ['child-photos/b.png']]);
+        $previous = PuzzleGeneration::where('order_item_id', $item->id)->sole();
+        $url = route('admin.orders.products.regenerate', [$order, $item]);
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertSessionHasNoErrors();
+        $child = PuzzleGeneration::latest('id')->first();
+        $this->assertSame(2, $child->attempt_number);
+        $this->assertSame($actor->id, $child->requested_by);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'resume'])->assertSessionHasErrors('assignment');
+        $service->tick();
+        $service->tick();
+        $this->assertSame('succeeded', $child->fresh()->status);
+        $this->assertNull($child->fresh()->active_item_id);
+        $this->assertSame(4, count($seen));
+        $this->assertStringContainsString('NEW blue butterflies', $seen[3]->prompt);
+        $this->assertStringContainsString('40x30', $seen[3]->prompt);
+        $this->assertSame(['data:image/png;base64,'.base64_encode($this->png.'different')], $seen[3]->inputImages);
+        $this->assertSame($oldRuns, PuzzleGeneration::whereKey(array_column($oldRuns, 'id'))->orderBy('id')->get()->map->getAttributes()->all());
+        $this->assertSame($oldAttachments, OrderAttachment::whereKey(array_column($oldAttachments, 'id'))->orderBy('id')->get()->map->getAttributes()->all());
+        $this->assertSame($oldPreviews, OrderPreview::whereKey(array_column($oldPreviews, 'id'))->orderBy('id')->get()->map->getAttributes()->all());
+        foreach (OrderAttachment::all() as $attachment) {
+            $this->assertSame($this->png, Storage::disk('local')->get($attachment->path));
+        }
+        $this->assertSame($order->id, OrderPreview::find($child->fresh()->preview_id)->order_id);
+        $this->assertSame($child->unit_key, OrderAttachment::find($child->fresh()->attachment_id)->production_unit_key);
+        $this->assertSame(4, OrderPreview::count());
+        $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
+        $this->assertFalse(app(AutomationAssignment::class)->owns($order));
+        $this->assertSame('new_confirmed', $order->fresh()->status);
+        $this->assertSame(0, $order->fresh()->paid_amount_cents);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.product_regeneration_requested', 'user_id' => $actor->id]);
+        $this->assertSame(3, AdminActivityLog::where('action', 'automation.puzzle_progress')->get()->filter(fn ($log) => ($log->properties['run_id'] ?? null) === $child->id && $log->user_id === null)->count());
+        // Replaying an old successful form is still a no-op after completion.
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        // Only the latest attempt's snapshot participates in a later manual return.
+        $this->handoff($order, 'resume');
+        $service->tick();
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    private function regenerationFixture(): array
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $this->fakeImage();
+        $service = app(PuzzleAutomation::class);
+        $service->tick();
+        $previous = PuzzleGeneration::sole();
+        $this->handoff($order, 'take');
+        $run = $service->regenerate($order, $order->items()->first(), $actor, $previous->id);
+
+        return [$order, $run, $service, $actor];
+    }
+
+    public function test_changes_after_regeneration_is_queued_block_without_provider_and_allow_explicit_fresh_attempt(): void
+    {
+        [$order, $run, $service, $actor] = $this->regenerationFixture();
+        $item = $order->items()->first();
+        $item->update(['title' => 'Changed while queued']);
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        $service->tick();
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertSame('puzzle_inputs_changed', $run->fresh()->error_code);
+        $this->assertNull($run->fresh()->active_item_id);
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'resume'])->assertSessionHasErrors('assignment');
+        $this->assertSame('blocked', $run->fresh()->status);
+        $fresh = $service->regenerate($order, $item, $actor, $run->id);
+        $this->assertSame(3, $fresh->attempt_number);
+        $this->fakeImage();
+        $service->tick();
+        $this->assertSame('succeeded', $fresh->fresh()->status);
+        $this->assertDatabaseCount('order_previews', 2);
+    }
+
+    public function test_late_input_change_retains_regeneration_output_for_review_without_replacing_preview(): void
+    {
+        [$order, $run, $service] = $this->regenerationFixture();
+        $this->fakeImage(1, function () use ($order) {
+            $order->items()->first()->update(['title' => 'Changed during provider call']);
+
+            return true;
+        });
+        $service->tick();
+        $service->tick();
+        $this->assertSame('review', $run->fresh()->status);
+        $this->assertSame('puzzle_inputs_changed', $run->fresh()->error_code);
+        Storage::disk('local')->assertExists($run->fresh()->output_path);
+        $this->assertDatabaseCount('order_previews', 1);
+        $this->assertDatabaseCount('order_attachments', 1);
+    }
+
+    public function test_output_or_handoff_change_blocks_regeneration_before_provider(): void
+    {
+        [$order, $run, $service] = $this->regenerationFixture();
+        OrderPreview::first()->update(['file_path' => 'manual-replacement.png']);
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        $service->tick();
+        $this->assertSame('puzzle_existing_output_changed', $run->fresh()->error_code);
+        $run->refresh()->update(['status' => 'queued']);
+        DB::table('order_automation_holds')->where('checkout_key', $order->checkoutGroupKey())->update(['fingerprint' => 'changed-hold']);
+        $service->tick();
+        $this->assertSame('puzzle_manual_handoff_changed', $run->fresh()->error_code);
+        $this->assertDatabaseCount('order_previews', 1);
+    }
+
+    public function test_regeneration_timeout_is_not_retried_and_preserves_old_picture(): void
+    {
+        [$order, $run, $service, $actor] = $this->regenerationFixture();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('uncertain provider result'));
+        $service->tick();
+        $service->tick();
+        $this->assertSame('uncertain', $run->fresh()->status);
+        $this->assertNotNull($run->fresh()->active_item_id);
+        $this->assertDatabaseCount('order_previews', 1);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        $this->post(route('admin.orders.products.regenerate', [$order, $order->items()->first()]), ['previous_run_id' => $run->id, 'confirm' => 1])->assertSessionHasErrors('product_generation');
+        $this->assertDatabaseCount('puzzle_generations', 2);
+    }
+
+    public function test_regeneration_endpoint_enforces_permissions_item_scope_confirmation_and_shipping_stage(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $this->fakeImage();
+        app(PuzzleAutomation::class)->tick();
+        $item = $order->items()->first();
+        $previous = PuzzleGeneration::sole();
+        $url = route('admin.orders.products.regenerate', [$order, $item]);
+        $this->post($url, ['previous_run_id' => $previous->id])->assertSessionHasErrors('confirm');
+        $other = $this->order();
+        $this->post(route('admin.orders.products.regenerate', [$other, $item]), ['previous_run_id' => $previous->id, 'confirm' => 1])->assertNotFound();
+        $this->post($url, ['previous_run_id' => 999999, 'confirm' => 1])->assertStatus(422);
+        $actor->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $actor->unsetRelation('permissions');
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertForbidden();
+        $this->staff();
+        $order->updateQuietly(['shipping_status' => 'shipped']);
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertSessionHasErrors('product_generation');
+        $this->assertDatabaseCount('puzzle_generations', 1);
+    }
+
+    public function test_product_regeneration_control_shows_exact_item_and_current_attempt(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        $this->fakeImage();
+        app(PuzzleAutomation::class)->tick();
+        $item = $order->items()->first();
+        $this->get(route('admin.orders.products.production', [$order, $item]))->assertOk()
+            ->assertSee('إعادة التوليد')->assertSee(route('admin.orders.products.regenerate', [$order, $item]), false)
+            ->assertSee('name="previous_run_id" value="'.PuzzleGeneration::sole()->id.'"', false);
+    }
+
     private function staff(): User
     {
         $user = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $user->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $user->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
         $this->actingAs($user);
 
         return $user;
@@ -433,7 +613,7 @@ class PuzzleAutomationTest extends TestCase
         $order = $this->order();
         app(PuzzleAutomation::class)->enroll();
         $actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
         $this->actingAs($actor);
         $run = PuzzleGeneration::sole();
         $run->update(['status' => 'processing']);

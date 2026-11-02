@@ -61,6 +61,8 @@
                     </div>
                 </div>
 
+                @include('admin.orders._product-regeneration')
+
                 <textarea
                     id="{{ $promptDomId }}"
                     rows="{{ $collapsed ? 18 : 26 }}"

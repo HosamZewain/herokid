@@ -1,5 +1,11 @@
 # HeroKid AWS deployment and agent handoff
 
+## 2 November 2026 — per-product regeneration prepared, not deployed
+
+Per-item **إعادة التوليد** is prepared on `codex/product-regeneration`, based on documentation successor b97a7e9/application29ac3cc. Updated canonical item inputs generate one new image through the existing worker, preserving earlier attempts/attachments/previews and every sibling. Explicit requests temporarily reserve Automation ownership even under a retained manual hold; completion returns control to staff. Parent/active-item uniqueness prevents repeated paid submissions. Uncertain provider results are not retried. No production order/generation/configuration was changed.
+
+Verification:34tests276assertions on each SQLite/isolatedMySQL,212tests1321assertions in the broader MySQL automation suite,PHP8.3 syntax and byte-identical isolated frontend build. New migration expands immutable attempt history; deployment requires fresh backup, drained affected Laravel workers and a reviewed narrow migration. **No deployment approval received for this feature.** [Behavior, verification and recovery](product-regeneration-2026-11-02.md). Earlier coloring-book/unified-preview work remains separate and unpublished.
+
 ## 2 November 2026 — edited product return and mug images deployed
 
 Owner authorized **deployment only**, explicitly retaining manual return of HK11-38. Application **29ac3cc7d2ccfac399fd24b38206d5bb8c64a9b2** deployed and verified10:29:12UTC /12:29Cairo. All9 changed-file hashes checked, PHP8.3 syntax valid, previous hashed assets and known drift preserved. Private cached config changed only by adding the mug slug to product_slugs; every other config value and .env byte preserved. No migration, maintenance, dependency installation, historical replay or new resources. Four affected Laravel workers gracefully drained/refreshed; scheduler restored/successful10:30:12UTC. Codex service PID unchanged.

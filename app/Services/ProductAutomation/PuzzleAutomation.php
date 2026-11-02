@@ -11,11 +11,14 @@ use App\Models\OrderPreview;
 use App\Models\OrderProcessEvent;
 use App\Models\OrderProductPreviewGallery;
 use App\Models\PuzzleGeneration;
+use App\Models\User;
 use App\Services\Ai\AiImagePricingService;
 use App\Services\Ai\GptImageClient;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
+use App\Support\AdminActivityLogger;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -78,12 +81,84 @@ class PuzzleAutomation
         });
     }
 
+    private function handoffToken(string $key): ?string
+    {
+        $hold = DB::table('order_automation_holds')->where('checkout_key', $key)->first();
+
+        return $hold ? hash('sha256', json_encode([$hold->user_id, $hold->created_at, $hold->fingerprint])) : null;
+    }
+
+    private function outputBaseline(int $orderId, string $unit): string
+    {
+        $attachments = OrderAttachment::where('order_id', $orderId)->where(fn ($q) => $q->where('production_unit_key', $unit)->orWhereNull('production_unit_key'))
+            ->orderBy('id')->get(['id', 'disk', 'path'])->toArray();
+        $previews = OrderPreview::where('order_id', $orderId)->where(fn ($q) => $q->where('production_unit_key', $unit)->orWhereNull('production_unit_key'))
+            ->orderBy('id')->get(['id', 'disk', 'file_path', 'checksum'])->toArray();
+
+        return hash('sha256', json_encode([$attachments, $previews], JSON_THROW_ON_ERROR));
+    }
+
+    public function regenerate(Order $order, OrderItem $item, User $actor, int $previousId): PuzzleGeneration
+    {
+        abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.update')
+            && $actor->hasPermission('orders.photos.view') && $actor->hasPermission('orders.production_prompt.manage'), 403);
+        abort_unless($item->order_id === $order->id, 404);
+
+        return DB::transaction(function () use ($order, $item, $actor, $previousId) {
+            $rows = Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
+            $order = $rows->firstWhere('id', $order->id);
+            abort_unless($order, 404);
+            $item = OrderItem::where('order_id', $order->id)->lockForUpdate()->findOrFail($item->id);
+            $runs = PuzzleGeneration::where('order_item_id', $item->id)->orderBy('id')->lockForUpdate()->get();
+            $previous = $runs->firstWhere('id', $previousId);
+            abort_unless($previous, 422, 'المحاولة السابقة لا تخص هذا المنتج.');
+            if ($duplicate = $runs->firstWhere('previous_run_id', $previousId)) {
+                return $duplicate; // Double-click/replayed form never creates another paid call.
+            }
+            if (! $this->enabled() || $runs->last()->id !== $previousId
+                || ! in_array($previous->status, ['succeeded', 'review', 'blocked'], true)
+                || $runs->contains(fn ($r) => in_array($r->status, ['queued', 'processing', 'uncertain'], true))
+                || app(AutomationAssignment::class)->owns($order)) {
+                throw ValidationException::withMessages(['product_generation' => 'انتظر انتهاء التنفيذ الحالي أو راجع المحاولة غير المؤكدة، ثم استلم الطلب يدويًا إذا كان تحت مسؤولية الأوتوميشن.']);
+            }
+            $this->assertRegenerationStage($rows);
+            try {
+                $context = app(PuzzleInputs::class)->capture($item);
+            } catch (Throwable $error) {
+                throw ValidationException::withMessages(['product_generation' => 'راجع برومبت المنتج وصوره: '.$this->safeError($error, 'puzzle_preflight_failed')]);
+            }
+            $context['output_baseline'] = $this->outputBaseline($order->id, $context['unit_key']);
+            $run = PuzzleGeneration::create(['order_id' => $order->id, 'order_item_id' => $item->id,
+                'event_id' => $previous->event_id, 'checkout_key' => $order->checkoutGroupKey(), 'unit_key' => $context['unit_key'],
+                'attempt_number' => $previous->attempt_number + 1, 'previous_run_id' => $previous->id,
+                'requested_by' => $actor->id, 'handoff_token' => $this->handoffToken($order->checkoutGroupKey()),
+                'context' => $context, 'status' => 'queued']);
+            AdminActivityLogger::log('order.product_regeneration_requested', 'طلب إعادة توليد صورة هذا المنتج بالبيانات الحالية مع الاحتفاظ بالصور السابقة.', $order,
+                ['run_id' => $run->id, 'previous_run_id' => $previous->id, 'order_item_id' => $item->id,
+                    'attempt_number' => $run->attempt_number, 'estimate_usd' => $context['estimate_usd']], $actor);
+
+            return $run;
+        }, 3);
+    }
+
+    private function assertRegenerationStage($rows): void
+    {
+        if ($rows->contains(fn ($r) => in_array($r->status, ['new', 'cancelled', 'completed'], true)
+            || ! in_array($r->printing_status, ['not_started', 'ready', 'on_hold', 'not_required'], true)
+            || ! in_array($r->shipping_status, ['not_ready', 'ready', 'not_required'], true))) {
+            throw ValidationException::withMessages(['product_generation' => 'إعادة التوليد متاحة للطلب المؤكد قبل بدء الطباعة والشحن.']);
+        }
+    }
+
     /** Explicit manual return may refresh only work that never reached a provider. */
     public function refreshUnstartedForReturn(string $key): void
     {
-        foreach (PuzzleGeneration::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get() as $run) {
+        foreach (PuzzleGeneration::where('checkout_key', $key)->whereIn('id', PuzzleGeneration::selectRaw('MAX(id)')->where('checkout_key', $key)->groupBy('order_item_id'))->orderBy('id')->lockForUpdate()->get() as $run) {
             if (in_array($run->status, ['processing', 'uncertain'], true)) {
                 throw ValidationException::withMessages(['assignment' => 'محاولة توليد المنتج جارية أو غير مؤكدة؛ يلزم مراجعتها قبل الإرجاع.']);
+            }
+            if ($run->requested_by && in_array($run->status, ['queued', 'blocked'], true)) {
+                throw ValidationException::withMessages(['assignment' => 'راجع محاولة إعادة التوليد من بند المنتج قبل الإرجاع؛ لن يُعاد تشغيلها تلقائيًا.']);
             }
             $unstarted = in_array($run->status, ['queued', 'blocked'], true) && ! $run->started_at
                 && ! $run->provider_request_id && ! $run->output_path && ! $run->attachment_id && ! $run->preview_id;
@@ -125,7 +200,7 @@ class PuzzleAutomation
                 }
             });
         }
-        $next = PuzzleGeneration::where('status', 'queued')->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orderBy('id')->first();
+        $next = PuzzleGeneration::where('status', 'queued')->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orWhereNotNull('requested_by'))->orderBy('id')->first();
         if ($next) {
             $this->generate($next->id);
         }
@@ -140,7 +215,7 @@ class PuzzleAutomation
             $candidate = PuzzleGeneration::findOrFail($id);
             Order::where('checkout_group_key', $candidate->checkout_key)->orderBy('id')->lockForUpdate()->get();
             $run = PuzzleGeneration::lockForUpdate()->findOrFail($id);
-            if ($run->status !== 'queued' || ! $this->enabled() || AutomationHandoff::held($run->checkout_key)) {
+            if ($run->status !== 'queued' || ! $this->enabled() || (! $run->requested_by && AutomationHandoff::held($run->checkout_key))) {
                 return null;
             }
             try {
@@ -211,7 +286,7 @@ class PuzzleAutomation
                 // Independent objects: deleting a preview must not remove the attachment.
                 $previewPath = 'orders/product-previews/'.$gallery->id.'/puzzle-'.$run->id.'.'.$ext;
                 $this->store($disk, $previewPath, $result->contents, $checksum);
-                $name = 'puzzle-'.$run->order_id.'-'.$run->order_item_id.'.'.$ext;
+                $name = 'product-'.$run->order_id.'-'.$run->order_item_id.'-attempt-'.($run->attempt_number ?: 1).'.'.$ext;
                 $attachment = OrderAttachment::create(['order_id' => $run->order_id, 'production_unit_key' => $run->unit_key,
                     'disk' => $disk, 'path' => $path, 'original_name' => $name, 'mime_type' => $size['mime'], 'size' => strlen($result->contents),
                     'note' => 'Automation — صورة المنتج؛ راجع الهوية والتصميم قبل الطباعة.', 'validity_days' => null, 'expires_at' => null]);
@@ -234,8 +309,14 @@ class PuzzleAutomation
 
     private function guard(PuzzleGeneration $run): void
     {
-        if (! $this->enabled() || AutomationHandoff::held($run->checkout_key)) {
+        if (! $this->enabled() || (! $run->requested_by && AutomationHandoff::held($run->checkout_key))) {
             throw new RuntimeException('puzzle_paused');
+        }
+        if ($run->requested_by && $run->handoff_token !== $this->handoffToken($run->checkout_key)) {
+            throw new RuntimeException('puzzle_manual_handoff_changed');
+        }
+        if ($run->requested_by) {
+            $this->assertRegenerationStage(Order::where('checkout_group_key', $run->checkout_key)->get());
         }
         $item = OrderItem::findOrFail($run->order_item_id);
         $fresh = app(PuzzleInputs::class)->capture($item);
@@ -247,6 +328,13 @@ class PuzzleAutomation
 
     private function assertNoOutput(PuzzleGeneration $run): void
     {
+        if ($run->previous_run_id) {
+            if (! hash_equals($run->context['output_baseline'] ?? '', $this->outputBaseline($run->order_id, $run->unit_key))) {
+                throw new RuntimeException('puzzle_existing_output_changed');
+            }
+
+            return;
+        }
         if (OrderAttachment::where('order_id', $run->order_id)->where(fn ($q) => $q->where('production_unit_key', $run->unit_key)->orWhereNull('production_unit_key'))->exists()
             || OrderPreview::where('order_id', $run->order_id)->where(fn ($q) => $q->where('production_unit_key', $run->unit_key)->orWhereNull('production_unit_key'))->exists()) {
             throw new RuntimeException('puzzle_existing_output');

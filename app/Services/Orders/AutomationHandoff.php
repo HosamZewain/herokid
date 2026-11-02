@@ -57,7 +57,7 @@ class AutomationHandoff
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get();
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
             abort_if($rows->isEmpty(), 404);
-            if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
+            if (PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->whereIn('status', ['processing', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'queued')->whereNotNull('requested_by')))->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'توليد البازل جارٍ أو نتيجته غير مؤكدة. انتظر اكتماله أو مراجعة المحاولة قبل الاستلام.']);
             }
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {
@@ -108,7 +108,7 @@ class AutomationHandoff
                 && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new_confirmed'
                     && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready'
                     && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
-            if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
+            if (PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->whereIn('status', ['processing', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'queued')->whereNotNull('requested_by')))->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
             }
             if ($changed && ! $productReturn) {
