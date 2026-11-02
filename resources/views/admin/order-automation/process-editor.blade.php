@@ -29,7 +29,7 @@
             <div data-process-builder data-initial="{{ json_encode($definition, JSON_UNESCAPED_UNICODE) }}" data-statuses="{{ json_encode($statuses, JSON_UNESCAPED_UNICODE) }}" data-variables="{{ json_encode(\App\Services\OrderAutomation\Process\ProcessDefinition::VARIABLES + \App\Services\OrderAutomation\Process\ProcessTemplates::EXTRA_VARIABLES, JSON_UNESCAPED_UNICODE) }}" class="space-y-4">
                 <h2 class="text-xl font-bold">٢. خطوات المسار وفروعه</h2>
                 <p class="text-sm text-slate-500">كل خطوة تحدد الخطوة التالية. الفروع تتجه لخطوات لاحقة؛ راجع الروابط بعد الحذف أو إعادة الترتيب.</p>
-                <datalist id="process-templates"><option value="herokid_order_confirmation">قالب تأكيد الطلب</option><option value="herokid_identity_review_payment">معاينة الهوية والدفع</option></datalist>
+                <datalist id="process-templates"><option value="herokid_preview_review_payment">المعاينة المجمعة والدفع</option><option value="herokid_order_confirmation">قالب تأكيد الطلب</option><option value="herokid_identity_review_payment">معاينة الهوية والدفع</option></datalist>
                 <div data-nodes class="space-y-3"></div>
                 <div class="flex flex-wrap gap-3 rounded-xl border border-dashed border-indigo-300 bg-indigo-50 p-4">
                     <select data-new-type aria-label="نوع الخطوة الجديدة" class="rounded-lg border-gray-300">@foreach(\App\Services\OrderAutomation\Process\ProcessDefinition::TYPES as $key=>$label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select>

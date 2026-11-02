@@ -8,6 +8,7 @@ use App\Models\OrderProcessRun;
 use App\Models\OrderStatusDefinition;
 use App\Models\User;
 use App\Services\Orders\AutomationHandoff;
+use App\Services\ProductAutomation\PuzzleAutomation;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -98,7 +99,10 @@ class ProcessLivePolicy
             $errors[] = 'التنفيذ الحالي يدعم نطاق عملية الشراء؛ تنفيذ وحدات القصص والمنتجات يحتاج ربط الإنتاج.';
         }
         foreach ($definition['nodes'] ?? [] as $node) {
-            if ($node['type'] === 'approve_identity' && ! OrderStatusDefinition::where('type', 'order')
+            if (in_array($node['type'], ['generate_previews', 'approve_previews'], true) && (! config('product_review.enabled') || ! config('order_process.identity_enabled') || ! app(PuzzleAutomation::class)->enabled() || $definition['conditions']['type'] !== 'any' || $definition['conditions']['status'] !== 'new_confirmed' || $definition['conditions']['story_ids'] || $definition['conditions']['product_ids'])) {
+                $errors[] = 'المعاينة المجمعة تحتاج تفعيلًا مستقلًا وتشمل كل أجزاء الطلب المؤكد.';
+            }
+            if (in_array($node['type'], ['approve_identity', 'approve_previews'], true) && ! OrderStatusDefinition::where('type', 'order')
                 ->where('key', ProcessIdentityService::APPROVED_ORDER_STATUS)->where('is_active', true)->where('behavior', 'standard')->exists()) {
                 $errors[] = 'اعتماد الهوية يحتاج حالة هوية مؤكدة وجاهزة للتوليد مفعلة كحالة تشغيل عادية.';
             }
@@ -112,6 +116,10 @@ class ProcessLivePolicy
                 $template = $node['config']['template'];
                 if (! ProcessTemplates::fields($template) || $node['config']['variables'] !== ProcessTemplates::fields($template)) {
                     $errors[] = 'القالب أو ترتيب متغيراته غير معتمد للتنفيذ.';
+                } elseif ($template === ProcessTemplates::REVIEW) {
+                    if (! config('product_review.enabled') || ! config('product_review.template_ready')) {
+                        $errors[] = 'قالب المعاينة المجمعة لم يعتمد للتنفيذ بعد.';
+                    }
                 } elseif ($template === ProcessTemplates::IDENTITY) {
                     if (! config('order_process.identity_template_ready') || ! config('order_process.identity_enabled')) {
                         $errors[] = 'قالب معاينة الهوية يحتاج تأكيد موافقة ميتا ومزامنته مع روبوديسك وتفعيل الإرسال.';
@@ -133,7 +141,7 @@ class ProcessLivePolicy
     {
         $actor = User::find($automation->process_activated_by);
 
-        $needsPhotos = collect($automation->revision?->definition['nodes'] ?? [])->contains(fn ($n) => in_array($n['type'], ['generate_identity', 'approve_identity'], true));
+        $needsPhotos = collect($automation->revision?->definition['nodes'] ?? [])->contains(fn ($n) => in_array($n['type'], ['generate_identity', 'approve_identity', 'generate_previews', 'approve_previews'], true));
 
         return $actor && (! $needsPhotos || $actor->hasPermission('orders.photos.view')) && $actor->is_active && $actor->role === 'admin'
             && collect(['order_automation.view', 'order_automation.activate', 'order_automation.execute', 'orders.view', 'orders.update'])

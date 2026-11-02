@@ -19,13 +19,20 @@ class PuzzleInputs
     {
         $item->loadMissing('order', 'product.productionComponents', 'productionComponents');
         $order = $item->order;
-        if (! $order || ! in_array($item->product?->slug, config('puzzle_automation.product_slugs', []), true)
+        $book = config('product_review.enabled') && $item->productionComponents->contains('production_stage', 'book_cover');
+        if (! $order || (! $book && ! in_array($item->product?->slug, config('puzzle_automation.product_slugs', []), true))
             || ! in_array($item->item_type, ['product', 'product_add_on'], true)
             || in_array($order->status, ['new', 'cancelled', 'completed'], true)
             || ! app(AdminOrderGroupService::class)->activeOrdersQuery()->whereKey($order->id)->exists()) {
             throw new RuntimeException('puzzle_ineligible');
         }
         $units = ProductProductionPrompt::forItem($item, privateImageInputs: true);
+        if ($book) {
+            if ($units->count() !== 2 || $units->where('production_stage', 'book_cover')->count() !== 1 || $units->where('production_stage', 'book_interior')->count() !== 1) {
+                throw new RuntimeException('puzzle_book_structure_invalid');
+            }
+            $units = $units->where('production_stage', 'book_cover')->values();
+        }
         if ($units->count() !== 1 || $units[0]['quantity_per_item'] !== 1 || trim($units[0]['prompt']) === '') {
             throw new RuntimeException('puzzle_single_image_required');
         }
@@ -76,11 +83,11 @@ class PuzzleInputs
         if (! $model || ! app(AiProviderAvailability::class)->modelAvailable($model, 'image_editing')) {
             throw new RuntimeException('puzzle_provider_unavailable');
         }
-        $size = config('puzzle_automation.size');
-        $quality = config('puzzle_automation.quality');
+        $size = config($book ? 'product_review.cover_size' : 'puzzle_automation.size');
+        $quality = config($book ? 'product_review.cover_quality' : 'puzzle_automation.quality');
         $cost = app(AiImagePricingService::class)->calculate($model, $size, $quality, []);
         if (strtoupper($model->estimated_cost_currency ?: 'USD') !== 'USD' || ! $cost['cost_usd']
-            || $cost['cost_usd'] <= 0 || $cost['cost_usd'] > config('puzzle_automation.budget_usd')) {
+            || $cost['cost_usd'] <= 0 || $cost['cost_usd'] > config($book ? 'product_review.cover_budget_usd' : 'puzzle_automation.budget_usd')) {
             throw new RuntimeException('puzzle_budget_required');
         }
         $context = ['order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'item_id' => $item->id,
@@ -90,6 +97,10 @@ class PuzzleInputs
             'quantity' => $item->quantity, 'linked_order_item_id' => $item->linked_order_item_id,
             'item_identity' => $item->only(['id', 'order_id', 'item_type', 'product_id', 'product_variant_id', 'title', 'sku']),
             'child_identity' => $order->only(['child_name', 'child_age', 'child_gender'])];
+
+        if ($book) {
+            $context['production_stage'] = 'book_cover';
+        }
 
         return $context + ['fingerprint' => hash('sha256', json_encode($context, JSON_THROW_ON_ERROR))];
     }

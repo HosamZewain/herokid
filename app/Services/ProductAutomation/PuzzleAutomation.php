@@ -269,7 +269,8 @@ class PuzzleAutomation
                         throw new RuntimeException('puzzle_late_output');
                     }
                     $this->guard($run);
-                    if ($size[1] < 1024 || $size[0] < 1536 || abs($size[0] / $size[1] - 1.5) > .015) {
+                    $book = ($run->context['production_stage'] ?? '') === 'book_cover';
+                    if ($book ? ($size[0] < 1024 || $size[1] < 1536 || abs($size[1] / $size[0] - 1.5) > .015) : ($size[1] < 1024 || $size[0] < 1536 || abs($size[0] / $size[1] - 1.5) > .015)) {
                         throw new RuntimeException('puzzle_output_quality');
                     }
                 } catch (Throwable $error) {

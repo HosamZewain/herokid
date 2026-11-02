@@ -23,7 +23,7 @@ class OrderProcessController extends Controller
 {
     public function create(Request $request): mixed
     {
-        $data = $request->validate(['name' => 'required|string|max:150', 'preset' => 'required|in:blank,confirmation,identity']);
+        $data = $request->validate(['name' => 'required|string|max:150', 'preset' => 'required|in:blank,confirmation,identity,product_review']);
         $workflow = OrderAutomation::create(['name' => $data['name'], 'draft' => ProcessDefinition::defaults($data['preset'])]);
         AdminActivityLogger::log('order_process.created', 'إنشاء مسار عمليات', $workflow);
 

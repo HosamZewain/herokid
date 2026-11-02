@@ -23,6 +23,9 @@ class OrderConfirmationTransport
 
     public function sendTemplate(string $phone, string $template, array $values, string $summary, ?string $checkoutKey = null): array
     {
+        if ($template === ProcessTemplates::REVIEW && (! config('product_review.enabled') || ! config('product_review.template_ready'))) {
+            throw new OrderConfirmationSendException('template_contract_invalid');
+        }
         $fields = ProcessTemplates::fields($template);
         if (! $fields || ! array_is_list($values) || count($values) !== count($fields)
             || collect($values)->contains(fn ($v) => ! is_string($v) || ($template !== 'herokid_order_confirmation' && trim($v) === '') || mb_strlen($v) > 4000)) {

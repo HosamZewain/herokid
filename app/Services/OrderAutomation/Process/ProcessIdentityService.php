@@ -247,7 +247,7 @@ class ProcessIdentityService
         return $ready;
     }
 
-    public function approve(OrderProcessRun $run, array $config): void
+    public function approve(OrderProcessRun $run, array $config, string $approvalText = 'تأكيد الهوية'): void
     {
         $response = $run->steps()->where('node_id', $config['response_node'])->first();
         if (! $response) {
@@ -255,7 +255,7 @@ class ProcessIdentityService
         }
         $decision = DB::table('order_process_responses')->where('run_id', $run->id)->where('step_id', $response->id)->first();
         $wait = collect($run->revision->definition['nodes'])->firstWhere('id', $config['response_node']);
-        $approval = collect($wait['config']['cases'])->firstWhere('text', 'تأكيد الهوية');
+        $approval = collect($wait['config']['cases'])->firstWhere('text', $approvalText);
         if (! $decision || ! $approval || $decision->decision !== $approval['key'] || ! $this->ready($run)) {
             throw new RuntimeException('identity_approval_missing');
         }

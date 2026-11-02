@@ -3,12 +3,12 @@
 @php
     $codexService = app(\App\Services\CodexScenes\ManualSceneService::class);
     $codexRuns = \App\Models\CodexSceneRun::where('order_id',$order->id)->latest()->limit(3)->get();
-    $codexReason = $codexService->reason($order);
+    $codexReason = $order->story_id ? $codexService->reason($order) : 'صفحات كتب التلوين تدخل الطابور بعد اعتماد الكفر وتسجيل دفعة فعلية.';
 @endphp
 <section id="codex-scenes-{{ $order->id }}" class="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-    <h4 class="text-sm font-black text-indigo-900">توليد مشاهد القصة — Codex</h4>
-    <p class="mt-2 text-xs text-gray-700">توليد هذه القصة باستخدام اشتراك Codex. 13 مشهدًا بالهوية المعتمدة؛ تتم إضافة النص وتجهيز ملف الطباعة في Studio بعد مراجعة الصور. لا يتم إرسال معاينة للعميل.</p>
-    <p class="mt-2 text-xs text-gray-700">التشغيل التلقائي {{ config('codex_scenes.automatic') ? 'مفعّل للقصص المعتمدة والمدفوعة' : 'متوقف' }} · @can('order_automation.view')<a class="underline" href="{{ route('admin.order-automation.codex-scenes') }}">متابعة طابور القصص</a>@endcan</p>
+    <h4 class="text-sm font-black text-indigo-900">توليد الصور والصفحات — Codex</h4>
+    <p class="mt-2 text-xs text-gray-700">{{ $order->story_id ? '13 مشهدًا بالهوية المعتمدة؛ تتم إضافة النص وتجهيز ملف الطباعة في Studio بعد مراجعة الصور.' : 'صفحات داخلية حسب العدد المحفوظ لكل كتاب، باستخدام الكفر المعتمد وبرومبت الصفحات الخاص به.' }} لا يتم إرسال معاينة للعميل.</p>
+    <p class="mt-2 text-xs text-gray-700">التشغيل التلقائي {{ config('codex_scenes.automatic') ? 'مفعّل للقصص المعتمدة والمدفوعة' : 'متوقف' }} · @can('order_automation.view')<a class="underline" href="{{ route('admin.order-automation.codex-scenes') }}">متابعة طابور التوليد</a>@endcan</p>
     @if($codexReason)
         <p class="mt-3 text-sm font-bold text-amber-800">{{ $codexReason }}</p>
     @else

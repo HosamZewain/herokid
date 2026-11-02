@@ -1,6 +1,6 @@
     @foreach($codexRuns as $codexRun)
         <div class="mt-4 rounded-xl border bg-white p-3">
-            <p class="text-sm font-black">{{ \App\Models\CodexSceneRun::LABELS[$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / 13</p>
+            <p class="text-xs font-bold">{{ $codexRun->production_kind === 'coloring_book' ? 'صفحات كتاب تلوين — منتج #'.$codexRun->order_item_id : 'مشاهد القصة' }}</p><p class="text-sm font-black">{{ \App\Models\CodexSceneRun::LABELS[$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / {{ $codexRun->scene_count ?? 13 }}</p>
             <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }}</p>
             <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }}</p>
             <div class="mt-2 text-xs text-gray-600">@include('admin.orders._codex-scene-timing', ['timingRun' => $codexRun])</div>
@@ -12,7 +12,7 @@
             @endif
             @endcan
             @if(count($codexRun->scenes ?? []))
-                <a href="{{ route('admin.orders.codex-scenes.download',[$order,$codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل الكل ({{ count($codexRun->scenes) }} / 13) — ZIP</a>
+                <a href="{{ route('admin.orders.codex-scenes.download',[$order,$codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل الكل ({{ count($codexRun->scenes) }} / {{ $codexRun->scene_count ?? 13 }}) — ZIP</a>
             @endif
             <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($codexRun->scenes ?? [] as $sceneNumber=>$sceneData)

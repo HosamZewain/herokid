@@ -41,6 +41,15 @@ class ProcessRuntime
             if ($enabled) {
                 abort_unless($this->policy->enabled() && $this->policy->allowsAutomation($automation->id) && $automation->revision_id, 422, 'التنفيذ الفعلي مقفول على الخادم أو لا توجد نسخة محفوظة.');
                 $this->policy->check($automation->revision->definition);
+                $newPreview = collect($automation->revision->definition['nodes'])->contains('type', 'generate_previews');
+                foreach (OrderAutomation::with('revision')->whereKeyNot($automation->id)->get() as $other) {
+                    $types = collect($other->revision?->definition['nodes'] ?? [])->pluck('type');
+                    if (($newPreview && $types->intersect(['generate_identity', 'generate_previews'])->isNotEmpty())
+                        || (! $newPreview && $types->contains('generate_previews') && collect($automation->revision->definition['nodes'])->contains('type', 'generate_identity'))) {
+                        abort_if($other->enabled || OrderProcessRun::where('automation_id', $other->id)->whereNotIn('status', ['completed', 'cancelled', 'blocked'])->exists(), 422,
+                            'أوقف قبول المسار الآخر وأنهِ محاولاته النشطة قبل نقل ملكية المعاينة.');
+                    }
+                }
                 $automation->process_activated_by = $actor->id;
                 abort_unless($this->policy->authorized($automation), 403);
                 if (! $automation->enabled) {
@@ -156,7 +165,7 @@ class ProcessRuntime
                     $node = $this->node($run);
                     $step = $run->steps()->firstOrCreate(['node_id' => $node['id']], ['type' => $node['type'], 'status' => 'pending']);
                     if ($run->status === 'waiting_identity') {
-                        if (app(ProcessIdentityService::class)->ready($run)) {
+                        if (app($node['type'] === 'generate_previews' ? ProcessProductReview::class : ProcessIdentityService::class)->ready($run)) {
                             $step->update(['status' => 'completed', 'completed_at' => now()]);
                             $this->move($run, $node['next']);
                         } else {
@@ -182,6 +191,13 @@ class ProcessRuntime
                     }
                     $c = $node['config'];
                     switch ($node['type']) {
+                        case 'generate_previews':
+                            app(ProcessProductReview::class)->prepare($run, $step, $c);
+
+                            return null;
+                        case 'approve_previews':
+                            app(ProcessProductReview::class)->approve($run, $c);
+                            break;
                         case 'generate_identity':
                             app(ProcessIdentityService::class)->prepare($run, $step, $c);
 
@@ -190,8 +206,9 @@ class ProcessRuntime
                             app(ProcessIdentityService::class)->approve($run, $c);
                             break;
                         case 'whatsapp':
-                            $identityMessage = $c['template'] === ProcessTemplates::IDENTITY;
-                            if ($identityMessage && ! app(ProcessIdentityService::class)->ready($run)) {
+                            $unified = $c['template'] === ProcessTemplates::REVIEW;
+                            $identityMessage = $unified || $c['template'] === ProcessTemplates::IDENTITY;
+                            if ($identityMessage && ! app($unified ? ProcessProductReview::class : ProcessIdentityService::class)->ready($run)) {
                                 throw new RuntimeException('identity_requires_review');
                             }
                             if (! $identityMessage && (! $this->policy->ownerReady() || $run->context['status'] !== 'new')) {
@@ -287,7 +304,7 @@ class ProcessRuntime
             } catch (ValidationException) {
                 $run->refresh()->update(['status' => 'blocked', 'error_code' => 'live_policy_changed']);
             } catch (RuntimeException $exception) {
-                $allowed = ['trial_scope_changed', 'order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action', 'identity_disabled', 'identity_scope_incomplete', 'identity_provider_unavailable', 'identity_budget_required', 'identity_already_claimed', 'identity_existing_review', 'identity_requires_review', 'identity_approval_missing', 'missing_inputs', 'invalid_photo', 'photo_too_large'];
+                $allowed = ['trial_scope_changed', 'order_ineligible', 'contact_invalid', 'actor_revoked', 'inputs_changed', 'step_already_claimed', 'confirmation_owner_or_state', 'legacy_confirmation_exists', 'legacy_confirmation_pending', 'confirmation_already_claimed', 'state_conflict', 'missing_send_receipt', 'unsupported_action', 'identity_disabled', 'identity_scope_incomplete', 'identity_provider_unavailable', 'identity_budget_required', 'identity_already_claimed', 'identity_existing_review', 'identity_requires_review', 'identity_approval_missing', 'missing_inputs', 'invalid_photo', 'photo_too_large', 'preview_requires_review'];
                 if (! in_array($exception->getMessage(), $allowed, true)) {
                     throw $exception;
                 }
@@ -371,7 +388,10 @@ class ProcessRuntime
                     throw new OrderConfirmationSendException('contact_changed');
                 }
                 $template = data_get(collect($run->revision->definition['nodes'])->firstWhere('id', $step->node_id), 'config.template');
-                if ($template === ProcessTemplates::IDENTITY) {
+                if ($template === ProcessTemplates::REVIEW) {
+                    $url = app(ProcessProductReview::class)->url($run);
+                    $receipt = app(OrderConfirmationTransport::class)->sendTemplate($data['customer']['phone'], $template, [$data['customer']['name'], $data['display_reference'], $url, number_format($data['amounts']['remaining'], 2, '.', '')], 'معاينة طلب HeroKid '.$data['display_reference'], $run->checkout_key);
+                } elseif ($template === ProcessTemplates::IDENTITY) {
                     $url = app(ProcessIdentityService::class)->previewUrl($run);
                     $fields = [$data['customer']['name'], $data['display_reference'], implode('، ', $data['stories']), implode('، ', $data['children']),
                         implode('، ', $data['products']) ?: 'لا توجد منتجات إضافية', $url, number_format($data['amounts']['total'], 2, '.', ''), number_format($data['amounts']['remaining'], 2, '.', '')];

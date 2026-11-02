@@ -15,6 +15,6 @@
     @endforeach
 </details>
 @if($attemptRun->status === 'needs_manual')
-<p class="mt-2 text-sm font-bold text-amber-800">المشاهد المطلوب استكمالها: {{ implode('، ', array_diff(range(1,13), array_keys($attemptRun->scenes ?? []))) }}</p>
+<p class="mt-2 text-sm font-bold text-amber-800">المشاهد المطلوب استكمالها: {{ implode('، ', array_diff(range(1,$attemptRun->scene_count ?? 13), array_keys($attemptRun->scenes ?? []))) }}</p>
 @endif
 @endif

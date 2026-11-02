@@ -1,4 +1,8 @@
-# Codex story-scene queue
+# Codex story and coloring-book queue
+
+## Coloring-book pages / protocol 5
+
+Protocol5 supports 1–1000 portrait interior pages. Each manifest and output includes exact order_item_id and production_kind=coloring_book, plus existing run/order/approved-cover checksum correlation. The same bounded two-slot worker pool and per-page attempt ledger apply. No API fallback, whole-book retry or replacement of accepted pages. Laravel requires a current approved combined-preview manifest and positive recorded payment before admission, and verifies private S3 attachment ownership on each page. Old protocols retain their original behavior. See [book and review contract](../../docs/automation/coloring-book-and-preview-contract.md). New flags remain off pending template/RoboDesk readiness.
 
 ## Independent scenes / protocol 4 — prepared 2 November 2026
 

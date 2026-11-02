@@ -21,7 +21,7 @@ class AutomationAssignment
                     ->orWhere(function ($waiting) {
                         $waiting->where('owned_run.status', 'waiting_staff')
                             ->whereExists(fn ($step) => $step->selectRaw('1')->from('order_process_steps')
-                                ->whereColumn('run_id', 'owned_run.id')->where('type', 'approve_identity')->where('status', 'completed'))
+                                ->whereColumn('run_id', 'owned_run.id')->whereIn('type', ['approve_identity', 'approve_previews'])->where('status', 'completed'))
                             ->whereNotExists(fn ($review) => $review->selectRaw('1')->from('order_payment_reviews')
                                 ->whereColumn('run_id', 'owned_run.id'))
                             ->whereNotExists(fn ($paid) => $paid->selectRaw('1')->from('orders as paid_order')

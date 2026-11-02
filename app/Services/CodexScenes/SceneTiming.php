@@ -20,7 +20,7 @@ class SceneTiming
         }
         $start = (float) $data['started_at'];
         $elapsed = (float) $data['elapsed_seconds'];
-        if ($start < $run->created_at->timestamp || $start > now()->timestamp + 5 || $elapsed < 0 || $elapsed > 86400) {
+        if ($start < $run->created_at->timestamp || $start > now()->timestamp + 5 || $elapsed < 0 || $elapsed > ($run->production_kind === 'coloring_book' ? max(86400, ($run->scene_count ?? 13) * 2500) : 86400)) {
             return null;
         }
         $result = ['started_at' => $start, 'elapsed_seconds' => $elapsed];
@@ -81,7 +81,7 @@ class SceneTiming
     {
         $exact = [];
         $estimated = [];
-        foreach (CodexSceneRun::where('status', 'completed')->select(['snapshot', 'timing', 'started_at', 'finished_at', 'created_at', 'status'])->cursor() as $run) {
+        foreach (CodexSceneRun::where('status', 'completed')->where('production_kind', 'story')->select(['snapshot', 'timing', 'started_at', 'finished_at', 'created_at', 'status'])->cursor() as $run) {
             $value = self::describe($run);
             if ($value['story_seconds'] === null) {
                 continue;

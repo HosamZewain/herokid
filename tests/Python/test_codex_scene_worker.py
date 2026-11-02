@@ -14,7 +14,7 @@ FAKE = '''#!/usr/bin/env python3
 import sys,pathlib,re,struct,zlib,json,time
 if sys.argv[1:3]==['login','status']:
  print('Logged in using ChatGPT');sys.exit(0)
-p=sys.stdin.read(); n=int(re.search(r'Target scene (\\d+)',p).group(1))
+p=sys.stdin.read(); n=int(re.search(r'(?:Target scene|Create page) (\\d+)',p).group(1))
 root=pathlib.Path(sys.argv[sys.argv.index('-C')+1])
 with (root/'calls').open('a') as f: f.write(str(n)+'\\n')
 mode = (root.parent.parent/'mode').read_text() if (root.parent.parent/'mode').exists() else ''
@@ -34,9 +34,10 @@ if '--output-last-message' in sys.argv:
 if (root.parent.parent/'fail').exists(): sys.exit(1)
 if (root.parent.parent/'low-res').exists():
  (root/f'scene-{n:02d}.png').write_bytes(b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR'+struct.pack('>II',1774,887));sys.exit(0)
+width,height=(1024,1536) if 'INTERIOR COLORING PAGE' in p else (1536,1024)
 c=lambda t,b:struct.pack('>I',len(b))+t+b+struct.pack('>I',zlib.crc32(t+b))
 color=1 if (root.parent.parent/'duplicate').exists() else n
-b=b'\\x89PNG\\r\\n\\x1a\\n'+c(b'IHDR',struct.pack('>IIBBBBB',1536,1024,8,2,0,0,0))+c(b'IDAT',zlib.compress((b'\\0'+bytes([color,0,0])*1536)*1024))+c(b'IEND',b'')
+b=b'\\x89PNG\\r\\n\\x1a\\n'+c(b'IHDR',struct.pack('>IIBBBBB',width,height,8,2,0,0,0))+c(b'IDAT',zlib.compress((b'\\0'+bytes([color,0,0])*width)*height))+c(b'IEND',b'')
 (root/f'scene-{n:02d}.png').write_bytes(b)
 '''
 
@@ -65,6 +66,29 @@ class WorkerTest(unittest.TestCase):
 
     def state(self):
         return json.loads((w.SPOOL / 'outbox' / self.id / 'status.json').read_text())['status']
+
+    def test_book_pages_are_portrait_variable_count_and_bound_to_product(self):
+        manifest=json.loads((self.inbox/'manifest.json').read_text())
+        manifest.update(protocol=5,production_kind='coloring_book',order_item_id=789,scene_count=6,
+                        texts=[{'scene_number':n,'text':'synthetic'} for n in range(1,7)])
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest))
+        (w.HOME/'mode').write_text('quality')
+        w.run_job(self.inbox)
+        self.assertEqual('needs_manual',self.state())
+        self.assertEqual('1\n2\n3\n4\n4\n5\n6\n',(w.HOME/'jobs'/self.id/'calls').read_text())
+        for n in [1,2,3,5,6]:
+            out=w.SPOOL/'outbox'/self.id
+            meta=json.loads((out/f'scene-{n:02d}.json').read_text())
+            self.assertEqual(789,meta['order_item_id']);self.assertEqual('coloring_book',meta['production_kind'])
+            w.validate_png(out/f'scene-{n:02d}.png',portrait=True)
+        calls=(w.HOME/'jobs'/self.id/'calls').read_text();w.run_job(self.inbox)
+        self.assertEqual(calls,(w.HOME/'jobs'/self.id/'calls').read_text())
+
+    def test_book_missing_product_binding_never_calls_cli(self):
+        manifest=json.loads((self.inbox/'manifest.json').read_text())
+        manifest.update(protocol=5,production_kind='coloring_book')
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest));w.run_job(self.inbox)
+        self.assertEqual('uncertain',self.state());self.assertFalse((w.HOME/'jobs'/self.id/'calls').exists())
 
     def test_parallel_stories_keep_references_and_output_metadata_separate(self):
         self.protocol4('')

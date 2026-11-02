@@ -1,6 +1,6 @@
-# Coloring-book stages and unified image review — foundation deployed, runtime pending
+# Coloring-book stages and unified image review
 
-Foundation deployed as48c2e4e on2November2026 at12:32UTC. Existing catalog/templates were preserved; no runtime activation. Originally prepared on 2 November 2026, based on live `f8ddc955c455d015a5d204a0b561b6cc1ec73e88` plus its documentation successor. No production catalog edit, generation, message, enrollment or deployment is included in this change.
+Foundation deployed as48c2e4e on2November2026 at12:32UTC. Existing catalog/templates were preserved; no runtime activation. Runtime completion is included in the subsequent main release described below. Originally prepared on 2 November 2026, based on live `f8ddc955c455d015a5d204a0b561b6cc1ec73e88` plus its documentation successor. No production catalog edit, generation, customer message or enrollment is performed by this release.
 
 ## Implemented catalog and manual-message support
 
@@ -18,7 +18,7 @@ New book orders retain the component role, page count and prompts. Subsequent ca
 
 A pending process identity is included only if its current process guard succeeds. A failed/stale run is not presented as a ready identity. Rendering links is read-only: it does not approve identity, mutate payment, send a message or enqueue generation.
 
-## Owner-approved target workflow (runtime still to implement)
+## Implemented runtime — activation separately gated
 
 1. Existing order confirmation.
 2. OpenAI API creates only the coloring-book cover using the item/child references and cover prompt.
@@ -26,26 +26,37 @@ A pending process identity is included only if its current process guard succeed
 4. Send the approved general image-review/payment template after the required identity/product previews for that checkout are ready.
 5. Bind the response to the exact sent preview manifest: order IDs, item IDs, stable unit keys, image IDs and checksums. New/replaced images require another review; never let a gallery's later additions inherit an earlier approval.
 6. Record preview acceptance separately from payment. Incoming attachments mean review only. Staff records actual payment; any positive valid payment is sufficient, not necessarily 50%.
-7. Codex generates the snapshotted number of interior pages, using the approved cover as an identity/style reference. This requires a product-page job contract; the existing story worker intentionally still requires exactly 13 landscape scenes and must not be reused unchanged.
+7. Codex generates the snapshotted number of interior pages, using the approved cover as an identity/style reference. Protocol 5 binds each page to its run, order, item, cover checksum and page number; story protocols retain their 13 landscape scenes. Book pages are portrait, at least 1024px on the short side.
 8. Verify and save each page on S3 under the correct production unit, record bounded retries/timing/failures, then hand off to the team. Manual takeover/holds and uncertain-provider safeguards must apply.
 
-The component roles and labels are configuration, **not enforced automation/payment gates** in this patch. No new worker, activation switch, provider call or automatic sender is present yet. The current story and puzzle automations are unchanged. Full book runtime and common-review approval binding remain required; do not advertise this patch as an active book automation.
+The runtime adds `generate_previews` and `approve_previews` nodes and a ready-to-edit `product_review` preset. One immutable encrypted review manifest contains every required image. Its signed page has no approval or payment side effects. Unsupported products, stale inputs, unavailable outputs or any changed preview block the process for review; they are never silently omitted. Existing manual `preview_links` remains available independently.
 
-## Proposed common WhatsApp template — not submitted or approved
+`PRODUCT_REVIEW_ENABLED`, `PRODUCT_REVIEW_TEMPLATE_READY`, and `COLORING_BOOK_PAGES_ENABLED` default to false. Deployment leaves all three false. Existing confirmation, identity, puzzle/mug and story behavior continues. New covers are opt-in through an explicitly configured product and enabled workflow, not a historical catalog conversion. No historical job replay is included.
 
-Proposed name: `herokid_preview_review_payment`, Arabic `ar` on Meta / `ar-EG` on RoboDesk.
+Book admission requires an approved latest manifest, unchanged cover/interior input fingerprints, active preview, actual positive payment and no manual hold or conflicting owner. An existing book run of any status prevents automatic re-enrollment. The existing two-slot Codex pool is shared; each run has a separate directory and item binding. Books on the same order serialize. If a story shares the same order, its completed story run precedes book pages. The exact immutable page count is used for collection, progress and completion. Pages are verified in private S3 and attached to the interior unit; no PDF or customer message is generated at this step. Completed runs become ready_preview; partial runs become pending_team_review with accepted later pages retained. Only definite image-quality errors get a second attempt; unknown outcomes/refusals do not automatically retry. Whole books are not replayed. Story timing averages exclude books.
 
-Body (draft):
+Before switching workflows, finish/drain the old identity workflow, including waiting_staff reviews, and disable it; the activation guard rejects overlapping identity/common-preview owners. Existing customer approvals cannot be migrated blindly. Configure catalog cover/interior prompts and page counts explicitly; this release does not invent briefs or convert existing orders.
 
-مرحباً {{1}}، دي المعاينات المتاحة لطلبك {{2}} من HeroKid.
-برجاء مراجعة الصور وتأكيدها لاستكمال تجهيز الطلب.
-المعاينات: {{3}}
-المبلغ المتبقي: {{4}} جنيه.
-لاستكمال الطلب، برجاء تحويل قيمة الطلب أو مقدم ٥٠٪ على محفظة 01111822277 باسم حسام جمال، وإرسال صورة التحويل هنا لمراجعة الفريق.
-إرسال الصورة لا يعني اعتماد الدفع؛ الفريق هيراجع التحويل ويسجله.
+## Common WhatsApp template — submitted 2 November 2026
 
-Suggested quick replies: `تأكيد المعاينة`, `طلب تعديل المعاينة`.
+Name `herokid_preview_review_payment`, Meta ID **1670211884633726**, Utility, Arabic `ar` on Meta / `ar-EG` on RoboDesk. Submission was verified in Meta as **pending review**, not approved. No customer message was sent. Four POSITIONAL values: customer name, checkout reference, **one signed frozen review-manifest URL**, remaining balance as a number only. Exact Quick Replies: `تأكيد المعاينة`, `طلب تعديل المعاينة`.
 
-Positional variables: customer name, checkout reference, identity/product preview links, remaining balance (number only). The manual variable can contain several lines. Before approving a Meta contract, verify whether the selected template accepts this representation; if not, use a single protected review-manifest page URL or an approved single-line representation. Do not silently truncate links. A frozen review-manifest page is preferable for binding approvals in mixed orders.
+Body:
 
-Existing `herokid_identity_review_payment` and `تأكيد الهوية` remain unchanged. The proposed common template is not registered in the live transport allowlist; an arbitrary common-template send is therefore rejected. RoboDesk will need tenant prompt instructions for the new exact button texts, with no payment approval claim.
+مرحباً {{1}}، دي معاينة لطلبك {{2}} من HeroKid.
+الرابط فيه هويات أطفال القصص وصور المنتجات أو كفر كتاب التلوين، حسب محتويات طلبك:
+{{3}}
+برجاء مراجعة كل الصور واختيار «تأكيد المعاينة» أو «طلب تعديل المعاينة».
+لاستكمال الطلب، يرجى تحويل قيمة الطلب أو ديبوزت بحد أدنى ٥٠٪ من إجمالي الطلب على المحفظة الإلكترونية.
+المبلغ المتبقي على طلبك: {{4}} جنيه.
+رقم المحفظة: 01111822277
+باسم: حسام جمال
+بعد الدفع، يرجى إرسال صورة التحويل هنا ليراجعها فريق HeroKid قبل استكمال الطلب.
+
+Existing identity template/buttons remain unchanged. New transport allowlist entry is gated before any conversation close/send. Before activation, verify Meta approval, RoboDesk catalog synchronization and tenant prompt responses for both new buttons; no callback, classification or payment approval is requested. Suggested acknowledgement: «استلمنا موافقتك على المعاينات 💛 هنراجع الدفع قبل استكمال الطلب». Revision: «استلمنا طلب تعديل المعاينات 💛 ابعتلنا التعديلات المطلوبة عشان الفريق يراجعها». Payment receipt acknowledgement remains review-only. HeroKid continues full-window inbound polling and message-ID deduplication, retaining existing exact sent-wamid matching and safe interaction fallback.
+
+## Verification and boundaries
+
+Synthetic tests cover combined story/product readiness, approval replay, changed cover/interior blocking, receipt-only pending review, any positive real ledger payment, protocol mismatch/manual holds, per-item output correlation, private storage checksum collection and partial-page handoff. Python fake CLI tests cover variable page count, quality retries and continuing later pages; no real provider request was used. Physical print/layout quality is still a team review, not implied by PNG/dimension checks.
+
+Recovery must preserve manifests, encrypted inputs, media and attempts. Never run migration down or restore old database contents. A previous worker cannot accept protocol5; drain before refreshing or rolling back. New feature flags may stop future admission but do not reconcile active provider outcomes. Follow the AWS runbook and exact main SHA.

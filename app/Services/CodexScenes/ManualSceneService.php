@@ -13,6 +13,7 @@ use App\Services\Orders\OrderSceneTextService;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
 use App\Support\StoryProductionPrompt;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -103,9 +104,13 @@ class ManualSceneService
     /** Explicit owner/operator action only. The original attempt and its bridge files remain immutable. */
     public function resumeQuality(CodexSceneRun $original, string $authorization, ?int $skipContentScene = null): CodexSceneRun
     {
+        if ($original->production_kind === 'coloring_book') {
+            throw ValidationException::withMessages(['codex_scenes' => 'استكمال صفحات الكتاب يحتاج مراجعة خاصة؛ لا تستخدم استكمال القصص.']);
+        }
         if (trim($authorization) === '') {
             throw ValidationException::withMessages(['codex_scenes' => 'يلزم مرجع اعتماد الاستكمال.']);
         }
+
         return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($original, $authorization, $skipContentScene) {
             return DB::transaction(function () use ($original, $authorization, $skipContentScene) {
                 $rows = Order::where('checkout_group_key', $original->checkout_key)->orderBy('id')->lockForUpdate()->get();
@@ -157,6 +162,7 @@ class ManualSceneService
                     'snapshot' => $snapshot, 'scenes' => $saved]);
                 AutomationActivity::record($order, 'codex_scene_resume_authorized', 'استكمال مشاهد Codex بعد مراجعة الجودة؛ الاحتفاظ بالمشاهد السليمة وبدء محاولة مستقلة للمشاهد المتبقية.',
                     ['run_id' => $run->id, 'previous_run_id' => $old->id, 'retained_scenes' => count($saved), 'authorization' => $authorization, 'skipped_content_scene' => $skipContentScene]);
+
                 return $run;
             });
         });
@@ -176,6 +182,7 @@ class ManualSceneService
             || min($size[0], $size[1]) < 1024 || $size[0] <= $size[1]) {
             throw new \RuntimeException('Retained scene integrity failed');
         }
+
         return $bytes;
     }
 
@@ -247,6 +254,7 @@ class ManualSceneService
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 $this->setStatus($run->order, $run->previous_status, 'إيقاف القصة قبل بدء التوليد.');
                 AdminActivityLogger::log(action: 'order.codex_scenes_stop_requested', description: 'إيقاف القصة من طابور Codex قبل التوليد.', subject: $run->order, properties: ['run_id' => $run->id], admin: $user);
+
                 return;
             }
             $dir = config('codex_scenes.spool').'/inbox/'.$run->id;
@@ -265,6 +273,7 @@ class ManualSceneService
     {
         Cache::lock('codex-scenes-sync', 110)->get(function () {
             $this->enroll();
+            app(BookPageService::class)->enroll();
             foreach (CodexSceneRun::where('active_slot', 1)->orderBy('created_at')->get() as $run) {
                 if ($run->status === 'waiting_slot') {
                     // An uncertain provider result pauses further dispatch until reviewed.
@@ -299,7 +308,10 @@ class ManualSceneService
     private function prepare(CodexSceneRun $run): void
     {
         $order = $run->order;
-        if (! hash_equals($run->fingerprint, $this->fingerprint($order))) {
+        if ($run->production_kind === 'coloring_book' && ! app(BookPageService::class)->workerReady()) {
+            throw new \RuntimeException('Book worker unavailable');
+        }
+        if (! hash_equals($run->fingerprint, $this->runFingerprint($run, $order))) {
             throw new \RuntimeException('Input changed');
         }
         if ($run->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($order->checkoutGroupKey()))) {
@@ -317,7 +329,10 @@ class ManualSceneService
         }
         file_put_contents($dir.'/identity.img', $image);
         chmod($dir.'/identity.img', 0640);
-        $data = ['protocol' => $run->protocol, 'id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
+        $data = ['protocol' => $run->protocol, 'id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => $run->scene_count ?? 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
+        if ($run->production_kind === 'coloring_book') {
+            $data += ['production_kind' => 'coloring_book', 'order_item_id' => $run->order_item_id];
+        }
         if ($run->protocol >= 3 && isset($snapshot['resume_from'])) {
             $data['resume_from'] = $snapshot['resume_from'];
             $data['retained_scenes'] = [];
@@ -340,7 +355,7 @@ class ManualSceneService
             }
             $rows = Order::where('checkout_group_key', $locked->checkout_key)->orderBy('id')->lockForUpdate()->get();
             $order = $rows->firstWhere('id', $locked->order_id);
-            if (! $order || ! hash_equals($locked->fingerprint, $this->fingerprint($order))
+            if (! $order || ! hash_equals($locked->fingerprint, $this->runFingerprint($locked, $order))
                 || ($locked->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($locked->checkout_key)))) {
                 throw new \RuntimeException('Eligibility changed before dispatch');
             }
@@ -348,6 +363,11 @@ class ManualSceneService
             $locked->update(['status' => 'queued']);
             AutomationActivity::record($locked->order, 'codex_scene_queued', 'تجهيز برومبت القصة والهوية المعتمدة لتوليد Codex.', ['run_id' => $locked->id]);
         });
+    }
+
+    private function runFingerprint(CodexSceneRun $run, Order $order): string
+    {
+        return $run->production_kind === 'coloring_book' ? app(BookPageService::class)->fingerprint($run) : $this->fingerprint($order);
     }
 
     private function safeFile(string $path, string $directory): bool
@@ -387,11 +407,11 @@ class ManualSceneService
 
                 return;
             }
-            if ($order->trashed() || ! hash_equals($run->fingerprint, $this->fingerprint($order)) || $order->status !== 'generating') {
+            if ($order->trashed() || ! hash_equals($run->fingerprint, $this->runFingerprint($run, $order)) || $order->status !== 'generating') {
                 throw new \RuntimeException('Input changed');
             }
             $saved = $run->scenes ?? [];
-            foreach (range(1, 13) as $n) {
+            foreach (range(1, $run->scene_count ?? 13) as $n) {
                 $key = (string) $n;
                 if ($run->protocol >= 4 && ! in_array($state['scene_progress'][$key]['status'] ?? '', ['succeeded', 'retained'], true)) {
                     continue;
@@ -412,10 +432,13 @@ class ManualSceneService
                     || ($meta['identity_checksum'] ?? '') !== $run->snapshot['identity_checksum'])) {
                     throw new \RuntimeException('Scene belongs to another story or identity');
                 }
+                if ($run->production_kind === 'coloring_book' && (($meta['production_kind'] ?? '') !== 'coloring_book' || ($meta['order_item_id'] ?? null) !== $run->order_item_id)) {
+                    throw new \RuntimeException('Page belongs to another product');
+                }
                 $bytes = file_get_contents($path);
                 $sha = hash('sha256', $bytes);
                 $size = @getimagesizefromstring($bytes);
-                if (($meta['scene'] ?? 0) !== $n || ! hash_equals($meta['sha256'] ?? '', $sha) || ! $size || $size['mime'] !== 'image/png' || min($size[0], $size[1]) < 1024 || $size[0] <= $size[1]) {
+                if (($meta['scene'] ?? 0) !== $n || ! hash_equals($meta['sha256'] ?? '', $sha) || ! $size || $size['mime'] !== 'image/png' || min($size[0], $size[1]) < 1024 || ($run->production_kind === 'coloring_book' ? $size[1] <= $size[0] : $size[0] <= $size[1])) {
                     throw new \RuntimeException('Invalid scene');
                 }
                 if (collect($saved)->contains(fn ($s) => $s['sha256'] === $sha)) {
@@ -426,9 +449,9 @@ class ManualSceneService
                 if (! $disk->put($dest, $bytes, ['visibility' => 'private']) || ! hash_equals($sha, hash('sha256', $disk->get($dest)))) {
                     throw new \RuntimeException('Storage verification failed');
                 }
-                $attachment = OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n]);
+                $attachment = OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => $run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n]);
                 $saved[$key] = ['attachment_id' => $attachment->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1]];
-                AutomationActivity::record($order, 'codex_scene_saved', 'توليد وحفظ مشهد '.$n.' من 13 عبر Codex.', ['run_id' => $run->id, 'scene' => $n, 'sha256' => $sha]);
+                AutomationActivity::record($order, 'codex_scene_saved', 'توليد وحفظ مشهد '.$n.' من '.($run->scene_count ?? 13).' عبر Codex.', ['run_id' => $run->id, 'scene' => $n, 'sha256' => $sha]);
             }
             ksort($saved, SORT_NUMERIC);
             SceneProgress::collect($run, $state, $saved, $order);
@@ -439,7 +462,7 @@ class ManualSceneService
                 $run->started_at = now();
             }
             if (in_array($phase, ['completed', 'needs_manual', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
-                if ($phase === 'completed' && count($saved) !== 13) {
+                if ($phase === 'completed' && count($saved) !== ($run->scene_count ?? 13)) {
                     throw new \RuntimeException('Missing scenes');
                 }
                 if ($phase === 'completed') {
@@ -452,7 +475,7 @@ class ManualSceneService
                     $run->error_code = 'partial_scenes';
                     $run->active_slot = null;
                     $run->finished_at = now();
-                    $missing = array_values(array_diff(range(1, 13), array_map('intval', array_keys($saved))));
+                    $missing = array_values(array_diff(range(1, $run->scene_count ?? 13), array_map('intval', array_keys($saved))));
                     $this->setStatus($order, 'pending_team_review', 'انتهت محاولات Codex؛ استكمال المشاهد الناقصة يدويًا: '.implode('، ', $missing));
                     AutomationActivity::record($order, 'codex_scene_manual_handoff', 'تسليم القصة للتيم لاستكمال المشاهد الناقصة فقط.', ['run_id' => $run->id, 'missing_scenes' => $missing, 'saved_scenes' => count($saved)]);
                 } elseif ($phase === 'stopped') {
@@ -464,7 +487,7 @@ class ManualSceneService
                     $run->status = 'quality_review';
                     $run->error_code = $state['code'];
                     if (isset($run->timing['finished_at'])) {
-                        $run->finished_at = \Carbon\Carbon::createFromTimestampUTC($run->timing['finished_at']);
+                        $run->finished_at = Carbon::createFromTimestampUTC($run->timing['finished_at']);
                     }
                 } else {
                     $run->status = 'uncertain';

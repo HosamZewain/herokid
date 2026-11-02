@@ -10,6 +10,7 @@ use App\Services\Orders\AutomationActivity;
 class SceneProgress
 {
     public const QUALITY = ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'];
+
     public const FAILURES = [...self::QUALITY, 'content_review', 'generation_result_uncertain'];
 
     public static function collect(CodexSceneRun $run, array $state, array $saved, Order $order): void
@@ -18,12 +19,14 @@ class SceneProgress
             if (($state['status'] ?? '') === 'needs_manual') {
                 throw new \RuntimeException('Partial result requires protocol 4');
             }
+
             return;
         }
+        $count = $run->scene_count ?? 13;
         $progress = $state['scene_progress'] ?? [];
         $previous = $run->scene_progress ?? [];
         $terminal = in_array($state['status'] ?? '', ['completed', 'needs_manual'], true);
-        if (! is_array($progress) || count($progress) > 13 || ($terminal && count($progress) !== 13)) {
+        if (! is_array($progress) || count($progress) > $count || ($terminal && count($progress) !== $count)) {
             throw new \RuntimeException('Invalid scene progress');
         }
         foreach ($previous as $number => $old) {
@@ -32,7 +35,7 @@ class SceneProgress
             }
         }
         foreach ($progress as $number => $entry) {
-            if (! ctype_digit((string) $number) || (int) $number < 1 || (int) $number > 13 || ! is_array($entry)
+            if (! ctype_digit((string) $number) || (int) $number < 1 || (int) $number > $count || ! is_array($entry)
                 || ! in_array($entry['status'] ?? '', ['running', 'succeeded', 'failed', 'retained'], true)
                 || array_diff(array_keys($entry), ['status', 'code', 'attempts', 'previous_run_id'])
                 || ! is_array($entry['attempts'] ?? null) || ! array_is_list($entry['attempts']) || count($entry['attempts']) > 2) {
@@ -93,7 +96,7 @@ class SceneProgress
                 throw new \RuntimeException('Terminal run has a pending attempt');
             }
         }
-        if ($terminal && (($state['status'] === 'completed') !== (count($saved) === 13))) {
+        if ($terminal && (($state['status'] === 'completed') !== (count($saved) === $count))) {
             throw new \RuntimeException('Incomplete story cannot be completed');
         }
         // Only log once, under the run lock. Never publish the private CLI transcript or prompt.

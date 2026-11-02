@@ -82,6 +82,7 @@ use App\Http\Controllers\Front\FootballStoriesController;
 use App\Http\Controllers\Front\HomeController;
 use App\Http\Controllers\Front\OrderCustomerRatingController;
 use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
+use App\Http\Controllers\Front\OrderReviewManifestController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
 use App\Http\Controllers\Front\PageController;
@@ -109,6 +110,9 @@ use Illuminate\Support\Facades\Route;
 // exec() disabled). The .htaccess only routes requests to PHP when the file
 // does NOT exist on disk, so this only fires when the symlink is missing —
 // it has zero cost when the symlink is in place.
+Route::get('/order-review/{manifest}', [OrderReviewManifestController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->name('order-process.review-preview');
+Route::get('/order-review/{manifest}/image/{index}', [OrderReviewManifestController::class, 'image'])->middleware(['signed', 'throttle:120,1'])->whereNumber('index')->name('order-process.review-image');
+
 Route::get('/storage/{path}', function (string $path) {
     // Block directory traversal
     if (str_contains($path, '..')) {

@@ -62,7 +62,7 @@ class ProcessPaymentReview
         foreach ($allRuns as $run) {
             foreach ($run->steps->where('type', 'whatsapp') as $step) {
                 $node = collect($run->revision->definition['nodes'] ?? [])->firstWhere('id', $step->node_id);
-                if (data_get($node, 'config.template') !== ProcessTemplates::IDENTITY) {
+                if (! in_array(data_get($node, 'config.template'), [ProcessTemplates::IDENTITY, ProcessTemplates::REVIEW], true)) {
                     continue;
                 }
                 $attempts = $step->messageAttempts->isEmpty() ? collect([$step]) : $step->messageAttempts;
@@ -70,7 +70,7 @@ class ProcessPaymentReview
                     $wamid = data_get($attempt->receipt, 'message_id');
                     $interaction = data_get($attempt->receipt, 'interaction_id');
                     if ($wamid && $interaction) {
-                        $sent->push(['run_id' => $run->id, 'checkout_key' => $run->checkout_key, 'wamid' => $wamid, 'interaction' => $interaction]);
+                        $sent->push(['run_id' => $run->id, 'checkout_key' => $run->checkout_key, 'wamid' => $wamid, 'interaction' => $interaction, 'template' => data_get($node, 'config.template')]);
                     }
                 }
             }
@@ -90,7 +90,7 @@ class ProcessPaymentReview
                 continue;
             }
             $evidence = $messages->filter(fn ($m) => $m->direction === 'outbound'
-                && data_get($m->provider_metadata, 'templateName') === ProcessTemplates::IDENTITY
+                && $candidates->contains(fn ($c) => $c['wamid'] === data_get($m->provider_metadata, 'channelId') && $c['template'] === data_get($m->provider_metadata, 'templateName'))
                 && data_get($m->provider_metadata, 'interactionId') === $interaction
                 && $candidates->contains('wamid', data_get($m->provider_metadata, 'channelId'))
                 // Incoming Meta time has second precision: same-second ordering is ambiguous.
@@ -122,7 +122,7 @@ class ProcessPaymentReview
                 $firstSignal = $review->wasRecentlyCreated;
                 $review->signals()->create(['message_id' => $message->id]);
                 AutomationActivity::record($current->checkout_key, 'attachment_received', 'وصل مرفق من العميل بعد معاينة الهوية ويحتاج مراجعة الفريق؛ ليس إثباتًا لاعتماد الدفع', ['source_id' => $message->id]);
-                if ($firstSignal && $current->status === 'waiting_staff' && $current->steps()->where('type', 'approve_identity')->where('status', 'completed')->exists()) {
+                if ($firstSignal && $current->status === 'waiting_staff' && $current->steps()->whereIn('type', ['approve_identity', 'approve_previews'])->where('status', 'completed')->exists()) {
                     AutomationActivity::record($current->checkout_key, 'handoff', 'تسليم مسؤولية الطلب للفريق بعد تأكيد الهوية ووصول مرفق لمراجعة الدفع');
                 }
                 $this->syncPaymentStatus($review);
