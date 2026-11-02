@@ -87,7 +87,7 @@ reports and Arabic owner-review document. Two further checks cover shared budget
 and bridge/PHP schema agreement. Native browser inspection verified the synthetic
 overview/detail views; HTTP tests cover filtering, access, freshness and redaction.
 
-- Current core Agentic tests (without MCP): **30 tests / 178 assertions**, passing
+- Current core Agentic tests (without MCP): **31 tests / 185 assertions**, passing
   on SQLite and isolated MySQL in the final combined run.
 - Actual data: **37 checkouts / 89 manually labelled targets**, captured on AWS
   inside a read-only transaction with outbound HTTP blocked; **0 read errors**.
@@ -128,9 +128,9 @@ PHP **8.3.3**, no production config/secrets/media, external requests blocked.
 |---|---|---|
 | Existing automation selection, SQLite | 312 / 1,954 passed | **319 / 2,021 passed** |
 | Existing automation selection, isolated MySQL 8.4 | 312 / 1,954 passed | **319 / 2,021 passed** |
-| New Agentic tests, both engines | — | **33 / 261 passed on each** |
+| New Agentic tests, both engines | — | **34 / 268 passed on each** |
 | Python fake-CLI scene worker | 23 passed | **23 passed** |
-| Broadened MySQL run incl. admin permissions, operational cards and cover artwork | — | **388 / 2,756 passed** |
+| Broadened MySQL run incl. admin permissions, operational cards and cover artwork | — | **389 / 2,761 passed** |
 
 Seven added existing-automation cases come from the concurrent production release,
 not removed or weakened tests. Broadened SQLite ran 388 tests / 2,749 assertions:
@@ -149,3 +149,18 @@ subscription login and real inference validation inside the reviewed runtime;
 real ≥95% benchmark with no unresolved safety-critical failures. Any future AWS
 deployment/migration/observation enablement or live execution needs its own scoped
 approval. See the architecture document and runtime README for recovery details.
+
+## Final review follow-up
+
+Added an explicit latest-run pointer, atomically set with attempt reservation, so
+multiple decisions in the same timestamp cannot be reordered by random UUIDs.
+Dashboard filters use that same pointer. The dedicated worker timeout/lease/retry
+ordering is now 1000s / 1100s / 1200s. Registry version is included in context
+fingerprints. A frozen-clock regression verifies the displayed latest decision.
+Targeted rerun: **34 tests / 268 assertions passed on both SQLite and MySQL**.
+
+All changed PHP files passed PHP 8.3 syntax checks. The built manifest resolves
+to existing local files and contains no build-machine paths. The diff against
+production `77ef1cc` for existing workflow/product/scene/confirmation services,
+Order model and assignment/hold owners is empty. The original dirty UI/mobile
+checkout was not edited.

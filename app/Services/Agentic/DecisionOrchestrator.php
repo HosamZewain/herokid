@@ -157,7 +157,8 @@ class DecisionOrchestrator
             }
             $token = (string) Str::uuid();
             DB::table('ai_runtime_states')->where('id', 1)->update(['lease_token' => $token,
-                'lease_until' => now()->addSeconds(60 + max(1, min(10, config('agentic.cycles_per_pass'))) * config('agentic.timeout_seconds')),
+                // Outlive the dedicated worker's 1000s timeout, but expire before retry_after=1200s.
+                'lease_until' => now()->addSeconds(1100),
                 'turns' => $control->turns + 1, 'provider_error' => null, 'updated_at' => now()]);
 
             return $token;
@@ -180,10 +181,14 @@ class DecisionOrchestrator
             $state->update(['last_attempt_at' => now()]);
             unset($context['operational'], $context['observed_at'], $context['representative_id']);
 
-            return AiAgentRun::create(['id' => (string) Str::uuid(), 'checkout_state_id' => $state->id,
+            $run = AiAgentRun::create(['id' => (string) Str::uuid(), 'checkout_state_id' => $state->id,
                 'context_version' => $state->context_version, 'fingerprint' => $state->fingerprint, 'snapshot' => $context,
                 'provider' => $this->provider->name(), 'policy_version' => CapabilityRegistry::VERSION, 'prompt_version' => self::PROMPT_VERSION,
                 'status' => 'running', 'started_at' => now()]);
+            // An explicit pointer is ordered even when several UUID runs share a timestamp.
+            $state->update(['last_run_id' => $run->id]);
+
+            return $run;
         }, 3);
     }
 }

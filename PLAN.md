@@ -202,3 +202,18 @@ transport complexity that is not necessary for these seven reads.
   AWS resource. Future deployment requires explicit approval and runbook checks.
 - Later execution phases require separate review of ownership transfer, one
   capability/cohort at a time, idempotency and the approved real evaluation gate.
+
+## Prepared implementation status
+
+- Implemented locally: context/specification/registry, bounded decisions and
+  scheduling, policy simulation, encrypted audit, isolated fail-closed SDK bridge,
+  dashboard, actual/synthetic evaluation harness and seven read-only MCP tools.
+- Existing production execution/ownership service diff against the merged release
+  is empty. Defaults remain off; the gateway has no execute method.
+- Pending acceptance: owner approval of `docs/agentic-evaluation-review.ar.md`,
+  dedicated ChatGPT subscription authentication and real inference verification,
+  then ≥95% correctness on the approved corpus with no unresolved safety-critical
+  failures. Mock scores do not satisfy that real-model gate.
+- Detailed files, measured tests, known SQLite limitations and runtime boundaries:
+  `docs/agentic-shadow-implementation.md`, `docs/agentic-shadow-architecture.md`,
+  and `ops/agentic/README.md`.

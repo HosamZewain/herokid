@@ -68,6 +68,21 @@ class AgenticDashboardTest extends TestCase
         $this->assertDatabaseCount('puzzle_generations', 0);
     }
 
+    public function test_latest_decision_and_filter_remain_ordered_with_identical_timestamps(): void
+    {
+        $this->freezeTime();
+        config(['agentic.observe' => true, 'agentic.evaluate' => true]);
+        $state = $this->observedCheckout('same-second', 2);
+        Order::where('checkout_group_key', 'same-second')->orderBy('id')->first()->update(['uploaded_photos' => []]);
+        app(ContextObserver::class)->observe('same-second');
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $last = \App\Models\AiOrderDecision::orderByDesc('id')->first();
+        $this->assertSame($last->agent_run_id, $state->fresh()->last_run_id);
+        $response = $this->actingAs($this->staff())->get(route('admin.agentic.index', ['decision' => 'execute']))->assertOk();
+        $this->assertSame($last->agent_run_id, $response->viewData('rows')->first()->latest->id);
+        $this->get(route('admin.agentic.index', ['decision' => 'human_required']))->assertOk()->assertSee('لا توجد طلبات مطابقة.');
+    }
+
     private function staff(array $keys = ['orders.view', 'order_automation.view']): User
     {
         $user = User::factory()->create(['role' => 'admin', 'is_active' => true]);

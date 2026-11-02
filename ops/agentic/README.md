@@ -74,7 +74,7 @@ observation later does not enable evaluation. Observation is a bounded scheduled
 read projection; evaluation uses its own Redis connection/queue `agentic-shadow`,
 one unique job, one global database lease and one provider call at a time. It
 does not consume the production `default` or `codex-scenes` queue. Worker timeout
-1000s is below retry_after/unique TTL 1200s; individual calls are bounded to 90s
+1000s is below the database lease 1100s and retry_after/unique TTL 1200s; individual calls are bounded to 90s
 (bridge model deadline 80s), and the pass is capped at ten cycles.
 
 Every attempted decision consumes the configurable Cairo-day quota, including

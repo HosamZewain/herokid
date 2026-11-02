@@ -72,7 +72,7 @@ class OrderContextBuilder
         $held = AutomationHandoff::held($key);
         $ownership = app(AutomationAssignment::class)->owns($orders->first(), false);
         $context = [
-            'schema_version' => 1, 'checkout_ref' => 'checkout:'.$orders->first()->id,
+            'schema_version' => 1, 'capability_registry_version' => CapabilityRegistry::VERSION, 'checkout_ref' => 'checkout:'.$orders->first()->id,
             'representative_id' => $orders->first()->id,
             'orders' => $orders->map(fn ($o) => ['order_ref' => 'order:'.$o->id, 'status' => $o->status, 'payment_status' => $o->payment_status,
                 'printing_status' => $o->printing_status, 'shipping_status' => $o->shipping_status, 'deleted' => $o->trashed(), 'active' => in_array($o->id, $activeIds, true)])->all(),

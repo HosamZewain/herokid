@@ -26,6 +26,7 @@ return new class extends Migration
             $t->timestamp('observed_at')->nullable();
             $t->timestamp('evaluated_at')->nullable();
             $t->timestamp('last_attempt_at')->nullable();
+            $t->uuid('last_run_id')->nullable();
             $t->timestamps();
         });
         Schema::create('ai_agent_runs', function (Blueprint $t) {

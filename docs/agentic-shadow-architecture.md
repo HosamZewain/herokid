@@ -57,7 +57,8 @@ that production will remain at that SHA; revalidate before any future release.
    failure cannot fail the source business transaction. Periodic cursor scans
    cover missed direct-SQL writes and catalogue/config changes.
 2. A meaningful fingerprint change advances the version and invalidates coverage.
-   Active scene progress refreshes operational facts without burning AI calls.
+   Registry version is part of the fingerprint; bump it for changed policy/prompt
+   semantics. Active scene progress refreshes operational facts without burning AI calls.
 3. One provider call selects one remaining target. The same full checkout facts
    accompany each bounded cycle. Proposals never become hypothetical executed
    effects; dependent stages keep waiting while independent siblings are covered.

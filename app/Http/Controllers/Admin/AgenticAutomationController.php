@@ -70,21 +70,16 @@ class AgenticAutomationController extends Controller
         if ($decision = $filters['decision'] ?? null) {
             $groups->whereExists(function ($q) use ($decision) {
                 $q->selectRaw('1')->from('ai_order_decisions as d')->join('ai_agent_runs as r', 'r.id', '=', 'd.agent_run_id')
-                    ->whereColumn('r.checkout_state_id', 's.id')->where('d.decision->decision', $decision)
-                    ->whereRaw('d.id = (select max(d2.id) from ai_order_decisions d2 join ai_agent_runs r2 on r2.id = d2.agent_run_id where r2.checkout_state_id = s.id)');
+                    ->whereColumn('r.id', 's.last_run_id')->where('d.decision->decision', $decision);
             });
         }
-        $rows = $groups->select(['g.*', 's.id as state_id', 's.status', 's.context_version', 's.target_count', 's.covered_targets',
+        $rows = $groups->select(['g.*', 's.id as state_id', 's.last_run_id', 's.status', 's.context_version', 's.target_count', 's.covered_targets',
             's.error_code', 's.observed_at', 's.evaluated_at', 's.dirty_at'])->orderByRaw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END')
             ->orderBy('s.last_attempt_at')->orderByDesc('g.representative_id')->paginate(25)
             ->withPath(route('admin.agentic.index'))->appends($filters);
         $orders = Order::whereIn('checkout_group_key', $rows->pluck('checkout_group_key'))->select('id', 'checkout_group_key', 'status')
             ->with('checkoutReference:id,checkout_group_key,short_reference')->get()->groupBy('checkout_group_key');
-        $latest = AiAgentRun::whereIn('checkout_state_id', $rows->pluck('state_id')->filter())->whereNotExists(function ($q) {
-            $q->selectRaw('1')->from('ai_agent_runs as newer')->whereColumn('newer.checkout_state_id', 'ai_agent_runs.checkout_state_id')
-                ->where(fn ($q) => $q->whereColumn('newer.started_at', '>', 'ai_agent_runs.started_at')
-                    ->orWhere(fn ($q) => $q->whereColumn('newer.started_at', 'ai_agent_runs.started_at')->whereColumn('newer.id', '>', 'ai_agent_runs.id')));
-        })->with('decision')->get()->keyBy('checkout_state_id');
+        $latest = AiAgentRun::whereIn('id', $rows->pluck('last_run_id')->filter())->with('decision')->get()->keyBy('checkout_state_id');
         $rows->setCollection($rows->getCollection()->map(function ($row) use ($orders, $latest) {
             $siblings = $orders->get($row->checkout_group_key, collect());
             $row->reference = $siblings->first()?->checkoutReference?->short_reference ?: 'Order '.$row->representative_id;
