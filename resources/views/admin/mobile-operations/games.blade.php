@@ -18,7 +18,7 @@
 @foreach($config['data']['games'] as $game)
 <details class="rounded-2xl border bg-white p-5" id="game-{{ $game['id'] }}">
 <summary class="cursor-pointer text-lg font-bold">{{ $game['title']['ar'] }} · {{ $game['enabled'] ? 'مفعّلة' : 'متوقفة' }} · ترتيب {{ $game['sort_order'] }}</summary>
-<form method="POST" enctype="multipart/form-data" action="{{ route('admin.mobile-operations.games.update', $game['id']) }}" class="mt-5 space-y-5" x-data="{ preview: null }">
+<form method="POST" enctype="multipart/form-data" action="{{ route('admin.mobile-operations.games.update', $game['id']) }}" class="mt-5 space-y-5" data-game-card-form>
 @csrf @method('PUT')<input type="hidden" name="config_version" value="{{ $config['version'] }}">
 <fieldset @disabled(!auth()->user()->can('settings.mobile.manage')) class="space-y-5">
 <div class="grid gap-4 md:grid-cols-2">
@@ -32,13 +32,13 @@
 </div>
 <div class="grid gap-5 md:grid-cols-2">
 <div>
-<label class="block font-bold">صورة كارت اللعبة<input type="file" name="image" accept="image/png,image/jpeg,image/webp" class="mt-2 block w-full" @change="if (preview) URL.revokeObjectURL(preview); preview = $event.target.files[0] ? URL.createObjectURL($event.target.files[0]) : null"></label>
+<label class="block font-bold">صورة كارت اللعبة<input type="file" name="image" accept="image/png,image/jpeg,image/webp" class="mt-2 block w-full" data-game-card-input></label>
 <p class="mt-2 text-sm text-slate-500">صورة عامة فقط، بدون صور العملاء. بحد أقصى 5 MB. تُحفظ WebP أو PNG وتُزال بياناتها الوصفية. المعاينة التالية قبل الحفظ.</p>
 <label class="mt-3 block"><input type="checkbox" name="remove_image" value="1"> العودة للصورة المدمجة بالتطبيق</label>
 </div>
 <div class="rounded-xl border bg-slate-50 p-4 text-center">
-<img x-show="preview" :src="preview" x-cloak alt="معاينة الصورة المختارة" class="mx-auto h-48 w-48 object-contain">
-@if($game['card_image']['path'])<img x-show="!preview" src="{{ secure_url('storage/'.$game['card_image']['path']) }}" alt="{{ $game['title']['ar'] }}" class="mx-auto h-48 w-48 object-contain">@else<p x-show="!preview" class="p-10 text-slate-500">الصورة المدمجة في الموبايل</p>@endif
+<img data-game-card-preview hidden alt="معاينة الصورة المختارة" class="mx-auto h-48 w-48 object-contain">
+@if($game['card_image']['path'])<img data-game-card-fallback src="{{ secure_url('storage/'.$game['card_image']['path']) }}" alt="{{ $game['title']['ar'] }}" class="mx-auto h-48 w-48 object-contain">@else<p data-game-card-fallback class="p-10 text-slate-500">الصورة المدمجة في الموبايل</p>@endif
 <p class="mt-2 font-bold">{{ $game['title']['ar'] }}</p><p class="text-sm">{{ $game['description']['ar'] }}</p>
 </div>
 </div>
@@ -65,4 +65,30 @@
 @endcan</td></tr>@endforeach
 </tbody></table></div>{{ $history->links() }}</section>
 </div>
+@push('scripts')
+<script>
+document.querySelectorAll('[data-game-card-form]').forEach((form) => {
+    const input = form.querySelector('[data-game-card-input]');
+    const preview = form.querySelector('[data-game-card-preview]');
+    const fallback = form.querySelector('[data-game-card-fallback]');
+    let objectUrl = null;
+    input.addEventListener('change', () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+        const file = input.files[0];
+        const valid = file && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 5 * 1024 * 1024;
+        input.setCustomValidity(file && !valid ? 'اختر صورة JPEG أو PNG أو WebP بحجم لا يتجاوز 5 MB.' : '');
+        if (valid) {
+            objectUrl = URL.createObjectURL(file);
+            preview.src = objectUrl;
+        } else {
+            preview.removeAttribute('src');
+        }
+        preview.hidden = !valid;
+        fallback.hidden = !!valid;
+    });
+    window.addEventListener('pagehide', () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, { once: true });
+});
+</script>
+@endpush
 </x-admin-layout>
