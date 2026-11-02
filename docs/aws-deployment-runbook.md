@@ -1,5 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
+## 2 November 2026 — coloring-book configuration and manual review links deployed
+
+Owner requested deploying the locally prepared foundation, then completing the remaining runtime. Application **48c2e4e7af0d05148740d948505ad46826546c9c** deployed and verified **12:32:12 UTC /14:32 Cairo**. Product components now support separate book-cover/interior prompts, per-variant interior-page counts and immutable book snapshots. Manual WhatsApp templates can use `{{preview_links}}` for available identity/product image links; existing templates remain unchanged. **No automatic book generation, combined review sender, new template or book activation is included in this release.** Runtime completion remains ongoing.
+
+Narrow additive migration `2026_11_02_120000_add_product_book_stages` completed in394ms. All22 release hashes and PHP8.3 syntax matched. Isolated SQLite/MySQL functional suites each passed106tests/913assertions on PHP8.5; initial PHP8.3 test image lacked GD/MySQL extensions, so PHP8.3 was used for full changed-file syntax validation. Isolated frontend lockfile build included newCSS while retaining cached assets. Concurrent test scratch-directory collision was corrected with per-container tmpfs; final suites passed.
+
+Checkpoint **/home/ubuntu/herokid-before-book-foundation-48c2e4e**. Fresh off-instance backup **herokid-20261102T122833Z.sql.gz**,48410094bytes, SHA25652f68884baae2116c85b5384205e30820df65c4b804e0939608ac0369feca0a0: local integrity and S3 checksum/size matched. Before/after hashes proved all original fields unchanged for41products,18variants,56catalogcomponents,2583ordercomponents and existing WhatsApp settings. New stage defaults standard and page counts null. `.env` and private cached configuration unchanged. Four affected Laravel workers drained/refreshed gracefully; Codex PID851280 unchanged. No replay, provider call, catalogue edit or new service.
+
+Authenticated product editor shows cover-prompt button and explanatory stage controls. Public home/up/cart/newCSS200; services and scheduler healthy,81historical failedjobs unchanged, zero new application log bytes/errors through12:35:14UTC. Preserve added schema/snapshots on recovery; no automatic migration down or database restore. This documentation successor is not itself the live application SHA.
+
+
 ## 2 November 2026 — per-product regeneration deployed
 
 Owner explicitly approved “انشر”. Application **01e6f6f684d00cca57496e66ca13323fbf2e1286** deployed and verified **11:04:48 UTC /13:04 Cairo**. Per-item **إعادة التوليد** is visible in the authenticated product production page, using current saved prompt/photos/notes and preserving earlier output and every sibling. The button was inspected only; no production regeneration was triggered for verification.

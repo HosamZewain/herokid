@@ -1,6 +1,6 @@
-# Coloring-book stages and unified image review — prepared, not deployed
+# Coloring-book stages and unified image review — foundation deployed, runtime pending
 
-Prepared on 2 November 2026, based on live `f8ddc955c455d015a5d204a0b561b6cc1ec73e88` plus its documentation successor. No production catalog edit, generation, message, enrollment or deployment is included in this change.
+Foundation deployed as48c2e4e on2November2026 at12:32UTC. Existing catalog/templates were preserved; no runtime activation. Originally prepared on 2 November 2026, based on live `f8ddc955c455d015a5d204a0b561b6cc1ec73e88` plus its documentation successor. No production catalog edit, generation, message, enrollment or deployment is included in this change.
 
 ## Implemented catalog and manual-message support
 
