@@ -19,6 +19,7 @@ use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Support\AdminActivityLogger;
+use App\Support\BookArtwork;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -261,7 +262,23 @@ class PuzzleAutomation
             $run->update(['disk' => $disk, 'output_path' => $path, 'checksum' => $checksum,
                 'provider_request_id' => $result->providerRequestId, 'usage' => $result->usage,
                 'cost_usd' => $cost['cost_usd'], 'billing_status' => $cost['billing_status']]);
-            DB::transaction(function () use ($run, $result, $size, $ext, $disk, $path, $checksum) {
+            $contents = $result->contents;
+            $artwork = null;
+            if (($context['artwork_contract'] ?? '') === 'a4-cover-v1') {
+                $artwork = BookArtwork::a4($contents, true);
+                $rawPath = $path;
+                $contents = $artwork['bytes'];
+                unset($artwork['bytes']);
+                $path = 'order-attachments/'.$run->order_id.'/book-cover-'.$run->id.'-a4.png';
+                $ext = 'png';
+                $size = getimagesizefromstring($contents);
+                $checksum = hash('sha256', $contents);
+                $this->store($disk, $path, $contents, $checksum);
+                $run->update(['output_path' => $path, 'checksum' => $checksum]);
+                AutomationActivity::record($run->order, 'book_cover_prepared', 'تجهيز كفر A4 مع الاحتفاظ بالأصل؛ يلزم فحص الاسم والهوية ودقة الطباعة.',
+                    ['run_id' => $run->id, 'raw_path' => $rawPath, 'artwork' => $artwork]);
+            }
+            DB::transaction(function () use ($run, $contents, $artwork, $size, $ext, $disk, $path, $checksum) {
                 Order::where('checkout_group_key', $run->checkout_key)->orderBy('id')->lockForUpdate()->get();
                 $run = PuzzleGeneration::lockForUpdate()->findOrFail($run->id);
                 try {
@@ -270,7 +287,7 @@ class PuzzleAutomation
                     }
                     $this->guard($run);
                     $book = ($run->context['production_stage'] ?? '') === 'book_cover';
-                    if ($book ? ($size[0] < 1024 || $size[1] < 1536 || abs($size[1] / $size[0] - 1.5) > .015) : ($size[1] < 1024 || $size[0] < 1536 || abs($size[0] / $size[1] - 1.5) > .015)) {
+                    if ($book ? ($size[0] < 1024 || $size[1] <= $size[0] || abs($size[1] / $size[0] - ($artwork ? 297 / 210 : 1.5)) > .015) : ($size[1] < 1024 || $size[0] < 1536 || abs($size[0] / $size[1] - 1.5) > .015)) {
                         throw new RuntimeException('puzzle_output_quality');
                     }
                 } catch (Throwable $error) {
@@ -286,14 +303,14 @@ class PuzzleAutomation
                 }
                 // Independent objects: deleting a preview must not remove the attachment.
                 $previewPath = 'orders/product-previews/'.$gallery->id.'/puzzle-'.$run->id.'.'.$ext;
-                $this->store($disk, $previewPath, $result->contents, $checksum);
+                $this->store($disk, $previewPath, $contents, $checksum);
                 $name = 'product-'.$run->order_id.'-'.$run->order_item_id.'-attempt-'.($run->attempt_number ?: 1).'.'.$ext;
                 $attachment = OrderAttachment::create(['order_id' => $run->order_id, 'production_unit_key' => $run->unit_key,
-                    'disk' => $disk, 'path' => $path, 'original_name' => $name, 'mime_type' => $size['mime'], 'size' => strlen($result->contents),
-                    'note' => 'Automation — صورة المنتج؛ راجع الهوية والتصميم قبل الطباعة.', 'validity_days' => null, 'expires_at' => null]);
+                    'disk' => $disk, 'path' => $path, 'original_name' => $name, 'mime_type' => $size['mime'], 'size' => strlen($contents),
+                    'note' => $artwork ? 'Automation — كفر A4؛ دقة فعلية '.$artwork['effective_ppi'].' PPI. راجع الاسم والهوية والجودة قبل الطباعة.' : 'Automation — صورة المنتج؛ راجع الهوية والتصميم قبل الطباعة.', 'validity_days' => null, 'expires_at' => null]);
                 $preview = OrderPreview::create(['order_id' => $run->order_id, 'production_unit_key' => $run->unit_key,
                     'product_gallery_id' => $gallery->id, 'file_path' => $previewPath, 'disk' => $disk, 'original_name' => $name,
-                    'mime_type' => $size['mime'], 'file_size' => strlen($result->contents), 'checksum' => $checksum,
+                    'mime_type' => $size['mime'], 'file_size' => strlen($contents), 'checksum' => $checksum,
                     'note' => 'Automation — '.$run->item->title]);
                 $run->update(['status' => 'succeeded', 'attachment_id' => $attachment->id, 'preview_id' => $preview->id,
                     'finished_at' => now(), 'lease_until' => null, 'error_code' => null]);

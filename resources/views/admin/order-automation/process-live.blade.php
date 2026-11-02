@@ -5,7 +5,7 @@
         @if($errors->any())<div role="alert" class="rounded-xl bg-red-50 p-4 text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
         @if(session('success'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</p>@endif
         <section class="space-y-3 rounded-2xl border bg-white p-5">
-            <h2 class="text-xl font-bold">{{ $workflow->enabled ? 'المسار مفعّل' : 'المسار متوقف' }} · النسخة {{ $workflow->revision_id ? '#'.$workflow->revision_id : 'غير محفوظة' }}</h2>
+            <h2 class="text-xl font-bold">{{ ! $workflow->enabled ? 'المسار متوقف' : ($workflow->accepts_new_runs ? 'المسار مفعّل' : 'متابعة الطلبات السابقة فقط') }} · النسخة {{ $workflow->revision_id ? '#'.$workflow->revision_id : 'غير محفوظة' }}</h2>
             <p>التفعيل يلتقط الأحداث الجديدة فقط. كل عملية شراء تدخل المسار مرة واحدة. التشغيلات القائمة تحتفظ بنسختها؛ الإيقاف يمنع الخطوة التالية ولا يسحب رسالة بدأ إرسالها.</p>
             @if(!$runtimeReady)<p class="rounded-xl bg-amber-50 p-4 text-amber-900">التنفيذ الفعلي مقفول على الخادم. يلزم تجهيز عامل التنفيذ وحدّ الطلبات الجديدة ومراجعة نقل ملكية التأكيد قبل التفعيل.</p>@endif
             @foreach($limitations as $limitation)<p class="text-amber-800">{{ $limitation }}</p>@endforeach

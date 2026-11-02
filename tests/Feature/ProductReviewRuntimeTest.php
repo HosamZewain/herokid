@@ -25,16 +25,22 @@ use App\Models\WhatsAppConversation;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
 use App\Services\CodexScenes\BookPageService;
+use App\Services\CodexScenes\BookReferences;
 use App\Services\CodexScenes\ManualSceneService;
+use App\Services\OrderAutomation\Process\PreviewCohort;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
+use App\Services\OrderAutomation\Process\ProcessEnrollment;
 use App\Services\OrderAutomation\Process\ProcessIdentityService;
 use App\Services\OrderAutomation\Process\ProcessPaymentReview;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\ProductAutomation\BookCatalog;
 use App\Services\ProductAutomation\PuzzleAutomation;
+use App\Services\ProductAutomation\PuzzleInputs;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
+use App\Support\ProductProductionPrompt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +79,7 @@ class ProductReviewRuntimeTest extends TestCase
             'codex_scenes.enabled' => true, 'codex_scenes.automatic' => false, 'robodesk.enabled' => false, 'robodesk.confirmation.enabled' => false]);
         $this->spool = sys_get_temp_dir().'/book-test-'.Str::uuid();
         mkdir($this->spool.'/outbox', 0770, true);
-        file_put_contents($this->spool.'/outbox/health.json', json_encode(['authenticated' => true, 'supported_protocols' => [4, 5]]));
+        file_put_contents($this->spool.'/outbox/health.json', json_encode(['authenticated' => true, 'supported_protocols' => [4, 5, 6]]));
         config(['codex_scenes.spool' => $this->spool]);
         $this->png = $this->png(1);
         Storage::disk('s3_private')->put('child-photos/synthetic.png', $this->png);
@@ -197,7 +203,7 @@ class ProductReviewRuntimeTest extends TestCase
         $run = CodexSceneRun::sole();
         $this->assertSame(3, $run->scene_count);
         $this->assertSame($item->id, $run->order_item_id);
-        $this->assertSame(5, $run->protocol);
+        $this->assertSame(6, $run->protocol);
         app(ManualSceneService::class)->tick();
         $this->assertSame('queued', $run->fresh()->status);
         $data = json_decode(file_get_contents($this->spool.'/inbox/'.$run->id.'/manifest.json'), true);
@@ -331,7 +337,7 @@ class ProductReviewRuntimeTest extends TestCase
         file_put_contents($this->spool.'/outbox/health.json', '{"authenticated":true}');
         app(BookPageService::class)->enroll();
         $this->assertDatabaseCount('codex_scene_runs', 0);
-        file_put_contents($this->spool.'/outbox/health.json', '{"authenticated":true,"supported_protocols":[5]}');
+        file_put_contents($this->spool.'/outbox/health.json', '{"authenticated":true,"supported_protocols":[5,6]}');
         DB::table('order_automation_holds')->insert(['checkout_key' => $item->order->checkoutGroupKey(), 'user_id' => $this->actor->id, 'runs' => '[]', 'confirmations' => '[]', 'fingerprint' => 'synthetic', 'created_at' => now(), 'updated_at' => now()]);
         app(BookPageService::class)->enroll();
         $this->assertDatabaseCount('codex_scene_runs', 0);
@@ -368,5 +374,123 @@ class ProductReviewRuntimeTest extends TestCase
         $this->reply($run);
         $this->assertNull($manifest->fresh()->approved_at);
         $this->assertSame('blocked', $run->fresh()->status);
+    }
+
+    public function test_cutover_keeps_old_response_processing_and_avoids_duplicate_ownership(): void
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->send($run);
+        $old = $run->automation;
+        $d = ProcessDefinition::defaults('product_review');
+        $next = OrderAutomation::create(['name' => 'Next', 'draft' => $d]);
+        $revision = OrderAutomationRevision::create(['automation_id' => $next->id, 'definition' => $d, 'checksum' => hash('sha256', json_encode($d)), 'published_by' => $this->actor->id, 'created_at' => now()]);
+        $next->update(['revision_id' => $revision->id]);
+        app(ProcessEnrollment::class)->cutover($old, $next, $this->actor);
+        $this->assertTrue($old->fresh()->enabled);
+        $this->assertFalse($old->fresh()->accepts_new_runs);
+        $this->reply($run);
+        $this->assertNotNull(OrderReviewManifest::sole()->approved_at);
+        $newItem = $this->book();
+        $newRun = $this->enroll($newItem->order);
+        $this->assertSame($next->id, $newRun->automation_id);
+        DB::transaction(fn () => $item->order->update(['status' => 'new']));
+        DB::transaction(fn () => $item->order->update(['status' => 'new_confirmed']));
+        app(ProcessRuntime::class)->tick();
+        $this->assertSame(1, OrderProcessRun::where('checkout_key', $run->checkout_key)->count());
+    }
+
+    public function test_book_a4_preserves_raw_output_and_records_native_resolution(): void
+    {
+        [$item,,$manifest] = $this->approvedBook();
+        $generation = PuzzleGeneration::sole();
+        $cover = getimagesizefromstring(Storage::disk('s3_private')->get($generation->output_path));
+        $this->assertEqualsWithDelta(297 / 210, $cover[1] / $cover[0], .002);
+        $this->assertSame($this->png, Storage::disk('s3_private')->get('order-attachments/'.$item->order_id.'/puzzle-'.$generation->id.'.png'));
+        $item->order->updateQuietly(['payment_status' => 'partially_paid', 'paid_amount_cents' => 1]);
+        $run = app(BookPageService::class)->start($item, $manifest);
+        app(ManualSceneService::class)->tick();
+        $data = json_decode(file_get_contents($this->spool.'/inbox/'.$run->id.'/manifest.json'), true);
+        $this->assertSame('child_photo', $data['references'][0]['role']);
+        $this->assertSame($this->png, file_get_contents($this->spool.'/inbox/'.$run->id.'/'.$data['references'][0]['file']));
+        $this->pageOutput($run, 1);
+        app(ManualSceneService::class)->collect($run);
+        $scene = $run->fresh()->scenes[1];
+        $this->assertLessThan(300, $scene['artwork']['effective_ppi']);
+        $this->assertFalse($scene['artwork']['resampled']);
+        $this->assertTrue($scene['artwork']['print_review_required']);
+        $this->assertEqualsWithDelta(297 / 210, $scene['height'] / $scene['width'], .002);
+    }
+
+    public function test_catalog_preserves_old_briefs_and_snapshots_exact_variant_page_counts(): void
+    {
+        $book = $this->book();
+        $product = $book->product;
+        $product->update(['name_ar' => 'كتاب تلوين تجريبي']);
+        $old = $product->productionComponents()->create(['stable_key' => 'legacy', 'name' => 'Old', 'prompt_template' => 'Historical brief', 'quantity_per_item' => 1, 'is_active' => true]);
+        $variants = [];
+        foreach ([20, 40, 50] as $count) {
+            $variant = $product->variants()->create(['name_ar' => 'كتاب '.$count.' صفحة', 'is_active' => true]);
+            $variants[$variant->id] = $count;
+        }
+        app(BookCatalog::class)->configure($product, 20, $variants);
+        $this->assertSame('Historical brief', $old->fresh()->prompt_template);
+        $this->assertFalse($old->fresh()->is_active);
+        foreach ($variants as $id => $count) {
+            $item = $book->order->items()->create(['product_id' => $product->id, 'product_variant_id' => $id, 'variant_snapshot' => ['book_page_count' => $count],
+                'item_type' => 'product', 'title' => 'Synthetic', 'quantity' => 1, 'unit_price_cents' => 100, 'total_price_cents' => 100]);
+            $this->assertCount(2, $item->productionComponents);
+            $this->assertSame($count, $item->productionComponents->firstWhere('production_stage', 'book_interior')->quantity_per_item);
+            $this->assertStringContainsString((string) $count, ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior')['prompt']);
+        }
+    }
+
+    public function test_a3_variant_is_not_silently_generated_as_a4(): void
+    {
+        $item = $this->book();
+        $item->update(['variant_snapshot' => ['name_ar' => '50 صفحة A3', 'book_page_count' => 50]]);
+        $item->order->update(['status' => 'new_confirmed']);
+        $this->expectExceptionMessage('puzzle_book_variant_requires_review');
+        app(PuzzleInputs::class)->capture($item);
+    }
+
+    public function test_wrong_child_story_link_blocks_book_pages(): void
+    {
+        [$item,,$manifest] = $this->approvedBook();
+        $other = $this->book();
+        $other->order->updateQuietly(['child_name' => 'Other child']);
+        $linked = $other->order->items()->create(['item_type' => 'story', 'title' => 'Other story', 'quantity' => 1, 'unit_price_cents' => 100, 'total_price_cents' => 100]);
+        $item->linked_order_item_id = $linked->id;
+        $this->expectExceptionMessage('book_story_link_ambiguous');
+        app(BookReferences::class)->capture($item, [], 20);
+    }
+
+    public function test_confirmed_cohort_converts_only_unstarted_book_and_keeps_history(): void
+    {
+        $item = $this->book();
+        $item->productionComponents()->delete();
+        $item->product->update(['name_ar' => 'كتاب تلوين']);
+        $old = $item->product->productionComponents()->create(['stable_key' => 'legacy', 'name' => 'Old', 'prompt_template' => 'Original brief', 'quantity_per_item' => 1, 'is_active' => true]);
+        $snapshot = $item->productionComponents()->create(['stable_key' => 'legacy', 'name' => 'Old', 'prompt_template' => 'Original brief', 'quantity_per_item' => 1]);
+        app(BookCatalog::class)->configure($item->product, 40, []);
+        $item->order->updateQuietly(['status' => 'new_confirmed']);
+        $flow = OrderAutomation::where('name', 'Synthetic all previews')->sole();
+        $cohort = app(PreviewCohort::class);
+        $before = DB::table('order_item_production_components')->count();
+        $cohort->inspect($item->order->checkoutGroupKey(), $flow);
+        $this->assertSame($before, DB::table('order_item_production_components')->count());
+        $this->assertNull($snapshot->fresh()->retired_at);
+        $run = $cohort->enroll($item->order->checkoutGroupKey(), $flow);
+        $this->assertNotNull($snapshot->fresh()->retired_at);
+        $this->assertSame('Original brief', $snapshot->fresh()->prompt_template);
+        $this->assertCount(2, $item->fresh()->productionComponents);
+        $this->assertSame(40, $item->fresh()->productionComponents->firstWhere('production_stage', 'book_interior')->quantity_per_item);
+        $this->assertSame('queued', $run->status);
+        $this->assertSame(0, $item->order->fresh()->paid_amount_cents);
+        Http::assertNothingSent();
+        $this->expectExceptionMessage('existing_workflow_or_manual_hold');
+        $cohort->enroll($item->order->checkoutGroupKey(), $flow);
     }
 }

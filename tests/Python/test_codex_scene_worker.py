@@ -84,6 +84,29 @@ class WorkerTest(unittest.TestCase):
         calls=(w.HOME/'jobs'/self.id/'calls').read_text();w.run_job(self.inbox)
         self.assertEqual(calls,(w.HOME/'jobs'/self.id/'calls').read_text())
 
+    def test_book_six_references_are_checked_and_passed_to_cli(self):
+        manifest = json.loads((self.inbox/'manifest.json').read_text())
+        source = b'synthetic-child-reference'
+        (self.inbox/'child-reference-1.png').write_bytes(source)
+        manifest.update(protocol=6, production_kind='coloring_book', order_item_id=789, scene_count=1,
+                        references=[{'file':'child-reference-1.png','role':'child_photo','sha256':w.hashlib.sha256(source).hexdigest()}],
+                        texts=[{'scene_number':1,'text':'synthetic'}])
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest))
+        w.run_job(self.inbox)
+        self.assertEqual('completed', self.state())
+        self.assertEqual(source, (w.HOME/'jobs'/self.id/'child-reference-1.png').read_bytes())
+
+    def test_book_six_tampered_reference_never_generates(self):
+        manifest = json.loads((self.inbox/'manifest.json').read_text())
+        (self.inbox/'child-reference-1.png').write_bytes(b'wrong-child')
+        manifest.update(protocol=6, production_kind='coloring_book', order_item_id=789, scene_count=1,
+                        references=[{'file':'child-reference-1.png','role':'child_photo','sha256':'0'*64}],
+                        texts=[{'scene_number':1,'text':'synthetic'}])
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest))
+        w.run_job(self.inbox)
+        self.assertEqual('uncertain', self.state())
+        self.assertFalse((w.HOME/'jobs'/self.id/'calls').exists())
+
     def test_book_missing_product_binding_never_calls_cli(self):
         manifest=json.loads((self.inbox/'manifest.json').read_text())
         manifest.update(protocol=5,production_kind='coloring_book')

@@ -36,7 +36,8 @@ class ProcessRuntime
     public function activate(OrderAutomation $automation, User $actor, bool $enabled, ?int $revisionId = null): void
     {
         DB::transaction(function () use ($automation, $actor, $enabled, $revisionId) {
-            $automation = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
+            $automation = OrderAutomation::orderBy('id')->lockForUpdate()->get()->firstWhere('id', $automation->id);
+            abort_unless($automation, 404);
             abort_if($revisionId !== null && $revisionId !== (int) $automation->revision_id, 409);
             if ($enabled) {
                 abort_unless($this->policy->enabled() && $this->policy->allowsAutomation($automation->id) && $automation->revision_id, 422, 'التنفيذ الفعلي مقفول على الخادم أو لا توجد نسخة محفوظة.');
@@ -46,8 +47,8 @@ class ProcessRuntime
                     $types = collect($other->revision?->definition['nodes'] ?? [])->pluck('type');
                     if (($newPreview && $types->intersect(['generate_identity', 'generate_previews'])->isNotEmpty())
                         || (! $newPreview && $types->contains('generate_previews') && collect($automation->revision->definition['nodes'])->contains('type', 'generate_identity'))) {
-                        abort_if($other->enabled || OrderProcessRun::where('automation_id', $other->id)->whereNotIn('status', ['completed', 'cancelled', 'blocked'])->exists(), 422,
-                            'أوقف قبول المسار الآخر وأنهِ محاولاته النشطة قبل نقل ملكية المعاينة.');
+                        abort_if($automation->accepts_new_runs && $other->enabled && $other->accepts_new_runs, 422,
+                            'أوقف قبول الطلبات الجديدة في المسار الآخر قبل نقل ملكية المعاينة؛ متابعة طلباته الحالية تستمر.');
                     }
                 }
                 $automation->process_activated_by = $actor->id;
@@ -78,11 +79,11 @@ class ProcessRuntime
                     return 0;
                 }
                 $enrolled = 0;
-                foreach (OrderAutomation::where('enabled', true)->whereNotNull('process_after_event_id')->orderBy('id')->get() as $automation) {
+                foreach (OrderAutomation::where('enabled', true)->where('accepts_new_runs', true)->whereNotNull('process_after_event_id')->orderBy('id')->get() as $automation) {
                     $automation = OrderAutomation::lockForUpdate()->findOrFail($automation->id);
                     $d = $automation->revision?->definition;
                     if (! $this->policy->allowsAutomation($automation->id) || ! $this->policy->allowsCheckout($event->checkout_key)
-                        || ! $automation->enabled || $event->id <= $automation->process_after_event_id || ! $d || ($d['schema'] ?? 1) !== 2 || $d['trigger'] !== $event->type || $d['conditions']['status'] !== ($event->data['status'] ?? null)) {
+                        || ! $automation->enabled || ! $automation->accepts_new_runs || $event->id <= $automation->process_after_event_id || ! $d || ($d['schema'] ?? 1) !== 2 || $d['trigger'] !== $event->type || $d['conditions']['status'] !== ($event->data['status'] ?? null)) {
                         continue;
                     }
                     try {
@@ -91,6 +92,9 @@ class ProcessRuntime
                             continue;
                         }
                         $snapshot = $this->contexts->snapshot($this->contexts->orders($event->checkout_key, true));
+                        if (ProcessEnrollment::isPreview($d) && ProcessEnrollment::previouslyOwned($event->checkout_key, $automation->id)) {
+                            continue;
+                        }
                         if (AutomationHandoff::held($event->checkout_key)) {
                             continue;
                         }

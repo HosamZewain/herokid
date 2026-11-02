@@ -20,8 +20,20 @@ Create exactly ONE full-color, flat front-cover illustration for a personalized 
 Child: {{child_full_name}}. Age: {{child_age}}. Gender: {{child_gender}}.
 Product: {{product_name}}. Parent notes: {{special_notes}}.
 Use only the attached reference photos for this child. Preserve the child's recognizable face, age, hair and appearance. Do not combine children or copy any background person.
-Create a cheerful, age-appropriate cover with the child as the main character and playful coloring-book motifs. Keep the face unobstructed and leave clear safe margins for later print layout.
-Output only the cover artwork as one image: no interior pages, grids, mockups, book spine, back cover, watermarks or invented logos. Leave title/logo lettering to the production layout.
+Create a cheerful full-color A4 portrait front cover (210 x 297 mm composition), like a premium personalized coloring book. Keep the child's main face photorealistic and recognizable, surrounded by colorful pencils, a few small cartoon/line-art versions of THIS same child, and playful motifs.
+Use the exact child name as a large readable Arabic/English title in its original language, plus the exact Arabic subtitle "كتاب تلوين". Do not invent a surname, dedication, age text, hobby or other child. Theme follows the purchased product and explicit customer notes; otherwise use a neutral joyful coloring world. Optional linked-story data belongs to this child only.
+Keep faces, lettering and important art 10 mm inside the A4 trim. Keep a quiet clear area in the lower-left 30% width and 15% height for the real HeroKid logo, which the application will overlay; do not draw a logo yourself. No back cover, spine or 3D book mockup. Output one front-cover artwork only. If the provider uses a different portrait canvas, keep all critical art in the central safe A4 composition; paper padding may be added without stretching or cropping.
+Reference images: {{child_image_references}}
+PROMPT;
+    }
+
+    public static function interiorPrompt(): string
+    {
+        return <<<'PROMPT'
+Create {{book_page_count}} DISTINCT portrait A4 interior coloring pages for {{child_full_name}}, age {{child_age}}, {{child_gender}}. Parent notes: {{special_notes}}. Product: {{product_name}}.
+Deliver one PNG per requested page, no PDF, cover, back cover, title page or blank filler. A4 is 210 x 297 mm; keep important art 10 mm inside trim. Request 2480 x 3508 native pixels where supported; never upscale an image and call it native 300 DPI.
+Use the supplied child photos as the identity source and the approved cover as theme guidance. Preserve this child's face, age, hair and distinctive appearance, and never copy another person or a sample child's identity. Show the child prominently on every page in a new pose or activity. Age-appropriate clean black outlines on white paper with closed shapes and usable coloring areas; no heavy gray backgrounds. Preserve recognizable facial detail. No printed text unless the customer's instructions explicitly require it.
+If approved linked-story scenes are supplied, adapt ALL those scenes in their supplied chronological order, one scene per assigned page, before adding distinct complementary activities. Do not invent a linked story. Without linked scenes, use distinct joyful everyday/adventure/coloring activities guided by the customer's notes and the approved cover. Never repeat a previous page.
 Reference images: {{child_image_references}}
 PROMPT;
     }

@@ -29,7 +29,7 @@ class BookPageService
         }
         $health = json_decode(file_get_contents(config('codex_scenes.spool').'/outbox/health.json'), true);
 
-        return in_array(5, $health['supported_protocols'] ?? [], true);
+        return in_array(6, $health['supported_protocols'] ?? [], true);
     }
 
     private function approvedInputs(OrderItem $item, OrderReviewManifest $manifest): array
@@ -59,7 +59,10 @@ class BookPageService
             throw new RuntimeException('Book pages incomplete');
         }
 
+        $references = app(BookReferences::class)->capture($item, $generation->context['photos'], $count);
+
         return ['manifest_id' => $manifest->id, 'item_id' => $item->id, 'unit_key' => $interior['unit_key'], 'page_count' => $count,
+            'artwork_contract' => 'a4-interior-v1', 'references' => $references['references'], 'texts' => $references['texts'],
             'input_fingerprint' => $image['input_fingerprint'], 'interior_fingerprint' => $image['interior_fingerprint'],
             'prompt' => $interior['prompt'], 'identity_disk' => $image['disk'], 'identity_path' => $image['path'], 'identity_checksum' => $image['sha256']];
     }
@@ -84,7 +87,7 @@ class BookPageService
                 $order = $rows->firstWhere('id', $item->order_id);
                 $item = OrderItem::lockForUpdate()->findOrFail($item->id);
                 if (! $order || AutomationHandoff::held($order->checkoutGroupKey()) || app(AutomationAssignment::class)->owns($order, false)
-                    || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed', 'ready_preview'], true)
+                    || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true)
                     || ! $rows->contains(fn ($row) => $row->paid_amount_cents > 0 && in_array($row->payment_status, ['partially_paid', 'paid_in_full', 'paid_without_shipping'], true))
                     || CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists()
                     || CodexSceneRun::where('production_kind', 'coloring_book')->where('order_item_id', $item->id)->exists()
@@ -93,11 +96,10 @@ class BookPageService
                 }
                 $inputs = $this->approvedInputs($item, $manifest->fresh());
                 $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(),
-                    'order_item_id' => $item->id, 'production_kind' => 'coloring_book', 'protocol' => 5, 'scene_count' => $inputs['page_count'],
+                    'order_item_id' => $item->id, 'production_kind' => 'coloring_book', 'protocol' => 6, 'scene_count' => $inputs['page_count'],
                     'source' => 'automatic', 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'scenes' => [],
                     'fingerprint' => hash('sha256', json_encode($inputs, JSON_THROW_ON_ERROR)),
-                    'snapshot' => $inputs + ['texts' => array_map(fn ($n) => ['scene_number' => $n, 'title' => 'صفحة '.$n,
-                        'text' => 'Create interior coloring page '.$n.' of '.$inputs['page_count'].' according to the production brief. Preserve the approved child and keep every page distinct.'], range(1, $inputs['page_count']))]]);
+                    'snapshot' => $inputs]);
                 $before = $order->status;
                 $order->update(['status' => 'generating']);
                 $order->statusLogs()->create(['status' => 'generating', 'notes' => 'توليد صفحات كتاب التلوين بعد اعتماد الكفر وتسجيل دفعة.']);
@@ -131,7 +133,13 @@ class BookPageService
                 if ($manifest?->approved_at) {
                     $this->start($item, $manifest);
                 }
-            } catch (RuntimeException $error) { /* Eligibility only; no request and no historical retry. */
+            } catch (RuntimeException $error) {
+                $reason = $error->getMessage();
+                if (preg_match('/\Abook_[a-z_]+\z/', $reason)
+                    && Cache::add('book-admission-review:'.$item->id.':'.$reason, true, now()->addDay())) {
+                    AutomationActivity::record($item->order, 'book_pages_waiting', 'توليد الكتاب ينتظر اكتمال أو مراجعة المراجع المرتبطة؛ لم يبدأ طلب توليد جديد.',
+                        ['item_id' => $item->id, 'reason' => $reason]);
+                }
             }
             Cache::put('coloring-book-enrollment-cursor', $item->id, now()->addDay());
         }

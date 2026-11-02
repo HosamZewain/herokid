@@ -11,6 +11,7 @@ use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\AdminActivityLogger;
+use App\Support\BookArtwork;
 use App\Support\OrderStatusRegistry;
 use App\Support\StoryProductionPrompt;
 use Carbon\Carbon;
@@ -331,7 +332,16 @@ class ManualSceneService
         chmod($dir.'/identity.img', 0640);
         $data = ['protocol' => $run->protocol, 'id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => $run->scene_count ?? 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
         if ($run->production_kind === 'coloring_book') {
-            $data += ['production_kind' => 'coloring_book', 'order_item_id' => $run->order_item_id];
+            $data += ['production_kind' => 'coloring_book', 'order_item_id' => $run->order_item_id,
+                'artwork_contract' => $snapshot['artwork_contract'] ?? null, 'references' => []];
+            foreach ($snapshot['references'] ?? [] as $reference) {
+                if (! preg_match('/\A(?:child-reference-[0-9]+\.(?:img|png|jpg|webp)|linked-story-[0-9]+\.png)\z/', $reference['file'])) {
+                    throw new \RuntimeException('Invalid book reference name');
+                }
+                file_put_contents($dir.'/'.$reference['file'], app(BookReferences::class)->bytes($reference));
+                chmod($dir.'/'.$reference['file'], 0640);
+                $data['references'][] = array_intersect_key($reference, array_flip(['file', 'role', 'sha256', 'scene']));
+            }
         }
         if ($run->protocol >= 3 && isset($snapshot['resume_from'])) {
             $data['resume_from'] = $snapshot['resume_from'];
@@ -441,7 +451,7 @@ class ManualSceneService
                 if (($meta['scene'] ?? 0) !== $n || ! hash_equals($meta['sha256'] ?? '', $sha) || ! $size || $size['mime'] !== 'image/png' || min($size[0], $size[1]) < 1024 || ($run->production_kind === 'coloring_book' ? $size[1] <= $size[0] : $size[0] <= $size[1])) {
                     throw new \RuntimeException('Invalid scene');
                 }
-                if (collect($saved)->contains(fn ($s) => $s['sha256'] === $sha)) {
+                if (collect($saved)->contains(fn ($s) => ($s['source_sha256'] ?? $s['sha256']) === $sha)) {
                     throw new \RuntimeException('Duplicate scene');
                 }
                 $dest = 'orders/'.$order->id.'/codex-scenes/'.$run->id.'/scene-'.sprintf('%02d', $n).'.png';
@@ -449,8 +459,21 @@ class ManualSceneService
                 if (! $disk->put($dest, $bytes, ['visibility' => 'private']) || ! hash_equals($sha, hash('sha256', $disk->get($dest)))) {
                     throw new \RuntimeException('Storage verification failed');
                 }
-                $attachment = OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => $run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n]);
-                $saved[$key] = ['attachment_id' => $attachment->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1]];
+                $artwork = null;
+                $sourceSha = $sha;
+                if (($run->snapshot['artwork_contract'] ?? '') === 'a4-interior-v1') {
+                    $artwork = BookArtwork::a4($bytes);
+                    $bytes = $artwork['bytes'];
+                    unset($artwork['bytes']);
+                    $dest = 'orders/'.$order->id.'/codex-scenes/'.$run->id.'/page-'.sprintf('%02d', $n).'-a4.png';
+                    $sha = hash('sha256', $bytes);
+                    $size = getimagesizefromstring($bytes);
+                    if (! $disk->put($dest, $bytes, ['visibility' => 'private']) || ! hash_equals($sha, hash('sha256', $disk->get($dest)))) {
+                        throw new \RuntimeException('Storage verification failed');
+                    }
+                }
+                $attachment = OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => $run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n.($artwork ? ' / A4 / '.$artwork['effective_ppi'].' PPI فعلية — راجع جودة الطباعة' : '')]);
+                $saved[$key] = ['attachment_id' => $attachment->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1], 'source_sha256' => $sourceSha, 'artwork' => $artwork];
                 AutomationActivity::record($order, 'codex_scene_saved', 'توليد وحفظ مشهد '.$n.' من '.($run->scene_count ?? 13).' عبر Codex.', ['run_id' => $run->id, 'scene' => $n, 'sha256' => $sha]);
             }
             ksort($saved, SORT_NUMERIC);
@@ -469,7 +492,11 @@ class ManualSceneService
                     $run->status = 'completed';
                     $run->active_slot = null;
                     $run->finished_at = now();
-                    $this->setStatus($order, 'ready_preview', 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
+                    $incompleteSibling = $run->production_kind === 'coloring_book' && CodexSceneRun::where('order_id', $order->id)
+                        ->where('production_kind', 'coloring_book')->whereKeyNot($run->id)->whereIn('status', ['needs_manual', 'quality_review', 'uncertain', 'stopped'])->exists();
+                    $this->setStatus($order, $incompleteSibling ? 'pending_team_review' : 'ready_preview', $incompleteSibling
+                        ? 'اكتملت صفحات هذا الكتاب؛ يوجد كتاب آخر في الطلب يحتاج مراجعة الفريق.'
+                        : 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
                 } elseif ($phase === 'needs_manual') {
                     $run->status = 'needs_manual';
                     $run->error_code = 'partial_scenes';

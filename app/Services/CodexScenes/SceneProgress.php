@@ -9,6 +9,43 @@ use App\Services\Orders\AutomationActivity;
 /** Worker protocol 4: bounded attempts, immutable outcomes, and explicit missing scenes. */
 class SceneProgress
 {
+    /** MySQL JSON round-trips epoch doubles by one ULP; tolerate <1 microsecond only. */
+    private static function sameTime(mixed $a, mixed $b): bool
+    {
+        return is_numeric($a) && is_numeric($b) && is_finite((float) $a) && is_finite((float) $b)
+            && abs((float) $a - (float) $b) <= 0.000001;
+    }
+
+    private static function sameAttempt(array $a, array $b): bool
+    {
+        foreach (['started_at', 'finished_at'] as $key) {
+            if (array_key_exists($key, $a) !== array_key_exists($key, $b)
+                || (array_key_exists($key, $a) && ! self::sameTime($a[$key], $b[$key]))) {
+                return false;
+            }
+            unset($a[$key], $b[$key]);
+        }
+
+        return $a == $b;
+    }
+
+    private static function sameEntry(array $a, array $b): bool
+    {
+        $attempts = $a['attempts'] ?? [];
+        $next = $b['attempts'] ?? [];
+        if (! is_array($next) || count($attempts) !== count($next)) {
+            return false;
+        }
+        foreach ($attempts as $i => $attempt) {
+            if (! isset($next[$i]) || ! self::sameAttempt($attempt, $next[$i])) {
+                return false;
+            }
+        }
+        unset($a['attempts'], $b['attempts']);
+
+        return $a == $b;
+    }
+
     public const QUALITY = ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'];
 
     public const FAILURES = [...self::QUALITY, 'content_review', 'generation_result_uncertain'];
@@ -43,7 +80,7 @@ class SceneProgress
             }
             $attempts = $entry['attempts'];
             $old = $previous[$number] ?? null;
-            if ($old && ($old['status'] !== 'running' ? $old != $entry : count($old['attempts']) > count($attempts))) {
+            if ($old && ($old['status'] !== 'running' ? ! self::sameEntry($old, $entry) : count($old['attempts']) > count($attempts))) {
                 throw new \RuntimeException('Scene outcome mutated');
             }
             foreach ($attempts as $index => $attempt) {
@@ -63,7 +100,7 @@ class SceneProgress
                     throw new \RuntimeException('Unknown scene failure');
                 }
                 $prior = $old['attempts'][$index] ?? null;
-                if ($prior && ($prior['status'] !== 'running' ? $prior != $attempt : $prior['started_at'] != $attempt['started_at'])) {
+                if ($prior && ($prior['status'] !== 'running' ? ! self::sameAttempt($prior, $attempt) : ! self::sameTime($prior['started_at'], $attempt['started_at']))) {
                     throw new \RuntimeException('Attempt outcome mutated');
                 }
             }

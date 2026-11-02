@@ -8,7 +8,7 @@ class OrderAutomation extends Model
 {
     protected $guarded = [];
 
-    protected $casts = ['draft' => 'array', 'enabled' => 'boolean'];
+    protected $casts = ['draft' => 'array', 'enabled' => 'boolean', 'accepts_new_runs' => 'boolean'];
 
     public function revision()
     {

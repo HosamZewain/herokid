@@ -28,6 +28,21 @@ class PuzzleInputs
         }
         $units = ProductProductionPrompt::forItem($item, privateImageInputs: true);
         if ($book) {
+            if (preg_match('/\bA3\b/i', json_encode($item->variant_snapshot ?? []))
+                || ($item->product_variant_id && ! data_get($item->variant_snapshot, 'book_page_count'))) {
+                throw new RuntimeException('puzzle_book_variant_requires_review');
+            }
+            $fields = ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []);
+            if (! empty($fields['child_name']) && trim($fields['child_name']) !== trim($order->child_name ?? '')) {
+                throw new RuntimeException('puzzle_book_child_requires_review');
+            }
+            if ($item->linked_order_item_id) {
+                $linked = $item->linkedOrderItem;
+                if (! $linked || $linked->item_type !== 'story' || $linked->order->checkoutGroupKey() !== $order->checkoutGroupKey()
+                    || $linked->order->child_name !== $order->child_name || (int) $linked->order->child_age !== (int) $order->child_age) {
+                    throw new RuntimeException('puzzle_book_story_requires_review');
+                }
+            }
             if ($units->count() !== 2 || $units->where('production_stage', 'book_cover')->count() !== 1 || $units->where('production_stage', 'book_interior')->count() !== 1) {
                 throw new RuntimeException('puzzle_book_structure_invalid');
             }
@@ -47,6 +62,10 @@ class PuzzleInputs
             'personalization' => ProductPersonalizationSchema::formValues($item->personalization_snapshot ?? []),
             'parent_notes' => $order->parent_notes, 'interests' => $order->interests,
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        if ($book && ($linkedStory = ($item->linkedOrderItem?->order ?? ($order->story_id ? $order : null)))) {
+            $prompt .= "\nLINKED STORY THEME FOR THIS CHILD: ".json_encode(['title' => $linkedStory->story?->title,
+                'interests' => $linkedStory->interests, 'parent_notes' => $linkedStory->parent_notes], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        }
         $paths = array_values(array_filter($order->uploaded_photos ?? [], 'is_string'));
         if (! $paths || count($paths) > 10) {
             throw new RuntimeException('puzzle_photos_required');
@@ -100,6 +119,8 @@ class PuzzleInputs
 
         if ($book) {
             $context['production_stage'] = 'book_cover';
+            $context['artwork_contract'] = 'a4-cover-v1';
+            $context['brand_checksum'] = hash_file('sha256', public_path('images/branding/herokid-20261018-768.png'));
         }
 
         return $context + ['fingerprint' => hash('sha256', json_encode($context, JSON_THROW_ON_ERROR))];

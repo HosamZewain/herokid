@@ -56,6 +56,7 @@ class OrderItem extends Model
     public function productionComponents()
     {
         return $this->hasMany(OrderItemProductionComponent::class)
+            ->whereNull('retired_at')
             ->orderBy('sort_order')
             ->orderBy('id');
     }
