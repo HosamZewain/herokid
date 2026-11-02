@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 
 class ResumeCodexQuality extends Command
 {
-    protected $signature = 'codex-scenes:resume-quality {run} {--execute} {--authorization=}';
+    protected $signature = 'codex-scenes:resume-quality {run} {--execute} {--authorization=} {--skip-content-scene=}';
 
     protected $description = 'Explicitly resume one reviewed quality failure, preserving accepted scenes; dry-run by default';
 
@@ -21,7 +21,7 @@ class ResumeCodexQuality extends Command
             $this->info('Read-only plan. Execution requires an explicit authorization reference.');
             return self::SUCCESS;
         }
-        $next = $service->resumeQuality($run, (string) $this->option('authorization'));
+        $next = $service->resumeQuality($run, (string) $this->option('authorization'), $this->option('skip-content-scene') !== null ? (int) $this->option('skip-content-scene') : null);
         $this->line(json_encode(['resumed_run_id' => $next->id, 'status' => $next->status]));
         return self::SUCCESS;
     }

@@ -5,6 +5,7 @@
             <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }}</p>
             <div class="mt-2 text-xs text-gray-600">@include('admin.orders._codex-scene-timing', ['timingRun' => $codexRun])</div>
             @if($codexRun->error_code)<p class="mt-2 text-sm text-amber-800">{{ \App\Models\CodexSceneRun::ERRORS[$codexRun->error_code] ?? 'تحتاج المحاولة مراجعة من الفريق.' }}</p>@endif
+            @include('admin.orders._codex-scene-attempts', ['attemptRun' => $codexRun])
             @can('orders.production_prompt.manage')
             @if($codexRun->active_slot)
                 <form method="POST" action="{{ route('admin.orders.codex-scenes.stop',[$order,$codexRun]) }}" class="mt-2">@csrf<button class="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">إيقاف التوليد والاحتفاظ بالمشاهد</button></form>

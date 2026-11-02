@@ -80,13 +80,13 @@ class ManualSceneService
                 if (! $texts['all_ready'] || count($texts['scenes']) !== 13) {
                     throw ValidationException::withMessages(['codex_scenes' => 'نصوص المشاهد الثلاثة عشر غير مكتملة.']);
                 }
-                foreach (['generating', 'ready_preview'] as $status) {
+                foreach (['generating', 'ready_preview', 'pending_team_review'] as $status) {
                     if (! OrderStatusRegistry::isValid('order', $status)) {
                         throw ValidationException::withMessages(['codex_scenes' => 'حالات الإنتاج المطلوبة غير مفعلة.']);
                     }
                 }
                 $attempt = $order->childIdentityApprovedAttempt;
-                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user?->id, 'source' => $user ? 'manual' : 'automatic', 'protocol' => 2, 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $this->fingerprint($order), 'scenes' => [],
+                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user?->id, 'source' => $user ? 'manual' : 'automatic', 'protocol' => 4, 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $this->fingerprint($order), 'scenes' => [],
                     'snapshot' => ['prompt' => StoryProductionPrompt::forOrder($order), 'texts' => $texts['scenes'], 'identity_disk' => $attempt->output_disk, 'identity_path' => $attempt->output_storage_path, 'identity_checksum' => $attempt->output_checksum]]);
                 $this->setStatus($order, 'generating', 'إضافة القصة إلى طابور توليد مشاهد Codex.');
                 if ($user) {
@@ -101,19 +101,19 @@ class ManualSceneService
     }
 
     /** Explicit owner/operator action only. The original attempt and its bridge files remain immutable. */
-    public function resumeQuality(CodexSceneRun $original, string $authorization): CodexSceneRun
+    public function resumeQuality(CodexSceneRun $original, string $authorization, ?int $skipContentScene = null): CodexSceneRun
     {
         if (trim($authorization) === '') {
             throw ValidationException::withMessages(['codex_scenes' => 'يلزم مرجع اعتماد الاستكمال.']);
         }
-        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($original, $authorization) {
-            return DB::transaction(function () use ($original, $authorization) {
+        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($original, $authorization, $skipContentScene) {
+            return DB::transaction(function () use ($original, $authorization, $skipContentScene) {
                 $rows = Order::where('checkout_group_key', $original->checkout_key)->orderBy('id')->lockForUpdate()->get();
                 $old = CodexSceneRun::lockForUpdate()->findOrFail($original->id);
                 $order = $rows->firstWhere('id', $old->order_id);
                 if (! $this->health() || ! $order || $order->status !== 'generating'
                     || $old->status !== 'quality_review' || $old->active_slot !== 1
-                    || ! in_array($old->error_code, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'], true)
+                    || ! in_array($old->error_code, $skipContentScene !== null ? ['content_review'] : SceneProgress::QUALITY, true)
                     || AutomationHandoff::held($old->checkout_key) || ! $this->hasPayment($order)
                     || $order->childIdentityApprovedAttempt?->status !== 'succeeded'
                     || ! hash_equals($old->fingerprint, $this->fingerprint($order))) {
@@ -130,6 +130,9 @@ class ManualSceneService
                 if (count($saved) >= 13 || array_map('intval', array_keys($saved)) !== (count($saved) ? range(1, count($saved)) : [])) {
                     throw ValidationException::withMessages(['codex_scenes' => 'تسلسل المشاهد المحفوظة يحتاج مراجعة.']);
                 }
+                if ($skipContentScene !== null && ($skipContentScene !== count($saved) + 1 || $skipContentScene > 13)) {
+                    throw ValidationException::withMessages(['codex_scenes' => 'المشهد المتجاوز يجب أن يكون مشهد رفض المحتوى التالي مباشرة.']);
+                }
                 foreach ($saved as $number => $scene) {
                     $this->retainedBytes($old, (int) $number, $scene);
                 }
@@ -145,14 +148,15 @@ class ManualSceneService
                 $snapshot['resume_from'] = $old->id;
                 $snapshot['resume_history'] = $history;
                 $snapshot['retained_scenes'] = $saved;
+                $snapshot['skipped_scenes'] = $skipContentScene === null ? [] : [['scene' => $skipContentScene, 'code' => 'content_review']];
                 $old->update(['active_slot' => null]);
                 $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $old->order_id,
                     'checkout_key' => $old->checkout_key, 'requested_by' => null, 'source' => 'automatic',
-                    'protocol' => 3, 'status' => 'waiting_slot', 'active_slot' => 1,
+                    'protocol' => 4, 'status' => 'waiting_slot', 'active_slot' => 1,
                     'previous_status' => $old->previous_status, 'fingerprint' => $old->fingerprint,
                     'snapshot' => $snapshot, 'scenes' => $saved]);
                 AutomationActivity::record($order, 'codex_scene_resume_authorized', 'استكمال مشاهد Codex بعد مراجعة الجودة؛ الاحتفاظ بالمشاهد السليمة وبدء محاولة مستقلة للمشاهد المتبقية.',
-                    ['run_id' => $run->id, 'previous_run_id' => $old->id, 'retained_scenes' => count($saved), 'authorization' => $authorization]);
+                    ['run_id' => $run->id, 'previous_run_id' => $old->id, 'retained_scenes' => count($saved), 'authorization' => $authorization, 'skipped_content_scene' => $skipContentScene]);
                 return $run;
             });
         });
@@ -324,6 +328,9 @@ class ManualSceneService
                 $data['retained_scenes'][] = ['scene' => (int) $number, 'sha256' => $scene['sha256']];
             }
         }
+        if ($run->protocol >= 4) {
+            $data['skipped_scenes'] = $snapshot['skipped_scenes'] ?? [];
+        }
         file_put_contents($dir.'/manifest.tmp', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         chmod($dir.'/manifest.tmp', 0640);
         DB::transaction(function () use ($run, $dir) {
@@ -386,6 +393,9 @@ class ManualSceneService
             $saved = $run->scenes ?? [];
             foreach (range(1, 13) as $n) {
                 $key = (string) $n;
+                if ($run->protocol >= 4 && ! in_array($state['scene_progress'][$key]['status'] ?? '', ['succeeded', 'retained'], true)) {
+                    continue;
+                }
                 if (isset($saved[$key])) {
                     continue;
                 }
@@ -420,13 +430,15 @@ class ManualSceneService
                 $saved[$key] = ['attachment_id' => $attachment->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1]];
                 AutomationActivity::record($order, 'codex_scene_saved', 'توليد وحفظ مشهد '.$n.' من 13 عبر Codex.', ['run_id' => $run->id, 'scene' => $n, 'sha256' => $sha]);
             }
+            ksort($saved, SORT_NUMERIC);
+            SceneProgress::collect($run, $state, $saved, $order);
             $run->scenes = $saved;
             $phase = $state['status'] ?? '';
             if ($phase === 'running' && in_array($run->status, ['queued', 'preparing', 'waiting_slot'], true)) {
                 $run->status = 'running';
                 $run->started_at = now();
             }
-            if (in_array($phase, ['completed', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
+            if (in_array($phase, ['completed', 'needs_manual', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
                 if ($phase === 'completed' && count($saved) !== 13) {
                     throw new \RuntimeException('Missing scenes');
                 }
@@ -435,6 +447,14 @@ class ManualSceneService
                     $run->active_slot = null;
                     $run->finished_at = now();
                     $this->setStatus($order, 'ready_preview', 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
+                } elseif ($phase === 'needs_manual') {
+                    $run->status = 'needs_manual';
+                    $run->error_code = 'partial_scenes';
+                    $run->active_slot = null;
+                    $run->finished_at = now();
+                    $missing = array_values(array_diff(range(1, 13), array_map('intval', array_keys($saved))));
+                    $this->setStatus($order, 'pending_team_review', 'انتهت محاولات Codex؛ استكمال المشاهد الناقصة يدويًا: '.implode('، ', $missing));
+                    AutomationActivity::record($order, 'codex_scene_manual_handoff', 'تسليم القصة للتيم لاستكمال المشاهد الناقصة فقط.', ['run_id' => $run->id, 'missing_scenes' => $missing, 'saved_scenes' => count($saved)]);
                 } elseif ($phase === 'stopped') {
                     $run->status = 'stopped';
                     $run->active_slot = null;
@@ -454,7 +474,7 @@ class ManualSceneService
             $changed = $run->isDirty('status');
             $run->save();
             if ($changed) {
-                AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'quality_review' => 'تحتاج مراجعة جودة: '.(CodexSceneRun::ERRORS[$run->error_code] ?? ''), 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
+                AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['needs_manual' => 'تسليم المشاهد الناقصة للتيم', 'running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'quality_review' => 'تحتاج مراجعة جودة: '.(CodexSceneRun::ERRORS[$run->error_code] ?? ''), 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
             }
         });
     }

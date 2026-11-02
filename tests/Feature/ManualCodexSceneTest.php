@@ -74,7 +74,10 @@ class ManualCodexSceneTest extends TestCase
 
     private function start(): CodexSceneRun
     {
-        return app(ManualSceneService::class)->start($this->order->fresh(), $this->actor);
+        $run = app(ManualSceneService::class)->start($this->order->fresh(), $this->actor);
+        // Existing regression fixtures model legacy worker protocol 2.
+        $run->update(['protocol' => 2]);
+        return $run;
     }
 
     private function sceneOutput(CodexSceneRun $run, int $number, string $status = 'running', ?int $color = null): void
@@ -84,7 +87,130 @@ class ManualCodexSceneTest extends TestCase
         $bytes = $this->png($color ?? $number);
         file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.png', $bytes);
         file_put_contents($dir.'/scene-'.sprintf('%02d', $number).'.json', json_encode(['id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $run->snapshot['identity_checksum'], 'scene' => $number, 'sha256' => hash('sha256', $bytes)]));
-        file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
+        $state = ['id' => $run->id, 'status' => $status];
+        if ($run->protocol >= 4) {
+            $state['scene_progress'] = $this->progress($run);
+        }
+        file_put_contents($dir.'/status.json', json_encode($state));
+    }
+
+    private function progress(CodexSceneRun $run): array
+    {
+        $progress = [];
+        foreach (range(1,13) as $n) {
+            if (isset($run->snapshot['retained_scenes'][$n])) {
+                $progress[$n] = ['status' => 'retained', 'attempts' => []];
+            } elseif (is_file($this->spool.'/outbox/'.$run->id.'/scene-'.sprintf('%02d', $n).'.json')) {
+                $progress[$n] = ['status' => 'succeeded', 'attempts' => [['number' => 1, 'status' => 'succeeded', 'started_at' => $run->created_at->timestamp, 'finished_at' => $run->created_at->timestamp + 1]]];
+            }
+        }
+        return $progress;
+    }
+
+    public function test_new_runs_use_independent_scene_protocol(): void
+    {
+        $run = app(ManualSceneService::class)->start($this->order->fresh(), $this->actor);
+        $this->assertSame(4, $run->protocol);
+        $this->assertTrue(\App\Support\OrderStatusRegistry::isValid('order', 'pending_team_review'));
+    }
+
+    public function test_partial_completion_hands_off_only_missing_scenes_and_records_attempts_once(): void
+    {
+        $run = $this->start(); $run->update(['protocol' => 4]);
+        foreach (array_diff(range(1,13), [4]) as $n) { $this->sceneOutput($run, $n); }
+        $progress = $this->progress($run);
+        $at = $run->created_at->timestamp;
+        $progress[4] = ['status' => 'failed', 'code' => 'invalid_dimensions', 'attempts' => [
+            ['number' => 1, 'status' => 'failed', 'code' => 'invalid_dimensions', 'started_at' => $at, 'finished_at' => $at+1],
+            ['number' => 2, 'status' => 'failed', 'code' => 'invalid_dimensions', 'started_at' => $at+1, 'finished_at' => $at+2],
+        ]];
+        ksort($progress);
+        file_put_contents($this->spool.'/outbox/'.$run->id.'/status.json', json_encode(['id'=>$run->id, 'status'=>'needs_manual', 'scene_progress'=>$progress]));
+        $service = app(ManualSceneService::class);
+        $service->collect($run); $service->collect($run->fresh());
+        $run->refresh();
+        $this->assertSame('needs_manual', $run->status);
+        $this->assertSame('pending_team_review', $this->order->fresh()->status);
+        $this->assertNull($run->active_slot);
+        $this->assertCount(12, $run->scenes);
+        $this->assertArrayNotHasKey(4, $run->scenes);
+        $this->assertArrayHasKey(13, $run->scenes);
+        $this->assertDatabaseCount('order_attachments', 12);
+        $this->assertFalse($service->automaticEligible($this->order->fresh()));
+        $this->assertSame(14, AdminActivityLog::where('action', 'automation.codex_scene_attempt_started')->count());
+        $this->assertSame(14, AdminActivityLog::where('action', 'automation.codex_scene_attempt_finished')->count());
+        $this->assertSame(1, AdminActivityLog::where('action', 'automation.codex_scene_manual_handoff')->count());
+        $html = view('admin.orders._codex-scene-attempts', ['attemptRun'=>$run])->render();
+        $this->assertStringContainsString('المشاهد المطلوب استكمالها: 4', $html);
+        $this->assertStringContainsString('2 محاولة', $html);
+    }
+
+    public function test_collector_rejects_retry_of_uncertain_attempt_and_false_completion(): void
+    {
+        $run=$this->start(); $run->update(['protocol'=>4]);
+        $at=$run->created_at->timestamp;
+        $progress=[1=>['status'=>'failed','code'=>'invalid_png','attempts'=>[
+            ['number'=>1,'status'=>'failed','code'=>'generation_result_uncertain','started_at'=>$at,'finished_at'=>$at+1],
+            ['number'=>2,'status'=>'failed','code'=>'invalid_png','started_at'=>$at+1,'finished_at'=>$at+2],
+        ]]];
+        File::ensureDirectoryExists($this->spool.'/outbox/'.$run->id);
+        $path=$this->spool.'/outbox/'.$run->id.'/status.json';
+        file_put_contents($path,json_encode(['id'=>$run->id,'status'=>'running','scene_progress'=>$progress]));
+        try { app(ManualSceneService::class)->collect($run); $this->fail('Unsafe retry accepted'); }
+        catch (\RuntimeException $e) { $this->assertSame('Unsafe attempt sequence',$e->getMessage()); }
+        file_put_contents($path,json_encode(['id'=>$run->id,'status'=>'completed','scene_progress'=>[]]));
+        $this->expectException(\RuntimeException::class);
+        app(ManualSceneService::class)->collect($run);
+    }
+
+    public function test_state_race_waits_for_atomic_success_before_collecting_image(): void
+    {
+        $run=$this->start(); $run->update(['protocol'=>4]);
+        $this->sceneOutput($run,1);
+        $path=$this->spool.'/outbox/'.$run->id.'/status.json';
+        $state=json_decode(file_get_contents($path),true);
+        $state['scene_progress'][1]['status']='running';
+        $state['scene_progress'][1]['attempts'][0]['status']='running';
+        unset($state['scene_progress'][1]['attempts'][0]['finished_at']);
+        file_put_contents($path,json_encode($state));
+        app(ManualSceneService::class)->collect($run);
+        $this->assertDatabaseCount('order_attachments',0);
+        $this->sceneOutput($run,1);
+        app(ManualSceneService::class)->collect($run->fresh());
+        $this->assertDatabaseCount('order_attachments',1);
+        $this->assertSame(1,AdminActivityLog::where('action','automation.codex_scene_attempt_started')->count());
+    }
+
+    public function test_repeated_running_reads_preserve_finished_attempts_and_do_not_duplicate_audit(): void
+    {
+        $run=$this->start(); $run->update(['protocol'=>4]);
+        $service=app(ManualSceneService::class);
+        $this->sceneOutput($run,1); $service->collect($run);
+        $this->sceneOutput($run->fresh(),2); $service->collect($run->fresh());
+        $service->collect($run->fresh());
+        $this->assertCount(2,$run->fresh()->scenes);
+        $this->assertSame(2,AdminActivityLog::where('action','automation.codex_scene_attempt_started')->count());
+        $this->assertSame(2,AdminActivityLog::where('action','automation.codex_scene_attempt_finished')->count());
+    }
+
+    public function test_explicit_content_skip_continues_without_retrying_refused_scene(): void
+    {
+        $service=app(ManualSceneService::class); $old=$this->qualityRun(2);
+        file_put_contents($this->spool.'/outbox/'.$old->id.'/status.json', json_encode(['id'=>$old->id,'status'=>'quality_review','code'=>'content_review']));
+        $service->collect($old);
+        $next=$service->resumeQuality($old->fresh(),'owner-skip-authorized',3);
+        $this->assertSame([['scene'=>3,'code'=>'content_review']],$next->snapshot['skipped_scenes']);
+        $service->tick();
+        $manifest=json_decode(file_get_contents($this->spool.'/inbox/'.$next->id.'/manifest.json'),true);
+        $this->assertSame(4,$manifest['protocol']);
+        $this->assertSame(3,$manifest['skipped_scenes'][0]['scene']);
+        foreach (range(4,13) as $n) { $this->sceneOutput($next,$n); }
+        $progress=$this->progress($next);
+        $progress[3]=['status'=>'failed','code'=>'content_review','attempts'=>[],'previous_run_id'=>$old->id];
+        file_put_contents($this->spool.'/outbox/'.$next->id.'/status.json',json_encode(['id'=>$next->id,'status'=>'needs_manual','scene_progress'=>$progress]));
+        $service->collect($next);
+        $this->assertSame('needs_manual',$next->fresh()->status);
+        $this->assertCount(12,$next->fresh()->scenes);
     }
 
     private function qualityRun(int $saved = 2): CodexSceneRun

@@ -11,12 +11,26 @@ w = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(w)
 
 FAKE = '''#!/usr/bin/env python3
-import sys,pathlib,re,struct,zlib
+import sys,pathlib,re,struct,zlib,json,time
 if sys.argv[1:3]==['login','status']:
  print('Logged in using ChatGPT');sys.exit(0)
 p=sys.stdin.read(); n=int(re.search(r'Target scene (\\d+)',p).group(1))
 root=pathlib.Path(sys.argv[sys.argv.index('-C')+1])
 with (root/'calls').open('a') as f: f.write(str(n)+'\\n')
+mode = (root.parent.parent/'mode').read_text() if (root.parent.parent/'mode').exists() else ''
+tries = (root/'calls').read_text().splitlines().count(str(n))
+if '--output-last-message' in sys.argv:
+ report=pathlib.Path(sys.argv[sys.argv.index('--output-last-message')+1])
+ report.write_text(json.dumps({'outcome':'saved'}))
+ # A missing predecessor must not be passed to the next request.
+ for i,arg in enumerate(sys.argv):
+  if arg=='-i': assert pathlib.Path(sys.argv[i+1]).is_file()
+ if n==4 and mode=='refusal':
+  report.write_text(json.dumps({'outcome':'content_refused'}));sys.exit(0)
+ if n==4 and mode=='unknown': sys.exit(1)
+ if n==4 and mode=='timeout': time.sleep(30)
+ if n==4 and (mode=='quality' or (mode=='recover' and tries==1)):
+  (root/f'scene-{n:02d}.png').write_bytes(b'invalid');sys.exit(0)
 if (root.parent.parent/'fail').exists(): sys.exit(1)
 if (root.parent.parent/'low-res').exists():
  (root/f'scene-{n:02d}.png').write_bytes(b'\\x89PNG\\r\\n\\x1a\\n\\x00\\x00\\x00\\rIHDR'+struct.pack('>II',1774,887));sys.exit(0)
@@ -53,6 +67,7 @@ class WorkerTest(unittest.TestCase):
         return json.loads((w.SPOOL / 'outbox' / self.id / 'status.json').read_text())['status']
 
     def test_parallel_stories_keep_references_and_output_metadata_separate(self):
+        self.protocol4('')
         second = w.SPOOL / 'inbox' / '00000000-0000-4000-8000-000000000002'; second.mkdir()
         identity = b'other-child-reference'
         manifest = json.loads((self.inbox/'manifest.json').read_text())
@@ -164,6 +179,63 @@ class WorkerTest(unittest.TestCase):
         w.run_job(new)
         self.assertEqual('uncertain',json.loads((w.SPOOL/'outbox'/new.name/'status.json').read_text())['status'])
         self.assertFalse((w.HOME/'jobs'/new.name/'calls').exists())
+
+    def protocol4(self, mode):
+        manifest = json.loads((self.inbox/'manifest.json').read_text())
+        manifest['protocol'] = 4
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest))
+        (w.HOME/'mode').write_text(mode)
+
+    def test_failed_scene_retries_once_then_continues_remaining_twelve(self):
+        self.protocol4('quality'); w.run_job(self.inbox); w.run_job(self.inbox)
+        out=w.SPOOL/'outbox'/self.id
+        state=json.loads((out/'status.json').read_text())
+        self.assertEqual('needs_manual',state['status'])
+        self.assertEqual(12,len(list(out.glob('scene-*.png'))))
+        self.assertEqual(2,len(state['scene_progress']['4']['attempts']))
+        self.assertEqual('invalid_png',state['scene_progress']['4']['code'])
+        self.assertEqual(list(map(str,[1,2,3,4,4,5,6,7,8,9,10,11,12,13])),(w.HOME/'jobs'/self.id/'calls').read_text().splitlines())
+        self.assertTrue((w.HOME/'jobs'/self.id/'rejected-scene-04-attempt-1.png').exists())
+        self.assertTrue((w.HOME/'jobs'/self.id/'rejected-scene-04-attempt-2.png').exists())
+
+    def test_successful_second_attempt_finishes_all_scenes(self):
+        self.protocol4('recover'); w.run_job(self.inbox)
+        state=json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
+        self.assertEqual('completed',state['status'])
+        self.assertEqual('succeeded',state['scene_progress']['4']['status'])
+        self.assertNotIn('code',state['scene_progress']['4'])
+        self.assertEqual(['failed','succeeded'],[a['status'] for a in state['scene_progress']['4']['attempts']])
+
+    def test_refusal_and_unknown_are_not_retried_but_following_scenes_complete(self):
+        for mode,code in [('refusal','content_review'),('unknown','generation_result_uncertain')]:
+            with self.subTest(mode=mode):
+                self.protocol4(mode); w.run_job(self.inbox)
+                state=json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
+                self.assertEqual('needs_manual',state['status'])
+                self.assertEqual(code,state['scene_progress']['4']['code'])
+                self.assertEqual(1,len(state['scene_progress']['4']['attempts']))
+                self.assertEqual('succeeded',state['scene_progress']['13']['status'])
+            if mode=='refusal':
+                self.tearDown(); self.setUp()
+
+    def test_timeout_kills_attempt_then_continues_without_repeating_it(self):
+        self.protocol4('timeout')
+        with patch.object(w,'SCENE_TIMEOUT',1): w.run_job(self.inbox)
+        state=json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
+        self.assertEqual('needs_manual',state['status'])
+        self.assertEqual(1,len(state['scene_progress']['4']['attempts']))
+        self.assertEqual('succeeded',state['scene_progress']['13']['status'])
+
+    def test_reviewed_content_skip_never_calls_that_scene(self):
+        new=self.resume_inbox(2)
+        manifest=json.loads((new/'manifest.json').read_text())
+        manifest.update(protocol=4,skipped_scenes=[{'scene':3,'code':'content_review'}])
+        (new/'manifest.json').write_text(json.dumps(manifest))
+        w.run_job(new)
+        state=json.loads((w.SPOOL/'outbox'/new.name/'status.json').read_text())
+        self.assertEqual('needs_manual',state['status'])
+        self.assertEqual([],state['scene_progress']['3']['attempts'])
+        self.assertEqual(list(map(str,range(4,14))),(w.HOME/'jobs'/new.name/'calls').read_text().splitlines())
 
     def test_no_api_keys_or_application_credentials_in_child_environment(self):
         with patch.dict(os.environ,{'OPENAI_API_KEY':'secret','AWS_SECRET_ACCESS_KEY':'secret','DB_PASSWORD':'secret'}):

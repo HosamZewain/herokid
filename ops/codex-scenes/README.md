@@ -1,5 +1,17 @@
 # Codex story-scene queue
 
+## Independent scenes / protocol 4 — prepared 2 November 2026
+
+New runs use a durable scene-attempt ledger. Each scene gets at most **two CLI invocations**, and only a definite local PNG/dimension/size/duplicate failure permits the second attempt. No whole-story automatic restart. Accepted scenes are never regenerated. A refusal reported by the CLI, missing output, nonzero result or killed timeout gets one attempt and is left for review; the worker continues the other scene numbers. No prompt substitution, safety bypass, API fallback, or assumed zero-cost failure. A process/host interruption still requires operator reconciliation and is never automatically replayed.
+
+Every request is reserved in atomic status before launch; completed outcomes and private per-attempt logs/rejected bytes are preserved. Laravel imports only images whose atomic scene state says succeeded, verifies their story/reference/SHA and private S3 readback, and records attempt start/result as Automation. The next scene uses the nearest earlier accepted scene for continuity plus the approved identity. Explicit 1536x1024 landscape instruction remains; local minimum-size validation is not visual/print certification.
+
+At the end, 13 verified scenes mean `ready_preview`. Otherwise the run is `needs_manual`, the story becomes **`pending_team_review` / بانتظار مراجعة الفريق**, its active reservation is released and the UI lists exact missing numbers, attempts and reasons. Automatic enrollment excludes prior runs, preventing a new whole-story loop. Ownership may remain Automation when another sibling story in the checkout is genuinely still running. Staff completes only missing scenes. Partial stories do not enter the completed-story timing average.
+
+Legacy protocol 1–3 remains readable with its existing stop semantics; never upgrade an in-flight manifest. `codex-scenes:resume-quality` creates a fresh audited UUID retaining accepted S3 bytes. For an operator-reviewed **legacy prefix** followed by a content refusal, explicit `--skip-content-scene=N` skips that exact next scene without retry, generates later scenes, and hands the remaining gap to the team. It requires matching stopped worker evidence, unchanged approved identity/input, recorded payment, no manual hold, and owner authorization. Old run/bridge files remain unchanged. This command is not automatic replay of uncertain or historical jobs.
+
+Deploy additive `2026_11_02_110000_add_codex_scene_progress.php` only after fresh verified backup; drain existing CLI work before refreshing the dedicated worker. Preserve schema/status/ledger, S3 outputs and original attempts on recovery. Old collectors cannot understand protocol 4; do not roll back to them while new runs exist. No credentials, new AWS resource or external messaging is added.
+
 ## Automatic queue — 1 November 2026
 
 Owner authorized automatic generation for existing and future confirmed stories with an approved identity and any actual paid amount, plus a live monitor. `CODEX_SCENES_AUTOMATIC=true` selects eligible stories every scheduled minute; partial/full/without-shipping paid statuses qualify, receipt-review signals do not. Manual holds, prior runs of every status, and stories already in production are excluded. At most50 stories reserve queue positions; two independent story runs dispatch concurrently on the existing server with unchanged resource limits.

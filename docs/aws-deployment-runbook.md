@@ -1,5 +1,11 @@
 # HeroKid AWS deployment and agent handoff
 
+## Independent scene retry and team review — prepared 2 November 2026
+
+Owner requested bounded automatic retry per failed scene, continuation past missing scenes, preserved failure reasons/attempt history and the new **بانتظار مراجعة الفريق** order status; deployment authorization continues the active failed-story repair. Protocol4 gives two total attempts only for definite local image-quality failures, never retries content refusal/uncertain generation, and continues later scenes using approved identity plus the nearest accepted prior scene. Partial final runs release their reservation into `pending_team_review`, complete13-scene runs still become ready_preview. All attempt actions carry Automation. Existing in-flight/legacy runs keep their protocol; reviewed content refusals can be explicitly skipped in a fresh audited continuation without replaying that scene. See [worker contract](../ops/codex-scenes/README.md).
+
+Prepared, **not yet deployed**: additive nullable scene_progress and system order status migration, collector validation, attempt UI and worker changes. Fresh backup completed08:53:25UTC: `herokid-20261102T085256Z.sql.gz`, off-instance upload service success; release script must reverify local/remote hashes. Active story2643 still finishing; no worker interruption. Previous live application53d06b1 and all S3/output/provider records remain preserved.
+
 ## 2 November 2026 — Codex quality recovery deployed; explicit attempts started
 
 Final observation08:17:40UTC: four new2653scenes3–6 passed native1536x1024/S3 checks, then CLI reported a safety rejection forscene7 without a saved output. Specific attemptca4dfd45 was operator-classifiedcontent_review, preserving original status/transcript hash in `content-status-second-before.json`, and audited; no retry/rewritten creative brief. This second attempt consumed540.197s of active worker time. Thus2655has11/13and2653has6/13awaiting content review. Worker confirms2727and2643running since08:17:09UTC;2635waits for capacity. The original21accepted scenes remain unchanged. All five authorized resumes were admitted once; completion is pending for three and blocked on creative review for two. Final env/private cached-config hashes match the predeployment checkpoint.
