@@ -158,6 +158,8 @@ class ProcessRuntime
                 return DB::transaction(function () use ($run) {
                     $this->policy->check($run->revision->definition);
                     $this->guard($run);
+                    app(ProcessPreviewStatus::class)->synchronize($run->id);
+                    $run->refresh();
                     // Serialize all workflows for this checkout, including durable customer waits.
                     $active = hash('sha256', $run->checkout_key);
                     if (OrderProcessRun::where('active_key', $active)->whereKeyNot($run->id)->lockForUpdate()->first()) {
@@ -428,6 +430,13 @@ class ProcessRuntime
                         $run->update(['status' => $status, 'error_code' => $exception instanceof OrderConfirmationSendException ? $exception->reason : 'send_result_uncertain']);
                     }
                 });
+            }
+            // The provider receipt is already durable. A status projection failure
+            // must never turn an accepted send into an uncertain/retryable message.
+            try {
+                app(ProcessPreviewStatus::class)->synchronize($run->id);
+            } catch (Throwable $exception) {
+                report($exception);
             }
         } finally {
             $claim['lock']->release();

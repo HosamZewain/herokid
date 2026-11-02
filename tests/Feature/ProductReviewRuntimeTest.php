@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Models\AdminActivityLog;
 use App\Models\AiProvider;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
@@ -31,7 +32,9 @@ use App\Services\OrderAutomation\Process\PreviewCohort;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
 use App\Services\OrderAutomation\Process\ProcessEnrollment;
 use App\Services\OrderAutomation\Process\ProcessIdentityService;
+use App\Services\OrderAutomation\Process\ProcessOrderContext;
 use App\Services\OrderAutomation\Process\ProcessPaymentReview;
+use App\Services\OrderAutomation\Process\ProcessPreviewStatus;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
@@ -183,6 +186,7 @@ class ProductReviewRuntimeTest extends TestCase
         app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
         $this->assertSame('succeeded', PuzzleGeneration::sole()->status, PuzzleGeneration::sole()->error_code ?? '');
         $this->send($run);
+        $this->assertSame('preview_uploaded', $item->order->fresh()->status);
         $conversation = $this->reply($run);
         $this->assertSame('waiting_staff', $run->fresh()->status, $run->fresh()->error_code ?? '');
         $manifest = OrderReviewManifest::sole();
@@ -323,6 +327,8 @@ class ProductReviewRuntimeTest extends TestCase
         Http::assertNothingSent();
         app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
         $this->send($run);
+        $this->assertSame('preview_uploaded', $item->order->fresh()->status);
+        $this->assertSame('preview_uploaded', $storyOrder->fresh()->status);
         $this->assertCount(2, OrderReviewManifest::sole()->images);
         $this->assertEqualsCanonicalizing([$item->order_id, $storyOrder->id], array_column(OrderReviewManifest::sole()->images, 'order_id'));
         $this->assertStringContainsString('Second synthetic child', collect(OrderReviewManifest::sole()->images)->firstWhere('kind', 'identity')['label']);
@@ -330,7 +336,7 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertNotNull(OrderReviewManifest::sole()->approved_at);
         $this->assertNotNull($storyOrder->fresh()->child_identity_approved_attempt_id);
         $this->assertSame('costomer_confirmed', $storyOrder->fresh()->status);
-        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+        $this->assertSame('pending_team_review', $item->order->fresh()->status);
         Http::assertSentCount(2);
         $this->assertDatabaseCount('order_process_responses', 1);
     }
@@ -429,6 +435,106 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertEqualsWithDelta(297 / 210, $scene['height'] / $scene['width'], .002);
     }
 
+    private function generatedPreview(): array
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+
+        return [$item, $run];
+    }
+
+    public function test_accepted_preview_reconciles_old_status_once_without_resending(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->send($run);
+        $manifest = OrderReviewManifest::sole()->getRawOriginal();
+        // Reproduce a pre-fix run with a durable receipt and its old status snapshot.
+        $item->order->fresh()->updateQuietly(['status' => 'new_confirmed']);
+        $contexts = app(ProcessOrderContext::class);
+        $run->refresh()->update(['context' => $contexts->snapshot($contexts->orders($run->checkout_key)) + ['actor_id' => $this->actor->id]]);
+        app(ProcessPreviewStatus::class)->synchronize($run->id);
+        $logCount = $item->order->statusLogs()->count();
+        app(ProcessPreviewStatus::class)->synchronize($run->id);
+        $this->assertSame('preview_uploaded', $item->order->fresh()->status);
+        $this->assertSame($logCount, $item->order->statusLogs()->count());
+        $this->assertSame($manifest, OrderReviewManifest::sole()->getRawOriginal());
+        app(ProcessRuntime::class)->guard($run->fresh());
+        $this->assertDatabaseHas('admin_activity_logs', ['subject_id' => $item->order_id, 'action' => 'automation.preview_waiting_approval', 'user_id' => null]);
+        $activity = AdminActivityLog::where('action', 'automation.preview_waiting_approval')->latest('id')->first();
+        $this->assertSame('Automation', $activity->properties['actor_name']);
+        Http::assertSentCount(2);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+    }
+
+    public function test_uncertain_preview_send_does_not_change_order_status(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->mock(OrderConfirmationTransport::class)->shouldReceive('sendTemplate')->once()->andThrow(new \RuntimeException('unknown provider result'));
+        foreach (range(1, 3) as $_) {
+            app(ProcessRuntime::class)->advance($run->id);
+        }
+        $this->assertSame('uncertain', $run->fresh()->status);
+        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+        $this->assertDatabaseMissing('admin_activity_logs', ['action' => 'automation.preview_waiting_approval']);
+    }
+
+    public function test_late_preview_receipt_preserves_manual_takeover(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->mock(OrderConfirmationTransport::class)->shouldReceive('sendTemplate')->once()->andReturnUsing(function () use ($run, $item) {
+            $run->update(['status' => 'paused']);
+            $item->order->updateQuietly(['status' => 'under_review']);
+
+            return ['message_id' => 'wamid.review', 'interaction_id' => 'review-interaction'];
+        });
+        foreach (range(1, 3) as $_) {
+            app(ProcessRuntime::class)->advance($run->id);
+        }
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertSame('under_review', $item->order->fresh()->status);
+        $this->assertSame('completed', $run->steps()->where('type', 'whatsapp')->sole()->status);
+    }
+
+    public function test_status_projection_failure_cannot_erase_an_accepted_send(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->mock(OrderConfirmationTransport::class)->shouldReceive('sendTemplate')->once()->andReturnUsing(function () {
+            $this->mock(ProcessPreviewStatus::class)->shouldReceive('synchronize')->once()->andThrow(new \RuntimeException('synthetic projection failure'));
+
+            return ['message_id' => 'wamid.review', 'interaction_id' => 'review-interaction'];
+        });
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $step = $run->steps()->where('type', 'whatsapp')->sole();
+        $this->assertSame('completed', $step->status);
+        $this->assertSame('completed', $step->messageAttempts()->sole()->status);
+        $this->assertSame('wamid.review', $step->receipt['message_id']);
+        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+        $this->app->forgetInstance(ProcessPreviewStatus::class);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertSame('preview_uploaded', $item->order->fresh()->status);
+    }
+
+    public function test_preview_status_reconciliation_rejects_changed_customer_inputs(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->send($run);
+        $item->order->fresh()->updateQuietly(['status' => 'new_confirmed', 'child_name' => 'Edited child']);
+        try {
+            app(ProcessPreviewStatus::class)->synchronize($run->id);
+            $this->fail('Changed inputs must be rejected');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('inputs_changed', $error->getMessage());
+        }
+        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+        Http::assertSentCount(2);
+    }
+
     public function test_cover_v2_is_snapshotted_without_changing_old_cover_contracts(): void
     {
         $old = $this->book();
@@ -518,7 +624,7 @@ class ProductReviewRuntimeTest extends TestCase
         $old = $item->product->productionComponents()->create(['stable_key' => 'legacy', 'name' => 'Old', 'prompt_template' => 'Original brief', 'quantity_per_item' => 1, 'is_active' => true]);
         $snapshot = $item->productionComponents()->create(['stable_key' => 'legacy', 'name' => 'Old', 'prompt_template' => 'Original brief', 'quantity_per_item' => 1]);
         app(BookCatalog::class)->configure($item->product, 40, []);
-        $item->order->updateQuietly(['status' => 'new_confirmed']);
+        $item->order->fresh()->updateQuietly(['status' => 'new_confirmed']);
         $flow = OrderAutomation::where('name', 'Synthetic all previews')->sole();
         $cohort = app(PreviewCohort::class);
         $before = DB::table('order_item_production_components')->count();
