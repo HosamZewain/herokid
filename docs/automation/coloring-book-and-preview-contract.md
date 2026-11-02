@@ -39,7 +39,7 @@ Before switching workflows, finish/drain the old identity workflow, including wa
 
 ## Common WhatsApp template — submitted 2 November 2026
 
-Name `herokid_preview_review_payment`, Meta ID **1670211884633726**, Utility, Arabic `ar` on Meta / `ar-EG` on RoboDesk. Submission was verified in Meta as **pending review**, not approved. No customer message was sent. Four POSITIONAL values: customer name, checkout reference, **one signed frozen review-manifest URL**, remaining balance as a number only. Exact Quick Replies: `تأكيد المعاينة`, `طلب تعديل المعاينة`.
+Name `herokid_preview_review_payment`, Meta ID **1670211884633726**, Utility, Arabic `ar` on Meta / `ar-EG` on RoboDesk. Submission first showed pending review. A later authenticated refresh on2November2026 confirmed **Active - quality pending** (approved for use, quality not yet rated). No customer message was sent. Four POSITIONAL values: customer name, checkout reference, **one signed frozen review-manifest URL**, remaining balance as a number only. Exact Quick Replies: `تأكيد المعاينة`, `طلب تعديل المعاينة`.
 
 Body:
 
@@ -53,7 +53,7 @@ Body:
 باسم: حسام جمال
 بعد الدفع، يرجى إرسال صورة التحويل هنا ليراجعها فريق HeroKid قبل استكمال الطلب.
 
-Existing identity template/buttons remain unchanged. New transport allowlist entry is gated before any conversation close/send. Before activation, verify Meta approval, RoboDesk catalog synchronization and tenant prompt responses for both new buttons; no callback, classification or payment approval is requested. Suggested acknowledgement: «استلمنا موافقتك على المعاينات 💛 هنراجع الدفع قبل استكمال الطلب». Revision: «استلمنا طلب تعديل المعاينات 💛 ابعتلنا التعديلات المطلوبة عشان الفريق يراجعها». Payment receipt acknowledgement remains review-only. HeroKid continues full-window inbound polling and message-ID deduplication, retaining existing exact sent-wamid matching and safe interaction fallback.
+Existing identity template/buttons remain unchanged. New transport allowlist entry is gated before any conversation close/send. Meta approval is verified; before activation verify RoboDesk catalog synchronization and tenant prompt responses for both new buttons; no callback, classification or payment approval is requested. Suggested acknowledgement: «استلمنا موافقتك على المعاينات 💛 هنراجع الدفع قبل استكمال الطلب». Revision: «استلمنا طلب تعديل المعاينات 💛 ابعتلنا التعديلات المطلوبة عشان الفريق يراجعها». Payment receipt acknowledgement remains review-only. HeroKid continues full-window inbound polling and message-ID deduplication, retaining existing exact sent-wamid matching and safe interaction fallback.
 
 ## Verification and boundaries
 
