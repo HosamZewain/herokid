@@ -29,8 +29,7 @@ class ProductionSpecificationResolver
     public function forItem(OrderItem $item): array
     {
         $canonical = ProductProductionPrompt::forItem($item, privateImageInputs: true);
-        $spec = $item->product_variant_id ? ProductProductionSpec::where('scope_key', 'variant:'.$item->product_variant_id)->latest('version')->first() : null;
-        $spec ??= ProductProductionSpec::where('scope_key', 'product:'.$item->product_id)->latest('version')->first();
+        $spec = $this->specification($item);
         $definition = $spec ? $this->validate($spec->definition) : null;
 
         return $canonical->map(function (array $unit) use ($item, $canonical, $spec, $definition): array {
@@ -66,5 +65,12 @@ class ProductionSpecificationResolver
                 'quality_requirements' => $definition['quality_requirements'] ?? ['correct_child', 'correct_unit', 'print_review'],
             ];
         })->all();
+    }
+
+    protected function specification(OrderItem $item): ?ProductProductionSpec
+    {
+        $spec = $item->product_variant_id ? ProductProductionSpec::where('scope_key', 'variant:'.$item->product_variant_id)->latest('version')->first() : null;
+
+        return $spec ?? ProductProductionSpec::where('scope_key', 'product:'.$item->product_id)->latest('version')->first();
     }
 }

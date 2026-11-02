@@ -6,7 +6,10 @@ use RuntimeException;
 
 class CodexSdkProvider implements DecisionProvider
 {
-    public function name(): string { return 'codex'; }
+    public function name(): string
+    {
+        return 'codex';
+    }
 
     public function health(): array
     {

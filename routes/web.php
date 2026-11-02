@@ -436,6 +436,11 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\ProtectAutomationOrders::class])->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('agentic-automation')->name('agentic.')->middleware(['permission:order_automation.view', 'permission:orders.view'])->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'index'])->name('index');
+        Route::get('monitor', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'monitor'])->name('monitor');
+        Route::get('orders/{order}', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'show'])->name('show');
+    });
     Route::post('orders/{order}/payment-review/close', \App\Http\Controllers\Admin\OrderPaymentReviewController::class)
         ->middleware(['permission:orders.view', 'permission:robodesk.review_payments'])
         ->name('orders.payment-review.close');

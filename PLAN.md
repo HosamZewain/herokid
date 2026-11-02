@@ -1,6 +1,7 @@
 # HeroKid Hybrid Agentic Automation — Phase 1
 
-Status: approved architecture; implementation in progress, **Shadow Mode only**.
+Status: architecture and amendments implemented locally; validation/review gates
+listed below remain, **Shadow Mode only**. Nothing deployed or activated.
 Owner amendments: 2 November 2026. No AWS deployment, production migration,
 customer messaging, production generation, or autonomous execution is authorized.
 
@@ -8,6 +9,9 @@ customer messaging, production generation, or autonomous execution is authorized
 
 - Dedicated branch: `codex/agentic-shadow`, isolated checkout. Base verified on
   AWS: `683389a1f2071fa997b6fdbb9f6f37fc96f4028b` on 2 November 2026.
+  During implementation AWS advanced to `77ef1cc00094aced96bcb1db500480d87b40a971`;
+  its cover/preview-state release was inspected and merged locally before final
+  verification. Revalidate again before any deployment.
 - Preserve the original dirty mobile/UI checkout and every current workflow,
   payment, approval, assignee, manual hold, production attempt and queue.
 - Cover all active checkout groups, including existing, held and uncertain work.

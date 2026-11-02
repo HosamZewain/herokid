@@ -7,6 +7,7 @@ use InvalidArgumentException;
 class DecisionValidator
 {
     public const TYPES = ['execute', 'wait', 'human_required', 'escalate', 'completed'];
+
     public const FIELDS = ['decision', 'action', 'target_type', 'target_id', 'reason_code', 'reason', 'confidence', 'context_version', 'requires_human'];
 
     public function validate(mixed $value): array

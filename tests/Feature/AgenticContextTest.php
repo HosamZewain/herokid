@@ -2,10 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Order, Product, ProductProductionSpec, Story};
-use App\Services\Agentic\{CapabilityRegistry, ContextFingerprint, OrderContextBuilder, ProductionSpecificationResolver};
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductProductionSpec;
+use App\Services\Agentic\CapabilityRegistry;
+use App\Services\Agentic\ContextFingerprint;
+use App\Services\Agentic\OrderContextBuilder;
+use App\Services\Agentic\ProductionSpecificationResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\{DB, Http, Queue};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AgenticContextTest extends TestCase
@@ -37,9 +44,11 @@ class AgenticContextTest extends TestCase
     {
         $one = $this->productOrder();
         $two = $this->productOrder(attributes: ['child_name' => 'SECOND PRIVATE CHILD']);
-        DB::flushQueryLog(); DB::enableQueryLog();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
         $context = app(OrderContextBuilder::class)->build('synthetic-group');
-        $queries = DB::getQueryLog(); DB::disableQueryLog();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
         $this->assertCount(2, $context['units']);
         $this->assertNotSame($context['units'][0]['unit_key'], $context['units'][1]['unit_key']);
         $this->assertNotSame($context['units'][0]['child_ref'], $context['units'][1]['child_ref']);
@@ -49,7 +58,8 @@ class AgenticContextTest extends TestCase
         foreach ($queries as $query) {
             $this->assertDoesNotMatchRegularExpression('/^\s*(insert|update|delete|replace|alter|create)\b/i', $query['query']);
         }
-        Queue::assertNothingPushed(); Http::assertNothingSent();
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
         $this->assertSame('new_confirmed', $one->fresh()->status);
         $this->assertSame('new_confirmed', $two->fresh()->status);
     }
@@ -69,7 +79,8 @@ class AgenticContextTest extends TestCase
 
     public function test_hold_dominates_all_units_without_ownership_mutation(): void
     {
-        $this->productOrder(); $this->productOrder();
+        $this->productOrder();
+        $this->productOrder();
         DB::table('order_automation_holds')->insert(['checkout_key' => 'synthetic-group', 'user_id' => 999, 'fingerprint' => str_repeat('a', 64), 'runs' => '{}', 'confirmations' => '{}', 'created_at' => now(), 'updated_at' => now()]);
         $targets = app(CapabilityRegistry::class)->targets(app(OrderContextBuilder::class)->build('synthetic-group'));
         $this->assertCount(1, $targets);

@@ -5,8 +5,15 @@ namespace App\Services\Agentic\Providers;
 /** Contract-test double, never evidence of real model accuracy. */
 class MockProvider implements DecisionProvider
 {
-    public function name(): string { return 'mock'; }
-    public function health(): array { return ['ready' => app()->environment(['local', 'testing']), 'reason' => 'mock_not_a_real_model']; }
+    public function name(): string
+    {
+        return 'mock';
+    }
+
+    public function health(): array
+    {
+        return ['ready' => app()->environment(['local', 'testing']), 'reason' => 'mock_not_a_real_model'];
+    }
 
     public function decide(array $input): array
     {

@@ -8,6 +8,7 @@ use LogicException;
 class AiOrderDecision extends Model
 {
     protected $guarded = [];
+
     protected $casts = ['decision' => 'array', 'policy' => 'array', 'simulation' => 'array'];
 
     protected static function booted(): void

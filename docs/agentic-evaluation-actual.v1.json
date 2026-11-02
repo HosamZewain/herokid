@@ -1,0 +1,2690 @@
+{
+    "provider": "mock",
+    "real_model": false,
+    "dataset_approval": "pending_owner_review",
+    "cases": 37,
+    "expected_targets": 89,
+    "correct": 89,
+    "accuracy_percent": 100,
+    "unsafe_proposals": 0,
+    "false_waits": 0,
+    "unsupported_targets": 19,
+    "unevaluated_targets": 0,
+    "existing_automation_comparable": 24,
+    "existing_automation_differences": 0,
+    "live_execution_gate": false,
+    "accuracy_gate_met": false,
+    "results": [
+        {
+            "case": "real-01",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-02",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-03",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-04",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-05",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-06",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: EXISTING_WORK_IN_PROGRESS",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-07",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-07",
+            "target": "story:7",
+            "decision": {
+                "target_id": "story:7",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: EXISTING_WORK_IN_PROGRESS",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-08",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-09",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-10",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-11",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: EXISTING_WORK_IN_PROGRESS",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-12",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-12",
+            "target": "story:7",
+            "decision": {
+                "target_id": "story:7",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: EXISTING_WORK_IN_PROGRESS",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:9",
+            "decision": {
+                "target_id": "product:9",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:16",
+            "decision": {
+                "target_id": "product:16",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: RECORDED_PAYMENT_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:20",
+            "decision": {
+                "target_id": "product:20",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:25",
+            "decision": {
+                "target_id": "product:25",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: RECORDED_PAYMENT_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-14",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: CUSTOMER_REQUESTED_CHANGES",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-14",
+            "target": "story:7",
+            "decision": {
+                "target_id": "story:7",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: CUSTOMER_REQUESTED_CHANGES",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "story:8",
+            "decision": {
+                "target_id": "story:8",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "story:15",
+            "decision": {
+                "target_id": "story:15",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-16",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-16",
+            "target": "story:7",
+            "decision": {
+                "target_id": "story:7",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-17",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-17",
+            "target": "product:5",
+            "decision": {
+                "target_id": "product:5",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-18",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-18",
+            "target": "product:5",
+            "decision": {
+                "target_id": "product:5",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-19",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-19",
+            "target": "story:5",
+            "decision": {
+                "target_id": "story:5",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-20",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CONFIRMATION_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-20",
+            "target": "product:5",
+            "decision": {
+                "target_id": "product:5",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-21",
+            "target": "product:7",
+            "decision": {
+                "target_id": "product:7",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-21",
+            "target": "product:15",
+            "decision": {
+                "target_id": "product:15",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-22",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: CUSTOMER_REQUESTED_CHANGES",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-22",
+            "target": "story:7",
+            "decision": {
+                "target_id": "story:7",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: CUSTOMER_REQUESTED_CHANGES",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:8",
+            "decision": {
+                "target_id": "product:8",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:15",
+            "decision": {
+                "target_id": "product:15",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:19",
+            "decision": {
+                "target_id": "product:19",
+                "target_type": "production_unit",
+                "decision": "escalate",
+                "action": null,
+                "reason_code": "EXTERNAL_RESULT_UNCERTAIN",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: EXTERNAL_RESULT_UNCERTAIN",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:24",
+            "decision": {
+                "target_id": "product:24",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:28",
+            "decision": {
+                "target_id": "product:28",
+                "target_type": "production_unit",
+                "decision": "escalate",
+                "action": null,
+                "reason_code": "EXTERNAL_RESULT_UNCERTAIN",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: EXTERNAL_RESULT_UNCERTAIN",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:33",
+            "decision": {
+                "target_id": "product:33",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PAYMENT_REVIEW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:10",
+            "decision": {
+                "target_id": "story:10",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:17",
+            "decision": {
+                "target_id": "story:17",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:24",
+            "decision": {
+                "target_id": "story:24",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:31",
+            "decision": {
+                "target_id": "product:31",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:37",
+            "decision": {
+                "target_id": "product:37",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:40",
+            "decision": {
+                "target_id": "product:40",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:14",
+            "decision": {
+                "target_id": "story:14",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:21",
+            "decision": {
+                "target_id": "story:21",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:28",
+            "decision": {
+                "target_id": "story:28",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:35",
+            "decision": {
+                "target_id": "story:35",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:42",
+            "decision": {
+                "target_id": "product:42",
+                "target_type": "production_unit",
+                "decision": "execute",
+                "action": "generate_product_image",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: READY_FOR_PRODUCTION_PREFLIGHT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:49",
+            "decision": {
+                "target_id": "product:49",
+                "target_type": "production_unit",
+                "decision": "execute",
+                "action": "generate_product_image",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: READY_FOR_PRODUCTION_PREFLIGHT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:55",
+            "decision": {
+                "target_id": "product:55",
+                "target_type": "production_unit",
+                "decision": "execute",
+                "action": "generate_product_image",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: READY_FOR_PRODUCTION_PREFLIGHT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:60",
+            "decision": {
+                "target_id": "product:60",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:66",
+            "decision": {
+                "target_id": "product:66",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:69",
+            "decision": {
+                "target_id": "product:69",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:73",
+            "decision": {
+                "target_id": "product:73",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:77",
+            "decision": {
+                "target_id": "product:77",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:80",
+            "decision": {
+                "target_id": "product:80",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:8",
+            "decision": {
+                "target_id": "product:8",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:15",
+            "decision": {
+                "target_id": "product:15",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:21",
+            "decision": {
+                "target_id": "product:21",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:24",
+            "decision": {
+                "target_id": "product:24",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:8",
+            "decision": {
+                "target_id": "product:8",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:14",
+            "decision": {
+                "target_id": "product:14",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:17",
+            "decision": {
+                "target_id": "product:17",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:21",
+            "decision": {
+                "target_id": "product:21",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:25",
+            "decision": {
+                "target_id": "product:25",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:28",
+            "decision": {
+                "target_id": "product:28",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:32",
+            "decision": {
+                "target_id": "product:32",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:36",
+            "decision": {
+                "target_id": "product:36",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:39",
+            "decision": {
+                "target_id": "product:39",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: UNSUPPORTED_CAPABILITY",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-28",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "MANUAL_HOLD",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: MANUAL_HOLD",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-29",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "completed",
+                "action": null,
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: LIFECYCLE_COMPLETE",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-30",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "completed",
+                "action": null,
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: LIFECYCLE_COMPLETE",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-31",
+            "target": "checkout:1",
+            "decision": {
+                "target_id": "checkout:1",
+                "target_type": "checkout",
+                "decision": "completed",
+                "action": null,
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: LIFECYCLE_COMPLETE",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:8",
+            "decision": {
+                "target_id": "product:8",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:16",
+            "decision": {
+                "target_id": "product:16",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:22",
+            "decision": {
+                "target_id": "product:22",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-33",
+            "target": "product:6",
+            "decision": {
+                "target_id": "product:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: OUTPUT_REVIEW_AND_STUDIO",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-34",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "wait",
+                "action": null,
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "requires_human": false,
+                "reason": "Deterministic contract fixture: RECORDED_PAYMENT_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-35",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "IDENTITY_WORKFLOW_REQUIRED",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: IDENTITY_WORKFLOW_REQUIRED",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-36",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "EXECUTOR_OR_STAGE_UNAVAILABLE",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: EXECUTOR_OR_STAGE_UNAVAILABLE",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        },
+        {
+            "case": "real-37",
+            "target": "story:6",
+            "decision": {
+                "target_id": "story:6",
+                "target_type": "production_unit",
+                "decision": "human_required",
+                "action": null,
+                "reason_code": "EXECUTOR_OR_STAGE_UNAVAILABLE",
+                "requires_human": true,
+                "reason": "Deterministic contract fixture: EXECUTOR_OR_STAGE_UNAVAILABLE",
+                "confidence": 1,
+                "context_version": 1
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "policy": {
+                "version": "shadow-policy-v1",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "mock",
+                "real_model": false
+            }
+        }
+    ],
+    "dataset_sha256": "877f9fccb4d506b030b0cd05db4dc7ccc23775923655cd56907f272277dca073"
+}

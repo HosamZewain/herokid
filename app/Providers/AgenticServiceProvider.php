@@ -3,11 +3,27 @@
 namespace App\Providers;
 
 use App\Jobs\EvaluateAgenticShadow;
-use App\Models\{ChildIdentityGenerationAttempt, CodexSceneRun, Order, OrderAttachment, OrderItem, OrderItemProductionComponent, OrderPaymentEvent, OrderPaymentReview, OrderPreview, OrderProcessIdentity, OrderProcessRun, OrderReviewManifest, PuzzleGeneration};
+use App\Models\ChildIdentityGenerationAttempt;
+use App\Models\CodexSceneRun;
+use App\Models\Order;
+use App\Models\OrderAttachment;
+use App\Models\OrderItem;
+use App\Models\OrderItemProductionComponent;
+use App\Models\OrderPaymentEvent;
+use App\Models\OrderPaymentReview;
+use App\Models\OrderPreview;
+use App\Models\OrderProcessIdentity;
+use App\Models\OrderProcessRun;
+use App\Models\OrderReviewManifest;
+use App\Models\PuzzleGeneration;
 use App\Services\Agentic\ContextObserver;
-use App\Services\Agentic\Providers\{CodexSdkProvider, DecisionProvider, MockProvider};
+use App\Services\Agentic\Providers\CodexSdkProvider;
+use App\Services\Agentic\Providers\DecisionProvider;
+use App\Services\Agentic\Providers\MockProvider;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\{DB, Log, Schedule};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 
 class AgenticServiceProvider extends ServiceProvider

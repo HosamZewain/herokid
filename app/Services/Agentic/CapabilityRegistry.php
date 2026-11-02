@@ -47,6 +47,14 @@ class CapabilityRegistry
         return array_values(array_map(fn ($target) => [
             'target_id' => $target['target_id'], 'reason_code' => $target['reason_code'],
             'assignee_ref' => $context['assignee_ref'], 'proposed' => true, 'source' => 'read_only_projection',
+            'task_type' => match ($target['reason_code']) {
+                'PAYMENT_REVIEW_REQUIRED', 'PAYMENT_STATE_CONFLICT' => 'payment_verification',
+                'MISSING_REFERENCE_IMAGES', 'PRODUCTION_BRIEF_INCOMPLETE' => 'missing_information',
+                'CUSTOMER_REQUESTED_CHANGES', 'IDENTITY_ATTEMPT_REQUIRES_REVIEW', 'IDENTITY_WORKFLOW_REQUIRED' => 'identity_or_customer_correction',
+                'OUTPUT_REVIEW_AND_STUDIO' => 'quality_review_and_studio',
+                default => 'manual_production_exception',
+            },
+            'later_human_steps' => ['printing', 'packaging', 'shipping'],
         ], array_filter($this->targets($context), fn ($target) => in_array($target['decision'], ['human_required', 'escalate'], true))));
     }
 
@@ -88,6 +96,7 @@ class CapabilityRegistry
             if ($unit['identity_status'] === 'succeeded') {
                 return $result('wait', null, 'CUSTOMER_IDENTITY_APPROVAL_REQUIRED');
             }
+
             // Existing workflow owns identity creation; do not enroll historical orders.
             return $result($context['automation_owned'] ? 'wait' : 'human_required', null,
                 $unit['identity_status'] ? 'IDENTITY_ATTEMPT_REQUIRES_REVIEW' : 'IDENTITY_WORKFLOW_REQUIRED');

@@ -2,12 +2,14 @@
 
 namespace Tests\Support;
 
-use App\Models\{Order, Product};
+use App\Models\AiCheckoutState;
+use App\Models\Order;
+use App\Models\Product;
 use App\Services\Agentic\ContextObserver;
 
 trait AgenticFixtures
 {
-    private function observedCheckout(string $key, int $units = 1): \App\Models\AiCheckoutState
+    private function observedCheckout(string $key, int $units = 1): AiCheckoutState
     {
         $product = Product::firstOrCreate(['slug' => 'personalized-child-adventure-hdf-puzzle'], [
             'name_ar' => 'Synthetic puzzle', 'price_cents' => 100, 'is_active' => true, 'production_prompt_template' => 'Draw {{child_full_name}}']);

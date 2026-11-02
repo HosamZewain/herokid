@@ -2,9 +2,26 @@
 
 namespace App\Services\Agentic;
 
-use App\Models\{ChildIdentityGenerationAttempt, CodexSceneRun, Order, OrderAttachment, OrderAutomationRun, OrderGroupMergeAlias, OrderItem, OrderPaymentEvent, OrderProcessIdentity, OrderProcessRun, OrderReviewManifest, ProductionProject, PuzzleGeneration, RoboDeskIntegrationEvent};
-use App\Services\CodexScenes\ManualSceneService;
-use App\Services\Orders\{AdminOrderGroupService, AutomationAssignment, AutomationHandoff, OrderSceneTextService};
+use App\Models\ChildIdentityGenerationAttempt;
+use App\Models\CodexSceneRun;
+use App\Models\Order;
+use App\Models\OrderAttachment;
+use App\Models\OrderAutomationRun;
+use App\Models\OrderGroupMergeAlias;
+use App\Models\OrderItem;
+use App\Models\OrderPaymentEvent;
+use App\Models\OrderPreview;
+use App\Models\OrderProcessIdentity;
+use App\Models\OrderProcessRun;
+use App\Models\OrderReviewManifest;
+use App\Models\ProductionProject;
+use App\Models\PuzzleGeneration;
+use App\Models\RoboDeskIntegrationEvent;
+use App\Services\OrderAutomation\Process\ProcessProductReview;
+use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\OrderSceneTextService;
 use App\Services\RoboDesk\OrderConfirmationService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -103,11 +120,17 @@ class OrderContextBuilder
                     $bookPages = $spec['capability'] === 'book_interior';
                     $run = $bookPages ? CodexSceneRun::where('order_item_id', $item->id)->where('production_kind', 'coloring_book')->latest('created_at')->first()
                         : PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
-                    $approvedImage = $manifest ? collect($manifest->images)->first(fn ($image) => ($image['item_id'] ?? null) === $item->id) : null;
+                    $approvedImage = $manifest ? collect($manifest->images)->first(fn ($image) => ($image['item_id'] ?? null) === $item->id && ($image['kind'] ?? null) === 'book_cover') : null;
                     $generation = $bookPages ? PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first() : $run;
+                    $preview = $generation?->preview_id ? OrderPreview::with('productGallery')->find($generation->preview_id) : null;
                     $coverApproved = $manifest?->approved_at && $approvedImage && $generation?->status === 'succeeded'
+                        && in_array($manifest->run?->status, ['running', 'waiting_staff', 'completed'], true)
                         && ($approvedImage['generation_id'] ?? null) === $generation->id
-                        && ($approvedImage['sha256'] ?? null) === $generation->checksum;
+                        && ($approvedImage['sha256'] ?? null) === $generation->checksum
+                        && $preview && $preview->productGallery?->status === 'active'
+                        && ($approvedImage['preview_id'] ?? null) === $preview->id
+                        && ($approvedImage['path'] ?? null) === $preview->file_path && $preview->checksum === $generation->checksum
+                        && ($approvedImage['interior_fingerprint'] ?? null) === app(ProcessProductReview::class)->interiorFingerprint($item);
                     $linked = $item->linked_order_item_id ? OrderItem::with('order')->find($item->linked_order_item_id) : null;
                     $linkedOrder = $linked?->order ?? ($order->story_id ? $order : null);
                     $linkValid = ! $item->linked_order_item_id || ($linked && $linked->item_type === 'story' && $linkedOrder

@@ -1,0 +1,2536 @@
+{
+  "schema_version": 1,
+  "approval": "pending_owner_review",
+  "label_method": "Manually specified synthetic cases, distinct from actual-order corpus",
+  "cases": [
+    {
+      "id": "synthetic-01",
+      "title": "New checkout confirmation only; sibling still waits",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": true,
+          "status": "pending",
+          "sendable": true
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "ba2f8ea72ee9688baff2e7f8af9c38eaf197b76633a3a089babac21652bdaa6c"
+      },
+      "expected": [
+        {
+          "target_id": "checkout:1",
+          "target_type": "checkout",
+          "decision": "execute",
+          "action": "send_order_confirmation",
+          "reason_code": "CONFIRMATION_REQUIRED"
+        },
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "wait",
+          "action": null,
+          "reason_code": "CONFIRMATION_REQUIRED"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-02",
+      "title": "Confirmed puzzle ready for existing executor preflight",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "302bbbc58eb1d3351b9c7c541e8372e88b0bf6c83e5b8b0f3be143caca6397e2"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "generate_product_image",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-03",
+      "title": "Confirmed mug ready without introducing story payment gate",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "302bbbc58eb1d3351b9c7c541e8372e88b0bf6c83e5b8b0f3be143caca6397e2"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "generate_product_image",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-04",
+      "title": "Identity generated but customer has not approved",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": false,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "7aeb09b55dd35d34666b81561455830bbfd9c9b866e7252268b47f0a73ca7412"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "wait",
+          "action": null,
+          "reason_code": "CUSTOMER_IDENTITY_APPROVAL_REQUIRED"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-05",
+      "title": "Approved story with no recorded qualifying payment",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "ce10962df52c989760e8042d3b0d65f8c398a3d554e0102ec74b778c95b349d9"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "wait",
+          "action": null,
+          "reason_code": "RECORDED_PAYMENT_REQUIRED"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-06",
+      "title": "Approved story and qualifying recorded payment",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "8761c527ef237d11a091fd3148e87d8d366f70ccd6d565c8c1dc9bf0116194f8"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "start_story_scene_generation",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-07",
+      "title": "Partial scenes from ended attempt are never regenerated blindly",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": "needs_manual",
+              "active": false,
+              "uncertain": false,
+              "attempted": true,
+              "completed_numbers": [
+                1,
+                2
+              ],
+              "missing_numbers": [
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "ae14bafb1ab34e052275013a10404a63eb5b6fe225f4604bd15eb42f12d402b4"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-08",
+      "title": "Two children and independent story plus product",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          },
+          {
+            "order_ref": "order:2",
+            "child_ref": "child-for-order:2",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "6be8e025d0401997cf70f01133792f29e66dfbdc6a40d97dede7a59cd5ef92d7"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "start_story_scene_generation",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        },
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "generate_product_image",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-09",
+      "title": "Missing original customer photos",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": false,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "a2b570a2628dacb393f1e9969f0ebee339a076a60046246e20d9dff4b934972d"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "MISSING_REFERENCE_IMAGES"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-10",
+      "title": "Existing active product job",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": "processing",
+              "active": true,
+              "uncertain": false,
+              "attempted": true,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "ba2b907e6be282fed4a80a69a3a3e595aa63c7251d00f93a5b08d54cca63b27e"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "wait",
+          "action": null,
+          "reason_code": "EXISTING_WORK_IN_PROGRESS"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-11",
+      "title": "External outcome uncertain; no retry",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": "uncertain",
+              "active": false,
+              "uncertain": true,
+              "attempted": true,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "9f54c71ec40fa6262828077d75d14ba882239987018ddbcb45e984794bd47585"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "escalate",
+          "action": null,
+          "reason_code": "EXTERNAL_RESULT_UNCERTAIN"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-12",
+      "title": "Manual hold blocks all production targets",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": true,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "e7ca0fc0d53053a199af4c975e1160fc0747d7f9f2342c844330f5e866eb10be"
+      },
+      "expected": [
+        {
+          "target_id": "checkout:1",
+          "target_type": "checkout",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "MANUAL_HOLD"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-13",
+      "title": "Customer requests changes; preserve explicit response",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": true,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "fef550f91a89662e6dc841d83d0357ddf7e3096b8d43c0d9e99f019193c0e62d"
+      },
+      "expected": [
+        {
+          "target_id": "checkout:1",
+          "target_type": "checkout",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "CUSTOMER_REQUESTED_CHANGES"
+        },
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "CUSTOMER_REQUESTED_CHANGES"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-14",
+      "title": "Unknown capability cannot invent an executor",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": false,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "326d913039993cbf0aa32aee57127bcef06bacfa015de1775b9011f38a36039d"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "UNSUPPORTED_CAPABILITY"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-15",
+      "title": "Active progress does not imply a second generation",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": "running",
+              "active": true,
+              "uncertain": false,
+              "attempted": true,
+              "completed_numbers": [
+                1,
+                2,
+                3
+              ],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "82aed78e5f4c12506eb79caa438939600770a1fa49e13b0a3b0052002072e21c"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "wait",
+          "action": null,
+          "reason_code": "EXISTING_WORK_IN_PROGRESS"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-16",
+      "title": "Shared Codex production pool uncertain",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": true,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "5fac0c1ac24eec253ca39370849e98e3863e4fbaacd8e05a518f6645ad4719a5",
+            "unit_key": "story:1",
+            "capability": "story_scenes",
+            "supported": true,
+            "product_ref": "story:7",
+            "variant_ref": null,
+            "expected_outputs": 13,
+            "purchased_copies": 1,
+            "spec_revision": "story-compat-v1",
+            "spec_fingerprint": "804ebb4879a66d01354421f3b7a770aaf890dd31b2d54fa3fb23554b1d0cc7ac",
+            "prompt_complete": true,
+            "variant_valid": true,
+            "identity_approved": true,
+            "identity_status": "succeeded",
+            "identity_ref": "identity:9",
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13
+              ]
+            },
+            "output_count": 0,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "d21a29cd55272b4a35c55e04d9db7da2aa77a5dc17a4748ec2044070c9951189"
+      },
+      "expected": [
+        {
+          "target_id": "story:1",
+          "target_type": "production_unit",
+          "decision": "escalate",
+          "action": null,
+          "reason_code": "CODEX_POOL_UNCERTAIN"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-17",
+      "title": "Incomplete unresolved prompt is not executable",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": false,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "fc30b877ea37743be3df03e9467784a5db4c70b28eb031e96093bb7e608921ef"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "PRODUCTION_BRIEF_INCOMPLETE"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-18",
+      "title": "Blocked unit must not hide independent ready sibling",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": false,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          },
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:2",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:2",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "6eed802e7748eea118221417db5d1720c066d0b20dd2b2c9319076c2d6719b8a"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "MISSING_REFERENCE_IMAGES"
+        },
+        {
+          "target_id": "product:2",
+          "target_type": "production_unit",
+          "decision": "execute",
+          "action": "generate_product_image",
+          "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-19",
+      "title": "Unsupported A3 book variant",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": true,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "book_cover",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": false,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "ce65d73e427c63c3c69613aa5faf4c1808b5fb15b1f404425c39656b9e8dc928"
+      },
+      "expected": [
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "VARIANT_OR_IDENTITY_LINK_REQUIRES_REVIEW"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    },
+    {
+      "id": "synthetic-20",
+      "title": "Conflicting checkout payment replicas escalate",
+      "origin": "synthetic_edge_case",
+      "context": {
+        "schema_version": 1,
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:1",
+            "status": "new_confirmed",
+            "payment_status": "unpaid",
+            "printing_status": "not_started",
+            "shipping_status": "not_ready",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "assignee_ref": null,
+        "payment": {
+          "positive_recorded": false,
+          "consistent": false,
+          "ledger_ref": null,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": "succeeded",
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:1",
+            "child_ref": "child-for-order:1",
+            "active": true,
+            "order_status": "new_confirmed",
+            "has_photos": true,
+            "input_fingerprint": "224e41074b2d384bcbfcd24724bb1a0daef71ff55f30b3f59bc2abdfec968897",
+            "unit_key": "product:1",
+            "capability": "single_image",
+            "supported": true,
+            "product_ref": "product:43",
+            "variant_ref": "variant:44",
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5583cdb0cd90bf1c685b008d4465995c5d0acdf23d664c8c88cadadc9c0d387d",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:46",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 0,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "fingerprint": "bdd128eeea95e1fec90ec4fd84db25015270f599b227fd92ed01c206654f821b"
+      },
+      "expected": [
+        {
+          "target_id": "checkout:1",
+          "target_type": "checkout",
+          "decision": "escalate",
+          "action": null,
+          "reason_code": "PAYMENT_STATE_CONFLICT"
+        },
+        {
+          "target_id": "product:1",
+          "target_type": "production_unit",
+          "decision": "escalate",
+          "action": null,
+          "reason_code": "PAYMENT_STATE_CONFLICT"
+        }
+      ],
+      "existing_automation": [],
+      "safety_critical": true
+    }
+  ]
+}

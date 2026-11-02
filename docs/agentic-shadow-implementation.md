@@ -72,3 +72,80 @@ and an additive queue connection are the only application bootstrap integration.
 - Remaining risks: real subscription login/inference is **not verified**; the
   real provider stays fail-closed. Container proof is local, not AWS attestation.
   Dashboard, representative actual-order corpus and its owner approval remain.
+
+## Milestone 3 — dashboard and representative evaluation
+
+Added AgenticAutomationController, protected GET/monitor/detail routes, three RTL
+Blade views, Arabic labels and one sidebar link; no activation controls. Updated
+the CSS manifest and retained all previous hashed assets. Fresh detail reads and
+operational counts work independently of model availability and feature flags.
+Financial amounts retain `orders.statistics.view`; no private media URLs are added.
+
+Added EvaluationRunner, BenchmarkAgenticDecisions and a quota/lease wrapper for
+future real benchmarks, plus anonymized actual and separate synthetic corpora,
+reports and Arabic owner-review document. Two further checks cover shared budget
+and bridge/PHP schema agreement. Native browser inspection verified the synthetic
+overview/detail views; HTTP tests cover filtering, access, freshness and redaction.
+
+- Current core Agentic tests (without MCP): **30 tests / 178 assertions**, passing
+  on SQLite and isolated MySQL in the final combined run.
+- Actual data: **37 checkouts / 89 manually labelled targets**, captured on AWS
+  inside a read-only transaction with outbound HTTP blocked; **0 read errors**.
+  Raw customer fields, media, amounts and real IDs were excluded before export.
+- Mock actual-corpus result: **89/89**, unsafe proposals **0**, false waits **0**,
+  unsupported targets **19**, unevaluated **0**. Existing story admission was
+  comparable for 24 targets, differences **0**; these sampled targets were all
+  currently non-admissible, so this is not broad production parity evidence.
+- Separate synthetic corpus: **20 cases / 25 targets, 25/25**, unsafe/false-wait
+  **0**, unsupported **1**. Duplicate events, stale contexts, malicious notes,
+  sibling coverage and actual transport behavior are also integration-tested.
+- Real Codex accuracy: **not measured**. Corpus approval is pending. Both real
+  accuracy and live-execution gates remain false; 100% Mock is not an AI score.
+- Production advanced to `77ef1cc` during the work. Its independent cover/preview
+  changes were read and merged locally without conflict, before final regressions.
+
+## Milestone 4 — read-only MCP
+
+Added the official `laravel/mcp` **1.1.2** package, routes/ai.php, one server, a
+shared thin ReadTool adapter, seven named tools, dedicated access middleware and
+transport tests. Composer kept every previously locked dependency unchanged.
+
+- **3 HTTP transport tests / 83 assertions** pass on SQLite and isolated MySQL.
+- Tested explicit dedicated scope, wildcard rejection, inactive/missing-permission
+  accounts, independent finance scope and permission, disabled feature, foreign
+  Origin, cross-checkout unit lookup, extra arguments and unregistered write tools.
+- Seven tools expose input/output schemas and read-only/non-destructive hints.
+  Invocation repeats authorization; tools do not call the observer or provider.
+- Local package discovery was required after installing with `--no-scripts`;
+  the first MCP test run returned 404 until the local package manifest was rebuilt.
+- MCP remains disabled and is not connected to the isolated Decision Agent.
+
+## Final combined verification
+
+PHP **8.3.3**, no production config/secrets/media, external requests blocked.
+
+| Suite | Before | After |
+|---|---|---|
+| Existing automation selection, SQLite | 312 / 1,954 passed | **319 / 2,021 passed** |
+| Existing automation selection, isolated MySQL 8.4 | 312 / 1,954 passed | **319 / 2,021 passed** |
+| New Agentic tests, both engines | — | **33 / 261 passed on each** |
+| Python fake-CLI scene worker | 23 passed | **23 passed** |
+| Broadened MySQL run incl. admin permissions, operational cards and cover artwork | — | **388 / 2,756 passed** |
+
+Seven added existing-automation cases come from the concurrent production release,
+not removed or weakened tests. Broadened SQLite ran 388 tests / 2,749 assertions:
+**two existing report tests fail because its older SQLite lacks MySQL CONCAT**.
+Both failures were reproduced on an isolated checkout of production `77ef1cc`
+without Agentic application changes. Both pass on isolated MySQL. No unrelated
+report-query change was made to make the SQLite run green.
+
+Vite build passed with the existing large-bundle warning. Existing dependency
+advisories were reported during lockfile installation; no automatic unrelated
+dependency upgrades were applied. No AWS migrations, deployment, services,
+workers, customer messages, generation, payments or ownership changes were run.
+
+Remaining acceptance gates: owner approval of the concrete corpus; a dedicated
+subscription login and real inference validation inside the reviewed runtime;
+real ≥95% benchmark with no unresolved safety-critical failures. Any future AWS
+deployment/migration/observation enablement or live execution needs its own scoped
+approval. See the architecture document and runtime README for recovery details.

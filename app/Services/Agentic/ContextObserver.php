@@ -78,7 +78,9 @@ class ContextObserver
         $closed = AiCheckoutState::whereNotIn('status', ['inactive', 'redirected'])
             ->whereNotIn('checkout_key', app(AdminOrderGroupService::class)->activeOrdersQuery()->select('checkout_group_key'))
             ->orderBy('observed_at')->limit(config('agentic.reconcile_batch'))->pluck('checkout_key');
-        foreach ($closed as $key) { $this->safelyObserve($key); }
+        foreach ($closed as $key) {
+            $this->safelyObserve($key);
+        }
         DB::table('ai_runtime_states')->where('id', 1)->update(['scan_cursor' => $groups->isEmpty() ? 0 : $groups->last()->cursor_id,
             'reconciled_at' => now(), 'updated_at' => now()]);
 

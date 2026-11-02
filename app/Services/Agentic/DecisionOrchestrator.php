@@ -2,8 +2,11 @@
 
 namespace App\Services\Agentic;
 
-use App\Models\{AiAgentRun, AiCheckoutState, AiOrderDecision};
+use App\Models\AiAgentRun;
+use App\Models\AiCheckoutState;
+use App\Models\AiOrderDecision;
 use App\Services\Agentic\Providers\DecisionProvider;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -38,14 +41,16 @@ class DecisionOrchestrator
             $due = AiCheckoutState::whereIn('status', ['pending', 'partial', 'quota_deferred'])
                 ->where(function ($q) use ($quotaAvailable) {
                     $q->where('next_evaluation_at', '<=', now());
-                    if ($quotaAvailable) { $q->orWhere('status', 'quota_deferred'); }
+                    if ($quotaAvailable) {
+                        $q->orWhere('status', 'quota_deferred');
+                    }
                 });
             if ($stateId !== null) {
                 $due->whereKey($stateId);
             }
             // Every third pass is oldest-attempt-first, so hot blocked work cannot starve coverage.
             if ($control->turns % 3 !== 0) {
-                $due->orderByDesc('blocked');
+                $due->orderByDesc('blocked')->orderByRaw("CASE WHEN status = 'pending' AND context_version > 1 THEN 0 ELSE 1 END");
             }
             $state = $due->orderByRaw('CASE WHEN last_attempt_at IS NULL THEN 0 ELSE 1 END')->orderBy('last_attempt_at')->orderBy('id')->first();
             if (! $state) {
@@ -139,7 +144,7 @@ class DecisionOrchestrator
     {
         return DB::transaction(function () {
             $control = DB::table('ai_runtime_states')->where('id', 1)->lockForUpdate()->first();
-            if ($control->lease_until && \Carbon\Carbon::parse($control->lease_until)->isFuture()) {
+            if ($control->lease_until && Carbon::parse($control->lease_until)->isFuture()) {
                 return null;
             }
             if ($control->lease_token) {
