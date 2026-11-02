@@ -1,10 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
-## 2 November 2026 — per-product regeneration prepared, not deployed
+## 2 November 2026 — per-product regeneration deployed
 
-Per-item **إعادة التوليد** is prepared on `codex/product-regeneration`, based on documentation successor b97a7e9/application29ac3cc. Updated canonical item inputs generate one new image through the existing worker, preserving earlier attempts/attachments/previews and every sibling. Explicit requests temporarily reserve Automation ownership even under a retained manual hold; completion returns control to staff. Parent/active-item uniqueness prevents repeated paid submissions. Uncertain provider results are not retried. No production order/generation/configuration was changed.
+Owner explicitly approved “انشر”. Application **01e6f6f684d00cca57496e66ca13323fbf2e1286** deployed and verified **11:04:48 UTC /13:04 Cairo**. Per-item **إعادة التوليد** is visible in the authenticated product production page, using current saved prompt/photos/notes and preserving earlier output and every sibling. The button was inspected only; no production regeneration was triggered for verification.
 
-Verification:34tests276assertions on each SQLite/isolatedMySQL,212tests1321assertions in the broader MySQL automation suite,PHP8.3 syntax and byte-identical isolated frontend build. New migration expands immutable attempt history; deployment requires fresh backup, drained affected Laravel workers and a reviewed narrow migration. **No deployment approval received for this feature.** [Behavior, verification and recovery](product-regeneration-2026-11-02.md). Earlier coloring-book/unified-preview work remains separate and unpublished.
+All15 changed-file hashes matched, PHP8.3 syntax verified, existing assets/drift preserved. Narrow migration `2026_11_02_140000_add_product_generation_attempts` completed in470ms during a brief maintenance fence after graceful draining of four affected Laravel workers. Route/Blade caches and FPM refreshed; workers and scheduler restored healthy. Separate Codex service PID851280 unchanged. `.env` and private cached configuration hashes unchanged.
+
+Fresh backup **herokid-20261102T110042Z.sql.gz**,47536524bytes, SHA2569288191383cc3a31db7d20abf57f382ccef4f3d9d92d7604bdc8dbaee5df223e: gzip/local checksum plus S3 metadata checksum and ContentLength verified. Recovery checkpoint **/home/ubuntu/herokid-before-regeneration-01e6f6f** contains code/archive hash, private config/routes, changed-file hashes, backup proof and before/after sanitized generation-state proofs. No restore was performed.
+
+Post-deploy verification11:06UTC: all19 existing generation rows preserved byte-for-byte apart from added schema fields (18succeeded/1pre-existing uncertain); zero new regeneration attempts, zero bad active reservations.81historical failedjobs unchanged. Public home/up/cartHTTPS200; seven services active, four expected Laravel workers running and scheduler successful. Authenticated product page displays attempt1 and **إعادة التوليد**. No payment/order/hold/message action was performed. Tests:34/276 each SQLite/isolatedMySQL and212/1321 broader MySQL suite; isolated frontend build byte-identical. [Behavior, verification and recovery](product-regeneration-2026-11-02.md).
+
+Preserve immutable history: migration down is forbidden once multiple attempts exist, and older workers do not manage active reservations. Use forward fixes after feature use. Coloring-book/unified-preview work remains separate and unpublished. This documentation successor is not itself the deployed application SHA.
 
 ## 2 November 2026 — edited product return and mug images deployed
 
