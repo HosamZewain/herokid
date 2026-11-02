@@ -42,3 +42,33 @@ AgenticContextTest. No existing execution path has been modified.
   proposal eligibility as executed or fully validated physical production.
 - Remaining: scheduling/coverage, strict decision contract, isolated provider,
   dashboard, real anonymized evaluation and optional read-only MCP.
+
+## Milestone 2 — decision, scheduling and simulation
+
+Added ContextObserver, DecisionOrchestrator, DecisionValidator, PolicyEngine,
+simulation-only ExecutionGateway, provider interface/mock/socket adapter,
+AgenticServiceProvider, observation/evaluation commands, one dedicated queue job,
+three audit models/four audit-control tables, and `ops/agentic` isolated SDK bridge.
+Existing queue connections and business executors are unchanged. Provider wiring
+and an additive queue connection are the only application bootstrap integration.
+
+- SQLite and isolated MySQL: **22 tests / 120 assertions passed on each**.
+- Node: **7 tests passed**, including six hostile unadvertised tool responses
+  against the real pinned CLI and a local fake provider. Initially the test's
+  rejection matcher did not recognize `aborted`/sandbox rejection; inspecting
+  the synthetic feedback and asserting unchanged/unread sentinel fixed the
+  test. No external inference or account credentials were used.
+- Linux container acceptance passed with network disabled, read-only root,
+  non-root UID, dropped capabilities, no-new-privileges and seccomp. Direct code
+  write failed; application secrets/Docker socket were absent; shell/read/patch
+  probes left the sentinel unchanged and undisclosed. Unverified subscription
+  credentials refused inference. See `ops/agentic/README.md` for boundaries.
+- Covers independent siblings across bounded passes, ready siblings alongside
+  blocked units, stale decisions, duplicate events, quota rollover/increase,
+  fairness, worker-loss handling, provider outage and direct-SQL lifecycle exit.
+- No execution gateway method, business reservation, external job, payment write,
+  production state change or activation control exists. Simulation always records
+  `executed=false` and `reserved=false`; existing executor preflight remains needed.
+- Remaining risks: real subscription login/inference is **not verified**; the
+  real provider stays fail-closed. Container proof is local, not AWS attestation.
+  Dashboard, representative actual-order corpus and its owner approval remain.
