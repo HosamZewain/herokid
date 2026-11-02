@@ -23,14 +23,21 @@ class ProductProductionComponentSnapshotService
             return;
         }
 
+        if ($item->productionComponents()->whereIn('production_stage', ['book_cover', 'book_interior'])->exists()) {
+            return;
+        }
+
         foreach ($components as $component) {
             $item->productionComponents()->updateOrCreate(
                 ['stable_key' => $component->stable_key],
                 [
                     'product_production_component_id' => $component->id,
                     'name' => $component->name,
+                    'production_stage' => $component->production_stage ?? 'standard',
                     'prompt_template' => $component->prompt_template,
-                    'quantity_per_item' => $component->quantity_per_item,
+                    'quantity_per_item' => $component->production_stage === 'book_interior'
+                        ? (data_get($item->variant_snapshot, 'book_page_count') ?: $component->quantity_per_item)
+                        : $component->quantity_per_item,
                     'sort_order' => $component->sort_order,
                 ],
             );

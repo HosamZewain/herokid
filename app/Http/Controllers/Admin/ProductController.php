@@ -11,6 +11,7 @@ use App\Support\AdminActivityLogger;
 use App\Support\AppDateTime;
 use App\Support\ProductPersonalizationSchema;
 use App\Support\ProductProductionPrompt;
+use App\Support\ProductProductionStage;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,7 @@ class ProductController extends Controller
                 'production_components.*.stable_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/', 'distinct'],
                 'production_components.*.name' => ['required', 'string', 'max:255'],
                 'production_components.*.prompt_template' => ['required', 'string', 'max:'.ProductProductionPrompt::MAX_TEMPLATE_LENGTH],
+                'production_components.*.production_stage' => ['nullable', 'in:standard,book_cover,book_interior'],
                 'production_components.*.quantity_per_item' => ['required', 'integer', 'min:1', 'max:1000'],
                 'production_components.*.is_active' => ['nullable', 'boolean'],
             ],
@@ -213,6 +215,8 @@ class ProductController extends Controller
                 'production_components.*.stable_key.distinct' => 'لا يمكن تكرار معرّف جزء الإنتاج.',
             ],
         )->validate()['production_components'];
+
+        ProductProductionStage::validate($validated);
 
         $usedKeys = [];
 
@@ -239,6 +243,7 @@ class ProductController extends Controller
             return [
                 'stable_key' => $key,
                 'name' => trim($row['name']),
+                'production_stage' => $row['production_stage'] ?? 'standard',
                 'prompt_template' => trim($row['prompt_template']),
                 'quantity_per_item' => (int) $row['quantity_per_item'],
                 'is_active' => (bool) ($row['is_active'] ?? false),
@@ -287,6 +292,7 @@ class ProductController extends Controller
         foreach ($source->productionComponents as $component) {
             $duplicate->productionComponents()->create($component->only([
                 'stable_key',
+                'production_stage',
                 'name',
                 'prompt_template',
                 'quantity_per_item',
@@ -304,6 +310,7 @@ class ProductController extends Controller
         if ($product->productionComponents->isNotEmpty()) {
             return $product->productionComponents->map(fn ($component): array => $component->only([
                 'stable_key',
+                'production_stage',
                 'name',
                 'prompt_template',
                 'quantity_per_item',

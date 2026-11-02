@@ -18,8 +18,12 @@ class ProductProductionPromptSyncService
         $updated = 0;
 
         foreach ($product->productionComponents as $component) {
+            if (($component->production_stage ?? 'standard') !== 'standard') {
+                continue;
+            }
             $updated += OrderItemProductionComponent::query()
                 ->where('stable_key', $component->stable_key)
+                ->where('production_stage', 'standard')
                 ->whereHas('orderItem', fn ($query) => $query
                     ->where('product_id', $product->id)
                     ->whereIn('item_type', ['product', 'product_add_on']))

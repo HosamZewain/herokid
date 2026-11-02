@@ -137,13 +137,17 @@
                     <input type="hidden" name="production_components_present" value="1">
                     <input type="hidden" name="production_prompt_template" value="{{ old('production_prompt_template', $product->production_prompt_template) }}">
                     <div class="mb-4 flex flex-wrap items-start justify-between gap-3 text-right">
-                        <button type="button" data-add-production-component class="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-black text-white hover:bg-fuchsia-700">+ إضافة جزء إنتاج</button>
+                        <div class="flex flex-wrap gap-2"><button type="button" data-add-production-component class="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-black text-white hover:bg-fuchsia-700">+ إضافة جزء إنتاج</button>
+                            <button type="button" data-add-book-cover class="rounded-xl border border-fuchsia-200 px-4 py-2 text-sm font-black text-fuchsia-700">+ برومبت كفر كتاب تلوين</button>
+                        </div>
+                        <template data-book-cover-default>{{ \App\Support\ProductProductionStage::coverPrompt() }}</template>
                         <div>
                             <h3 class="text-lg font-black text-fuchsia-950">برومبت إنتاج المنتج</h3>
                             <p class="mt-1 max-w-3xl text-sm leading-6 text-fuchsia-700">أضف برومبت مستقل لكل جزء يمكن إنتاجه وتسليم ملفه منفصلًا. يظل المنتج عنصرًا واحدًا في المتجر والسلة، وتُحفظ نسخة الأجزاء مع كل طلب جديد.</p>
                         </div>
                     </div>
 
+                    <p class="mb-3 rounded-xl bg-white p-3 text-sm leading-6 text-fuchsia-800">لكتاب التلوين: أضف جزأين، واختر مرحلة «كفر كتاب التلوين» للأول و«صفحات كتاب التلوين» للثاني. كمية الكفر 1، وكمية الصفحات هي عدد الصفحات الداخلية بدون الكفر. يمكن تحديد عدد مختلف لكل متغير. اختيار المراحل لا يفعّل التوليد أو إرسال واتساب تلقائيًا.</p>
                     <x-input-error :messages="$errors->get('production_components')" class="mb-3" />
                     <div class="space-y-4" data-production-component-list>
                         @foreach($productionComponentRows as $componentIndex => $component)
@@ -162,6 +166,15 @@
                                         <button type="button" data-remove-production-component class="rounded-xl border border-red-200 px-3 py-2.5 text-xs font-black text-red-600 hover:bg-red-50">حذف</button>
                                     </div>
                                 </div>
+                                <label class="mt-3 block text-xs font-black text-slate-600">مرحلة الإنتاج
+                                    <select name="production_components[{{ $componentIndex }}][production_stage]" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-sm">
+                                        @foreach(\App\Support\ProductProductionStage::LABELS as $stage => $label)
+                                            <option value="{{ $stage }}" @selected(data_get($component, 'production_stage', 'standard') === $stage)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.quantity_per_item')" class="mt-2" />
+                                <x-input-error :messages="$errors->get('production_components.'.$componentIndex.'.production_stage')" class="mt-2" />
                                 <label class="mt-3 block text-xs font-black text-slate-600">برومبت الإنتاج
                                     <textarea name="production_components[{{ $componentIndex }}][prompt_template]" rows="12" required maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}" dir="ltr" spellcheck="false" class="mt-1.5 block w-full rounded-xl border-fuchsia-200 text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500">{{ data_get($component, 'prompt_template') }}</textarea>
                                 </label>
@@ -194,6 +207,13 @@
                                     <button type="button" data-remove-production-component class="rounded-xl border border-red-200 px-3 py-2.5 text-xs font-black text-red-600 hover:bg-red-50">حذف</button>
                                 </div>
                             </div>
+                            <label class="mt-3 block text-xs font-black text-slate-600">مرحلة الإنتاج
+                                <select name="production_components[__INDEX__][production_stage]" class="mt-1.5 w-full rounded-xl border-fuchsia-200 text-sm">
+                                    @foreach(\App\Support\ProductProductionStage::LABELS as $stage => $label)
+                                        <option value="{{ $stage }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
                             <label class="mt-3 block text-xs font-black text-slate-600">برومبت الإنتاج
                                 <textarea name="production_components[__INDEX__][prompt_template]" rows="12" required maxlength="{{ \App\Support\ProductProductionPrompt::MAX_TEMPLATE_LENGTH }}" dir="ltr" spellcheck="false" class="mt-1.5 block w-full rounded-xl border-fuchsia-200 text-left font-mono text-sm leading-6 focus:border-fuchsia-500 focus:ring-fuchsia-500"></textarea>
                             </label>
@@ -303,6 +323,7 @@
                                     <div><label class="mb-1 block text-xs font-bold">فرق السعر</label><input type="number" step="0.01" name="price_adjustment" value="{{ $variant->price_adjustment_cents / 100 }}" class="w-full rounded-xl border-gray-300" placeholder="يضاف لسعر المنتج"></div>
                                     <div><label class="mb-1 block text-xs font-bold">المخزون</label><input type="number" name="stock_quantity" value="{{ $variant->stock_quantity }}" class="w-full rounded-xl border-gray-300"></div>
                                     <div><label class="mb-1 block text-xs font-bold">الترتيب</label><input type="number" name="sort_order" value="{{ $variant->sort_order }}" class="w-full rounded-xl border-gray-300"></div>
+                                    <div><label class="mb-1 block text-xs font-bold">صفحات كتاب التلوين الداخلية (بدون الكفر)</label><input type="number" name="book_page_count" min="1" max="1000" value="{{ $variant->book_page_count }}" class="w-full rounded-xl border-gray-300" placeholder="اتركه فارغًا لاستخدام عدد جزء الصفحات"></div>
                                     <div class="md:col-span-2"><label class="mb-1 block text-xs font-bold">الخصائص (كل سطر خاصية)</label><textarea name="attributes_text" rows="2" class="w-full rounded-xl border-gray-300 text-right">{{ implode("\n", $variant->attributes ?? []) }}</textarea></div>
                                     <div><label class="mb-1 block text-xs font-bold">الصورة الرئيسية</label><input type="file" name="image" accept="image/*" class="w-full text-sm"></div>
                                     <div class="md:col-span-2"><label class="mb-1 block text-xs font-bold">صور إضافية (حتى ٨)</label><input type="file" name="gallery_images[]" accept="image/*" multiple class="w-full text-sm"></div>
@@ -339,6 +360,7 @@
                         @csrf
                         <input name="name_ar" required class="rounded-xl border-gray-300 text-right" placeholder="اسم المتغير">
                         <input name="sku" class="rounded-xl border-gray-300 text-left" dir="ltr" placeholder="SKU">
+                        <label class="text-xs font-bold">صفحات التلوين بدون الكفر<input type="number" name="book_page_count" min="1" max="1000" class="mt-1 w-full rounded-xl border-gray-300" placeholder="اختياري — يستخدم عدد جزء الصفحات"></label>
                         <input type="number" step="0.01" name="price_override" class="rounded-xl border-gray-300" placeholder="السعر المستقل">
                         <input type="number" name="stock_quantity" class="rounded-xl border-gray-300" placeholder="المخزون">
                         <input type="file" name="image" accept="image/*" class="text-sm">
@@ -395,6 +417,18 @@
                 list.appendChild(row);
                 row.querySelector('input[name$="[name]"]')?.focus();
                 syncEmpty();
+            });
+
+            section.querySelector('[data-add-book-cover]')?.addEventListener('click', () => {
+                const existing = [...list.querySelectorAll('select[name$="[production_stage]"]')].find(select => select.value === 'book_cover');
+                if (existing) { existing.focus(); return; }
+                addButton.click();
+                const row = list.lastElementChild;
+                row.querySelector('input[name$="[name]"]').value = 'كفر كتاب التلوين';
+                row.querySelector('input[name$="[quantity_per_item]"]').value = '1';
+                row.querySelector('select[name$="[production_stage]"]').value = 'book_cover';
+                row.querySelector('textarea[name$="[prompt_template]"]').value = section.querySelector('[data-book-cover-default]').content.textContent.trim();
+                row.querySelector('textarea').focus();
             });
 
             list.addEventListener('click', (event) => {

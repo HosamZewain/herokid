@@ -12,6 +12,7 @@ class ProductVariant extends Model
 
     protected $casts = [
         'attributes' => 'array',
+        'book_page_count' => 'integer',
         'gallery_images' => 'array',
         'is_active' => 'boolean',
     ];

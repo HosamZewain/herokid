@@ -85,6 +85,7 @@ class ProductVariantController extends Controller
             'stock_quantity' => 'nullable|integer|min:0|max:999999',
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'attributes_text' => 'nullable|string|max:2000',
+            'book_page_count' => 'nullable|integer|min:1|max:1000',
             'is_active' => 'nullable|boolean',
         ]);
 

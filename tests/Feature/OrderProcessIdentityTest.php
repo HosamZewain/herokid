@@ -40,6 +40,7 @@ use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\OrderPaymentService;
+use App\Services\Orders\OrderReviewLinks;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
@@ -120,6 +121,21 @@ class OrderProcessIdentityTest extends TestCase
         app(ProcessRuntime::class)->tick();
 
         return OrderProcessRun::where('checkout_key', $key)->firstOrFail();
+    }
+
+    public function test_unified_review_links_include_pending_identity_and_remove_stale_run_without_approval(): void
+    {
+        $run = $this->generated();
+        $order = OrderProcessIdentity::firstOrFail()->order;
+        $service = app(OrderReviewLinks::class);
+        $text = $service->forOrders(collect([$order]));
+        $this->assertStringContainsString('هوية الطفل', $text);
+        preg_match('~https?://[^\s]+~u', $text, $match);
+        $this->get($match[0])->assertOk()->assertContent($this->png);
+        $this->assertNull($order->fresh()->child_identity_approved_attempt_id);
+        $this->assertDatabaseCount('order_process_responses', 0);
+        $order->update(['child_name' => 'تغيير بعد التوليد']);
+        $this->assertSame('', $service->forOrders(collect([$order->fresh()])));
     }
 
     public function test_confirmed_checkout_is_reserved_during_enrollment_and_released_when_not_matched(): void

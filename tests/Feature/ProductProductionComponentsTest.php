@@ -6,7 +6,10 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
+use App\Services\Orders\ProductProductionComponentSnapshotService;
+use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Support\ProductProductionPrompt;
+use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -314,6 +317,93 @@ class ProductProductionComponentsTest extends TestCase
             $source->productionComponents()->firstOrFail()->id,
             $duplicate->productionComponents->first()->id,
         );
+    }
+
+    public function test_coloring_book_has_separate_cover_and_interior_prompts_and_variant_page_snapshot(): void
+    {
+        $product = $this->product();
+        $components = [
+            ['stable_key' => 'cover', 'name' => 'كفر', 'production_stage' => 'book_cover', 'quantity_per_item' => 1, 'prompt_template' => 'Cover {{child_full_name}} only', 'is_active' => 1],
+            ['stable_key' => 'pages', 'name' => 'صفحات', 'production_stage' => 'book_interior', 'quantity_per_item' => 12, 'prompt_template' => '{{book_page_count}} pages for {{child_full_name}}', 'is_active' => 1],
+        ];
+        $this->actingAs($this->admin())->put(route('admin.products.update', $product), [
+            ...$this->productPayload($product), 'production_components_present' => 1, 'production_components' => $components,
+        ])->assertSessionHasNoErrors();
+        $variant = $product->variants()->create(['name_ar' => 'نسخة 20 صفحة', 'book_page_count' => 20, 'is_active' => true]);
+        $order = Order::create(['order_number' => 'BOOK-TEST', 'child_name' => 'رقية', 'status' => 'new']);
+        $item = $order->items()->create(['item_type' => 'product', 'product_id' => $product->id,
+            'product_variant_id' => $variant->id, 'variant_snapshot' => ProductVariantSnapshot::make($product, $variant),
+            'title' => 'كتاب رقية', 'quantity' => 2, 'unit_price_cents' => 10000, 'total_price_cents' => 20000]);
+        $units = ProductProductionPrompt::forItem($item->fresh());
+        $this->assertSame(['book_cover', 'book_interior'], $units->pluck('production_stage')->all());
+        $this->assertSame([2, 40], $units->pluck('quantity')->all());
+        $this->assertSame('20 pages for رقية', $units[1]['prompt']);
+        $this->assertSame('product:'.$item->id.':component:cover', $units[0]['unit_key']);
+        $product->productionComponents()->update(['prompt_template' => 'changed', 'quantity_per_item' => 99]);
+        $variant->update(['book_page_count' => 30]);
+        app(ProductProductionPromptSyncService::class)->syncForProduct($product);
+        app(ProductProductionComponentSnapshotService::class)->captureForItem($item->fresh());
+        $units = ProductProductionPrompt::forItem($item->fresh());
+        $this->assertSame('Cover رقية only', $units[0]['prompt']);
+        $this->assertSame('20 pages for رقية', $units[1]['prompt']);
+        $this->assertSame([1, 20], $units->pluck('quantity_per_item')->all());
+        $this->assertSame(['order_component_snapshot', 'order_component_snapshot'], $units->pluck('prompt_source')->all());
+    }
+
+    public function test_incomplete_or_ambiguous_book_components_are_rejected_without_changing_product(): void
+    {
+        $product = $this->product();
+        $cover = ['name' => 'كفر', 'production_stage' => 'book_cover', 'quantity_per_item' => 1, 'prompt_template' => 'Cover', 'is_active' => 1];
+        $pages = ['name' => 'صفحات', 'production_stage' => 'book_interior', 'quantity_per_item' => 12, 'prompt_template' => 'Pages', 'is_active' => 1];
+        foreach ([[$cover], [$pages], [$cover, $cover, $pages], [$cover, $pages, ['name' => 'Other', 'quantity_per_item' => 1, 'prompt_template' => 'Other', 'is_active' => 1]]] as $components) {
+            $this->actingAs($this->admin())->put(route('admin.products.update', $product), [
+                ...$this->productPayload($product), 'production_components_present' => 1, 'production_components' => $components,
+            ])->assertSessionHasErrors('production_components');
+        }
+        foreach ([[2, 12, 0], [1, 1001, 1]] as [$covers, $count, $index]) {
+            $cover['quantity_per_item'] = $covers;
+            $pages['quantity_per_item'] = $count;
+            $this->actingAs($this->admin())->put(route('admin.products.update', $product), [
+                ...$this->productPayload($product), 'production_components_present' => 1, 'production_components' => [$cover, $pages],
+            ])->assertSessionHasErrors('production_components.'.$index.'.quantity_per_item');
+        }
+        $this->assertDatabaseCount('product_production_components', 0);
+    }
+
+    public function test_changing_catalog_component_to_cover_does_not_replace_existing_standard_prompt(): void
+    {
+        $product = $this->product();
+        $part = $product->productionComponents()->create(['stable_key' => 'main', 'name' => 'قديم', 'quantity_per_item' => 1, 'prompt_template' => 'Original', 'is_active' => 1]);
+        $order = Order::create(['order_number' => 'BOOK-OLD', 'status' => 'new']);
+        $item = $order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'title' => 'قديم', 'quantity' => 1, 'unit_price_cents' => 100, 'total_price_cents' => 100]);
+        $part->update(['production_stage' => 'book_cover', 'prompt_template' => 'New cover']);
+        app(ProductProductionPromptSyncService::class)->syncForProduct($product);
+        $unit = ProductProductionPrompt::forItem($item->fresh())->sole();
+        $this->assertSame('Original', $unit['prompt']);
+        $this->assertSame('standard', $unit['production_stage']);
+        $this->assertSame('product:'.$item->id, $unit['unit_key']);
+    }
+
+    public function test_book_stage_controls_are_rendered_on_both_existing_and_new_components(): void
+    {
+        $product = $this->product();
+        $product->productionComponents()->create(['stable_key' => 'main', 'name' => 'جزء', 'quantity_per_item' => 1, 'prompt_template' => 'Test', 'is_active' => 1]);
+        $this->actingAs($this->admin())->get(route('admin.products.edit', $product))->assertOk()
+            ->assertSee('production_components[0][production_stage]', false)
+            ->assertSee('production_components[__INDEX__][production_stage]', false)
+            ->assertSee('book_page_count', false)->assertSee('كفر كتاب التلوين');
+    }
+
+    public function test_legacy_order_without_components_does_not_adopt_new_cover_or_lose_its_saved_prompt(): void
+    {
+        $product = $this->product();
+        $order = Order::create(['order_number' => 'LEGACY-BOOK', 'status' => 'new']);
+        $item = $order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'title' => 'كتاب قديم', 'quantity' => 1, 'unit_price_cents' => 100, 'total_price_cents' => 100, 'item_snapshot' => ['production_prompt_template' => 'Saved original']]);
+        $product->productionComponents()->create(['stable_key' => 'cover', 'production_stage' => 'book_cover', 'name' => 'كفر', 'quantity_per_item' => 1, 'prompt_template' => 'New cover', 'is_active' => 1]);
+        $unit = ProductProductionPrompt::forItem($item->fresh())->sole();
+        $this->assertSame('Saved original', $unit['prompt']);
+        $this->assertSame('standard', $unit['production_stage']);
+        $this->assertSame('product:'.$item->id, $unit['unit_key']);
     }
 
     private function product(): Product

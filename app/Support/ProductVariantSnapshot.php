@@ -23,6 +23,7 @@ class ProductVariantSnapshot
             'gallery_images' => $variant->gallery_images ?? [],
             'gallery_image_urls' => $variant->gallery_image_urls,
             'attributes' => $variant->attributes ?? [],
+            'book_page_count' => $variant->book_page_count,
             'price_adjustment_cents' => (int) $variant->price_adjustment_cents,
             'price_override_cents' => $variant->price_override_cents !== null
                 ? (int) $variant->price_override_cents

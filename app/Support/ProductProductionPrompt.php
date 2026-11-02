@@ -47,6 +47,8 @@ class ProductProductionPrompt
                 'item' => $item,
                 'component' => $definition['component'],
                 'component_key' => $componentKey,
+                'production_stage' => $definition['production_stage'] ?? 'standard',
+                'stage_label' => ProductProductionStage::LABELS[$definition['production_stage'] ?? 'standard'],
                 'component_name' => $definition['name'],
                 'component_count' => $componentCount,
                 'quantity_per_item' => $definition['quantity_per_item'],
@@ -109,6 +111,7 @@ class ProductProductionPrompt
             'order_number' => ['label' => 'رقم الطلب المختصر', 'example' => 'HK08-151'],
             'product_name' => ['label' => 'اسم المنتج', 'example' => 'ستيكر مخصص باسم وصورة طفلك'],
             'component_name' => ['label' => 'اسم جزء الإنتاج', 'example' => 'الاستيكرات الكبيرة'],
+            'book_page_count' => ['label' => 'عدد الصفحات الداخلية للكتاب بدون الكفر', 'example' => '12'],
             'component_quantity' => ['label' => 'الكمية المطلوبة من هذا الجزء', 'example' => '2'],
             'product_quantity' => ['label' => 'عدد وحدات المنتج المشتراة', 'example' => '1'],
             'child_full_name' => ['label' => 'اسم الطفل كاملًا', 'example' => 'Roqaya Ahmed Ali'],
@@ -147,6 +150,7 @@ class ProductProductionPrompt
         $notes = self::snapshotValue($snapshot, 'parent_notes') ?? $order->parent_notes;
 
         return [
+            'book_page_count' => self::bookPageCount($item),
             'order_number' => self::value($order->checkoutReference?->short_reference ?: $order->order_number),
             'product_name' => self::value($item->title),
             'component_name' => self::value($definition['name']),
@@ -179,10 +183,12 @@ class ProductProductionPrompt
 
             return $item->productionComponents->map(function (OrderItemProductionComponent $component) use ($liveComponents): array {
                 $liveComponent = $liveComponents->get($component->stable_key);
-                $hasLiveTemplate = $liveComponent && filled($liveComponent->prompt_template);
+                $hasLiveTemplate = ($component->production_stage ?? 'standard') === 'standard'
+                    && $liveComponent && ($liveComponent->production_stage ?? 'standard') === 'standard' && filled($liveComponent->prompt_template);
 
                 return [
                     'component' => $component,
+                    'production_stage' => $component->production_stage ?? 'standard',
                     'stable_key' => $component->stable_key,
                     'name' => $component->name,
                     'prompt_template' => $hasLiveTemplate
@@ -199,18 +205,31 @@ class ProductProductionPrompt
         if ($item->product) {
             $components = $item->product->productionComponents
                 ->where('is_active', true)
-                ->filter(fn (ProductProductionComponent $component): bool => filled($component->prompt_template))
+                ->filter(fn (ProductProductionComponent $component): bool => filled($component->prompt_template)
+                    && ($component->production_stage ?? 'standard') === 'standard')
                 ->values();
 
             if ($components->isNotEmpty()) {
                 return $components->map(fn (ProductProductionComponent $component): array => [
                     'component' => $component,
+                    'production_stage' => $component->production_stage ?? 'standard',
                     'stable_key' => $component->stable_key,
                     'name' => $component->name,
                     'prompt_template' => $component->prompt_template,
                     'quantity_per_item' => max(1, (int) $component->quantity_per_item),
                     'source' => 'live_component_template',
                 ])->values();
+            }
+
+            // A legacy item without component snapshots must not acquire a new
+            // book structure merely because the catalog was configured later.
+            if ($item->product->productionComponents->contains(fn ($component) => in_array($component->production_stage, ['book_cover', 'book_interior'], true))) {
+                $template = data_get($item->item_snapshot, 'production_prompt_template');
+
+                return filled($template) ? collect([[
+                    'component' => null, 'stable_key' => 'main', 'name' => $item->title,
+                    'prompt_template' => $template, 'quantity_per_item' => 1, 'source' => 'historical_snapshot',
+                ]]) : collect();
             }
 
             $template = $item->product->production_prompt_template;
@@ -239,6 +258,13 @@ class ProductProductionPrompt
                 'source' => 'historical_snapshot',
             ]])
             : collect();
+    }
+
+    private static function bookPageCount(OrderItem $item): string
+    {
+        $interior = $item->productionComponents->firstWhere('production_stage', 'book_interior');
+
+        return $interior ? (string) $interior->quantity_per_item : self::NOT_AVAILABLE;
     }
 
     private static function snapshotValue(array $snapshot, string $key): mixed

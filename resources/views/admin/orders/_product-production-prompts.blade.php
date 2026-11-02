@@ -45,6 +45,11 @@
                             @endif
                         @endcan
                         <p class="mt-1 text-xs font-bold text-gray-500">{{ $productPrompt['component_name'] }} · الكمية المطلوبة {{ $productPrompt['quantity'] }}</p>
+                        @if(($productPrompt['production_stage'] ?? 'standard') !== 'standard')
+                            <p class="mt-2 text-xs font-bold text-fuchsia-700">{{ $productPrompt['stage_label'] }}</p>
+                            <p class="mt-1 text-xs text-slate-600">{{ $productPrompt['production_stage'] === 'book_cover' ? 'معاينة الكفر فقط؛ لا يشمل الصفحات الداخلية.' : 'العدد لكل كتاب: '.$productPrompt['quantity_per_item'].' صفحة داخلية. يبدأ التنفيذ بعد اعتماد الكفر وتسجيل دفعة فعلية بواسطة الفريق.' }}</p>
+                        @endif
+
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="inline-flex rounded-full border px-3 py-1.5 text-xs font-black {{ $productPrompt['uses_live_template'] ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700' }}">

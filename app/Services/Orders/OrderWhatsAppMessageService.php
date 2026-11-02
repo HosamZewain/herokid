@@ -28,6 +28,7 @@ class OrderWhatsAppMessageService
         'payment_status' => 'حالة الدفع',
         'order_status' => 'حالة الطلب',
         'preview_url' => 'رابط معاينة الطلب (كتاب أو منتجات)',
+        'preview_links' => 'كل روابط معاينة الهوية والمنتجات المتاحة (بدون مشاهد القصة)',
         'preview_scenes_url' => 'روابط معاينة مشاهد كل القصص (كل رابط في سطر)',
         'product_preview_url' => 'رابط معرض معاينة المنتجات',
         'customer_preview_url' => 'رابط المعاينة المناسب للعميل',
@@ -63,16 +64,23 @@ class OrderWhatsAppMessageService
             return [];
         }
 
-        $variables = $this->variablesForGroup($group);
+        $templates = collect($this->templates(true));
+        // Identity image links carry access to private child media. Do not expose
+        // the new combined template on a staff surface that hides those photos.
+        if (auth()->user() && ! auth()->user()->hasPermission('orders.photos.view')) {
+            $templates = $templates->reject(fn ($template) => Str::contains($template['message'], '{{preview_links}}'));
+        }
+        $needsReviewLinks = $templates->contains(fn ($template) => Str::contains($template['message'], '{{preview_links}}'));
+        $variables = $this->variablesForGroup($group, $needsReviewLinks);
 
-        return collect($this->templates(true))
+        return $templates
             ->map(function (array $template) use ($phone, $variables): array {
                 $body = $this->render($template['message'], $variables);
 
                 if (
                     $template['id'] === 'preview'
                     && $variables['customer_preview_url'] !== ''
-                    && ! Str::contains($template['message'], ['{{preview_url}}', '{{preview_scenes_url}}', '{{customer_preview_url}}', '{{product_preview_url}}'])
+                    && ! Str::contains($template['message'], ['{{preview_url}}', '{{preview_scenes_url}}', '{{customer_preview_url}}', '{{product_preview_url}}', '{{preview_links}}'])
                 ) {
                     $body .= "\n\nرابط المعاينة:\n".$variables['customer_preview_url'];
                 }
@@ -89,7 +97,7 @@ class OrderWhatsAppMessageService
     }
 
     /** @return array<string, string> */
-    public function variablesForGroup(array $group): array
+    public function variablesForGroup(array $group, bool $includeReviewLinks = true): array
     {
         $orders = collect($group['active_orders'] ?? $group['orders'] ?? []);
         $previews = $orders
@@ -136,6 +144,7 @@ class OrderWhatsAppMessageService
             'payment_status' => (string) ($group['payment_status_label'] ?? ''),
             'order_status' => (string) ($group['status_label'] ?? ''),
             'preview_url' => (string) ($customerPreviewUrl ?? ''),
+            'preview_links' => $includeReviewLinks ? app(OrderReviewLinks::class)->forOrders($orders) : '',
             'preview_scenes_url' => $previewScenesUrls,
             'product_preview_url' => (string) ($productPreviewUrl ?? ''),
             'customer_preview_url' => (string) ($customerPreviewUrl ?? ''),
