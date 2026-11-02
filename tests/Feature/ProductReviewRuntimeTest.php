@@ -309,6 +309,8 @@ class ProductReviewRuntimeTest extends TestCase
         $story = Story::create(['title' => 'Synthetic story', 'slug' => 'mixed-test', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
         $storyOrder = $item->order->replicate();
         $storyOrder->order_number = 'SYN-STORY';
+        $storyOrder->child_name = 'Second synthetic child';
+        $storyOrder->child_age = 7;
         $storyOrder->story_id = $story->id;
         $storyOrder->save();
         $storyOrder->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => 'Synthetic story', 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
@@ -321,6 +323,8 @@ class ProductReviewRuntimeTest extends TestCase
         app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
         $this->send($run);
         $this->assertCount(2, OrderReviewManifest::sole()->images);
+        $this->assertEqualsCanonicalizing([$item->order_id, $storyOrder->id], array_column(OrderReviewManifest::sole()->images, 'order_id'));
+        $this->assertStringContainsString('Second synthetic child', collect(OrderReviewManifest::sole()->images)->firstWhere('kind', 'identity')['label']);
         $this->reply($run);
         $this->assertNotNull(OrderReviewManifest::sole()->approved_at);
         $this->assertNotNull($storyOrder->fresh()->child_identity_approved_attempt_id);

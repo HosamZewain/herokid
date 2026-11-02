@@ -96,6 +96,33 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual('completed', self.state())
         self.assertEqual(source, (w.HOME/'jobs'/self.id/'child-reference-1.png').read_bytes())
 
+    def test_full_twenty_forty_fifty_page_books_keep_count_order_and_binding(self):
+        for count in (20, 40, 50):
+            with self.subTest(pages=count):
+                run_id = f'00000000-0000-4000-8000-{count:012d}'
+                inbox = w.SPOOL/'inbox'/run_id
+                inbox.mkdir()
+                identity = f'cover-{count}'.encode()
+                child = f'child-{count}'.encode()
+                (inbox/'identity.img').write_bytes(identity)
+                (inbox/'child-reference-1.png').write_bytes(child)
+                manifest = {'id':run_id, 'order_id':count, 'order_item_id':count+100,
+                            'protocol':6, 'production_kind':'coloring_book', 'scene_count':count,
+                            'prompt':'synthetic only', 'identity_checksum':w.hashlib.sha256(identity).hexdigest(),
+                            'references':[{'file':'child-reference-1.png', 'role':'child_photo', 'sha256':w.hashlib.sha256(child).hexdigest()}],
+                            'texts':[{'scene_number':n, 'text':'synthetic page'} for n in range(1,count+1)]}
+                (inbox/'manifest.json').write_text(json.dumps(manifest))
+                w.run_job(inbox)
+                out = w.SPOOL/'outbox'/run_id
+                self.assertEqual('completed', json.loads((out/'status.json').read_text())['status'])
+                self.assertEqual(count, len(list(out.glob('scene-*.png'))))
+                self.assertEqual(list(map(str,range(1,count+1))), (w.HOME/'jobs'/run_id/'calls').read_text().splitlines())
+                for n in range(1,count+1):
+                    meta = json.loads((out/f'scene-{n:02d}.json').read_text())
+                    self.assertEqual(count+100, meta['order_item_id'])
+                    self.assertEqual(count, meta['order_id'])
+                self.assertEqual(child, (w.HOME/'jobs'/run_id/'child-reference-1.png').read_bytes())
+
     def test_book_six_tampered_reference_never_generates(self):
         manifest = json.loads((self.inbox/'manifest.json').read_text())
         (self.inbox/'child-reference-1.png').write_bytes(b'wrong-child')
