@@ -17,7 +17,7 @@ class AdminMobileOperationsTest extends TestCase
         $admin = $this->admin(['settings.mobile.view', 'settings.mobile.manage']);
 
         $this->actingAs($admin)->get(route('admin.mobile-operations.index'))
-            ->assertOk()->assertSee('تشغيل تطبيق الهاتف')->assertSee('طلبات الخصوصية');
+            ->assertOk()->assertSee('إعدادات تطبيق الموبايل')->assertSee('طلبات الخصوصية');
 
         $this->actingAs($admin)->put(route('admin.mobile-operations.config.update'), [
             'mobile_minimum_supported_version' => '1.0.0',

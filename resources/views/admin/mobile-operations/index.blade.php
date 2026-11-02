@@ -1,5 +1,5 @@
 <x-admin-layout>
-<x-slot name="header"><h2 class="text-xl font-bold text-gray-800">تشغيل تطبيق الهاتف</h2></x-slot>
+<x-slot name="header"><h2 class="text-xl font-bold text-gray-800">إعدادات تطبيق الموبايل</h2></x-slot>
 @php
     $s = fn (string $key, string $default = '') => old($key, $settings[$key] ?? $default);
     $funnel = [
@@ -13,6 +13,7 @@
 @endphp
 
 <div class="space-y-6" dir="rtl">
+@include('admin.mobile-operations.tabs')
     @if(session('success'))<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-bold text-emerald-800">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800"><ul class="list-disc pr-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 

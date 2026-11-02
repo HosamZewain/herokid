@@ -33,6 +33,9 @@ use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Front\StoryLibraryController;
 use App\Http\Middleware\EnsureMobileGuestScope;
 use App\Http\Middleware\EnsureStudioAccess;
+use App\Http\Controllers\Api\V1\MobileGameController;
+use App\Http\Middleware\AnonymousGameTraffic;
+use App\Http\Middleware\StudioSessionBoundary;
 use Illuminate\Support\Facades\Route;
 
 Route::get('feeds/robodesk/{feed}', \App\Http\Controllers\Api\RoboDeskFeedController::class)
@@ -113,6 +116,12 @@ Route::prefix('agent')->middleware(['auth:sanctum', 'throttle:60,1'])->group(fun
 });
 
 Route::prefix('v1')->group(function (): void {
+    Route::prefix('mobile-app')->withoutMiddleware([StudioSessionBoundary::class])
+        ->middleware([AnonymousGameTraffic::class])->group(function () {
+            Route::get('config', [MobileGameController::class, 'config'])->middleware('throttle:mobile-game-config')->name('api.mobile-app.config');
+            Route::post('events', [MobileGameController::class, 'events'])->middleware('throttle:mobile-game-events')->name('api.mobile-app.events');
+        });
+
     Route::get('story-library', [StoryLibraryController::class, 'index'])->middleware('throttle:120,1')->name('api.story-library.index');
     Route::get('story-library/{story}', [StoryLibraryController::class, 'show'])->middleware('throttle:120,1')->name('api.story-library.show');
     Route::get('story-library/{story}/document', [StoryLibraryController::class, 'document'])->name('api.story-library.document');

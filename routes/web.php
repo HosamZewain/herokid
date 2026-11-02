@@ -28,6 +28,7 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
 use App\Http\Controllers\Admin\MobileOperationsController;
+use App\Http\Controllers\Admin\MobileGamesController;
 use App\Http\Controllers\Admin\MobilePushCampaignController;
 use App\Http\Controllers\Admin\NotificationCenterController;
 use App\Http\Controllers\Admin\OrderActivityController;
@@ -1009,6 +1010,14 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::post('mobile-push/preview', [MobilePushCampaignController::class, 'preview'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:20,1'])->name('mobile-push.preview');
     Route::post('mobile-push', [MobilePushCampaignController::class, 'store'])->middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage', 'throttle:5,1'])->name('mobile-push.store');
     Route::get('mobile-push/{campaign}', [MobilePushCampaignController::class, 'show'])->middleware('permission:settings.mobile.view')->name('mobile-push.show');
+    Route::get('mobile-operations/overview', [MobileGamesController::class, 'reports'])->name('mobile-operations.overview')->middleware('permission:settings.mobile.view');
+    Route::get('mobile-operations/games', [MobileGamesController::class, 'index'])->name('mobile-operations.games')->middleware('permission:settings.mobile.view');
+    Route::get('mobile-operations/game-reports', [MobileGamesController::class, 'reports'])->name('mobile-operations.game-reports')->middleware('permission:settings.mobile.view');
+    Route::middleware(['permission:settings.mobile.view', 'permission:settings.mobile.manage'])->group(function () {
+        Route::put('mobile-operations/games/settings', [MobileGamesController::class, 'general'])->name('mobile-operations.games.settings');
+        Route::put('mobile-operations/games/{game}', [MobileGamesController::class, 'update'])->name('mobile-operations.games.update');
+        Route::post('mobile-operations/games/restore/{version}', [MobileGamesController::class, 'restore'])->whereNumber('version')->name('mobile-operations.games.restore');
+    });
     Route::get('mobile-operations', [MobileOperationsController::class, 'index'])->middleware('permission:settings.mobile.view')->name('mobile-operations.index');
     Route::put('mobile-operations/config', [MobileOperationsController::class, 'updateConfig'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.config.update');
     Route::post('mobile-operations/promo-codes', [MobileOperationsController::class, 'storePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.store');

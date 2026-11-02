@@ -71,6 +71,14 @@ class AppServiceProvider extends ServiceProvider
             $model::observe(PublicCatalogImageObserver::class);
         }
         View::composer(['welcome', 'front.homepage', 'front.shop.*', 'front.stories.*', 'front.packages.*', 'front.pages.pricing'], PublicImageViewComposer::class);
+        foreach (['mobile-game-config' => 120, 'mobile-game-events' => 30] as $limiter => $maximum) {
+            RateLimiter::for($limiter, function (Request $request) use ($limiter, $maximum) {
+                // Abuse control uses a rotating HMAC in the existing cache only.
+                $key = hash_hmac('sha256', now()->utc()->toDateString().'|'.$request->ip(), (string) config('app.key'));
+
+                return [Limit::perMinute($maximum)->by($limiter.':'.$key), Limit::perMinute(3000)->by($limiter.':global')];
+            });
+        }
         RateLimiter::for('photo-uploads', function (Request $request): Limit {
             $sessionToken = (string) $request->session()->get('photo_upload.token', '');
             $key = $sessionToken !== ''

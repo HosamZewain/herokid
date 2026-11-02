@@ -311,7 +311,7 @@
                             <a href="{{ route('admin.settings.notifications.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.settings.notifications.*') ? $activeLink : $idleLink }}">مركز التنبيهات</a>
                         @endcan
                         @can('settings.mobile.view')
-                            <a href="{{ route('admin.mobile-operations.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-operations.*') ? $activeLink : $idleLink }}">تطبيق الهاتف</a>
+                            <a href="{{ route('admin.mobile-operations.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-operations.*') ? $activeLink : $idleLink }}">إعدادات تطبيق الموبايل</a>
                             <a href="{{ route('admin.mobile-push.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.mobile-push.*') ? $activeLink : $idleLink }}">إشعارات التطبيق</a>
                         @endcan
                     </div>
