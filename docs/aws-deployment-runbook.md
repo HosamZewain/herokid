@@ -1,8 +1,12 @@
 # HeroKid AWS deployment and agent handoff
 
-## 2 November 2026 — edited product return and mug images: prepared only
+## 2 November 2026 — edited product return and mug images deployed
 
-Scoped fix based on live f8ddc95 for HK11-38 (four puzzles/two mugs): explicit return re-evaluates a manually edited product-only confirmed checkout, emits a fresh product event, preserves completed outputs, and never replays the previous confirmation. Adds the single-image mug catalog slug to the existing private-storage product worker. Story/mixed resumption guards remain. [Scope, diagnostic evidence, validation and release boundaries](product-automation-edited-return-2026-11-02.md). **Not deployed; no production hold released, provider call or customer message sent.** Coloring-book/unified-preview work is separate and is not included in this patch.
+Owner authorized **deployment only**, explicitly retaining manual return of HK11-38. Application **29ac3cc7d2ccfac399fd24b38206d5bb8c64a9b2** deployed and verified10:29:12UTC /12:29Cairo. All9 changed-file hashes checked, PHP8.3 syntax valid, previous hashed assets and known drift preserved. Private cached config changed only by adding the mug slug to product_slugs; every other config value and .env byte preserved. No migration, maintenance, dependency installation, historical replay or new resources. Four affected Laravel workers gracefully drained/refreshed; scheduler restored/successful10:30:12UTC. Codex service PID unchanged.
+
+Authenticated HK11-38 shows six products, **الأوتوميشن متوقف للعمل اليدوي** and Return to Automation. Before/after hash proves order/items, payment fields, hold, assignment and existing outbound evidence unchanged; zero product generations for this checkout. No return action or chargeable test performed. Revised product return and mug generation are verified synthetically, not by executing this live checkout. Final bounded check10:30UTC: home/up/cartHTTPS200, seven services active, four Laravel workers running, zero new Laravel log bytes, failedjobs81 unchanged.
+
+Recovery **/home/ubuntu/herokid-before-product-return-29ac3cc-v3**, previous applicationf8ddc95; code tar SHA verified and private config/environment evidence retained. First two preparation attempts stopped before runtime mutation due existing private Git-ref/home-directory permissions; recovered through root Git inspection and PHP stdin without widening permissions. Earlier private checkpoints preserved. No fresh DB backup required for this code-only/no-schema patch. [Implementation, tests and recovery boundaries](product-automation-edited-return-2026-11-02.md). Coloring-book/unified-preview work remains separate/unpublished. This documentation successor is not the deployed application SHA.
 
 ## Independent scene retry and team review — prepared 2 November 2026
 
