@@ -1,4 +1,5 @@
 @php($timing = \App\Services\CodexScenes\SceneTiming::describe($timingRun))
+@if($timing['resumed'])<p>محاولة استكمال؛ وقتها للمشاهد المتبقية فقط. إجمالي محاولات القصة: <bdi>{{ $timing['story_duration'] }}</bdi> (بدون فترات التوقف)</p>@endif
 <p>دخل الطابور: {{ app_datetime($timingRun->created_at,'d/m/Y h:i:s A') }}</p>
 <p>انتظار وتجهيز: <bdi>{{ $timing['wait'] }}</bdi></p>
 @if($timing['start'])<p>بدأ التوليد: {{ app_datetime($timing['start'],'d/m/Y h:i:s A') }}</p>@endif

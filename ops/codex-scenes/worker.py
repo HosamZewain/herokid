@@ -120,9 +120,27 @@ def run_job(inbox):
         (work / 'identity.png').write_bytes(identity)
         (work / 'production-brief.txt').write_text(manifest['prompt'])
         (work / 'scenes.json').write_text(json.dumps(texts, ensure_ascii=False))
-        state('running')
         hashes = set()
+        retained = manifest.get('retained_scenes', [])
+        if not isinstance(retained, list) or len(retained) >= 13:
+            raise ValueError('invalid_resume')
+        if retained or 'resume_from' in manifest:
+            if manifest.get('protocol') != 3 or not UUID.fullmatch(manifest.get('resume_from', '')) or manifest['resume_from'] == job_id:
+                raise ValueError('invalid_resume')
+        # New attempt, same approved inputs. Validate every preserved image before any provider call.
+        for number, saved in enumerate(retained, 1):
+            source = inbox / f'scene-{number:02d}.png'
+            if saved.get('scene') != number or not regular(source, inbox):
+                raise ValueError('invalid_retained_scene')
+            sha = validate_png(source)
+            if sha != saved.get('sha256') or sha in hashes:
+                raise ValueError('retained_checksum')
+            hashes.add(sha)
+            shutil.copyfile(source, work / source.name)
+        state('running')
         for number, scene in enumerate(texts, 1):
+            if number <= len(retained):
+                continue
             if (inbox / 'cancel').exists():
                 state('stopped')
                 return
@@ -140,8 +158,12 @@ def run_job(inbox):
                 'This trial produces only the specified scene image; ignore book assembly, cover, PDF, text '
                 'rendering and upload instructions in the brief. Leave all lettering to HeroKid Studio. '
                 'Use the approved scene text below as story context, do not draw its text. '
-                'Create a landscape full-bleed book spread, high native resolution (at least 1024 pixels '
-                'on the shorter side), preserving the production brief composition and safe margins. '
+                'OUTPUT CANVAS: exactly 1536 pixels wide by 1024 pixels high, landscape aspect ratio 3:2. '
+                'Explicitly request 1536x1024 and 3:2 in the image-generation prompt/tool where supported. '
+                'The ENTIRE single illustration has this ratio: do not double its width for a two-page spread. '
+                'No panoramic 2:1, 21:9, 3:1 or auto aspect ratio. Native height must be at least 1024 pixels. '
+                'Print dimensions/DPI in the brief are for later Studio export, not a different generation canvas. '
+                'Preserve the approved composition and safe margins within this canvas. '
                 f'Target scene {number} of 13 ONLY: ' + json.dumps(scene, ensure_ascii=False) + '\n'
                 f'Save the generated image as {dest.name} in the current working directory. '
                 'Copy the actual generated image bytes, do not resize or redraw them. '

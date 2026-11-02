@@ -54,7 +54,16 @@ class SceneTiming
         $wait = $start ? max(0, $run->created_at->diffInSeconds($start, false))
             : ($run->status === 'waiting_slot' || $run->status === 'queued' || $run->status === 'preparing' ? max(0, $run->created_at->diffInSeconds(now(), false)) : null);
 
-        return ['start' => $start, 'end' => $end, 'seconds' => $seconds, 'wait_seconds' => $wait,
+        $history = $run->snapshot['resume_history'] ?? [];
+        $total = $seconds;
+        $totalExact = isset($t['finished_at']);
+        foreach ($history as $previous) {
+            $total = $total !== null && ($previous['seconds'] ?? null) !== null ? $total + $previous['seconds'] : null;
+            $totalExact = $totalExact && ($previous['source'] ?? '') === 'worker';
+        }
+
+        return ['resumed' => count($history) > 0, 'story_seconds' => $total, 'story_duration' => self::format($total), 'story_exact' => $totalExact,
+            'start' => $start, 'end' => $end, 'seconds' => $seconds, 'wait_seconds' => $wait,
             'source' => $t ? 'worker' : 'observed', 'live' => $live, 'duration' => self::format($seconds), 'wait' => self::format($wait)];
     }
 
@@ -72,15 +81,15 @@ class SceneTiming
     {
         $exact = [];
         $estimated = [];
-        foreach (CodexSceneRun::where('status', 'completed')->select(['timing', 'started_at', 'finished_at', 'created_at', 'status'])->cursor() as $run) {
+        foreach (CodexSceneRun::where('status', 'completed')->select(['snapshot', 'timing', 'started_at', 'finished_at', 'created_at', 'status'])->cursor() as $run) {
             $value = self::describe($run);
-            if ($value['seconds'] === null) {
+            if ($value['story_seconds'] === null) {
                 continue;
             }
-            if (isset($run->timing['finished_at'])) {
-                $exact[] = $value['seconds'];
+            if ($value['story_exact']) {
+                $exact[] = $value['story_seconds'];
             } else {
-                $estimated[] = $value['seconds'];
+                $estimated[] = $value['story_seconds'];
             }
         }
 

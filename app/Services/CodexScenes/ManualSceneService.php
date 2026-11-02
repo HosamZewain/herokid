@@ -100,6 +100,81 @@ class ManualSceneService
         });
     }
 
+    /** Explicit owner/operator action only. The original attempt and its bridge files remain immutable. */
+    public function resumeQuality(CodexSceneRun $original, string $authorization): CodexSceneRun
+    {
+        if (trim($authorization) === '') {
+            throw ValidationException::withMessages(['codex_scenes' => 'يلزم مرجع اعتماد الاستكمال.']);
+        }
+        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($original, $authorization) {
+            return DB::transaction(function () use ($original, $authorization) {
+                $rows = Order::where('checkout_group_key', $original->checkout_key)->orderBy('id')->lockForUpdate()->get();
+                $old = CodexSceneRun::lockForUpdate()->findOrFail($original->id);
+                $order = $rows->firstWhere('id', $old->order_id);
+                if (! $this->health() || ! $order || $order->status !== 'generating'
+                    || $old->status !== 'quality_review' || $old->active_slot !== 1
+                    || ! in_array($old->error_code, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'], true)
+                    || AutomationHandoff::held($old->checkout_key) || ! $this->hasPayment($order)
+                    || $order->childIdentityApprovedAttempt?->status !== 'succeeded'
+                    || ! hash_equals($old->fingerprint, $this->fingerprint($order))) {
+                    throw ValidationException::withMessages(['codex_scenes' => 'الاستكمال غير آمن: راجع حالة القصة والهوية والدفع والاستلام اليدوي.']);
+                }
+                $dir = config('codex_scenes.spool').'/outbox/'.$old->id;
+                $statePath = $dir.'/status.json';
+                $state = $this->safeFile($statePath, $dir) ? json_decode(file_get_contents($statePath), true) : null;
+                if (($state['id'] ?? null) !== $old->id || ($state['status'] ?? null) !== 'quality_review'
+                    || ($state['code'] ?? null) !== $old->error_code) {
+                    throw ValidationException::withMessages(['codex_scenes' => 'لم يتأكد توقف عامل التوليد بسبب جودة الصورة.']);
+                }
+                $saved = $old->scenes ?? [];
+                if (count($saved) >= 13 || array_map('intval', array_keys($saved)) !== (count($saved) ? range(1, count($saved)) : [])) {
+                    throw ValidationException::withMessages(['codex_scenes' => 'تسلسل المشاهد المحفوظة يحتاج مراجعة.']);
+                }
+                foreach ($saved as $number => $scene) {
+                    $this->retainedBytes($old, (int) $number, $scene);
+                }
+                foreach (range(count($saved) + 1, 13) as $number) {
+                    if (is_file($dir.'/scene-'.sprintf('%02d', $number).'.json')) {
+                        throw new \RuntimeException('Accepted worker output not collected yet');
+                    }
+                }
+                $snapshot = $old->snapshot;
+                $history = $snapshot['resume_history'] ?? [];
+                $clock = SceneTiming::describe($old);
+                $history[] = ['run_id' => $old->id, 'seconds' => $clock['seconds'], 'source' => $clock['source']];
+                $snapshot['resume_from'] = $old->id;
+                $snapshot['resume_history'] = $history;
+                $snapshot['retained_scenes'] = $saved;
+                $old->update(['active_slot' => null]);
+                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $old->order_id,
+                    'checkout_key' => $old->checkout_key, 'requested_by' => null, 'source' => 'automatic',
+                    'protocol' => 3, 'status' => 'waiting_slot', 'active_slot' => 1,
+                    'previous_status' => $old->previous_status, 'fingerprint' => $old->fingerprint,
+                    'snapshot' => $snapshot, 'scenes' => $saved]);
+                AutomationActivity::record($order, 'codex_scene_resume_authorized', 'استكمال مشاهد Codex بعد مراجعة الجودة؛ الاحتفاظ بالمشاهد السليمة وبدء محاولة مستقلة للمشاهد المتبقية.',
+                    ['run_id' => $run->id, 'previous_run_id' => $old->id, 'retained_scenes' => count($saved), 'authorization' => $authorization]);
+                return $run;
+            });
+        });
+    }
+
+    private function retainedBytes(CodexSceneRun $run, int $number, array $scene): string
+    {
+        $attachment = OrderAttachment::find($scene['attachment_id'] ?? 0);
+        if (! $attachment || $attachment->order_id !== $run->order_id || $attachment->production_unit_key !== 'story:'.$run->order_id
+            || $attachment->disk !== 's3_private' || $attachment->path !== ($scene['path'] ?? null)
+            || ! str_starts_with($attachment->path, 'orders/'.$run->order_id.'/codex-scenes/')) {
+            throw new \RuntimeException('Retained scene belongs to another story');
+        }
+        $bytes = Storage::disk('s3_private')->get($attachment->path);
+        $size = @getimagesizefromstring($bytes);
+        if (! hash_equals($scene['sha256'] ?? '', hash('sha256', $bytes)) || ! $size || $size['mime'] !== 'image/png'
+            || min($size[0], $size[1]) < 1024 || $size[0] <= $size[1]) {
+            throw new \RuntimeException('Retained scene integrity failed');
+        }
+        return $bytes;
+    }
+
     public function automaticEligible(Order $order): bool
     {
         return config('codex_scenes.automatic') && ! AutomationHandoff::held($order->checkoutGroupKey())
@@ -239,6 +314,16 @@ class ManualSceneService
         file_put_contents($dir.'/identity.img', $image);
         chmod($dir.'/identity.img', 0640);
         $data = ['protocol' => $run->protocol, 'id' => $run->id, 'order_id' => $run->order_id, 'identity_checksum' => $snapshot['identity_checksum'], 'scene_count' => 13, 'prompt' => $snapshot['prompt'], 'texts' => $snapshot['texts']];
+        if ($run->protocol >= 3 && isset($snapshot['resume_from'])) {
+            $data['resume_from'] = $snapshot['resume_from'];
+            $data['retained_scenes'] = [];
+            foreach ($snapshot['retained_scenes'] as $number => $scene) {
+                $file = $dir.'/scene-'.sprintf('%02d', $number).'.png';
+                file_put_contents($file, $this->retainedBytes($run, (int) $number, $scene));
+                chmod($file, 0640);
+                $data['retained_scenes'][] = ['scene' => (int) $number, 'sha256' => $scene['sha256']];
+            }
+        }
         file_put_contents($dir.'/manifest.tmp', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         chmod($dir.'/manifest.tmp', 0640);
         DB::transaction(function () use ($run, $dir) {
@@ -358,6 +443,9 @@ class ManualSceneService
                 } elseif ($phase === 'quality_review' && in_array($state['code'] ?? null, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'], true)) {
                     $run->status = 'quality_review';
                     $run->error_code = $state['code'];
+                    if (isset($run->timing['finished_at'])) {
+                        $run->finished_at = \Carbon\Carbon::createFromTimestampUTC($run->timing['finished_at']);
+                    }
                 } else {
                     $run->status = 'uncertain';
                     $run->error_code = 'codex_requires_review';

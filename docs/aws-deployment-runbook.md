@@ -1,5 +1,14 @@
 # HeroKid AWS deployment and agent handoff
 
+## Prepared 2 November 2026 — explicit Codex quality recovery (not yet deployed)
+
+Owner authorized recovery of five stopped stories and the required fix. Verified current base `7c9c27012696618ba78696968b60d0b6fc97cecf`; nine completed and five quality_review, no running/queued provider work at inspection. Rejected native images were 1774x887,2172x724,1919x820 (short side below1024). Worker now explicitly requests a single1536x1024/3:2 canvas, preserving canonical scene/identity data; no upscale, weakened quality gate, API fallback or automatic retry.
+
+Explicit operator command `codex-scenes:resume-quality <uuid>` is read-only unless `--execute --authorization=<reference>` is supplied. It re-locks checkout/run, requires terminal quality evidence, unchanged fingerprint/approved identity, actual payment and no manual hold, verifies every retained S3 attachment/hash, then creates a new UUID with retained scene references and an audit event. Original run/output/transcript remains unchanged except release of its active reservation. New worker validates retained bytes before generating only missing scenes, using the previous accepted scene for continuity. Retries of the operator command cannot duplicate enrollment. Unknown outcomes still require review and are not retried. No schema/config/dependency change.
+
+Authorized cohort:2655/08632abe-39f5-4c19-a436-9e3af9173fbd retains11;2653/145bad13-9493-415c-aba3-e77712eb0af5 retains2;2727/508daeb0-d2bc-42c3-8072-b257ca70d0b6 retains1;2643/a0f9eed5-f9bc-4b5f-ab2c-eecad2fa8b17 retains0;2635/e8544155-101e-4d94-b8db-bae2a0d75db1 retains7. No puzzle/confirmation replay. Attempt timing excludes the pause; full-story averages include prior attempts only when their timing is known, never a partial recovery time disguised as a full story.
+
+
 **Canonical entry point:** [AGENTS.md](../AGENTS.md). **Last operational verification: 1 November 2026, approximately 23:00 UTC / 2 November 01:00 Africa/Cairo (winter, UTC+02). Other infrastructure observations retain their stated historical dates.** This document records observations, not immutable infrastructure state. Revalidate before acting. Server schedules below use UTC; convert user-facing times with `Africa/Cairo` because its offset changes with daylight saving.
 
 ## Existing confirmed puzzle enrollment — 2 November 2026 Cairo

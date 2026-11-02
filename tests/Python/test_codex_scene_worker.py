@@ -134,6 +134,37 @@ class WorkerTest(unittest.TestCase):
         (self.inbox/'identity.img').symlink_to('/etc/passwd')
         w.run_job(self.inbox); self.assertEqual('uncertain',self.state())
 
+    def resume_inbox(self, count=2):
+        w.run_job(self.inbox)
+        new = w.SPOOL/'inbox'/'00000000-0000-4000-8000-000000000002'; new.mkdir()
+        manifest = json.loads((self.inbox/'manifest.json').read_text())
+        manifest.update(id=new.name, protocol=3, resume_from=self.id, retained_scenes=[])
+        (new/'identity.img').write_bytes((self.inbox/'identity.img').read_bytes())
+        for n in range(1,count+1):
+            source=w.SPOOL/'outbox'/self.id/f'scene-{n:02d}.png'
+            (new/source.name).write_bytes(source.read_bytes())
+            manifest['retained_scenes'].append({'scene':n,'sha256':w.hashlib.sha256(source.read_bytes()).hexdigest()})
+        (new/'manifest.json').write_text(json.dumps(manifest))
+        return new
+
+    def test_explicit_resume_keeps_previous_bytes_and_generates_only_remaining_once(self):
+        new=self.resume_inbox(11)
+        prior=(w.SPOOL/'outbox'/self.id/'status.json').read_bytes()
+        w.run_job(new); w.run_job(new)
+        work=w.HOME/'jobs'/new.name
+        self.assertEqual('12\n13\n',(work/'calls').read_text())
+        self.assertEqual(prior,(w.SPOOL/'outbox'/self.id/'status.json').read_bytes())
+        for n in range(1,12):
+            self.assertEqual((new/f'scene-{n:02d}.png').read_bytes(),(work/f'scene-{n:02d}.png').read_bytes())
+        self.assertEqual(2,len(list((w.SPOOL/'outbox'/new.name).glob('scene-*.png'))))
+
+    def test_resume_corrupt_retained_image_never_calls_provider(self):
+        new=self.resume_inbox()
+        (new/'scene-02.png').write_bytes((new/'scene-01.png').read_bytes())
+        w.run_job(new)
+        self.assertEqual('uncertain',json.loads((w.SPOOL/'outbox'/new.name/'status.json').read_text())['status'])
+        self.assertFalse((w.HOME/'jobs'/new.name/'calls').exists())
+
     def test_no_api_keys_or_application_credentials_in_child_environment(self):
         with patch.dict(os.environ,{'OPENAI_API_KEY':'secret','AWS_SECRET_ACCESS_KEY':'secret','DB_PASSWORD':'secret'}):
             self.assertFalse(set(w.environment()) & {'OPENAI_API_KEY','AWS_SECRET_ACCESS_KEY','DB_PASSWORD'})

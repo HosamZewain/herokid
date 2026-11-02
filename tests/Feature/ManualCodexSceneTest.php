@@ -87,6 +87,106 @@ class ManualCodexSceneTest extends TestCase
         file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => $status]));
     }
 
+    private function qualityRun(int $saved = 2): CodexSceneRun
+    {
+        $this->order->update(['payment_status' => 'partially_paid']);
+        $run = $this->start();
+        for ($n = 1; $n <= $saved; $n++) {
+            $this->sceneOutput($run, $n);
+        }
+        $dir = $this->spool.'/outbox/'.$run->id;
+        File::ensureDirectoryExists($dir);
+        file_put_contents($dir.'/status.json', json_encode(['id' => $run->id, 'status' => 'quality_review', 'code' => 'invalid_dimensions']));
+        app(ManualSceneService::class)->collect($run);
+        return $run->fresh();
+    }
+
+    public function test_quality_resume_preserves_attachments_original_evidence_and_finishes_remaining_scenes(): void
+    {
+        $service = app(ManualSceneService::class);
+        $old = $this->qualityRun();
+        $oldSnapshot = $old->snapshot;
+        $state = file_get_contents($this->spool.'/outbox/'.$old->id.'/status.json');
+        $next = $service->resumeQuality($old, 'owner-test-authorization');
+        $this->assertSame($old->scenes, $next->scenes);
+        $this->assertSame($oldSnapshot, $old->fresh()->snapshot);
+        $this->assertSame('quality_review', $old->fresh()->status);
+        $this->assertNull($old->fresh()->active_slot);
+        $this->assertSame('waiting_slot', $next->status);
+        $service->tick();
+        $manifest = json_decode(file_get_contents($this->spool.'/inbox/'.$next->id.'/manifest.json'), true);
+        $this->assertSame($old->id, $manifest['resume_from']);
+        $this->assertCount(2, $manifest['retained_scenes']);
+        $this->assertSame(hash('sha256', $this->png(2)), hash_file('sha256', $this->spool.'/inbox/'.$next->id.'/scene-02.png'));
+        for ($n = 3; $n <= 13; $n++) {
+            $this->sceneOutput($next, $n, 'completed');
+        }
+        $service->collect($next);
+        $this->assertSame('completed', $next->fresh()->status);
+        $this->assertSame('ready_preview', $this->order->fresh()->status);
+        $this->assertDatabaseCount('order_attachments', 13);
+        $this->assertSame($state, file_get_contents($this->spool.'/outbox/'.$old->id.'/status.json'));
+        $this->assertSame(1, AdminActivityLog::where('action', 'automation.codex_scene_resume_authorized')->count());
+        $this->assertNull(\App\Services\CodexScenes\SceneTiming::describe($next->fresh())['story_seconds']);
+        Http::assertNothingSent();
+    }
+
+    public function test_repeated_resume_request_cannot_duplicate_work(): void
+    {
+        $old = $this->qualityRun(0);
+        app(ManualSceneService::class)->resumeQuality($old, 'owner');
+        try {
+            app(ManualSceneService::class)->resumeQuality($old, 'owner');
+            $this->fail('Repeated resume accepted');
+        } catch (ValidationException $e) {
+            $this->assertDatabaseCount('codex_scene_runs', 2);
+            $this->assertSame(1, CodexSceneRun::where('active_slot', 1)->count());
+        }
+    }
+
+    public function test_resume_rejects_uncertain_worker_changed_identity_hold_and_missing_payment(): void
+    {
+        $old = $this->qualityRun();
+        $service = app(ManualSceneService::class);
+        foreach (['uncertain_worker', 'identity_changed', 'hold', 'unpaid'] as $scenario) {
+            DB::beginTransaction();
+            $path = $this->spool.'/outbox/'.$old->id.'/status.json';
+            $prior = file_get_contents($path);
+            if ($scenario === 'uncertain_worker') {
+                file_put_contents($path, json_encode(['id' => $old->id, 'status' => 'uncertain']));
+            } elseif ($scenario === 'identity_changed') {
+                $this->order->update(['child_name' => 'changed']);
+            } elseif ($scenario === 'hold') {
+                DB::table('order_automation_holds')->insert(['checkout_key' => $old->checkout_key, 'user_id' => $this->actor->id, 'fingerprint' => 'synthetic', 'runs' => '[]', 'confirmations' => '[]', 'created_at' => now(), 'updated_at' => now()]);
+            } else {
+                $this->order->update(['paid_amount_cents' => 0]);
+            }
+            try {
+                $service->resumeQuality($old, 'owner');
+                $this->fail('Unsafe resume accepted: '.$scenario);
+            } catch (ValidationException $e) {
+                $this->assertDatabaseCount('codex_scene_runs', 1);
+            } finally {
+                DB::rollBack();
+                file_put_contents($path, $prior);
+                $this->order->refresh();
+            }
+        }
+    }
+
+    public function test_resume_rejects_corrupt_saved_s3_without_releasing_original(): void
+    {
+        $old = $this->qualityRun();
+        Storage::disk('s3_private')->put($old->scenes[1]['path'], 'corrupt');
+        try {
+            app(ManualSceneService::class)->resumeQuality($old, 'owner');
+            $this->fail('Corruption accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(1, $old->fresh()->active_slot);
+            $this->assertDatabaseCount('codex_scene_runs', 1);
+        }
+    }
+
     public function test_worker_timing_is_preserved_and_excludes_collection_delay(): void
     {
         $run = $this->start();
@@ -106,6 +206,19 @@ class ManualCodexSceneTest extends TestCase
         $this->travel(60)->minutes();
         app(ManualSceneService::class)->collect($run);
         $this->assertSame('00:02:00', \App\Services\CodexScenes\SceneTiming::describe($run->fresh())['duration']);
+    }
+
+    public function test_resumed_total_and_average_include_prior_work_without_the_pause(): void
+    {
+        $run = $this->start();
+        $snapshot = $run->snapshot;
+        $snapshot['resume_history'] = [['run_id' => 'prior', 'seconds' => 190, 'source' => 'worker']];
+        $run->update(['snapshot' => $snapshot, 'status' => 'completed', 'active_slot' => null,
+            'timing' => ['started_at' => now()->timestamp, 'finished_at' => now()->timestamp + 100, 'elapsed_seconds' => 100]]);
+        $timing = \App\Services\CodexScenes\SceneTiming::describe($run);
+        $this->assertSame('00:01:40', $timing['duration']);
+        $this->assertSame('00:04:50', $timing['story_duration']);
+        $this->assertSame('00:04:50', \App\Services\CodexScenes\SceneTiming::summary()['average']);
     }
 
     public function test_timing_rejects_clock_replacement_and_invalid_values(): void
