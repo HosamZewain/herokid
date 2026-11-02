@@ -4,7 +4,7 @@
             <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }}</p>
             <p class="mt-1 text-xs text-gray-500">{{ $codexRun->source === 'automatic' ? 'بدأ بواسطة Automation' : 'بدأ بطلب موظف' }}</p>
             <div class="mt-2 text-xs text-gray-600">@include('admin.orders._codex-scene-timing', ['timingRun' => $codexRun])</div>
-            @if($codexRun->error_code)<p class="mt-2 text-sm text-amber-800">{{ \App\Models\CodexSceneRun::ERRORS[$codexRun->error_code] ?? 'تحتاج المحاولة مراجعة من الفريق.' }}</p>@endif
+            @if($codexRun->error_code && $codexRun->status !== 'completed')<p class="mt-2 text-sm text-amber-800">{{ \App\Models\CodexSceneRun::ERRORS[$codexRun->error_code] ?? 'تحتاج المحاولة مراجعة من الفريق.' }}</p>@endif
             @include('admin.orders._codex-scene-attempts', ['attemptRun' => $codexRun])
             @can('orders.production_prompt.manage')
             @if($codexRun->active_slot)
