@@ -174,6 +174,19 @@ class ManualCodexSceneTest extends TestCase
         }
     }
 
+    public function test_operator_classified_content_rejection_frees_capacity_but_cannot_be_retried_as_quality(): void
+    {
+        $old = $this->qualityRun();
+        $old->update(['status' => 'uncertain']);
+        $path = $this->spool.'/outbox/'.$old->id.'/status.json';
+        file_put_contents($path, json_encode(['id' => $old->id, 'status' => 'quality_review', 'code' => 'content_review']));
+        app(ManualSceneService::class)->collect($old);
+        $this->assertSame('quality_review', $old->fresh()->status);
+        $this->assertSame('content_review', $old->fresh()->error_code);
+        $this->expectException(ValidationException::class);
+        app(ManualSceneService::class)->resumeQuality($old, 'owner');
+    }
+
     public function test_resume_rejects_corrupt_saved_s3_without_releasing_original(): void
     {
         $old = $this->qualityRun();

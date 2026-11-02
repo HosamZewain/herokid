@@ -1,6 +1,10 @@
 # HeroKid AWS deployment and agent handoff
 
-## Prepared 2 November 2026 — explicit Codex quality recovery (not yet deployed)
+## 2 November 2026 — Codex quality recovery deployed; explicit attempts started
+
+Application `f29b2a0562bafea8c4d007578889245b973ad7cc` deployed08:01:18UTC, eight changed hashes/PHP8.3 syntax verified. Checkpoint `/home/ubuntu/herokid-before-codex-resume-20261102` preserves source, private configuration hashes, original encrypted run rows and bridge state. Scheduler fenced only for idle-worker refresh; all seven services active, HTTP home/up/cart200; no schema/config change, no Laravel worker restart.194tests1160assertions MySQL,41tests222assertions SQLite,13fake-CLI tests and frontend polling passed.
+
+Five explicit resumes enrolled08:02UTC, audit count5, original21accepted scene references unchanged. New UUIDs:2655/c6644deb-44ef-4b6a-ae49-4eca492ec990;2653/ca4dfd45-0157-4144-b3bb-c2c944ef1c1d;2727/0052830d-4503-4f7e-9e46-b4e1f6c9d003;2643/c965b39a-c132-4104-b159-a06aa63efa4d;2635/5d0f749b-cdeb-4128-a8e7-2a027c91bd63. First new2653scene3observed1536x1024.2655scene12returned no image; CLI final explicitly reported image safety rejection as violence. No replay or content substitution authorized/performed. Prepared narrow follow-up allows operator-classified `content_review` terminal state, retaining the reservation and all evidence while releasing parallel dispatch capacity. It is deliberately excluded from quality-resume eligibility; classification is not a billing determination. No inference from an absent image alone, and no automatic transcript classifier.
 
 Owner authorized recovery of five stopped stories and the required fix. Verified current base `7c9c27012696618ba78696968b60d0b6fc97cecf`; nine completed and five quality_review, no running/queued provider work at inspection. Rejected native images were 1774x887,2172x724,1919x820 (short side below1024). Worker now explicitly requests a single1536x1024/3:2 canvas, preserving canonical scene/identity data; no upscale, weakened quality gate, API fallback or automatic retry.
 

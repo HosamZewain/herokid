@@ -440,7 +440,7 @@ class ManualSceneService
                     $run->active_slot = null;
                     $run->finished_at = now();
                     $this->setStatus($order, $run->previous_status, 'توقف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
-                } elseif ($phase === 'quality_review' && in_array($state['code'] ?? null, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene'], true)) {
+                } elseif ($phase === 'quality_review' && in_array($state['code'] ?? null, ['invalid_dimensions', 'invalid_png', 'oversized_scene', 'duplicate_scene', 'content_review'], true)) {
                     $run->status = 'quality_review';
                     $run->error_code = $state['code'];
                     if (isset($run->timing['finished_at'])) {
