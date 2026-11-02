@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 2 November 2026 — edited product return and mug images: prepared only
+
+Scoped fix based on live f8ddc95 for HK11-38 (four puzzles/two mugs): explicit return re-evaluates a manually edited product-only confirmed checkout, emits a fresh product event, preserves completed outputs, and never replays the previous confirmation. Adds the single-image mug catalog slug to the existing private-storage product worker. Story/mixed resumption guards remain. [Scope, diagnostic evidence, validation and release boundaries](product-automation-edited-return-2026-11-02.md). **Not deployed; no production hold released, provider call or customer message sent.** Coloring-book/unified-preview work is separate and is not included in this patch.
+
 ## Independent scene retry and team review — prepared 2 November 2026
 
 Owner requested bounded automatic retry per failed scene, continuation past missing scenes, preserved failure reasons/attempt history and the new **بانتظار مراجعة الفريق** order status; deployment authorization continues the active failed-story repair. Protocol4 gives two total attempts only for definite local image-quality failures, never retries content refusal/uncertain generation, and continues later scenes using approved identity plus the nearest accepted prior scene. Partial final runs release their reservation into `pending_team_review`, complete13-scene runs still become ready_preview. All attempt actions carry Automation. Existing in-flight/legacy runs keep their protocol; reviewed content refusals can be explicitly skipped in a fresh audited continuation without replaying that scene. See [worker contract](../ops/codex-scenes/README.md).

@@ -14,11 +14,13 @@ use App\Models\PuzzleGeneration;
 use App\Services\Ai\AiImagePricingService;
 use App\Services\Ai\GptImageClient;
 use App\Services\OrderAutomation\WorkflowInputs;
+use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationHandoff;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -42,7 +44,7 @@ class PuzzleAutomation
             $events = OrderProcessEvent::where('id', '>', max($cursor->event_id, (int) config('puzzle_automation.after_event_id')))->orderBy('id')->limit(100)->get();
             $created = 0;
             foreach ($events as $event) {
-                if ($event->type === 'status_entered' && ($event->data['status'] ?? null) === 'new_confirmed') {
+                if (in_array($event->type, ['status_entered', 'automation_resumed'], true) && ($event->data['status'] ?? null) === 'new_confirmed') {
                     $rows = Order::where('checkout_group_key', $event->checkout_key)->orderBy('id')->lockForUpdate()->get();
                     $items = OrderItem::whereIn('order_id', $rows->pluck('id'))
                         ->whereHas('product', fn ($q) => $q->whereIn('slug', config('puzzle_automation.product_slugs')))->get();
@@ -74,6 +76,38 @@ class PuzzleAutomation
 
             return $created;
         });
+    }
+
+    /** Explicit manual return may refresh only work that never reached a provider. */
+    public function refreshUnstartedForReturn(string $key): void
+    {
+        foreach (PuzzleGeneration::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get() as $run) {
+            if (in_array($run->status, ['processing', 'uncertain'], true)) {
+                throw ValidationException::withMessages(['assignment' => 'محاولة توليد المنتج جارية أو غير مؤكدة؛ يلزم مراجعتها قبل الإرجاع.']);
+            }
+            $unstarted = in_array($run->status, ['queued', 'blocked'], true) && ! $run->started_at
+                && ! $run->provider_request_id && ! $run->output_path && ! $run->attachment_id && ! $run->preview_id;
+            try {
+                $fresh = app(PuzzleInputs::class)->capture(OrderItem::findOrFail($run->order_item_id));
+                if (! $unstarted) {
+                    if (! $run->context || ! hash_equals($run->context['fingerprint'], $fresh['fingerprint'])) {
+                        throw new RuntimeException('puzzle_completed_inputs_changed');
+                    }
+
+                    continue; // Preserve completed/attempted work exactly; never retry it here.
+                }
+                $this->assertNoOutput($run);
+                $oldFingerprint = $run->context['fingerprint'] ?? null;
+                $run->update(['context' => $fresh, 'unit_key' => $fresh['unit_key'], 'status' => 'queued',
+                    'error_code' => null, 'finished_at' => null]);
+                AutomationActivity::record($run->order, 'product_inputs_refreshed',
+                    'تحديث بيانات محاولة لم يبدأ توليدها بعد، عقب الإرجاع اليدوي.',
+                    ['run_id' => $run->id, 'order_item_id' => $run->order_item_id,
+                        'old_fingerprint' => $oldFingerprint, 'new_fingerprint' => $fresh['fingerprint']]);
+            } catch (Throwable $error) {
+                throw ValidationException::withMessages(['assignment' => 'تعذرت إعادة تقييم بند المنتج #'.$run->order_item_id.': '.$this->safeError($error, 'puzzle_preflight_failed').'. لم تُعَد أي محاولة توليد.']);
+            }
+        }
     }
 
     /** Unique single-attempt AI job; durable run state prevents provider replay. */
@@ -180,7 +214,7 @@ class PuzzleAutomation
                 $name = 'puzzle-'.$run->order_id.'-'.$run->order_item_id.'.'.$ext;
                 $attachment = OrderAttachment::create(['order_id' => $run->order_id, 'production_unit_key' => $run->unit_key,
                     'disk' => $disk, 'path' => $path, 'original_name' => $name, 'mime_type' => $size['mime'], 'size' => strlen($result->contents),
-                    'note' => 'Automation — صورة البازل؛ راجع الهوية والتصميم قبل الطباعة.', 'validity_days' => null, 'expires_at' => null]);
+                    'note' => 'Automation — صورة المنتج؛ راجع الهوية والتصميم قبل الطباعة.', 'validity_days' => null, 'expires_at' => null]);
                 $preview = OrderPreview::create(['order_id' => $run->order_id, 'production_unit_key' => $run->unit_key,
                     'product_gallery_id' => $gallery->id, 'file_path' => $previewPath, 'disk' => $disk, 'original_name' => $name,
                     'mime_type' => $size['mime'], 'file_size' => strlen($result->contents), 'checksum' => $checksum,

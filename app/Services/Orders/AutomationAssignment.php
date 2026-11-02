@@ -69,7 +69,7 @@ class AutomationAssignment
                 ->join('orders as puzzle_order', 'puzzle_order.checkout_group_key', '=', 'puzzle_event.checkout_key')
                 ->join('order_items as puzzle_item', 'puzzle_item.order_id', '=', 'puzzle_order.id')
                 ->join('products as puzzle_product', 'puzzle_product.id', '=', 'puzzle_item.product_id')
-                ->where('puzzle_event.id', '>', $floor)->where('puzzle_event.type', 'status_entered')
+                ->where('puzzle_event.id', '>', $floor)->whereIn('puzzle_event.type', ['status_entered', 'automation_resumed'])
                 ->where('puzzle_event.data->status', 'new_confirmed')->whereNull('puzzle_order.deleted_at')
                 ->whereNotIn('puzzle_order.status', ['new', 'cancelled', 'completed'])
                 ->whereIn('puzzle_product.slug', config('puzzle_automation.product_slugs'))

@@ -5,15 +5,18 @@ namespace App\Services\Orders;
 use App\Jobs\SendOrderConfirmationJob;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessRun;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
+use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /** Explicit checkout-level manual ownership, independent of the current employee. */
@@ -100,8 +103,19 @@ class AutomationHandoff
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'انتظر انتهاء تجربة Codex قبل إعادة المسار السابق.']);
             }
-            if (! hash_equals($hold->fingerprint, $this->fingerprint($rows))) {
+            $changed = ! hash_equals($hold->fingerprint, $this->fingerprint($rows));
+            $productReturn = $rows->isNotEmpty() && $runs->isEmpty()
+                && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new_confirmed'
+                    && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready'
+                    && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
+            if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
+            }
+            if ($changed && ! $productReturn) {
                 throw ValidationException::withMessages(['assignment' => 'تغيّرت بيانات الطلب أو هويته أثناء العمل اليدوي؛ لا يمكن استكمال مسار برسائل أو صور قديمة. أكمل يدويًا أو استخدم زر Codex بعد اعتماد الهوية وتسجيل الدفعة.']);
+            }
+            if ($productReturn) {
+                app(PuzzleAutomation::class)->refreshUnstartedForReturn($key);
             }
             foreach (json_decode($hold->runs, true) as $id => $status) {
                 $run = $runs->get($id);
@@ -113,12 +127,22 @@ class AutomationHandoff
             foreach (json_decode($hold->confirmations, true) as $id => $status) {
                 $event = $events->get($id);
                 abort_unless($event && $event->status === 'held', 422, 'تغيّرت محاولة رسالة التأكيد أثناء التوقف.');
-                $event->update(['status' => $status]);
-                if ($status === 'pending') {
+                // A staff-confirmed revised checkout must never consume a reply to
+                // the old order contents. Keep its original send receipt and attempts.
+                $event->update(['status' => $productReturn ? 'cancelled' : $status]);
+                if (! $productReturn && $status === 'pending') {
                     SendOrderConfirmationJob::dispatch($event->id)->afterCommit();
                 }
             }
             DB::table('order_automation_holds')->where('checkout_key', $key)->delete();
+            if ($productReturn) {
+                // Explicit new evaluation, not replay of a missed historical event.
+                $event = OrderProcessEvent::create(['event_key' => 'manual-return:'.Str::uuid(),
+                    'type' => 'automation_resumed', 'order_id' => $rows->first()->id, 'checkout_key' => $key,
+                    'data' => ['status' => 'new_confirmed', 'actor_id' => $actor->id, 'changed' => $changed], 'status' => 'pending']);
+                AutomationActivity::record($order, 'products_reevaluated', 'إعادة تقييم المنتجات بالبيانات الحالية بعد إرجاع الطلب من الموظف؛ دون إعادة الصور المكتملة أو رسالة التأكيد السابقة.',
+                    ['event_id' => $event->id, 'requested_by' => $actor->id, 'changed' => $changed]);
+            }
             AdminActivityLogger::log('order.automation_resumed', 'إعادة متابعة الطلب إلى Automation بطلب الموظف، دون إعادة الخطوات المكتملة.', $order, ['checkout_group_key' => $key], $actor, $request);
         }, 3);
     }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Jobs\TickPuzzleAutomation;
 use App\Models\AdminActivityLog;
 use App\Models\AiProvider;
 use App\Models\Order;
@@ -13,12 +14,14 @@ use App\Models\OrderProcessEvent;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\PuzzleGeneration;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\ProductAutomation\PuzzleAutomation;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -63,15 +66,133 @@ class PuzzleAutomationTest extends TestCase
             'production_prompt_template' => 'One puzzle for {{child_full_name}}, {{child_age}}. {{child_image_references}}']);
     }
 
+    private function staff(): User
+    {
+        $user = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $user->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    private function handoff(Order $order, string $action): void
+    {
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => $action])->assertSessionHasNoErrors();
+    }
+
+    public function test_edited_confirmed_product_checkout_returns_with_new_mug_and_no_old_confirmation_replay(): void
+    {
+        $this->staff();
+        $puzzle = $this->order();
+        // Confirmation happened manually during the hold; no status event was emitted.
+        OrderProcessEvent::query()->delete();
+        $puzzle->updateQuietly(['status' => 'new']);
+        $event = RoboDeskIntegrationEvent::create(['event_id' => (string) Str::uuid(), 'deduplication_key' => 'test-return',
+            'direction' => 'outbound', 'event_type' => 'order.pending_confirmation', 'checkout_group_key' => $puzzle->checkoutGroupKey(),
+            'order_id' => $puzzle->id, 'status' => 'succeeded', 'attempts' => 1, 'payload' => ['confirmation' => ['eligible_at_creation' => true]],
+            'response_payload' => ['message_id' => 'synthetic-wamid']]);
+        $this->handoff($puzzle, 'take');
+        $puzzle->updateQuietly(['status' => 'new_confirmed']);
+        $mug = Product::create(['slug' => 'personalized-child-family-photo-mug', 'name_ar' => 'مج اختبار', 'price_cents' => 10000,
+            'production_prompt_template' => 'MUG ART for {{child_full_name}} {{child_image_references}}']);
+        $other = $this->order('مارية', 'b', $puzzle->checkoutGroupKey());
+        $other->items()->first()->update(['product_id' => $mug->id, 'title' => 'مج مارية']);
+        OrderProcessEvent::query()->delete();
+        $this->handoff($puzzle, 'resume');
+        $this->assertFalse(AutomationHandoff::held($puzzle->checkoutGroupKey()));
+        $this->assertSame('cancelled', $event->fresh()->status);
+        $this->assertSame(1, $event->fresh()->attempts);
+        $this->assertSame('synthetic-wamid', $event->fresh()->response_payload['message_id']);
+        $this->assertSame('automation_resumed', OrderProcessEvent::sole()->type);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($puzzle));
+        $seen = [];
+        $this->fakeImage(2, function (GptImageRequest $request) use (&$seen) {
+            $seen[] = $request;
+
+            return true;
+        });
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        $this->assertSame(2, PuzzleGeneration::where('status', 'succeeded')->count());
+        $this->assertStringContainsString('MUG ART for مارية', $seen[1]->prompt);
+        $this->assertNotSame($seen[0]->inputImages, $seen[1]->inputImages);
+        foreach (PuzzleGeneration::all() as $run) {
+            $this->assertSame($run->order_id, OrderPreview::findOrFail($run->preview_id)->order_id);
+            $this->assertSame($run->unit_key, OrderAttachment::findOrFail($run->attachment_id)->production_unit_key);
+        }
+        $this->assertSame(0, $puzzle->fresh()->paid_amount_cents);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'automation.products_reevaluated', 'user_id' => null]);
+        $this->post(route('admin.orders.groups.assignment.automation', $puzzle), ['action' => 'resume'])->assertStatus(422);
+        $this->assertDatabaseCount('order_process_events', 1);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    public function test_explicit_return_refreshes_only_unstarted_product_inputs(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        $service = app(PuzzleAutomation::class);
+        $service->enroll();
+        $before = PuzzleGeneration::sole()->context['fingerprint'];
+        $this->handoff($order, 'take');
+        $order->updateQuietly(['uploaded_photos' => ['child-photos/b.png']]);
+        $this->handoff($order, 'resume');
+        $this->assertNotSame($before, PuzzleGeneration::sole()->context['fingerprint']);
+        $this->fakeImage(1, function (GptImageRequest $request) {
+            $this->assertSame(['data:image/png;base64,'.base64_encode($this->png.'different')], $request->inputImages);
+
+            return true;
+        });
+        $service->tick();
+        $service->tick();
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertSame('succeeded', PuzzleGeneration::sole()->status);
+    }
+
+    public function test_return_after_addition_preserves_completed_product_output(): void
+    {
+        $this->staff();
+        $one = $this->order();
+        $this->fakeImage(2);
+        $service = app(PuzzleAutomation::class);
+        $service->tick();
+        $old = PuzzleGeneration::sole()->getAttributes();
+        $this->handoff($one, 'take');
+        $this->order('مارية', 'b', $one->checkoutGroupKey());
+        $this->handoff($one, 'resume');
+        $service->tick();
+        $service->tick();
+        $this->assertSame($old, PuzzleGeneration::find($old['id'])->getAttributes());
+        $this->assertSame(2, PuzzleGeneration::where('status', 'succeeded')->count());
+    }
+
+    public function test_changed_completed_product_keeps_hold_and_never_retries_provider(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        $this->fakeImage();
+        app(PuzzleAutomation::class)->tick();
+        $before = PuzzleGeneration::sole()->getAttributes();
+        $this->handoff($order, 'take');
+        $order->updateQuietly(['uploaded_photos' => ['child-photos/b.png']]);
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'resume'])->assertSessionHasErrors('assignment');
+        $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
+        $this->assertSame($before, PuzzleGeneration::sole()->getAttributes());
+        app(PuzzleAutomation::class)->tick();
+    }
+
     public function test_scheduler_only_dispatches_one_job_and_worker_generates_without_blocking_scheduler(): void
     {
         $this->order();
         $this->fakeImage();
         $this->artisan('puzzle-automation:tick')->assertSuccessful();
         $this->artisan('puzzle-automation:tick')->assertSuccessful();
-        Queue::assertPushed(\App\Jobs\TickPuzzleAutomation::class, 1);
+        Queue::assertPushed(TickPuzzleAutomation::class, 1);
         $this->assertDatabaseCount('puzzle_generations', 0);
-        $job = Queue::pushed(\App\Jobs\TickPuzzleAutomation::class)->first();
+        $job = Queue::pushed(TickPuzzleAutomation::class)->first();
         $this->assertSame('order-process-ai', $job->connection);
         $this->assertSame('order-process-ai', $job->queue);
         $this->assertSame(1, $job->tries);
@@ -80,7 +201,7 @@ class PuzzleAutomationTest extends TestCase
         $job->handle(app(PuzzleAutomation::class));
         $job->handle(app(PuzzleAutomation::class));
         $this->assertSame('succeeded', PuzzleGeneration::sole()->status);
-        $event = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+        $event = collect(app(Schedule::class)->events())
             ->first(fn ($event) => str_contains($event->command ?? '', 'puzzle-automation:tick'));
         $this->assertNotNull($event);
         $this->assertFalse($event->runInBackground);
@@ -344,6 +465,6 @@ class PuzzleAutomationTest extends TestCase
         $actor->unsetRelation('permissions');
         $this->actingAs($actor)->get($url)->assertOk();
         $this->get(route('admin.orders.puzzle-image', [$other, $run]))->assertNotFound();
-        $this->get(route('admin.orders.show', $order))->assertOk()->assertSee('أوتوميشن البازل')->assertSee('فتح الصورة المحفوظة للمراجعة');
+        $this->get(route('admin.orders.show', $order))->assertOk()->assertSee('أوتوميشن صور المنتجات')->assertSee('فتح الصورة المحفوظة للمراجعة');
     }
 }

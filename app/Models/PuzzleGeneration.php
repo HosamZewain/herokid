@@ -11,7 +11,7 @@ class PuzzleGeneration extends Model
 
     protected $casts = ['context' => 'encrypted:array', 'usage' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime', 'lease_until' => 'datetime'];
 
-    public const LABELS = ['queued' => 'بانتظار توليد البازل', 'processing' => 'جاري توليد البازل',
+    public const LABELS = ['queued' => 'بانتظار توليد صورة المنتج', 'processing' => 'جاري توليد صورة المنتج',
         'succeeded' => 'الصورة محفوظة في المرفقات والمعاينة', 'blocked' => 'يحتاج تدخل الفريق — لم يبدأ الإرسال',
         'uncertain' => 'نتيجة التوليد غير مؤكدة — لا تُعِد التوليد تلقائيًا', 'review' => 'الصورة محفوظة للمراجعة — لم تُنشر في المعاينة'];
 
