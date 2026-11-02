@@ -403,7 +403,7 @@ class OrderProcessIdentityTest extends TestCase
         $task = OrderProcessIdentity::firstOrFail();
         $this->assertSame('blocked', $run->fresh()->status);
         $this->assertNull($task->order->child_identity_approved_attempt_id);
-        $this->assertSame('new_confirmed', $task->order->status);
+        $this->assertSame('preview_uploaded', $task->order->status);
         $this->assertSame(0, $task->order->statusLogs()->where('status', ProcessIdentityService::APPROVED_ORDER_STATUS)->count());
     }
 

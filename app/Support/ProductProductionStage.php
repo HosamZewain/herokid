@@ -16,6 +16,22 @@ class ProductProductionStage
     public static function coverPrompt(): string
     {
         return <<<'PROMPT'
+HEROKID_COVER_ART_DIRECTION_V2
+Create ONE premium full-color personalized children's coloring-book FRONT COVER, a coherent richly illustrated scene, not a collage or scrapbook.
+Child: {{child_full_name}}. Age: {{child_age}}. Gender: {{child_gender}}.
+Product: {{product_name}}. Parent notes: {{special_notes}}.
+IDENTITY: The attached photos are multiple references of ONE child, not photographs to paste into a layout. Show the child ONCE as the main photorealistic subject. Preserve recognizable facial proportions, skin tone, age, hair and appearance. Never use a background person, merge children, mirror clothing text, or add secondary photographic portraits. Integrate the child into the scene with natural pose, coherent light, contact shadows and appropriate clothing; avoid a cropped floating head, white cutout halos or sticker outlines around the child.
+ART DIRECTION: Build one believable, delightful setting inspired by the explicitly purchased theme and parent notes (e.g. a vivid sports setting for a sports theme, a magical art atelier for a fantasy theme). With no theme, use a joyful colorful art studio. Rich but controlled colors, depth, softly lit dimensional materials, purposeful foreground coloring pencils and an open coloring book. Include a few simple black-outline coloring drawings on actual pages or an easel within the scene, not a wallpaper of repeated faces. Keep the composition balanced and cinematic, never a collection of unrelated stickers.
+TYPE: Upper quarter contains the exact child name in its original Arabic/English spelling, large and highly legible, with the exact subtitle "كتاب تلوين". Do not invent or translate names, surnames, dedications, ages, hobbies or words. Include extra printed text only when explicitly requested in the parent instructions; do not automatically add page-count badges, birthday banners or giant age numerals from raw variant metadata. Reference examples guide style only; none of their names or identities belong here.
+LAYOUT: Flat portrait cover, not a 3D book, spine or back cover. Child is the visual focus in the middle, with expressive activity and enough surrounding scene to feel immersive. Keep the lower center as a naturally lit, low-detail part of the SAME scene for a small transparent publisher logo. It is not a blank hole: no white rectangle, empty cloud, dotted outline, speech bubble, bordered plaque or conspicuous logo placeholder. Do not draw any logo or publisher text; the application inserts the exact transparent HeroKid asset. Keep face, hands, title and important objects outside that lower-center logo footprint (central 24% width, bottom 13% height).
+PRINT: Final A4 portrait 210 x 297 mm. Fill the full canvas with scene/background, no white sidebars or external border. If generated on a 2:3 portrait canvas, only the outermost 3% at top and bottom may be trimmed to A4, with no stretching. Keep ALL lettering, faces, hands and essential objects within the middle 84% of height and 90% of width, so they retain safe margins after trim. One finished cover artwork only.
+Reference images: {{child_image_references}}
+PROMPT;
+    }
+
+    public static function legacyCoverPrompt(): string
+    {
+        return <<<'PROMPT'
 Create exactly ONE full-color, flat front-cover illustration for a personalized children's coloring book.
 Child: {{child_full_name}}. Age: {{child_age}}. Gender: {{child_gender}}.
 Product: {{product_name}}. Parent notes: {{special_notes}}.

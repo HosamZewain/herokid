@@ -264,8 +264,8 @@ class PuzzleAutomation
                 'cost_usd' => $cost['cost_usd'], 'billing_status' => $cost['billing_status']]);
             $contents = $result->contents;
             $artwork = null;
-            if (($context['artwork_contract'] ?? '') === 'a4-cover-v1') {
-                $artwork = BookArtwork::a4($contents, true);
+            if (in_array($context['artwork_contract'] ?? '', ['a4-cover-v1', 'a4-cover-v2'], true)) {
+                $artwork = BookArtwork::a4($contents, true, $context['artwork_contract']);
                 $rawPath = $path;
                 $contents = $artwork['bytes'];
                 unset($artwork['bytes']);

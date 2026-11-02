@@ -175,6 +175,20 @@ class ProcessProductReview
         $manifest = OrderReviewManifest::where('run_id', $run->id)->lockForUpdate()->firstOrFail();
         if (! $manifest->approved_at) {
             $manifest->update(['approved_at' => now(), 'response_message_id' => $decision->message_id]);
+            // A product approval is not a printing or payment approval. Hand it to
+            // staff; approved, paid books can enter their existing interior gate.
+            $contexts = app(ProcessOrderContext::class);
+            foreach ($contexts->orders($run->checkout_key, true)->whereNull('story_id') as $order) {
+                if (! in_array($order->status, ['new_confirmed', 'preview_uploaded'], true)) {
+                    continue;
+                }
+                $from = $order->status;
+                $order->update(['status' => 'pending_team_review']);
+                $order->statusLogs()->create(['status_type' => 'order', 'status' => 'pending_team_review', 'notes' => 'Automation: اعتماد المعاينة؛ مراجعة الدفع واستكمال الطلب بواسطة الفريق.']);
+                AutomationActivity::record($order, 'product_preview_approved', 'اعتماد معاينة المنتج وتسليم الطلب لمراجعة الفريق دون اعتماد الدفع.',
+                    ['run_id' => $run->id, 'manifest_id' => $manifest->id, 'from' => $from, 'to' => 'pending_team_review']);
+            }
+            $run->context = $contexts->snapshot($contexts->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
             AutomationActivity::record($run->checkout_key, 'previews_approved', 'اعتماد صور المعاينة المحددة فقط بناءً على رد العميل؛ لم يسجل دفع.', ['manifest_id' => $manifest->id, 'image_count' => count($manifest->images), 'source_id' => $decision->message_id]);
         }
     }
