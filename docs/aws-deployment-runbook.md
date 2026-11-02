@@ -1,8 +1,8 @@
 # HeroKid AWS deployment and agent handoff
 
-## 2 November 2026 — prepared cover redesign and preview-status correction (NOT deployed)
+## 2 November 2026 — cover redesign and preview-status release preparation
 
-Prepared in isolated branch `codex/book-cover-art-direction-v2`, based on verified production/main `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Cover code `c892463`; status code `a58fe70`. Neither is deployed or activated. Primary dirty mobile/UI checkout remains untouched.
+Prepared in isolated branch `codex/book-cover-art-direction-v2`, based on verified production/main `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Cover code `c892463`; status code `a58fe70`. At preparation neither is deployed or activated. Release proceeds within the owner-authorized coloring-book/combined-preview implementation and main deployment, addressing the supplied cover feedback and HK11-50 status defect. No new feature rollout or historical regeneration is included. Primary dirty mobile/UI checkout remains untouched.
 
 Read-only audit confirmed **HK11-50 / order2808 / process26 / workflow9** still `new_confirmed`, despite a completed combined-preview send receipt at **15:56:12UTC**, with its process waiting_response. Initial cohort:9 waiting checkouts/11order rows with accepted identity/combined previews and the same order-status mismatch. This is a point-in-time observation; customers continue responding. No receipt is proof of handset delivery. No production state, message or generation was changed during this investigation.
 
