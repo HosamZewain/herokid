@@ -119,8 +119,12 @@ class PuzzleInputs
 
         if ($book) {
             $context['production_stage'] = 'book_cover';
-            $context['artwork_contract'] = 'a4-cover-v1';
-            $context['brand_checksum'] = hash_file('sha256', public_path('images/branding/herokid-20261018-768.png'));
+            // Version follows the immutable order prompt, not a global asset replacement.
+            $v2 = str_contains($units[0]['prompt'], 'HEROKID_COVER_ART_DIRECTION_V2');
+            $context['artwork_contract'] = $v2 ? 'a4-cover-v2' : 'a4-cover-v1';
+            $context['brand_checksum'] = hash_file('sha256', public_path($v2
+                ? 'images/branding/herokid-cover-transparent-v2.png'
+                : 'images/branding/herokid-20261018-768.png'));
         }
 
         return $context + ['fingerprint' => hash('sha256', json_encode($context, JSON_THROW_ON_ERROR))];

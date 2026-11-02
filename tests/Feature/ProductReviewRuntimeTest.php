@@ -41,6 +41,7 @@ use App\Services\ProductAutomation\PuzzleInputs;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
 use App\Support\ProductProductionPrompt;
+use App\Support\ProductProductionStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -426,6 +427,44 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertFalse($scene['artwork']['resampled']);
         $this->assertTrue($scene['artwork']['print_review_required']);
         $this->assertEqualsWithDelta(297 / 210, $scene['height'] / $scene['width'], .002);
+    }
+
+    public function test_cover_v2_is_snapshotted_without_changing_old_cover_contracts(): void
+    {
+        $old = $this->book();
+        $old->order->updateQuietly(['status' => 'new_confirmed']);
+        $before = app(PuzzleInputs::class)->capture($old);
+        $this->assertSame('a4-cover-v1', $before['artwork_contract']);
+        $fresh = $this->book();
+        $fresh->productionComponents()->where('production_stage', 'book_cover')->update(['prompt_template' => ProductProductionStage::coverPrompt()]);
+        $fresh->unsetRelation('productionComponents');
+        $this->enroll($fresh->order);
+        $generation = PuzzleGeneration::sole();
+        $this->assertSame('a4-cover-v2', $generation->context['artwork_contract']);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate($generation->id);
+        $generation->refresh();
+        $this->assertSame('succeeded', $generation->status);
+        $size = getimagesizefromstring(Storage::disk('s3_private')->get($generation->output_path));
+        $this->assertSame([1024, 1448], array_slice($size, 0, 2));
+        $this->assertSame($before['fingerprint'], app(PuzzleInputs::class)->capture($old)['fingerprint']);
+    }
+
+    public function test_cover_design_upgrade_only_changes_managed_catalog_not_order_snapshots(): void
+    {
+        $item = $this->book();
+        $product = $item->product;
+        $component = $product->productionComponents()->create(['stable_key' => 'automation-cover-v1', 'name' => 'Cover',
+            'production_stage' => 'book_cover', 'quantity_per_item' => 1, 'is_active' => true,
+            'prompt_template' => ProductProductionStage::legacyCoverPrompt()]);
+        $snapshots = $item->productionComponents()->get()->toArray();
+        $this->artisan('books:cover-design', ['products' => [$product->id]])->assertSuccessful();
+        $this->assertSame(ProductProductionStage::legacyCoverPrompt(), $component->fresh()->prompt_template);
+        $this->artisan('books:cover-design', ['products' => [$product->id], '--apply' => true])->assertSuccessful();
+        $this->assertSame(ProductProductionStage::coverPrompt(), $component->fresh()->prompt_template);
+        $this->assertSame($snapshots, $item->productionComponents()->get()->toArray());
+        $this->artisan('books:cover-design', ['products' => [$product->id], '--apply' => true])->assertSuccessful();
+        $this->assertSame($snapshots, $item->productionComponents()->get()->toArray());
     }
 
     public function test_catalog_preserves_old_briefs_and_snapshots_exact_variant_page_counts(): void
