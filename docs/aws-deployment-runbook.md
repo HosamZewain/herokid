@@ -1,5 +1,18 @@
 # HeroKid AWS deployment and agent handoff
 
+## 2 November 2026 — cover/status correction deployed from main
+
+Application **a91ee19a604f17207a038c145638296eaca10c89** published to GitHub main and deployed from AWS main, verified **16:55:57UTC /18:55 Cairo**. This is the scoped correction of the owner-authorized coloring-book/combined-preview release: approved transparent logo/art direction plus the reported missing order-status transition. All13 changed-file hashes, PHP8.3 syntax and www-data readability passed. Existing `.env`, private cached configuration, route cache and frontend manifest hashes unchanged. No schema/dependency/build change. Four affected Laravel workers drained gracefully and restarted; dedicated Codex PID stayed unchanged with two real stories continuing.
+
+Catalog-only upgrade applied to managed cover components for products2and28. Every other catalog field and component count preserved. Only future order snapshots use v2; no previously sent/approved artwork, customer image, order brief or generation was replaced. Native print-quality/name/face review remains necessary; the improved production API output has not yet been observed on a new real order after this deployment.
+
+Exact initial waiting cohort was rechecked against current run state and immutable context. **7checkouts /8order rows** changed to `preview_uploaded`: HK10-617(2685), HK11-1(2708), HK11-33(2772), HK11-39(2791), HK11-44(2800/2801), HK11-48(2806), **HK11-50(2808)**. All8 have one Automation status-projection activity. Runs20/HK11-22 and21/HK11-31 had received actual customer approval during investigation and already entered waiting_staff; they were left untouched, not reverted to awaiting approval. No historical jobs, provider generation or customer message was replayed. All9 current process fingerprints match their orders; no errors on these runs.
+
+Authenticated browser verified HK11-50 heading and visible **انتظار الموافقة** plus the Automation status-history entry. At post-release check: home/up/cartHTTPS200, seven services active, four Laravel workers RUNNING, scheduler Result=success/exit0, failed_jobs81 unchanged, zero added Laravel/worker log bytes. Codex16completed/2running/4waiting_slot/3needs_manual/8quality_review/2stopped is an observation, not new retry authorization. Test evidence remains149tests/1117assertions on each isolated SQLite/MySQL plus PHP8.3 syntax.
+
+Recovery checkpoint: **/home/ubuntu/herokid-before-cover-status-a91ee19**; source archive/checksum, exact target hashes, private preserved config hashes, before/after catalog proof, scoped status reconciliation, original drift and log offsets. Previous live/main683389a. Code-only/catalog-prompt metadata release; no DB restore or new AWS service. Preserve v2 snapshots/new order statuses and their matching contexts during recovery; do not revert live order state or regenerate media automatically. The documentation-only successor records this verification without restarting workers or Codex.
+
+
 ## 2 November 2026 — cover redesign and preview-status release preparation
 
 Prepared in isolated branch `codex/book-cover-art-direction-v2`, based on verified production/main `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Cover code `c892463`; status code `a58fe70`. At preparation neither is deployed or activated. Release proceeds within the owner-authorized coloring-book/combined-preview implementation and main deployment, addressing the supplied cover feedback and HK11-50 status defect. No new feature rollout or historical regeneration is included. Primary dirty mobile/UI checkout remains untouched.
