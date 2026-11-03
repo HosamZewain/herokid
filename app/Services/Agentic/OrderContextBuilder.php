@@ -18,12 +18,14 @@ use App\Models\OrderReviewManifest;
 use App\Models\ProductionProject;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
+use App\Services\CodexScenes\BookPageService;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\RoboDesk\OrderConfirmationService;
+use App\Support\OrderStatusRegistry;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -79,6 +81,8 @@ class OrderContextBuilder
             'schema_version' => 1, 'capability_registry_version' => CapabilityRegistry::VERSION, 'checkout_ref' => 'checkout:'.$orders->first()->id,
             'representative_id' => $orders->first()->id,
             'orders' => $orders->map(fn ($o) => ['order_ref' => 'order:'.$o->id, 'status' => $o->status, 'payment_status' => $o->payment_status,
+                'order_behavior' => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_ORDER, $o->status),
+                'shipping_behavior' => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $o->shipping_status),
                 'printing_status' => $o->printing_status, 'shipping_status' => $o->shipping_status, 'deleted' => $o->trashed(), 'active' => in_array($o->id, $activeIds, true)])->all(),
             'all_complete' => $activeIds === [], 'hold' => $held, 'automation_owned' => $ownership,
             'automation_control' => ['state' => $control?->state ?? 'running', 'version' => (int) ($control?->version ?? 0)],
@@ -150,6 +154,7 @@ class OrderContextBuilder
                         'item_ref' => 'item:'.$item->id, 'identity_approved' => false, 'identity_status' => null,
                         'production' => $this->production($run, $spec['expected_outputs']), 'output_count' => $this->outputs($order, $spec['unit_key'], $context),
                         'cover_approved' => (bool) $coverApproved, 'linked_story_ref' => $linkedOrder ? 'story:'.$linkedOrder->id : null,
+                        'book_admission_eligible' => $spec['capability'] === 'book_interior' && app(BookPageService::class)->statusEligible($order),
                         'linked_story_valid' => (bool) $linkValid, 'linked_story_complete' => ! $linkedOrder || ($linkedRun?->status === 'completed' && $spec['expected_outputs'] >= $linkedRun->scene_count),
                         'legacy_conflict' => false,
                     ];

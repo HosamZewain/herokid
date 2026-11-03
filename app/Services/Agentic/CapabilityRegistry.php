@@ -5,7 +5,7 @@ namespace App\Services\Agentic;
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'autopilot-shadow-policy-v3';
+    public const VERSION = 'autopilot-shadow-policy-v4';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -15,7 +15,7 @@ class CapabilityRegistry
 
     public function targets(array $context): array
     {
-        // Owner clarification: terminal delivery/cancellation precedes old holds.
+        // Owner clarification: actual customer delivery/cancellation precedes old holds.
         if (AutoPilotOrderScope::complete($context)) {
             return [$this->target($context['checkout_ref'], 'checkout', 'completed', null, 'LIFECYCLE_COMPLETE')];
         }
@@ -74,7 +74,8 @@ class CapabilityRegistry
     private function unitTarget(array $context, array $unit): array
     {
         $result = fn ($decision, $action, $reason) => $this->target($unit['unit_key'], 'production_unit', $decision, $action, $reason);
-        if (! $unit['active'] || in_array($unit['order_status'], ['delivered', 'cancelled'], true)) {
+        $order = collect($context['orders'])->firstWhere('order_ref', $unit['order_ref']) ?? ['status' => $unit['order_status']];
+        if (! $unit['active'] || AutoPilotOrderScope::terminal($order)) {
             return $result('completed', null, 'UNIT_INACTIVE');
         }
         if ($context['change_requested']) {
@@ -89,6 +90,21 @@ class CapabilityRegistry
         }
         if ($production['active'] || in_array($unit['identity_status'], ['queued', 'pending', 'processing'], true) || $unit['legacy_conflict']) {
             return $result('wait', null, 'EXISTING_WORK_IN_PROGRESS');
+        }
+        if (($order['order_behavior'] ?? $unit['order_status']) === 'delivered') {
+            if (($order['shipping_behavior'] ?? $order['shipping_status'] ?? null) === 'shipped') {
+                return $result('wait', null, 'CUSTOMER_DELIVERY_PENDING');
+            }
+            if ($unit['capability'] === 'book_interior' && $production['attempted'] && $production['missing_numbers']) {
+                return $result('human_required', null, 'PRESERVE_OUTPUT_REVIEW_ATTEMPT');
+            }
+            // Keep fulfilment visible, without regenerating approved products or
+            // enrolling historical books. Only the existing SELECT-only admission
+            // rule can let an unstarted interior proceed to the other preflights.
+            if ($unit['capability'] !== 'book_interior' || $production['attempted'] || ! ($unit['book_admission_eligible'] ?? false)
+                || ($order['printing_status'] ?? null) !== 'not_started' || ($order['shipping_status'] ?? null) !== 'not_ready') {
+                return $result('human_required', null, 'FULFILLMENT_REQUIRES_TEAM');
+            }
         }
         if ($production['attempted'] || $unit['output_count'] > 0) {
             return $result('human_required', null, in_array($production['status'], ['completed', 'succeeded'], true) ? 'OUTPUT_REVIEW_AND_STUDIO' : 'PRESERVE_OUTPUT_REVIEW_ATTEMPT');
@@ -136,7 +152,8 @@ class CapabilityRegistry
             'story_scenes' => $context['runtime']['scenes_enabled'] && $context['runtime']['scenes_automatic']
                 && in_array($unit['order_status'], ['new_confirmed', 'costomer_confirmed'], true),
             'book_interior' => $context['runtime']['reviews_enabled'] && $context['runtime']['book_pages_enabled']
-                && in_array($unit['order_status'], ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true),
+                && (in_array($unit['order_status'], ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true)
+                    || ($unit['order_status'] === 'delivered' && ($unit['book_admission_eligible'] ?? false))),
             'book_cover' => $context['runtime']['reviews_enabled'] && $context['runtime']['products_enabled'],
             'single_image' => $context['runtime']['products_enabled'],
             default => false,

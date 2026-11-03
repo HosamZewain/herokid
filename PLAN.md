@@ -1,16 +1,19 @@
 # HeroKid Auto Pilot — Phase 1
 
-## Owner review and memory/activity amendment — 3 November 2026
+## Owner review and memory/activity amendments — 3–4 November 2026
 
 - Product name: **HeroKid Auto Pilot**. Preserve technical route/config names for compatibility.
-- The owner returned all 37 reviews and clarified that delivered orders are complete
-  even with an old manual hold. Cancelled orders are also terminal. Apply this only
+- The owner returned all 37 reviews and subsequently confirmed that **actual customer
+  delivery in shipping status**, or order cancellation, ends the lifecycle even with
+  an old manual hold. The order status labelled "production approved" stays open.
+  Apply this only
   to Auto Pilot projections/decisions; never rewrite existing business statuses or
   ownership. Mixed checkouts still evaluate each remaining live unit independently.
-- Preserve the original corpus as v1. Publish reviewed v2 with provenance, the five
-  requested corrections plus the clarified first case, and explicit owner approval.
-  Keep mock and real Codex scores distinct. Dedicated subscription verification and
-  the approved real evaluation passed on 3 November; see the acceptance status below.
+- Preserve v1 and the original reviewed v2 with their reports. Publish v3 for the
+  latest explicit delivery clarification: 37 checkouts / 89 targets; only cases
+  1, 32, 33, 36 and 37 change expectations, with captured facts unchanged.
+  Keep mock and real Codex scores distinct. The full v3 real Codex evaluation passed
+  on 4 November: 89/89 correct, zero unsafe proposals/false waits/unevaluated targets.
 - Add persistent, encrypted, scoped decision memory. Authorized staff can create,
   review, edit, archive and restore rules, with optimistic revisions and immutable
   version history. Decision feedback links to the exact run. Automatic suggestions
@@ -19,8 +22,11 @@
   applicable memory versions in context fingerprints and audit history. Memory edits
   invalidate affected observations without making AI calls or altering business data.
   Guidance cannot grant tools, alter isolation, infer payment, or bypass hard policy.
-- Seed the owner's reviewed operating lessons through an explicit idempotent import
-  action. Retain source references; do not execute the supplied HTML or import its scripts.
+- Seed the owner's reviewed operating lessons through an explicit idempotent import.
+  Upgrade the two untouched old delivery/hold rules as new immutable revisions.
+  A manually edited legacy rule requires visible review; never silently overwrite
+  it. Keep later staff edits after a current rule is imported. Retain source references;
+  do not execute the supplied HTML or import its scripts.
 - Add a current-activity panel: actual stage, checkout, remaining/selected target,
   start/update times, provider wait, quota/disabled/offline reasons, last outcome and
   expired/stalled worker state. Refresh independently of AI; never invent progress.
@@ -28,9 +34,10 @@
   rollback, applicability, stale in-flight decisions, terminal/mixed checkouts,
   manual staff actions and current activity on isolated SQLite/MySQL.
 - Keep all observation/evaluation/MCP defaults OFF, no execution controls, no AWS
-  deployment or production migrations. Live release observed read-only on 3 November:
-  `c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5`. Continue from prepared feature commit
-  `63818e5`; a future release must separately reconcile intervening production changes.
+  deployment or production migrations. AWS was reverified read-only at 22:10 UTC
+  on 3 November (4 November Cairo): `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`.
+  The dedicated release branch includes that base; recheck any intervening drift
+  before a separately approved deployment. Preserve the dirty primary checkout.
 
 Status: architecture and amendments implemented locally; approved real evaluation
 and memory acceptance passed, **Shadow Mode only**. Production defaults remain off;
@@ -238,6 +245,19 @@ transport complexity that is not necessary for these seven reads.
 
 ## Prepared implementation status
 
+- November 4 lifecycle amendment: production approval remains open until customer
+  delivery/cancellation. Before the amendment, SQLite passed 496/3,866; the same
+  candidate's earlier MySQL baseline also passed 496/3,866. After the amendment,
+  **503 tests / 3,988 assertions passed on each isolated SQLite and MySQL 8.4**.
+  The approved v3 real evaluation passed **89/89 (100%)** across 37 checkouts:
+  unsafe proposals 0, false waits 0, unsupported targets 19, unevaluated targets 0,
+  comparable existing admissions 24 and differences 0. All 89 calls used ChatGPT
+  subscription auth, zero tools and the attested private runtime; execution stayed
+  disabled. Same persistent quota, natural Cairo-day rollover, **89/100** attempts
+  on November 4; no reset or limit increase. Historical v1/v2 evidence is unchanged.
+  See `docs/autopilot-lifecycle-clarification-2026-11-04.ar.md`,
+  `docs/autopilot-lifecycle-validation-2026-11-04.json` and
+  `docs/autopilot-evaluation-actual.v3-codex.json`.
 - Release integration on November 3: candidate branch
   `codex/autopilot-shadow-release-20261103` is based on read-only verified AWS
   `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`, preserving its assignment permissions,
@@ -252,12 +272,14 @@ transport complexity that is not necessary for these seven reads.
   network denials and one real subscription decision passed. Cumulative local
   attempts are 94/100 on November 3 Cairo; the original 87-case score is historical
   v2 evidence, not a new full benchmark of this candidate.
-- **Business rule confirmation pending:** the current site labels `status=delivered`
-  as production approved, while customer delivery is separately represented by
-  `shipping_status=delivered`. The prior owner-approved terminal rule and v2 labels
-  remain unchanged pending clarification. No observation/evaluation rollout until
-  the meaning, scope, memory and evaluation labels agree. Preserve original reports
-  and create a new version if the rule changes.
+- **Business rule confirmed:** the owner explicitly approved continued tracking
+  after production approval until actual customer delivery or cancellation.
+  The implementation uses shipping/order status behaviours, including configured
+  aliases; legacy checkout/payment/printing completion cannot hide open fulfilment.
+  Approved production is not regenerated. Unstarted book interiors retain the
+  existing read-only admission fence, cover/payment/link checks and executor preflight.
+  Memory v2 and evaluation corpus v3 preserve all historical originals. See
+  `docs/autopilot-lifecycle-clarification-2026-11-04.ar.md` for this amendment's evidence.
 - Docker is not installed on AWS. Runtime installation, the three exact additive
   migrations, fresh dedicated host authentication and enabling shadow observation
   require a concrete approved deployment. No production changes have been made.
@@ -292,8 +314,9 @@ transport complexity that is not necessary for these seven reads.
   See `docs/autopilot-memory-activity-implementation.md` for this amendment's evidence.
 - Existing production execution/ownership service diff against the merged release
   is empty. Defaults remain off; the gateway has no execute method.
-- Owner review is incorporated in `actual-orders.v2.json`: 37 actual checkouts,
-  87 targets, including delivered taking precedence over an old manual hold.
+- Historical first owner review remains in `actual-orders.v2.json`: 37 checkouts,
+  87 targets. The latest delivery clarification is the separately versioned v3
+  with 89 targets; actual customer delivery takes precedence over an old hold.
 - Remaining release gates: reconcile the then-current AWS release, review the
   runtime installation and dedicated credential renewal, and obtain explicit
   deployment approval. Live autonomous execution remains unimplemented and

@@ -25,6 +25,8 @@ return [
         'AUTOMATION_PAUSE_REQUESTED' => 'طُلب إيقاف آمن؛ انتظر تأكيد انتهاء الخطوة الجارية',
         'AUTOMATION_PAUSED' => 'الأتمتة متوقفة؛ الاستئناف يحتاج إجراء الموظف المخوّل',
         'AUTOMATION_CONTROL_UNCERTAIN' => 'لم يتأكد وضع الإيقاف؛ يلزم فحص المسؤول بدون تكرار العمل',
+        'FULFILLMENT_REQUIRES_TEAM' => 'الإنتاج معتمد؛ متابعة الطباعة والتجهيز والشحن مع الفريق حتى تسليم العميل',
+        'CUSTOMER_DELIVERY_PENDING' => 'تم الشحن؛ انتظار التسليم الفعلي للعميل دون إعادة الإنتاج',
         'MEMORY_CONTEXT_LIMIT'=>'عدد قواعد الذاكرة المناسبة تجاوز الحد؛ راجع القواعد قبل التقييم',
         'PAYMENT_STATE_CONFLICT' => 'تعارض في رصيد الطلب يحتاج مراجعة', 'PAYMENT_REVIEW_REQUIRED' => 'مراجعة إثبات الدفع بواسطة الموظف',
         'CUSTOMER_REQUESTED_CHANGES' => 'العميل طلب تعديلًا', 'CONFIRMATION_REQUIRED' => 'انتظار تأكيد الطلب', 'CONFIRMATION_UNCERTAIN' => 'نتيجة إرسال التأكيد غير مؤكدة',

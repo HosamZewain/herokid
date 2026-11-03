@@ -3,12 +3,13 @@
     <main class="mx-auto max-w-6xl space-y-6 p-6" dir="rtl">
         <a href="{{ route('admin.agentic.index') }}" class="text-indigo-700 underline">المتابعة والنشاط الحالي</a>
         <p>هنا القواعد والتصحيحات المحفوظة. القواعد النشطة تدخل في مراجعة القرارات حسب نطاقها. كل تعديل له نسخة وتاريخ ومصدر، ويمكن استرجاع نسخة سابقة.</p>
-        <p class="text-sm text-gray-600">قواعد التشغيل الثابتة تظل مطبّقة: Shadow Mode، واحترام صلاحيات الفريق، وعدم إعادة تشغيل طلب مسلّم أو ملغي. تعديل نص الذاكرة لا يمنح صلاحية تنفيذ.</p>
+        <p class="text-sm text-gray-600">قواعد التشغيل الثابتة تظل مطبّقة: Shadow Mode، واحترام صلاحيات الفريق، وعدم إعادة تشغيل طلب أُلغي أو تم تسليمه فعليًا للعميل. «تم الإنتاج والموافقة» تظل تحت المتابعة. تعديل نص الذاكرة لا يمنح صلاحية تنفيذ.</p>
         @if(session('status'))<p role="status" class="rounded-lg bg-green-50 p-3">{{ session('status') }}</p>@endif
+        @if($errors->any())<p role="alert" class="rounded-lg border p-3">{{ $errors->first() }}</p>@endif
         @if(auth()->user()->hasPermission('order_automation.manage'))
             <div class="flex flex-wrap gap-4">
                 <a href="{{ route('admin.agentic.memory.create') }}" class="rounded-lg bg-indigo-700 px-4 py-2 text-white">إضافة قاعدة أو تصحيح</a>
-                <form method="POST" action="{{ route('admin.agentic.memory.import') }}">@csrf<button class="rounded-lg border px-4 py-2">إضافة قواعد مراجعة 3 نوفمبر</button></form>
+                <form method="POST" action="{{ route('admin.agentic.memory.import') }}">@csrf<button class="rounded-lg border px-4 py-2">إضافة قواعد المراجعة وتوضيح التسليم</button></form>
             </div>
         @endif
         <div class="space-y-3">

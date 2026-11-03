@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "mode": "shadow_only",
+  "deployed": false,
+  "autonomous_execution": false,
+  "branch": "codex/autopilot-shadow-release-20261103",
+  "previous_candidate": "194d8d5c9855335fdb45d97f72931ee66a78c0ed",
+  "aws_base_read_only_verified": {
+    "sha": "99c0b981a37a4828f5c7fbafe85a96d5d2d574b1",
+    "at_utc": "2026-11-03T22:10:20Z"
+  },
+  "approval_receipt": "autopilot-owner-delivery-clarification-2026-11-04.json",
+  "approved_dataset_sha256": "077798087a0a24b8c660192938de161059700dbd94028550d5a87a2dbd798cfe",
+  "real_report_sha256": "6ada0599e1ecca0d54419a7d04374e47ac9549ba4412fb681132d4de72db8836",
+  "evaluation": {
+    "provider": "codex",
+    "real_model": true,
+    "dataset_approval": "owner_approved",
+    "cases": 37,
+    "expected_targets": 89,
+    "correct": 89,
+    "accuracy_percent": 100,
+    "unsafe_proposals": 0,
+    "false_waits": 0,
+    "unsupported_targets": 19,
+    "unevaluated_targets": 0,
+    "existing_automation_comparable": 24,
+    "existing_automation_differences": 0,
+    "stopped_reason": null,
+    "live_execution_gate": false,
+    "accuracy_gate_met": true,
+    "dataset_sha256": "077798087a0a24b8c660192938de161059700dbd94028550d5a87a2dbd798cfe"
+  },
+  "tests": [
+    {
+      "name": "before_sqlite",
+      "tests": 496,
+      "assertions": 3866,
+      "passed": true,
+      "source": "fresh_before_this_amendment",
+      "evidence_file": "before-sqlite.log",
+      "evidence_sha256": "deb5099d6e4897f0211b203aa4ad38935187d6da3f579cefa61c06a208b001fb"
+    },
+    {
+      "name": "before_mysql",
+      "tests": 496,
+      "assertions": 3866,
+      "passed": true,
+      "source": "previous_preparation_same_194d8d5_candidate",
+      "evidence_file": "merged-mysql.log",
+      "evidence_sha256": "c90afc5021ce28d013666be42f660c3caa01b289cb60e64b84e46a5abb993dad"
+    },
+    {
+      "name": "after_sqlite",
+      "tests": 503,
+      "assertions": 3988,
+      "passed": true,
+      "source": "current_amendment",
+      "evidence_file": "after-sqlite.log",
+      "evidence_sha256": "e0b3992c2e7d6fd390c71fe7752778a7cfc7a74cf110389c6969d0c9496923ac"
+    },
+    {
+      "name": "after_mysql",
+      "tests": 503,
+      "assertions": 3988,
+      "passed": true,
+      "source": "current_amendment",
+      "evidence_file": "after-mysql.log",
+      "evidence_sha256": "17fb2731a8777ce8adee46a74f01c4337349934de8dfa3785b7bbc5a5f300b9a"
+    },
+    {
+      "name": "focused",
+      "tests": 29,
+      "assertions": 310,
+      "passed": true,
+      "source": "current_amendment",
+      "evidence_file": "focused-verified.log",
+      "evidence_sha256": "0e4513e7ade46b6c594eb67b87756761a408245c48f63d4e2488a56b64c37a55"
+    }
+  ],
+  "runtime": {
+    "host_attestation": {
+      "verified": true,
+      "private_network": true,
+      "host_gateway_absent": true,
+      "model_ports_published": false,
+      "model_mounts": [
+        "read_only_dedicated_auth",
+        "private_unix_socket"
+      ],
+      "direct_model_egress": false
+    },
+    "decision_image": "sha256:5c2b0057493ca4e8e572a2fced09b56436eefb434e28f0adff6a138ffe3c240d",
+    "egress_image": "sha256:88c0bd91adfdeaca3d13590b928ae201e3f49b3462f882e5d03efbdf99363821",
+    "authentication": "chatgpt",
+    "tools_used": 0,
+    "api_fallback": false,
+    "isolation_digests": [
+      "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba"
+    ],
+    "cli_versions": [
+      "0.166.0"
+    ]
+  },
+  "quota": {
+    "timezone": "Africa/Cairo",
+    "day": "2026-11-04",
+    "attempts": 89,
+    "limit": 100,
+    "manual_reset": false,
+    "new_day_rollover": true,
+    "previous_day_attempts": 94
+  },
+  "original_review_files": {
+    "tests/Fixtures/agentic/actual-orders.v1.json": {
+      "unchanged": true,
+      "sha256": "877f9fccb4d506b030b0cd05db4dc7ccc23775923655cd56907f272277dca073"
+    },
+    "tests/Fixtures/agentic/actual-orders.v2.json": {
+      "unchanged": true,
+      "sha256": "c3b9aef60b21524617d01a2d50ecf43b51a2481030f0ca1d43bb3c70e68a43c1"
+    },
+    "resources/agentic/owner-memory-2026-11-03.json": {
+      "unchanged": true,
+      "sha256": "42b5dee0504b46606bd46b0790aa85c3b10d07de7b9e7c8e0d487f58708c4280"
+    },
+    "docs/autopilot-evaluation-actual.v2-codex.json": {
+      "unchanged": true,
+      "sha256": "b4783d32eb1dcc76b2850bd57568453fd4a27f58b067e364d8c142eb61f7dd2a"
+    }
+  },
+  "source_fingerprints": {
+    "app/Services/Agentic/AutoPilotOrderScope.php": "1daa1740524c3f6e7ff95771985e0f4f1e29520d7e4dd856c013c02ff2766f8c",
+    "app/Services/Agentic/CapabilityRegistry.php": "ca0c847eaf7ad58498736604e00bc429f7464c9bee4bd6ed69a76505a935c422",
+    "app/Services/Agentic/OrderContextBuilder.php": "5ce425602e8c684211f56867ca1d483aedd29974721de1705ed853d7720f83ac",
+    "app/Services/Agentic/MemoryService.php": "150fe27707f7bc8098cdcc98b15b304ef56db334c3c84cfd6a6ead3f44ce24ba",
+    "app/Console/Commands/BenchmarkAgenticDecisions.php": "4651d04755480444281333f779a2ef3efc854de18f4a59dbb0193c87c4ff129d",
+    "resources/agentic/owner-memory-2026-11-03.v2.json": "a122a04c505b2ce9f82bbc6d8d306429855d7d0374c5cff00f8bdf1966853e2d"
+  },
+  "remaining_limits": [
+    "Accuracy is limited to the approved anonymized evaluation set, not all future orders.",
+    "Physical delivery and custom status aliases also have synthetic regression coverage; no new production samples were collected.",
+    "AWS Docker installation, additive migrations, dedicated host authentication and Shadow activation still require explicit deployment approval.",
+    "Actual host isolation, authenticated UI, observer freshness and worker health must be verified after an approved deployment.",
+    "Preserve the same-day Auto Pilot quota when moving the prepared runtime to a fresh host database."
+  ]
+}

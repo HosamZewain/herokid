@@ -19,7 +19,7 @@ class BenchmarkAgenticDecisions extends Command
             || ! in_array($this->option('dataset'), ['actual', 'synthetic'], true)) {
             return self::FAILURE;
         }
-        $path = base_path('tests/Fixtures/agentic/'.$this->option('dataset').'-orders.'.($this->option('dataset') === 'actual' ? 'v2' : 'v1').'.json');
+        $path = base_path('tests/Fixtures/agentic/'.$this->option('dataset').'-orders.'.($this->option('dataset') === 'actual' ? 'v3' : 'v1').'.json');
         $corpus = json_decode(file_get_contents($path), true, 64, JSON_THROW_ON_ERROR);
         $provider = $this->option('provider') === 'codex' ? app(EvaluationBudgetProvider::class) : app(MockProvider::class);
         if ($provider->name() === 'codex' && ($corpus['approval'] !== 'owner_approved' || ! $this->option('output') || ! ($provider->health()['ready'] ?? false))) {

@@ -5,7 +5,9 @@ namespace App\Services\Agentic;
 use App\Models\AiCheckoutState;
 use App\Models\AiMemory;
 use App\Models\AiMemoryVersion;
+use App\Models\Order;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -28,7 +30,7 @@ class MemoryService
         $data['scope_key'] = $data['scope_key'] ?? '';
         if (($data['scope_type'] === 'global' && $data['scope_key'] !== '')
             || ($data['scope_type'] === 'capability' && ! in_array($data['scope_key'], self::CAPABILITIES, true))
-            || ($data['scope_type'] === 'checkout' && ! \App\Models\Order::where('checkout_group_key', $data['scope_key'])->exists())) {
+            || ($data['scope_type'] === 'checkout' && ! Order::where('checkout_group_key', $data['scope_key'])->exists())) {
             throw ValidationException::withMessages(['scope_key' => 'اختر نطاقًا موجودًا للقاعدة.']);
         }
         // Active guidance is deliberately small and contains no links, credentials,
@@ -88,26 +90,42 @@ class MemoryService
 
     public function importOwnerReview(?User $actor = null): int
     {
-        $seeds = json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.json')), true, 16, JSON_THROW_ON_ERROR);
-        $count = 0;
-        foreach ($seeds as $seed) {
-            $key = 'owner-review:2026-11-03:'.$seed['key'];
-            if (AiMemory::where('source_key', $key)->exists()) {
-                continue;
-            }
-            try {
-                $this->save(null, $seed + ['scope_type' => 'global', 'scope_key' => '', 'status' => 'active',
-                    'change_reason' => 'مراجعة المالك بتاريخ 3 نوفمبر 2026؛ الحالات '.$seed['cases']], $actor, sourceKey: $key);
-                $count++;
-            } catch (\Illuminate\Database\UniqueConstraintViolationException $error) {
-                // A simultaneous import may have won the unique source key.
-                // Never overwrite its revision or any subsequent staff correction.
-                if (! AiMemory::where('source_key', $key)->exists()) {
-                    throw $error;
+        $original = collect(json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.json')), true, 16, JSON_THROW_ON_ERROR))->keyBy('key');
+        $seeds = json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.v2.json')), true, 16, JSON_THROW_ON_ERROR);
+
+        return DB::transaction(function () use ($actor, $original, $seeds) {
+            $count = 0;
+            foreach ($seeds as $seed) {
+                $key = 'owner-review:2026-11-03:'.$seed['key'];
+                $memory = AiMemory::where('source_key', $key)->lockForUpdate()->first();
+                $data = $seed + ['scope_type' => 'global', 'scope_key' => '', 'status' => 'active',
+                    'change_reason' => 'مراجعة المالك وتوضيح التسليم الفعلي بتاريخ 3 نوفمبر 2026؛ الحالات '.$seed['cases']];
+                if ($memory) {
+                    $old = $original[$seed['key']];
+                    if ($old['guidance'] === $seed['guidance']) {
+                        continue;
+                    }
+                    // A current seed was already published at revision 1 (fresh
+                    // install) or 2 (approved upgrade). Preserve later staff edits.
+                    if ($memory->versions()->whereIn('revision', [1, 2])->get()->contains(fn ($v) => ($v->snapshot['guidance'] ?? null) === $seed['guidance'])) {
+                        continue;
+                    }
+                    if ($memory->revision !== 1 || $memory->guidance !== $old['guidance'] || $memory->title !== $old['title']
+                        || $memory->status !== 'active' || $memory->scope_type !== 'global' || $memory->scope_key !== '') {
+                        throw ValidationException::withMessages(['memory' => 'قاعدة التسليم القديمة عُدّلت يدويًا؛ راجعها في الذاكرة قبل استيراد التوضيح الجديد. لم تُستبدل تعديلات الفريق.']);
+                    }
+                }
+                try {
+                    $this->save($memory, $data, $actor, $memory?->revision, sourceKey: $key);
+                    $count++;
+                } catch (UniqueConstraintViolationException $error) {
+                    if (! AiMemory::where('source_key', $key)->exists()) {
+                        throw $error;
+                    }
                 }
             }
-        }
 
-        return $count;
+            return $count;
+        }, 3);
     }
 }

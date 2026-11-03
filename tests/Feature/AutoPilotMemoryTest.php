@@ -4,9 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiAgentRun;
 use App\Models\AiMemory;
-use App\Models\AiMemoryVersion;
 use App\Models\AiOrderDecision;
-use App\Models\Order;
 use App\Models\Permission;
 use App\Models\User;
 use App\Services\Agentic\ContextObserver;
@@ -171,6 +169,47 @@ class AutoPilotMemoryTest extends TestCase
         $this->assertFalse(AiOrderDecision::first()->simulation['executed']);
         $this->assertSame([], AiAgentRun::first()->snapshot['memory']['entries']);
         $this->assertCount(6, $state->fresh()->snapshot['memory']['entries']);
+    }
+
+    public function test_approved_delivery_correction_upgrades_unchanged_old_rules_as_new_versions(): void
+    {
+        $this->observedCheckout('memory-upgrade');
+        $service = app(MemoryService::class);
+        $seeds = json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.json')), true);
+        foreach ($seeds as $seed) {
+            $service->save(null, $this->guidance(['title' => $seed['title'], 'guidance' => $seed['guidance']]), null,
+                sourceKey: 'owner-review:2026-11-03:'.$seed['key']);
+        }
+        $before = app(ContextObserver::class)->observe('memory-upgrade')->snapshot;
+        $ordersBefore = DB::table('orders')->get()->toJson();
+        $this->assertSame(2, $service->importOwnerReview());
+        $this->assertSame(0, $service->importOwnerReview());
+        $rule = AiMemory::where('source_key', 'owner-review:2026-11-03:delivered-is-terminal')->firstOrFail();
+        $this->assertSame(2, $rule->revision);
+        $this->assertSame($seeds[0]['guidance'], $rule->versions()->where('revision', 1)->first()->snapshot['guidance']);
+        $this->assertStringContainsString('التسليم الفعلي', $rule->guidance);
+        $this->assertSame([1, 2], $rule->versions()->orderBy('revision')->pluck('revision')->all());
+        $this->assertNotSame($before['fingerprint'], app(ContextObserver::class)->observe('memory-upgrade')->snapshot['fingerprint']);
+        $this->assertSame($ordersBefore, DB::table('orders')->get()->toJson());
+        $this->assertDatabaseCount('ai_memory_versions', 8);
+        $this->assertDatabaseCount('ai_agent_runs', 0);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_legacy_rule_with_staff_changes_requires_visible_review_instead_of_overwrite(): void
+    {
+        $seed = json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.json')), true)[0];
+        $service = app(MemoryService::class);
+        $rule = $service->save(null, $this->guidance(['title' => $seed['title'], 'guidance' => $seed['guidance']]), null,
+            sourceKey: 'owner-review:2026-11-03:'.$seed['key']);
+        $service->save($rule, $this->guidance(['guidance' => 'تصحيح يدوي سابق يجب مراجعته']), null, 1);
+        $this->actingAs($this->staff(true))->post(route('admin.agentic.memory.import'))->assertSessionHasErrors('memory');
+        $this->get(route('admin.agentic.memory.index'))->assertOk()->assertSee('لم تُستبدل تعديلات الفريق');
+        $this->assertSame('تصحيح يدوي سابق يجب مراجعته', $rule->fresh()->guidance);
+        $this->assertSame(2, $rule->fresh()->revision);
+        $this->assertDatabaseCount('ai_memories', 1);
+        $this->assertDatabaseCount('ai_memory_versions', 2);
     }
 
     public function test_overflow_is_visible_and_does_not_spend_a_model_call(): void

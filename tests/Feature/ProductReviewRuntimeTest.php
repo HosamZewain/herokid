@@ -516,7 +516,11 @@ class ProductReviewRuntimeTest extends TestCase
         $context = app(OrderContextBuilder::class)->build($item->order->checkoutGroupKey());
         $this->assertNotNull($context['review']['staff_approval_ref']);
         $this->assertTrue(collect($context['units'])->firstWhere('capability', 'book_interior')['cover_approved']);
+        $this->assertTrue(collect($context['units'])->firstWhere('capability', 'book_interior')['book_admission_eligible']);
         $this->assertSame($ordersBefore, DB::table('orders')->get()->toJson());
+        $item->order->updateQuietly(['status' => 'delivered', 'printing_status' => 'not_started', 'shipping_status' => 'not_ready']);
+        $context = app(OrderContextBuilder::class)->build($item->order->checkoutGroupKey());
+        $this->assertFalse(collect($context['units'])->firstWhere('capability', 'book_interior')['book_admission_eligible']);
         $this->app->forgetInstance(PuzzleInputs::class);
         $book = app(BookPageService::class)->start($item->fresh(), $manifest->fresh(), true);
         $this->assertStringContainsString('Refreshed inside 3 pages', $book->snapshot['prompt']);

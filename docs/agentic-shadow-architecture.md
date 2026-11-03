@@ -48,15 +48,17 @@ implementation evidence for tested guarantees and real-authentication limits.
 | PuzzleAutomation / PuzzleInputs | Existing puzzle/mug and book executors stay authoritative. Avoid media downloads, provider pricing or credential loading in the observer; paid/provider preflight is explicitly deferred. |
 | ProcessProductReview / BookPageService | Read latest immutable manifest, cover/preview correlation, revocation, run state and interior fingerprint. Fresh media checks and full linked-story capture still belong to existing executor preflight. |
 | ProductProductionPrompt / ProductProductionStage | Preserve purchased variants/components and unit keys. Hash and discard raw prompt/photo inputs. An explicit spec may restrict capabilities, never expand an executor. |
-| AdminOrderGroupService | Reuse grouping and base active scope. AutoPilotOrderScope additionally treats delivered/cancelled orders as terminal for Auto Pilot, as explicitly confirmed by the owner. Existing workflows and holds are unchanged. Mixed checkouts retain their open siblings. |
+| AdminOrderGroupService / OrderStatusRegistry | Preserve existing checkout grouping and admin workflows. AutoPilotOrderScope has its own approved lifecycle: actual shipping-delivery or order-cancellation behaviour is terminal, including custom aliases. Production approval alone stays open; payment/printing completion cannot hide pending fulfilment. Mixed checkouts retain their open siblings. |
 
 The original baseline was `683389a`. During implementation, production advanced
 to `77ef1cc` (cover artwork and preview-state synchronization). That release was
 inspected and merged locally, and final checks include it. This is no assertion
 that production will remain at that SHA; revalidate before any future release.
 On November 3, AWS was read-only verified at `c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5`.
-This extension starts from the prepared feature commit `63818e5`; intervening
-production releases still need reconciliation before a separately approved release.
+That extension started from the prepared feature commit `63818e5`. The later
+release candidate incorporates AWS `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`,
+read-only rechecked at 21:48:17UTC on November 3. Revalidate current production
+before a separately approved release.
 
 ## Lifecycle, coverage and safety
 
@@ -197,9 +199,9 @@ The current concrete candidate, exact migrations, tested runtime and remaining
 business-rule gate are documented in
 [`autopilot-release-preparation-2026-11-03.ar.md`](autopilot-release-preparation-2026-11-03.ar.md)
 and [`../ops/agentic/deploy/README.md`](../ops/agentic/deploy/README.md).
-The existing `status=delivered` terminal rule above is retained pending the
-owner's clarification of the newer production-approval label; it must not be
-treated as an approved reading of actual customer delivery in the new release.
+The owner has now clarified the newer production-approval label. The amendment in
+[`autopilot-lifecycle-clarification-2026-11-04.ar.md`](autopilot-lifecycle-clarification-2026-11-04.ar.md)
+supersedes the historical terminal assumption and preserves all old reports.
 
 Revalidate AWS SHA and exact diff; preserve concurrent releases and record a
 private recovery checkpoint. Review the three additive migrations before seeking

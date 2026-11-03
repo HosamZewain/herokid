@@ -9,7 +9,9 @@ owner-approved. Subsequent real Codex acceptance passed as recorded in
 Current AWS integration and isolated amd64 acceptance are recorded in
 [`autopilot-release-preparation-2026-11-03.ar.md`](autopilot-release-preparation-2026-11-03.ar.md).
 The earlier unverified-auth statements below are historical. Deployment remains
-unperformed, and the current lifecycle-label conflict is a pending release gate.
+unperformed. The lifecycle-label conflict was resolved by the owner's explicit
+clarification; see [`autopilot-lifecycle-clarification-2026-11-04.ar.md`](autopilot-lifecycle-clarification-2026-11-04.ar.md)
+for the successor implementation and evaluation, without changing historical reports.
 
 Prepared locally, not deployed. Branch `codex/agentic-shadow`, release base
 `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Production behavior and ownership stay

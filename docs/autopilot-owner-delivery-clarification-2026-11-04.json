@@ -1,0 +1,26 @@
+{
+  "recorded_for": "HeroKid Auto Pilot",
+  "source": "explicit_owner_reply",
+  "question": "هل نخلي Auto Pilot يتابع حالة تم الإنتاج والموافقة، ويقفل الأوردر عند الإلغاء أو تم التسليم للعميل في حالة الشحن؟",
+  "answer": "نعم، يتابع لحد التسليم الفعلي للعميل (الموصى به)",
+  "approved_rule": "production_approval_is_not_customer_delivery",
+  "applies_to": [
+    "Auto Pilot lifecycle projection",
+    "versioned memory clarification",
+    "five affected evaluation labels"
+  ],
+  "does_not_authorize": [
+    "autonomous execution",
+    "AWS deployment",
+    "production migrations"
+  ],
+  "previous_dataset": "actual-orders.v2.json",
+  "current_dataset": "actual-orders.v3.json",
+  "changed_cases": [
+    "real-01",
+    "real-32",
+    "real-33",
+    "real-36",
+    "real-37"
+  ]
+}

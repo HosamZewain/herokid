@@ -1,14 +1,18 @@
 # Prepared Auto Pilot host profile — not installed
 
-Release prerequisite: resolve the lifecycle ambiguity in
-[`../../../docs/autopilot-release-preparation-2026-11-03.ar.md`](../../../docs/autopilot-release-preparation-2026-11-03.ar.md)
-and obtain scoped AWS/migration approval. No autonomous execution exists in this
+The owner resolved the lifecycle ambiguity; see
+[`../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md`](../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md).
+Release still requires scoped AWS/migration approval and actual host attestation.
+No autonomous execution exists in this
 package. Do not run this as a blanket deployment script.
 
 ## Boundary and measured acceptance
 
 The exact amd64 image pair was tested locally on Linux containers, including a
-real subscription decision. The decision container has one internal network with
+real subscription decision and the November 4 approved v3 evaluation: 89/89
+correct, zero unsafe proposals/false waits/unevaluated targets, all subscription
+authenticated with zero model tools. This is local evidence, not AWS activation.
+The decision container has one internal network with
 Docker's `gateway_mode_ipv4=isolated`, no default route and no published port.
 Only the proxy joins a second outbound network. No other container may join the
 private network. Docker 28+ is required; an ordinary internal network alone still
@@ -73,11 +77,16 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    Keep provider `codex`, daily limit 100, cycles/pass 3. Discover Composer packages
    from the reviewed lockfile, then validate routes/views/cache; stale package
    discovery hid the MCP route in the first local test attempt.
+   Before enabling evaluation on the same Cairo day, carry forward the greater
+   recorded local/host Auto Pilot attempt count under the runtime-state lock;
+   a fresh host database must not create a second daily allowance. Preserve all
+   prior quota reports. A new calendar day follows the normal quota rule.
 7. Apply only the three exact additive migrations listed in the release report,
    using individual `--path` arguments after confirming their pending state. No
    blanket migration, seed, test, data rewrite, ownership change or queue replay.
-   Import reviewed memory through the authorized application action only after
-   the lifecycle rule is resolved; imports must not overwrite staff revisions.
+   Import the current reviewed memory through the authorized application action.
+   The two unchanged legacy rules gain immutable revisions. A customized legacy
+   delivery rule produces a visible conflict and requires review; it is not overwritten.
 8. Enable observation alone, measure bounded scans/load/freshness and verify the
    authenticated dashboard with the existing permissions. Existing production
    workers remain running; their missed new hints are covered by reconciliation.
