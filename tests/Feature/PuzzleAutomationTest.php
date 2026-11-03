@@ -235,7 +235,10 @@ class PuzzleAutomationTest extends TestCase
         $this->assertSame('uncertain', $run->fresh()->status);
         $this->assertNotNull($run->fresh()->active_item_id);
         $this->assertDatabaseCount('order_previews', 1);
-        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        // The existing explicit manual hold resumes ownership when this worker finishes.
+        // Unknown billing still prevents regeneration; the old preview remains untouched.
+        $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
+        $this->assertFalse(app(AutomationAssignment::class)->owns($order));
         $this->post(route('admin.orders.products.regenerate', [$order, $order->items()->first()]), ['previous_run_id' => $run->id, 'confirm' => 1])->assertSessionHasErrors('product_generation');
         $this->assertDatabaseCount('puzzle_generations', 2);
     }
@@ -526,6 +529,94 @@ class PuzzleAutomationTest extends TestCase
         $this->assertSame('puzzle_result_uncertain', $run->error_code);
         $this->assertTrue(app(AutomationAssignment::class)->owns($order));
         $this->assertDatabaseCount('order_previews', 0);
+    }
+
+    public function test_finished_uncertain_product_can_be_taken_and_cancelled_without_retry_or_history_changes(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $service = app(PuzzleAutomation::class);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('uncertain result'));
+        $service->tick();
+        $run = PuzzleGeneration::sole();
+        $original = $run->getAttributes();
+        $this->assertNotNull($run->finished_at);
+        $this->assertNull($run->lease_until);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+
+        $this->handoff($order, 'take');
+        $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
+        $this->assertFalse(app(AutomationAssignment::class)->owns($order));
+        $this->assertDatabaseHas('order_group_assignments', ['checkout_group_key' => $order->checkoutGroupKey(), 'assigned_to_user_id' => $actor->id]);
+        $audit = AdminActivityLog::where('action', 'order.automation_taken_over')->sole();
+        $this->assertSame([$run->id], $audit->properties['uncertain_product_run_ids']);
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'resume'])->assertSessionHasErrors('assignment');
+        $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
+        $this->post(route('admin.orders.products.regenerate', [$order, $order->items()->first()]), ['previous_run_id' => $run->id, 'confirm' => 1])->assertSessionHasErrors();
+        // Clear the previous redirect's flashed validation errors before testing cancellation.
+        session()->forget('errors');
+        $this->patch(route('admin.orders.groups.workflow-statuses', $order), [
+            'status' => 'cancelled', 'payment_status' => 'unpaid',
+            'printing_status' => 'not_started', 'shipping_status' => 'not_ready',
+            'admin_notes' => 'Customer requested cancellation',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertEquals(0, $order->fresh()->paid_amount_cents);
+        $service->tick();
+        $service->generate($run->id);
+        $this->assertSame($original, $run->fresh()->getAttributes());
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertDatabaseCount('order_previews', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_explicit_take_releases_finished_uncertain_manual_generation_only(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        app(PuzzleAutomation::class)->enroll();
+        $this->handoff($order, 'take');
+        $run = PuzzleGeneration::sole();
+        $run->update(['requested_by' => $actor->id, 'status' => 'processing']);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'take'])->assertSessionHasErrors('assignment');
+        $run->update(['status' => 'uncertain', 'finished_at' => now(), 'lease_until' => null, 'billing_status' => 'unknown']);
+        $original = $run->fresh()->getAttributes();
+        session()->forget('errors');
+        $this->handoff($order, 'take');
+        $this->assertFalse(app(AutomationAssignment::class)->owns($order));
+        $this->assertSame($original, $run->fresh()->getAttributes());
+    }
+
+    public function test_uncertain_product_without_worker_completion_still_blocks_takeover(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        app(PuzzleAutomation::class)->enroll();
+        $run = PuzzleGeneration::sole();
+        foreach ([
+            ['finished_at' => null, 'lease_until' => null],
+            ['finished_at' => now(), 'lease_until' => now()->addMinute()],
+            ['finished_at' => now(), 'lease_until' => now()->subMinute()],
+        ] as $workerState) {
+            $run->update(['status' => 'uncertain'] + $workerState);
+            $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'take'])->assertSessionHasErrors('assignment');
+            $this->assertFalse(AutomationHandoff::held($order->checkoutGroupKey()));
+            $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        }
+        $this->assertDatabaseCount('order_group_assignments', 0);
+    }
+
+    public function test_finished_uncertainty_does_not_allow_takeover_of_another_active_product_in_checkout(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        $other = $this->order('مارية', 'b', $order->checkoutGroupKey());
+        app(PuzzleAutomation::class)->enroll();
+        PuzzleGeneration::where('order_id', $order->id)->first()->update(['status' => 'uncertain', 'finished_at' => now(), 'lease_until' => null]);
+        PuzzleGeneration::where('order_id', $other->id)->first()->update(['status' => 'processing']);
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'take'])->assertSessionHasErrors('assignment');
+        $this->assertFalse(AutomationHandoff::held($order->checkoutGroupKey()));
     }
 
     public function test_changed_inputs_and_missing_photos_block_without_provider_call(): void

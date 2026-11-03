@@ -61,9 +61,16 @@ class AutomationHandoff
                 throw ValidationException::withMessages(['assignment' => 'إعادة توليد الهوية جارية أو نتيجتها غير مؤكدة؛ انتظر المراجعة.']);
             }
             abort_if($rows->isEmpty(), 404);
-            if (PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->whereIn('status', ['processing', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'queued')->whereNotNull('requested_by')))->lockForUpdate()->exists()) {
-                throw ValidationException::withMessages(['assignment' => 'توليد البازل جارٍ أو نتيجته غير مؤكدة. انتظر اكتماله أو مراجعة المحاولة قبل الاستلام.']);
+            // A finished worker with an uncertain provider result is not running work.
+            // Preserve its unknown result/billing and retry fence, but permit a manual hold/cancellation.
+            $productRuns = PuzzleGeneration::where('checkout_key', $key)->orderBy('id')->lockForUpdate()
+                ->get(['id', 'status', 'requested_by', 'finished_at', 'lease_until']);
+            if ($productRuns->contains(fn ($run) => $run->status === 'processing'
+                || ($run->status === 'uncertain' && (! $run->finished_at || $run->lease_until))
+                || ($run->status === 'queued' && $run->requested_by))) {
+                throw ValidationException::withMessages(['assignment' => 'توليد المنتج جارٍ أو لم يتأكد توقف العامل. انتظر انتهاء التنفيذ قبل الاستلام.']);
             }
+            $uncertainProductIds = $productRuns->where('status', 'uncertain')->pluck('id')->all();
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'أوقف تجربة Codex من زر الإيقاف وانتظر تأكيد توقفها، ثم استلم الطلب.']);
             }
@@ -88,7 +95,7 @@ class AutomationHandoff
                     }
                 }
                 DB::table('order_automation_holds')->insert(['checkout_key' => $key, 'user_id' => $actor->id, 'fingerprint' => $this->fingerprint($rows), 'runs' => json_encode($savedRuns), 'confirmations' => json_encode($savedEvents), 'created_at' => now(), 'updated_at' => now()]);
-                AdminActivityLogger::log('order.automation_taken_over', 'استلام يدوي من Automation وإيقاف متابعة الأوتوميشن لهذه العملية.', $order, ['checkout_group_key' => $key, 'run_ids' => array_keys($savedRuns)], $actor, $request);
+                AdminActivityLogger::log('order.automation_taken_over', 'استلام يدوي من Automation وإيقاف متابعة الأوتوميشن لهذه العملية.', $order, ['checkout_group_key' => $key, 'run_ids' => array_keys($savedRuns), 'uncertain_product_run_ids' => $uncertainProductIds], $actor, $request);
             }
             app(OrderAssignmentService::class)->acquire($order, $actor, $request, true);
         }, 3);

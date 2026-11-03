@@ -36,7 +36,7 @@ class OrderAssignmentController extends Controller
             $handoff->resume($order, $request->user(), $request);
         }
 
-        return back()->with('success', $data['action'] === 'take' ? 'تم استلام الطلب وإيقاف متابعته الآلية؛ يمكنك تعديل الطلب ورفع الهوية.' : 'تمت إعادة متابعة الطلب إلى الأوتوميشن.');
+        return back()->with('success', $data['action'] === 'take' ? 'تم استلام الطلب وإيقاف متابعته الآلية؛ يمكنك تعديله أو إلغاء الطلب. أي نتيجة توليد غير مؤكدة تظل محفوظة للمراجعة ولا يُعاد تنفيذها.' : 'تمت إعادة متابعة الطلب إلى الأوتوميشن.');
     }
 
     public function release(Request $request, int $representative, OrderAssignmentService $assignments)
