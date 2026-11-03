@@ -1,4 +1,35 @@
-# HeroKid Hybrid Agentic Automation — Phase 1
+# HeroKid Auto Pilot — Phase 1
+
+## Owner review and memory/activity amendment — 3 November 2026
+
+- Product name: **HeroKid Auto Pilot**. Preserve technical route/config names for compatibility.
+- The owner returned all 37 reviews and clarified that delivered orders are complete
+  even with an old manual hold. Cancelled orders are also terminal. Apply this only
+  to Auto Pilot projections/decisions; never rewrite existing business statuses or
+  ownership. Mixed checkouts still evaluate each remaining live unit independently.
+- Preserve the original corpus as v1. Publish reviewed v2 with provenance, the five
+  requested corrections plus the clarified first case, and explicit owner approval.
+  Keep mock and real Codex scores distinct; real subscription verification remains pending.
+- Add persistent, encrypted, scoped decision memory. Authorized staff can create,
+  review, edit, archive and restore rules, with optimistic revisions and immutable
+  version history. Decision feedback links to the exact run. Automatic suggestions
+  stay drafts; only explicit staff activation supplies guidance to the Decision Agent.
+- Store only approved, bounded guidance in sanitized decision snapshots. Include
+  applicable memory versions in context fingerprints and audit history. Memory edits
+  invalidate affected observations without making AI calls or altering business data.
+  Guidance cannot grant tools, alter isolation, infer payment, or bypass hard policy.
+- Seed the owner's reviewed operating lessons through an explicit idempotent import
+  action. Retain source references; do not execute the supplied HTML or import its scripts.
+- Add a current-activity panel: actual stage, checkout, remaining/selected target,
+  start/update times, provider wait, quota/disabled/offline reasons, last outcome and
+  expired/stalled worker state. Refresh independently of AI; never invent progress.
+- Baseline existing automation before edits, then test memory permissions, revisions,
+  rollback, applicability, stale in-flight decisions, terminal/mixed checkouts,
+  manual staff actions and current activity on isolated SQLite/MySQL.
+- Keep all observation/evaluation/MCP defaults OFF, no execution controls, no AWS
+  deployment or production migrations. Live release observed read-only on 3 November:
+  `c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5`. Continue from prepared feature commit
+  `63818e5`; a future release must separately reconcile intervening production changes.
 
 Status: architecture and amendments implemented locally; validation/review gates
 listed below remain, **Shadow Mode only**. Nothing deployed or activated.
@@ -208,10 +239,14 @@ transport complexity that is not necessary for these seven reads.
 - Implemented locally: context/specification/registry, bounded decisions and
   scheduling, policy simulation, encrypted audit, isolated fail-closed SDK bridge,
   dashboard, actual/synthetic evaluation harness and seven read-only MCP tools.
+- November 3 extension: HeroKid Auto Pilot naming, owner-reviewed terminal rules,
+  editable scoped memory with immutable revisions, and live activity/status polling.
+  See `docs/autopilot-memory-activity-implementation.md` for this amendment's evidence.
 - Existing production execution/ownership service diff against the merged release
   is empty. Defaults remain off; the gateway has no execute method.
-- Pending acceptance: owner approval of `docs/agentic-evaluation-review.ar.md`,
-  dedicated ChatGPT subscription authentication and real inference verification,
+- Owner review is incorporated in `actual-orders.v2.json`: 37 actual checkouts,
+  87 targets, including delivered taking precedence over an old manual hold.
+- Pending acceptance: dedicated ChatGPT subscription authentication and real inference verification,
   then ≥95% correctness on the approved corpus with no unresolved safety-critical
   failures. Mock scores do not satisfy that real-model gate.
 - Detailed files, measured tests, known SQLite limitations and runtime boundaries:

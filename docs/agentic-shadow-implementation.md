@@ -1,5 +1,11 @@
 # Agentic Shadow implementation evidence
 
+Historical Phase 1 evidence through November 2. The latest November 3 owner review,
+HeroKid Auto Pilot memory/activity changes and before/after results are recorded in
+[`autopilot-memory-activity-implementation.md`](autopilot-memory-activity-implementation.md).
+The pending-owner-review statements below describe the earlier v1 only; v2 is now
+owner-approved. Real Codex acceptance and deployment remain unperformed.
+
 Prepared locally, not deployed. Branch `codex/agentic-shadow`, release base
 `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Production behavior and ownership stay
 unchanged. See `PLAN.md` for the approved scope and acceptance gates.

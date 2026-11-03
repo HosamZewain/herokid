@@ -33,6 +33,7 @@ class AgenticDashboardTest extends TestCase
         $this->get(route('admin.agentic.index'))->assertRedirect(route('login'));
         $this->actingAs(User::factory()->create(['role' => 'customer']))->get(route('admin.agentic.index'))->assertForbidden();
         $this->actingAs($this->staff(['orders.view']))->get(route('admin.agentic.monitor'))->assertForbidden();
+        $this->get(route('admin.agentic.activity'))->assertForbidden();
         $this->actingAs($this->staff(['order_automation.view']))->get(route('admin.agentic.index'))->assertForbidden();
     }
 
@@ -44,6 +45,7 @@ class AgenticDashboardTest extends TestCase
         $this->mock(DecisionProvider::class)->shouldNotReceive('health')->shouldNotReceive('decide');
         $this->actingAs($this->staff())->get(route('admin.agentic.index'))->assertOk()->assertSee('Shadow Mode')->assertSee('generating')->assertSee('لم يصدر اقتراح');
         $this->get(route('admin.agentic.monitor'))->assertOk()->assertJsonStructure(['html']);
+        $this->get(route('admin.agentic.activity'))->assertOk()->assertJsonStructure(['html'])->assertSee('Auto Pilot');
         $this->get(route('admin.agentic.show', $state->representative_id))->assertOk()->assertSee('لم تُرصد هذه النسخة بعد')->assertSee('generating');
         $this->get(route('admin.agentic.index', ['state' => 'unobserved']))->assertOk()->assertSee(route('admin.agentic.show', $other->id), false);
         $this->assertDatabaseCount('ai_agent_runs', 0);

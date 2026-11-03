@@ -1,4 +1,4 @@
-# HeroKid unified operations — Shadow foundation
+# HeroKid Auto Pilot — Shadow foundation
 
 This branch prepares one checkout-level operational view and one decision agent.
 It does not replace ProcessRuntime, confirmations, payment review, product
@@ -11,6 +11,8 @@ flowchart TD
     B --> D[Read-only OrderContextBuilder]
     C --> D
     S[Versioned specifications and compatibility resolver] --> D
+    O[Staff corrections and approved review] --> P[Scoped memory and immutable revisions]
+    P --> D
     D --> E[Encrypted checkout snapshot, version and target coverage]
     E --> F[Priority, fairness, Cairo quota and exclusive decision lease]
     F --> G[Isolated Codex SDK bridge or explicit local Mock]
@@ -21,6 +23,8 @@ flowchart TD
     A --> L[Protected operational dashboard]
     E --> L
     K --> L
+    F --> Q[Lease-bound activity stages and timestamps]
+    Q --> L
     D --> M[Seven authenticated read-only MCP tools]
     N[Existing business executors and staff] --> A
 ```
@@ -44,12 +48,15 @@ implementation evidence for tested guarantees and real-authentication limits.
 | PuzzleAutomation / PuzzleInputs | Existing puzzle/mug and book executors stay authoritative. Avoid media downloads, provider pricing or credential loading in the observer; paid/provider preflight is explicitly deferred. |
 | ProcessProductReview / BookPageService | Read latest immutable manifest, cover/preview correlation, revocation, run state and interior fingerprint. Fresh media checks and full linked-story capture still belong to existing executor preflight. |
 | ProductProductionPrompt / ProductProductionStage | Preserve purchased variants/components and unit keys. Hash and discard raw prompt/photo inputs. An explicit spec may restrict capabilities, never expand an executor. |
-| AdminOrderGroupService | Reuse current lifecycle definition. A delivered label alone does not prove the checkout has completed every workflow. |
+| AdminOrderGroupService | Reuse grouping and base active scope. AutoPilotOrderScope additionally treats delivered/cancelled orders as terminal for Auto Pilot, as explicitly confirmed by the owner. Existing workflows and holds are unchanged. Mixed checkouts retain their open siblings. |
 
 The original baseline was `683389a`. During implementation, production advanced
 to `77ef1cc` (cover artwork and preview-state synchronization). That release was
 inspected and merged locally, and final checks include it. This is no assertion
 that production will remain at that SHA; revalidate before any future release.
+On November 3, AWS was read-only verified at `c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5`.
+This extension starts from the prepared feature commit `63818e5`; intervening
+production releases still need reconciliation before a separately approved release.
 
 ## Lifecycle, coverage and safety
 
@@ -116,25 +123,60 @@ Policy Engine/Execution Gateway, never call services directly from MCP.
 
 ## Persistence and dashboard
 
-Five additive tables across two forward-only migrations: versioned product specs,
+Seven additive tables across three forward-only migrations: versioned product specs,
 checkout observations, agent runs, immutable decisions, and a single runtime
-control row. No duplicate payment ledger, media store, business attempts or human
+control row, plus memory rules and their immutable revisions. No duplicate payment ledger, media store, business attempts or human
 assignment table. Context snapshots are encrypted with the existing APP_KEY;
 never rotate it as part of this feature. No raw prompts or provider transcripts
 are stored in decision audit. Audit models prohibit editing/deleting decisions.
 
 `/admin/agentic-automation` uses existing order/automation permissions. It includes
 unobserved active groups, live status, coverage/freshness, errors, product/state/
-decision filters and history. Refresh every 30 seconds reads operations without
+decision filters and history. Activity refreshes every 5 seconds; the order table
+refreshes every 30 seconds to keep aggregate-query load bounded. Both read without
 an AI call. Detail pages rebuild current facts and flag stale proposals. Financial
 amounts retain the separate statistics permission. Output links use existing
 order-page permissions. There is no chat or activation control.
 
+The activity panel records the actual lease holder's stage: provider readiness,
+order selection, context reading, decision wait, policy checks and result saving.
+It shows the current checkout and remaining/selected unit references, start/update
+times, last saved proposal and provider/quota/observation state. Expired or stalled
+workers are shown as uncertain, never as confirmed running. Local benchmark work
+has its own activity label. Polling only reads; it cannot invoke AI or retry work.
+
+## Editable learning memory
+
+`/admin/agentic-automation/memory` provides global, capability and checkout-scoped
+guidance. View requires `orders.view` and `order_automation.view`; save, restore,
+and approved-review import also require `order_automation.manage` and CSRF protection.
+Corrections can originate from a saved proposal. The linked checkout is derived
+server-side; new corrections start as drafts. A manager explicitly chooses active
+or archived. This is persistent guidance, not model training or self-editing code.
+
+Each edit records the actor, reason and immutable numbered snapshot. Optimistic
+revision checks prevent stale editors overwriting newer changes; restore creates a
+new revision. Guidance, snapshots and change reasons are encrypted. Approved owner
+rules import idempotently and never overwrite staff edits. Import is an explicit
+admin action or local/testing command, not a GET side effect or production seeder.
+
+Only active rules matching the current checkout/capabilities enter the context.
+The default bound is 30 matching rules, configurable up to 100; overflow blocks the
+AI call visibly instead of silently omitting rules. Rule/version digests invalidate
+applicable coverage; dirty hints for unrelated checkouts do not spend new decisions.
+Each run freezes the exact rule revisions used. A correction during evaluation
+invalidates stale results. Text cannot authorize tools, supply payment/approval
+facts or bypass deterministic safety and ownership checks. There is no memory-write
+tool for the Decision Agent. Staff must keep guidance free of personal data;
+validation blocks common contacts, links and key formats, not all possible PII.
+
 ## Evaluation and release gates
 
-- 37 anonymized actual checkouts / 89 manually labelled targets, captured read-only
-  on 2 November. 20 synthetic edge cases / 25 targets are reported separately.
-- Actual corpus is awaiting owner approval; see the Arabic review document.
+- 37 anonymized actual checkouts, captured read-only on 2 November. The owner's
+  November 3 review and clarification are incorporated in v2: 87 targets, six
+  changed cases, no rewritten order facts. The original 89-target v1 is retained.
+  20 synthetic edge cases / 25 targets are reported separately.
+- The actual v2 corpus is owner-approved; see the versioned owner-review record.
 - Mock scores test pipeline/contract/coverage consistency. They are **not** Codex
   correctness. Real subscription inference has not been run or proved available.
 - Harness reports correctness, unsafe proposals before policy, false waits,
@@ -152,7 +194,7 @@ order-page permissions. There is no chat or activation control.
 ## Future deployment and rollback proposal — not executed
 
 Revalidate AWS SHA and exact diff; preserve concurrent releases and record a
-private recovery checkpoint. Review the two additive migrations before seeking
+private recovery checkpoint. Review the three additive migrations before seeking
 explicit production-migration approval. Install the reviewed Composer lockfile,
 discover packages, preserve all old committed hashed assets and verify the new
 manifest. Keep all three AGENTIC switches off during code deployment. Do not
@@ -166,7 +208,7 @@ The runtime needs explicit egress for official subscription inference; local
 network-none acceptance is not proof of a deployed network/auth configuration.
 
 Rollback is flags off, gracefully drain only the dedicated shadow worker/runtime,
-restore reviewed code/assets, and retain all five audit/spec tables. No data
+restore reviewed code/assets, and retain all seven audit/spec/memory tables. No data
 rollback, production queue clearing, historical retry, Hostinger change or audit
 table drop. Existing executors continue as before.
 

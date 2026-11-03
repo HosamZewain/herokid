@@ -1,5 +1,5 @@
 <x-admin-layout>
-    <x-slot name="header"><h1 class="text-2xl font-bold">عقل HeroKid — متابعة الطلبات</h1></x-slot>
+    <x-slot name="header"><h1 class="text-2xl font-bold">HeroKid Auto Pilot — متابعة الطلبات</h1></x-slot>
     <main class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
         <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
             <strong>Shadow Mode — اقتراحات ومحاكاة فقط</strong>
@@ -12,24 +12,30 @@
             <label>المنتج <select name="product" class="rounded-lg border-gray-300"><option value="">كل المنتجات</option>@foreach($products as $product)<option value="{{ $product->id }}" @selected(($filters['product'] ?? '') == $product->id)>{{ $product->name_ar }}</option>@endforeach</select></label>
             <button class="rounded-lg bg-indigo-700 px-4 py-2 text-white">تصفية</button>
         </form>
-        <p id="agentic-refresh" class="text-sm text-gray-600" aria-live="polite">تحديث تلقائي كل 30 ثانية؛ دون استدعاء الموديل.</p>
+        <p id="autopilot-activity-refresh" class="text-sm text-gray-600" aria-live="polite">النشاط يتحدث كل 5 ثوانٍ؛ دون استدعاء الموديل.</p>
+        <section id="autopilot-activity" data-url="{{ route('admin.agentic.activity') }}">@include('admin.agentic._activity')</section>
+        <p id="agentic-refresh" class="text-sm text-gray-600" aria-live="polite">جدول الطلبات يتحدث كل 30 ثانية.</p>
         <section id="agentic-overview" data-url="{{ route('admin.agentic.monitor', request()->only('scope','state','decision','product','page')) }}">@include('admin.agentic._overview')</section>
     </main>
     <script>
     (() => {
-        const root = document.getElementById('agentic-overview'), note = document.getElementById('agentic-refresh');
-        let busy = false;
-        setInterval(async () => {
-            if (document.hidden || busy) return;
-            busy = true;
-            try {
-                const response = await fetch(root.dataset.url, {headers: {'Accept': 'application/json'}, signal: AbortSignal.timeout(15000)});
-                if (!response.ok) throw new Error('refresh');
-                const data = await response.json(); root.innerHTML = data.html;
-                note.textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
-            } catch { note.textContent = 'تعذر التحديث؛ البيانات المعروضة من آخر قراءة ناجحة.'; }
-            finally { busy = false; }
-        }, 30000);
+        function poll(rootId, noteId, interval) {
+            const root = document.getElementById(rootId), note = document.getElementById(noteId);
+            let busy = false;
+            setInterval(async () => {
+                if (document.hidden || busy) return;
+                busy = true;
+                try {
+                    const response = await fetch(root.dataset.url, {headers: {'Accept': 'application/json'}, signal: AbortSignal.timeout(15000)});
+                    if (!response.ok) throw new Error('refresh');
+                    const data = await response.json(); root.innerHTML = data.html;
+                    note.textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
+                } catch { note.textContent = 'تعذر التحديث؛ البيانات المعروضة من آخر قراءة ناجحة.'; }
+                finally { busy = false; }
+            }, interval);
+        }
+        poll('autopilot-activity', 'autopilot-activity-refresh', 5000);
+        poll('agentic-overview', 'agentic-refresh', 30000);
     })();
     </script>
 </x-admin-layout>

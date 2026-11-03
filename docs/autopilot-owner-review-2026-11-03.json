@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "dataset": "actual-orders.v1-2026-11-02",
+  "savedAt": "2026-11-03T09:50:05.183Z",
+  "answers": {
+    "1": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "2": {
+      "verdict": "edit",
+      "note": "طالما ملغي يدويا خلاص يسيبة"
+    },
+    "3": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "4": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "5": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "6": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "7": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "8": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "9": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "10": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "11": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "12": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "13": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "14": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "15": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "16": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "17": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "18": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "19": {
+      "verdict": "correct",
+      "note": "ممكن التيم يسجل التآكيد يدويا لان العميل ممكن يآكد بطريقة مختلفة مثلا واتس اب او خلافه"
+    },
+    "20": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "21": {
+      "verdict": "correct",
+      "note": "الفريق ممكن يولد المحاولة المتوقفة يدويا ويرفعها "
+    },
+    "22": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "23": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "24": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "25": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "26": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "27": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "28": {
+      "verdict": "correct",
+      "note": "يعرض ان الطلب متوقف يدويا ويبقي متاح الاستكمال لو الموظف ضغط علي استكمال"
+    },
+    "29": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "30": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "31": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "32": {
+      "verdict": "wrong",
+      "note": "طالما تم تسليمة يبقي انتهي بالكامل وانتهت دورة التشغيل"
+    },
+    "33": {
+      "verdict": "wrong",
+      "note": "طالما تم تسليمة يبقي انتهي بالكامل وانتهت دورة التشغيل"
+    },
+    "34": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "35": {
+      "verdict": "correct",
+      "note": ""
+    },
+    "36": {
+      "verdict": "edit",
+      "note": "طالما تم تسليمة يبقي انتهي بالكامل وانتهت دورة التشغيل"
+    },
+    "37": {
+      "verdict": "edit",
+      "note": "طالما تم تسليمة يبقي انتهي بالكامل وانتهت دورة التشغيل"
+    }
+  },
+  "source_sha256": "f6283a7b23e203b048c9468875ee379a60d50c82b4cfb66dd97446b00efd7b78",
+  "clarification": {
+    "date": "2026-11-03",
+    "decision": "تم التسليم ينهي الأوردر حتى لو عليه إيقاف يدوي قديم",
+    "source": "owner_chat_reply"
+  }
+}

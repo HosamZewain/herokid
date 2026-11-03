@@ -5,7 +5,7 @@ namespace App\Services\Agentic;
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'shadow-policy-v1';
+    public const VERSION = 'autopilot-shadow-policy-v2';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -15,11 +15,15 @@ class CapabilityRegistry
 
     public function targets(array $context): array
     {
+        // Owner clarification: terminal delivery/cancellation precedes old holds.
+        if (AutoPilotOrderScope::complete($context)) {
+            return [$this->target($context['checkout_ref'], 'checkout', 'completed', null, 'LIFECYCLE_COMPLETE')];
+        }
         if ($context['hold']) {
             return [$this->target($context['checkout_ref'], 'checkout', 'human_required', null, 'MANUAL_HOLD')];
         }
-        if ($context['all_complete']) {
-            return [$this->target($context['checkout_ref'], 'checkout', 'completed', null, 'LIFECYCLE_COMPLETE')];
+        if ($context['memory']['overflow'] ?? false) {
+            return [$this->target($context['checkout_ref'], 'checkout', 'human_required', null, 'MEMORY_CONTEXT_LIMIT')];
         }
         $targets = [];
         if (! $context['payment']['consistent']) {
@@ -61,7 +65,7 @@ class CapabilityRegistry
     private function unitTarget(array $context, array $unit): array
     {
         $result = fn ($decision, $action, $reason) => $this->target($unit['unit_key'], 'production_unit', $decision, $action, $reason);
-        if (! $unit['active']) {
+        if (! $unit['active'] || in_array($unit['order_status'], ['delivered', 'cancelled'], true)) {
             return $result('completed', null, 'UNIT_INACTIVE');
         }
         if ($context['change_requested']) {

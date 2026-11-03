@@ -1,5 +1,5 @@
 <x-admin-layout>
-    <x-slot name="header"><h1 class="text-2xl font-bold">تفاصيل قرار HeroKid — {{ $context['checkout_ref'] }}</h1></x-slot>
+    <x-slot name="header"><h1 class="text-2xl font-bold">تفاصيل قرار HeroKid Auto Pilot — {{ $context['checkout_ref'] }}</h1></x-slot>
     <main class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
         <a class="text-indigo-700 underline" href="{{ route('admin.agentic.index') }}">كل الطلبات</a> · <a class="text-indigo-700 underline" href="{{ route('admin.orders.show',$order) }}">فتح الطلب</a>
         <div class="rounded-xl border bg-indigo-50 p-4"><strong>Shadow Mode — لم يُنفَّذ أي إجراء بواسطة الـAgent</strong><p>القراءة الحالية بتوقيت القاهرة: <bdi dir="ltr">{{ \Carbon\Carbon::parse($context['observed_at'])->tz('Africa/Cairo')->format('Y-m-d H:i:s') }}</bdi> · {{ $matches ? 'مطابقة للنسخة المرصودة' : 'لم تُرصد هذه النسخة بعد؛ الاقتراحات السابقة قديمة' }}</p><p>المالك: {{ $context['automation_owned'] ? 'الأوتوميشن الحالي' : ($context['assignee_ref'] ?: 'غير معيّن') }} · إيقاف يدوي: {{ $context['hold'] ? 'نعم' : 'لا' }}</p></div>
@@ -14,11 +14,17 @@
         </section>
         <section><h2 class="text-xl font-bold">مهام بشرية مقترحة</h2><ul class="list-inside list-disc">@forelse($tasks as $task)<li>{{ $task['target_id'] }} · {{ __('agentic.reasons.'.$task['reason_code']) }} · {{ $task['assignee_ref'] ?: 'غير معيّن' }}</li>@empty<li>لا توجد مهام إضافية مقترحة؛ خطوات الطباعة والتغليف والشحن تظل بشرية.</li>@endforelse</ul></section>
         <section><h2 class="text-xl font-bold">المخرجات المتاحة</h2><p>{{ count($context['operational']['outputs']) }} مرفقات مسجلة. افتح <a href="{{ route('admin.orders.show',$order) }}" class="text-indigo-700 underline">صفحة الطلب</a> للوصول إلى الملفات عبر صلاحياتها الحالية.</p></section>
+        <section class="space-y-2"><h2 class="text-xl font-bold">الذاكرة المستخدمة حاليًا</h2>
+            @foreach($context['memory']['entries'] ?? [] as $entry)<p><a class="text-indigo-700 underline" href="{{ route('admin.agentic.memory.show',$entry['id']) }}#revision-{{ $entry['revision'] }}">{{ $entry['title'] }} · نسخة {{ $entry['revision'] }}</a></p>@endforeach
+            <p class="text-sm">التأكيد اليدوي ورفع الملفات واستكمال الإيقاف تتم من <a class="text-indigo-700 underline" href="{{ route('admin.orders.show',$order) }}">صفحة الطلب الحالية</a> بصلاحيات الفريق؛ يقرأ Auto Pilot التغيير المسجل في مراجعته التالية.</p>
+        </section>
         <section class="space-y-3"><h2 class="text-xl font-bold">سجل الاقتراحات والمحاكاة</h2>
             @forelse($history as $run)
                 <article class="rounded-xl border bg-white p-4"><p>{{ $run->started_at }} · نسخة {{ $run->context_version }} · {{ $run->provider }} · {{ $run->status }}</p>
                     @if($run->decision)<p><strong>{{ __('agentic.decisions.'.$run->decision->decision['decision']) }}</strong> · {{ $run->decision->decision['target_id'] }} · {{ $run->decision->decision['action'] }}</p><p>{{ $run->decision->decision['reason'] }}</p><p>السياسة: {{ $run->decision->policy['reason_code'] }} · المحاكاة: {{ $run->decision->simulation['result'] }} · لم يُنفَّذ</p>@endif
                     @if($run->error_code)<p class="text-red-700">{{ $run->error_code }}</p>@endif
+                    @if(auth()->user()->hasPermission('order_automation.manage'))<a class="text-indigo-700 underline" href="{{ route('admin.agentic.memory.create',['run'=>$run->id]) }}">تصحيح الاقتراح وحفظه في الذاكرة</a>@endif
+                    @foreach($run->snapshot['memory']['entries'] ?? [] as $entry)<p class="text-sm">استخدم قاعدة <a class="text-indigo-700 underline" href="{{ route('admin.agentic.memory.show',$entry['id']) }}#revision-{{ $entry['revision'] }}">{{ $entry['title'] }} · نسخة {{ $entry['revision'] }}</a></p>@endforeach
                     <details><summary>مرجع التدقيق</summary><p dir="ltr">{{ $run->id }} · {{ $run->fingerprint }}</p><p>سياسة {{ $run->policy_version }} · تعليمات {{ $run->prompt_version }}</p></details>
                 </article>
             @empty <p>لم يُقيّم هذا الطلب بعد.</p> @endforelse

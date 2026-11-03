@@ -38,12 +38,20 @@ class EvaluationBudgetProvider implements DecisionProvider
                 throw new \RuntimeException('benchmark_quota_exhausted');
             }
             DB::table('ai_runtime_states')->where('id', 1)->update(['quota_day' => $day, 'attempts' => $used + 1,
-                'lease_token' => $token, 'lease_until' => now()->addSeconds(120), 'updated_at' => now()]);
+                'lease_token' => $token, 'lease_until' => now()->addSeconds(120), 'updated_at' => now(),
+                'activity_stage' => 'evaluating_dataset', 'activity_state_id' => null, 'activity_run_id' => null,
+                'activity_targets' => '[]', 'activity_started_at' => now(), 'activity_updated_at' => now(),
+                'provider_checked_at' => now(), 'provider_error' => null]);
         });
+        $outcome = 'benchmark_error';
         try {
-            return $this->provider->decide($input);
+            $response = $this->provider->decide($input);
+            $outcome = 'benchmark_finished';
+
+            return $response;
         } finally {
-            DB::table('ai_runtime_states')->where('id', 1)->where('lease_token', $token)->update(['lease_token' => null, 'lease_until' => null, 'updated_at' => now()]);
+            DB::table('ai_runtime_states')->where('id', 1)->where('lease_token', $token)->update(['lease_token' => null, 'lease_until' => null,
+                'activity_stage' => 'idle', 'activity_updated_at' => now(), 'last_outcome' => $outcome, 'updated_at' => now()]);
         }
     }
 }

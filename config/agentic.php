@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'name' => 'HeroKid Auto Pilot',
+    'memory_limit' => 30,
     // These switches enable observation/evaluation only. There is no execute mode.
     'observe' => (bool) env('AGENTIC_OBSERVE', false),
     'evaluate' => (bool) env('AGENTIC_EVALUATE', false),

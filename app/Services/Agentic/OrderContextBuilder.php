@@ -18,7 +18,6 @@ use App\Models\ProductionProject;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Services\OrderAutomation\Process\ProcessProductReview;
-use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\OrderSceneTextService;
@@ -55,7 +54,7 @@ class OrderContextBuilder
         if ($orders->isEmpty()) {
             throw new RuntimeException('checkout_not_found');
         }
-        $activeIds = app(AdminOrderGroupService::class)->activeOrdersQuery()->whereIn('id', $orders->pluck('id'))->pluck('id')->all();
+        $activeIds = AutoPilotOrderScope::activeOrdersQuery()->whereIn('id', $orders->pluck('id'))->pluck('id')->all();
         $live = $orders->filter(fn ($o) => ! $o->trashed() && $o->status !== 'cancelled');
         $balances = $live->pluck('paid_amount_cents')->map(fn ($v) => (int) $v)->unique();
         $payment = [
@@ -147,6 +146,7 @@ class OrderContextBuilder
                 }
             }
         }
+        $context['memory'] = app(MemoryService::class)->forContext($key, $context);
         $context['fingerprint'] = ContextFingerprint::hash($context);
         $context['observed_at'] = now()->toISOString();
 

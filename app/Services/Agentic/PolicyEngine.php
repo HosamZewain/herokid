@@ -14,6 +14,8 @@ class PolicyEngine
             $reason = 'STALE_CONTEXT';
         } elseif (! $target || ! in_array($decision['target_id'], $remaining, true) || $target['target_type'] !== $decision['target_type']) {
             $reason = 'INVALID_OR_COVERED_TARGET';
+        } elseif ($target['decision'] === 'completed' && $decision['decision'] !== 'completed') {
+            $reason = 'TERMINAL_TARGET';
         } elseif ($decision['decision'] === 'wait' && $target['decision'] !== 'wait') {
             $reason = 'FALSE_WAITING';
         } elseif ($decision['decision'] === 'execute' && ($target['decision'] !== 'execute' || $target['action'] !== $decision['action'])) {

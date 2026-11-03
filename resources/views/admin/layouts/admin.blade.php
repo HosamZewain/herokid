@@ -282,7 +282,7 @@
                         @can('order_automation.view')
                             <a href="{{ route('admin.order-automation.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.order-automation.*') ? $activeLink : $idleLink }}">أتمتة الطلبات</a>
                             @can('orders.view')
-                                <a href="{{ route('admin.agentic.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agentic.*') ? $activeLink : $idleLink }}">عقل HeroKid — متابعة تجريبية</a>
+                                <a href="{{ route('admin.agentic.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agentic.*') ? $activeLink : $idleLink }}">HeroKid Auto Pilot</a>
                             @endcan
                         @endcan
                         @can('studio.settings.manage')

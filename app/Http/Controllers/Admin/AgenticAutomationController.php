@@ -8,9 +8,10 @@ use App\Models\AiCheckoutState;
 use App\Models\Order;
 use App\Models\Product;
 use App\Services\Agentic\CapabilityRegistry;
+use App\Services\Agentic\ActivityMonitor;
+use App\Services\Agentic\AutoPilotOrderScope;
 use App\Services\Agentic\DecisionValidator;
 use App\Services\Agentic\OrderContextBuilder;
-use App\Services\Orders\AdminOrderGroupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -21,12 +22,19 @@ class AgenticAutomationController extends Controller
 
     public function index(Request $request)
     {
-        return response()->view('admin.agentic.index', $this->data($request))->header('Cache-Control', 'private, no-store');
+        return response()->view('admin.agentic.index', $this->data($request) + ['activity' => app(ActivityMonitor::class)->snapshot()])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function monitor(Request $request)
     {
         return response()->json(['html' => view('admin.agentic._overview', $this->data($request))->render()])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function activity(ActivityMonitor $monitor)
+    {
+        return response()->json(['html' => view('admin.agentic._activity', ['activity' => $monitor->snapshot()])->render()])
             ->header('Cache-Control', 'private, no-store');
     }
 
@@ -51,7 +59,7 @@ class AgenticAutomationController extends Controller
         $filters = $request->validate(['state' => ['nullable', Rule::in(self::STATES)],
             'decision' => ['nullable', Rule::in(DecisionValidator::TYPES)],
             'product' => 'nullable|integer|min:1', 'scope' => 'nullable|in:active,all', 'page' => 'nullable|integer|min:1']);
-        $active = app(AdminOrderGroupService::class)->activeOrdersQuery()
+        $active = AutoPilotOrderScope::activeOrdersQuery()
             ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'));
         $activeKeys = (clone $active)->select('checkout_group_key')->distinct();
         $activeCount = DB::query()->fromSub($activeKeys, 'active')->count();

@@ -3,7 +3,6 @@
 namespace App\Services\Agentic;
 
 use App\Models\AiCheckoutState;
-use App\Services\Orders\AdminOrderGroupService;
 use Illuminate\Support\Facades\DB;
 
 class ContextObserver
@@ -65,7 +64,7 @@ class ContextObserver
     public function reconcile(): int
     {
         $control = DB::table('ai_runtime_states')->where('id', 1)->first();
-        $query = app(AdminOrderGroupService::class)->activeOrdersQuery()
+        $query = AutoPilotOrderScope::activeOrdersQuery()
             ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'))
             ->selectRaw('checkout_group_key, MIN(id) as cursor_id')->groupBy('checkout_group_key')
             ->havingRaw('MIN(id) > ?', [$control->scan_cursor])->orderBy('cursor_id')->limit(config('agentic.reconcile_batch'));
@@ -76,7 +75,7 @@ class ContextObserver
         // Query-builder/SQL writes bypass model events. Sweep known states that left
         // the active set too, otherwise a fulfilled checkout can remain pending forever.
         $closed = AiCheckoutState::whereNotIn('status', ['inactive', 'redirected'])
-            ->whereNotIn('checkout_key', app(AdminOrderGroupService::class)->activeOrdersQuery()->select('checkout_group_key'))
+            ->whereNotIn('checkout_key', AutoPilotOrderScope::activeOrdersQuery()->select('checkout_group_key'))
             ->orderBy('observed_at')->limit(config('agentic.reconcile_batch'))->pluck('checkout_key');
         foreach ($closed as $key) {
             $this->safelyObserve($key);

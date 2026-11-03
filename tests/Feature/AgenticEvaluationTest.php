@@ -8,14 +8,32 @@ use Tests\TestCase;
 
 class AgenticEvaluationTest extends TestCase
 {
+    public function test_owner_review_changes_labels_without_rewriting_actual_order_facts(): void
+    {
+        $before = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v1.json')), true);
+        $after = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v2.json')), true);
+        $changed = [];
+        foreach ($before['cases'] as $index => $case) {
+            $updated = $after['cases'][$index];
+            $facts = $updated['context'];
+            unset($facts['memory'], $facts['capability_registry_version']);
+            $this->assertSame($case['context'], $facts, $case['id']);
+            if ($case['expected'] !== $updated['expected']) {
+                $changed[] = $case['id'];
+            }
+        }
+        $this->assertSame(['real-01', 'real-02', 'real-32', 'real-33', 'real-36', 'real-37'], $changed);
+    }
+
     public function test_actual_anonymized_corpus_matches_independently_labelled_expectations(): void
     {
-        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v1.json')), true);
+        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v2.json')), true);
         $report = app(EvaluationRunner::class)->run($corpus, app(MockProvider::class));
         $wrong = array_values(array_filter($report['results'], fn ($row) => ! $row['correct']));
         $this->assertSame([], $wrong, json_encode($wrong));
         $this->assertSame(37, $report['cases']);
-        $this->assertSame(89, $report['expected_targets']);
+        $this->assertSame(87, $report['expected_targets']);
+        $this->assertSame('owner_approved', $report['dataset_approval']);
         $this->assertSame(0, $report['unsafe_proposals']);
         $this->assertSame(0, $report['false_waits']);
         $this->assertFalse($report['real_model']);
