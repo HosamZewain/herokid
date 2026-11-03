@@ -1,5 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
+## 3 November 2026 — identity regeneration and Codex order banner DEPLOYED from main
+
+Owner explicitly approved “انشر” for application **686776560adbfb1b779e8978b978d36d68b2574d**. Published on GitHub main and AWS main, verified **08:24:07 UTC /10:24 Cairo**. All36 changed-file hashes and www-data readability matched, private .env/config hashes unchanged, previous untracked assets and mode-only bootstrap/cache/.gitignore drift preserved. Only additive migration2026_11_03_100000_create_order_identity_regenerations applied, before code activation. Route/view caches refreshed and FPM gracefully reloaded. Process/process-ai workers received Laravel graceful TERM, completed their work and restarted as1226211/1226212; default/conversation workers unchanged. Codex remained PID952607, no service restart, pause, replay, production test order or test message. Regeneration table0 at verification.
+
+Authenticated UI: HK11-65 top banner showed **21/50 saved pages** and running; its version attribute changed through the automatic polling mechanism. HK11-54 displays identity attempt706 as **غير معتمدة**, its private image loads1536×1024, and editable identity/product regeneration controls are present. No regenerate/approve action was submitted. Public home/up/cart/new CSS200. Failed jobs81 unchanged; bounded observation235requests/zero5xx, zero new Laravel/Nginx errors. Synthetic validation remains146tests/1223assertions on each SQLite/MySQL plus2JavaScript tests.
+
+Recovery checkpoint **/home/ubuntu/herokid-before-order-regeneration-6867765**, base2bc41a55a4d351024ca599edfa9209841d01d8f1, source archive/hash, config/routes, retained assets, log offsets and worker baselines. Fresh backup **herokid-20261103T082151Z.sql.gz**,50131252bytes, SHA256 **fa3d1ad4857bc9dd7cc35c7fd1ed158ade86952e9b39e383f6371f5fea214666**; gzip/local hash and S3 metadata/size verified. Preparation initially stopped before mutation on a mode-only numstat guard; corrected to byte-content comparison. Post-apply status comparison detected the agent's own staged migration directory; it was moved into the checkpoint and original drift equality then passed. No customer data deletion or rollback.
+
+Recovery is reviewed code-only reversal, preserving the additive table, paid-attempt history and images; drain any new regeneration jobs before reverting code. No database restore/migration-down. Documentation-only successor records verification. New owner report HK11-55 cancellation blocked by a historical uncertain product result is a separate follow-up, not repaired by this release.
+
+
 ## 3 November 2026 — identity regeneration and live order Codex banner prepared, NOT deployed
 
 Prepared in isolated branch `codex/order-preview-regeneration` from `2bc41a55a4d351024ca599edfa9209841d01d8f1`. AWS SHA rechecked unchanged at **07:56 UTC /09:56 Cairo**. Primary dirty checkout preserved. This scope has no new deployment authorization yet: no migrations, worker refresh, production order changes, generation, customer messaging or historical replay performed.
