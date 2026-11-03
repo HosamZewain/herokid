@@ -81,11 +81,7 @@ class ProcessPaymentReview
                 continue;
             }
             $candidates = $sent->where('interaction', $interaction);
-            if ($candidates->pluck('checkout_key')->unique()->count() !== 1 || $candidates->pluck('run_id')->unique()->count() !== 1) {
-                continue;
-            }
-            $run = $runs->firstWhere('id', $candidates->first()['run_id'] ?? null);
-            if (! $run) {
+            if ($candidates->pluck('checkout_key')->unique()->count() !== 1) {
                 continue;
             }
             $evidence = $messages->filter(fn ($m) => $m->direction === 'outbound'
@@ -95,6 +91,26 @@ class ProcessPaymentReview
                 // Incoming Meta time has second precision: same-second ordering is ambiguous.
                 && $m->sent_at->lt($message->sent_at->startOfSecond()));
             if ($evidence->isEmpty()) {
+                continue;
+            }
+            if ($candidates->pluck('run_id')->unique()->count() > 1) {
+                // A deliberate revised preview may share RoboDesk's interaction.
+                // Accept only a proven supersession chain for this same checkout,
+                // and only the latest actual outbound template before the image.
+                $ids = $candidates->pluck('run_id')->unique()->sort()->values();
+                foreach ($ids->slice(1)->values() as $index => $id) {
+                    if ((int) data_get($allRuns->firstWhere('id', $id)?->context, 'supersedes_run_id') !== $ids[$index]) {
+                        continue 2;
+                    }
+                }
+                $latest = $evidence->sortByDesc('sent_at')->first();
+                if ($evidence->filter(fn ($m) => $m->sent_at->timestamp === $latest->sent_at->timestamp)->count() !== 1) {
+                    continue;
+                }
+                $candidates = $candidates->where('wamid', data_get($latest->provider_metadata, 'channelId'));
+            }
+            $run = $runs->firstWhere('id', $candidates->first()['run_id'] ?? null);
+            if (! $run) {
                 continue;
             }
             DB::transaction(function () use ($run, $message) {
@@ -136,7 +152,8 @@ class ProcessPaymentReview
         if ($orders->isEmpty() || $orders->contains(fn ($order) => (int) $order->paid_amount_cents !== 0)) {
             return;
         }
-        $target = $review->status === 'pending' ? 'pending_review' : 'unpaid';
+        $target = OrderPaymentReview::where('checkout_key', $review->checkout_key)->where('status', 'pending')->exists()
+            ? 'pending_review' : 'unpaid';
         if ($orders->contains(fn ($order) => ! in_array($order->payment_status, ['unpaid', 'pending_review'], true))) {
             return;
         }

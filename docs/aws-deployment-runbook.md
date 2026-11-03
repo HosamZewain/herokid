@@ -1,5 +1,12 @@
 # HeroKid AWS deployment and agent handoff
 
+## 3 November 2026 — product preview return correction prepared; HK10-495 reconciled
+
+Prepared from live/main **1a542ac6074b027c1af8943bd480dbfc2d9786a6** in isolated `codex/product-return-after-preview`. This corrects the owner-reported HK11-57 resume defect within the authorized order-workspace follow-up. After staff confirms all revised product rows, explicit resume retains matching completed outputs, retires the old wait and creates a fresh preview version. No historical activation is part of deployment. No schema/config/Codex worker changes. [Behavior, test evidence and cancellation reconciliation](product-preview-return-2026-11-03.ar.md). Deployment result follows only after host verification.
+
+Separately, owner explicitly confirmed Bosta cancellation for **HK10-495 / tracking6902510473 / shipment906**. Scoped reconciliation **13:13:46UTC**, audit**175871** under owner1, records human confirmation as the evidence source. Bosta GET returned400/1066, not a positive cancellation receipt. Original label retained as confirmed cancelled/superseded; current key released, shipment count1, no new label/provider mutation/payment change. Authenticated order page shows ready to create shipment. Preserve this audit and cancelled label during any recovery.
+
+
 ## 3 November 2026 — order workspace DEPLOYED from main
 
 Owner explicitly authorized deployment on completion. Initial release **007876afeab8b42f323a0ce642288207670a3c46** applied12:47:53–12:48:00UTC; read-only summary-priority follow-up **9f0e42dbef5c0eeef2d528cf891adb6356d095bc** verified12:53:09UTC. Both published on GitHub main; production now tracks main. The detached prior privacy release **c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5** is preserved in ancestry. Primary dirty/mobile checkout untouched. [Contract, permissions and testing](order-workspace-2026-11-03.ar.md).

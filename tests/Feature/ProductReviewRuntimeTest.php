@@ -14,6 +14,7 @@ use App\Models\OrderAutomationRevision;
 use App\Models\OrderItem;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
+use App\Models\OrderProcessStep;
 use App\Models\OrderReviewManifest;
 use App\Models\OrderStatusDefinition;
 use App\Models\Permission;
@@ -39,6 +40,8 @@ use App\Services\OrderAutomation\Process\ProcessPreviewStatus;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\OrderAutomationSummary;
 use App\Services\ProductAutomation\BookCatalog;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductAutomation\PuzzleInputs;
@@ -47,6 +50,8 @@ use App\Services\RoboDesk\OrderConfirmationTransport;
 use App\Support\ProductProductionPrompt;
 use App\Support\ProductProductionStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -55,6 +60,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class ProductReviewRuntimeTest extends TestCase
@@ -196,6 +202,107 @@ class ProductReviewRuntimeTest extends TestCase
         return [$item, $run, $manifest, $conversation];
     }
 
+    public function test_revised_product_checkout_preserves_output_and_sends_one_new_manifest(): void
+    {
+        $this->actor->permissions()->attach(Permission::whereIn('key', ['orders.automation.control', 'orders.view_all'])->pluck('id'));
+        $first = $this->book();
+        $old = $this->enroll($first->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->twice()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $output = PuzzleGeneration::sole()->getAttributes();
+        $this->send($old);
+        $manifest = OrderReviewManifest::sole()->getAttributes();
+        $request = Request::create('/');
+        app(AutomationHandoff::class)->take($first->order, $this->actor, $request);
+        $added = $this->book();
+        $added->order->updateQuietly(['checkout_group_key' => $first->order->checkoutGroupKey()]);
+        try {
+            app(AutomationHandoff::class)->resume($first->order, $this->actor, $request);
+            $this->fail('An unconfirmed addition must not start');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('غير مؤكد', $e->getMessage());
+        }
+        Order::where('checkout_group_key', $first->order->checkoutGroupKey())->update(['status' => 'new_confirmed']);
+        app(AutomationHandoff::class)->resume($first->order, $this->actor, $request);
+        $new = OrderProcessRun::latest('id')->first();
+        $this->assertNotSame($old->id, $new->id);
+        $this->assertSame('cancelled', $old->fresh()->status);
+        $this->assertSame($manifest, OrderReviewManifest::find($manifest['id'])->getAttributes());
+        $this->assertSame($output, PuzzleGeneration::find($output['id'])->getAttributes());
+        app(ProcessRuntime::class)->advance($new->id);
+        $this->assertSame('waiting_identity', $new->fresh()->status, $new->fresh()->error_code ?? '');
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::latest('id')->first()->id);
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['https://hero-kid.robodesk.ai/*' => fn ($request) => str_contains($request->url(), 'messagesByPhone')
+            ? Http::response(['phone' => '201000000001', 'interactions' => [], 'messages' => []])
+            : Http::response(['_id' => 'review-interaction', 'channelId' => 'wamid.revised'])]);
+        $this->send($new);
+        app(ProcessRuntime::class)->advance($new->id);
+        $this->assertDatabaseCount('order_review_manifests', 2);
+        $this->assertCount(2, OrderReviewManifest::latest('id')->first()->images);
+        $this->assertSame($old->id, $new->fresh()->context['supersedes_run_id']);
+        $this->assertSame($output, PuzzleGeneration::find($output['id'])->getAttributes());
+        $this->assertSame(2, OrderProcessRun::count());
+        $this->assertSame(2, OrderProcessStep::where('type', 'whatsapp')->where('status', 'completed')->count());
+        $this->assertFalse(AutomationHandoff::held($first->order->checkoutGroupKey()));
+        $this->travel(3)->seconds();
+        $conversation = WhatsAppConversation::create(['account_key' => $new->account_key, 'phone_hash' => $new->phone_hash, 'phone' => '+201000000001']);
+        foreach (['wamid.review', 'wamid.revised'] as $wamid) {
+            $conversation->messages()->create(['remote_id' => $wamid, 'remote_hash' => hash('sha256', $wamid), 'fingerprint' => hash('sha256', $wamid), 'direction' => 'outbound', 'body' => 'معاينة', 'kind' => 'text', 'sent_at' => now(),
+                'provider_metadata' => ['contract_fields_present' => true, 'channelId' => $wamid, 'templateName' => ProcessTemplates::REVIEW, 'interactionId' => 'review-interaction']]);
+        }
+        foreach (['wamid.review', 'wamid.revised'] as $index => $replyTo) {
+            $this->travel(2)->seconds();
+            $conversation->messages()->create(['remote_id' => 'answer-'.$index, 'remote_hash' => hash('sha256', 'answer-'.$index), 'fingerprint' => hash('sha256', 'answer-'.$index),
+                'direction' => 'inbound', 'body' => 'تأكيد المعاينة', 'kind' => 'text', 'sent_at' => now(),
+                'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'answer-'.$index, 'replyTo' => $replyTo, 'templateName' => null, 'interactionId' => 'review-interaction']]);
+            app(ProcessResponsePoller::class)->process($conversation);
+            foreach (range(1, 3) as $_) {
+                app(ProcessRuntime::class)->advance($new->id);
+            }
+            $this->assertSame($index === 0 ? 'waiting_response' : 'waiting_staff', $new->fresh()->status, $new->fresh()->error_code ?? '');
+        }
+        $this->assertSame($manifest, OrderReviewManifest::find($manifest['id'])->getAttributes());
+        $this->assertNotNull(OrderReviewManifest::where('run_id', $new->id)->sole()->approved_at);
+        $this->assertSame($old->id, $new->fresh()->context['supersedes_run_id']);
+        $this->assertSame(0, $first->order->fresh()->paid_amount_cents);
+    }
+
+    public function test_changed_completed_product_or_uncertain_send_cannot_restart_preview(): void
+    {
+        $this->actor->permissions()->attach(Permission::whereIn('key', ['orders.automation.control', 'orders.view_all'])->pluck('id'));
+        $first = $this->book();
+        $old = $this->enroll($first->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->send($old);
+        $request = Request::create('/');
+        app(AutomationHandoff::class)->take($first->order, $this->actor, $request);
+        $first->order->refresh()->updateQuietly(['status' => 'new_confirmed', 'child_name' => 'Changed child']);
+        try {
+            app(AutomationHandoff::class)->resume($first->order, $this->actor, $request);
+            $this->fail('Changed completed output must be regenerated explicitly');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('puzzle_completed_inputs_changed', $e->getMessage());
+        }
+        $this->assertTrue(AutomationHandoff::held($first->order->checkoutGroupKey()));
+        $this->assertSame('paused', $old->fresh()->status);
+        $first->order->updateQuietly(['child_name' => 'Synthetic child']);
+        $old->steps()->where('type', 'whatsapp')->update(['status' => 'uncertain']);
+        try {
+            app(AutomationHandoff::class)->resume($first->order, $this->actor, $request);
+            $this->fail('Uncertain send must block a fresh preview');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('غير محسوم', $e->getMessage());
+        }
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+    }
+
     public function test_paid_approved_legacy_status_is_visible_and_requires_explicit_admission(): void
     {
         [$item,$flow,$manifest] = $this->approvedBook();
@@ -203,7 +310,7 @@ class ProductReviewRuntimeTest extends TestCase
         Setting::where('key', 'book_approved_enrollment_after')->update(['value' => now()->addMinute()->toDateTimeString()]);
         app(BookPageService::class)->enroll();
         $this->assertDatabaseCount('codex_scene_runs', 0);
-        $summary = app(\App\Services\Orders\OrderAutomationSummary::class)->forKeys([$item->order->checkoutGroupKey()])[$item->order->checkoutGroupKey()];
+        $summary = app(OrderAutomationSummary::class)->forKeys([$item->order->checkoutGroupKey()])[$item->order->checkoutGroupKey()];
         $this->assertStringStartsWith('صفحات التلوين لم تبدأ', $summary['label']);
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin)->getJson(route('admin.orders.codex-scenes.banner', $item->order))->assertOk()->assertJson(fn ($json) => $json->where('html', fn ($html) => str_contains($html, 'صفحات التلوين لم تبدأ'))->has('version'));

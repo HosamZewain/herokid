@@ -6,6 +6,7 @@ use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationHandoff;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 /** Reflect an accepted preview send without repeating any provider effect. */
@@ -63,7 +64,7 @@ class ProcessPreviewStatus
                 $changed = true;
             }
             if ($changed) {
-                $run->update(['context' => $contexts->snapshot($contexts->orders($run->checkout_key, true), (int) ($run->context['fingerprint_version'] ?? 1)) + ['actor_id' => $run->context['actor_id']]]);
+                $run->update(['context' => $contexts->snapshot($contexts->orders($run->checkout_key, true), (int) ($run->context['fingerprint_version'] ?? 1)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id'])]);
             }
         });
     }

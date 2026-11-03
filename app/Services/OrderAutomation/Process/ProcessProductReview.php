@@ -13,6 +13,7 @@ use App\Services\Orders\AutomationActivity;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -188,7 +189,7 @@ class ProcessProductReview
                 AutomationActivity::record($order, 'product_preview_approved', 'اعتماد معاينة المنتج وتسليم الطلب لمراجعة الفريق دون اعتماد الدفع.',
                     ['run_id' => $run->id, 'manifest_id' => $manifest->id, 'from' => $from, 'to' => 'pending_team_review']);
             }
-            $run->context = $contexts->snapshot($contexts->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
+            $run->context = $contexts->snapshot($contexts->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
             AutomationActivity::record($run->checkout_key, 'previews_approved', 'اعتماد صور المعاينة المحددة فقط بناءً على رد العميل؛ لم يسجل دفع.', ['manifest_id' => $manifest->id, 'image_count' => count($manifest->images), 'source_id' => $decision->message_id]);
         }
     }

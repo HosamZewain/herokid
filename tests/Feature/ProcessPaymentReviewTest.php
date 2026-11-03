@@ -78,6 +78,29 @@ class ProcessPaymentReviewTest extends TestCase
         app(ProcessPaymentReview::class)->process($this->conversation);
     }
 
+    public function test_revised_preview_in_same_interaction_marks_only_current_version(): void
+    {
+        $old = $this->run;
+        $old->update(['status' => 'cancelled']);
+        $new = $old->replicate(['enrollment_key']);
+        $new->fill(['status' => 'waiting_response', 'enrollment_key' => hash('sha256', 'revision'),
+            'context' => $old->context + ['supersedes_run_id' => $old->id]])->save();
+        $step = $old->steps()->first()->replicate(['effect_key']);
+        $step->fill(['run_id' => $new->id, 'receipt' => ['message_id' => 'wamid.new-preview', 'interaction_id' => 'interaction-one']])->save();
+        $this->message('new-template', ['direction' => 'outbound', 'attachments' => [],
+            'provider_metadata' => ['interactionId' => 'interaction-one', 'channelId' => 'wamid.new-preview', 'templateName' => ProcessTemplates::IDENTITY]]);
+        $this->travel(2)->seconds();
+        $this->message('new-payment');
+        $this->poll();
+        $this->poll();
+        $this->assertSame($new->id, OrderPaymentReview::sole()->run_id);
+        $this->assertDatabaseCount('order_payment_review_signals', 1);
+        $this->assertSame(0, $this->order->fresh()->paid_amount_cents);
+        $previousReview = OrderPaymentReview::create(['run_id' => $old->id, 'checkout_key' => $old->checkout_key, 'status' => 'closed']);
+        DB::transaction(fn () => app(ProcessPaymentReview::class)->syncPaymentStatus($previousReview));
+        $this->assertSame('pending_review', $this->order->fresh()->payment_status);
+    }
+
     public function test_attachment_marks_pending_payment_review_once_without_changing_money_or_order_status(): void
     {
         $before = $this->order->fresh()->getRawOriginal();
@@ -134,11 +157,11 @@ class ProcessPaymentReviewTest extends TestCase
         $this->assertSame('pending_review', $this->order->fresh()->payment_status);
         $this->assertSame(0, (int) $this->order->fresh()->paid_amount_cents);
         $this->assertDatabaseCount('order_payment_review_signals', 1);
-        $this->assertSame(0, \App\Models\AdminActivityLog::where('action', 'automation.attachment_received')->count());
-        $this->assertSame('Automation', data_get(\App\Models\AdminActivityLog::where('action', 'automation.payment_review')->first()->properties, 'actor_name'));
-        $count = \App\Models\AdminActivityLog::count();
+        $this->assertSame(0, AdminActivityLog::where('action', 'automation.attachment_received')->count());
+        $this->assertSame('Automation', data_get(AdminActivityLog::where('action', 'automation.payment_review')->first()->properties, 'actor_name'));
+        $count = AdminActivityLog::count();
         $this->poll();
-        $this->assertSame($count, \App\Models\AdminActivityLog::count());
+        $this->assertSame($count, AdminActivityLog::count());
         Http::assertNothingSent();
         Queue::assertNothingPushed();
     }

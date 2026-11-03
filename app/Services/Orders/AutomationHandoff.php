@@ -128,15 +128,17 @@ class AutomationHandoff
                 throw ValidationException::withMessages(['assignment' => 'انتظر انتهاء تجربة Codex قبل إعادة المسار السابق.']);
             }
             $changed = ! hash_equals($hold->fingerprint, $this->fingerprint($rows));
-            $productReturn = $rows->isNotEmpty() && $runs->isEmpty()
+            $confirmedProducts = $rows->isNotEmpty()
                 && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new_confirmed'
                     && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready'
                     && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
+            $productReturn = $confirmedProducts && $runs->isEmpty();
+            $revisedPreview = $changed && $confirmedProducts && $runs->isNotEmpty();
             if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
             }
-            if ($changed && ! $productReturn) {
-                if ($runs->isEmpty() && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new')) {
+            if ($changed && ! $productReturn && ! $revisedPreview) {
+                if ($rows->every(fn ($row) => ! $row->story_id) && $rows->contains('status', 'new')) {
                     throw ValidationException::withMessages(['assignment' => 'الطلب المعدّل غير مؤكد. بعد موافقة العميل على البيانات الجديدة، احفظ حالة «طلب جديد مؤكد» لكل عملية الشراء ثم أرجعه للأوتوميشن. البازل وكفر التلوين يبدأان قبل الدفع؛ صفحات التلوين تبدأ بعد اعتماد الكفر وتسجيل دفعة.']);
                 }
                 throw ValidationException::withMessages(['assignment' => 'تغيّرت بيانات الطلب أو هويته أثناء العمل اليدوي؛ لا يمكن استكمال مسار برسائل أو صور قديمة. أكمل يدويًا أو استخدم زر Codex بعد اعتماد الهوية وتسجيل الدفعة.']);
@@ -144,7 +146,10 @@ class AutomationHandoff
             if ($productReturn) {
                 app(PuzzleAutomation::class)->refreshUnstartedForReturn($key);
             }
-            foreach (json_decode($hold->runs, true) as $id => $status) {
+            if ($revisedPreview) {
+                app(ProductPreviewReturn::class)->restart($rows, $runs, $hold, $actor->id);
+            }
+            foreach ($revisedPreview ? [] : json_decode($hold->runs, true) as $id => $status) {
                 $run = $runs->get($id);
                 abort_unless($run && $run->status === 'paused' && $run->automation->enabled, 422, 'المسار السابق غير متاح للاستكمال.');
                 $run->update(['status' => $status, 'version' => $run->version + 1, 'next_at' => now(),
@@ -156,8 +161,8 @@ class AutomationHandoff
                 abort_unless($event && $event->status === 'held', 422, 'تغيّرت محاولة رسالة التأكيد أثناء التوقف.');
                 // A staff-confirmed revised checkout must never consume a reply to
                 // the old order contents. Keep its original send receipt and attempts.
-                $event->update(['status' => $productReturn ? 'cancelled' : $status]);
-                if (! $productReturn && $status === 'pending') {
+                $event->update(['status' => ($productReturn || $revisedPreview) ? 'cancelled' : $status]);
+                if (! $productReturn && ! $revisedPreview && $status === 'pending') {
                     SendOrderConfirmationJob::dispatch($event->id)->afterCommit();
                 }
             }

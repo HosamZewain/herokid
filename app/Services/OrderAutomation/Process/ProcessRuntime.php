@@ -231,6 +231,9 @@ class ProcessRuntime
                                 throw new RuntimeException('legacy_confirmation_pending');
                             }
                             $effect = hash('sha256', ($identityMessage ? 'identity-preview:' : 'order-confirmation:').$run->checkout_key);
+                            if ($identityMessage && isset($run->context['supersedes_run_id'])) {
+                                $effect = hash('sha256', 'revised-preview:'.$run->id.':'.$run->checkout_key);
+                            }
                             if (OrderProcessStep::where('effect_key', $effect)->exists()) {
                                 throw new RuntimeException('confirmation_already_claimed');
                             }

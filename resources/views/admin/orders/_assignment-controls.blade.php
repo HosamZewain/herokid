@@ -33,6 +33,8 @@
                         <input type="hidden" name="action" value="{{ in_array($summary['control_state'],['paused','paused_legacy'],true) ? 'resume' : 'pause' }}">
                         @if($summary['control_state'] === 'running')
                             <input required name="reason" maxlength="1000" placeholder="سبب طلب الإيقاف" aria-label="سبب طلب الإيقاف" class="w-full rounded-lg border-gray-200 text-xs">
+                        @else
+                            <p class="text-xs text-gray-600">لو أضفت منتجات بعد المعاينة، أكد بيانات الطلب المعدّل واحفظ كل عناصره «طلب جديد مؤكد» أولًا. الاستئناف يحفظ الصور المطابقة، ويجهّز المضاف ثم يرسل معاينة جديدة؛ الرد القديم لا يعتمد الإضافات.</p>
                         @endif
                         <button class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">{{ in_array($summary['control_state'],['paused','paused_legacy'],true) ? 'استئناف الأوتوميشن' : 'طلب إيقاف آمن' }}</button>
                     </form>
