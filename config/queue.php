@@ -44,6 +44,12 @@ return [
             'after_commit' => false,
         ],
 
+        // Shadow decisions have their own queue and bounded worker, never production jobs.
+        'agentic-shadow' => [
+            'driver' => 'redis', 'connection' => 'default', 'queue' => 'agentic-shadow',
+            'retry_after' => 1200, 'block_for' => null, 'after_commit' => true,
+        ],
+
         // Separate reservation window; do not change existing workers' behavior.
         'order-process-ai' => [
             'driver' => 'redis', 'connection' => 'default', 'queue' => 'order-process-ai',

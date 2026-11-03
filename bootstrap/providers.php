@@ -6,4 +6,5 @@ use App\Providers\RoboDeskIntegrationServiceProvider;
 return [
     AppServiceProvider::class,
     RoboDeskIntegrationServiceProvider::class,
+    \App\Providers\AgenticServiceProvider::class,
 ];

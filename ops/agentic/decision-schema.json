@@ -1,0 +1,15 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["decision", "action", "target_type", "target_id", "reason_code", "reason", "confidence", "context_version", "requires_human"],
+  "properties": {
+    "decision": {"type": "string", "enum": ["execute", "wait", "human_required", "escalate", "completed"]},
+    "action": {"type": ["string", "null"], "enum": [null, "send_order_confirmation", "generate_identity", "generate_product_image", "start_story_scene_generation", "generate_book_cover", "generate_book_pages", "send_product_preview", "request_customer_approval", "attach_asset", "create_human_task"]},
+    "target_type": {"type": "string", "enum": ["checkout", "production_unit"]},
+    "target_id": {"type": "string", "pattern": "^[a-zA-Z0-9:_-]{1,160}$"},
+    "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,79}$"},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1500},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "context_version": {"type": "integer", "minimum": 1},
+    "requires_human": {"type": "boolean"}
+  }
+}

@@ -1,0 +1,175 @@
+{
+    "mode": "memory",
+    "real_model": true,
+    "execution_mode": "shadow",
+    "passed": true,
+    "results": [
+        {
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:1",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "Product:1 is eligible for executor preflight and is prioritized by approved memory. Generation remains subject to preflight checks.",
+                "confidence": 1,
+                "context_version": 2,
+                "requires_human": false
+            },
+            "policy": {
+                "version": "autopilot-shadow-policy-v2",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11255,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 104,
+                    "reasoning_output_tokens": 17
+                },
+                "isolation_digest": "703a326f27d86639f945a5b43cc1cee661c28ef3670c97d373cd2f2901f87911",
+                "model": "subscription_default"
+            },
+            "memory": {
+                "digest": "5cc6a8a697bb6f2fcb468ef02cf2a76e9ad3f5da223682f1ca29288836ee66b3",
+                "overflow": false,
+                "entries": [
+                    {
+                        "id": 1,
+                        "revision": 1,
+                        "title": "أولوية اختبار محلية",
+                        "guidance": "عندما يكون الهدفان مستقلين، ابدأ مراجعة الهدف product:1 أولًا. التزم بالقرار الآمن المحدد له ولا تغيّر حقائق الأوردر.",
+                        "scope": "checkout",
+                        "source": "staff_correction"
+                    }
+                ]
+            },
+            "context_fingerprint": "03f3ff414f397cbe1b78c30e49f0628c369d4f9982446118187529df99570a7d",
+            "expected_target": "product:1",
+            "context_version": 2
+        },
+        {
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:2",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "Product:2 is eligible for executor preflight and takes priority under the approved checkout guidance. Execution remains subject to preflight checks.",
+                "confidence": 1,
+                "context_version": 3,
+                "requires_human": false
+            },
+            "policy": {
+                "version": "autopilot-shadow-policy-v2",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11249,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 105,
+                    "reasoning_output_tokens": 16
+                },
+                "isolation_digest": "703a326f27d86639f945a5b43cc1cee661c28ef3670c97d373cd2f2901f87911",
+                "model": "subscription_default"
+            },
+            "memory": {
+                "digest": "12849a365ef01811c2acec26370164969d77976ec5f6ece5096f4d70ff167427",
+                "overflow": false,
+                "entries": [
+                    {
+                        "id": 1,
+                        "revision": 2,
+                        "title": "أولوية اختبار محلية",
+                        "guidance": "عندما يكون الهدفان مستقلين، ابدأ مراجعة الهدف product:2 أولًا. التزم بالقرار الآمن المحدد له ولا تغيّر حقائق الأوردر.",
+                        "scope": "checkout",
+                        "source": "staff_correction"
+                    }
+                ]
+            },
+            "context_fingerprint": "820fca1803f7ebb83967d78431b4779255a27aae93f2ac0c3f78cda0eb9fc79a",
+            "expected_target": "product:2",
+            "context_version": 3
+        },
+        {
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:1",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "Product:1 is eligible for image generation, subject to executor preflight, and approved guidance prioritizes it first.",
+                "confidence": 1,
+                "context_version": 4,
+                "requires_human": false
+            },
+            "policy": {
+                "version": "autopilot-shadow-policy-v2",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11250,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 112,
+                    "reasoning_output_tokens": 26
+                },
+                "isolation_digest": "703a326f27d86639f945a5b43cc1cee661c28ef3670c97d373cd2f2901f87911",
+                "model": "subscription_default"
+            },
+            "memory": {
+                "digest": "f21649abf19337710d2b23207e16d32408284920d4434f12a2f0ff8accf374fd",
+                "overflow": false,
+                "entries": [
+                    {
+                        "id": 1,
+                        "revision": 3,
+                        "title": "أولوية اختبار محلية",
+                        "guidance": "عندما يكون الهدفان مستقلين، ابدأ مراجعة الهدف product:1 أولًا. التزم بالقرار الآمن المحدد له ولا تغيّر حقائق الأوردر.",
+                        "scope": "checkout",
+                        "source": "staff_correction"
+                    }
+                ]
+            },
+            "context_fingerprint": "d8288e32958020597ebf98ac51e47cff457ba1279b69528d1b23944e5d5686e2",
+            "expected_target": "product:1",
+            "context_version": 4
+        }
+    ],
+    "orders_unchanged": true,
+    "memory_revision_history": [
+        1,
+        2,
+        3
+    ],
+    "learning_mechanism": "versioned_guidance_in_context_not_model_training",
+    "daily_attempts": 93
+}
