@@ -1,16 +1,22 @@
 <?php
 
 use App\Jobs\AdvanceProductionAutomationRun;
+use App\Jobs\TickPuzzleAutomation;
 use App\Models\AiProvider;
 use App\Models\ProductionAutomationRun;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
+use App\Services\Bosta\BostaAutomaticPickupService;
 use App\Services\Cart\CartTrackingService;
 use App\Services\DatabaseExports\DatabaseExportService;
 use App\Services\MediaLibrary\AdminMediaLibraryService;
 use App\Services\Notifications\NotificationCredentialService;
 use App\Services\Notifications\NotificationStuckChecker;
+use App\Services\OrderAutomation\Process\ProcessRuntime;
+use App\Services\OrderAutomation\WorkflowService;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderAttachmentService;
+use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\RoboDesk\Conversations\ActiveConversationRefreshService;
 use App\Services\RoboDesk\Conversations\ConversationReplyService;
@@ -20,6 +26,7 @@ use App\Support\AdminRoleSyncer;
 use App\Support\ProductionAutomation;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Console\Command\Command;
@@ -264,17 +271,17 @@ Schedule::command('production-automation:recover')
 
 Schedule::command('mobile-push:check-receipts')->everyTenMinutes()->withoutOverlapping(10);
 
-Artisan::command('order-automation:tick', function (\App\Services\OrderAutomation\WorkflowService $workflows) {
+Artisan::command('order-automation:tick', function (WorkflowService $workflows) {
     $this->info('New workflow runs: '.$workflows->tick());
 })->purpose('Admit new orders and recover safe workflow steps; never resubmit uncertain generation');
 Schedule::command('order-automation:tick')->everyMinute()->withoutOverlapping(10);
 
-Artisan::command('order-process:tick', function (\App\Services\OrderAutomation\Process\ProcessRuntime $runtime) {
+Artisan::command('order-process:tick', function (ProcessRuntime $runtime) {
     $this->info('New process runs: '.$runtime->tick());
 })->purpose('Advance explicitly enabled processes; never retry uncertain sends');
 Schedule::command('order-process:tick')->everyMinute()->withoutOverlapping(10);
 
-Artisan::command('bosta:automatic-pickup', function (\App\Services\Bosta\BostaAutomaticPickupService $service) {
+Artisan::command('bosta:automatic-pickup', function (BostaAutomaticPickupService $service) {
     $result = $service->run();
     $this->info($result);
 
@@ -287,11 +294,18 @@ Schedule::command('bosta:automatic-pickup')->dailyAt('14:30')->timezone('Africa/
 // Enroll eligible stories only when automatic mode is enabled; collect manual and automatic runs.
 Schedule::command('codex-scenes:sync')->everyMinute()->withoutOverlapping(3);
 
-Artisan::command('puzzle-automation:tick', function (\App\Services\ProductAutomation\PuzzleAutomation $puzzles) {
+Artisan::command('puzzle-automation:tick', function (PuzzleAutomation $puzzles) {
     if ($puzzles->enabled()) {
-        \App\Jobs\TickPuzzleAutomation::dispatch();
+        TickPuzzleAutomation::dispatch();
     }
     $this->info('Puzzle automation tick scheduled on the existing AI queue.');
 })->purpose('Generate one confirmed puzzle image; never replay uncertain provider calls');
 // Keep dispatch in the foreground: systemd ends background children with schedule:run.
 Schedule::command('puzzle-automation:tick')->everyMinute()->withoutOverlapping(10);
+
+Artisan::command('order-workspace:settle', function () {
+    foreach (DB::table('order_automation_controls')->whereIn('state', ['pause_requested', 'pause_uncertain'])->pluck('checkout_key') as $key) {
+        app(AutomationControl::class)->settle($key);
+    }
+})->purpose('Settle requested safe pauses without retrying provider operations');
+Schedule::command('order-workspace:settle')->everyMinute()->withoutOverlapping(3);

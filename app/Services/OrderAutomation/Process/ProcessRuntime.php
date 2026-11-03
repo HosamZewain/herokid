@@ -14,6 +14,7 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationTransport;
@@ -151,7 +152,7 @@ class ProcessRuntime
         }
         $send = DB::transaction(function () use ($id) {
             $run = OrderProcessRun::lockForUpdate()->find($id);
-            if (! $run || ! in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_identity'], true) || ! $run->automation->enabled) {
+            if (! $run || ! AutomationControl::admits($run->checkout_key) || ! in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_identity'], true) || ! $run->automation->enabled) {
                 return null;
             }
             try {
@@ -339,6 +340,9 @@ class ProcessRuntime
                 $run = OrderProcessRun::lockForUpdate()->findOrFail($runId);
                 $step = OrderProcessStep::where('run_id', $runId)->lockForUpdate()->findOrFail($stepId);
                 $attempt = $step->messageAttempts()->lockForUpdate()->findOrFail($attemptId);
+                if (! AutomationControl::admits($run->checkout_key)) {
+                    return null;
+                }
                 if ($run->version !== $version || $run->status !== 'retry_queued' || $step->status !== 'retry_pending' || $attempt->status !== 'pending') {
                     return null;
                 }

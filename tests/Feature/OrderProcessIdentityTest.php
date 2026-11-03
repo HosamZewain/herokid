@@ -40,6 +40,7 @@ use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\OrderIdentityMedia;
 use App\Services\Orders\OrderIdentityRegenerationService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderReviewLinks;
@@ -128,7 +129,7 @@ class OrderProcessIdentityTest extends TestCase
     private function regenerationOrder(): Order
     {
         $run = $this->generated();
-        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.production_prompt.manage', 'orders.assignment.manage', 'orders.assign'])->pluck('id'));
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.production_prompt.manage', 'orders.assignment.manage', 'orders.automation.control', 'orders.view_all', 'orders.assign'])->pluck('id'));
         $this->actingAs($this->actor);
         $order = $run->order->fresh();
         $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'take'])->assertSessionHasNoErrors();
@@ -199,7 +200,7 @@ class OrderProcessIdentityTest extends TestCase
         $run = $service->request($order, $this->actor, $order->childIdentityRequest->attempts()->sole()->id, str_repeat('Original child with blue costume. ', 3));
         $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
             ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-copy-failure', ['cost_usd' => 0.1], []));
-        $this->mock(\App\Services\Orders\OrderIdentityMedia::class)->shouldReceive('attach')->once()->andThrow(new \RuntimeException('copy failed'));
+        $this->mock(OrderIdentityMedia::class)->shouldReceive('attach')->once()->andThrow(new \RuntimeException('copy failed'));
         $service->generate($run->id);
         $service->generate($run->id);
         $run->refresh();

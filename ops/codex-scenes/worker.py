@@ -48,7 +48,7 @@ def authenticated():
 
 
 def heartbeat():
-    atomic(SPOOL / 'outbox/health.json', {'authenticated': authenticated(), 'supported_protocols': [2, 3, 4, 5, 6], 'at': time.time()})
+    atomic(SPOOL / 'outbox/health.json', {'authenticated': authenticated(), 'supported_protocols': [2, 3, 4, 5, 6], 'safe_pause': 1, 'at': time.time()})
 
 
 def regular(path, root):
@@ -78,22 +78,32 @@ def run_job(inbox):
     timing = {}
     progress = {}
     monotonic_start = None
+    elapsed_before = 0
+    resuming = False
+    manifest_sha = None
     if state_path.exists():
         prior_state = json.loads(state_path.read_text())
+        manifest_sha = prior_state.get('manifest_sha256')
         timing = prior_state.get('timing') or {}
         progress = prior_state.get('scene_progress') or {}
 
     def state(status, code=None):
-        nonlocal monotonic_start
+        nonlocal monotonic_start, elapsed_before
         at = time.time()
-        if status == 'running' and not timing:
+        if status == 'running' and monotonic_start is None:
+            elapsed_before = timing.get('elapsed_seconds', 0)
             monotonic_start = time.monotonic()
-            timing.update({'started_at': at, 'elapsed_seconds': 0})
+            if resuming and 'paused_at' in timing:
+                timing['paused_seconds'] = timing.get('paused_seconds', 0) + max(0, at - timing.pop('paused_at'))
+            timing.setdefault('started_at', at)
+            timing.pop('finished_at', None)
         if monotonic_start is not None and 'finished_at' not in timing:
-            timing['elapsed_seconds'] = round(time.monotonic() - monotonic_start, 3)
+            timing['elapsed_seconds'] = round(elapsed_before + time.monotonic() - monotonic_start, 3)
             if status in {'completed', 'quality_review', 'stopped', 'uncertain', 'needs_manual'}:
                 timing['finished_at'] = at
-        atomic(state_path, {'id': job_id, 'status': status, 'code': code, 'at': at, 'timing': timing, 'scene_progress': progress})
+        if status == 'paused':
+            timing['paused_at'] = at
+        atomic(state_path, {'manifest_sha256': manifest_sha, 'id': job_id, 'status': status, 'code': code, 'at': at, 'timing': timing, 'scene_progress': progress})
 
     # Cancel is acknowledged even if staging failed before a manifest was published.
     if (inbox / 'cancel').exists():
@@ -103,7 +113,9 @@ def run_job(inbox):
         prior = json.loads(state_path.read_text())
         if prior.get('status') == 'running':
             state('uncertain', 'worker_interrupted')
-        return  # Never replay an attempted run, including after restart.
+        if prior.get('status') != 'paused' or (inbox / 'pause-after-scene').exists():
+            return  # Never replay an uncertain or interrupted operation.
+        resuming = True
     if not regular(inbox / 'manifest.json', inbox):
         return
     if not authenticated():
@@ -111,7 +123,12 @@ def run_job(inbox):
     work = HOME / 'jobs' / job_id
     process = None
     try:
-        manifest = json.loads((inbox / 'manifest.json').read_text())
+        manifest_bytes = (inbox / 'manifest.json').read_bytes()
+        current_sha = hashlib.sha256(manifest_bytes).hexdigest()
+        if resuming and manifest_sha != current_sha:
+            raise ValueError('changed_pause_manifest')
+        manifest_sha = current_sha
+        manifest = json.loads(manifest_bytes)
         book = manifest.get('protocol') in {5, 6}
         count = manifest.get('scene_count')
         if type(count) is not int or (not book and count != 13) or (book and (not 1 <= count <= 1000 or manifest.get('production_kind') != 'coloring_book' or type(manifest.get('order_item_id')) is not int or manifest['order_item_id'] <= 0)):
@@ -119,6 +136,8 @@ def run_job(inbox):
         if manifest['id'] != job_id or not isinstance(manifest.get('order_id'), int):
             raise ValueError('invalid_manifest')
         independent = manifest.get('protocol') in {4, 5, 6}
+        if resuming and not independent:
+            raise ValueError('legacy_pause_requires_review')
         texts = manifest['texts']
         if len(texts) != count or [s['scene_number'] for s in texts] != list(range(1, count + 1)):
             raise ValueError('invalid_scene_sequence')
@@ -127,7 +146,9 @@ def run_job(inbox):
         identity = (inbox / 'identity.img').read_bytes()
         if hashlib.sha256(identity).hexdigest() != manifest['identity_checksum']:
             raise ValueError('identity_checksum')
-        work.mkdir(parents=True, exist_ok=False, mode=0o700)
+        if work.is_symlink():
+            raise ValueError('invalid_work_directory')
+        work.mkdir(parents=True, exist_ok=resuming, mode=0o700)
         (work / 'identity.png').write_bytes(identity)
         if book:
             references = manifest.get('references', [])
@@ -170,7 +191,7 @@ def run_job(inbox):
             hashes.add(sha)
             accepted.add(number)
             if independent:
-                progress[str(number)] = {'status': 'retained', 'attempts': []}
+                progress.setdefault(str(number), {'status': 'retained', 'attempts': []})
             shutil.copyfile(source, work / source.name)
         skipped = manifest.get('skipped_scenes', [])
         if not isinstance(skipped, list) or (skipped and (not independent or 'resume_from' not in manifest)):
@@ -184,6 +205,31 @@ def run_job(inbox):
             progress[str(number)] = {'status': 'failed', 'code': 'content_review', 'attempts': [], 'previous_run_id': manifest['resume_from']}
         if independent:
             atomic(work / 'result-schema.json', {'type': 'object', 'properties': {'outcome': {'type': 'string', 'enum': ['saved', 'content_refused', 'unavailable', 'unknown']}}, 'required': ['outcome'], 'additionalProperties': False})
+        if resuming:
+            for key, checkpoint in progress.items():
+                number = int(key)
+                if number not in range(1, count + 1):
+                    raise ValueError('invalid_pause_checkpoint')
+                if checkpoint.get('status') in {'succeeded', 'retained'}:
+                    if number in accepted:
+                        continue  # Original retained input already validated above.
+                    source = out / f'scene-{number:02d}.png'
+                    meta_file = out / f'scene-{number:02d}.json'
+                    if not regular(source, out) or not regular(meta_file, out):
+                        raise ValueError('missing_pause_output')
+                    meta = json.loads(meta_file.read_text())
+                    sha = validate_png(source, portrait=book)
+                    if meta.get('sha256') != sha or meta.get('id') != job_id or meta.get('order_id') != manifest['order_id'] or meta.get('identity_checksum') != manifest['identity_checksum']:
+                        raise ValueError('invalid_pause_output')
+                    if sha in hashes or meta.get('scene') != number or (book and meta.get('order_item_id') != manifest['order_item_id']):
+                        raise ValueError('invalid_pause_binding')
+                    accepted.add(number)
+                    hashes.add(sha)
+                    shutil.copyfile(source, work / source.name)
+                elif checkpoint.get('status') == 'failed':
+                    skipped_numbers.add(number)
+                elif any(a.get('status') != 'failed' or a.get('code') not in QUALITY_ERRORS for a in checkpoint.get('attempts', [])):
+                    raise ValueError('uncertain_pause_checkpoint')
         state('running')
         for number, scene in enumerate(texts, 1):
             if number in accepted | skipped_numbers:
@@ -191,9 +237,16 @@ def run_job(inbox):
             if (inbox / 'cancel').exists():
                 state('stopped')
                 return
+            if (inbox / 'pause-after-scene').exists():
+                state('paused')
+                return
             if independent:
-                progress[str(number)] = {'status': 'running', 'attempts': []}
-            for attempt in range(1, (MAX_ATTEMPTS if independent else 1) + 1):
+                progress.setdefault(str(number), {'status': 'running', 'attempts': []})
+            first_attempt = len(progress.get(str(number), {}).get('attempts', [])) + 1
+            for attempt in range(first_attempt, (MAX_ATTEMPTS if independent else 1) + 1):
+                if (inbox / 'pause-after-scene').exists():
+                    state('paused')
+                    return
                 if (inbox / 'cancel').exists():
                     state('stopped')
                     return
@@ -325,7 +378,8 @@ def run_job(inbox):
                     state('running')
                     if not retry:
                         break
-        state('needs_manual' if len(accepted) < count else 'completed')
+        # Even on the final scene, acknowledge the requested boundary before handoff.
+        state('paused' if (inbox / 'pause-after-scene').exists() else ('needs_manual' if len(accepted) < count else 'completed'))
     except Exception as error:
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)
@@ -354,8 +408,10 @@ def dispatch(pool, active):
             prior = json.loads(status.read_text())
             if prior.get('status') == 'running':
                 atomic(status, {**prior, 'status': 'uncertain', 'code': 'worker_interrupted', 'at': time.time()})
-            if not (inbox / 'cancel').exists() or prior.get('status') == 'stopped':
+            if prior.get('status') != 'paused' and (not (inbox / 'cancel').exists() or prior.get('status') == 'stopped'):
                 continue
+        if (inbox / 'pause-after-scene').exists() and status.exists() and prior.get('status') == 'paused':
+            continue
         if not (inbox / 'manifest.json').exists() and not (inbox / 'cancel').exists():
             continue
         active[inbox.name] = pool.submit(run_job, inbox)

@@ -7,6 +7,8 @@ use App\Models\OrderAttachment;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRun;
 use App\Models\User;
+use App\Services\Orders\AutomationControl;
+use App\Services\Orders\AutomationHandoff;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,6 +37,10 @@ class WorkflowRunner
             if (! $run->dry_run && ! $run->trial && (! config('order_automation.enabled') || ! $run->automation->enabled)) {
                 $run->update(['next_at' => now()->addMinutes(5)]);
 
+                return null;
+            }
+            $key = Order::whereKey($run->order_id)->value('checkout_group_key');
+            if (! $run->dry_run && $run->status !== 'polling' && ($key && (! AutomationControl::admits($key) || AutomationHandoff::held($key)))) {
                 return null;
             }
             $run->update(['lease_token' => (string) Str::uuid(), 'lease_until' => now()->addMinutes(10)]);

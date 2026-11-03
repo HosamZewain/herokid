@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
+use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\AutomationControl;
 use App\Services\RoboDesk\OrderConfirmationSendException;
 use App\Services\RoboDesk\OrderConfirmationService;
 use App\Services\RoboDesk\OrderConfirmationTransport;
@@ -15,6 +17,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SendOrderConfirmationJob implements ShouldQueue
@@ -83,12 +86,18 @@ class SendOrderConfirmationJob implements ShouldQueue
             unset($data['children'], $data['instapay_url'], $data['amounts']['paid'], $data['amounts']['remaining']);
             $data['confirmation']['send_started_at'] = now()->utc()->toISOString();
             // Durable compare-and-set precedes even closing the provider conversation.
-            if (! RoboDeskIntegrationEvent::whereKey($event->id)->where('status', 'pending')->where('attempts', 0)
-                ->update(['status' => 'processing', 'attempts' => 1, 'payload' => json_encode($data, JSON_THROW_ON_ERROR)])) {
+            if (! DB::transaction(function () use ($event, $data) {
+                if (! AutomationControl::admits($event->checkout_group_key)) {
+                    return false;
+                }
+
+                return RoboDeskIntegrationEvent::whereKey($event->id)->where('status', 'pending')->where('attempts', 0)
+                    ->update(['status' => 'processing', 'attempts' => 1, 'payload' => json_encode($data, JSON_THROW_ON_ERROR)]);
+            })) {
                 return;
             }
             $event->refresh();
-            \App\Services\Orders\AutomationActivity::record($event->checkout_group_key, 'confirmation_send_started', 'بدء محاولة إرسال تأكيد الطلب', ['source_id' => $event->id, 'stage' => 'تأكيد الطلب']);
+            AutomationActivity::record($event->checkout_group_key, 'confirmation_send_started', 'بدء محاولة إرسال تأكيد الطلب', ['source_id' => $event->id, 'stage' => 'تأكيد الطلب']);
             try {
                 $receipt = $transport->send($data);
                 $event->update(['status' => 'succeeded', 'response_payload' => $receipt, 'processed_at' => now(), 'last_error' => null]);

@@ -19,7 +19,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-DktivaQm.css",
+    "file": "assets/app-qOIDx25u.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -95,6 +95,12 @@
     "name": "order-process-builder",
     "src": "resources/js/order-process-builder.js",
     "isDynamicEntry": true
+  },
+  "resources/js/order-workspace.js": {
+    "file": "assets/order-workspace-Dg7jrtS-.js",
+    "name": "order-workspace",
+    "src": "resources/js/order-workspace.js",
+    "isEntry": true
   },
   "resources/js/scene-reader.js": {
     "file": "assets/scene-reader-BoUEwSCH.js",

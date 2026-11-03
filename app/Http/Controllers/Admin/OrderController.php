@@ -136,7 +136,7 @@ class OrderController extends Controller
                     data_get($delivery, 'city'),
                     data_get($delivery, 'street'),
                     data_get($delivery, 'address_details', data_get($delivery, 'address')),
-                    ($row['automation_assigned'] ?? false) ? 'Automation' : $row['assigned_admin']?->name,
+                    $row['assigned_admin']?->name,
                     $row['source_notes'],
                     implode(' | ', array_column($row['marketing_sources'], 'label')),
                     ...collect(['campaign_name', 'adset_name', 'ad_name', 'campaign_id', 'adset_id', 'ad_id', 'source', 'medium', 'campaign', 'content', 'term'])

@@ -19,6 +19,7 @@ use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderIdentityMedia;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
@@ -111,6 +112,9 @@ class ProcessIdentityService
             // Always lock run before task: runtime/response/worker lock ordering agrees.
             $run = OrderProcessRun::lockForUpdate()->findOrFail($candidate->run_id);
             $task = OrderProcessIdentity::lockForUpdate()->findOrFail($id);
+            if (! AutomationControl::admits($run->checkout_key)) {
+                return null;
+            }
             if ($task->status !== 'queued') {
                 return null;
             }
@@ -219,7 +223,7 @@ class ProcessIdentityService
     {
         $tasks = OrderProcessIdentity::where('run_id', $run->id)->get();
         foreach ($tasks as $task) {
-            if ($task->status === 'queued' && $task->created_at->lt(now()->subHour())) {
+            if ($task->status === 'queued' && $task->updated_at->lt(now()->subHour())) {
                 $task->update(['status' => 'blocked', 'error_code' => 'identity_worker_missing']);
             }
             if ($task->status === 'processing' && $task->lease_until?->isPast()) {

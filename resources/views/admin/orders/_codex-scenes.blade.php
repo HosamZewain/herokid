@@ -3,7 +3,7 @@
 @php
     $codexService = app(\App\Services\CodexScenes\ManualSceneService::class);
     $codexRuns = \App\Models\CodexSceneRun::where('order_id',$order->id)->latest()->limit(3)->get();
-    $codexReason = $order->story_id ? $codexService->reason($order) : 'صفحات كتب التلوين تدخل الطابور بعد اعتماد الكفر وتسجيل دفعة فعلية.';
+    $codexReason = !app(\App\Services\Orders\OrderAccess::class)->controls($order,auth()->user()) ? 'تشغيل الأوتوميشن يحتاج صلاحية التحكم لهذا الطلب.' : ($order->story_id ? $codexService->reason($order) : 'صفحات كتب التلوين تدخل الطابور بعد اعتماد الكفر وتسجيل دفعة فعلية.');
 @endphp
 <section id="codex-scenes-{{ $order->id }}" class="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
     <h4 class="text-sm font-black text-indigo-900">توليد الصور والصفحات — Codex</h4>

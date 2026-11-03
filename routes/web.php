@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
 use App\Http\Controllers\Admin\AdminHomeController;
-use App\Http\Controllers\Admin\EmployeePerformanceReportController;
 use App\Http\Controllers\Admin\AdminMediaLibraryController;
 use App\Http\Controllers\Admin\AdminMediaUploadController;
 use App\Http\Controllers\Admin\AdminRoleController;
@@ -10,6 +9,7 @@ use App\Http\Controllers\Admin\AdvertisingTargetingReportController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\AppLandingAnalyticsController;
 use App\Http\Controllers\Admin\BookletPreviewController as AdminBookletPreviewController;
 use App\Http\Controllers\Admin\BostaController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -17,18 +17,21 @@ use App\Http\Controllers\Admin\ChildIdentityController as AdminChildIdentityCont
 use App\Http\Controllers\Admin\ChildIdentityMediaController as AdminChildIdentityMediaController;
 use App\Http\Controllers\Admin\ChildIdentitySettingsController;
 use App\Http\Controllers\Admin\ChildIdentityShareController as AdminChildIdentityShareController;
+use App\Http\Controllers\Admin\CodexSceneController;
 use App\Http\Controllers\Admin\ContactMessageController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DatabaseExportController;
 use App\Http\Controllers\Admin\DeliveryZoneController;
 use App\Http\Controllers\Admin\DiscountCodeController;
+use App\Http\Controllers\Admin\EmployeePerformanceReportController;
 use App\Http\Controllers\Admin\ExpenseCategoryController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
+use App\Http\Controllers\Admin\FreeShippingOfferController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
-use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\MobileGamesController;
+use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\MobilePushCampaignController;
 use App\Http\Controllers\Admin\NotificationCenterController;
 use App\Http\Controllers\Admin\OrderActivityController;
@@ -36,12 +39,17 @@ use App\Http\Controllers\Admin\OrderAdminNoteController;
 use App\Http\Controllers\Admin\OrderApprovedChildIdentityController;
 use App\Http\Controllers\Admin\OrderAssignmentController;
 use App\Http\Controllers\Admin\OrderAttachmentController;
+use App\Http\Controllers\Admin\OrderAutomationController;
 use App\Http\Controllers\Admin\OrderBulkActionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\OrderEditController;
 use App\Http\Controllers\Admin\OrderGroupController;
 use App\Http\Controllers\Admin\OrderGroupTagController;
+use App\Http\Controllers\Admin\OrderIdentityGenerationController;
+use App\Http\Controllers\Admin\OrderMessageRetryController;
+use App\Http\Controllers\Admin\OrderPaymentReviewController;
 use App\Http\Controllers\Admin\OrderPhotoController;
+use App\Http\Controllers\Admin\OrderProcessController;
 use App\Http\Controllers\Admin\OrderProductionPromptController;
 use App\Http\Controllers\Admin\OrderProductPreviewController as AdminOrderProductPreviewController;
 use App\Http\Controllers\Admin\OrderProductProductionController;
@@ -49,6 +57,7 @@ use App\Http\Controllers\Admin\OrderQuickEditController;
 use App\Http\Controllers\Admin\OrderReportController;
 use App\Http\Controllers\Admin\OrderStatusDefinitionController;
 use App\Http\Controllers\Admin\OrderWhatsAppTemplateController;
+use App\Http\Controllers\Admin\OrderWorkspaceController;
 use App\Http\Controllers\Admin\PaymentReportController;
 use App\Http\Controllers\Admin\PricingPackageController;
 use App\Http\Controllers\Admin\ProductCategoryController;
@@ -58,8 +67,10 @@ use App\Http\Controllers\Admin\ProductionSceneSnapshotController;
 use App\Http\Controllers\Admin\ProductionStudioController;
 use App\Http\Controllers\Admin\ProductUpsellRuleController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\PuzzleGenerationController;
 use App\Http\Controllers\Admin\SalesReportController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShippingDiscountController;
 use App\Http\Controllers\Admin\ShippingReportController;
 use App\Http\Controllers\Admin\StoryAttachmentController;
 use App\Http\Controllers\Admin\StoryChildIdentityPromptTemplateController;
@@ -70,6 +81,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VisitorCartController;
 use App\Http\Controllers\ConversationReplyMediaController;
 use App\Http\Controllers\Front\AccountDeletionController;
+use App\Http\Controllers\Front\AppLandingMetricsController;
 use App\Http\Controllers\Front\BookletPreviewController as PublicBookletPreviewController;
 use App\Http\Controllers\Front\CartController;
 use App\Http\Controllers\Front\CartPromoCodeController;
@@ -83,10 +95,12 @@ use App\Http\Controllers\Front\FootballStoriesController;
 use App\Http\Controllers\Front\HomeController;
 use App\Http\Controllers\Front\OrderCustomerRatingController;
 use App\Http\Controllers\Front\OrderProductPreviewController as PublicOrderProductPreviewController;
+use App\Http\Controllers\Front\OrderRegeneratedIdentityPreviewController;
 use App\Http\Controllers\Front\OrderReviewManifestController;
 use App\Http\Controllers\Front\PackageCartController;
 use App\Http\Controllers\Front\PackageController;
 use App\Http\Controllers\Front\PageController;
+use App\Http\Controllers\Front\ProcessIdentityPreviewController;
 use App\Http\Controllers\Front\ProductCartController;
 use App\Http\Controllers\Front\PublicChildIdentityShareController;
 use App\Http\Controllers\Front\ShopController;
@@ -97,6 +111,8 @@ use App\Http\Controllers\Front\TemporaryPhotoUploadController;
 use App\Http\Controllers\Front\TrackOrderController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicMediaController;
+use App\Http\Middleware\EnforceOrderAccess;
+use App\Http\Middleware\ProtectAutomationOrders;
 use App\Http\Middleware\TrackCustomerVisit;
 use App\Models\Order;
 use App\Models\PricingPackage;
@@ -111,7 +127,7 @@ use Illuminate\Support\Facades\Route;
 // exec() disabled). The .htaccess only routes requests to PHP when the file
 // does NOT exist on disk, so this only fires when the symlink is missing —
 // it has zero cost when the symlink is in place.
-Route::get('/order-identity-review/{regeneration}', \App\Http\Controllers\Front\OrderRegeneratedIdentityPreviewController::class)->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('orders.regenerated-identity-preview');
+Route::get('/order-identity-review/{regeneration}', OrderRegeneratedIdentityPreviewController::class)->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('orders.regenerated-identity-preview');
 Route::get('/order-review/{manifest}', [OrderReviewManifestController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->name('order-process.review-preview');
 Route::get('/order-review/{manifest}/image/{index}', [OrderReviewManifestController::class, 'image'])->middleware(['signed', 'throttle:120,1'])->whereNumber('index')->name('order-process.review-image');
 
@@ -401,9 +417,9 @@ Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'submitContact'])->name('contact.submit');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::view('/app', 'front.pages.app')->name('app.download');
-Route::get('/app/metrics/visit', [App\Http\Controllers\Front\AppLandingMetricsController::class, 'visit'])
+Route::get('/app/metrics/visit', [AppLandingMetricsController::class, 'visit'])
     ->middleware('throttle:120,1')->withoutMiddleware(TrackCustomerVisit::class)->name('app.metrics.visit');
-Route::get('/app/download/{platform}', [App\Http\Controllers\Front\AppLandingMetricsController::class, 'download'])
+Route::get('/app/download/{platform}', [AppLandingMetricsController::class, 'download'])
     ->whereIn('platform', ['ios', 'android'])->withoutMiddleware(TrackCustomerVisit::class)->name('app.store');
 Route::get('/story-library', [StoryLibraryController::class, 'index'])->name('story-library.index');
 Route::get('/story-library/{story}', [StoryLibraryController::class, 'show'])->name('story-library.show');
@@ -437,24 +453,24 @@ Route::middleware('auth')->group(function () {
 });
 
 // Admin Routes
-Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\ProtectAutomationOrders::class])->prefix('admin')->name('admin.')->group(function () {
-    Route::post('orders/{order}/payment-review/close', \App\Http\Controllers\Admin\OrderPaymentReviewController::class)
+Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class, ProtectAutomationOrders::class])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('orders/{order}/payment-review/close', OrderPaymentReviewController::class)
         ->middleware(['permission:orders.view', 'permission:robodesk.review_payments'])
         ->name('orders.payment-review.close');
-    Route::post('orders/{order}/message-retry', \App\Http\Controllers\Admin\OrderMessageRetryController::class)
+    Route::post('orders/{order}/message-retry', OrderMessageRetryController::class)
         ->middleware(['permission:orders.view', 'permission:orders.update', 'permission:order_automation.execute', 'throttle:5,1'])
         ->name('orders.message-retry');
     Route::prefix('order-automation')->name('order-automation.')->middleware('permission:order_automation.view')->group(function (): void {
-        $controller = \App\Http\Controllers\Admin\OrderAutomationController::class;
+        $controller = OrderAutomationController::class;
         Route::get('/', [$controller, 'index'])->name('index');
-        Route::get('codex-scenes', [\App\Http\Controllers\Admin\CodexSceneController::class, 'index'])->middleware('permission:orders.view')->name('codex-scenes');
-        Route::get('codex-scenes/progress', [\App\Http\Controllers\Admin\CodexSceneController::class, 'monitor'])->middleware('permission:orders.view')->name('codex-scenes.progress');
+        Route::get('codex-scenes', [CodexSceneController::class, 'index'])->middleware('permission:orders.view')->name('codex-scenes');
+        Route::get('codex-scenes/progress', [CodexSceneController::class, 'monitor'])->middleware('permission:orders.view')->name('codex-scenes.progress');
         Route::post('/', [$controller, 'create'])->middleware('permission:order_automation.manage')->name('create');
         Route::get('runs/{run}', [$controller, 'show'])->middleware('permission:orders.view')->name('runs.show');
         Route::get('runs/{run}/image', [$controller, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('runs.image');
         Route::post('runs/{run}/action', [$controller, 'action'])->middleware(['permission:orders.view', 'permission:orders.photos.view', 'permission:order_automation.execute', 'throttle:10,1'])->name('runs.action');
         Route::prefix('process')->name('process.')->middleware('permission:order_automation.manage')->group(function (): void {
-            $process = \App\Http\Controllers\Admin\OrderProcessController::class;
+            $process = OrderProcessController::class;
             Route::post('/', [$process, 'create'])->name('create');
             Route::get('simulations/{simulation}', [$process, 'show'])->name('simulation');
             Route::post('simulations/{simulation}', [$process, 'respond'])->middleware('throttle:30,1')->name('respond');
@@ -518,7 +534,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::get('analytics', [AnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')
         ->name('analytics.index');
-    Route::get('app-download-analytics', [App\Http\Controllers\Admin\AppLandingAnalyticsController::class, 'index'])
+    Route::get('app-download-analytics', [AppLandingAnalyticsController::class, 'index'])
         ->middleware('permission:analytics.view')->name('app-download-analytics.index');
     Route::get('agent-api-tokens', [AgentApiTokenController::class, 'index'])
         ->middleware('permission:agent_api.tokens.manage')
@@ -800,6 +816,11 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::get('bosta/pickup-dates', [BostaController::class, 'pickupDates'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.dates');
     Route::post('bosta/pickups', [BostaController::class, 'createPickup'])->middleware('permission:bosta.create_pickup')->name('bosta.pickups.store');
     Route::post('bosta/awb', [BostaController::class, 'awb'])->middleware('permission:bosta.print_awb')->name('bosta.awb');
+    Route::post('orders/workspace/assign', [OrderWorkspaceController::class, 'assign'])->middleware(['permission:orders.view', 'permission:orders.assignment.manage'])->name('orders.workspace.assign');
+    Route::post('orders/workspace/visibility', [OrderWorkspaceController::class, 'visibility'])->middleware('permission:orders.visibility.manage')->name('orders.workspace.visibility');
+    Route::get('orders/workspace/progress', [OrderWorkspaceController::class, 'progress'])->middleware('permission:orders.view')->name('orders.workspace.progress');
+    Route::post('orders/{order}/workspace/book/{item}/start', [OrderWorkspaceController::class, 'startBook'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.book-start');
+    Route::post('orders/{order}/workspace/control', [OrderWorkspaceController::class, 'control'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control'])->name('orders.workspace.control');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');
     Route::get('orders/create', [OrderController::class, 'create'])->middleware('permission:orders.create')->name('orders.create');
     Route::get('orders/existing-customers/search', [OrderController::class, 'searchExistingCustomers'])
@@ -829,10 +850,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');
     Route::delete('orders/groups/{representative}/product-previews', [AdminOrderProductPreviewController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy-many');
     Route::delete('orders/{order}/product-previews/{preview}', [AdminOrderProductPreviewController::class, 'destroy'])->whereNumber(['order', 'preview'])->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy');
-    Route::post('orders/groups/{representative}/assignment/automation', [OrderAssignmentController::class, 'automation'])->whereNumber('representative')->middleware(['permission:orders.assignment.manage', 'permission:orders.update'])->name('orders.groups.assignment.automation');
-    Route::post('orders/groups/{representative}/assignment/acquire', [OrderAssignmentController::class, 'acquire'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.acquire');
+    Route::post('orders/groups/{representative}/assignment/automation', [OrderAssignmentController::class, 'automation'])->whereNumber('representative')->middleware(['permission:orders.automation.control', 'permission:orders.update'])->name('orders.groups.assignment.automation');
+    Route::post('orders/groups/{representative}/assignment/acquire', [OrderAssignmentController::class, 'acquire'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.acquire');
     Route::post('orders/groups/{representative}/assignment/takeover', [OrderAssignmentController::class, 'takeover'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.takeover');
-    Route::delete('orders/groups/{representative}/assignment', [OrderAssignmentController::class, 'release'])->whereNumber('representative')->middleware('permission:orders.assign')->name('orders.groups.assignment.release');
+    Route::delete('orders/groups/{representative}/assignment', [OrderAssignmentController::class, 'release'])->whereNumber('representative')->middleware('permission:orders.assignment.manage')->name('orders.groups.assignment.release');
     Route::delete('orders/groups/{representative}', [OrderGroupController::class, 'destroy'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.destroy');
     Route::post('orders/groups/{representative}/restore', [OrderGroupController::class, 'restore'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.restore');
     Route::get('orders/{order}/products/{item}/production', OrderProductProductionController::class)
@@ -859,18 +880,18 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::post('orders/{order}/restore', [OrderController::class, 'restore'])->whereNumber('order')->middleware('permission:orders.delete')->name('orders.restore');
     Route::post('orders/{order}/photos', [OrderController::class, 'uploadPhotos'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.store');
     Route::delete('orders/{order}/photos/{index}', [OrderPhotoController::class, 'destroy'])->whereNumber(['order', 'index'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.destroy');
-    Route::post('orders/{order}/codex-scenes', [\App\Http\Controllers\Admin\CodexSceneController::class, 'start'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.start');
-    Route::post('orders/{order}/codex-scenes/{run}/stop', [\App\Http\Controllers\Admin\CodexSceneController::class, 'stop'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.stop');
-    Route::get('orders/{order}/codex-scenes/banner', [\App\Http\Controllers\Admin\CodexSceneController::class, 'banner'])->middleware('permission:orders.view')->name('orders.codex-scenes.banner');
-    Route::get('orders/{order}/identity-attempts/{attempt}/image', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.identity-attempts.image');
-    Route::post('orders/{order}/identity/regenerate', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity.regenerate');
-    Route::post('orders/{order}/identity-attempts/{attempt}/approve', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'approve'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity-attempts.approve');
-    Route::get('orders/{order}/codex-scenes/progress', [\App\Http\Controllers\Admin\CodexSceneController::class, 'progress'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.photos.view'])->name('orders.codex-scenes.progress');
-    Route::get('orders/{order}/codex-scenes/{run}/download', [\App\Http\Controllers\Admin\CodexSceneController::class, 'download'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.download');
-    Route::get('orders/{order}/codex-scenes/{run}/images/{scene}', [\App\Http\Controllers\Admin\CodexSceneController::class, 'image'])->whereNumber('scene')->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.image');
+    Route::post('orders/{order}/codex-scenes', [CodexSceneController::class, 'start'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.start');
+    Route::post('orders/{order}/codex-scenes/{run}/stop', [CodexSceneController::class, 'stop'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.stop');
+    Route::get('orders/{order}/codex-scenes/banner', [CodexSceneController::class, 'banner'])->middleware('permission:orders.view')->name('orders.codex-scenes.banner');
+    Route::get('orders/{order}/identity-attempts/{attempt}/image', [OrderIdentityGenerationController::class, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.identity-attempts.image');
+    Route::post('orders/{order}/identity/regenerate', [OrderIdentityGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity.regenerate');
+    Route::post('orders/{order}/identity-attempts/{attempt}/approve', [OrderIdentityGenerationController::class, 'approve'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity-attempts.approve');
+    Route::get('orders/{order}/codex-scenes/progress', [CodexSceneController::class, 'progress'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.photos.view'])->name('orders.codex-scenes.progress');
+    Route::get('orders/{order}/codex-scenes/{run}/download', [CodexSceneController::class, 'download'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.download');
+    Route::get('orders/{order}/codex-scenes/{run}/images/{scene}', [CodexSceneController::class, 'image'])->whereNumber('scene')->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.image');
     Route::post('orders/{order}/approved-child-identity', OrderApprovedChildIdentityController::class)->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.approved-child-identity.store');
-    Route::post('orders/{order}/products/{item}/regenerate', [\App\Http\Controllers\Admin\PuzzleGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.products.regenerate');
-    Route::get('orders/{order}/puzzle-generations/{run}/image', [\App\Http\Controllers\Admin\PuzzleGenerationController::class, 'image'])->middleware('permission:orders.view')->name('orders.puzzle-image');
+    Route::post('orders/{order}/products/{item}/regenerate', [PuzzleGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.products.regenerate');
+    Route::get('orders/{order}/puzzle-generations/{run}/image', [PuzzleGenerationController::class, 'image'])->middleware('permission:orders.view')->name('orders.puzzle-image');
 
     Route::post('orders/{order}/attachments', [OrderAttachmentController::class, 'store'])->middleware('permission:orders.update')->name('orders.attachments.store');
     Route::delete('orders/groups/{representative}/attachments', [OrderAttachmentController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.attachments.destroy-many');
@@ -1028,8 +1049,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::post('mobile-operations/promo-codes', [MobileOperationsController::class, 'storePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.store');
     Route::patch('mobile-operations/promo-codes/{promoCode}', [MobileOperationsController::class, 'updatePromo'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.promo-codes.update');
     Route::patch('mobile-operations/privacy-requests/{privacyRequest}', [MobileOperationsController::class, 'updatePrivacyRequest'])->middleware('permission:settings.mobile.manage')->name('mobile-operations.privacy-requests.update');
-    Route::put('discount-codes/free-shipping', [\App\Http\Controllers\Admin\FreeShippingOfferController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.free-shipping');
-    Route::put('discount-codes/shipping-discount', [\App\Http\Controllers\Admin\ShippingDiscountController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.shipping-discount');
+    Route::put('discount-codes/free-shipping', [FreeShippingOfferController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.free-shipping');
+    Route::put('discount-codes/shipping-discount', [ShippingDiscountController::class, 'update'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.shipping-discount');
     Route::get('discount-codes', [DiscountCodeController::class, 'index'])->middleware('permission:store.discount_codes.view')->name('discount-codes.index');
     Route::post('discount-codes', [DiscountCodeController::class, 'store'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.store');
     Route::get('discount-codes/{discountCode}/edit', [DiscountCodeController::class, 'edit'])->middleware('permission:store.discount_codes.manage')->name('discount-codes.edit');
@@ -1075,5 +1096,5 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
 require __DIR__.'/auth.php';
 
 // Read-only, time-limited customer access to this process's identity output only.
-Route::get('/order-process/identity-preview/{run}', [\App\Http\Controllers\Front\ProcessIdentityPreviewController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-preview');
-Route::get('/order-process/identity-preview/{run}/image/{identity}', [\App\Http\Controllers\Front\ProcessIdentityPreviewController::class, 'image'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-image');
+Route::get('/order-process/identity-preview/{run}', [ProcessIdentityPreviewController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-preview');
+Route::get('/order-process/identity-preview/{run}/image/{identity}', [ProcessIdentityPreviewController::class, 'image'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-image');

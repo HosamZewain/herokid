@@ -280,7 +280,7 @@ class PuzzleAutomationTest extends TestCase
     private function staff(): User
     {
         $user = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $user->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
+        $user->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.automation.control', 'orders.view_all', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
         $this->actingAs($user);
 
         return $user;
@@ -547,7 +547,7 @@ class PuzzleAutomationTest extends TestCase
         $this->handoff($order, 'take');
         $this->assertTrue(AutomationHandoff::held($order->checkoutGroupKey()));
         $this->assertFalse(app(AutomationAssignment::class)->owns($order));
-        $this->assertDatabaseHas('order_group_assignments', ['checkout_group_key' => $order->checkoutGroupKey(), 'assigned_to_user_id' => $actor->id]);
+        $this->assertDatabaseCount('order_group_assignments', 0);
         $audit = AdminActivityLog::where('action', 'order.automation_taken_over')->sole();
         $this->assertSame([$run->id], $audit->properties['uncertain_product_run_ids']);
         $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'resume'])->assertSessionHasErrors('assignment');
@@ -732,7 +732,7 @@ class PuzzleAutomationTest extends TestCase
         $order = $this->order();
         app(PuzzleAutomation::class)->enroll();
         $actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
+        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.automation.control', 'orders.view_all', 'orders.production_prompt.manage', 'orders.photos.view'])->pluck('id'));
         $this->actingAs($actor);
         $run = PuzzleGeneration::sole();
         $run->update(['status' => 'processing']);

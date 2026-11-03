@@ -23,13 +23,20 @@ class SceneTiming
         if ($start < $run->created_at->timestamp || $start > now()->timestamp + 5 || $elapsed < 0 || $elapsed > ($run->production_kind === 'coloring_book' ? max(86400, ($run->scene_count ?? 13) * 2500) : 86400)) {
             return null;
         }
+        $paused = $data['paused_seconds'] ?? 0;
+        if (! is_numeric($paused) || ! is_finite((float) $paused) || $paused < 0 || $paused > now()->timestamp + 5 - $start) {
+            return null;
+        }
         $result = ['started_at' => $start, 'elapsed_seconds' => $elapsed];
+        if (isset($data['paused_seconds'])) {
+            $result['paused_seconds'] = (float) $paused;
+        }
         if (isset($data['finished_at'])) {
             if (! is_numeric($data['finished_at']) || ! is_finite((float) $data['finished_at'])) {
                 return null;
             }
             $end = (float) $data['finished_at'];
-            if ($end < $start || $end > now()->timestamp + 5 || abs(($end - $start) - $elapsed) > 5) {
+            if ($end < $start || $end > now()->timestamp + 5 || abs(($end - $start) - $elapsed - $paused) > 5) {
                 return null;
             }
             $result['finished_at'] = $end;
@@ -49,7 +56,7 @@ class SceneTiming
         $start = isset($t['started_at']) ? CarbonImmutable::createFromTimestampUTC($t['started_at']) : $run->started_at;
         $end = isset($t['finished_at']) ? CarbonImmutable::createFromTimestampUTC($t['finished_at']) : $run->finished_at;
         $live = in_array($run->status, ['running', 'queued', 'preparing', 'waiting_slot'], true);
-        $seconds = isset($t['finished_at']) ? (float) $t['elapsed_seconds']
+        $seconds = isset($t['elapsed_seconds']) ? (float) $t['elapsed_seconds']
             : ($start && ($end || $live) ? max(0, $start->diffInSeconds($end ?? now(), false)) : null);
         $wait = $start ? max(0, $run->created_at->diffInSeconds($start, false))
             : ($run->status === 'waiting_slot' || $run->status === 'queued' || $run->status === 'preparing' ? max(0, $run->created_at->diffInSeconds(now(), false)) : null);

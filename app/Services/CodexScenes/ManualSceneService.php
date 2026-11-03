@@ -8,6 +8,7 @@ use App\Models\OrderAttachment;
 use App\Models\User;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\AdminActivityLogger;
@@ -72,6 +73,9 @@ class ManualSceneService
             return DB::transaction(function () use ($order, $user) {
                 $rows = Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
                 $order = $rows->firstWhere('id', $order->id);
+                if ($order && ! AutomationControl::admits($order->checkoutGroupKey())) {
+                    throw ValidationException::withMessages(['automation' => 'الأوتوميشن متوقف؛ استأنفه بعد مراجعة البيانات.']);
+                }
                 if (! $order || ($reason = $this->reason($order))) {
                     throw ValidationException::withMessages(['codex_scenes' => $reason ?? 'الطلب غير متاح.']);
                 }
@@ -172,7 +176,7 @@ class ManualSceneService
     private function retainedBytes(CodexSceneRun $run, int $number, array $scene): string
     {
         $attachment = OrderAttachment::find($scene['attachment_id'] ?? 0);
-        if (! $attachment || $attachment->order_id !== $run->order_id || $attachment->production_unit_key !== 'story:'.$run->order_id
+        if (! $attachment || $attachment->order_id !== $run->order_id || $attachment->production_unit_key !== ($run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$run->order_id)
             || $attachment->disk !== 's3_private' || $attachment->path !== ($scene['path'] ?? null)
             || ! str_starts_with($attachment->path, 'orders/'.$run->order_id.'/codex-scenes/')) {
             throw new \RuntimeException('Retained scene belongs to another story');
@@ -180,7 +184,7 @@ class ManualSceneService
         $bytes = Storage::disk('s3_private')->get($attachment->path);
         $size = @getimagesizefromstring($bytes);
         if (! hash_equals($scene['sha256'] ?? '', hash('sha256', $bytes)) || ! $size || $size['mime'] !== 'image/png'
-            || min($size[0], $size[1]) < 1024 || $size[0] <= $size[1]) {
+            || min($size[0], $size[1]) < 1024 || ($run->production_kind === 'coloring_book' ? $size[1] <= $size[0] : $size[0] <= $size[1])) {
             throw new \RuntimeException('Retained scene integrity failed');
         }
 
@@ -244,6 +248,77 @@ class ManualSceneService
         AutomationActivity::record($order, 'codex_scene_status', $note, ['from' => $before, 'to' => $status]);
     }
 
+    public function requestPause(CodexSceneRun $run): void
+    {
+        DB::transaction(function () use ($run) {
+            $run = CodexSceneRun::lockForUpdate()->findOrFail($run->id);
+            if (! $run->active_slot) {
+                return;
+            }
+            if ($run->status === 'waiting_slot') {
+                $run->update(['status' => 'paused', 'active_slot' => null]);
+
+                return;
+            }
+            $dir = config('codex_scenes.spool').'/inbox/'.$run->id;
+            if (! is_dir($dir)) {
+                return;
+            }
+            if (file_put_contents($dir.'/pause-after-scene', '1') === false) {
+                throw new \RuntimeException('Cannot request pause');
+            }
+            chmod($dir.'/pause-after-scene', 0640);
+        });
+    }
+
+    public function resumePaused(CodexSceneRun $run): void
+    {
+        $run = CodexSceneRun::lockForUpdate()->findOrFail($run->id);
+        $order = Order::lockForUpdate()->findOrFail($run->order_id);
+        if ($run->status !== 'paused' || ! $this->hasPayment($order) || ! hash_equals($run->fingerprint, $this->runFingerprint($run, $order)) || ! $this->health()) {
+            throw ValidationException::withMessages(['automation' => 'بيانات التوليد أو الاعتماد أو الدفع تغيرت؛ راجعها قبل الاستئناف.']);
+        }
+        $dir = config('codex_scenes.spool').'/inbox/'.$run->id;
+        $staged = is_file($dir.'/manifest.json');
+        if ($staged) {
+            $out = config('codex_scenes.spool').'/outbox/'.$run->id;
+            if (! $this->safeFile($out.'/status.json', $out) || (json_decode(file_get_contents($out.'/status.json'), true)['status'] ?? '') !== 'paused') {
+                throw ValidationException::withMessages(['automation' => 'نقطة توقف العامل غير مؤكدة.']);
+            }
+        }
+        foreach ($run->scenes ?? [] as $number => $scene) {
+            $this->retainedBytes($run, (int) $number, $scene);
+        }
+        $snapshot = $run->snapshot;
+        $snapshot['resume_publication_pending'] = $staged;
+        $run->update(['status' => $staged ? 'queued' : 'waiting_slot', 'active_slot' => 1, 'snapshot' => $snapshot]);
+        // Filesystem publication only after all sibling runs validate and DB commits.
+        DB::afterCommit(fn () => $this->publishResume($run));
+        AutomationActivity::record($order, 'codex_scene_resumed', 'استكمال المشاهد المتبقية من نقطة التوقف الآمن.', ['run_id' => $run->id]);
+    }
+
+    private function publishResume(CodexSceneRun $run): bool
+    {
+        return DB::transaction(function () use ($run) {
+            if (! AutomationControl::admits($run->checkout_key)) {
+                return false;
+            }
+            $run = CodexSceneRun::lockForUpdate()->findOrFail($run->id);
+            $snapshot = $run->snapshot;
+            if (empty($snapshot['resume_publication_pending'])) {
+                return true;
+            }
+            $marker = config('codex_scenes.spool').'/inbox/'.$run->id.'/pause-after-scene';
+            if (is_file($marker) && ! unlink($marker)) {
+                throw new \RuntimeException('Resume publication failed');
+            }
+            $snapshot['resume_publication_pending'] = false;
+            $run->update(['snapshot' => $snapshot]);
+
+            return true;
+        });
+    }
+
     public function cancel(CodexSceneRun $run, User $user): void
     {
         DB::transaction(function () use ($run, $user) {
@@ -277,6 +352,9 @@ class ManualSceneService
             app(BookPageService::class)->enroll();
             foreach (CodexSceneRun::where('active_slot', 1)->orderBy('created_at')->get() as $run) {
                 if ($run->status === 'waiting_slot') {
+                    if (AutomationControl::blocked($run->checkout_key)) {
+                        continue;
+                    }
                     // An uncertain provider result pauses further dispatch until reviewed.
                     if (CodexSceneRun::where('active_slot', 1)->where('status', 'uncertain')->exists()
                         || CodexSceneRun::where('active_slot', 1)->whereNotIn('status', ['waiting_slot', 'quality_review'])->count() >= config('codex_scenes.concurrency', 2)) {
@@ -289,7 +367,15 @@ class ManualSceneService
                     $run->refresh();
                 }
                 try {
+                    if (! empty($run->snapshot['resume_publication_pending']) && ! $this->publishResume($run)) {
+                        continue;
+                    }
                     if ($run->status === 'preparing') {
+                        if (AutomationControl::blocked($run->checkout_key) && ! is_file(config('codex_scenes.spool').'/inbox/'.$run->id.'/manifest.json')) {
+                            $run->update(['status' => 'paused', 'active_slot' => null]);
+
+                            continue;
+                        }
                         $this->prepare($run);
                     }
                     $this->collect($run->fresh());
@@ -368,6 +454,9 @@ class ManualSceneService
             if (! $order || ! hash_equals($locked->fingerprint, $this->runFingerprint($locked, $order))
                 || ($locked->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($locked->checkout_key)))) {
                 throw new \RuntimeException('Eligibility changed before dispatch');
+            }
+            if (! AutomationControl::admits($locked->checkout_key)) {
+                return;
             }
             rename($dir.'/manifest.tmp', $dir.'/manifest.json');
             $locked->update(['status' => 'queued']);
@@ -484,7 +573,7 @@ class ManualSceneService
                 $run->status = 'running';
                 $run->started_at = now();
             }
-            if (in_array($phase, ['completed', 'needs_manual', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
+            if (in_array($phase, ['completed', 'needs_manual', 'paused', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
                 if ($phase === 'completed' && count($saved) !== ($run->scene_count ?? 13)) {
                     throw new \RuntimeException('Missing scenes');
                 }
@@ -494,9 +583,17 @@ class ManualSceneService
                     $run->finished_at = now();
                     $incompleteSibling = $run->production_kind === 'coloring_book' && CodexSceneRun::where('order_id', $order->id)
                         ->where('production_kind', 'coloring_book')->whereKeyNot($run->id)->whereIn('status', ['needs_manual', 'quality_review', 'uncertain', 'stopped'])->exists();
-                    $this->setStatus($order, $incompleteSibling ? 'pending_team_review' : 'ready_preview', $incompleteSibling
+                    $this->setStatus($order, $incompleteSibling ? 'pending_team_review' : ($run->production_kind === 'coloring_book' ? 'delivered' : 'ready_preview'), $incompleteSibling
                         ? 'اكتملت صفحات هذا الكتاب؛ يوجد كتاب آخر في الطلب يحتاج مراجعة الفريق.'
                         : 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
+                } elseif ($phase === 'paused') {
+                    $expected = collect($state['scene_progress'] ?? [])->filter(fn ($p) => in_array($p['status'] ?? '', ['succeeded', 'retained'], true))->count();
+                    if (count($saved) !== $expected) {
+                        throw new \RuntimeException('Pause outputs not persisted');
+                    }
+                    $run->status = 'paused';
+                    $run->active_slot = null;
+                    // Keep generating status/fingerprint; checkout fence owns manual handoff.
                 } elseif ($phase === 'needs_manual') {
                     $run->status = 'needs_manual';
                     $run->error_code = 'partial_scenes';

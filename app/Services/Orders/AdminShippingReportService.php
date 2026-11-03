@@ -245,7 +245,9 @@ class AdminShippingReportService
 
     private function groupKey(string $alias): string
     {
-        return "COALESCE(NULLIF({$alias}.checkout_group_key, ''), CONCAT('order:', {$alias}.id))";
+        $fallback = DB::connection()->getDriverName() === 'sqlite' ? "('order:' || {$alias}.id)" : "CONCAT('order:', {$alias}.id)";
+
+        return "COALESCE(NULLIF({$alias}.checkout_group_key, ''), {$fallback})";
     }
 
     /** Normalize before aggregating: MariaDB's strict mode rejects the inline

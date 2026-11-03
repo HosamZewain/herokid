@@ -169,6 +169,9 @@ class OrderIdentityRegenerationService
             $candidate = OrderIdentityRegeneration::findOrFail($id);
             Order::where('checkout_group_key', $candidate->checkout_key)->orderBy('id')->lockForUpdate()->get();
             $run = OrderIdentityRegeneration::lockForUpdate()->findOrFail($id);
+            if (! AutomationControl::admits($run->checkout_key, (bool) $run->requested_by)) {
+                return null;
+            }
             if ($run->status !== 'queued') {
                 return null;
             }

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\CodexScenes\OrderGenerationBanner;
 use App\Services\CodexScenes\SceneTiming;
+use App\Services\Orders\OrderAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,7 @@ class CodexSceneController extends Controller
 
     public function start(Request $request, Order $order, ManualSceneService $service)
     {
+        abort_unless(app(OrderAccess::class)->controls($order, $request->user()), 403);
         $request->validate(['confirm' => ['accepted']]);
         $service->start($order, $request->user());
 
@@ -51,6 +53,7 @@ class CodexSceneController extends Controller
     public function stop(Request $request, Order $order, CodexSceneRun $run, ManualSceneService $service)
     {
         abort_unless($run->order_id === $order->id, 404);
+        abort_unless(app(OrderAccess::class)->controls($order, $request->user()), 403);
         $service->cancel($run, $request->user());
 
         return back()->with('success', 'تم طلب الإيقاف. انتظر تأكيد توقف Codex قبل استكمال العمل.');

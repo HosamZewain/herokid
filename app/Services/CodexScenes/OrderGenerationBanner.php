@@ -5,6 +5,7 @@ namespace App\Services\CodexScenes;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Orders\OrderAutomationSummary;
 
 /** Read-only checkout summary. Saved scenes are counted only after the S3 collector accepted them. */
 class OrderGenerationBanner
@@ -28,7 +29,7 @@ class OrderGenerationBanner
             ]);
         $items = OrderItem::whereIn('id', $runs->pluck('order_item_id')->filter())->pluck('title', 'id');
 
-        return ['generationRows' => $runs->map(function ($run) use ($items) {
+        return ['workspaceOrder' => $order, 'workspaceSummary' => app(OrderAutomationSummary::class)->forKeys([$order->checkoutGroupKey()])[$order->checkoutGroupKey()], 'unstartedBooks' => OrderItem::whereIn('order_id', $orders)->whereHas('productionComponents', fn ($q) => $q->where('production_stage', 'book_interior'))->whereNotIn('id', CodexSceneRun::where('production_kind', 'coloring_book')->whereNotNull('order_item_id')->select('order_item_id'))->get(['id', 'order_id', 'title', 'updated_at']), 'generationRows' => $runs->map(function ($run) use ($items) {
             $total = max(1, (int) ($run->scene_count ?? 13));
             $done = collect($run->scenes ?? [])->filter(fn ($scene, $number) => ctype_digit((string) $number)
                 && (int) $number >= 1 && (int) $number <= $total && is_array($scene) && ! empty($scene['path']) && ! empty($scene['sha256']))->count();

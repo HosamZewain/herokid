@@ -15,8 +15,10 @@ use App\Services\OrderAutomation\Process\ProcessDefinition;
 use App\Services\OrderAutomation\Process\ProcessLivePolicy;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -38,7 +40,7 @@ class AutomationHandoffTest extends TestCase
         Http::preventStrayRequests();
         Queue::fake();
         $this->actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $this->actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $this->actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign', 'orders.assignment.manage', 'orders.automation.control', 'orders.view_all'])->pluck('id'));
         $this->actingAs($this->actor);
         $this->order = Order::create(['order_number' => 'SYNTHETIC-TAKE', 'parent_name' => 'Synthetic', 'status' => 'new_confirmed', 'delivery_details' => ['phone' => '01000000001']]);
         $d = ProcessDefinition::defaults('identity');
@@ -51,7 +53,7 @@ class AutomationHandoffTest extends TestCase
 
     private function action(string $action)
     {
-        return $this->post(route('admin.orders.groups.assignment.automation', $this->order), ['action' => $action]);
+        return $this->post(route('admin.orders.workspace.control', $this->order), ['action' => $action === 'take' ? 'pause' : 'resume', 'reason' => 'synthetic stop', 'version' => DB::table('order_automation_controls')->where('checkout_key', $this->order->checkoutGroupKey())->value('version') ?? 1]);
     }
 
     public function test_takeover_pauses_before_assigning_and_records_staff_actor(): void
@@ -61,9 +63,9 @@ class AutomationHandoffTest extends TestCase
         $this->assertSame('paused', $this->run->fresh()->status);
         $this->assertFalse(app(AutomationAssignment::class)->owns($this->order));
         $this->assertFalse(app(ProcessLivePolicy::class)->allowsCheckout($this->order->checkoutGroupKey()));
-        $this->assertDatabaseHas('order_group_assignments', ['checkout_group_key' => $this->order->checkoutGroupKey(), 'assigned_to_user_id' => $this->actor->id]);
+        $this->assertDatabaseCount('order_group_assignments', 0);
         $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.automation_taken_over', 'user_id' => $this->actor->id]);
-        $this->action('take')->assertSessionHasNoErrors();
+        $this->action('take')->assertStatus(409);
         $this->assertDatabaseCount('order_automation_holds', 1);
         app(ProcessRuntime::class)->advance($this->run->id);
         $this->assertSame('paused', $this->run->fresh()->status);
@@ -96,13 +98,15 @@ class AutomationHandoffTest extends TestCase
 
     public function test_inflight_send_keeps_automation_ownership_and_assignment_unchanged(): void
     {
-        foreach (['sending', 'uncertain', 'waiting_identity', 'retry_queued'] as $status) {
-            $this->run->update(['status' => $status]);
-            $this->action('take')->assertSessionHasErrors('assignment');
-            $this->assertFalse(AutomationHandoff::held($this->order->checkoutGroupKey()));
-            $this->assertDatabaseCount('order_group_assignments', 0);
-            $this->assertSame($status, $this->run->fresh()->status);
-        }
+        $this->run->update(['status' => 'sending']);
+        $this->action('take')->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertFalse(AutomationHandoff::held($this->order->checkoutGroupKey()));
+        $this->assertDatabaseHas('order_automation_controls', ['state' => 'pause_requested']);
+        $this->assertTrue(app(AutomationAssignment::class)->owns($this->order));
+        $this->assertDatabaseCount('order_group_assignments', 0);
+        $this->run->update(['status' => 'waiting_response']);
+        app(AutomationControl::class)->settle($this->order->checkoutGroupKey());
+        $this->assertDatabaseHas('order_automation_controls', ['state' => 'paused']);
     }
 
     public function test_accepted_confirmation_is_paused_without_resending_on_resume(): void

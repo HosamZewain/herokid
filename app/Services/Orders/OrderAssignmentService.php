@@ -13,8 +13,40 @@ use Illuminate\Validation\ValidationException;
 
 class OrderAssignmentService
 {
+    public function assign(Order $order, ?User $target, User $actor, Request $request, ?int $expectedAssignee, int $expectedVersion, string $reason): void
+    {
+        abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.assignment.manage'), 403);
+        app(OrderAccess::class)->assert($order);
+        abort_if($target && (! $target->is_active || $target->agent_api_enabled || ! $target->isAdmin() || ! $target->hasPermission('orders.view')), 422, 'اختر موظفًا نشطًا لديه صلاحية عرض الطلبات.');
+        DB::transaction(function () use ($order, $target, $actor, $request, $expectedAssignee, $expectedVersion, $reason) {
+            // Checkout lock also serializes the first assignment when no assignment row exists.
+            Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
+            DB::table('order_automation_controls')->insertOrIgnore(['checkout_key' => $order->checkoutGroupKey(), 'created_at' => now(), 'updated_at' => now()]);
+            $control = DB::table('order_automation_controls')->where('checkout_key', $order->checkoutGroupKey())->lockForUpdate()->first();
+            $current = OrderGroupAssignment::where('checkout_group_key', $order->checkoutGroupKey())->lockForUpdate()->first();
+            abort_unless(($current?->assigned_to_user_id) === $expectedAssignee && (int) $control->assignment_version === $expectedVersion, 409, 'تغيّر المسؤول عن الطلب؛ حدّث الصفحة قبل إعادة الإسناد.');
+            if (($current?->assigned_to_user_id) === $target?->id) {
+                return;
+            }
+            $before = $current?->assigned_to_user_id;
+            DB::table('order_automation_controls')->where('checkout_key', $order->checkoutGroupKey())->update(['assignment_version' => $expectedVersion + 1, 'updated_at' => now()]);
+            if ($target) {
+                OrderGroupAssignment::updateOrCreate(['checkout_group_key' => $order->checkoutGroupKey()], [
+                    'assigned_to_user_id' => $target->id, 'assigned_by_user_id' => $actor->id,
+                    'assigned_at' => now(), 'version' => ($current?->version ?? 0) + 1,
+                ]);
+            } else {
+                $current?->delete();
+            }
+            AdminActivityLogger::log('order.assignment_changed', 'تغيير الموظف المسؤول دون تغيير تنفيذ الأوتوميشن.', $order,
+                ['checkout_group_key' => $order->checkoutGroupKey(), 'previous_assignee_id' => $before, 'assigned_to_user_id' => $target?->id, 'reason' => $reason], $actor, $request);
+        }, 3);
+    }
+
     public function acquire(Order $representative, User $admin, Request $request, bool $force = false): OrderGroupAssignment
     {
+        abort_unless($admin->is_active && $admin->hasPermission('orders.assignment.manage'), 403);
+        app(OrderAccess::class)->assert($representative);
         if ($admin->agent_api_enabled) {
             throw ValidationException::withMessages([
                 'assignment' => 'الاستحواذ على الطلبات متاح للموظفين فقط، وليس لحسابات Agent API.',
@@ -25,7 +57,6 @@ class OrderAssignmentService
 
         try {
             return DB::transaction(function () use ($representative, $admin, $request, $force, $key): OrderGroupAssignment {
-                app(AutomationAssignment::class)->assertAvailable($representative);
                 $assignment = OrderGroupAssignment::query()
                     ->with('assignee:id,name')
                     ->where('checkout_group_key', $key)
@@ -81,6 +112,8 @@ class OrderAssignmentService
 
     public function release(Order $representative, User $admin, Request $request, bool $force = false): void
     {
+        abort_unless($admin->is_active && $admin->hasPermission('orders.assignment.manage'), 403);
+        app(OrderAccess::class)->assert($representative);
         if ($admin->agent_api_enabled) {
             throw ValidationException::withMessages([
                 'assignment' => 'إدارة استحواذ الطلبات متاحة للموظفين فقط، وليس لحسابات Agent API.',
@@ -88,7 +121,6 @@ class OrderAssignmentService
         }
 
         DB::transaction(function () use ($representative, $admin, $request, $force): void {
-            app(AutomationAssignment::class)->assertAvailable($representative);
             $assignment = OrderGroupAssignment::query()
                 ->with('assignee:id,name')
                 ->where('checkout_group_key', $representative->checkoutGroupKey())

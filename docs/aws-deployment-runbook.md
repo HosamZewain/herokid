@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 3 November 2026 — order workspace PREPARED; deployment explicitly authorized
+
+Prepared in isolated codex/order-workspace, preserving dirty primary/mobile changes and already-live privacy commit c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5. Owner explicitly requested deployment on completion. Independent staff assignment, scoped staff access (default all), actual mixed automation summary/polling, durable safe pause/resume and explicit validated book-interior admission. No historical replay, reassignment, synthetic order, provider call or customer test message is included. [Detailed contract and tests](order-workspace-2026-11-03.ar.md). Fresh database backup herokid-20261103T115931Z.sql.gz completed and off-instance upload verified at11:59:57UTC. This section is preparation only; replace with verified release evidence after deployment.
+
 ## 3 November 2026 — uncertain product handoff DEPLOYED; HK11-55 cancellation verified
 
 Owner approved “انشر” in response to the scoped fix/cancellation proposal. Application **5b4cf145abb26616edbf18a4b1ca1f42296738f7** published on GitHub main and deployed by fast-forward on AWS main, verified **08:54:24UTC /10:54 Cairo**. All5 changed-file hashes and www-data readability matched; .env/private config/routes/frontend manifest checksums and original drift unchanged. PHP-FPM gracefully reloaded; no migrations, cache rebuild, worker restart or Codex restart. All four Laravel worker PIDs and Codex PID952607 preserved; seven required services active. Public HTTPS home/up/cart/CSS200; failed_jobs81 unchanged.

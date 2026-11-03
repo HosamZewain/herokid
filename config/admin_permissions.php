@@ -290,6 +290,18 @@ return [
             'sort_order' => 32,
             'sensitive' => true,
         ],
+        'orders.view_all' => [
+            'group_key' => 'orders', 'name_ar' => 'مشاهدة جميع الطلبات', 'name_en' => 'orders.view_all',
+            'description_ar' => 'تجاوز قصر رؤية الطلبات على الموظف المسؤول.', 'sort_order' => 37, 'sensitive' => true,
+        ],
+        'orders.automation.control' => [
+            'group_key' => 'orders', 'name_ar' => 'التحكم في أوتوميشن الطلب', 'name_en' => 'orders.automation.control',
+            'description_ar' => 'إيقاف واستئناف أوتوميشن الطلبات المسندة إليك؛ مشاهدة الجميع مطلوبة للتحكم في طلبات غيرك.', 'sort_order' => 37, 'sensitive' => true,
+        ],
+        'orders.visibility.manage' => [
+            'group_key' => 'orders', 'name_ar' => 'إدارة نطاق رؤية الطلبات', 'name_en' => 'orders.visibility.manage',
+            'description_ar' => 'تغيير وضع رؤية الطلبات بين الجميع والمسند للموظف فقط.', 'sort_order' => 37, 'sensitive' => true,
+        ],
         'orders.assign' => [
             'group_key' => 'orders',
             'name_ar' => 'استلام وترك الطلبات',

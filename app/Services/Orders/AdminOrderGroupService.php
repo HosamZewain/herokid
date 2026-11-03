@@ -107,6 +107,12 @@ class AdminOrderGroupService
             ->filter()
             ->values());
 
+        $summaries = app(OrderAutomationSummary::class)->forKeys($keys);
+        $groups->setCollection($groups->getCollection()->map(fn ($group) => $group + ['automation_summary' => $summaries[$group['key']] ?? null]));
+        $countRequest = $request->duplicate($request->except(['workspace', 'page']));
+        $workspaceKeys = $this->groupedFilteredQuery($countRequest, $includeDeleted, $catalogType, $lifecycle)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        $workspaceStates = collect(app(OrderAutomationSummary::class)->forKeys($workspaceKeys));
+        $workspaceCounts = ['all' => $workspaceStates->count(), 'automation' => $workspaceStates->where('tracking', true)->count(), 'team' => $workspaceStates->where('tracking', false)->count(), 'attention' => $workspaceStates->where('state', 'intervention')->count()];
         $stats = null;
 
         // Share the resolved checkout keys across cards: repeating nested catalog
@@ -120,6 +126,7 @@ class AdminOrderGroupService
 
         return [
             'groups' => $groups,
+            'workspaceCounts' => $workspaceCounts,
             'stats' => $stats,
             'operationalStats' => $this->operationalStatistics($request, $allKeys, $includeDeleted, $catalogType, $lifecycle),
             'trash' => $request->query('view') === 'trash',
@@ -129,7 +136,7 @@ class AdminOrderGroupService
             'selectedShippingStatuses' => $this->selectedStatuses($request, 'shipping_status', OrderStatusRegistry::TYPE_SHIPPING),
             'selectedPrintingStatuses' => $this->selectedStatuses($request, 'printing_status', OrderStatusRegistry::TYPE_PRINTING),
             'selectedPaymentStatuses' => $this->selectedStatuses($request, 'payment_status', OrderStatusRegistry::TYPE_PAYMENT),
-            'assignmentUsers' => User::query()
+            'assignmentUsers' => User::with(['permissions:id,key', 'adminRoles.permissions:id,key'])
                 ->where('role', 'admin')
                 ->where(function (Builder $query): void {
                     $query
@@ -137,12 +144,12 @@ class AdminOrderGroupService
                         ->orWhereHas('assignedOrderGroups');
                 })
                 ->orderBy('name')
-                ->get(['id', 'name', 'is_active']),
+                ->get()->filter(fn ($user) => $user->is_active && ! $user->agent_api_enabled && $user->hasPermission('orders.view'))->values(),
             'filterProducts' => Product::query()
                 ->whereExists(fn ($items) => $items
                     ->selectRaw('1')
                     ->from('order_items')
-                    ->whereColumn('order_items.product_id', 'products.id'))
+                    ->whereColumn('order_items.product_id', 'products.id')->when(app(OrderAccess::class)->restricted(), fn ($q) => $q->whereIn('order_id', Order::withTrashed()->select('id'))))
                 ->orderBy('name_ar')
                 ->get(['id', 'name_ar', 'slug']),
             'filterTags' => $this->tagOptions(),
@@ -157,7 +164,7 @@ class AdminOrderGroupService
         $activeKeys = $lifecycle === 'active' ? $matchingKeys : $this->groupedFilteredQuery($activeRequest, false, $catalogType, 'active')
             ->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
         if (! $request->filled('assignment') || $request->query('assignment') === 'unassigned') {
-            $unassigned = Order::query()->whereIn('checkout_group_key', $activeKeys)->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys())
+            $unassigned = Order::query()->whereIn('checkout_group_key', $activeKeys)
                 ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('order_group_assignments')
                     ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'))
                 ->distinct()->count('checkout_group_key');
@@ -239,7 +246,11 @@ class AdminOrderGroupService
     public function tagOptions(): Collection
     {
         return OrderTag::query()
-            ->whereHas('checkoutReferences')
+            ->whereHas('checkoutReferences', function ($q) {
+                if (app(OrderAccess::class)->restricted()) {
+                    $q->whereIn('checkout_group_key', app(OrderAccess::class)->keys(request()->user()));
+                }
+            })
             ->orderBy('name')
             ->get(['id', 'name']);
     }
@@ -747,7 +758,7 @@ class AdminOrderGroupService
         bool $applyTagFilter = true,
     ): Builder {
         $query = $includeDeleted ? Order::withTrashed() : Order::query();
-        if ($request->attributes->getBoolean('order_report') && $catalogType !== 'all') {
+        if (($request->attributes->getBoolean('order_report') || $catalogType === 'mixed') && $catalogType !== 'all') {
             // Use the same visible quantities as the report cards, including
             // retained deletions but not superseded children or merged copies.
             $query->whereIn('checkout_group_key', $this->reportCheckoutKeysForCatalogType($catalogType, $includeDeleted));
@@ -870,10 +881,8 @@ class AdminOrderGroupService
             });
         }
 
+        app(OrderAutomationSummary::class)->filter($query, $request);
         $assignment = (string) $request->query('assignment', '');
-        if (in_array($assignment, ['mine', 'unassigned'], true) || str_starts_with($assignment, 'user:')) {
-            $query->whereNotIn('checkout_group_key', app(AutomationAssignment::class)->keys());
-        }
         if ($assignment === 'automation') {
             $query->whereIn('checkout_group_key', app(AutomationAssignment::class)->keys());
         } elseif ($assignment === 'mine' && $request->user()) {
@@ -888,10 +897,10 @@ class AdminOrderGroupService
                 ->from('order_group_assignments')
                 ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
         } elseif ($assignment === 'assigned') {
-            $query->where(fn ($owned) => $owned->whereIn('checkout_group_key', app(AutomationAssignment::class)->keys())->orWhereExists(fn ($assigned) => $assigned
+            $query->whereExists(fn ($assigned) => $assigned
                 ->selectRaw('1')
                 ->from('order_group_assignments')
-                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key')));
+                ->whereColumn('order_group_assignments.checkout_group_key', 'orders.checkout_group_key'));
         } elseif (preg_match('/\Auser:(\d+)\z/', $assignment, $matches) === 1) {
             $query->whereExists(fn ($assigned) => $assigned
                 ->selectRaw('1')
@@ -1200,13 +1209,13 @@ class AdminOrderGroupService
             return 'all';
         }
 
-        $type = (string) $request->query('catalog_type', 'stories');
+        $type = (string) $request->query('catalog_type', 'all');
 
         if ($request->attributes->getBoolean('order_report')) {
             return in_array($type, ['all', 'stories', 'stories_only', 'products', 'mixed', 'unclassified'], true) ? $type : 'all';
         }
 
-        return in_array($type, ['all', 'stories', 'products'], true) ? $type : 'stories';
+        return in_array($type, ['all', 'stories', 'products', 'mixed'], true) ? $type : 'all';
     }
 
     private function lifecycle(Request $request): string

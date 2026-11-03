@@ -2,209 +2,158 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminActivityLog;
+use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderAttachment;
 use App\Models\OrderGroupAssignment;
 use App\Models\Permission;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Story;
 use App\Models\User;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\OrderAutomationSummary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AdminOrderAssignmentTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_acquires_group_once_and_name_appears_in_order_list_and_details(): void
+    private function assignAs(User $actor, Order $order, ?User $target, int $version = 0, ?int $previous = null)
     {
-        $admin = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول هيروكد']);
-        [$first, $second] = $this->group();
-
-        $this->actingAs($admin)
-            ->post(route('admin.orders.groups.assignment.acquire', $first))
-            ->assertRedirect()
-            ->assertSessionHas('success');
-
-        $assignment = OrderGroupAssignment::query()->firstOrFail();
-        $this->assertSame('ASSIGN-GROUP', $assignment->checkout_group_key);
-        $this->assertSame($admin->id, $assignment->assigned_to_user_id);
-        $this->assertSame(1, OrderGroupAssignment::query()->count());
-
-        $this->actingAs($admin)->get(route('admin.orders.index'))
-            ->assertOk()
-            ->assertSee('مسؤول هيروكد')
-            ->assertSee('(أنت)')
-            ->assertSee('ترك الطلب');
-
-        $this->actingAs($admin)->get(route('admin.orders.show', $second))
-            ->assertOk()
-            ->assertSee('مسؤول تنفيذ عملية الشراء')
-            ->assertSee('مسؤول هيروكد');
-
-        $this->assertDatabaseHas('admin_activity_logs', [
-            'action' => 'order.assignment_acquired',
-            'subject_id' => $first->id,
-        ]);
+        return $this->actingAs($actor)->post(route('admin.orders.workspace.assign'), ['target_id' => $target?->id, 'reason' => 'synthetic change', 'orders' => [['id' => $order->id, 'assignee' => $previous, 'version' => $version]]]);
     }
 
-    public function test_automation_uses_existing_assignee_column_and_filters_without_overwriting_employee(): void
+    public function test_assignment_during_automation_is_independent_and_conflicting_version_is_rejected(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
-        [$order] = $this->group();
-        $this->actingAs($admin)->post(route('admin.orders.groups.assignment.acquire', $order));
-        RoboDeskIntegrationEvent::create(['event_id' => 'synthetic-auto', 'direction' => 'outbound', 'event_type' => 'order.pending_confirmation',
-            'checkout_group_key' => $order->checkoutGroupKey(), 'order_id' => $order->id, 'status' => 'succeeded',
-            'payload' => ['confirmation' => ['eligible_at_creation' => true]], 'response_payload' => []]);
-        $ownership = app(AutomationAssignment::class);
-        $this->assertTrue($ownership->owns($order));
-        $this->get(route('admin.orders.index', ['assignment' => 'automation']))->assertOk()->assertSee('🤖 Automation');
-        foreach (['mine', 'unassigned', 'user:'.$admin->id] as $filter) {
-            $rows = $this->get(route('admin.orders.index', ['assignment' => $filter]))->assertOk()->viewData('groups');
-            $this->assertCount(0, $rows->items());
+        $manager = User::factory()->create(['role' => 'admin']);
+        $employee = User::factory()->create(['role' => 'admin', 'name' => 'Assigned Employee']);
+        [$order,$sibling] = $this->group();
+        RoboDeskIntegrationEvent::create(['event_id' => 'synthetic-auto', 'direction' => 'outbound', 'event_type' => 'order.pending_confirmation', 'checkout_group_key' => $order->checkoutGroupKey(), 'order_id' => $order->id, 'status' => 'processing', 'payload' => ['confirmation' => ['eligible_at_creation' => true]]]);
+        $this->assignAs($manager, $order, $employee)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertTrue(app(AutomationAssignment::class)->owns($sibling));
+        $this->assignAs($manager, $order, $manager)->assertStatus(409);
+        $this->assertSame($employee->id, OrderGroupAssignment::first()->assigned_to_user_id);
+        $this->get(route('admin.orders.index', ['assignment' => 'user:'.$employee->id]))->assertOk()->assertSee('Assigned Employee')->assertSee('جارٍ الإرسال');
+        if (getenv('HK_WORKSPACE_RENDER')) {
+            file_put_contents('/app/storage/framework/testing/workspace-preview.html', $this->get(route('admin.orders.index'))->getContent());
         }
-        $rows = $this->get(route('admin.orders.index', ['assignment' => 'assigned']))->assertOk()->viewData('groups');
-        $this->assertCount(1, $rows->items());
-        $this->post(route('admin.orders.groups.assignment.takeover', $order))->assertSessionHasErrors('assignment');
-        $this->patch(route('admin.orders.update', $order), ['status' => 'under_review'])->assertSessionHasErrors('assignment');
-        $this->assertSame('new', $order->fresh()->status);
-        $this->delete(route('admin.orders.destroy', $order))->assertSessionHasErrors('assignment');
-        $this->assertFalse($order->fresh()->trashed());
-        $this->assertSame($admin->id, OrderGroupAssignment::first()->assigned_to_user_id);
-        RoboDeskIntegrationEvent::query()->update(['status' => 'failed']);
-        $this->assertFalse($ownership->owns($order));
-        $this->assertSame($admin->id, OrderGroupAssignment::first()->assigned_to_user_id);
-    }
-
-    public function test_second_admin_cannot_acquire_an_assigned_order_without_manager_takeover(): void
-    {
-        $firstAdmin = User::factory()->create(['role' => 'admin', 'name' => 'الأول']);
-        $secondAdmin = User::factory()->create(['role' => 'admin', 'name' => 'الثاني']);
-        [$order] = $this->group();
-
-        $this->actingAs($firstAdmin)->post(route('admin.orders.groups.assignment.acquire', $order));
-        $this->actingAs($secondAdmin)
-            ->post(route('admin.orders.groups.assignment.acquire', $order))
-            ->assertSessionHasErrors('assignment');
-
-        $this->assertSame($firstAdmin->id, OrderGroupAssignment::query()->value('assigned_to_user_id'));
-    }
-
-    public function test_admin_can_release_own_order_and_manager_can_take_over_another_assignment(): void
-    {
-        $firstAdmin = User::factory()->create(['role' => 'admin', 'name' => 'الأول']);
-        $manager = User::factory()->create(['role' => 'admin', 'name' => 'المشرف']);
-        [$order] = $this->group();
-
-        $this->actingAs($firstAdmin)->post(route('admin.orders.groups.assignment.acquire', $order));
-        $this->actingAs($manager)
-            ->post(route('admin.orders.groups.assignment.takeover', $order))
-            ->assertSessionHas('success');
-        $this->assertSame($manager->id, OrderGroupAssignment::query()->value('assigned_to_user_id'));
-
-        $this->actingAs($manager)
-            ->delete(route('admin.orders.groups.assignment.release', $order))
-            ->assertSessionHas('success');
+        $this->assignAs($manager, $order, null, 1, $employee->id)->assertRedirect();
+        $this->assignAs($manager, $order, $manager, 0)->assertStatus(409); // ABA after removal
         $this->assertDatabaseCount('order_group_assignments', 0);
-        $this->assertSame(1, AdminActivityLog::query()->where('action', 'order.assignment_taken_over')->count());
-        $this->assertSame(1, AdminActivityLog::query()->where('action', 'order.assignment_released')->count());
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.assignment_changed', 'subject_id' => $order->id]);
     }
 
-    public function test_assignment_filters_return_mine_assigned_and_unassigned_checkouts(): void
+    public function test_employee_cannot_self_assign_and_agent_accounts_are_not_assignment_targets(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
-        [$assigned] = $this->group();
-        $unassigned = $this->order('OTHER-GROUP', 'OTHER-ORDER');
-        $this->actingAs($admin)->post(route('admin.orders.groups.assignment.acquire', $assigned));
-
-        $mine = $this->actingAs($admin)->get(route('admin.orders.index', ['assignment' => 'mine']))->viewData('groups');
-        $this->assertSame(['ASSIGN-GROUP'], collect($mine->items())->pluck('key')->all());
-
-        $unassignedGroups = $this->actingAs($admin)->get(route('admin.orders.index', ['assignment' => 'unassigned']))->viewData('groups');
-        $this->assertSame([$unassigned->checkout_group_key], collect($unassignedGroups->items())->pluck('key')->all());
-
-        $assignedGroups = $this->actingAs($admin)->get(route('admin.orders.index', ['assignment' => 'assigned']))->viewData('groups');
-        $this->assertSame(['ASSIGN-GROUP'], collect($assignedGroups->items())->pluck('key')->all());
-    }
-
-    public function test_assignment_filter_can_select_a_specific_admin_and_filters_statistics(): void
-    {
-        $viewer = User::factory()->create(['role' => 'admin', 'name' => 'المشاهد']);
-        $firstAdmin = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول أول']);
-        $secondAdmin = User::factory()->create(['role' => 'admin', 'name' => 'مسؤول ثان']);
-        [$firstOrder] = $this->group();
-        $secondOrder = $this->order('SECOND-GROUP', 'SECOND-ORDER');
-
-        $this->actingAs($firstAdmin)->post(route('admin.orders.groups.assignment.acquire', $firstOrder));
-        $this->actingAs($secondAdmin)->post(route('admin.orders.groups.assignment.acquire', $secondOrder));
-
-        $response = $this->actingAs($viewer)->get(route('admin.orders.index', [
-            'assignment' => 'user:'.$secondAdmin->id,
-        ]));
-
-        $response
-            ->assertOk()
-            ->assertSee('حسب المستخدم')
-            ->assertSee('مسؤول أول')
-            ->assertSee('مسؤول ثان');
-
-        $groups = $response->viewData('groups');
-        $this->assertSame(['SECOND-GROUP'], collect($groups->items())->pluck('key')->all());
-        $this->assertSame(1, $response->viewData('stats')['checkouts']);
-
-        $csv = $this->actingAs($viewer)->get(route('admin.orders.export', [
-            'assignment' => 'user:'.$secondAdmin->id,
-        ]))->streamedContent();
-
-        $this->assertStringContainsString('SECOND-ORDER', $csv);
-        $this->assertStringNotContainsString('ASSIGN-1', $csv);
-    }
-
-    public function test_assignment_routes_require_their_permissions(): void
-    {
-        $limited = User::factory()->create(['role' => 'admin']);
-        $limited->permissions()->sync(Permission::query()->where('key', 'orders.view')->pluck('id'));
-        $limited->unsetRelation('permissions');
+        $manager = User::factory()->create(['role' => 'admin']);
+        $employee = User::factory()->create(['role' => 'admin']);
+        $employee->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.assign'])->pluck('id'));
+        $employee->unsetRelation('permissions');
         [$order] = $this->group();
-
-        $this->actingAs($limited)
-            ->post(route('admin.orders.groups.assignment.acquire', $order))
-            ->assertForbidden();
+        $this->assignAs($employee, $order, $employee)->assertForbidden();
+        $this->actingAs($employee)->post(route('admin.orders.groups.assignment.acquire', $order))->assertForbidden();
+        $agent = User::factory()->create(['role' => 'admin', 'agent_api_enabled' => true]);
+        $this->assignAs($manager, $order, $agent)->assertStatus(422);
+        $this->assignAs($agent, $order, $manager)->assertForbidden();
+        $inactive = User::factory()->create(['role' => 'admin', 'is_active' => false]);
+        $this->assignAs($manager, $order, $inactive)->assertStatus(422);
         $this->assertDatabaseCount('order_group_assignments', 0);
     }
 
-    public function test_agent_api_accounts_cannot_acquire_take_over_or_release_employee_assignments(): void
+    public function test_bulk_assignment_is_atomic_on_conflict_and_covers_whole_checkout(): void
     {
-        $employee = User::factory()->create(['role' => 'admin', 'name' => 'موظف الإنتاج']);
-        $agent = User::factory()->create([
-            'role' => 'admin',
-            'name' => 'AI Agent',
-            'agent_api_enabled' => true,
-        ]);
-        [$assigned, $sibling] = $this->group();
-        $unassigned = $this->order('AGENT-BLOCKED-GROUP', 'AGENT-BLOCKED-ORDER');
+        $manager = User::factory()->create(['role' => 'admin']);
+        $target = User::factory()->create(['role' => 'admin']);
+        [$first,$sibling] = $this->group();
+        $second = $this->order('SECOND', 'SECOND');
+        $payload = ['target_id' => $target->id, 'reason' => 'distribution', 'orders' => [['id' => $first->id, 'version' => 0], ['id' => $second->id, 'version' => 9]]];
+        $this->actingAs($manager)->post(route('admin.orders.workspace.assign'), $payload)->assertStatus(409);
+        $this->assertDatabaseCount('order_group_assignments', 0);
+        $payload['orders'][1]['version'] = 0;
+        $this->post(route('admin.orders.workspace.assign'), $payload)->assertRedirect();
+        $this->assertDatabaseCount('order_group_assignments', 2);
+        $this->assertSame($target->id, $sibling->fresh()->groupAssignment->assigned_to_user_id);
+    }
 
-        $this->actingAs($employee)->post(route('admin.orders.groups.assignment.acquire', $assigned));
+    public function test_default_all_and_assigned_only_protect_lists_counts_export_links_media_and_bulk(): void
+    {
+        Http::preventStrayRequests();
+        $manager = User::factory()->create(['role' => 'admin']);
+        $employee = User::factory()->create(['role' => 'admin']);
+        $employee->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.statistics.view', 'orders.photos.view', 'orders.delete'])->pluck('id'));
+        $employee->unsetRelation('permissions');
+        [$mine,$sibling] = $this->group();
+        $foreign = $this->order('SECRET-GROUP', 'SECRET-ORDER');
+        $this->assignAs($manager, $mine, $employee)->assertRedirect();
+        $this->actingAs($employee)->get(route('admin.orders.index'))->assertOk()->assertViewHas('groups', fn ($g) => $g->total() === 2);
+        $this->actingAs($manager)->post(route('admin.orders.workspace.visibility'), ['mode' => 'assigned', 'expected' => 'all'])->assertRedirect();
+        $this->actingAs($employee)->get(route('admin.orders.index'))->assertOk()->assertDontSee('SECRET-ORDER')->assertViewHas('groups', fn ($g) => $g->total() === 1)->assertViewHas('workspaceCounts', fn ($c) => $c['all'] === 1);
+        $this->get(route('admin.orders.index', ['q' => 'SECRET-ORDER']))->assertOk()->assertViewHas('groups', fn ($g) => $g->total() === 0);
+        $this->get(route('admin.orders.groups.show', $foreign))->assertNotFound();
+        $this->patch(route('admin.orders.update', $foreign), ['status' => 'new_confirmed'])->assertNotFound();
+        $this->get(route('admin.orders.photo', [$foreign, 0]))->assertNotFound();
+        $attachment = OrderAttachment::create(['order_id' => $foreign->id, 'disk' => 's3_private', 'path' => 'synthetic/secret.png', 'original_name' => 'secret.png', 'mime_type' => 'image/png', 'size' => 10]);
+        $this->get(route('admin.orders.attachments.show', $attachment))->assertNotFound();
+        $this->post(route('admin.orders.bulk-actions'), ['action' => 'update_status', 'status' => 'new_confirmed', 'representative_ids' => [$mine->id, $foreign->id]])->assertNotFound();
+        $csv = $this->get(route('admin.orders.export'))->assertOk()->streamedContent();
+        $this->assertStringNotContainsString('SECRET-ORDER', $csv);
+        $this->assertStringContainsString('ASSIGN-1', $csv);
+        $this->getJson(route('admin.orders.workspace.progress', ['visible' => [$mine->id, $foreign->id]]))->assertOk()->assertJsonPath('revoked.0', $foreign->id)->assertJsonCount(1, 'rows');
+        // Transfer while employee keeps a stale page open revokes every subsequent call.
+        $this->assignAs($manager, $mine, $manager, 1, $employee->id)->assertRedirect();
+        $this->actingAs($employee)->get(route('admin.orders.groups.show', $sibling))->assertNotFound();
+        $this->getJson(route('admin.orders.workspace.progress', ['visible' => [$mine->id]]))->assertOk()->assertJsonCount(0, 'rows');
+        $this->actingAs($manager)->get(route('admin.orders.index'))->assertOk()->assertViewHas('groups', fn ($g) => $g->total() === 2);
+    }
 
-        $this->actingAs($agent)
-            ->post(route('admin.orders.groups.assignment.acquire', $unassigned))
-            ->assertSessionHasErrors('assignment');
-        $this->actingAs($agent)
-            ->post(route('admin.orders.groups.assignment.takeover', $sibling))
-            ->assertSessionHasErrors('assignment');
-        $this->actingAs($agent)
-            ->delete(route('admin.orders.groups.assignment.release', $sibling))
-            ->assertSessionHasErrors('assignment');
+    public function test_pause_resume_preserve_employee_and_require_control_of_own_order(): void
+    {
+        $manager = User::factory()->create(['role' => 'admin']);
+        $employee = User::factory()->create(['role' => 'admin']);
+        $employee->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.automation.control'])->pluck('id'));
+        $employee->unsetRelation('permissions');
+        [$order] = $this->group();
+        $other = $this->order('OTHER', 'OTHER');
+        $this->assignAs($manager, $order, $employee)->assertRedirect();
+        $this->actingAs($employee)->post(route('admin.orders.workspace.control', $other), ['action' => 'pause', 'version' => 1, 'reason' => 'manual change'])->assertForbidden();
+        $this->post(route('admin.orders.workspace.control', $order), ['action' => 'pause', 'version' => 1, 'reason' => 'manual change'])->assertRedirect();
+        $this->assertDatabaseHas('order_automation_controls', ['checkout_key' => $order->checkoutGroupKey(), 'state' => 'paused']);
+        $this->assertSame($employee->id, OrderGroupAssignment::first()->assigned_to_user_id);
+        $this->post(route('admin.orders.workspace.control', $order), ['action' => 'resume', 'version' => 1])->assertStatus(409);
+        $version = DB::table('order_automation_controls')->where('checkout_key', $order->checkoutGroupKey())->value('version');
+        $this->post(route('admin.orders.workspace.control', $order), ['action' => 'resume', 'version' => $version])->assertRedirect();
+        $this->assertDatabaseHas('order_automation_controls', ['checkout_key' => $order->checkoutGroupKey(), 'state' => 'running']);
+        $this->assertSame($employee->id, OrderGroupAssignment::first()->assigned_to_user_id);
+    }
 
-        $this->assertDatabaseCount('order_group_assignments', 1);
-        $this->assertDatabaseHas('order_group_assignments', [
-            'checkout_group_key' => $assigned->checkoutGroupKey(),
-            'assigned_to_user_id' => $employee->id,
-        ]);
-        $this->assertDatabaseMissing('order_group_assignments', [
-            'checkout_group_key' => $unassigned->checkoutGroupKey(),
-        ]);
+    public function test_mixed_summary_keeps_failure_and_parallel_progress_with_batched_queries(): void
+    {
+        [$order, $sibling] = $this->group();
+        $base = ['checkout_key' => $order->checkoutGroupKey(), 'previous_status' => 'new_confirmed', 'fingerprint' => str_repeat('a', 64), 'snapshot' => [], 'scene_count' => 13, 'production_kind' => 'story'];
+        CodexSceneRun::create($base + ['id' => (string) Str::uuid(), 'order_id' => $order->id, 'status' => 'needs_manual', 'error_code' => 'partial_scenes', 'scenes' => [1 => ['path' => 'synthetic.png', 'sha256' => str_repeat('b', 64)]]]);
+        CodexSceneRun::create($base + ['id' => (string) Str::uuid(), 'order_id' => $sibling->id, 'status' => 'running', 'scenes' => [1 => ['path' => 'other.png', 'sha256' => str_repeat('c', 64)]]]);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $single = (new OrderAutomationSummary)->forKeys([$order->checkoutGroupKey()]);
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        $summary = $single[$order->checkoutGroupKey()];
+        $this->assertSame('intervention', $summary['state']);
+        $this->assertTrue($summary['running']);
+        $this->assertCount(2, collect($summary['parts'])->where('stage', 'story_pages'));
+        $keys = [$order->checkoutGroupKey()];
+        for ($i = 0; $i < 12; $i++) {
+            $keys[] = $this->order('BATCH-'.$i, 'BATCH-'.$i)->checkoutGroupKey();
+        }
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        (new OrderAutomationSummary)->forKeys($keys);
+        $this->assertSame($count, count(DB::getQueryLog()), 'Summary query count must not grow per checkout within a batch.');
+        DB::disableQueryLog();
     }
 
     private function group(): array

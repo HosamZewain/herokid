@@ -8,9 +8,11 @@ use App\Models\OrderItem;
 use App\Models\OrderPreview;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
+use App\Models\Setting;
 use App\Services\OrderAutomation\Process\ProcessProductReview;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
@@ -75,19 +77,80 @@ class BookPageService
         return hash('sha256', json_encode($this->approvedInputs($item, $manifest), JSON_THROW_ON_ERROR));
     }
 
-    public function start(OrderItem $item, OrderReviewManifest $manifest): CodexSceneRun
+    public function statusEligible(Order $order, bool $explicit = false): bool
+    {
+        if (in_array($order->status, ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true)) {
+            return true;
+        }
+        // The owner's existing "تم الإنتاج والموافقة" order status is stored as
+        // delivered. Fulfilment is tracked separately; never enroll printed/shipped work.
+        if ($order->status !== 'delivered' || $order->printing_status !== 'not_started' || $order->shipping_status !== 'not_ready') {
+            return false;
+        }
+        $cutoff = Setting::where('key', 'book_approved_enrollment_after')->value('value');
+
+        return $explicit || ($cutoff && $order->statusLogs()->where('status_type', 'order')->where('status', 'delivered')->where('created_at', '>', $cutoff)->exists());
+    }
+
+    /** Read-only detail diagnostics, using exactly the admission checks before enqueue. */
+    public function admissionReason(OrderItem $item): ?string
+    {
+        $order = $item->order;
+        if (CodexSceneRun::where('production_kind', 'coloring_book')->where('order_item_id', $item->id)->exists()) {
+            return 'له تشغيل مسجل بالفعل؛ راجع تقدمه أو استأنف المسار، دون إنشاء تشغيل مكرر.';
+        }
+        if (! config('product_review.enabled') || ! config('product_review.book_pages_enabled') || ! $this->workerReady()) {
+            return 'عامل صفحات التلوين غير متاح حاليًا.';
+        }
+        if (AutomationHandoff::held($order->checkoutGroupKey()) || AutomationControl::blocked($order->checkoutGroupKey())) {
+            return 'الأوتوميشن متوقف؛ استخدم الاستئناف أولًا.';
+        }
+        if (! $this->statusEligible($order, true)) {
+            return 'حالة الطلب أو الطباعة أو الشحن لا تسمح ببدء الصفحات.';
+        }
+        if (! Order::where('checkout_group_key', $order->checkoutGroupKey())->where('paid_amount_cents', '>', 0)->whereIn('payment_status', ['partially_paid', 'paid_in_full', 'paid_without_shipping'])->exists()) {
+            return 'بانتظار تسجيل دفعة فعلية؛ إثبات التحويل وحده لا يكفي.';
+        }
+        if (CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists() || app(AutomationAssignment::class)->owns($order, false)) {
+            return 'بانتظار انتهاء خطوة التنفيذ الجارية على الطلب.';
+        }
+        if ($order->story_id && ! CodexSceneRun::where('order_id', $order->id)->where('production_kind', 'story')->where('status', 'completed')->exists()) {
+            return 'بانتظار اكتمال القصة المرتبطة بالطفل.';
+        }
+        $manifest = OrderReviewManifest::where('checkout_key', $order->checkoutGroupKey())->latest('id')->first();
+        if (! $manifest?->approved_at) {
+            return 'بانتظار اعتماد العميل للكفر في النسخة الحالية من المعاينة.';
+        }
+        try {
+            $this->approvedInputs($item, $manifest);
+        } catch (RuntimeException $e) {
+            return match ($e->getMessage()) {
+                'Book approval unavailable' => 'اعتماد الكفر غير صالح للمسار الحالي؛ راجع المعاينة.',
+                'Book inputs changed after approval' => 'تغيرت بيانات الكتاب بعد اعتماد الكفر؛ يلزم معاينة واعتماد النسخة الجديدة.',
+                'Book preview revoked' => 'معاينة الكفر سُحبت أو تغيرت؛ يلزم اعتماد المعاينة الحالية.',
+                default => 'مراجع الطفل أو القصة أو صفحات الكتاب تحتاج مراجعة قبل التوليد.',
+            };
+        }
+
+        return null;
+    }
+
+    public function start(OrderItem $item, OrderReviewManifest $manifest, bool $explicit = false): CodexSceneRun
     {
         if (! config('product_review.enabled') || ! config('product_review.book_pages_enabled') || ! $this->workerReady()) {
             throw new RuntimeException('Book production disabled');
         }
 
-        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($item, $manifest) {
-            return DB::transaction(function () use ($item, $manifest) {
+        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($item, $manifest, $explicit) {
+            return DB::transaction(function () use ($item, $manifest, $explicit) {
                 $rows = Order::where('checkout_group_key', $item->order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
                 $order = $rows->firstWhere('id', $item->order_id);
                 $item = OrderItem::lockForUpdate()->findOrFail($item->id);
+                if (! AutomationControl::admits($item->order->checkoutGroupKey())) {
+                    throw new RuntimeException('Automation paused');
+                }
                 if (! $order || AutomationHandoff::held($order->checkoutGroupKey()) || app(AutomationAssignment::class)->owns($order, false)
-                    || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true)
+                    || ! $this->statusEligible($order, $explicit)
                     || ! $rows->contains(fn ($row) => $row->paid_amount_cents > 0 && in_array($row->payment_status, ['partially_paid', 'paid_in_full', 'paid_without_shipping'], true))
                     || CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists()
                     || CodexSceneRun::where('production_kind', 'coloring_book')->where('order_item_id', $item->id)->exists()

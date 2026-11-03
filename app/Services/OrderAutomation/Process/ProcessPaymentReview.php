@@ -22,8 +22,7 @@ class ProcessPaymentReview
     public function runs(): Builder
     {
         $query = OrderProcessRun::query()->where('account_key', config('robodesk.conversations.account_key', 'primary'))
-            ->whereIn('status', ['running', 'waiting_response', 'waiting_staff'])
-            ->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))
+            ->whereIn('status', ['running', 'waiting_response', 'waiting_staff', 'paused'])
             ->where('order_id', '>', (int) config('order_process.after_order_id'))
             ->whereHas('order', fn ($q) => $q->whereNull('deleted_at')->whereNotIn('status', OrderStatusRegistry::keysForBehavior(OrderStatusRegistry::TYPE_ORDER, 'cancelled')))
             ->whereHas('automation', fn ($q) => $q->where('enabled', true))
@@ -169,7 +168,7 @@ class ProcessPaymentReview
 
         return $order && ! $order->trashed() && $order->checkoutGroupKey() === $run->checkout_key
             && $phone && hash('sha256', $phone) === $run->phone_hash
-            && $policy->allowsCheckout($run->checkout_key) && $policy->allowsAutomation($run->automation_id)
+            && $policy->allowsCheckout($run->checkout_key, true) && $policy->allowsAutomation($run->automation_id)
             && $policy->authorized($run->automation);
     }
 

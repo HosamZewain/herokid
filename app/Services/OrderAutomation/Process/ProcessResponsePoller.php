@@ -17,7 +17,7 @@ class ProcessResponsePoller
     public function needsFullWindow(string $phone): bool
     {
         return app(ProcessLivePolicy::class)->enabled() && OrderProcessRun::where('account_key', config('robodesk.conversations.account_key', 'primary'))
-            ->where('phone_hash', hash('sha256', '+'.ltrim($phone, '+')))->whereIn('status', ['sending', 'running', 'waiting_response', 'uncertain', 'retry_queued'])->exists();
+            ->where('phone_hash', hash('sha256', '+'.ltrim($phone, '+')))->whereIn('status', ['sending', 'running', 'waiting_response', 'uncertain', 'retry_queued', 'paused'])->exists();
     }
 
     public function process(WhatsAppConversation $conversation): void

@@ -33,9 +33,9 @@ class ProcessLivePolicy
             || (config('order_process.enrollment_mode') === 'trial' && $id === (int) config('order_process.trial_automation_id'));
     }
 
-    public function allowsCheckout(string $key): bool
+    public function allowsCheckout(string $key, bool $readEvidence = false): bool
     {
-        if (AutomationHandoff::held($key)) {
+        if (! $readEvidence && AutomationHandoff::held($key)) {
             return false;
         }
         if (config('order_process.enrollment_mode', 'all_new') === 'all_new') {

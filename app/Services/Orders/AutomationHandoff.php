@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Jobs\SendOrderConfirmationJob;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderAutomationRun;
 use App\Models\OrderIdentityRegeneration;
 use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessRun;
@@ -45,19 +46,27 @@ class AutomationHandoff
 
     private function authorize(User $actor): void
     {
-        abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.assignment.manage') && $actor->hasPermission('orders.update'), 403);
+        abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.automation.control') && $actor->hasPermission('orders.update'), 403);
     }
 
-    public function take(Order $order, User $actor, Request $request): void
+    public function take(Order $order, User $actor, Request $request, bool $settling = false): void
     {
-        $this->authorize($actor);
-        DB::transaction(function () use ($order, $actor, $request) {
+        if (! $settling) {
+            $this->authorize($actor);
+        }
+        if (! $settling) {
+            abort_unless(app(OrderAccess::class)->controls($order, $actor), 403);
+        }
+        DB::transaction(function () use ($order, $actor, $request, $settling) {
             $key = $order->checkoutGroupKey();
             // Match worker lock order: run/event before checkout rows.
             $runs = OrderProcessRun::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get();
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get();
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
-            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', ['queued', 'processing', 'uncertain'])->exists()) {
+            if (OrderAutomationRun::whereIn('order_id', $rows->pluck('id'))->where('dry_run', false)->where(fn ($q) => $q->whereIn('status', ['generating', 'polling', 'uncertain'])->orWhereNotNull('lease_until'))->exists()) {
+                throw ValidationException::withMessages(['automation' => 'هناك محاولة هوية قديمة جارية أو نتيجتها غير مؤكدة؛ يلزم مراجعتها.']);
+            }
+            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', $settling ? ['processing', 'uncertain'] : ['queued', 'processing', 'uncertain'])->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'إعادة توليد الهوية جارية أو نتيجتها غير مؤكدة؛ انتظر المراجعة.']);
             }
             abort_if($rows->isEmpty(), 404);
@@ -67,14 +76,14 @@ class AutomationHandoff
                 ->get(['id', 'status', 'requested_by', 'finished_at', 'lease_until']);
             if ($productRuns->contains(fn ($run) => $run->status === 'processing'
                 || ($run->status === 'uncertain' && (! $run->finished_at || $run->lease_until))
-                || ($run->status === 'queued' && $run->requested_by))) {
+                || (! $settling && $run->status === 'queued' && $run->requested_by))) {
                 throw ValidationException::withMessages(['assignment' => 'توليد المنتج جارٍ أو لم يتأكد توقف العامل. انتظر انتهاء التنفيذ قبل الاستلام.']);
             }
             $uncertainProductIds = $productRuns->where('status', 'uncertain')->pluck('id')->all();
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'أوقف تجربة Codex من زر الإيقاف وانتظر تأكيد توقفها، ثم استلم الطلب.']);
             }
-            if ($runs->contains(fn ($run) => in_array($run->status, ['sending', 'uncertain', 'retry_queued', 'waiting_identity'], true) || $run->identities()->whereIn('status', ['processing', 'uncertain'])->exists())
+            if ($runs->contains(fn ($run) => in_array($run->status, $settling ? ['sending', 'uncertain'] : ['sending', 'uncertain', 'retry_queued', 'waiting_identity'], true) || $run->identities()->whereIn('status', ['processing', 'uncertain'])->exists())
                 || $events->contains(fn ($event) => in_array($event->status, ['processing', 'unknown'], true))) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد أو إرسال جارٍ أو نتيجته غير مؤكدة. انتظر انتهاءه أو سوِّ المحاولة من الأوتوميشن قبل الاستلام؛ لم يتم تغيير المسؤولية.']);
             }
@@ -97,19 +106,20 @@ class AutomationHandoff
                 DB::table('order_automation_holds')->insert(['checkout_key' => $key, 'user_id' => $actor->id, 'fingerprint' => $this->fingerprint($rows), 'runs' => json_encode($savedRuns), 'confirmations' => json_encode($savedEvents), 'created_at' => now(), 'updated_at' => now()]);
                 AdminActivityLogger::log('order.automation_taken_over', 'استلام يدوي من Automation وإيقاف متابعة الأوتوميشن لهذه العملية.', $order, ['checkout_group_key' => $key, 'run_ids' => array_keys($savedRuns), 'uncertain_product_run_ids' => $uncertainProductIds], $actor, $request);
             }
-            app(OrderAssignmentService::class)->acquire($order, $actor, $request, true);
+            // Employee assignment is independent of automation execution ownership.
         }, 3);
     }
 
     public function resume(Order $order, User $actor, Request $request): void
     {
         $this->authorize($actor);
+        abort_unless(app(OrderAccess::class)->controls($order, $actor), 403);
         DB::transaction(function () use ($order, $actor, $request) {
             $key = $order->checkoutGroupKey();
             $runs = OrderProcessRun::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
-            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', ['queued', 'processing', 'uncertain'])->exists()) {
+            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'إعادة توليد الهوية جارية أو نتيجتها غير مؤكدة؛ انتظر المراجعة.']);
             }
             $hold = DB::table('order_automation_holds')->where('checkout_key', $key)->lockForUpdate()->first();
@@ -122,10 +132,13 @@ class AutomationHandoff
                 && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new_confirmed'
                     && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready'
                     && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
-            if (PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->whereIn('status', ['processing', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'queued')->whereNotNull('requested_by')))->lockForUpdate()->exists()) {
+            if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
             }
             if ($changed && ! $productReturn) {
+                if ($runs->isEmpty() && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new')) {
+                    throw ValidationException::withMessages(['assignment' => 'الطلب المعدّل غير مؤكد. بعد موافقة العميل على البيانات الجديدة، احفظ حالة «طلب جديد مؤكد» لكل عملية الشراء ثم أرجعه للأوتوميشن. البازل وكفر التلوين يبدأان قبل الدفع؛ صفحات التلوين تبدأ بعد اعتماد الكفر وتسجيل دفعة.']);
+                }
                 throw ValidationException::withMessages(['assignment' => 'تغيّرت بيانات الطلب أو هويته أثناء العمل اليدوي؛ لا يمكن استكمال مسار برسائل أو صور قديمة. أكمل يدويًا أو استخدم زر Codex بعد اعتماد الهوية وتسجيل الدفعة.']);
             }
             if ($productReturn) {

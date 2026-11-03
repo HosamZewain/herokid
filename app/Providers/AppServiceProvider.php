@@ -6,6 +6,7 @@ use App\Contracts\MobileSocialIdentityVerifier;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\FaqItem;
+use App\Models\Order;
 use App\Models\OrderPaymentReview;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessMessageAttempt;
@@ -26,6 +27,8 @@ use App\Services\Catalog\RoboDeskFeedCache;
 use App\Services\Images\PublicCatalogImageSources;
 use App\Services\Images\PublicImageVariants;
 use App\Services\Mobile\ProviderTokenVerifier;
+use App\Services\Orders\OrderAccess;
+use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Payments\HistoricalPaymentSource;
 use App\Services\Payments\PaymentReconciliationService;
 use App\Support\AdminPermissionRegistry;
@@ -49,12 +52,16 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(MobileSocialIdentityVerifier::class, ProviderTokenVerifier::class);
         $this->app->scoped(PublicImageVariants::class);
+        $this->app->scoped(OrderAutomationSummary::class);
         $this->app->scoped(HistoricalPaymentSource::class);
         $this->app->scoped(PaymentReconciliationService::class);
     }
 
     public function boot(): void
     {
+        Order::addGlobalScope('staff_order_access', function ($query) {
+            app(OrderAccess::class)->scope($query);
+        });
         foreach ([OrderProcessRun::class, OrderProcessStep::class,
             OrderProcessIdentity::class, OrderProcessMessageAttempt::class,
             RoboDeskIntegrationEvent::class, OrderPaymentReview::class] as $automationModel) {

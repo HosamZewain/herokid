@@ -67,6 +67,7 @@
                 </div>
             @endif
 
+            @include('admin.orders._workspace-toolbar')
             <div class="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-col gap-3">
                     <div class="flex flex-wrap items-center gap-2">
@@ -121,9 +122,14 @@
                 @endif
 
                 <form method="GET" action="{{ route('admin.orders.index') }}" class="space-y-3">
-                    <input type="hidden" name="catalog_type" value="{{ $catalogType }}">
+                    <input type="hidden" name="workspace" value="{{ request('workspace','all') }}">
                     <input type="hidden" name="lifecycle" value="{{ $lifecycle }}">
+                    <div class="grid gap-3 md:grid-cols-2">
+                    <label class="text-xs font-bold">حالة الأوتوميشن<select name="automation_state" class="mt-1 w-full rounded-xl border-gray-200 text-sm"><option value="">كل حالات التنفيذ</option>@foreach(\App\Services\Orders\OrderAutomationSummary::STATES as $value=>$label)<option value="{{ $value }}" @selected(request('automation_state') === $value)>{{ $label }}</option>@endforeach</select></label>
+                    <label class="text-xs font-bold">مرحلة الأوتوميشن<select name="automation_stage" class="mt-1 w-full rounded-xl border-gray-200 text-sm"><option value="">كل المراحل</option>@foreach(\App\Services\Orders\OrderAutomationSummary::STAGES as $value=>$label)<option value="{{ $value }}" @selected(request('automation_stage') === $value)>{{ $label }}</option>@endforeach</select></label>
+                    </div>
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
+                        <div><label class="mb-1.5 block text-xs font-black text-gray-600">نوع الطلب</label><select name="catalog_type" class="w-full rounded-xl border-gray-200 text-sm">@foreach(['all'=>'كل الأنواع','stories'=>'قصص','products'=>'منتجات فقط','mixed'=>'طلبات مختلطة'] as $value=>$label)<option value="{{ $value }}" @selected($catalogType === $value)>{{ $label }}</option>@endforeach</select></div>
                         <div class="xl:col-span-2">
                             <label class="mb-1.5 block text-xs font-black text-gray-600">بحث شامل</label>
                             <input name="q" type="search" value="{{ request('q') }}" placeholder="مرجع، طلب، عميل، هاتف، طفل، قصة، منتج أو علامة"
@@ -206,7 +212,7 @@
                                 <label class="mb-1.5 block text-xs font-black text-gray-600">مسؤول الطلب</label>
                                 <select name="assignment" class="w-full rounded-xl border-gray-200 text-right text-sm">
                                     <option value="">كل الطلبات</option>
-                                    <option value="automation" @selected(request('assignment') === 'automation')>Automation</option>
+
                                     <option value="mine" @selected(request('assignment') === 'mine')>طلباتي</option>
                                     <option value="unassigned" @selected(request('assignment') === 'unassigned')>غير مستلمة</option>
                                     <option value="assigned" @selected(request('assignment') === 'assigned')>مستلمة</option>
@@ -248,26 +254,26 @@
                         @if($showBulkActions)
                             <div class="border-t border-indigo-100 bg-indigo-50/60 p-4 sm:p-5" data-order-bulk-actions>
                                 <div class="flex flex-col gap-4 xl:flex-row xl:items-end">
-                                    <div class="min-w-44">
+                                    <div class="min-w-[160px]">
                                         <p class="text-sm font-black text-indigo-950">إجراءات جماعية</p>
                                         <p class="mt-1 text-xs font-bold text-indigo-700"><span data-bulk-selected-count>0</span> عملية شراء محددة</p>
                                     </div>
-                                    <div class="min-w-64 flex-1">
+                                    <div class="min-w-[200px] flex-1">
                                         <label class="mb-1.5 block text-xs font-black text-gray-600">الإجراء</label>
                                         <select name="action" form="order-bulk-actions" required class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-action>
                                             @if($canBulkUpdateStatus)<option value="update_status">تغيير حالة الطلبات المحددة</option>@endif
-                                            @if($canBulkReleaseAssignments)<option value="release_assignments">إلغاء الاستحواذ عن الطلبات المحددة</option>@endif
-                                            @if($canBulkUpdateStatus && $canBulkReleaseAssignments)<option value="update_status_and_release">تغيير الحالة وإلغاء الاستحواذ</option>@endif
+
+
                                         </select>
                                     </div>
-                                    <div class="min-w-64 flex-1" data-bulk-status-field>
+                                    <div class="min-w-[200px] flex-1" data-bulk-status-field>
                                         <label class="mb-1.5 block text-xs font-black text-gray-600">الحالة الجديدة</label>
                                         <select name="status" form="order-bulk-actions" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" data-bulk-status>
                                             <option value="">اختر الحالة</option>
                                             @foreach($bulkOrderStatuses as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
                                         </select>
                                     </div>
-                                    <div class="min-w-64 flex-[1.5]">
+                                    <div class="min-w-[200px] flex-[1.5]">
                                         <label class="mb-1.5 block text-xs font-black text-gray-600">ملاحظة للسجل (اختياري)</label>
                                         <input name="admin_notes" form="order-bulk-actions" maxlength="2000" class="w-full rounded-xl border-indigo-200 bg-white text-right text-sm" placeholder="سبب التغيير أو الإجراء">
                                     </div>
@@ -283,6 +289,7 @@
             @include('admin.orders._operational-statistics')
 
             @can('orders.statistics.view')
+                <details class="rounded-xl border border-gray-100 bg-white p-4"><summary class="cursor-pointer font-bold text-sm text-gray-600">الإحصاءات المالية للطلبات المطابقة</summary>
             <section aria-label="إحصائيات الطلبات المطابقة للفلاتر" class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                     <p class="text-xs font-black text-indigo-700">إجمالي الطلبات</p>
@@ -324,6 +331,7 @@
                 </div>
             </section>
 
+            </details>
             @endcan
 
             @if($activeTags->isNotEmpty())
@@ -353,20 +361,20 @@
                         @php
                             $detailsUrl = route('admin.orders.groups.show', $group['representative_id']);
                         @endphp
-                        <article class="space-y-4 p-5">
-                            <div class="flex items-start justify-between gap-3">
+                        <article data-order-card data-order-workspace-row="{{ $group['representative_id'] }}" class="space-y-4 p-5">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
                                 @if($showBulkActions && !$group['trashed'])
                                     <label class="flex min-h-10 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-xs font-black text-indigo-700">
                                         <input type="checkbox" value="{{ $group['representative_id'] }}" class="rounded border-indigo-300 text-indigo-600" data-bulk-order-checkbox aria-label="تحديد {{ $group['short_reference'] ?: $group['key'] }}">
                                         تحديد
                                     </label>
                                 @endif
-                                <div class="min-w-0 text-right">
-                                    <a href="{{ $detailsUrl }}" class="block truncate font-mono text-base font-black text-indigo-700" dir="ltr">{{ $group['short_reference'] ?: $group['key'] }}</a>
+                                <div class="min-w-0 flex-1 text-right">
+                                    <a href="{{ $detailsUrl }}" class="block truncate font-mono text-base font-black text-indigo-700" dir="ltr"><span data-order-robot="{{ $group['representative_id'] }}">{{ ($group['automation_summary']['tracking'] ?? false) ? '🤖 ' : '' }}</span>{{ $group['short_reference'] ?: $group['key'] }}</a>
                                     <p class="mt-1 truncate text-[9px] text-gray-400" dir="ltr" title="{{ $group['key'] }}">{{ $group['key'] }}</p>
                                     <p class="mt-1 text-[10px] text-gray-400" dir="ltr">{{ implode(' · ', $group['order_numbers']) }}</p>
                                 </div>
-                                <div class="flex max-w-44 flex-wrap justify-end gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
+                                <div class="flex w-full flex-wrap justify-start gap-1" data-workflow-badge-group="{{ $group['representative_id'] }}">
                                     <span data-workflow-badge="status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
                                     <span data-workflow-badge="printing_status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $printingStatusColors[$group['printing_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['printing_status_label'] }}</span>
                                     <span data-workflow-badge="shipping_status" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-black {{ $shippingStatusColors[$group['shipping_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['shipping_status_label'] }}</span>
@@ -427,6 +435,7 @@
                                 @endif
                             </div>
                             @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
+                                        @include('admin.orders._automation-summary', ['group' => $group])
                             @can('orders.update')
                                 @if(!$group['trashed'])
                                     <details>
@@ -451,9 +460,10 @@
                                     </th>
                                 @endif
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">عملية الشراء</th>
+                                <th class="px-4 py-3 text-xs font-black text-gray-500">الموظف والأوتوميشن</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المصدر</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العميل</th>
-                                <th class="px-4 py-3 text-xs font-black text-gray-500">المسؤول</th>
+
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">المحتويات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">العلامات</th>
                                 <th class="px-4 py-3 text-xs font-black text-gray-500">الحالة</th>
@@ -480,7 +490,7 @@
                                         </td>
                                     @endif
                                     <td class="w-44 max-w-44 px-4 py-4" data-order-primary-cell>
-                                        <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}">{{ $group['short_reference'] ?: $group['key'] }}</a>
+                                        <a href="{{ $detailsUrl }}" class="block w-40 truncate font-mono text-sm font-black text-indigo-700 hover:text-indigo-900 hover:underline" dir="ltr" title="{{ $group['short_reference'] ?: $group['key'] }}"><span data-order-robot="{{ $group['representative_id'] }}">{{ ($group['automation_summary']['tracking'] ?? false) ? '🤖 ' : '' }}</span>{{ $group['short_reference'] ?: $group['key'] }}</a>
                                         @if($group['customer_rating'])
                                             <div class="mt-1 flex w-40 items-center gap-0.5" dir="ltr" data-order-list-rating aria-label="تقييم العميل {{ $group['customer_rating'] }} من 5" title="تقييم العميل: {{ $group['customer_rating'] }} من 5">
                                                 @for($star = 1; $star <= 5; $star++)
@@ -514,6 +524,10 @@
                                             @endcan
                                         </div>
                                     </td>
+                                    <td class="min-w-[280px] px-4 py-4">
+                                        @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
+                                        @include('admin.orders._automation-summary', ['group' => $group])
+                                    </td>
                                     <td class="px-4 py-4">
                                         @include('admin.orders._marketing-source', ['sources' => $group['marketing_sources']])
                                         @if($group['source_notes'])<p class="mt-2 line-clamp-2 max-w-32 text-[10px] leading-4 text-gray-400">{{ $group['source_notes'] }}</p>@endif
@@ -526,10 +540,8 @@
                                         @endcan
                                         @if($group['phone'])<p class="mt-1 text-xs text-gray-400" dir="ltr">{{ $group['phone'] }}</p>@endif
                                     </td>
-                                    <td class="min-w-36 px-4 py-4">
-                                        @include('admin.orders._assignment-controls', ['group' => $group, 'compact' => true])
-                                    </td>
-                                    <td class="min-w-64 px-4 py-4">
+
+                                    <td class="min-w-[200px] px-4 py-4">
                                         <div class="flex flex-wrap gap-1.5">
                                             @if($group['story_count'])<span class="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-black text-violet-700">{{ $group['story_count'] }} قصة</span>@endif
                                             @if($group['add_on_quantity'])<span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700">{{ $group['add_on_quantity'] }} إضافة</span>@endif
@@ -538,11 +550,11 @@
                                         @if($group['child_names'])<p class="mt-2 text-xs font-bold text-gray-700">الأطفال: {{ implode('، ', $group['child_names']) }}</p>@endif
                                         <p class="mt-1 line-clamp-2 text-xs text-gray-500">{{ implode('، ', array_merge($group['story_titles'], $group['add_on_titles'], $group['product_titles'])) }}</p>
                                     </td>
-                                    <td class="min-w-36 px-4 py-4">
+                                    <td class="min-w-[140px] px-4 py-4">
                                         @include('admin.orders._index-tag-manager', ['group' => $group, 'mode' => 'desktop'])
                                     </td>
                                     <td class="px-4 py-4" data-workflow-badge-group="{{ $group['representative_id'] }}">
-                                        <div class="flex min-w-36 flex-col items-start gap-1">
+                                        <div class="flex min-w-[140px] flex-col items-start gap-1">
                                             <span data-workflow-badge="status" class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-black {{ $statusColors[$group['status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['status_label'] }}</span>
                                             <span data-workflow-badge="printing_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $printingStatusColors[$group['printing_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['printing_status_label'] }}</span>
                                             <span data-workflow-badge="shipping_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $shippingStatusColors[$group['shipping_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['shipping_status_label'] }}</span>
@@ -555,7 +567,7 @@
                                             </div>
                                         @endif
                                     </td>
-                                    <td class="min-w-44 whitespace-nowrap px-4 py-4">
+                                    <td class="min-w-[160px] whitespace-nowrap px-4 py-4">
                                         <div class="flex flex-wrap items-center gap-2">
                                             <p class="font-black text-gray-900">{{ format_report_money($group['total_cents'] / 100) }}</p>
                                             <span data-workflow-badge="payment_status" class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-black {{ $paymentStatusColors[$group['payment_status']] ?? 'bg-gray-100 text-gray-700' }}">{{ $group['payment_status_label'] }}</span>

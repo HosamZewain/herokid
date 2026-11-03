@@ -20,6 +20,7 @@ use App\Models\Permission;
 use App\Models\Product;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskConversationSetting;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\WhatsAppConversation;
@@ -195,6 +196,47 @@ class ProductReviewRuntimeTest extends TestCase
         return [$item, $run, $manifest, $conversation];
     }
 
+    public function test_paid_approved_legacy_status_is_visible_and_requires_explicit_admission(): void
+    {
+        [$item,$flow,$manifest] = $this->approvedBook();
+        $item->order->updateQuietly(['status' => 'delivered', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 20700, 'printing_status' => 'not_started', 'shipping_status' => 'not_ready']);
+        Setting::where('key', 'book_approved_enrollment_after')->update(['value' => now()->addMinute()->toDateTimeString()]);
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->getJson(route('admin.orders.codex-scenes.banner', $item->order))->assertOk()->assertJson(fn ($json) => $json->where('html', fn ($html) => str_contains($html, 'صفحات التلوين لم تبدأ'))->has('version'));
+    }
+
+    public function test_explicit_book_start_uses_codex_once_and_preserves_payment(): void
+    {
+        [$item,$flow,$manifest] = $this->approvedBook();
+        $item->order->updateQuietly(['status' => 'delivered', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 1, 'printing_status' => 'not_started', 'shipping_status' => 'not_ready']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $payload = ['confirm' => 1, 'expected_updated_at' => $item->fresh()->updated_at->toISOString()];
+        $this->actingAs($admin)->post(route('admin.orders.workspace.book-start', [$item->order, $item]), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('coloring_book', CodexSceneRun::sole()->production_kind);
+        $this->assertSame('waiting_slot', CodexSceneRun::sole()->status);
+        $this->post(route('admin.orders.workspace.book-start', [$item->order, $item]), $payload)->assertSessionHasErrors('automation');
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertSame(1, $item->order->fresh()->paid_amount_cents);
+    }
+
+    public function test_new_approved_paid_status_enters_but_printed_book_does_not(): void
+    {
+        [$item,$flow,$manifest] = $this->approvedBook();
+        Setting::where('key', 'book_approved_enrollment_after')->update(['value' => now()->subMinute()->toDateTimeString()]);
+        $item->order->updateQuietly(['status' => 'delivered', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 1, 'printing_status' => 'completed', 'shipping_status' => 'not_ready']);
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $item->order->updateQuietly(['printing_status' => 'not_started']);
+        // Editing an old order must not silently enroll historical work.
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $item->order->statusLogs()->create(['status_type' => 'order', 'status' => 'delivered']);
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+    }
+
     public function test_product_only_cover_preview_approval_and_positive_payment_gate(): void
     {
         [$item,$flow,$manifest] = $this->approvedBook();
@@ -221,7 +263,7 @@ class ProductReviewRuntimeTest extends TestCase
         app(ManualSceneService::class)->collect($run);
         app(ManualSceneService::class)->collect($run->fresh());
         $this->assertSame('completed', $run->fresh()->status);
-        $this->assertSame('ready_preview', $item->order->fresh()->status);
+        $this->assertSame('delivered', $item->order->fresh()->status);
         $this->assertCount(3, $run->fresh()->scenes);
         foreach ($run->fresh()->scenes as $scene) {
             $a = OrderAttachment::find($scene['attachment_id']);
@@ -439,7 +481,7 @@ class ProductReviewRuntimeTest extends TestCase
     {
         [$item, $run] = $this->generatedPreview();
         $this->send($run);
-        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.assign', 'orders.assignment.manage', 'orders.automation.control', 'orders.view_all'])->pluck('id'));
         $this->actingAs($this->actor->fresh());
         $this->post(route('admin.orders.groups.assignment.automation', $item->order), ['action' => 'take'])->assertSessionHasNoErrors();
         $manifest = OrderReviewManifest::sole();

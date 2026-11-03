@@ -9,7 +9,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/** A system assignee in the existing assignment UI, never an employee account. */
+/** Execution reservation only; independent of employee assignment and list visibility. */
 class AutomationAssignment
 {
     public function keys(bool $includeScenes = true): Builder
@@ -83,7 +83,13 @@ class AutomationAssignment
             $keys->union($pendingPuzzles);
         }
 
-        return $includeScenes ? $keys->union($sceneTrials) : $keys;
+        $work = $includeScenes ? $keys->union($sceneTrials) : $keys;
+
+        return DB::query()->fromSub($work, 'reserved_work')->select('checkout_key')
+            ->whereNotIn('checkout_key', DB::table('order_automation_controls')->select('checkout_key')->where('state', 'paused'))
+            ->union(DB::table('order_automation_controls')->select('checkout_key')->whereIn('state', ['pause_requested', 'pause_uncertain']))
+            ->union(DB::table('puzzle_generations')->select('checkout_key')->whereNotNull('requested_by')->whereIn('status', ['queued', 'processing', 'uncertain'])->where(fn ($q) => $q->where('status', '!=', 'uncertain')->orWhereNull('finished_at')->orWhereNotNull('lease_until')))
+            ->union(DB::table('order_identity_regenerations')->select('checkout_key')->whereIn('status', ['queued', 'processing', 'uncertain']));
     }
 
     public function owns(Order $order, bool $includeScenes = true): bool
@@ -99,7 +105,7 @@ class AutomationAssignment
     public function assertAvailable(Order $order): void
     {
         if ($this->owns($order)) {
-            throw ValidationException::withMessages(['assignment' => 'المسؤول الحالي هو Automation. انتظر تسليم الطلب للتيم أو أوقف تنفيذ هذا الطلب من شاشة الأوتوميشن قبل استلامه.']);
+            throw ValidationException::withMessages(['assignment' => 'الأوتوميشن ينفّذ هذا الطلب حاليًا. أوقف التنفيذ وانتظر تأكيد التوقف قبل تعديل بيانات الإنتاج.']);
         }
     }
 }

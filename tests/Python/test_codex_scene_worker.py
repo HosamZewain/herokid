@@ -67,6 +67,45 @@ class WorkerTest(unittest.TestCase):
     def state(self):
         return json.loads((w.SPOOL / 'outbox' / self.id / 'status.json').read_text())['status']
 
+    def pause_after_third(self):
+        self.protocol4('')
+        original = w.atomic
+        def checkpoint(path, data):
+            original(path, data)
+            if path.name == 'status.json' and data.get('scene_progress', {}).get('3', {}).get('status') == 'succeeded':
+                (self.inbox/'pause-after-scene').write_text('1')
+        with patch.object(w, 'atomic', checkpoint):
+            w.run_job(self.inbox)
+        self.assertEqual('paused', self.state())
+        self.assertEqual(['1','2','3'], (w.HOME/'jobs'/self.id/'calls').read_text().splitlines())
+
+    def test_safe_pause_preserves_scenes_and_resume_does_not_replay(self):
+        self.pause_after_third()
+        w.run_job(self.inbox)
+        self.assertEqual('paused', self.state())
+        (self.inbox/'pause-after-scene').unlink()
+        w.run_job(self.inbox)
+        self.assertEqual('completed', self.state())
+        self.assertEqual(list(map(str,range(1,14))), (w.HOME/'jobs'/self.id/'calls').read_text().splitlines())
+        state=json.loads((w.SPOOL/'outbox'/self.id/'status.json').read_text())
+        self.assertIn('paused_seconds',state['timing'])
+        self.assertEqual(13,len(state['scene_progress']))
+
+    def test_changed_manifest_after_pause_never_calls_provider(self):
+        self.pause_after_third()
+        manifest=json.loads((self.inbox/'manifest.json').read_text());manifest['prompt']='changed child'
+        (self.inbox/'manifest.json').write_text(json.dumps(manifest))
+        (self.inbox/'pause-after-scene').unlink();w.run_job(self.inbox)
+        self.assertEqual('uncertain',self.state())
+        self.assertEqual(['1','2','3'],(w.HOME/'jobs'/self.id/'calls').read_text().splitlines())
+
+    def test_corrupt_checkpoint_after_pause_never_calls_provider(self):
+        self.pause_after_third()
+        (w.SPOOL/'outbox'/self.id/'scene-02.png').write_bytes(b'corrupt')
+        (self.inbox/'pause-after-scene').unlink();w.run_job(self.inbox)
+        self.assertIn(self.state(),['uncertain','quality_review'])
+        self.assertEqual(['1','2','3'],(w.HOME/'jobs'/self.id/'calls').read_text().splitlines())
+
     def test_book_pages_are_portrait_variable_count_and_bound_to_product(self):
         manifest=json.loads((self.inbox/'manifest.json').read_text())
         manifest.update(protocol=5,production_kind='coloring_book',order_item_id=789,scene_count=6,

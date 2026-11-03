@@ -17,6 +17,7 @@ use App\Services\Ai\GptImageClient;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\PreviewRegenerationGuard;
 use App\Support\AdminActivityLogger;
@@ -206,7 +207,7 @@ class PuzzleAutomation
                 }
             });
         }
-        $next = PuzzleGeneration::where('status', 'queued')->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orWhereNotNull('requested_by'))->orderBy('id')->first();
+        $next = PuzzleGeneration::where('status', 'queued')->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_controls')->select('checkout_key')->where('state', '!=', 'running'))->orWhere(fn ($q) => $q->whereNotNull('requested_by')->whereIn('checkout_key', DB::table('order_automation_controls')->select('checkout_key')->where('state', 'paused'))))->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orWhereNotNull('requested_by'))->orderBy('id')->first();
         if ($next) {
             $this->generate($next->id);
         }
@@ -221,6 +222,9 @@ class PuzzleAutomation
             $candidate = PuzzleGeneration::findOrFail($id);
             Order::where('checkout_group_key', $candidate->checkout_key)->orderBy('id')->lockForUpdate()->get();
             $run = PuzzleGeneration::lockForUpdate()->findOrFail($id);
+            if (! AutomationControl::admits($run->checkout_key, (bool) $run->requested_by)) {
+                return null;
+            }
             if ($run->status !== 'queued' || ! $this->enabled() || (! $run->requested_by && AutomationHandoff::held($run->checkout_key))) {
                 return null;
             }

@@ -13,6 +13,10 @@ class OrderBulkActionController extends Controller
 {
     public function __invoke(Request $request, OrderBulkActionService $actions): RedirectResponse
     {
+        if (in_array($request->input('action'), ['release_assignments', 'update_status_and_release'], true)) {
+            abort_unless($request->user()->hasPermission('orders.assignment.manage'), 403);
+        }
+        abort_if(in_array($request->input('action'), ['release_assignments', 'update_status_and_release'], true), 409, 'استخدم الإسناد الجماعي مع نسخة الإسناد الحالية.');
         $validated = $request->validate([
             'action' => ['required', Rule::in([
                 OrderBulkActionService::ACTION_UPDATE_STATUS,

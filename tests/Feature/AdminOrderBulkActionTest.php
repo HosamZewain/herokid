@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminActivityLog;
 use App\Models\Order;
 use App\Models\OrderGroupAssignment;
 use App\Models\Permission;
@@ -78,50 +77,13 @@ class AdminOrderBulkActionTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_release_other_users_assignments_without_changing_status(): void
+    public function test_legacy_bulk_release_requires_a_versioned_assignment_submission(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
-        $assignee = User::factory()->create(['role' => 'admin']);
-        $first = $this->order('BULK-RELEASE-FIRST', 'BULK-RELEASE-FIRST-1');
-        $second = $this->order('BULK-RELEASE-SECOND', 'BULK-RELEASE-SECOND-1');
-        $this->assign($first, $assignee);
-        $this->assign($second, $assignee);
-
-        $this->actingAs($admin)
-            ->post(route('admin.orders.bulk-actions'), [
-                'action' => OrderBulkActionService::ACTION_RELEASE_ASSIGNMENTS,
-                'representative_ids' => [$first->id, $second->id],
-            ])
-            ->assertRedirect()
-            ->assertSessionHas('success');
-
-        $this->assertDatabaseCount('order_group_assignments', 0);
-        $this->assertSame('new', $first->fresh()->status);
-        $this->assertSame('new', $second->fresh()->status);
-        $this->assertSame(2, AdminActivityLog::query()->where('action', 'order.assignment_released')->count());
-    }
-
-    public function test_admin_can_change_status_and_release_assignments_in_one_action(): void
-    {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $assignee = User::factory()->create(['role' => 'admin']);
-        $first = $this->order('BULK-COMBINED-FIRST', 'BULK-COMBINED-FIRST-1');
-        $second = $this->order('BULK-COMBINED-SECOND', 'BULK-COMBINED-SECOND-1');
-        $this->assign($first, $assignee);
-        $this->assign($second, $assignee);
-
-        $this->actingAs($admin)
-            ->post(route('admin.orders.bulk-actions'), [
-                'action' => OrderBulkActionService::ACTION_UPDATE_STATUS_AND_RELEASE,
-                'representative_ids' => [$first->id, $second->id],
-                'status' => 'under_review',
-            ])
-            ->assertRedirect()
-            ->assertSessionHas('success');
-
-        $this->assertSame('under_review', $first->fresh()->status);
-        $this->assertSame('under_review', $second->fresh()->status);
-        $this->assertDatabaseCount('order_group_assignments', 0);
+        $order = $this->order('BULK-OLD', 'BULK-OLD');
+        $this->assign($order, $admin);
+        $this->actingAs($admin)->post(route('admin.orders.bulk-actions'), ['action' => 'release_assignments', 'representative_ids' => [$order->id]])->assertStatus(409);
+        $this->assertDatabaseCount('order_group_assignments', 1);
     }
 
     public function test_bulk_actions_enforce_the_specific_status_and_assignment_permissions(): void
@@ -173,7 +135,8 @@ class AdminOrderBulkActionTest extends TestCase
         $this->actingAs($admin)
             ->from(route('admin.orders.index'))
             ->post(route('admin.orders.bulk-actions'), [
-                'action' => OrderBulkActionService::ACTION_RELEASE_ASSIGNMENTS,
+                'action' => OrderBulkActionService::ACTION_UPDATE_STATUS,
+                'status' => 'new_confirmed',
                 'representative_ids' => [],
             ])
             ->assertRedirect(route('admin.orders.index'))

@@ -18,7 +18,7 @@ class CodexSceneRun extends Model
         'waiting_slot' => 'في طابور الانتظار', 'preparing' => 'تجهيز الملفات',
         'queued' => 'جاهزة لبدء Codex', 'running' => 'جاري توليد المشاهد',
         'needs_manual' => 'مشاهد ناقصة — استكمال يدوي بواسطة التيم', 'completed' => 'مكتملة — جاهزة للمعاينة', 'quality_review' => 'تحتاج مراجعة جودة — الصور محفوظة', 'uncertain' => 'تحتاج مراجعة — لن نعيد التوليد تلقائيًا',
-        'stopping' => 'جارٍ الإيقاف', 'stopped' => 'متوقفة',
+        'paused' => 'متوقف بأمان عند نهاية المشهد', 'stopping' => 'جارٍ الإيقاف', 'stopped' => 'متوقفة',
     ];
 
     public const ERRORS = [

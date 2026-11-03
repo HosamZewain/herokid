@@ -8,7 +8,7 @@
             @include('admin.orders._codex-scene-attempts', ['attemptRun' => $codexRun])
             @can('orders.production_prompt.manage')
             @if($codexRun->active_slot)
-                <form method="POST" action="{{ route('admin.orders.codex-scenes.stop',[$order,$codexRun]) }}" class="mt-2">@csrf<button class="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700">إيقاف التوليد والاحتفاظ بالمشاهد</button></form>
+                <a href="#order-automation-controls" class="mt-2 inline-block rounded-lg border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800">التحكم والإيقاف الآمن بعد الصفحة الجارية</a>
             @endif
             @endcan
             @if(count($codexRun->scenes ?? []))
