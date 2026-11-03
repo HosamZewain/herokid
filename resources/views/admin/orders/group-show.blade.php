@@ -158,8 +158,8 @@
                     </div>
                     <div class="flex flex-col gap-2 rounded-xl bg-sky-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between xl:min-w-[22rem]">
                         <div>
-                            <p class="text-xs font-black text-gray-900">مسؤول تنفيذ الطلب</p>
-                            <p class="mt-0.5 text-[11px] font-bold text-gray-500">حدد بوضوح من يعمل على الطلب الآن.</p>
+                            <p class="text-xs font-black text-gray-900">الموظف المسؤول عن الطلب</p>
+                            <p class="mt-0.5 text-[11px] font-bold text-gray-500">مسؤول متابعة الطلب مستقل عن التنفيذ الآلي.</p>
                         </div>
                         @include('admin.orders._assignment-controls', ['group' => $group])
                     </div>
