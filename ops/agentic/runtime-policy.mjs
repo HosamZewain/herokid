@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 export const root = dirname(fileURLToPath(import.meta.url));
 export const version = '0.166.0';
+export const networkProfile = 'private-proxy-v1';
+export const subscriptionProxy = 'http://herokid-autopilot-egress:3128';
 export const disabledFeatures = [
   'shell_tool', 'unified_exec', 'unified_exec_tty', 'shell_snapshot', 'image_generation',
   'view_image', 'apps', 'hooks', 'multi_agent', 'multi_agent_v2', 'code_mode', 'code_mode_host',
@@ -23,6 +25,9 @@ export function isolatedEnvironment(authDirectory, temporaryDirectory) {
   return {
     PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
     CODEX_HOME: authDirectory, TMPDIR: temporaryDirectory, RUST_LOG: 'error',
+    // Fixed trusted egress; orders and the host environment cannot select it.
+    HTTPS_PROXY: subscriptionProxy, HTTP_PROXY: subscriptionProxy,
+    NO_PROXY: '127.0.0.1,localhost',
   };
 }
 

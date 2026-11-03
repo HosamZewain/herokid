@@ -193,12 +193,24 @@ validation blocks common contacts, links and key formats, not all possible PII.
 
 ## Future deployment and rollback proposal — not executed
 
+The current concrete candidate, exact migrations, tested runtime and remaining
+business-rule gate are documented in
+[`autopilot-release-preparation-2026-11-03.ar.md`](autopilot-release-preparation-2026-11-03.ar.md)
+and [`../ops/agentic/deploy/README.md`](../ops/agentic/deploy/README.md).
+The existing `status=delivered` terminal rule above is retained pending the
+owner's clarification of the newer production-approval label; it must not be
+treated as an approved reading of actual customer delivery in the new release.
+
 Revalidate AWS SHA and exact diff; preserve concurrent releases and record a
 private recovery checkpoint. Review the three additive migrations before seeking
 explicit production-migration approval. Install the reviewed Composer lockfile,
 discover packages, preserve all old committed hashed assets and verify the new
 manifest. Keep all three AGENTIC switches off during code deployment. Do not
 restart current production workers for this feature or run blanket deploy.sh.
+Those long-lived workers may initially lack the new after-commit hints; bounded
+reconciliation still observes their changes. Do not claim every-minute freshness
+for the entire backlog. Loading hints later needs a separately scoped graceful
+refresh that preserves in-flight production work.
 
 Observation-only enablement can be reviewed first, with bounded load/freshness
 measurements. Evaluation then requires a separately reviewed runtime container,

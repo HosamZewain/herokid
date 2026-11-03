@@ -4,7 +4,12 @@ Historical Phase 1 evidence through November 2. The latest November 3 owner revi
 HeroKid Auto Pilot memory/activity changes and before/after results are recorded in
 [`autopilot-memory-activity-implementation.md`](autopilot-memory-activity-implementation.md).
 The pending-owner-review statements below describe the earlier v1 only; v2 is now
-owner-approved. Real Codex acceptance and deployment remain unperformed.
+owner-approved. Subsequent real Codex acceptance passed as recorded in
+[`autopilot-real-validation-2026-11-03.md`](autopilot-real-validation-2026-11-03.md).
+Current AWS integration and isolated amd64 acceptance are recorded in
+[`autopilot-release-preparation-2026-11-03.ar.md`](autopilot-release-preparation-2026-11-03.ar.md).
+The earlier unverified-auth statements below are historical. Deployment remains
+unperformed, and the current lifecycle-label conflict is a pending release gate.
 
 Prepared locally, not deployed. Branch `codex/agentic-shadow`, release base
 `683389a1f2071fa997b6fdbb9f6f37fc96f4028b`. Production behavior and ownership stay

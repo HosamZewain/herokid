@@ -11,16 +11,18 @@ use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderItem;
 use App\Models\OrderPaymentEvent;
 use App\Models\OrderPreview;
+use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Models\ProductionProject;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
-use App\Services\OrderAutomation\Process\ProcessProductReview;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\OrderSceneTextService;
+use App\Services\Orders\StaffPreviewInputs;
 use App\Services\RoboDesk\OrderConfirmationService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -67,6 +69,9 @@ class OrderContextBuilder
         $responses = DB::table('order_process_responses')->whereIn('run_id', $runs->pluck('id'))->orderBy('id')->get(['id', 'run_id', 'decision']);
         $latestResponse = $responses->last();
         $manifest = OrderReviewManifest::where('checkout_key', $key)->latest('id')->first();
+        $staffApproval = $manifest ? OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->first() : null;
+        $staffInputs = $manifest ? app(StaffPreviewInputs::class)->recorded($manifest) : [];
+        $control = DB::table('order_automation_controls')->where('checkout_key', $key)->first(['state', 'version']);
         $confirmation = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->latest('id')->first();
         $held = AutomationHandoff::held($key);
         $ownership = app(AutomationAssignment::class)->owns($orders->first(), false);
@@ -76,6 +81,7 @@ class OrderContextBuilder
             'orders' => $orders->map(fn ($o) => ['order_ref' => 'order:'.$o->id, 'status' => $o->status, 'payment_status' => $o->payment_status,
                 'printing_status' => $o->printing_status, 'shipping_status' => $o->shipping_status, 'deleted' => $o->trashed(), 'active' => in_array($o->id, $activeIds, true)])->all(),
             'all_complete' => $activeIds === [], 'hold' => $held, 'automation_owned' => $ownership,
+            'automation_control' => ['state' => $control?->state ?? 'running', 'version' => (int) ($control?->version ?? 0)],
             'assignee_ref' => ($id = DB::table('order_group_assignments')->where('checkout_group_key', $key)->value('assigned_to_user_id')) ? 'staff:'.$id : null,
             'payment' => $payment,
             'confirmation' => ['required' => $live->contains('status', 'new'), 'status' => $confirmation?->status,
@@ -85,7 +91,8 @@ class OrderContextBuilder
             'process_runs' => $runs->map(fn ($r) => ['run_ref' => 'process:'.$r->id, 'status' => $r->status, 'version' => $r->version,
                 'node' => $r->node_id, 'enabled' => (bool) $r->automation?->enabled, 'accepts_new_runs' => (bool) $r->automation?->accepts_new_runs,
                 'deadline_elapsed' => $r->wait_until?->isPast() ?? false])->all(),
-            'review' => ['manifest_ref' => $manifest ? 'manifest:'.$manifest->id : null, 'approved' => (bool) $manifest?->approved_at],
+            'review' => ['manifest_ref' => $manifest ? 'manifest:'.$manifest->id : null, 'approved' => (bool) $manifest?->approved_at,
+                'staff_approval_ref' => $manifest?->approved_at && $staffApproval && hash_equals($manifest->fingerprint, $staffApproval->fingerprint) ? 'staff-approval:'.$staffApproval->id : null],
             'global_uncertain' => CodexSceneRun::where('status', 'uncertain')->exists(),
             'runtime' => ['scenes_enabled' => (bool) config('codex_scenes.enabled'), 'scenes_automatic' => (bool) config('codex_scenes.automatic'),
                 'identity_enabled' => (bool) config('order_process.identity_enabled'), 'products_enabled' => (bool) config('puzzle_automation.enabled'),
@@ -129,7 +136,10 @@ class OrderContextBuilder
                         && $preview && $preview->productGallery?->status === 'active'
                         && ($approvedImage['preview_id'] ?? null) === $preview->id
                         && ($approvedImage['path'] ?? null) === $preview->file_path && $preview->checksum === $generation->checksum
-                        && ($approvedImage['interior_fingerprint'] ?? null) === app(ProcessProductReview::class)->interiorFingerprint($item);
+                        // Reuse the SELECT-only approved template lineage. Media,
+                        // provider and byte-level capture remain executor preflight.
+                        && (app(BookPromptSync::class)->matchesInterior($item, $approvedImage['interior_fingerprint'] ?? '')
+                            || app(BookPromptSync::class)->matchesInterior($item, $staffInputs[(string) $item->id]['interior_fingerprint'] ?? ''));
                     $linked = $item->linked_order_item_id ? OrderItem::with('order')->find($item->linked_order_item_id) : null;
                     $linkedOrder = $linked?->order ?? ($order->story_id ? $order : null);
                     $linkValid = ! $item->linked_order_item_id || ($linked && $linked->item_type === 'story' && $linkedOrder

@@ -26,6 +26,7 @@ use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\WhatsAppConversation;
+use App\Services\Agentic\OrderContextBuilder;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
 use App\Services\CodexScenes\BookPageService;
@@ -510,6 +511,13 @@ class ProductReviewRuntimeTest extends TestCase
         $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasNoErrors();
         $this->assertSame($originalImages, $manifest->fresh()->images);
         $this->assertNotNull($manifest->fresh()->approved_at);
+        $ordersBefore = DB::table('orders')->get()->toJson();
+        $this->partialMock(PuzzleInputs::class)->shouldNotReceive('captureCurrent');
+        $context = app(OrderContextBuilder::class)->build($item->order->checkoutGroupKey());
+        $this->assertNotNull($context['review']['staff_approval_ref']);
+        $this->assertTrue(collect($context['units'])->firstWhere('capability', 'book_interior')['cover_approved']);
+        $this->assertSame($ordersBefore, DB::table('orders')->get()->toJson());
+        $this->app->forgetInstance(PuzzleInputs::class);
         $book = app(BookPageService::class)->start($item->fresh(), $manifest->fresh(), true);
         $this->assertStringContainsString('Refreshed inside 3 pages', $book->snapshot['prompt']);
         $this->assertSame($originalImages[0]['sha256'], $book->snapshot['identity_checksum']);
@@ -685,6 +693,8 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame(3, $part->quantity_per_item);
         $this->assertSame($source->prompt_template, $part->prompt_template);
         $this->assertDatabaseCount('book_prompt_revisions', 1);
+        $context = app(OrderContextBuilder::class)->build($item->order->checkoutGroupKey());
+        $this->assertTrue(collect($context['units'])->firstWhere('capability', 'book_interior')['cover_approved']);
         $this->assertTrue(app(ProcessProductReview::class)->ready($flow->fresh()));
         $this->assertSame($manifestBefore, $manifest->fresh()->getRawOriginal());
         $item->order->updateQuietly(['payment_status' => 'partially_paid', 'paid_amount_cents' => 1]);
@@ -711,6 +721,8 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertNotNull($manifest->fresh()->approved_at);
         $item->productionComponents()->where('production_stage', 'book_interior')->update(['quantity_per_item' => 40]);
         $this->assertFalse(app(BookPromptSync::class)->matchesInterior($item->fresh(), $manifest->images[0]['interior_fingerprint']));
+        $context = app(OrderContextBuilder::class)->build($item->order->checkoutGroupKey());
+        $this->assertFalse(collect($context['units'])->firstWhere('capability', 'book_interior')['cover_approved']);
         $this->expectException(\RuntimeException::class);
         app(ProcessProductReview::class)->ready($flow->fresh());
     }

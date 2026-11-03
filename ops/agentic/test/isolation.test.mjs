@@ -11,6 +11,7 @@ import { configuration, isolatedEnvironment } from '../runtime-policy.mjs';
 import { probeTools } from '../probe-tools.mjs';
 import { createDecisionWorkspace, credentialReferenceIntact, removeDecisionWorkspace } from '../workspace.mjs';
 import { runDecisionStream } from '../decision-stream.mjs';
+import { hasDirectDefaultRoute } from '../network-isolation.mjs';
 
 const mount = (path, mode = 'ro') => `1 0 0:1 / ${path} ${mode} - tmpfs tmpfs ${mode}`;
 const confined = { platform: 'linux', uid: 1000, rootPath: '/opt/herokid-agentic',
@@ -19,20 +20,32 @@ const confined = { platform: 'linux', uid: 1000, rootPath: '/opt/herokid-agentic
 
 test('OS guard refuses privilege, source mounts, host home, writable root and missing auth boundary', () => {
   assert.equal(assessIsolation(confined).verified, true);
+  assert.equal(assessIsolation({...confined, mounts: confined.mounts + '\n' + mount('/usr/sbin/docker-init')}).verified, true);
   for (const change of [{uid: 0}, {platform: 'darwin'}, {status: 'NoNewPrivs:\t0'},
     {mounts: confined.mounts + '\n' + mount('/app')}, {mounts: confined.mounts + '\n' + mount('/root/.codex')},
-    {mounts: confined.mounts.replace('/ ro ', '/ rw ')}, {mounts: mount('/')}]) {
+    {mounts: confined.mounts.replace('/ ro ', '/ rw ')}, {mounts: mount('/')},
+    {mounts: confined.mounts + '\n' + mount('/usr/sbin/docker-init', 'rw')}]) {
     assert.equal(assessIsolation({...confined, ...change}).verified, false);
   }
 });
 test('SDK environment is an explicit allowlist and API authentication cannot substitute', () => {
   process.env.OPENAI_API_KEY = 'synthetic-must-not-inherit'; process.env.APP_KEY = 'synthetic-application-secret';
+  process.env.HTTPS_PROXY = 'http://untrusted.invalid:1234'; process.env.NO_PROXY = '*';
   const env = isolatedEnvironment('/dedicated-auth', '/scratch');
   assert.equal(env.OPENAI_API_KEY, undefined); assert.equal(env.APP_KEY, undefined);
+  assert.equal(env.HTTPS_PROXY, 'http://herokid-autopilot-egress:3128');
+  assert.equal(env.NO_PROXY, '127.0.0.1,localhost');
   assert.equal(configuration.forced_login_method, 'chatgpt');
   assert.equal(isSubscriptionAuth({auth_mode: 'api', OPENAI_API_KEY: 'synthetic'}), false);
   assert.equal(isSubscriptionAuth({auth_mode: 'chatgpt', tokens: {access_token: 'synthetic'}, OPENAI_API_KEY: 'synthetic'}), false);
   assert.equal(isSubscriptionAuth({auth_mode: 'chatgpt', tokens: {access_token: 'synthetic'}}), true);
+});
+test('runtime network guard rejects direct IPv4 and IPv6 routes', () => {
+  const header = 'Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\n';
+  assert.equal(hasDirectDefaultRoute(header + 'eth0 000015AC 00000000 0001 0 0 0 0000FFFF 0 0 0', ''), false);
+  assert.equal(hasDirectDefaultRoute(header + 'eth0 00000000 010015AC 0003 0 0 0 00000000 0 0 0', ''), true);
+  assert.equal(hasDirectDefaultRoute(header, '00000000000000000000000000000000 00 00000000000000000000000000000000 00 fe800000000000000000000000000001 00000400 00000000 00000000 00000003 eth0'), true);
+  assert.equal(hasDirectDefaultRoute(header, '00000000000000000000000000000000 00 00000000000000000000000000000000 00 00000000000000000000000000000000 ffffffff 00000001 00000000 00200200 lo'), false);
 });
 test('pinned CLI accepts the subscription status command and an empty home stays unauthenticated', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'herokid-login-status-'));

@@ -1,0 +1,88 @@
+{
+  "prepared_only": true,
+  "execution_mode": "shadow",
+  "aws_base": "99c0b981a37a4828f5c7fbafe85a96d5d2d574b1",
+  "source_checkpoint": "3f27458ace76703781d3d4ca866e71d864dd04ce",
+  "branch": "codex/autopilot-shadow-release-20261103",
+  "php_before_each_database": {
+    "tests": 435,
+    "assertions": 3348,
+    "databases": [
+      "sqlite",
+      "mysql8.4"
+    ]
+  },
+  "php_after_each_database": {
+    "tests": 496,
+    "assertions": 3866,
+    "databases": [
+      "sqlite",
+      "mysql8.4"
+    ]
+  },
+  "existing_worker_python": 26,
+  "existing_order_frontend": 9,
+  "sdk_cli_node": 15,
+  "hostile_tool_probes": 6,
+  "host_attestation": {
+    "verified": true,
+    "private_network": true,
+    "host_gateway_absent": true,
+    "model_ports_published": false,
+    "model_mounts": [
+      "read_only_dedicated_auth",
+      "private_unix_socket"
+    ],
+    "direct_model_egress": false,
+    "rejected_profiles": [
+      "direct_network",
+      "extra_peer",
+      "app_mount",
+      "writable_auth",
+      "root",
+      "privilege",
+      "published_port",
+      "image_changed",
+      "entrypoint_override",
+      "unbounded_cpu",
+      "automatic_restart"
+    ]
+  },
+  "network": {
+    "direct_paths": {
+      "1.1.1.1": "denied",
+      "169.254.169.254": "denied",
+      "10.0.0.1": "denied"
+    },
+    "forbidden_tunnels": [
+      "example.com:443",
+      "api.openai.com:443",
+      "169.254.169.254:443",
+      "127.0.0.1:443",
+      "chatgpt.com:80",
+      "chatgpt.com.example.com:443"
+    ],
+    "subscription_tunnels": [
+      "chatgpt.com",
+      "auth.openai.com"
+    ],
+    "general_http": "denied",
+    "inference_calls": 0
+  },
+  "subscription_smoke": {
+    "calls": 1,
+    "passed": true,
+    "attempts": 94,
+    "limit": 100,
+    "cairo_day": "2026-11-03",
+    "report_sha256": "ca88f6b18ee0d84968102dda15bb809fe294e6cb54133820f12afada84da80fb"
+  },
+  "pending_gates": [
+    "lifecycle_business_meaning_confirmation",
+    "updated_dataset_if_semantics_change",
+    "scoped_aws_and_migration_approval",
+    "actual_aws_runtime_auth_attestation"
+  ],
+  "decision_image": "sha256:5c2b0057493ca4e8e572a2fced09b56436eefb434e28f0adff6a138ffe3c240d",
+  "egress_image": "sha256:88c0bd91adfdeaca3d13590b928ae201e3f49b3462f882e5d03efbdf99363821"
+}

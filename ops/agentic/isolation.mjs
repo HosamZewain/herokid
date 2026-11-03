@@ -3,12 +3,13 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { root, version, configuration, isolatedEnvironment } from './runtime-policy.mjs';
+import { root, version, configuration, isolatedEnvironment, networkProfile } from './runtime-policy.mjs';
+import { hasDirectDefaultRoute } from './network-isolation.mjs';
 
 export const authDirectory = '/run/agentic-auth';
 export const socketPath = '/run/bridge/decision.sock';
 const allowedWritable = new Set(['/tmp', '/run/bridge', '/dev', '/dev/pts', '/dev/mqueue', '/dev/shm', '/proc', '/proc/interrupts', '/proc/kcore', '/proc/keys', '/proc/latency_stats', '/proc/timer_list']);
-const allowedMounts = new Set(['/', '/tmp', '/run/bridge', authDirectory, '/etc/resolv.conf', '/etc/hosts', '/etc/hostname']);
+const allowedMounts = new Set(['/', '/tmp', '/run/bridge', authDirectory, '/etc/resolv.conf', '/etc/hosts', '/etc/hostname', '/usr/sbin/docker-init']);
 
 export function assessIsolation({ platform, uid, status, mounts, rootPath }) {
   const errors = [];
@@ -30,7 +31,11 @@ export async function verifyIsolation() {
   try {
     const result = assessIsolation({ platform: process.platform, uid: process.getuid?.(), rootPath: root,
       status: await readFile('/proc/self/status', 'utf8'), mounts: await readFile('/proc/self/mountinfo', 'utf8') });
-    return { ...result, digest: createHash('sha256').update(JSON.stringify({ version, configuration, result })).digest('hex') };
+    if (hasDirectDefaultRoute(await readFile('/proc/net/route', 'utf8'), await readFile('/proc/net/ipv6_route', 'utf8'))) {
+      result.verified = false;
+      result.errors.push('DIRECT_NETWORK_ROUTE_FORBIDDEN');
+    }
+    return { ...result, digest: createHash('sha256').update(JSON.stringify({ version, configuration, networkProfile, result })).digest('hex') };
   } catch { return { verified: false, errors: ['ISOLATION_UNVERIFIED'] }; }
 }
 

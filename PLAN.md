@@ -238,6 +238,30 @@ transport complexity that is not necessary for these seven reads.
 
 ## Prepared implementation status
 
+- Release integration on November 3: candidate branch
+  `codex/autopilot-shadow-release-20261103` is based on read-only verified AWS
+  `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`, preserving its assignment permissions,
+  durable pause controls, staff preview approval and book prompt lineage. This is
+  prepared code, not a deployed release. Details and exact gates are in
+  `docs/autopilot-release-preparation-2026-11-03.ar.md`.
+- Before integration, 435 tests / 3,348 assertions passed on each isolated PHP 8.3
+  SQLite and MySQL 8.4 database. After integration, 496 / 3,866 passed on each;
+  existing worker Python 26, order frontend 9 and bridge Node 15 also passed.
+- The amd64 runtime now uses a private, gateway-isolated Docker network and a
+  separate CONNECT-only subscription proxy. Actual Linux hostile-tool probes,
+  network denials and one real subscription decision passed. Cumulative local
+  attempts are 94/100 on November 3 Cairo; the original 87-case score is historical
+  v2 evidence, not a new full benchmark of this candidate.
+- **Business rule confirmation pending:** the current site labels `status=delivered`
+  as production approved, while customer delivery is separately represented by
+  `shipping_status=delivered`. The prior owner-approved terminal rule and v2 labels
+  remain unchanged pending clarification. No observation/evaluation rollout until
+  the meaning, scope, memory and evaluation labels agree. Preserve original reports
+  and create a new version if the rule changes.
+- Docker is not installed on AWS. Runtime installation, the three exact additive
+  migrations, fresh dedicated host authentication and enabling shadow observation
+  require a concrete approved deployment. No production changes have been made.
+
 - November 3 real acceptance: dedicated ChatGPT authentication verified through
   actual inference; **87/87 correct (100%)** on 37 owner-approved checkouts,
   unsafe proposals 0, false waits 0, unevaluated targets 0, unsupported targets 19,

@@ -5,7 +5,7 @@ namespace App\Services\Agentic;
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'autopilot-shadow-policy-v2';
+    public const VERSION = 'autopilot-shadow-policy-v3';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -18,6 +18,15 @@ class CapabilityRegistry
         // Owner clarification: terminal delivery/cancellation precedes old holds.
         if (AutoPilotOrderScope::complete($context)) {
             return [$this->target($context['checkout_ref'], 'checkout', 'completed', null, 'LIFECYCLE_COMPLETE')];
+        }
+        $control = $context['automation_control']['state'] ?? 'running';
+        if ($control !== 'running') {
+            return [$this->target($context['checkout_ref'], 'checkout', in_array($control, ['paused', 'pause_requested'], true) ? 'human_required' : 'escalate', null,
+                match ($control) {
+                    'pause_requested' => 'AUTOMATION_PAUSE_REQUESTED',
+                    'paused' => 'AUTOMATION_PAUSED',
+                    default => 'AUTOMATION_CONTROL_UNCERTAIN',
+                })];
         }
         if ($context['hold']) {
             return [$this->target($context['checkout_ref'], 'checkout', 'human_required', null, 'MANUAL_HOLD')];

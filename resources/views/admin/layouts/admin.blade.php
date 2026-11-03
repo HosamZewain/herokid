@@ -282,7 +282,9 @@
                         @can('order_automation.view')
                             <a href="{{ route('admin.order-automation.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.order-automation.*') ? $activeLink : $idleLink }}">أتمتة الطلبات</a>
                             @can('orders.view')
-                                <a href="{{ route('admin.agentic.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agentic.*') ? $activeLink : $idleLink }}">HeroKid Auto Pilot</a>
+                                @if(! app(\App\Services\Orders\OrderAccess::class)->restricted())
+                                    <a href="{{ route('admin.agentic.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.agentic.*') ? $activeLink : $idleLink }}">HeroKid Auto Pilot</a>
+                                @endif
                             @endcan
                         @endcan
                         @can('studio.settings.manage')

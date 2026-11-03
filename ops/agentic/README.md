@@ -96,12 +96,16 @@ network-disabled synthetic-session acceptance run exercises the exact built-in
 provider configuration and verifies that provider failure leaves the process
 alive, the runtime idle and the decision refused.
 
-Future authenticated runtime needs reviewed outbound HTTPS for official Codex
-subscription endpoints (network-none is the test profile, not an inference
-profile), the same filesystem/process confinement, a private socket volume
-shared only with the dedicated PHP evaluation worker, restrictive socket group,
-and the exact pinned image. Never mount the application or its credentials into
-this container. No such deployment is part of this change.
+The prepared authenticated profile is now in `deploy/compose.yaml`; see
+[`deploy/README.md`](deploy/README.md). It requires Docker 28+, an internal
+gateway-isolated network and a separate proxy allowing CONNECT to the two fixed
+subscription hosts on port 443. The model container has no default route, published
+port or host gateway. The runtime rejects direct IPv4/IPv6 default routes, while
+the host validator checks exact image, launch, mount and network boundaries.
+The SDK environment fixes the proxy and never inherits proxy overrides. Empty-auth
+acceptance and one real subscription inference passed on the amd64 candidate;
+network-none remains useful for synthetic tests. No AWS installation has occurred.
+Never mount application code, credentials or the Docker socket into this runtime.
 
 Official references checked during implementation:
 - [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk)

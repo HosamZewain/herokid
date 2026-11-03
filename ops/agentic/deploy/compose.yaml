@@ -1,0 +1,62 @@
+# Explicitly invoked after reviewed deployment approval. No published ports.
+# Runtime image inputs must be locally loaded, verified sha256 IDs.
+name: herokid-autopilot
+services:
+  egress:
+    image: ${AUTOPILOT_EGRESS_IMAGE:?Set the reviewed sha256 image ID}
+    pull_policy: never
+    user: "13:13"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 0.25
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,uid=13,gid=13,mode=0700"]
+    networks:
+      private:
+        aliases: [herokid-autopilot-egress]
+      outbound: {}
+    restart: "no"
+    init: true
+    stop_grace_period: 5s
+    logging:
+      driver: local
+      options: {max-size: "5m", max-file: "2"}
+  decision:
+    image: ${AUTOPILOT_DECISION_IMAGE:?Set the reviewed sha256 image ID}
+    pull_policy: never
+    user: "${AUTOPILOT_UID:?Dedicated runtime UID required}:${AUTOPILOT_GID:?Private socket group required}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.5
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=128m"]
+    volumes:
+      - type: bind
+        source: ${AUTOPILOT_AUTH_DIR:?Dedicated auth directory required}
+        target: /run/agentic-auth
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${AUTOPILOT_SOCKET_DIR:?Private socket directory required}
+        target: /run/bridge
+        bind: {create_host_path: false}
+    networks: [private]
+    depends_on: [egress]
+    restart: "no"
+    init: true
+    stop_grace_period: 90s
+    logging:
+      driver: local
+      options: {max-size: "5m", max-file: "2"}
+networks:
+  private:
+    internal: true
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  outbound:
+    enable_ipv6: false
