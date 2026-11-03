@@ -262,14 +262,20 @@ class CustomerOrderSelfService
             return 'تم الاحتفاظ بالطلب الجديد وإلغاء الطلب السابق بناءً على اختيارك.';
         }
 
-        $this->assertMergeable($previous['active_orders']);
-        $this->merges->merge(
-            $newOrder,
-            (string) $previous['short_reference'],
-            'دمج اختاره العميل أثناء إنشاء طلب جديد من الموقع.',
-            $request->user(),
-            $request,
-        );
+        try {
+            $this->assertMergeable($previous['active_orders']);
+            $this->merges->merge(
+                $newOrder, (string) $previous['short_reference'],
+                'دمج اختاره العميل أثناء إنشاء طلب جديد من الموقع.',
+                $request->user(), $request, customerCheckout: true,
+            );
+        } catch (ValidationException $error) {
+            // Never relax production locks. Accept the new purchase and leave an
+            // auditable shipping request instead of blocking checkout.
+            app(ShippingMergeReview::class)->request(($previous['active_orders']->first() ?? $previous['orders']->first()), $newOrder, $phone, $request);
+
+            return ShippingMergeReview::MESSAGE;
+        }
 
         return 'تم دمج الطلبين واحتساب مصاريف توصيل واحدة.';
     }
@@ -296,6 +302,7 @@ class CustomerOrderSelfService
             'created_at' => app_datetime($group['created_at'], 'd/m/Y'),
             'can_cancel' => $group['can_cancel'],
             'can_merge' => $group['can_merge'],
+            'can_request_shipping_merge' => $group['active_orders']->isNotEmpty(),
         ];
     }
 

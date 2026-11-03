@@ -146,7 +146,7 @@ class ProcessProductReview
     private function capture(OrderItem $item): array
     {
         try {
-            return app(PuzzleInputs::class)->capture($item);
+            return app(PuzzleInputs::class)->captureCurrent($item);
         } catch (\Throwable) {
             throw new RuntimeException('preview_requires_review');
         }

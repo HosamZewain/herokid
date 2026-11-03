@@ -35,8 +35,9 @@ class OrderGroupMergeService
         string $reason,
         ?User $admin,
         Request $request,
+        bool $customerCheckout = false,
     ): array {
-        return DB::transaction(function () use ($targetRepresentative, $sourceReference, $reason, $admin, $request): array {
+        return DB::transaction(function () use ($targetRepresentative, $sourceReference, $reason, $admin, $request, $customerCheckout): array {
             $targetKey = $targetRepresentative->checkoutGroupKey();
             $sourceKey = $this->resolveGroupKey($sourceReference);
 
@@ -45,6 +46,9 @@ class OrderGroupMergeService
             }
 
             $keys = collect([$targetKey, $sourceKey])->sort()->values();
+            // Confirmation replies lock the event before checkout rows. Match that order.
+            $confirmationEvents = $customerCheckout ? RoboDeskIntegrationEvent::whereIn('checkout_group_key', $keys)
+                ->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get() : collect();
             $locked = Order::query()
                 ->whereIn('checkout_group_key', $keys)
                 ->lockForUpdate()
@@ -57,8 +61,12 @@ class OrderGroupMergeService
                 throw ValidationException::withMessages(['source_reference' => 'تعذر العثور على عمليتي الشراء النشطتين.']);
             }
 
-            app(AutomationAssignment::class)->assertAvailable($targetOrders->first());
-            app(AutomationAssignment::class)->assertAvailable($sourceOrders->first());
+            if ($customerCheckout) {
+                $this->prepareCustomerMerge($targetOrders, $sourceOrders, $confirmationEvents);
+            } else {
+                app(AutomationAssignment::class)->assertAvailable($targetOrders->first());
+                app(AutomationAssignment::class)->assertAvailable($sourceOrders->first());
+            }
             if (AutomationHandoff::held($sourceKey) && ! AutomationHandoff::held($targetKey)) {
                 throw ValidationException::withMessages(['source_reference' => 'استلم الطلب المستهدف يدويًا وأوقف الأوتوميشن عليه قبل دمج طلب متوقف للعمل اليدوي.']);
             }
@@ -116,7 +124,9 @@ class OrderGroupMergeService
             $this->mergeAssignment($targetKey, $sourceKey);
             OrderAdminNote::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
             OrderPaymentProof::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
-            RoboDeskIntegrationEvent::query()->where('checkout_group_key', $sourceKey)->update(['checkout_group_key' => $targetKey]);
+            RoboDeskIntegrationEvent::query()->where('checkout_group_key', $sourceKey)
+                ->when($customerCheckout, fn ($q) => $q->where('event_type', '!=', 'order.pending_confirmation'))
+                ->update(['checkout_group_key' => $targetKey]);
             $this->mergeProductPreviewGallery($targetKey, $sourceKey);
             $this->mergeCustomerWorkflow($targetKey, $sourceKey);
             if ($targetReference && $sourceCheckoutReference) {
@@ -197,6 +207,40 @@ class OrderGroupMergeService
 
             return $this->groups->findByRepresentative($representative->id);
         });
+    }
+
+    /** Customer checkout may replace an unstarted confirmation, never a production reservation. */
+    private function prepareCustomerMerge(Collection $target, Collection $source, Collection $events): void
+    {
+        $targetKey = $target->first()->checkoutGroupKey();
+        $sourceKey = $source->first()->checkoutGroupKey();
+        $keys = [$targetKey, $sourceKey];
+        $orders = $target->concat($source);
+        $reject = fn (string $message) => throw ValidationException::withMessages(['previous_order_action' => $message]);
+        if (config('order_process.confirmation_owner') === 'process'
+            || $orders->contains(fn (Order $o) => ! in_array($o->status, ['new', 'under_review'], true)
+                || ! in_array(OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_PRINTING, $o->printing_status), [null, 'not_started', 'not_required'], true)
+                || ! in_array(OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $o->shipping_status), [null, 'not_ready', 'not_required'], true)
+                || $o->bostaShipments()->exists())
+            || DB::table('order_automation_holds')->whereIn('checkout_key', $keys)->exists()
+            || DB::table('order_automation_controls')->whereIn('checkout_key', $keys)->where('state', '!=', 'running')->exists()
+            || DB::table('order_process_runs')->whereIn('checkout_key', $keys)->exists()
+            || DB::table('codex_scene_runs')->whereIn('checkout_key', $keys)->exists()
+            || DB::table('puzzle_generations')->whereIn('checkout_key', $keys)->exists()
+            || DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->exists()
+            || CheckoutCustomerWorkflow::whereIn('checkout_group_key', $keys)->where('confirmation_status', 'confirmed')->exists()) {
+            $reject('الطلب السابق بدأ تنفيذه أو يحتاج مراجعة الفريق قبل دمجه. يمكنك المتابعة بطلب منفصل أو التواصل معنا لضم الشحن.');
+        }
+        if ($events->contains(fn ($event) => in_array($event->status, ['processing', 'unknown'], true)
+            || ($event->checkout_group_key === $targetKey && ($event->attempts > 0 || $event->status === 'succeeded')))) {
+            $reject('رسالة تأكيد الطلب قيد الإرسال أو التحقق الآن. السلة محفوظة؛ حاول الدمج بعد قليل أو تواصل معنا للمساعدة.');
+        }
+        // Retain original receipt/reference evidence; a late reply must not approve the new contents.
+        foreach ($events->where('checkout_group_key', $sourceKey) as $event) {
+            $payload = $event->payload ?? [];
+            $payload['confirmation']['superseded_by_checkout'] = $targetKey;
+            $event->update(['status' => 'cancelled', 'payload' => $payload, 'last_error' => 'superseded_by_customer_merge']);
+        }
     }
 
     private function mergeProductPreviewGallery(string $targetKey, string $sourceKey): void

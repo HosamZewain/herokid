@@ -9,9 +9,11 @@ use App\Models\OrderAutomationRun;
 use App\Models\OrderIdentityRegeneration;
 use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessRun;
+use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
+use App\Services\CodexScenes\BookPageService;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
@@ -129,19 +131,47 @@ class AutomationHandoff
             }
             $changed = ! hash_equals($hold->fingerprint, $this->fingerprint($rows));
             $confirmedProducts = $rows->isNotEmpty()
-                && $rows->every(fn ($row) => ! $row->story_id && $row->status === 'new_confirmed'
+                && $rows->every(fn ($row) => ! $row->story_id && in_array($row->status, ['new_confirmed', 'preview_uploaded', 'costomer_confirmed', 'pending_team_review', 'delivered'], true)
                     && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready'
                     && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
             $productReturn = $confirmedProducts && $runs->isEmpty();
-            $revisedPreview = $changed && $confirmedProducts && $runs->isNotEmpty();
+            $revisedArtwork = PuzzleGeneration::where('checkout_key', $key)->whereNotNull('requested_by')->where('created_at', '>=', $hold->created_at)->exists();
+            $revisedPreview = ($changed || $revisedArtwork) && $confirmedProducts && $runs->isNotEmpty();
             if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
             }
-            if ($changed && ! $productReturn && ! $revisedPreview) {
+            $approvedBooks = collect();
+            $manifest = OrderReviewManifest::where('checkout_key', $key)->latest('id')->first();
+            $savedRuns = json_decode($hold->runs, true);
+            if ($manifest?->approved_at && ($savedRuns[$manifest->run_id] ?? null) === 'waiting_staff'
+                && $rows->every(fn ($row) => ! $row->story_id && in_array($row->status, ['new_confirmed', 'costomer_confirmed', 'pending_team_review', 'delivered'], true)
+                    && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready')
+                && ! CodexSceneRun::where('checkout_key', $key)->exists()) {
+                $items = $rows->flatMap(fn ($row) => $row->items()->get());
+                if ($items->isNotEmpty() && $items->every(fn ($item) => in_array($item->item_type, ['product', 'product_add_on'], true)
+                    && $item->productionComponents()->where('production_stage', 'book_interior')->exists())) {
+                    try {
+                        foreach ($items as $item) {
+                            app(BookPageService::class)->validatePausedResume($item, $manifest);
+                        }
+                        $approvedBooks = $items;
+                    } catch (ValidationException $error) {
+                        if (! $revisedPreview) {
+                            throw $error;
+                        }
+                        // A changed cover needs a fresh preview, never inherited consent.
+                        // restart() still requires current completed artwork for every item.
+                    }
+                }
+            }
+            if ($changed && ! $productReturn && ! $revisedPreview && $approvedBooks->isEmpty()) {
                 if ($rows->every(fn ($row) => ! $row->story_id) && $rows->contains('status', 'new')) {
                     throw ValidationException::withMessages(['assignment' => 'الطلب المعدّل غير مؤكد. بعد موافقة العميل على البيانات الجديدة، احفظ حالة «طلب جديد مؤكد» لكل عملية الشراء ثم أرجعه للأوتوميشن. البازل وكفر التلوين يبدأان قبل الدفع؛ صفحات التلوين تبدأ بعد اعتماد الكفر وتسجيل دفعة.']);
                 }
                 throw ValidationException::withMessages(['assignment' => 'تغيّرت بيانات الطلب أو هويته أثناء العمل اليدوي؛ لا يمكن استكمال مسار برسائل أو صور قديمة. أكمل يدويًا أو استخدم زر Codex بعد اعتماد الهوية وتسجيل الدفعة.']);
+            }
+            if ($approvedBooks->isNotEmpty()) {
+                $revisedPreview = false;
             }
             if ($productReturn) {
                 app(PuzzleAutomation::class)->refreshUnstartedForReturn($key);
@@ -161,8 +191,8 @@ class AutomationHandoff
                 abort_unless($event && $event->status === 'held', 422, 'تغيّرت محاولة رسالة التأكيد أثناء التوقف.');
                 // A staff-confirmed revised checkout must never consume a reply to
                 // the old order contents. Keep its original send receipt and attempts.
-                $event->update(['status' => ($productReturn || $revisedPreview) ? 'cancelled' : $status]);
-                if (! $productReturn && ! $revisedPreview && $status === 'pending') {
+                $event->update(['status' => ($productReturn || $revisedPreview || $approvedBooks->isNotEmpty()) ? 'cancelled' : $status]);
+                if (! $productReturn && ! $revisedPreview && $approvedBooks->isEmpty() && $status === 'pending') {
                     SendOrderConfirmationJob::dispatch($event->id)->afterCommit();
                 }
             }
@@ -174,6 +204,11 @@ class AutomationHandoff
                     'data' => ['status' => 'new_confirmed', 'actor_id' => $actor->id, 'changed' => $changed], 'status' => 'pending']);
                 AutomationActivity::record($order, 'products_reevaluated', 'إعادة تقييم المنتجات بالبيانات الحالية بعد إرجاع الطلب من الموظف؛ دون إعادة الصور المكتملة أو رسالة التأكيد السابقة.',
                     ['event_id' => $event->id, 'requested_by' => $actor->id, 'changed' => $changed]);
+            }
+            foreach ($approvedBooks as $item) {
+                OrderProcessEvent::create(['event_key' => 'book-resume:'.Str::uuid(), 'type' => 'book_pages_resume',
+                    'order_id' => $item->order_id, 'checkout_key' => $key, 'status' => 'processed',
+                    'data' => ['actor_id' => $actor->id, 'item_id' => $item->id, 'manifest_id' => $manifest->id]]);
             }
             AdminActivityLogger::log('order.automation_resumed', 'إعادة متابعة الطلب إلى Automation بطلب الموظف، دون إعادة الخطوات المكتملة.', $order, ['checkout_group_key' => $key], $actor, $request);
         }, 3);

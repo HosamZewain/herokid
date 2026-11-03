@@ -170,7 +170,7 @@ class PuzzleAutomation
             $unstarted = in_array($run->status, ['queued', 'blocked'], true) && ! $run->started_at
                 && ! $run->provider_request_id && ! $run->output_path && ! $run->attachment_id && ! $run->preview_id;
             try {
-                $fresh = app(PuzzleInputs::class)->capture(OrderItem::findOrFail($run->order_item_id));
+                $fresh = app(PuzzleInputs::class)->capture(OrderItem::findOrFail($run->order_item_id), $run->context['prompt_override'] ?? null);
                 if (! $unstarted) {
                     if (! $run->context || ! hash_equals($run->context['fingerprint'], $fresh['fingerprint'])) {
                         throw new RuntimeException('puzzle_completed_inputs_changed');
@@ -187,7 +187,7 @@ class PuzzleAutomation
                     ['run_id' => $run->id, 'order_item_id' => $run->order_item_id,
                         'old_fingerprint' => $oldFingerprint, 'new_fingerprint' => $fresh['fingerprint']]);
             } catch (Throwable $error) {
-                throw ValidationException::withMessages(['assignment' => 'تعذرت إعادة تقييم بند المنتج #'.$run->order_item_id.': '.$this->safeError($error, 'puzzle_preflight_failed').'. لم تُعَد أي محاولة توليد.']);
+                throw ValidationException::withMessages(['assignment' => 'استخدم زر إعادة التوليد تحت المنتج لتجهيز صورة بالبيانات الحالية قبل الاستئناف. تعذرت إعادة تقييم بند المنتج #'.$run->order_item_id.': '.$this->safeError($error, 'puzzle_preflight_failed').'. لم تُعَد أي محاولة توليد.']);
             }
         }
     }

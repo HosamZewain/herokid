@@ -48,7 +48,11 @@ class ProductPreviewReturn
         $policy->check($definition);
         $contexts = app(ProcessOrderContext::class);
         $snapshot = $contexts->snapshot($contexts->orders($key, true));
-        if (! $contexts->matches($definition, $snapshot)) {
+        // Explicit return accepts already-confirmed product stages; retain the real
+        // status/fingerprint in the new run, and recheck every other enrollment condition.
+        $confirmed = $rows->every(fn ($row) => ! $row->story_id && in_array($row->status, ['new_confirmed', 'preview_uploaded', 'costomer_confirmed', 'pending_team_review', 'delivered'], true)
+            && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready');
+        if (! $confirmed || ! $contexts->matches($definition, array_replace($snapshot, ['status' => 'new_confirmed']))) {
             $deny('أكد بيانات جميع منتجات الطلب المعدّل قبل الإرجاع للأوتوميشن.');
         }
         // Validate all newly added inputs before retiring the old path. Completed
@@ -56,7 +60,7 @@ class ProductPreviewReturn
         try {
             foreach ($rows as $row) {
                 foreach ($row->items()->get() as $item) {
-                    app(PuzzleInputs::class)->capture($item);
+                    app(PuzzleInputs::class)->captureCurrent($item);
                 }
             }
         } catch (\Throwable) {

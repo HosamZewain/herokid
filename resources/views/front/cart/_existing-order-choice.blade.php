@@ -23,8 +23,8 @@
                 <span class="mt-1 block text-xs font-bold text-red-700" data-cancel-choice-note>متاح فقط قبل بدء تنفيذ الطلب السابق وقبل تسجيل أي دفعة.</span>
             </button>
             <button type="button" data-order-choice="merge" class="w-full rounded-2xl border-2 border-emerald-100 bg-emerald-50 p-4 text-right transition hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">
-                <span class="block font-black text-emerald-950">دمج الطلبين واحتساب شحن واحد</span>
-                <span class="mt-1 block text-xs font-bold text-emerald-700" data-merge-choice-note>تُجمع المنتجات في طلب واحد وتُحذف مصاريف الشحن المكررة.</span>
+                <span class="block font-black text-emerald-950">طلب ضم الطلبين في شحنة واحدة</span>
+                <span class="mt-1 block text-xs font-bold text-emerald-700" data-merge-choice-note>إذا لم يبدأ التنفيذ، ندمج الطلبين بشحن واحد. وإلا نقبل طلبك الجديد ونرسل طلب ضم الشحن للفريق للمراجعة قبل تعديل المصاريف.</span>
             </button>
         </div>
     </section>
@@ -94,7 +94,7 @@
                     const cancelButton = dialog.querySelector('[data-order-choice="cancel_previous"]');
                     const mergeButton = dialog.querySelector('[data-order-choice="merge"]');
                     cancelButton.disabled = !selectedOrder.can_cancel;
-                    mergeButton.disabled = !selectedOrder.can_merge;
+                    mergeButton.disabled = !selectedOrder.can_merge && !selectedOrder.can_request_shipping_merge;
                     dialog.classList.remove('hidden');
                     dialog.classList.add('flex');
                 } catch (error) {

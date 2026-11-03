@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderAutomationRun;
 use App\Models\OrderProductPreviewGallery;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderActivityTimelineService;
@@ -18,6 +19,7 @@ use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\OrderWhatsAppMessageService;
 use App\Services\Orders\OrderWorkflowStatusService;
 use App\Services\Orders\RelatedCustomerCheckoutService;
+use App\Services\Orders\ShippingMergeReview;
 use App\Support\OrderPaymentStatus;
 use App\Support\OrderStatusRegistry;
 use App\Support\OrderWorkflowStatus;
@@ -87,7 +89,7 @@ class OrderGroupController extends Controller
         return view('admin.orders.group-show', [
             'group' => $group,
             'automationRuns' => request()->user()->hasPermission('order_automation.view')
-                ? \App\Models\OrderAutomationRun::whereIn('order_id', $group['orders']->pluck('id'))->where('dry_run', false)->latest('id')->limit(20)->get()
+                ? OrderAutomationRun::whereIn('order_id', $group['orders']->pluck('id'))->where('dry_run', false)->latest('id')->limit(20)->get()
                 : collect(),
             'statuses' => $statuses,
             'paymentStatuses' => $paymentStatuses,
@@ -100,6 +102,7 @@ class OrderGroupController extends Controller
             'attachmentOrders' => $attachmentOrders,
             'whatsappMessages' => $whatsapp->messagesForGroup($group),
             'orderAdminNotes' => $adminNotes->notesFor($attachmentTarget),
+            'shippingMergeReviews' => app(ShippingMergeReview::class)->forKey($group['key']),
             'orderActivity' => $activityTimeline->forGroup($group),
             'paymentEvents' => $paymentLedger->forCheckout($group['key']),
             'productPreviewGallery' => $productPreviewGallery,
@@ -108,6 +111,14 @@ class OrderGroupController extends Controller
             'customerRating' => $customerRatings->ratingForGroup($group),
             'ratingWhatsAppAction' => $customerRatings->whatsappActionForGroup($group),
         ]);
+    }
+
+    public function resolveShippingMerge(Request $request, int $representative, int $review)
+    {
+        $data = $request->validate(['resolution' => ['required', 'string', 'min:5', 'max:2000']]);
+        app(ShippingMergeReview::class)->resolve(Order::findOrFail($representative), $review, $data['resolution'], $request);
+
+        return back()->with('success', 'تم حفظ نتيجة مراجعة ضم الشحن.');
     }
 
     public function updateWorkflowStatuses(

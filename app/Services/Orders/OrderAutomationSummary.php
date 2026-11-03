@@ -6,6 +6,7 @@ use App\Models\AdminActivityLog;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderReviewManifest;
+use App\Models\OrderShippingMergeRequest;
 use App\Models\PuzzleGeneration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -57,6 +58,9 @@ class OrderAutomationSummary
         $admissionErrors = AdminActivityLog::where('action', 'order.automation_admission_blocked')->where('subject_type', Order::class)
             ->whereIn('subject_id', $orders->flatten(1)->pluck('id'))->orderBy('id')->get(['subject_id', 'properties', 'created_at'])->keyBy('subject_id');
         $reviews = DB::table('order_payment_reviews')->whereIn('checkout_key', $keys)->where('status', 'pending')->get(['checkout_key', 'updated_at'])->keyBy('checkout_key');
+        $shippingReviews = OrderShippingMergeRequest::where('status', 'pending')
+            ->where(fn ($q) => $q->whereHas('sourceOrder', fn ($q) => $q->whereIn('checkout_group_key', $keys))->orWhereHas('targetOrder', fn ($q) => $q->whereIn('checkout_group_key', $keys)))
+            ->with(['sourceOrder:id,checkout_group_key', 'targetOrder:id,checkout_group_key'])->get();
         foreach ($keys as $key) {
             $rows = $orders->get($key, collect());
             $parts = [];
@@ -70,6 +74,10 @@ class OrderAutomationSummary
             $add = function (string $stage, string $state, string $label, $at, ?string $reason = null, ?int $orderId = null, ?int $done = null, ?int $total = null) use (&$parts, $rows) {
                 $parts[] = compact('stage', 'state', 'label', 'reason', 'done', 'total') + ['at' => (string) $at, 'child' => $rows->firstWhere('id', $orderId)?->child_name];
             };
+            foreach ($shippingReviews->filter(fn ($review) => in_array($key, [$review->sourceOrder?->checkoutGroupKey(), $review->targetOrder?->checkoutGroupKey()], true)) as $review) {
+                $add('team', 'intervention', 'طلب ضم الشحن — بانتظار مراجعة الفريق', $review->updated_at,
+                    'راجع الطلبين والمبلغ النهائي قبل إنشاء البوليصة. طلب الضم لا يغيّر وضع التوليد؛ لم تُخصم رسوم الشحن.');
+            }
             $control = $controls->get($key);
             if ($control && $control->state !== 'running') {
                 $add('control', 'intervention', match ($control->state) {

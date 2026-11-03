@@ -66,7 +66,7 @@ class OrderConfirmationService
 
     public function canSend(RoboDeskIntegrationEvent $event): bool
     {
-        if (AutomationHandoff::held($event->checkout_group_key) || ! $this->ready() || data_get($event->payload, 'confirmation.eligible_at_creation') !== true
+        if (data_get($event->payload, 'confirmation.superseded_by_checkout') || AutomationHandoff::held($event->checkout_group_key) || ! $this->ready() || data_get($event->payload, 'confirmation.eligible_at_creation') !== true
             || $event->order_id <= (int) config('robodesk.confirmation.after_order_id')) {
             return false;
         }
@@ -95,7 +95,7 @@ class OrderConfirmationService
                 return;
             }
             $request = RoboDeskIntegrationEvent::whereKey($request->id)->lockForUpdate()->firstOrFail();
-            if (! $this->ready() || $request->status !== 'succeeded'
+            if (data_get($request->payload, 'confirmation.superseded_by_checkout') || ! $this->ready() || $request->status !== 'succeeded'
                 || data_get($request->payload, 'confirmation.eligible_at_creation') !== true
                 || $request->attempts < 1 || data_get($request->payload, 'customer.phone') !== $phone) {
                 return;

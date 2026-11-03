@@ -6,6 +6,7 @@ use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderPreview;
+use App\Models\OrderProcessEvent;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
 use App\Models\Setting;
@@ -21,6 +22,7 @@ use App\Support\ProductProductionPrompt;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /** Book interiors share the bounded Codex pool, but never a story's identity or unit key. */
@@ -36,19 +38,19 @@ class BookPageService
         return in_array(6, $health['supported_protocols'] ?? [], true);
     }
 
-    private function approvedInputs(OrderItem $item, OrderReviewManifest $manifest): array
+    private function approvedInputs(OrderItem $item, OrderReviewManifest $manifest, bool $pausedResume = false): array
     {
         $item->loadMissing('order', 'productionComponents', 'product.productionComponents');
         if (! $manifest->approved_at || $manifest->checkout_key !== $item->order->checkoutGroupKey()
             || OrderReviewManifest::where('checkout_key', $manifest->checkout_key)->max('id') !== $manifest->id
-            || ! in_array($manifest->run?->status, ['running', 'waiting_staff', 'completed'], true)) {
+            || ! in_array($manifest->run?->status, $pausedResume ? ['paused', 'waiting_staff'] : ['running', 'waiting_staff', 'completed'], true)) {
             throw new RuntimeException('Book approval unavailable');
         }
         $image = collect($manifest->images)->first(fn ($image) => ($image['kind'] ?? '') === 'book_cover' && ($image['item_id'] ?? 0) === $item->id);
         $interior = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');
         $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
         $staffInputs = app(StaffPreviewInputs::class)->recorded($manifest);
-        $currentCover = app(PuzzleInputs::class)->capture($item)['fingerprint'];
+        $currentCover = app(PuzzleInputs::class)->captureCurrent($item)['fingerprint'];
         $currentInterior = app(ProcessProductReview::class)->interiorFingerprint($item);
         if (! $image || ! $interior || ! $generation || $generation->id !== $image['generation_id'] || $generation->status !== 'succeeded'
             || (! hash_equals($image['input_fingerprint'], $currentCover) && ! hash_equals($staffInputs[(string) $item->id]['input_fingerprint'] ?? '', $currentCover))
@@ -74,6 +76,32 @@ class BookPageService
             'prompt' => $interior['prompt'], 'identity_disk' => $image['disk'], 'identity_path' => $image['path'], 'identity_checksum' => $image['sha256']];
     }
 
+    /** Validate actual approved artwork and references before explicitly releasing a manual hold. */
+    public function validatePausedResume(OrderItem $item, OrderReviewManifest $manifest): void
+    {
+        try {
+            $this->approvedInputs($item, $manifest, true);
+        } catch (RuntimeException $e) {
+            throw ValidationException::withMessages(['assignment' => $this->inputFailureReason($e)]);
+        }
+    }
+
+    private function inputFailureReason(RuntimeException $e): string
+    {
+        return match ($e->getMessage()) {
+            'Book approval unavailable' => 'اعتماد الكفر غير صالح للمسار الحالي؛ راجع المعاينة.',
+            'Book inputs changed after approval' => 'تغيرت بيانات الكتاب أو صوره بعد اعتماد الكفر؛ راجع المعاينة الحالية وسجل موافقة العميل عليها قبل التشغيل.',
+            'Book preview revoked' => 'معاينة الكفر سُحبت أو تغيرت؛ يلزم اعتماد المعاينة الحالية.',
+            'Book pages incomplete' => 'برومبت صفحات الكتاب ناقص أو يحتوي متغيرات غير مكتملة؛ راجع برومبت الإنتاج وعدد الصفحات.',
+            'book_story_link_ambiguous' => 'ربط كتاب التلوين بالقصة غير مطابق للطفل؛ راجع المنتج والقصة المرتبطة به.',
+            'book_waiting_linked_story' => 'صفحات التلوين تنتظر اكتمال القصة المرتبطة بالطفل واعتماد هويتها.',
+            'book_story_pages_incomplete' => 'مشاهد القصة المرتبطة غير مكتملة أو عدد صفحات الكتاب أقل منها؛ راجع المشاهد وعدد الصفحات.',
+            'book_story_reference_changed' => 'أحد مراجع القصة المرتبطة تغير أو لم يعد متاحًا؛ راجع مرفقات القصة.',
+            'book_reference_checksum' => 'تعذر التحقق من إحدى صور الطفل أو القصة؛ راجع الصور الأصلية المرفوعة.',
+            default => 'تعذر قراءة مراجع الكتاب حاليًا؛ أعد الفحص، وإذا استمر الخطأ راجع الصور المرفوعة.',
+        };
+    }
+
     public function fingerprint(CodexSceneRun $run): string
     {
         $item = OrderItem::where('order_id', $run->order_id)->findOrFail($run->order_item_id);
@@ -94,7 +122,10 @@ class BookPageService
         }
         $cutoff = Setting::where('key', 'book_approved_enrollment_after')->value('value');
 
-        return $explicit || ($cutoff && $order->statusLogs()->where('status_type', 'order')->where('status', 'delivered')->where('created_at', '>', $cutoff)->exists());
+        $resumed = OrderProcessEvent::where('checkout_key', $order->checkoutGroupKey())->where('type', 'book_pages_resume')
+            ->where('order_id', $order->id)->exists();
+
+        return $explicit || $resumed || ($cutoff && $order->statusLogs()->where('status_type', 'order')->where('status', 'delivered')->where('created_at', '>', $cutoff)->exists());
     }
 
     /** Read-only detail diagnostics, using exactly the admission checks before enqueue. */
@@ -129,12 +160,7 @@ class BookPageService
         try {
             $this->approvedInputs($item, $manifest);
         } catch (RuntimeException $e) {
-            return match ($e->getMessage()) {
-                'Book approval unavailable' => 'اعتماد الكفر غير صالح للمسار الحالي؛ راجع المعاينة.',
-                'Book inputs changed after approval' => 'تغيرت بيانات الكتاب بعد اعتماد الكفر؛ يلزم معاينة واعتماد النسخة الجديدة.',
-                'Book preview revoked' => 'معاينة الكفر سُحبت أو تغيرت؛ يلزم اعتماد المعاينة الحالية.',
-                default => 'مراجع الطفل أو القصة أو صفحات الكتاب تحتاج مراجعة قبل التوليد.',
-            };
+            return $this->inputFailureReason($e);
         }
 
         return null;

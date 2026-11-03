@@ -104,6 +104,7 @@
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
             @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $attachmentTarget])
+            @include('admin.orders._shipping-merge-reviews')
             @if(session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-800">{{ session('success') }}</div>
             @endif
@@ -577,7 +578,8 @@
                             @php
                                 $productOrder = $group['active_orders']->firstWhere('id', (int) $product->order_id);
                                 $productPhotos = $productOrder?->uploaded_photos ?? [];
-                                $productPrompt = ($productProductionPrompts ?? collect())->first(fn ($prompt) => (int) $prompt['item']->id === (int) $product->id);
+                                $productPrompts = ($productProductionPrompts ?? collect())->filter(fn ($prompt) => (int) $prompt['item']->id === (int) $product->id);
+                                $productPrompt = $productPrompts->firstWhere('production_stage', 'book_cover') ?? $productPrompts->first();
                             @endphp
                             <div class="flex h-full flex-col rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
                                 @if(data_get($product->item_snapshot, 'package.name'))<p class="mb-1.5 text-[10px] font-black text-fuchsia-700">ضمن باقة: {{ data_get($product->item_snapshot, 'package.name') }}</p>@endif

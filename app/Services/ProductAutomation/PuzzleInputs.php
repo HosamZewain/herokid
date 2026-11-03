@@ -4,6 +4,7 @@ namespace App\Services\ProductAutomation;
 
 use App\Models\AiModel;
 use App\Models\OrderItem;
+use App\Models\PuzzleGeneration;
 use App\Services\Ai\AiImagePricingService;
 use App\Services\Ai\AiProviderAvailability;
 use App\Services\Orders\AdminOrderGroupService;
@@ -15,6 +16,14 @@ use RuntimeException;
 
 class PuzzleInputs
 {
+    /** Validate current child/product inputs against the explicit latest artwork prompt. */
+    public function captureCurrent(OrderItem $item): array
+    {
+        $latest = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
+
+        return $this->capture($item, $latest?->requested_by ? ($latest->context['prompt_override'] ?? null) : null);
+    }
+
     public function capture(OrderItem $item, ?string $promptOverride = null): array
     {
         $item->loadMissing('order', 'product.productionComponents', 'productionComponents');

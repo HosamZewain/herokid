@@ -423,6 +423,55 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.preview_approved_by_staff', 'user_id' => $admin->id, 'subject_id' => $item->order_id]);
     }
 
+    public function test_approved_book_resumes_after_staff_status_and_payment_changes_without_recreating_preview(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertSessionHasNoErrors();
+        $manifest->refresh();
+        app(AutomationHandoff::class)->take($item->order, $admin, Request::create('/'));
+        $item->order->updateQuietly(['status' => 'delivered', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 20400]);
+        Setting::updateOrCreate(['key' => 'book_approved_enrollment_after'], ['value' => now()->addDay()->toDateTimeString()]);
+        $this->assertFalse(app(BookPageService::class)->statusEligible($item->order->fresh()));
+        app(AutomationHandoff::class)->resume($item->order, $admin, Request::create('/'));
+        $this->assertFalse(AutomationHandoff::held($run->checkout_key));
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $this->assertSame($manifest->approved_at?->toISOString(), $manifest->fresh()->approved_at?->toISOString());
+        $this->assertSame('delivered', $item->order->fresh()->status);
+        app(BookPageService::class)->enroll();
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertDatabaseCount('order_review_manifests', 1);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertSame(20400, $item->order->fresh()->paid_amount_cents);
+        Http::assertSentCount(2);
+    }
+
+    public function test_safe_control_resume_accepts_unchanged_approved_book_but_keeps_changed_child_held(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertSessionHasNoErrors();
+        $control = app(AutomationControl::class);
+        $version = DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version');
+        $control->pause($item->order, $admin, Request::create('/'), $version, 'Synthetic stop');
+        $originalName = $item->order->child_name;
+        $item->order->updateQuietly(['status' => 'delivered', 'child_name' => 'Changed child']);
+        $version = DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version');
+        try {
+            $control->resume($item->order, $admin, Request::create('/'), $version);
+            $this->fail('Changed child cannot use prior cover consent');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('assignment', $e->errors());
+        }
+        $this->assertTrue(AutomationHandoff::held($run->checkout_key));
+        $this->assertTrue(AutomationControl::blocked($run->checkout_key));
+        $item->order->updateQuietly(['child_name' => $originalName, 'payment_status' => 'partially_paid', 'paid_amount_cents' => 100]);
+        $control->resume($item->order, $admin, Request::create('/'), $version);
+        $this->assertFalse(AutomationHandoff::held($run->checkout_key));
+        $this->assertFalse(AutomationControl::blocked($run->checkout_key));
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+    }
+
     public function test_staff_approval_does_not_record_payment_or_generate_unpaid_pages(): void
     {
         [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
@@ -1070,6 +1119,62 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertNull($manifest->fresh()->approved_at);
         $this->assertSame(0, CodexSceneRun::count());
         $this->assertSame(2, OrderAttachment::count());
+        $this->post(route('admin.orders.groups.assignment.automation', $item->order), ['action' => 'resume'])->assertSessionHasNoErrors();
+        $next = OrderProcessRun::latest('id')->first();
+        $this->assertNotSame($run->id, $next->id);
+        app(ProcessRuntime::class)->advance($next->id);
+        $this->send($next);
+        $this->assertNull(OrderReviewManifest::latest('id')->first()->approved_at);
+        $this->assertSame(2, PuzzleGeneration::count());
+    }
+
+    public function test_two_books_with_interior_first_keep_cover_button_and_resume_after_one_child_changes(): void
+    {
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.production_prompt.manage', 'orders.automation.control', 'orders.view_all'])->pluck('id'));
+        $first = $this->book();
+        $second = $this->book();
+        $second->order->updateQuietly(['checkout_group_key' => $first->order->checkoutGroupKey(), 'status' => 'new_confirmed']);
+        foreach ([$first, $second] as $item) {
+            $item->productionComponents()->where('production_stage', 'book_interior')->update(['sort_order' => 0]);
+            $item->productionComponents()->where('production_stage', 'book_cover')->update(['sort_order' => 10]);
+        }
+        $run = $this->enroll($first->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->twice()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        foreach (PuzzleGeneration::all() as $generation) {
+            app(PuzzleAutomation::class)->generate($generation->id);
+        }
+        $retained = PuzzleGeneration::where('order_item_id', $first->id)->sole()->getAttributes();
+        $previous = PuzzleGeneration::where('order_item_id', $second->id)->sole();
+        $this->send($run);
+        $manifest = OrderReviewManifest::sole()->getAttributes();
+        $this->actingAs($this->actor->fresh());
+        $this->post(route('admin.orders.groups.assignment.automation', $first->order), ['action' => 'take'])->assertSessionHasNoErrors();
+        $second->order->updateQuietly(['child_name' => 'Different child', 'uploaded_photos' => ['child-photos/new-child.png']]);
+        Storage::disk('s3_private')->put('child-photos/new-child.png', $this->png(3));
+        $this->get(route('admin.orders.groups.show', $first->order))->assertOk()->assertSee('إعادة توليد الكفر')
+            ->assertSee(route('admin.orders.products.regenerate', [$second->order, $second]), false);
+        $this->post(route('admin.orders.products.regenerate', [$second->order, $second]), ['previous_run_id' => $previous->id, 'confirm' => 1,
+            'prompt' => 'New colorful cover for Different child with exact current identity'])->assertSessionHasNoErrors();
+        $new = PuzzleGeneration::latest('id')->first();
+        $this->assertSame($second->id, $new->order_item_id);
+        $this->assertSame('Different child', $new->context['child_identity']['child_name']);
+        $this->assertSame('child-photos/new-child.png', $new->context['photos'][0]['path']);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->andReturn(new GptImageResult($this->png(4), 'png', 'image/png', 'synthetic-new', [], []));
+        app(PuzzleAutomation::class)->generate($new->id);
+        $this->assertSame('succeeded', $new->fresh()->status);
+        $this->post(route('admin.orders.groups.assignment.automation', $first->order), ['action' => 'resume'])->assertSessionHasNoErrors();
+        $next = OrderProcessRun::latest('id')->first();
+        $this->assertNotSame($run->id, $next->id);
+        app(ProcessRuntime::class)->advance($next->id);
+        $this->assertSame('waiting_identity', $next->fresh()->status, $next->fresh()->error_code ?? '');
+        $this->assertSame($retained, PuzzleGeneration::find($retained['id'])->getAttributes());
+        $this->assertDatabaseCount('puzzle_generations', 3);
+        $this->send($next);
+        $this->assertSame($manifest, OrderReviewManifest::find($manifest['id'])->getAttributes());
+        $this->assertNull(OrderReviewManifest::latest('id')->first()->approved_at);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
     }
 
     private function generatedPreview(): array

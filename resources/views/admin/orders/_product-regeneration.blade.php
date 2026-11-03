@@ -17,7 +17,7 @@
                 <details class="my-3"><summary class="cursor-pointer font-bold">تعديل برومبت إعادة التوليد</summary>
                     <textarea name="prompt" rows="10" minlength="20" maxlength="65000" dir="auto" class="mt-2 w-full rounded-xl border-gray-300 font-mono text-sm">{{ $regenerationPrompt['prompt'] ?? '' }}</textarea>
                 </details>
-                <button type="submit" name="confirm" value="1" class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">إعادة التوليد</button>
+                <button type="submit" name="confirm" value="1" class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">{{ ($productPrompt['production_stage'] ?? '') === 'book_cover' ? 'إعادة توليد الكفر' : 'إعادة التوليد' }}</button>
             </form>
         @else
             <p class="mt-2 text-xs">إعادة التوليد غير متاحة أثناء التنفيذ أو قبل مراجعة نتيجة غير مؤكدة.</p>

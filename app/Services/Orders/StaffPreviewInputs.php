@@ -26,7 +26,7 @@ class StaffPreviewInputs
             if ($generation->id !== $image['generation_id'] || $generation->status !== 'succeeded') {
                 throw new RuntimeException('Preview changed');
             }
-            $current = app(PuzzleInputs::class)->capture($item);
+            $current = app(PuzzleInputs::class)->captureCurrent($item);
             // Existing image may be explicitly accepted after a TEMPLATE edit.
             // Personalization, references, purchased variant and model/artwork
             // contract must still be identical. Never treat a changed child as a template edit.

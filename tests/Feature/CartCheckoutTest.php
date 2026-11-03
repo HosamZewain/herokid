@@ -6,15 +6,20 @@ use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\MetaConversionEvent;
 use App\Models\Order;
+use App\Models\RoboDeskConversationSetting;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\VisitorCart;
 use App\Services\Cart\CartTrackingService;
+use App\Services\Catalog\CustomerKnowledge;
+use App\Services\Orders\AutomationAssignment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -25,7 +30,7 @@ class CartCheckoutTest extends TestCase
     public function test_process_outbox_records_one_completed_web_checkout(): void
     {
         Http::preventStrayRequests();
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
         config(['order_process.enabled' => true, 'order_process.after_order_id' => 0, 'order_process.confirmation_owner' => 'process']);
         $this->test_checkout_keeps_independent_story_languages_and_correct_scene_text();
         $this->assertDatabaseCount('order_process_events', 1);
@@ -324,9 +329,9 @@ class CartCheckoutTest extends TestCase
             ->assertSee('يرجى إدخال عمر الطفل')
             ->assertSee('يرجى اختيار جنس الطفل')
             ->assertSee('يرجى رفع صورتين واضحتين للطفل على الأقل')
-            ->assertSee('اختيار '.\App\Services\Catalog\CustomerKnowledge::photoCount())
+            ->assertSee('اختيار '.CustomerKnowledge::photoCount())
             ->assertSee('لم يتم اختيار صور')
-            ->assertSee('ارفع '.\App\Services\Catalog\CustomerKnowledge::photoCount().' واضحة للوجه')
+            ->assertSee('ارفع '.CustomerKnowledge::photoCount().' واضحة للوجه')
             ->assertDontSee('صورتان مطلوبتان، والصورة الثالثة اختيارية')
             ->assertDontSee('تقبل صور JPG وPNG وWebP وHEIC/HEIF')
             ->assertDontSee('سيتم رفع كل صورة وحدها قبل إرسال الطلب')
@@ -393,7 +398,7 @@ class CartCheckoutTest extends TestCase
         $this->get(route('stories.show', $story->slug))
             ->assertOk()
             ->assertSee('صيغة الصورة غير مدعومة')
-            ->assertSee('اختيار '.\App\Services\Catalog\CustomerKnowledge::photoCount());
+            ->assertSee('اختيار '.CustomerKnowledge::photoCount());
     }
 
     public function test_story_cart_accepts_mobile_image_formats_up_to_15_mb_each(): void
@@ -1044,6 +1049,67 @@ class CartCheckoutTest extends TestCase
         $cart->activities()->update(['created_at' => now()->subDays(70)]);
         $result = app(CartTrackingService::class)->maintainStatuses(abandonedAfterMinutes: 360, retentionDays: 60);
         $this->assertGreaterThanOrEqual(1, $result['deletedActivities']);
+    }
+
+    public function test_website_checkout_merges_while_both_orders_are_reserved_for_confirmation(): void
+    {
+        Storage::fake('local');
+        Http::preventStrayRequests();
+        Queue::fake();
+        config(['queue.default' => 'redis', 'order_process.confirmation_owner' => 'legacy', 'robodesk.confirmation.enabled' => true,
+            'robodesk.confirmation.contract_ready' => true, 'robodesk.confirmation.after_order_id' => 0,
+            'robodesk.confirmation.audience' => 'all_new', 'robodesk.confirmation_only' => true]);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only']);
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $cairo->update(['delivery_fee' => 40]);
+        $story = $this->story('merge-story', 'قصة اختبار', 100);
+        $payload = ['parent_name' => 'Synthetic parent', 'phone' => '01000000000', 'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id, 'city' => 'Nasr City', 'street' => 'Synthetic street', 'address_details' => 'Synthetic building'];
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('الطفلة الأولى', 'الرسم'))->assertRedirect();
+        $this->post(route('checkout.store'), $payload)->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+        $previous = Order::sole();
+        $this->assertTrue(app(AutomationAssignment::class)->owns($previous));
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('الطفلة الثانية', 'القراءة'))->assertRedirect();
+        $this->post(route('checkout.store'), $payload + ['previous_order_action' => 'merge',
+            'previous_order_reference' => $previous->checkoutReference->short_reference])->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('orders', 2);
+        $this->assertSame(1, Order::distinct()->count('checkout_group_key'));
+        $this->assertSame(240.0, (float) data_get($previous->fresh()->delivery_details, 'total'));
+        $this->assertDatabaseCount('order_group_merge_aliases', 1);
+        $this->assertSame(1, RoboDeskIntegrationEvent::where('event_type', 'order.pending_confirmation')->where('status', 'pending')->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_website_checkout_accepts_shipping_review_after_previous_preview(): void
+    {
+        Storage::fake('local');
+        Http::preventStrayRequests();
+        Queue::fake();
+        config(['queue.default' => 'redis', 'order_process.confirmation_owner' => 'legacy', 'robodesk.confirmation.enabled' => true,
+            'robodesk.confirmation.contract_ready' => true, 'robodesk.confirmation.after_order_id' => 0,
+            'robodesk.confirmation.audience' => 'all_new', 'robodesk.confirmation_only' => true]);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only']);
+        $egypt = DeliveryCountry::where('code', 'EG')->firstOrFail();
+        $cairo = DeliveryGovernorate::where('delivery_country_id', $egypt->id)->where('name', 'القاهرة')->firstOrFail();
+        $cairo->update(['delivery_fee' => 40]);
+        $story = $this->story('merge-story', 'قصة اختبار', 100);
+        $payload = ['parent_name' => 'Synthetic parent', 'phone' => '01000000000', 'delivery_country_id' => $egypt->id,
+            'delivery_governorate_id' => $cairo->id, 'city' => 'Nasr City', 'street' => 'Synthetic street', 'address_details' => 'Synthetic building'];
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('الطفلة الأولى', 'الرسم'))->assertRedirect();
+        $this->post(route('checkout.store'), $payload)->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+        $previous = Order::sole();
+        $previous->updateQuietly(['status' => 'preview_uploaded']);
+        $before = $previous->getAttributes();
+        $this->post(route('cart.store', $story->slug), $this->cartPayload('الطفلة الثانية', 'القراءة'))->assertRedirect();
+        $this->post(route('checkout.store'), $payload + ['previous_order_action' => 'merge',
+            'previous_order_reference' => $previous->checkoutReference->short_reference])->assertRedirect(route('checkout.success'))->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('orders', 2);
+        $this->assertSame(2, Order::distinct()->count('checkout_group_key'));
+        $this->assertSame($before, $previous->fresh()->getAttributes());
+        $this->assertDatabaseCount('order_shipping_merge_requests', 1);
+        $this->get(route('checkout.success'))->assertOk()->assertSee('تسجيل طلب ضم الشحن للفريق')->assertSee('لم تُخصم مصاريف الشحن');
+        Http::assertNothingSent();
     }
 
     private function story(string $slug, string $title, int $price): Story

@@ -2,12 +2,32 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendOrderConfirmationJob;
+use App\Models\CodexSceneRun;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
+use App\Models\OrderShippingMergeRequest;
+use App\Models\Permission;
+use App\Models\RoboDeskConversationSetting;
+use App\Models\RoboDeskIntegrationEvent;
+use App\Models\User;
+use App\Models\WhatsAppConversation;
+use App\Models\WhatsAppConversationMessage;
+use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\CustomerOrderSelfService;
+use App\Services\Orders\OrderAutomationSummary;
+use App\Services\RoboDesk\OrderConfirmationService;
+use App\Services\RoboDesk\OrderConfirmationTransport;
+use App\Services\RoboDesk\RoboDeskOutbox;
+use App\Support\OrderStatusRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CustomerOrderSelfServiceTest extends TestCase
@@ -130,7 +150,7 @@ class CustomerOrderSelfServiceTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'orders')
             ->assertJsonPath('orders.0.reference', $active->checkoutReference->short_reference)
-            ->assertJsonPath('orders.0.status_label', 'طلب جديد')
+            ->assertJsonPath('orders.0.status_label', OrderStatusRegistry::label('order', 'new'))
             ->assertJsonPath('orders.0.can_cancel', true)
             ->assertJsonPath('orders.0.can_merge', true);
     }
@@ -155,6 +175,155 @@ class CustomerOrderSelfServiceTest extends TestCase
         $this->assertStringContainsString('تم دمج الطلبين', $message);
         $this->assertSame([$newKey], Order::query()->pluck('checkout_group_key')->unique()->values()->all());
         $this->assertSame(45_000, (int) data_get($new->fresh()->delivery_details, 'total') * 100);
+    }
+
+    private function enableConfirmations(): void
+    {
+        Queue::fake();
+        Http::preventStrayRequests();
+        config(['queue.default' => 'redis', 'order_process.confirmation_owner' => 'legacy',
+            'robodesk.confirmation.enabled' => true, 'robodesk.confirmation.contract_ready' => true,
+            'robodesk.confirmation.after_order_id' => 0, 'robodesk.confirmation.audience' => 'all_new', 'robodesk.confirmation_only' => true]);
+        RoboDeskConversationSetting::create(['id' => 1, 'enabled' => true, 'email' => 'synthetic@example.test', 'password' => 'test-only', 'conversation_limit' => 50]);
+    }
+
+    private function mergeCustomer(Order $new, Order $previous): void
+    {
+        $request = Request::create('/checkout', 'POST');
+        $request->setLaravelSession($this->app['session.store']);
+        app(CustomerOrderSelfService::class)->applyCheckoutDecision($request, $new, 'merge', $previous->checkoutReference->short_reference, '01012345678');
+    }
+
+    public function test_customer_can_merge_confirmation_only_and_only_new_combined_confirmation_is_sent(): void
+    {
+        $this->enableConfirmations();
+        $previous = $this->order('CONFIRM-OLD', '01012345678');
+        $new = $this->order('CONFIRM-NEW', '01012345678');
+        $old = RoboDeskIntegrationEvent::where('checkout_group_key', $previous->checkoutGroupKey())->where('event_type', 'order.pending_confirmation')->firstOrFail();
+        $old->update(['status' => 'succeeded', 'attempts' => 1, 'response_payload' => ['message_id' => 'old-wamid']]);
+        $current = RoboDeskIntegrationEvent::where('checkout_group_key', $new->checkoutGroupKey())->where('event_type', 'order.pending_confirmation')->firstOrFail();
+        $this->assertTrue(app(AutomationAssignment::class)->owns($previous));
+        $this->assertTrue(app(AutomationAssignment::class)->owns($new));
+        $this->mergeCustomer($new, $previous);
+        $this->assertSame($new->checkoutGroupKey(), $previous->fresh()->checkoutGroupKey());
+        $this->assertSame('cancelled', $old->fresh()->status);
+        $this->assertSame('CHK-CUSTOMER-CONFIRM-OLD', $old->fresh()->checkout_group_key);
+        $this->assertSame('old-wamid', $old->fresh()->response_payload['message_id']);
+        $this->assertSame($new->checkoutGroupKey(), data_get($old->fresh()->payload, 'confirmation.superseded_by_checkout'));
+        $this->assertFalse(app(OrderConfirmationService::class)->canSend($old->fresh()));
+        $conversation = WhatsAppConversation::create(['account_key' => 'primary', 'phone_hash' => hash('sha256', '+201012345678'), 'phone' => '+201012345678']);
+        $reply = WhatsAppConversationMessage::create(['conversation_id' => $conversation->id, 'remote_hash' => hash('sha256', 'late-reply'),
+            'remote_id' => 'late-reply', 'direction' => 'inbound', 'kind' => 'text', 'body' => 'تأكيد الطلب', 'sent_at' => now(), 'fingerprint' => str_repeat('b', 64)]);
+        app(OrderConfirmationService::class)->confirmPolledMessage($old->fresh(), $reply, '201012345678', 'reply');
+        $this->assertNull($reply->fresh()->confirmation_event_id);
+        $this->assertSame('new', $previous->fresh()->status);
+
+        $this->mock(OrderConfirmationTransport::class, function ($mock) use ($new) {
+            $mock->shouldReceive('send')->once()->withArgs(fn ($data) => $data['checkout_reference'] === $new->checkoutGroupKey()
+                && count($data['order_numbers']) === 2 && $data['amounts']['delivery'] === 50 && $data['amounts']['total'] === 450)
+                ->andReturn(['message_id' => 'combined-wamid', 'interaction_id' => 'synthetic']);
+        });
+        app()->call([new SendOrderConfirmationJob($old->id), 'handle']);
+        app()->call([new SendOrderConfirmationJob($current->id), 'handle']);
+        app()->call([new SendOrderConfirmationJob($current->id), 'handle']);
+        $this->assertSame('succeeded', $current->fresh()->status);
+        $this->assertSame(0, $new->fresh()->paid_amount_cents);
+        $this->assertSame('new', $previous->fresh()->status);
+    }
+
+    public function test_pending_old_confirmation_is_retired_and_cannot_be_released_after_customer_merge(): void
+    {
+        $this->enableConfirmations();
+        $previous = $this->order('PENDING-OLD', '01012345678');
+        $new = $this->order('PENDING-NEW', '01012345678');
+        $old = RoboDeskIntegrationEvent::where('checkout_group_key', $previous->checkoutGroupKey())->where('event_type', 'order.pending_confirmation')->firstOrFail();
+        $this->mergeCustomer($new, $previous);
+        $this->assertSame('cancelled', $old->fresh()->status);
+        try {
+            app(RoboDeskOutbox::class)->release($old->fresh());
+            $this->fail('A retired confirmation must not be re-sent');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+        }
+    }
+
+    public function test_customer_merge_does_not_touch_inflight_or_uncertain_confirmation(): void
+    {
+        $this->enableConfirmations();
+        foreach (['processing', 'unknown'] as $status) {
+            $previous = $this->order('BUSY-OLD-'.$status, '01012345678');
+            $new = $this->order('BUSY-NEW-'.$status, '01012345678');
+            $old = RoboDeskIntegrationEvent::where('checkout_group_key', $previous->checkoutGroupKey())->where('event_type', 'order.pending_confirmation')->firstOrFail();
+            $old->update(['status' => $status, 'attempts' => 1]);
+            $this->mergeCustomer($new, $previous);
+            $this->assertDatabaseHas('order_shipping_merge_requests', ['target_order_id' => $new->id, 'source_order_id' => $previous->id, 'status' => 'pending']);
+            $this->assertSame($status, $old->fresh()->status);
+            $this->assertNotSame($new->checkoutGroupKey(), $previous->fresh()->checkoutGroupKey());
+        }
+        $this->assertDatabaseCount('order_group_merge_aliases', 0);
+    }
+
+    public function test_customer_merge_does_not_bypass_production_reservation_or_different_customer(): void
+    {
+        $this->enableConfirmations();
+        $previous = $this->order('WORK-OLD', '01012345678');
+        $new = $this->order('WORK-NEW', '01012345678');
+        CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $previous->id,
+            'checkout_key' => $previous->checkoutGroupKey(), 'production_kind' => 'story', 'scene_count' => 13,
+            'status' => 'running', 'previous_status' => 'new_confirmed', 'active_slot' => 1, 'source' => 'automatic', 'protocol' => 1, 'snapshot' => [], 'fingerprint' => str_repeat('a', 64)]);
+        $this->mergeCustomer($new, $previous);
+        $this->assertDatabaseHas('order_shipping_merge_requests', ['target_order_id' => $new->id, 'status' => 'pending']);
+        $this->assertSame('running', CodexSceneRun::sole()->status);
+        $this->assertDatabaseCount('order_group_merge_aliases', 0);
+        $this->assertNotSame($new->checkoutGroupKey(), $previous->fresh()->checkoutGroupKey());
+        $other = $this->order('OTHER', '01199999999');
+        try {
+            $this->mergeCustomer($new, $other);
+            $this->fail('Different customer must remain inaccessible');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('previous_order_action', $e->errors());
+        }
+    }
+
+    public function test_progressed_checkout_accepts_new_order_with_auditable_shipping_review_and_keeps_prices(): void
+    {
+        $this->enableConfirmations();
+        Http::preventStrayRequests();
+        Queue::fake();
+        $previous = $this->order('PREVIEW-OLD', '01012345678', 'preview_uploaded');
+        $new = $this->order('PREVIEW-NEW', '01012345678');
+        $before = $previous->getAttributes();
+        $this->post(route('checkout.active-orders'), ['phone' => '01012345678'])->assertOk()->assertJsonFragment(['can_request_shipping_merge' => true]);
+        $this->mergeCustomer($new, $previous);
+        $this->mergeCustomer($new, $previous);
+        $review = OrderShippingMergeRequest::sole();
+        $this->assertSame($before, $previous->fresh()->getAttributes());
+        $this->assertSame(50, data_get($new->fresh()->delivery_details, 'delivery_fee'));
+        $this->assertDatabaseCount('order_admin_notes', 2);
+        $this->assertDatabaseCount('order_group_merge_aliases', 0);
+        $summary = app(OrderAutomationSummary::class)->forKeys([$previous->checkoutGroupKey(), $new->checkoutGroupKey()]);
+        foreach ($summary as $row) {
+            $this->assertStringContainsString('ضم الشحن', json_encode($row, JSON_UNESCAPED_UNICODE));
+        }
+        $actor = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.view_all'])->pluck('id'));
+        $this->actingAs($actor);
+        $this->get(route('admin.orders.groups.show', $new))->assertOk()->assertSee('طلب العميل ضم الشحن')->assertSee($previous->checkoutReference->short_reference);
+        $url = route('admin.orders.groups.shipping-merge.resolve', [$new, $review]);
+        $this->post($url, ['resolution' => ''])->assertSessionHasErrors('resolution');
+        $this->assertSame('pending', $review->fresh()->status);
+        $unrelated = $this->order('UNRELATED-REVIEW', '01199999999');
+        $this->post(route('admin.orders.groups.shipping-merge.resolve', [$unrelated, $review]), ['resolution' => 'يجب ألا يسمح بهذا'])->assertNotFound();
+        $actor->permissions()->detach(Permission::where('key', 'orders.view_all')->value('id'));
+        $this->actingAs($actor->fresh());
+        $this->post($url, ['resolution' => 'قرار بدون صلاحية'])->assertForbidden();
+        $actor->permissions()->attach(Permission::where('key', 'orders.view_all')->value('id'));
+        $this->actingAs($actor->fresh());
+        $this->post($url, ['resolution' => 'تم التواصل مع العميل وتأكيد الشحن منفصلًا'])->assertSessionHasNoErrors();
+        $this->assertSame('resolved', $review->fresh()->status);
+        $this->assertSame($actor->id, $review->fresh()->resolved_by);
+        $this->assertSame(50, data_get($new->fresh()->delivery_details, 'delivery_fee'));
+        Http::assertNothingSent();
     }
 
     private function order(
