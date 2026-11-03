@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessIsolation, isSubscriptionAuth } from '../isolation.mjs';
+import { assessIsolation, isSubscriptionAuth, isSubscriptionStatus, subscriptionStatusArguments } from '../isolation.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { consumeDecision, DecisionRuntime } from '../runtime.mjs';
 import { configuration, isolatedEnvironment } from '../runtime-policy.mjs';
 import { probeTools } from '../probe-tools.mjs';
@@ -26,6 +31,32 @@ test('SDK environment is an explicit allowlist and API authentication cannot sub
   assert.equal(isSubscriptionAuth({auth_mode: 'api', OPENAI_API_KEY: 'synthetic'}), false);
   assert.equal(isSubscriptionAuth({auth_mode: 'chatgpt', tokens: {access_token: 'synthetic'}, OPENAI_API_KEY: 'synthetic'}), false);
   assert.equal(isSubscriptionAuth({auth_mode: 'chatgpt', tokens: {access_token: 'synthetic'}}), true);
+});
+test('pinned CLI accepts the subscription status command and an empty home stays unauthenticated', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'herokid-login-status-'));
+  try {
+    const execute = promisify(execFile);
+    const options = {env: isolatedEnvironment(directory, tmpdir()), timeout: 5000};
+    const help = await execute(process.execPath, [...subscriptionStatusArguments(), '--help'], options);
+    assert.match(help.stdout, /Show login status/);
+    await assert.rejects(execute(process.execPath, subscriptionStatusArguments(), options), error => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /Not logged in/);
+      assert.equal(isSubscriptionStatus(error), false);
+      return true;
+    });
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+test('subscription status admits only its exact read-only helper warning and ChatGPT status', () => {
+  const status = 'Logged in using ChatGPT';
+  const warning = 'WARNING: proceeding, even though we could not create PATH aliases: Read-only file system (os error 30)';
+  for (const result of [{stdout: '', stderr: status}, {stdout: status, stderr: warning}, {stdout: '', stderr: `${warning}\n${status}`}]) {
+    assert.equal(isSubscriptionStatus(result), true);
+  }
+  for (const stderr of ['', 'Not logged in', 'Logged in using an API key', `${status}\nError loading configuration`,
+    `${warning}\n${warning}\n${status}`, `${status}\nWARNING: unknown auth warning`, `${status}\n${status}`]) {
+    assert.equal(isSubscriptionStatus({stdout: '', stderr}), false);
+  }
 });
 test('tool/file/network events fail closed even if followed by a valid answer', async () => {
   for (const type of ['command_execution', 'file_change', 'mcp_tool_call', 'web_search', 'unknown_new_tool']) {

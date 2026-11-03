@@ -38,6 +38,22 @@ export function isSubscriptionAuth(value) {
   return value?.auth_mode === 'chatgpt' && ! value.OPENAI_API_KEY && typeof value.tokens?.access_token === 'string' && value.tokens.access_token.length > 0;
 }
 
+export function subscriptionStatusArguments() {
+  // --ignore-user-config belongs to `exec`, not `login`. This separate login
+  // check has an allowlisted environment and a home containing only auth.json.
+  return [resolve(root, 'node_modules/@openai/codex/bin/codex.js'),
+    '-c', 'forced_login_method="chatgpt"', '-c', 'cli_auth_credentials_store="file"', 'login', 'status'];
+}
+
+export function isSubscriptionStatus(result) {
+  // The pinned CLI attempts PATH-helper setup before `login status`. Denying
+  // that write is intentional; admit this exact warning, never arbitrary stderr.
+  const readOnlyWarning = 'WARNING: proceeding, even though we could not create PATH aliases: Read-only file system (os error 30)';
+  const lines = `${result.stdout}\n${result.stderr}`.trim().split('\n').map(line => line.trim()).filter(Boolean);
+  if (lines.filter(line => line === readOnlyWarning).length > 1) return false;
+  return lines.filter(line => line !== readOnlyWarning).join('\n') === 'Logged in using ChatGPT';
+}
+
 export async function verifyAuthentication() {
   try {
     // Only this dedicated credential directory is admitted; never the desktop home.
@@ -45,8 +61,8 @@ export async function verifyAuthentication() {
     if (files.length !== 1 || files[0] !== 'auth.json') return false;
     if (! isSubscriptionAuth(JSON.parse(await readFile(`${authDirectory}/auth.json`, 'utf8')))) return false;
     const result = await promisify(execFile)(process.execPath,
-      [resolve(root, 'node_modules/@openai/codex/bin/codex.js'), '--ignore-user-config', '-c', 'forced_login_method="chatgpt"', 'login', 'status'],
+      subscriptionStatusArguments(),
       { env: isolatedEnvironment(authDirectory, '/tmp'), timeout: 5000, maxBuffer: 8192 });
-    return `${result.stdout}\n${result.stderr}`.trim() === 'Logged in using ChatGPT';
+    return isSubscriptionStatus(result);
   } catch { return false; }
 }

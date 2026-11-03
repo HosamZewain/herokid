@@ -96,4 +96,61 @@ class AgenticEvaluationTest extends TestCase
         $this->assertSame(0, $report['unsafe_proposals']);
         $this->assertFalse($report['accuracy_gate_met']);
     }
+
+    public function test_provider_failure_stops_calls_and_keeps_all_remaining_targets_visible(): void
+    {
+        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v2.json')), true);
+        $provider = new class extends MockProvider
+        {
+            public int $calls = 0;
+
+            public function decide(array $input): array
+            {
+                $this->calls++;
+                if ($this->calls > 1) {
+                    throw new \RuntimeException('synthetic provider outage');
+                }
+
+                return parent::decide($input);
+            }
+        };
+        $report = app(EvaluationRunner::class)->run($corpus, $provider);
+        $this->assertSame(2, $provider->calls);
+        $this->assertSame(87, $report['expected_targets']);
+        $this->assertSame(1, $report['correct']);
+        $this->assertSame(86, $report['unevaluated_targets']);
+        $this->assertSame('PROVIDER_UNAVAILABLE', $report['stopped_reason']);
+        $this->assertSame('NOT_EVALUATED_AFTER_PROVIDER_FAILURE', end($report['results'])['error']);
+        $this->assertFalse($report['accuracy_gate_met']);
+    }
+
+    public function test_invalid_model_decision_is_scored_without_hiding_later_cases(): void
+    {
+        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v2.json')), true);
+        $provider = new class extends MockProvider
+        {
+            public int $calls = 0;
+
+            public function decide(array $input): array
+            {
+                $this->calls++;
+
+                return $this->calls === 1 ? ['decision' => null] : parent::decide($input);
+            }
+        };
+        $report = app(EvaluationRunner::class)->run($corpus, $provider);
+        $this->assertSame(87, $provider->calls);
+        $this->assertSame(86, $report['correct']);
+        $this->assertSame(1, $report['unevaluated_targets']);
+        $this->assertNull($report['stopped_reason']);
+        $this->assertFalse($report['accuracy_gate_met']);
+    }
+
+    public function test_benchmark_command_fails_when_a_high_accuracy_report_still_has_missing_targets(): void
+    {
+        $this->mock(EvaluationRunner::class)->shouldReceive('run')->once()->andReturn([
+            'accuracy_percent' => 96.55, 'unsafe_proposals' => 0, 'unevaluated_targets' => 3, 'results' => [],
+        ]);
+        $this->artisan('agentic:benchmark', ['--provider' => 'mock'])->assertExitCode(1);
+    }
 }

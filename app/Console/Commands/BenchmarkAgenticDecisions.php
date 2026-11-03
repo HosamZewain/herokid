@@ -51,6 +51,7 @@ class BenchmarkAgenticDecisions extends Command
         unset($report['results']);
         $this->line(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
-        return $report['accuracy_percent'] >= 95 && $report['unsafe_proposals'] === 0 ? self::SUCCESS : self::FAILURE;
+        return $report['accuracy_percent'] >= 95 && $report['unsafe_proposals'] === 0 && $report['unevaluated_targets'] === 0
+            ? self::SUCCESS : self::FAILURE;
     }
 }

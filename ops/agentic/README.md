@@ -34,6 +34,18 @@ require an operator to renew that dedicated session. An expired session can
 still look locally logged in: the actual model call then fails closed. Real
 account entitlement and successful inference remain an explicit validation gate.
 
+The login-status command uses `forced_login_method="chatgpt"` and
+`cli_auth_credentials_store="file"`. Unlike `exec`, `login` in CLI 0.166.0 does
+not accept `--ignore-user-config`; the credential directory is instead restricted
+to the single auth file. Only the pinned CLI's exact read-only PATH-helper warning
+is tolerated alongside `Logged in using ChatGPT`. Unknown output or a nonzero
+exit refuses the runtime. A locally parseable session is not proof of a current
+subscription entitlement; only successful real inference can establish that.
+
+The image installs Debian's `ca-certificates` for the native CLI's HTTPS trust
+store. Node's bundled roots alone are insufficient for the CLI login client.
+TLS certificate verification is never disabled.
+
 OS acceptance requires Linux, non-root UID, zero effective capabilities,
 NoNewPrivs, seccomp filtering, read-only root, an exact mount allowlist and no app
 code, `.env`, host home or Docker socket. Writable scratch and socket directories
@@ -85,6 +97,13 @@ never-evaluated work without blocked-first priority. Raising quota resumes
 deferred work immediately. Provider errors/unknown outcomes require investigation
 or a genuine context change, not blind retries. Expired shadow leases mark only
 shadow runs uncertain; they never clear production leases or retry generation.
+
+Local benchmark evaluation also stops its provider calls after an unavailable or
+uncertain provider result. Its report keeps every remaining target in the
+denominator and marks skipped cases explicitly. Invalid model decisions are
+scored as failures while later cases remain eligible for evaluation. A partially
+evaluated corpus cannot return a successful benchmark exit, even if completed
+answers would exceed 95% correctness.
 
 Model saved/deleted hooks provide coalesced after-commit hints. Every five minutes
 a cursor scans up to 50 active checkout groups plus up to 50 known groups that

@@ -236,6 +236,11 @@ transport complexity that is not necessary for these seven reads.
 
 ## Prepared implementation status
 
+- November 3 real-provider preparation: corrected the pinned CLI's login-status
+  arguments, kept the read-only credential boundary, added system HTTPS trust
+  certificates, and made benchmark provider outages stop further calls while
+  retaining every unevaluated target. See
+  `docs/autopilot-subscription-validation-2026-11-03.md` for measured evidence.
 - Implemented locally: context/specification/registry, bounded decisions and
   scheduling, policy simulation, encrypted audit, isolated fail-closed SDK bridge,
   dashboard, actual/synthetic evaluation harness and seven read-only MCP tools.
