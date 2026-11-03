@@ -207,6 +207,21 @@ class ProductReviewRuntimeTest extends TestCase
         $this->actingAs($admin)->getJson(route('admin.orders.codex-scenes.banner', $item->order))->assertOk()->assertJson(fn ($json) => $json->where('html', fn ($html) => str_contains($html, 'صفحات التلوين لم تبدأ'))->has('version'));
     }
 
+    public function test_book_start_reloads_item_relations_after_concurrent_prompt_edit(): void
+    {
+        [$item, $flow, $manifest] = $this->approvedBook();
+        $item->order->updateQuietly(['status' => 'delivered', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 1, 'printing_status' => 'not_started', 'shipping_status' => 'not_ready']);
+        $item->load('productionComponents');
+        $item->productionComponents()->where('production_stage', 'book_interior')->update(['prompt_template' => 'Changed pages after approval']);
+        try {
+            app(BookPageService::class)->start($item, $manifest, true);
+            $this->fail('Stale item must not generate approved content after edits.');
+        } catch (\RuntimeException $error) {
+            $this->assertSame('Book inputs changed after approval', $error->getMessage());
+        }
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
     public function test_explicit_book_start_uses_codex_once_and_preserves_payment(): void
     {
         [$item,$flow,$manifest] = $this->approvedBook();

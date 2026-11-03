@@ -157,6 +157,9 @@ class BookPageService
                     || ($order->story_id && ! CodexSceneRun::where('order_id', $order->id)->where('production_kind', 'story')->where('status', 'completed')->exists())) {
                     throw new RuntimeException('Book not eligible');
                 }
+                // Re-read after checkout locking: the HTTP preflight may hold stale
+                // item/component relations while another request edits personalization.
+                $item = OrderItem::where('order_id', $order->id)->lockForUpdate()->findOrFail($item->id);
                 $inputs = $this->approvedInputs($item, $manifest->fresh());
                 $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(),
                     'order_item_id' => $item->id, 'production_kind' => 'coloring_book', 'protocol' => 6, 'scene_count' => $inputs['page_count'],
