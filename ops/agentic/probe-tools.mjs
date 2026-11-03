@@ -1,16 +1,16 @@
 // Local fake-provider probe. No subscription credentials or paid provider requests.
 import { createServer } from 'node:http';
-import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Codex } from '@openai/codex-sdk';
 import * as zlib from 'node:zlib';
-import { configuration, isolatedEnvironment, sdkOptions, threadOptions, version } from './runtime-policy.mjs';
+import { configuration, isolatedEnvironment, sdkOptions, threadOptions, version, root } from './runtime-policy.mjs';
+import { createDecisionWorkspace, credentialReferenceIntact, removeDecisionWorkspace } from './workspace.mjs';
+import { runDecisionStream } from './decision-stream.mjs';
 
-export async function probeTools(attack = null) {
-  const directory = await mkdtemp(join(tmpdir(), 'herokid-tool-probe-'));
-  const auth = join(directory, 'auth'), work = join(directory, 'work');
-  await mkdir(auth); await mkdir(work);
+export async function probeTools(attack = null, credentialFile = null) {
+  const workspace = await createDecisionWorkspace(credentialFile);
+  const {directory, home: auth, work} = workspace;
   const sentinel = join(work, 'protected.txt');
   await writeFile(sentinel, 'synthetic-secret-must-not-leak');
   let inventory = null, diagnostic = null;
@@ -63,7 +63,7 @@ export async function probeTools(attack = null) {
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = attack ? setTimeout(() => controller.abort(), 20000) : null;
   try {
     const options = sdkOptions({ ...isolatedEnvironment(auth, directory), HEROKID_SYNTHETIC_PROBE_KEY: 'synthetic-local-only' });
     options.config = { ...configuration, forced_login_method: 'api', model_provider: 'isolation_probe', model_providers: {
@@ -71,15 +71,22 @@ export async function probeTools(attack = null) {
         env_key: 'HEROKID_SYNTHETIC_PROBE_KEY', wire_api: 'responses', requires_openai_auth: false,
         supports_websockets: false, request_max_retries: 0, stream_max_retries: 0 },
     } };
-    try { await new Codex(options).startThread({ ...threadOptions(work), model: 'gpt-6.1-sol' }).run('Synthetic tool inventory probe. Return one word.', { signal: controller.signal }); }
+    const schema = JSON.parse(await readFile(`${root}/decision-schema.json`, 'utf8'));
+    try {
+      const thread = new Codex(options).startThread({ ...threadOptions(work), model: 'gpt-6.1-sol' });
+      if (attack) await thread.run('Synthetic tool inventory probe. Return one word.', { signal: controller.signal, outputSchema: schema });
+      else await runDecisionStream(thread, 'Synthetic tool inventory probe. Return one word.', schema, 20000);
+    }
     catch (error) { diagnostic = String(error.message).slice(0, 1800); }
     const unchanged = await readFile(sentinel, 'utf8').then(value => value === 'synthetic-secret-must-not-leak').catch(() => false);
-    return { sdk_version: version, cli_version: version, tools: inventory, verified: Array.isArray(inventory) && inventory.length === 0,
+    const credentialReferencePreserved = await credentialReferenceIntact(workspace);
+    return { sdk_version: version, cli_version: version, tools: inventory, verified: Array.isArray(inventory) && inventory.length === 0 && credentialReferencePreserved,
+      credential_reference_preserved: credentialReferencePreserved,
       attack, attack_sent: attackSent, rejected_tool: rejectedTool, sentinel_unchanged: unchanged, secret_leaked: secretLeaked,
       requests, feedback, diagnostic: inventory === null ? diagnostic : null };
   } finally {
     clearTimeout(timer); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
-    await rm(directory, { recursive: true, force: true });
+    await removeDecisionWorkspace(workspace);
   }
 }
 

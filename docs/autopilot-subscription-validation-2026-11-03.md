@@ -1,5 +1,10 @@
 # HeroKid Auto Pilot — subscription validation preparation
 
+Historical preparation checkpoint. Dedicated sign-in, real evaluation and memory
+acceptance subsequently passed; see
+[the final real validation report](autopilot-real-validation-2026-11-03.md).
+The pending statements and zero-attempt count below describe this earlier stage.
+
 3 November 2026. Dedicated branch `codex/agentic-shadow`, starting at
 `bc58a21e642e29ca59eac95b5790d66f8ba0e5bd`. Prepared locally in Shadow Mode.
 No AWS access, deployment, production migrations, business execution or account

@@ -13,10 +13,10 @@ export const disabledFeatures = [
 
 export const configuration = Object.freeze({
   forced_login_method: 'chatgpt', model_provider: 'openai', web_search: 'disabled',
+  cli_auth_credentials_store: 'file', history: {persistence: 'none'},
   approval_policy: 'never', sandbox_mode: 'read-only',
   features: Object.fromEntries(disabledFeatures.map(name => [name, false])),
   shell_environment_policy: { inherit: 'none' },
-  model_providers: { openai: { request_max_retries: 0, stream_max_retries: 0 } },
 });
 
 export function isolatedEnvironment(authDirectory, temporaryDirectory) {

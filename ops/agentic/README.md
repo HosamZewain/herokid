@@ -46,6 +46,28 @@ The image installs Debian's `ca-certificates` for the native CLI's HTTPS trust
 store. Node's bundled roots alone are insufficient for the CLI login client.
 TLS certificate verification is never disabled.
 
+Inference uses a fresh CLI home and a separate empty work directory inside the
+bounded `/tmp` mount. The native CLI needs writable bookkeeping state even with
+`--ephemeral`. Its temporary `auth.json` is a symlink to the fixed read-only
+credential mount, not a credential copy. The reference must still be that exact
+symlink before a result is accepted; replacement/refresh in scratch rejects the
+result. The entire scratch tree is removed after each attempt, without following
+the credential link. History persistence is disabled. This grants no file tool
+to the model and adds no application, host-home or secret mount.
+
+Use the built-in `openai` provider with forced ChatGPT authentication. CLI 0.166.0
+rejects any `model_providers.openai` override; the former retry override was
+invalid. The bridge makes one SDK decision attempt, aborts on a provider error,
+and enforces an 80-second total deadline. Native internal transport retries are
+not claimed to be zero; they remain inside that deadline and do not create a new
+application decision cycle or an API-key fallback.
+
+The streaming guard tolerates only the pinned CLI's exact diagnostic confirming
+that its code-mode host is disabled. All other unexpected item types and errors
+are rejected. Rejection aborts while the SDK's child-process listeners are still
+attached. There is no second abort after SDK iterator cleanup, which otherwise
+can crash SDK 0.166.0's caller with an unhandled `AbortError`.
+
 OS acceptance requires Linux, non-root UID, zero effective capabilities,
 NoNewPrivs, seccomp filtering, read-only root, an exact mount allowlist and no app
 code, `.env`, host home or Docker socket. Writable scratch and socket directories
@@ -66,6 +88,13 @@ stream failures, tool inventory and hostile shell/read/patch responses against
 the real CLI and a loopback fake provider. Custom apply_patch is rejected by the
 read-only sandbox/approval policy, even if a hostile provider emits an unadvertised
 call. Sentinel contents stay unchanged and are never returned to the provider.
+
+The suite also validates the complete production configuration through the real
+CLI, linked credentials with the production output schema, immutable credential
+references, exact-warning handling and stream cleanup ordering. A separate
+network-disabled synthetic-session acceptance run exercises the exact built-in
+provider configuration and verifies that provider failure leaves the process
+alive, the runtime idle and the decision refused.
 
 Future authenticated runtime needs reviewed outbound HTTPS for official Codex
 subscription endpoints (network-none is the test profile, not an inference

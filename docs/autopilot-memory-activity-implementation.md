@@ -1,5 +1,9 @@
 # HeroKid Auto Pilot — memory and activity amendment
 
+Historical implementation checkpoint. The later dedicated-subscription evaluation
+and real memory acceptance are recorded in
+[the final real validation report](autopilot-real-validation-2026-11-03.md).
+
 Prepared locally on 3 November 2026 on `codex/agentic-shadow`, starting from
 `63818e527900d09c1195dcc30a8bbe87b538d286`. **Shadow Mode only; not deployed.**
 The original dirty UI/mobile checkout was preserved. No AWS migrations, deployment,

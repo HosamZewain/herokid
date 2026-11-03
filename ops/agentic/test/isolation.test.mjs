@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { assessIsolation, isSubscriptionAuth, isSubscriptionStatus, subscriptionStatusArguments } from '../isolation.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { consumeDecision, DecisionRuntime } from '../runtime.mjs';
 import { configuration, isolatedEnvironment } from '../runtime-policy.mjs';
 import { probeTools } from '../probe-tools.mjs';
+import { createDecisionWorkspace, credentialReferenceIntact, removeDecisionWorkspace } from '../workspace.mjs';
+import { runDecisionStream } from '../decision-stream.mjs';
 
 const mount = (path, mode = 'ro') => `1 0 0:1 / ${path} ${mode} - tmpfs tmpfs ${mode}`;
 const confined = { platform: 'linux', uid: 1000, rootPath: '/opt/herokid-agentic',
@@ -47,6 +49,20 @@ test('pinned CLI accepts the subscription status command and an empty home stays
     });
   } finally { await rm(directory, {recursive: true, force: true}); }
 });
+test('pinned CLI accepts the complete production configuration without provider overrides', async () => {
+  const workspace = await createDecisionWorkspace();
+  const argumentsFor = (value, prefix = '') => Object.entries(value).flatMap(([key, item]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return item && typeof item === 'object' && ! Array.isArray(item)
+      ? argumentsFor(item, path) : ['-c', `${path}=${JSON.stringify(item)}`];
+  });
+  try {
+    const result = await promisify(execFile)(process.execPath,
+      [subscriptionStatusArguments()[0], ...argumentsFor(configuration), 'features', 'list'],
+      {env: isolatedEnvironment(workspace.home, workspace.directory), timeout: 5000});
+    assert.match(result.stdout, /shell_tool\s+\S+\s+false/);
+  } finally { await removeDecisionWorkspace(workspace); }
+});
 test('subscription status admits only its exact read-only helper warning and ChatGPT status', () => {
   const status = 'Logged in using ChatGPT';
   const warning = 'WARNING: proceeding, even though we could not create PATH aliases: Read-only file system (os error 30)';
@@ -57,6 +73,35 @@ test('subscription status admits only its exact read-only helper warning and Cha
     `${warning}\n${warning}\n${status}`, `${status}\nWARNING: unknown auth warning`, `${status}\n${status}`]) {
     assert.equal(isSubscriptionStatus({stdout: '', stderr}), false);
   }
+});
+test('ephemeral CLI state references credentials without copying and rejects replacement', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'herokid-auth-fixture-'));
+  const credential = join(directory, 'auth.json');
+  await writeFile(credential, 'synthetic-only', {mode: 0o400});
+  const workspace = await createDecisionWorkspace(credential);
+  try {
+    assert.notEqual(workspace.home, workspace.work);
+    assert.equal(await credentialReferenceIntact(workspace), true);
+    assert.equal(await readFile(join(workspace.home, 'auth.json'), 'utf8'), 'synthetic-only');
+    await unlink(join(workspace.home, 'auth.json'));
+    await writeFile(join(workspace.home, 'auth.json'), 'replacement');
+    assert.equal(await credentialReferenceIntact(workspace), false);
+    await removeDecisionWorkspace(workspace);
+    assert.equal(await readFile(credential, 'utf8'), 'synthetic-only');
+  } finally { await removeDecisionWorkspace(workspace); await rm(directory, {recursive: true, force: true}); }
+});
+test('real CLI reaches only the fake provider with linked credentials and the production schema', {timeout: 30000}, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'herokid-auth-fixture-'));
+  const credential = join(directory, 'auth.json');
+  const value = JSON.stringify({auth_mode: 'apikey', OPENAI_API_KEY: 'synthetic-local-only'});
+  await writeFile(credential, value, {mode: 0o400});
+  try {
+    const result = await probeTools(null, credential);
+    assert.equal(result.verified, true);
+    assert.equal(result.credential_reference_preserved, true);
+    assert.deepEqual(result.tools, []);
+    assert.equal(await readFile(credential, 'utf8'), value);
+  } finally { await rm(directory, {recursive: true, force: true}); }
 });
 test('tool/file/network events fail closed even if followed by a valid answer', async () => {
   for (const type of ['command_execution', 'file_change', 'mcp_tool_call', 'web_search', 'unknown_new_tool']) {
@@ -69,6 +114,42 @@ test('partial or failed provider answers are never accepted', async () => {
   async function* failed() { yield {type: 'turn.failed', error: {message: 'synthetic'}}; }
   await assert.rejects(consumeDecision(partial()), /INCOMPLETE_DECISION/);
   await assert.rejects(consumeDecision(failed()), /PROVIDER_RESULT_UNCERTAIN/);
+});
+test('only the exact pinned disabled-code-mode diagnostic is tolerated', async () => {
+  const warning = 'Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`.';
+  const events = async function* (message) {
+    yield {type: 'item.completed', item: {type: 'error', message}};
+    yield {type: 'item.completed', item: {type: 'agent_message', text: '{}'}};
+    yield {type: 'turn.completed', usage: {input_tokens: 1, output_tokens: 1}};
+  };
+  assert.deepEqual((await consumeDecision(events(warning))).decision, {});
+  for (const message of ['other CLI failure', `${warning} Additional instructions`]) {
+    await assert.rejects(consumeDecision(events(message)), /TOOL_EVENT_REJECTED/);
+  }
+});
+test('stream rejection aborts before SDK cleanup and successful completion does not abort afterward', async () => {
+  for (const rejected of [true, false]) {
+    let signal, closed = false, abortedWhileOpen = false;
+    const thread = {async runStreamed(prompt, options) {
+      signal = options.signal;
+      signal.addEventListener('abort', () => { assert.equal(closed, false); abortedWhileOpen = true; });
+      async function* events() {
+        try {
+          if (rejected) yield {type: 'turn.failed'};
+          else {
+            yield {type: 'item.completed', item: {type: 'agent_message', text: '{}'}};
+            yield {type: 'turn.completed', usage: {input_tokens: 1, output_tokens: 1}};
+          }
+        } finally { closed = true; }
+      }
+      return {events: events()};
+    }};
+    if (rejected) await assert.rejects(runDecisionStream(thread, 'synthetic', {}, 1000), /PROVIDER_RESULT_UNCERTAIN/);
+    else assert.deepEqual((await runDecisionStream(thread, 'synthetic', {}, 1000)).decision, {});
+    assert.equal(closed, true);
+    assert.equal(abortedWhileOpen, rejected);
+    assert.equal(signal.aborted, rejected);
+  }
 });
 test('unverified runtime cannot make a decision or fall back to mock', async () => {
   const runtime = new DecisionRuntime();

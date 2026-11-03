@@ -9,7 +9,8 @@
   ownership. Mixed checkouts still evaluate each remaining live unit independently.
 - Preserve the original corpus as v1. Publish reviewed v2 with provenance, the five
   requested corrections plus the clarified first case, and explicit owner approval.
-  Keep mock and real Codex scores distinct; real subscription verification remains pending.
+  Keep mock and real Codex scores distinct. Dedicated subscription verification and
+  the approved real evaluation passed on 3 November; see the acceptance status below.
 - Add persistent, encrypted, scoped decision memory. Authorized staff can create,
   review, edit, archive and restore rules, with optimistic revisions and immutable
   version history. Decision feedback links to the exact run. Automatic suggestions
@@ -31,8 +32,9 @@
   `c9e685e7fd97dd4f4da83cd774d2d78ce8db10c5`. Continue from prepared feature commit
   `63818e5`; a future release must separately reconcile intervening production changes.
 
-Status: architecture and amendments implemented locally; validation/review gates
-listed below remain, **Shadow Mode only**. Nothing deployed or activated.
+Status: architecture and amendments implemented locally; approved real evaluation
+and memory acceptance passed, **Shadow Mode only**. Production defaults remain off;
+nothing deployed and no autonomous execution activated. Release boundaries remain below.
 Owner amendments: 2 November 2026. No AWS deployment, production migration,
 customer messaging, production generation, or autonomous execution is authorized.
 
@@ -236,6 +238,23 @@ transport complexity that is not necessary for these seven reads.
 
 ## Prepared implementation status
 
+- November 3 real acceptance: dedicated ChatGPT authentication verified through
+  actual inference; **87/87 correct (100%)** on 37 owner-approved checkouts,
+  unsafe proposals 0, false waits 0, unevaluated targets 0, unsupported targets 19,
+  comparable existing admissions 22 and differences 0. The approved accuracy gate
+  passes; this does not enable live execution or establish general-case accuracy.
+- Real memory acceptance passed three decisions: priority revision 1, changed
+  priority revision 2, then restored guidance as revision 3. Decisions used the
+  current context, history remained intact, and synthetic business orders were
+  unchanged. Memory is editable guidance, not model-weight training.
+- All real calls used the same local quota: **93/100 attempts** on 3 November in
+  Cairo, including two refused startup attempts, one successful smoke, 87 approved
+  targets and three memory decisions. No quota reset, API fallback or model tools.
+- Runtime compatibility fixes preserve isolation: disposable CLI bookkeeping,
+  read-only credential reference, supported built-in provider configuration and
+  safe stream cleanup. Final regressions passed 384 PHP tests / 2,518 assertions,
+  14 Node tests and Linux isolation acceptance. See
+  `docs/autopilot-real-validation-2026-11-03.md` and its real JSON reports.
 - November 3 real-provider preparation: corrected the pinned CLI's login-status
   arguments, kept the read-only credential boundary, added system HTTPS trust
   certificates, and made benchmark provider outages stop further calls while
@@ -251,9 +270,11 @@ transport complexity that is not necessary for these seven reads.
   is empty. Defaults remain off; the gateway has no execute method.
 - Owner review is incorporated in `actual-orders.v2.json`: 37 actual checkouts,
   87 targets, including delivered taking precedence over an old manual hold.
-- Pending acceptance: dedicated ChatGPT subscription authentication and real inference verification,
-  then ≥95% correctness on the approved corpus with no unresolved safety-critical
-  failures. Mock scores do not satisfy that real-model gate.
+- Remaining release gates: reconcile the then-current AWS release, review the
+  runtime installation and dedicated credential renewal, and obtain explicit
+  deployment approval. Live autonomous execution remains unimplemented and
+  unauthorized. The local approved evaluation has no unresolved safety-critical
+  failure; new scenarios or runtime changes require proportionate validation.
 - Detailed files, measured tests, known SQLite limitations and runtime boundaries:
   `docs/agentic-shadow-implementation.md`, `docs/agentic-shadow-architecture.md`,
   and `ops/agentic/README.md`.
