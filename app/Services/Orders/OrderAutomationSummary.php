@@ -155,7 +155,8 @@ class OrderAutomationSummary
                 $add('team', 'intervention', 'الطلب يحتاج تدخل الفريق', $rows->max('updated_at'));
             }
             $rank = ['intervention' => 0, 'running' => 1, 'waiting' => 2, 'queued' => 3, 'idle' => 4];
-            usort($parts, fn ($a, $b) => $rank[$a['state']] <=> $rank[$b['state']]);
+            $stageRank = ['control' => 0, 'payment' => 1, 'confirmation' => 2, 'identity' => 2, 'product' => 2, 'book_cover' => 2, 'story_pages' => 2, 'book_pages' => 2, 'team' => 3, 'preview' => 4];
+            usort($parts, fn ($a, $b) => ($rank[$a['state']] <=> $rank[$b['state']]) ?: (($stageRank[$a['stage']] ?? 5) <=> ($stageRank[$b['stage']] ?? 5)));
             $top = $parts[0] ?? ['state' => 'idle', 'stage' => 'team', 'label' => 'مع الفريق', 'reason' => null];
             $tracking = $owned->contains($key) || collect($parts)->contains(fn ($p) => in_array($p['state'], ['running', 'waiting', 'queued'], true));
             if ($control?->state === 'paused' || $holds->contains($key)) {

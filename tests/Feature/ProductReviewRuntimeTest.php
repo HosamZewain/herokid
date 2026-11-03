@@ -203,6 +203,8 @@ class ProductReviewRuntimeTest extends TestCase
         Setting::where('key', 'book_approved_enrollment_after')->update(['value' => now()->addMinute()->toDateTimeString()]);
         app(BookPageService::class)->enroll();
         $this->assertDatabaseCount('codex_scene_runs', 0);
+        $summary = app(\App\Services\Orders\OrderAutomationSummary::class)->forKeys([$item->order->checkoutGroupKey()])[$item->order->checkoutGroupKey()];
+        $this->assertStringStartsWith('صفحات التلوين لم تبدأ', $summary['label']);
         $admin = User::factory()->create(['role' => 'admin']);
         $this->actingAs($admin)->getJson(route('admin.orders.codex-scenes.banner', $item->order))->assertOk()->assertJson(fn ($json) => $json->where('html', fn ($html) => str_contains($html, 'صفحات التلوين لم تبدأ'))->has('version'));
     }
