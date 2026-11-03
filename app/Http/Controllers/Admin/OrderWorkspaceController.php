@@ -14,13 +14,16 @@ use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderAccess;
 use App\Services\Orders\OrderAssignmentService;
+use App\Services\Orders\OrderAutomationAdmission;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Orders\StaffPreviewApproval;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderWorkspaceController extends Controller
 {
@@ -50,6 +53,30 @@ class OrderWorkspaceController extends Controller
         }
 
         return back()->with('success', $data['action'] === 'pause' ? 'تم تسجيل طلب الإيقاف؛ انتظر تأكيد حفظ الخطوة الجارية قبل التعديل.' : 'تم استئناف المتبقي المؤهل دون تغيير الموظف المسؤول.');
+    }
+
+    public function admit(Request $request, Order $order, OrderAutomationAdmission $admission)
+    {
+        $data = $request->validate(['confirm' => 'accepted', 'version' => 'required|integer|min:1']);
+        $admission->start($order, $request->user(), $request, (int) $data['version']);
+
+        return back()->with('success', 'تم إدخال الطلب للأوتوميشن؛ تابع مراحل التجهيز أعلى الطلب.');
+    }
+
+    public function approvePreview(Request $request, Order $order, StaffPreviewApproval $approvals)
+    {
+        $data = $request->validate(['confirm' => 'accepted', 'manifest_id' => 'required|integer', 'fingerprint' => 'required|string|size:64',
+            'inputs_fingerprint' => 'required|string|size:64', 'run_version' => 'required|integer|min:1', 'control_version' => 'required|integer|min:1',
+            'channel' => 'required|in:phone,whatsapp,in_person,other', 'note' => 'required|string|min:3|max:1000']);
+        try {
+            $approvals->approve($order, $request->user(), $request, $data);
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
+        } catch (\RuntimeException) {
+            throw ValidationException::withMessages(['preview_approval' => 'تعذر اعتماد النسخة الحالية. راجع الصور وبياناتها؛ لم يُسجل اعتماد جزئي أو يبدأ توليد.']);
+        }
+
+        return back()->with('success', 'تم تسجيل موافقة العميل بواسطة الفريق واستئناف المتبقي المؤهل. يبدأ التوليد بعد وجود دفعة فعلية؛ تابع حالته أعلى الطلب.');
     }
 
     public function startBook(Request $request, Order $order, OrderItem $item, BookPageService $books)

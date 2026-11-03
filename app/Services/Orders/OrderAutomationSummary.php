@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Models\AdminActivityLog;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderReviewManifest;
@@ -46,16 +47,24 @@ class OrderAutomationSummary
         $identities = DB::table('order_process_identities')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->get(['id', 'run_id', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('run_id');
         $manualIdentities = DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
         $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'status', 'error_code', 'context', 'updated_at'])->groupBy('checkout_key');
-        $scenes = CodexSceneRun::whereIn('checkout_key', $keys)->orderBy('created_at')->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'production_kind', 'status', 'scenes', 'scene_count', 'error_code', 'updated_at'])->groupBy('checkout_key');
+        $scenes = CodexSceneRun::whereIn('checkout_key', $keys)->orderBy('created_at')->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'production_kind', 'status', 'book_pdf', 'scenes', 'scene_count', 'error_code', 'updated_at'])->groupBy('checkout_key');
         $books = DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('order_item_production_components as component', 'component.order_item_id', '=', 'order_items.id')
             ->whereIn('orders.checkout_group_key', $keys)->where('component.production_stage', 'book_interior')
             ->select(['orders.checkout_group_key', 'order_items.id', 'order_items.order_id', 'order_items.title', 'component.quantity_per_item'])->get()->groupBy('checkout_group_key');
         $manifests = OrderReviewManifest::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'approved_at', 'images'])->keyBy('checkout_key');
+        $legacyOrderIds = DB::table('order_automation_runs')->whereIn('order_id', $orders->flatten(1)->pluck('id'))->where('dry_run', false)->pluck('order_id');
+        $admissionErrors = AdminActivityLog::where('action', 'order.automation_admission_blocked')->where('subject_type', Order::class)
+            ->whereIn('subject_id', $orders->flatten(1)->pluck('id'))->orderBy('id')->get(['subject_id', 'properties', 'created_at'])->keyBy('subject_id');
         $reviews = DB::table('order_payment_reviews')->whereIn('checkout_key', $keys)->where('status', 'pending')->get(['checkout_key', 'updated_at'])->keyBy('checkout_key');
         foreach ($keys as $key) {
             $rows = $orders->get($key, collect());
             $parts = [];
+            $hasExecution = $processes->get($key, collect())->isNotEmpty() || $products->get($key, collect())->isNotEmpty()
+                || $scenes->get($key, collect())->isNotEmpty() || $manualIdentities->get($key, collect())->isNotEmpty()
+                || $rows->contains(fn ($o) => $legacyOrderIds->contains($o->id));
+            $needsEnrollment = ! $hasExecution && $rows->isNotEmpty() && $rows->every(fn ($o) => $o->status === 'new_confirmed'
+                && $o->printing_status === 'not_started' && $o->shipping_status === 'not_ready');
             $fulfilled = $rows->isNotEmpty() && $rows->every(fn ($o) => $o->status === 'cancelled' || $o->printing_status !== 'not_started' || $o->shipping_status !== 'not_ready');
             $activeScenes = $scenes->get($key, collect())->contains(fn ($r) => in_array($r->status, ['waiting_slot', 'queued', 'preparing', 'running'], true));
             $add = function (string $stage, string $state, string $label, $at, ?string $reason = null, ?int $orderId = null, ?int $done = null, ?int $total = null) use (&$parts, $rows) {
@@ -126,6 +135,9 @@ class OrderAutomationSummary
             foreach ($scenes->get($key, collect())->keyBy(fn ($run) => $run->order_id.':'.($run->order_item_id ?? 'story')) as $run) {
                 $done = collect($run->scenes ?? [])->filter(fn ($s, $number) => ctype_digit((string) $number) && (int) $number >= 1 && (int) $number <= ($run->scene_count ?? 13) && ! empty($s['path']) && ! empty($s['sha256']))->count();
                 $stage = $run->production_kind === 'coloring_book' ? 'book_pages' : 'story_pages';
+                if (($run->book_pdf['status'] ?? '') === 'failed') {
+                    $add('book_pages', 'intervention', 'تعذر تجميع PDF كتاب التلوين', $run->updated_at, 'الصور محفوظة؛ تعذر تجميع الملف بعد '.$run->book_pdf['attempts'].' محاولة. لا تعِد توليد الصفحات.', $run->order_id);
+                }
                 $state = match ($run->status) {
                     'running','preparing' => 'running','waiting_slot','queued' => 'queued',default => 'intervention'
                 };
@@ -148,6 +160,13 @@ class OrderAutomationSummary
                     : ['intervention', 'الكفر معتمد والدفعة مسجلة، لكن صفحات Codex لم تبدأ. استخدم فحص وبدء صفحات التلوين؛ سيُراجع شروط التشغيل.']));
                 $add('book_pages', $state, 'صفحات التلوين لم تبدأ — '.$book->title, $rows->max('updated_at'), $reason, $book->order_id, 0, $book->quantity_per_item);
             }
+            if ($needsEnrollment) {
+                $failure = $rows->map(fn ($o) => $admissionErrors->get($o->id))->filter()->sortByDesc('created_at')->first();
+                $reason = $failure && $failure->created_at->gte($rows->max('updated_at'))
+                    ? OrderAutomationAdmission::message($failure->properties['reason_code'] ?? 'admission_requires_review')
+                    : 'لا يوجد تشغيل مسجل لتجهيز الهوية أو المنتجات. استخدم «فحص وإدخال للأوتوميشن» لعرض أي بيانات ناقصة قبل البدء.';
+                $add('preview', 'intervention', 'لم يدخل مسار الإنتاج الآلي', $failure?->created_at ?? $rows->max('updated_at'), $reason);
+            }
             if ($reviews->has($key) || $rows->contains('payment_status', 'pending_review')) {
                 $add('payment', 'intervention', 'بانتظار مراجعة الدفع', $reviews->get($key)?->updated_at ?? $rows->max('updated_at'), 'راجع رسالة العميل وسجّل الدفع يدويًا.');
             }
@@ -159,10 +178,10 @@ class OrderAutomationSummary
             usort($parts, fn ($a, $b) => ($rank[$a['state']] <=> $rank[$b['state']]) ?: (($stageRank[$a['stage']] ?? 5) <=> ($stageRank[$b['stage']] ?? 5)));
             $top = $parts[0] ?? ['state' => 'idle', 'stage' => 'team', 'label' => 'مع الفريق', 'reason' => null];
             $tracking = $owned->contains($key) || collect($parts)->contains(fn ($p) => in_array($p['state'], ['running', 'waiting', 'queued'], true));
-            if ($control?->state === 'paused' || $holds->contains($key)) {
+            if ($control?->state === 'paused' || $holds->contains($key) || ($needsEnrollment && ! collect($parts)->contains('state', 'running'))) {
                 $tracking = false;
             }
-            $this->cache[$key] = $top + ['tracking' => $tracking, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
+            $this->cache[$key] = $top + ['tracking' => $tracking, 'has_execution' => $hasExecution, 'needs_enrollment' => $needsEnrollment, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
                 'updated_at' => collect($parts)->max('at') ?: (string) $rows->max('updated_at'), 'control_state' => $control?->state ?? ($holds->contains($key) ? 'paused_legacy' : 'running'),
                 'control_version' => (int) ($control?->version ?? 1), 'assignment_version' => (int) ($control?->assignment_version ?? 0)];
         }

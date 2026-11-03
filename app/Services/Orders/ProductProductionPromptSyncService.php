@@ -39,6 +39,8 @@ class ProductProductionPromptSyncService
                 ]);
         }
 
-        return $updated;
+        $books = app(BookPromptSync::class)->sync($product, auth()->id());
+
+        return $updated + $books['updated'];
     }
 }

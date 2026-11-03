@@ -290,7 +290,7 @@
                 </aside>
             </section>
 
-            @include('admin.orders._payment-review')
+
         @include('admin.orders._message-history')
 
             @can('bosta.view')

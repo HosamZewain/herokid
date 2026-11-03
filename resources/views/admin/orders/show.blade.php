@@ -822,7 +822,7 @@
                     @endif
                     @endcan
 
-        @include('admin.orders._payment-review')
+
         @include('admin.orders._message-history')
 
                     @include('admin.orders._bosta-shipping-panel', ['group' => $checkoutGroup])

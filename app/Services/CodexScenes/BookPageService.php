@@ -14,6 +14,8 @@ use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
 use Illuminate\Support\Facades\Cache;
@@ -45,9 +47,12 @@ class BookPageService
         $image = collect($manifest->images)->first(fn ($image) => ($image['kind'] ?? '') === 'book_cover' && ($image['item_id'] ?? 0) === $item->id);
         $interior = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');
         $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
+        $staffInputs = app(StaffPreviewInputs::class)->recorded($manifest);
+        $currentCover = app(PuzzleInputs::class)->capture($item)['fingerprint'];
+        $currentInterior = app(ProcessProductReview::class)->interiorFingerprint($item);
         if (! $image || ! $interior || ! $generation || $generation->id !== $image['generation_id'] || $generation->status !== 'succeeded'
-            || ! hash_equals($image['input_fingerprint'], app(PuzzleInputs::class)->capture($item)['fingerprint'])
-            || ! hash_equals($image['interior_fingerprint'] ?? '', app(ProcessProductReview::class)->interiorFingerprint($item) ?? '')
+            || (! hash_equals($image['input_fingerprint'], $currentCover) && ! hash_equals($staffInputs[(string) $item->id]['input_fingerprint'] ?? '', $currentCover))
+            || (! app(BookPromptSync::class)->matchesInterior($item, $image['interior_fingerprint'] ?? '') && ! app(BookPromptSync::class)->matchesInterior($item, $staffInputs[(string) $item->id]['interior_fingerprint'] ?? ''))
             || ! $generation->preview_id || $generation->preview_id !== $image['preview_id']) {
             throw new RuntimeException('Book inputs changed after approval');
         }
@@ -65,7 +70,7 @@ class BookPageService
 
         return ['manifest_id' => $manifest->id, 'item_id' => $item->id, 'unit_key' => $interior['unit_key'], 'page_count' => $count,
             'artwork_contract' => 'a4-interior-v1', 'references' => $references['references'], 'texts' => $references['texts'],
-            'input_fingerprint' => $image['input_fingerprint'], 'interior_fingerprint' => $image['interior_fingerprint'],
+            'input_fingerprint' => $currentCover, 'interior_fingerprint' => app(ProcessProductReview::class)->interiorFingerprint($item),
             'prompt' => $interior['prompt'], 'identity_disk' => $image['disk'], 'identity_path' => $image['path'], 'identity_checksum' => $image['sha256']];
     }
 

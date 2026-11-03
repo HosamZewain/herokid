@@ -12,7 +12,7 @@ class CodexSceneRun extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['scene_count' => 'integer', 'order_item_id' => 'integer', 'snapshot' => 'encrypted:array', 'timing' => 'array', 'scene_progress' => 'array', 'scenes' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
+    protected $casts = ['book_pdf' => 'array', 'scene_count' => 'integer', 'order_item_id' => 'integer', 'snapshot' => 'encrypted:array', 'timing' => 'array', 'scene_progress' => 'array', 'scenes' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
 
     public const LABELS = [
         'waiting_slot' => 'في طابور الانتظار', 'preparing' => 'تجهيز الملفات',

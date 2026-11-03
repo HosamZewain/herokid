@@ -12,6 +12,7 @@ use App\Models\OrderAttachment;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderItem;
+use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
@@ -28,6 +29,7 @@ use App\Models\WhatsAppConversation;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
 use App\Services\CodexScenes\BookPageService;
+use App\Services\CodexScenes\BookPdfService;
 use App\Services\CodexScenes\BookReferences;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\OrderAutomation\Process\PreviewCohort;
@@ -37,11 +39,16 @@ use App\Services\OrderAutomation\Process\ProcessIdentityService;
 use App\Services\OrderAutomation\Process\ProcessOrderContext;
 use App\Services\OrderAutomation\Process\ProcessPaymentReview;
 use App\Services\OrderAutomation\Process\ProcessPreviewStatus;
+use App\Services\OrderAutomation\Process\ProcessProductReview;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\OrderAutomationSummary;
+use App\Services\Orders\ProductProductionPromptSyncService;
+use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\BookCatalog;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductAutomation\PuzzleInputs;
@@ -52,6 +59,7 @@ use App\Support\ProductProductionStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -61,6 +69,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Mpdf\Mpdf;
+use setasign\Fpdi\PdfParser\StreamReader;
 use Tests\TestCase;
 
 class ProductReviewRuntimeTest extends TestCase
@@ -303,6 +313,215 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertDatabaseCount('puzzle_generations', 1);
     }
 
+    public function test_explicit_admission_shows_no_workflow_and_starts_once_without_sending_confirmation(): void
+    {
+        $item = $this->book();
+        $item->order->updateQuietly(['status' => 'new_confirmed']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $summary = (new OrderAutomationSummary)->forKeys([$item->order->checkoutGroupKey()])[$item->order->checkoutGroupKey()];
+        $this->assertSame('لم يدخل مسار الإنتاج الآلي', $summary['label']);
+        $this->assertFalse($summary['tracking']);
+        $this->assertTrue($summary['needs_enrollment']);
+        $this->actingAs($admin)->get(route('admin.orders.groups.show', $item->order))->assertOk()->assertSee('فحص وإدخال للأوتوميشن')->assertDontSee('طلب إيقاف آمن');
+        $payload = ['confirm' => 1, 'version' => 1];
+        $this->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertSame('queued', OrderProcessRun::sole()->status);
+        $this->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertStatus(409);
+        $this->post(route('admin.orders.workspace.admit', $item->order), ['confirm' => 1, 'version' => 2])->assertSessionHasErrors('automation');
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_admission_rejects_bad_photo_before_any_upgrade_or_generation_and_displays_reason(): void
+    {
+        $item = $this->book();
+        Storage::disk('s3_private')->put('child-photos/synthetic.heic', 'synthetic unsupported image');
+        $item->order->updateQuietly(['status' => 'new_confirmed', 'uploaded_photos' => ['child-photos/synthetic.heic']]);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.admit', $item->order), ['confirm' => 1, 'version' => 1])->assertSessionHasErrors('automation');
+        $this->assertDatabaseCount('order_process_runs', 0);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $summary = (new OrderAutomationSummary)->forKeys([$item->order->checkoutGroupKey()])[$item->order->checkoutGroupKey()];
+        $this->assertStringContainsString('HEIC', $summary['reason']);
+        $this->assertFalse($summary['tracking']);
+        $this->assertSame('intervention', $summary['state']);
+        Http::assertNothingSent();
+    }
+
+    public function test_admission_requires_scope_and_does_not_unpause_or_ignore_fulfilment(): void
+    {
+        $item = $this->book();
+        $item->order->updateQuietly(['status' => 'new_confirmed']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $payload = ['confirm' => 1, 'version' => 1];
+        $this->actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.automation.control'])->pluck('id'));
+        $this->actingAs($this->actor->fresh())->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertForbidden();
+        DB::table('order_automation_controls')->insert(['checkout_key' => $item->order->checkoutGroupKey(), 'state' => 'paused', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertSessionHasErrors('automation');
+        $this->assertSame('paused', DB::table('order_automation_controls')->value('state'));
+        DB::table('order_automation_controls')->update(['state' => 'running']);
+        $item->order->updateQuietly(['printing_status' => 'completed']);
+        $this->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertSessionHasErrors('automation');
+        $this->assertDatabaseCount('order_process_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    private function staffApprovalFixture(): array
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->send($run);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $manifest = OrderReviewManifest::sole();
+
+        return [$item, $run->fresh(), $manifest, $admin];
+    }
+
+    private function staffApprovalPayload(OrderProcessRun $run, OrderReviewManifest $manifest): array
+    {
+        return ['manifest_id' => $manifest->id, 'fingerprint' => $manifest->fingerprint,
+            'inputs_fingerprint' => app(StaffPreviewInputs::class)->fingerprint(app(StaffPreviewInputs::class)->capture($manifest)),
+            'run_version' => $run->fresh()->version,
+            'control_version' => DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version') ?? 1,
+            'confirm' => 1, 'channel' => 'phone', 'note' => 'Synthetic customer phone consent'];
+    }
+
+    public function test_staff_approval_settles_paused_paid_book_after_status_changes_without_resending(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        DB::table('order_group_assignments')->insert(['checkout_group_key' => $run->checkout_key, 'assigned_to_user_id' => $admin->id, 'assigned_by_user_id' => $admin->id, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $control = app(AutomationControl::class);
+        $version = DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version');
+        $control->pause($item->order, $admin, Request::create('/'), $version, 'Synthetic stop');
+        $item->order->updateQuietly(['status' => 'pending_team_review', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 20000]);
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertNotNull($manifest->fresh()->approved_at);
+        $this->assertNull($manifest->fresh()->response_message_id);
+        $this->assertDatabaseCount('order_process_responses', 0);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertFalse(AutomationHandoff::held($run->checkout_key));
+        $this->assertFalse(AutomationControl::blocked($run->checkout_key));
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $this->assertSame($admin->id, DB::table('order_group_assignments')->where('checkout_group_key', $run->checkout_key)->value('assigned_to_user_id'));
+        $this->assertSame(20000, $item->order->fresh()->paid_amount_cents);
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        app(BookPageService::class)->enroll();
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertSame($item->id, CodexSceneRun::sole()->order_item_id);
+        $this->assertSame(3, CodexSceneRun::sole()->scene_count);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertStatus(409);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        Http::assertSentCount(2);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.preview_approved_by_staff', 'user_id' => $admin->id, 'subject_id' => $item->order_id]);
+    }
+
+    public function test_staff_approval_does_not_record_payment_or_generate_unpaid_pages(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $this->actingAs($admin)->get(route('admin.orders.groups.show', $item->order))->assertOk()
+            ->assertSee('تسجيل موافقة العميل بواسطة الفريق')->assertDontSee('مراجعة الدفع — مرفقات العميل');
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertRedirect()->assertSessionHasNoErrors();
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertSame(0, $item->order->fresh()->paid_amount_cents);
+        $this->assertNotNull($manifest->fresh()->approved_at);
+        Http::assertSentCount(2);
+    }
+
+    public function test_staff_approval_rejects_changed_data_and_changed_page_prompt(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $item->order->updateQuietly(['child_name' => 'Different child']);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasErrors('preview_approval');
+        $item->order->updateQuietly(['child_name' => 'Synthetic child']);
+        $item->productionComponents()->where('production_stage', 'book_interior')->update(['prompt_template' => 'Changed interior']);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertStatus(409);
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
+    public function test_staff_can_accept_existing_cover_after_template_refresh_without_regenerating_it(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $originalImages = $manifest->images;
+        $item->productionComponents()->where('production_stage', 'book_cover')->update(['prompt_template' => 'Refreshed cover template {{child_full_name}}']);
+        $item->productionComponents()->where('production_stage', 'book_interior')->update(['prompt_template' => 'Refreshed inside {{book_page_count}} pages {{child_full_name}}']);
+        $item->order->updateQuietly(['payment_status' => 'partially_paid', 'paid_amount_cents' => 20000]);
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasNoErrors();
+        $this->assertSame($originalImages, $manifest->fresh()->images);
+        $this->assertNotNull($manifest->fresh()->approved_at);
+        $book = app(BookPageService::class)->start($item->fresh(), $manifest->fresh(), true);
+        $this->assertStringContainsString('Refreshed inside 3 pages', $book->snapshot['prompt']);
+        $this->assertSame($originalImages[0]['sha256'], $book->snapshot['identity_checksum']);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $item->order->updateQuietly(['parent_notes' => 'Changed customer requirement']);
+        $this->expectException(\RuntimeException::class);
+        app(BookPageService::class)->fingerprint($book->fresh());
+    }
+
+    public function test_staff_approval_rejects_stale_version_cancelled_order_and_unsettled_execution(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['run_version' => $run->version + 1]))->assertStatus(409);
+        $item->order->updateQuietly(['status' => 'cancelled']);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasErrors('preview_approval');
+        $item->order->updateQuietly(['status' => 'preview_uploaded']);
+        $run->steps()->where('type', 'whatsapp')->update(['status' => 'uncertain']);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasErrors('preview_approval');
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertNull($manifest->fresh()->approved_at);
+    }
+
+    public function test_staff_approval_requires_permissions_current_assignment_and_explicit_consent(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['confirm' => 0]))->assertSessionHasErrors('confirm');
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['note' => '']))->assertSessionHasErrors('note');
+        $this->actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.automation.control'])->pluck('id'));
+        $this->actingAs($this->actor->fresh())->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertForbidden();
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+    }
+
+    public function test_staff_approval_rejects_new_preview_and_unreadable_output_without_partial_mutation(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['manifest_id' => $manifest->id + 1]))->assertStatus(409);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['fingerprint' => str_repeat('0', 64)]))->assertStatus(409);
+        $image = $manifest->images[0];
+        Storage::disk($image['disk'])->put($image['path'], 'corrupt synthetic output');
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasErrors('preview_approval');
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
+    public function test_late_customer_reply_cannot_repeat_staff_approval_or_change_payment(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertSessionHasNoErrors();
+        $approvedAt = $manifest->fresh()->approved_at->toISOString();
+        $this->reply($run);
+        $this->assertSame($approvedAt, $manifest->fresh()->approved_at->toISOString());
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertDatabaseCount('order_process_responses', 0);
+        $this->assertSame(0, $item->order->fresh()->paid_amount_cents);
+        Http::assertSentCount(2);
+    }
+
     public function test_paid_approved_legacy_status_is_visible_and_requires_explicit_admission(): void
     {
         [$item,$flow,$manifest] = $this->approvedBook();
@@ -390,11 +609,197 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame('delivered', $item->order->fresh()->status);
         $this->assertCount(3, $run->fresh()->scenes);
         foreach ($run->fresh()->scenes as $scene) {
-            $a = OrderAttachment::find($scene['attachment_id']);
-            $this->assertSame('s3_private', $a->disk);
-            $this->assertSame('product:'.$item->id.':component:pages', $a->production_unit_key);
-            $this->assertSame($scene['sha256'], hash('sha256', Storage::disk('s3_private')->get($a->path)));
+            $this->assertNull($scene['attachment_id']);
+            $this->assertSame($scene['sha256'], hash('sha256', Storage::disk('s3_private')->get($scene['path'])));
         }
+        $pdf = $run->fresh()->book_pdf;
+        $this->assertSame('ready', $pdf['status']);
+        $attachment = OrderAttachment::findOrFail($pdf['attachment_id']);
+        $this->assertSame('s3_private', $attachment->disk);
+        $this->assertSame('application/pdf', $attachment->mime_type);
+        $this->assertSame('product:'.$item->id.':component:pages', $attachment->production_unit_key);
+        $this->assertStringStartsWith('%PDF-', Storage::disk('s3_private')->get($attachment->path));
+        $this->assertSame(1, OrderAttachment::where('production_unit_key', $attachment->production_unit_key)->count());
+
+    }
+
+    public function test_catalog_book_prompt_sync_preserves_cover_consent_and_pins_dispatched_run(): void
+    {
+        [$item, $flow, $manifest] = $this->approvedBook();
+        $source = $item->product->productionComponents()->create(['stable_key' => 'new-catalog-pages-key', 'name' => 'Pages', 'production_stage' => 'book_interior', 'quantity_per_item' => 50, 'is_active' => true,
+            'prompt_template' => 'New interior {{book_page_count}} pages for {{child_full_name}}']);
+        $manifestBefore = $manifest->getRawOriginal();
+        $sync = app(ProductProductionPromptSyncService::class);
+        $this->assertSame(1, $sync->syncForProduct($item->product));
+        $this->assertSame(0, $sync->syncForProduct($item->product));
+        $part = $item->productionComponents()->where('production_stage', 'book_interior')->sole();
+        $this->assertSame(3, $part->quantity_per_item);
+        $this->assertSame($source->prompt_template, $part->prompt_template);
+        $this->assertDatabaseCount('book_prompt_revisions', 1);
+        $this->assertTrue(app(ProcessProductReview::class)->ready($flow->fresh()));
+        $this->assertSame($manifestBefore, $manifest->fresh()->getRawOriginal());
+        $item->order->updateQuietly(['payment_status' => 'partially_paid', 'paid_amount_cents' => 1]);
+        $run = app(BookPageService::class)->start($item->fresh(), $manifest->fresh(), true);
+        $this->assertStringContainsString('New interior 3 pages', $run->snapshot['prompt']);
+        $fingerprint = $run->fingerprint;
+        $source->update(['prompt_template' => 'Later template {{child_full_name}}']);
+        $this->assertSame(0, $sync->syncForProduct($item->product));
+        $this->assertSame($fingerprint, app(BookPageService::class)->fingerprint($run->fresh()));
+        $this->assertStringContainsString('New interior 3 pages', $run->fresh()->snapshot['prompt']);
+    }
+
+    public function test_catalog_prompt_sync_does_not_approve_changed_page_count_or_replace_generated_cover(): void
+    {
+        [$item, $flow, $manifest] = $this->approvedBook();
+        foreach (['cover' => 'book_cover', 'pages' => 'book_interior'] as $key => $stage) {
+            $item->product->productionComponents()->create(['stable_key' => $key, 'name' => $key, 'production_stage' => $stage,
+                'quantity_per_item' => 50, 'is_active' => true, 'prompt_template' => 'New '.$key.' {{child_full_name}}']);
+        }
+        $oldCover = $item->productionComponents()->where('production_stage', 'book_cover')->value('prompt_template');
+        $result = app(BookPromptSync::class)->sync($item->product, $this->actor->id);
+        $this->assertSame(['updated' => 1, 'frozen' => 1], $result);
+        $this->assertSame($oldCover, $item->productionComponents()->where('production_stage', 'book_cover')->value('prompt_template'));
+        $this->assertNotNull($manifest->fresh()->approved_at);
+        $item->productionComponents()->where('production_stage', 'book_interior')->update(['quantity_per_item' => 40]);
+        $this->assertFalse(app(BookPromptSync::class)->matchesInterior($item->fresh(), $manifest->images[0]['interior_fingerprint']));
+        $this->expectException(\RuntimeException::class);
+        app(ProcessProductReview::class)->ready($flow->fresh());
+    }
+
+    public function test_book_prompt_backfill_command_is_dry_by_default_and_requires_matching_catalog(): void
+    {
+        $item = $this->book();
+        $item->product->productionComponents()->create(['stable_key' => 'new-pages', 'name' => 'Pages', 'production_stage' => 'book_interior',
+            'quantity_per_item' => 99, 'is_active' => true, 'prompt_template' => 'Updated {{book_page_count}} {{child_full_name}}']);
+        $part = $item->productionComponents()->where('production_stage', 'book_interior')->sole();
+        $before = $part->prompt_template;
+        $this->assertSame(0, Artisan::call('orders:sync-book-prompts'));
+        $plan = json_decode(Artisan::output(), true);
+        $this->assertSame(1, $plan['products'][$item->product_id]['updated']);
+        $this->assertSame($before, $part->fresh()->prompt_template);
+        $this->assertDatabaseCount('book_prompt_revisions', 0);
+        $this->assertSame(1, Artisan::call('orders:sync-book-prompts', ['--apply' => true]));
+        $this->assertSame(0, Artisan::call('orders:sync-book-prompts', ['--apply' => true, '--actor' => $this->actor->id, '--expect' => $plan['catalog_hash']]));
+        $this->assertDatabaseCount('book_prompt_revisions', 1);
+        $this->assertSame(3, $part->fresh()->quantity_per_item);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    private function pdfFixture(int $count): CodexSceneRun
+    {
+        $item = $this->book();
+        $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $item->order_id, 'order_item_id' => $item->id,
+            'checkout_key' => $item->order->checkoutGroupKey(), 'production_kind' => 'coloring_book', 'scene_count' => $count,
+            'source' => 'automatic', 'protocol' => 6, 'status' => 'completed', 'previous_status' => 'delivered', 'fingerprint' => str_repeat('a', 64),
+            'snapshot' => ['unit_key' => 'product:'.$item->id.':component:pages']]);
+        $scenes = [];
+        foreach (array_reverse(range(1, $count)) as $n) {
+            $image = imagecreatetruecolor(1024, 1448);
+            imagefill($image, 0, 0, imagecolorallocate($image, 255, 255, 255));
+            $ink = imagecolorallocate($image, 20, 20, 20);
+            imagerectangle($image, 30, 30, 994, 1418, $ink);
+            imageellipse($image, 512, 650, 400 + $n, 400, $ink);
+            imagestring($image, 5, 400, 150, 'SYNTHETIC PAGE '.$n, $ink);
+            ob_start();
+            imagepng($image);
+            $bytes = ob_get_clean();
+            imagedestroy($image);
+            $path = 'orders/'.$run->order_id.'/codex-scenes/'.$run->id.'/page-'.sprintf('%02d', $n).'-a4.png';
+            Storage::disk('s3_private')->put($path, $bytes);
+            $scenes[(string) $n] = ['path' => $path, 'sha256' => hash('sha256', $bytes), 'source_run_id' => $run->id, 'attachment_id' => null];
+        }
+        $run->update(['scenes' => $scenes]);
+
+        return $run;
+    }
+
+    public function test_book_pdf_20_40_50_pages_is_a4_single_attachment_and_idempotent(): void
+    {
+        $service = app(BookPdfService::class);
+        foreach ([20, 40, 50] as $count) {
+            $run = $this->pdfFixture($count);
+            $service->request($run);
+            $run->save();
+            $service->publish($run);
+            $service->publish($run->fresh());
+            $meta = $run->fresh()->book_pdf;
+            $this->assertSame('ready', $meta['status']);
+            $this->assertTrue($meta['complete']);
+            $this->assertSame([], $meta['missing_pages']);
+            $this->assertSame(1, $meta['attempts']);
+            $bytes = Storage::disk('s3_private')->get($meta['path']);
+            $parser = new Mpdf(['tempDir' => storage_path('framework/cache/mpdf')]);
+            $this->assertSame($count, $parser->setSourceFile(StreamReader::createByString($bytes)));
+            $size = $parser->getTemplateSize($parser->importPage(1));
+            $this->assertEqualsWithDelta(210, $size['width'], .1);
+            $this->assertEqualsWithDelta(297, $size['height'], .1);
+            $this->assertSame(1, OrderAttachment::where('order_id', $run->order_id)->where('production_unit_key', $run->snapshot['unit_key'])->count());
+            if ($count === 20) {
+                File::ensureDirectoryExists(storage_path('app/testing-pdf'));
+                file_put_contents(storage_path('app/testing-pdf/book-20.pdf'), $bytes);
+            }
+        }
+    }
+
+    public function test_partial_pdf_keeps_missing_page_positions_and_rejects_other_book(): void
+    {
+        $service = app(BookPdfService::class);
+        $run = $this->pdfFixture(3);
+        $scenes = $run->scenes;
+        unset($scenes['2']);
+        $run->update(['scenes' => $scenes, 'status' => 'needs_manual']);
+        $service->request($run);
+        $run->save();
+        $service->publish($run);
+        $meta = $run->fresh()->book_pdf;
+        $this->assertSame('ready', $meta['status']);
+        $this->assertFalse($meta['complete']);
+        $this->assertSame([2], $meta['missing_pages']);
+        $attachment = OrderAttachment::findOrFail($meta['attachment_id']);
+        $this->assertStringContainsString('INCOMPLETE', $attachment->original_name);
+        $bytes = Storage::disk('s3_private')->get($meta['path']);
+        $parser = new Mpdf(['tempDir' => storage_path('framework/cache/mpdf')]);
+        $this->assertSame(3, $parser->setSourceFile(StreamReader::createByString($bytes)));
+        File::ensureDirectoryExists(storage_path('app/testing-pdf'));
+        file_put_contents(storage_path('app/testing-pdf/book-partial.pdf'), $bytes);
+        $other = $this->pdfFixture(3);
+        $this->expectException(\RuntimeException::class);
+        $service::pageBytes($other, 1, $run->scenes['1']);
+    }
+
+    public function test_pdf_failure_retries_assembly_only_and_does_not_repack_historical_runs(): void
+    {
+        $service = app(BookPdfService::class);
+        $run = $this->pdfFixture(3);
+        Queue::fake();
+        $service->retryPending();
+        $this->assertNull($run->fresh()->book_pdf);
+        $service->request($run);
+        $run->save();
+        $path = $run->scenes['1']['path'];
+        $bytes = Storage::disk('s3_private')->get($path);
+        Storage::disk('s3_private')->put($path, 'corrupted');
+        $service->publish($run);
+        $this->assertSame('failed', $run->fresh()->book_pdf['status']);
+        $this->assertSame('completed', $run->fresh()->status);
+        $this->assertCount(3, $run->fresh()->scenes);
+        Storage::disk('s3_private')->put($path, $bytes);
+        $service->retryPending();
+        $this->assertSame('ready', $run->fresh()->book_pdf['status']);
+        $this->assertSame(2, $run->fresh()->book_pdf['attempts']);
+        $this->assertSame(1, CodexSceneRun::count());
+        Queue::assertNothingPushed();
+        $broken = $this->pdfFixture(3);
+        $service->request($broken);
+        $broken->save();
+        Storage::disk('s3_private')->put($broken->scenes['1']['path'], 'bad');
+        foreach (range(1, 4) as $_) {
+            $service->publish($broken->fresh());
+        }
+        $this->assertSame(3, $broken->fresh()->book_pdf['attempts']);
+        $this->assertSame('failed', $broken->fresh()->book_pdf['status']);
+        $this->assertSame('completed', $broken->fresh()->status);
     }
 
     private function pageOutput(CodexSceneRun $run, int $n, ?int $wrongItem = null): void
@@ -505,6 +910,44 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame('pending_team_review', $item->order->fresh()->status);
         Http::assertSentCount(2);
         $this->assertDatabaseCount('order_process_responses', 1);
+    }
+
+    public function test_staff_approval_of_mixed_two_child_preview_approves_exact_identity_and_cover(): void
+    {
+        $item = $this->book();
+        $story = Story::create(['title' => 'Synthetic story', 'slug' => 'mixed-test', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
+        $storyOrder = $item->order->replicate();
+        $storyOrder->order_number = 'SYN-STORY';
+        $storyOrder->child_name = 'Second synthetic child';
+        $storyOrder->child_age = 7;
+        $storyOrder->story_id = $story->id;
+        $storyOrder->save();
+        $storyOrder->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => 'Synthetic story', 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+        $storyOrder->updateQuietly(['status' => 'new_confirmed']);
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->twice()->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::sole()->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        Http::assertNothingSent();
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->send($run);
+        $this->assertSame('preview_uploaded', $item->order->fresh()->status);
+        $this->assertSame('preview_uploaded', $storyOrder->fresh()->status);
+        $this->assertCount(2, OrderReviewManifest::sole()->images);
+        $this->assertEqualsCanonicalizing([$item->order_id, $storyOrder->id], array_column(OrderReviewManifest::sole()->images, 'order_id'));
+        $this->assertStringContainsString('Second synthetic child', collect(OrderReviewManifest::sole()->images)->firstWhere('kind', 'identity')['label']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order),
+            $this->staffApprovalPayload($run, OrderReviewManifest::sole()))->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertNotNull(OrderReviewManifest::sole()->approved_at);
+        $this->assertNotNull($storyOrder->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame('costomer_confirmed', $storyOrder->fresh()->status);
+        $this->assertSame('pending_team_review', $item->order->fresh()->status);
+        Http::assertSentCount(2);
+        $this->assertDatabaseCount('order_process_responses', 0);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertSame($storyOrder->fresh()->child_identity_approved_attempt_id, OrderProcessIdentity::sole()->attempt_id);
+        $this->assertSame($admin->id, OrderPreviewStaffApproval::sole()->user_id);
     }
 
     public function test_old_worker_and_manual_hold_block_book_admission(): void

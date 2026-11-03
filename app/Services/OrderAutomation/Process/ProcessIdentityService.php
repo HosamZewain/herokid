@@ -8,6 +8,7 @@ use App\Jobs\GenerateProcessIdentity;
 use App\Models\AiModel;
 use App\Models\ChildIdentityRequest;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
@@ -22,6 +23,7 @@ use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderIdentityMedia;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -100,7 +102,7 @@ class ProcessIdentityService
             app(ChildIdentityAggregateService::class)->recalculate($identity);
             GenerateProcessIdentity::dispatch($task->id)->afterCommit();
         }
-        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
+        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
         $run->update(['status' => 'waiting_identity', 'next_at' => now()->addMinute()]);
         $step->update(['status' => 'waiting', 'started_at' => now()]);
     }
@@ -257,7 +259,7 @@ class ProcessIdentityService
         return $ready;
     }
 
-    public function approve(OrderProcessRun $run, array $config, string $approvalText = 'تأكيد الهوية'): void
+    public function approve(OrderProcessRun $run, array $config, string $approvalText = 'تأكيد الهوية', ?OrderPreviewStaffApproval $staffApproval = null): void
     {
         $response = $run->steps()->where('node_id', $config['response_node'])->first();
         if (! $response) {
@@ -266,7 +268,7 @@ class ProcessIdentityService
         $decision = DB::table('order_process_responses')->where('run_id', $run->id)->where('step_id', $response->id)->first();
         $wait = collect($run->revision->definition['nodes'])->firstWhere('id', $config['response_node']);
         $approval = collect($wait['config']['cases'])->firstWhere('text', $approvalText);
-        if (! $decision || ! $approval || $decision->decision !== $approval['key'] || ! $this->ready($run)) {
+        if (($staffApproval ? ! $staffApproval->matches($run) : (! $decision || ! $approval || $decision->decision !== $approval['key'])) || ! $this->ready($run)) {
             throw new RuntimeException('identity_approval_missing');
         }
         foreach (OrderProcessIdentity::where('run_id', $run->id)->get() as $task) {
@@ -279,16 +281,16 @@ class ProcessIdentityService
             if (! $disk->exists($attempt->output_storage_path) || ! hash_equals($attempt->output_checksum, hash('sha256', $disk->get($attempt->output_storage_path)))) {
                 throw new RuntimeException('identity_requires_review');
             }
-            app(ChildIdentityApprovalService::class)->approve($identity, $task->attempt, source: 'robodesk_process');
+            app(ChildIdentityApprovalService::class)->approve($identity, $task->attempt, actor: $staffApproval?->user, source: $staffApproval ? 'admin' : 'robodesk_process');
             $order = $task->order;
             if ($order->status !== self::APPROVED_ORDER_STATUS) {
                 $order->update(['status' => self::APPROVED_ORDER_STATUS]);
                 AutomationActivity::record($order, 'identity_approved', 'اعتماد الهوية بناءً على تأكيد العميل وتغيير الحالة إلى هوية مؤكدة وجاهزة للتوليد', ['source_id' => $task->attempt_id, 'stage' => 'اعتماد هوية الطفل', 'story_title' => $order->story?->title, 'child_name' => $order->child_name]);
                 $order->statusLogs()->create(['status_type' => 'order', 'status' => self::APPROVED_ORDER_STATUS,
-                    'notes' => 'تأكيد هوية العميل عبر مسار العمليات #'.$run->id]);
+                    'notes' => ($staffApproval ? 'موافقة العميل على الهوية مسجلة بواسطة الفريق؛ سجل الاعتماد #'.$staffApproval->id : 'تأكيد هوية العميل عبر مسار العمليات #'.$run->id)]);
             }
         }
-        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
+        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
     }
 
     public function previewUrl(OrderProcessRun $run): string

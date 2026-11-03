@@ -14,6 +14,13 @@
             @if(count($codexRun->scenes ?? []))
                 <a href="{{ route('admin.orders.codex-scenes.download',[$order,$codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل الكل ({{ count($codexRun->scenes) }} / {{ $codexRun->scene_count ?? 13 }}) — ZIP</a>
             @endif
+            @if(($codexRun->book_pdf['status'] ?? '') === 'ready')
+                <a href="{{ route('admin.orders.attachments.download', $codexRun->book_pdf['attachment_id']) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل كتاب التلوين PDF {{ $codexRun->book_pdf['complete'] ? '— جميع الصفحات' : '— غير مكتمل، للمراجعة فقط' }}</a>
+            @elseif(($codexRun->book_pdf['status'] ?? '') === 'failed')
+                <p class="mt-2 text-sm font-bold text-red-700">تعذر تجميع PDF؛ الصور محفوظة. محاولات التجميع: {{ $codexRun->book_pdf['attempts'] }} / 3. لا تعِد توليد الصفحات.</p>
+            @elseif($codexRun->production_kind === 'coloring_book')
+                <p class="mt-2 text-xs text-gray-600">عند انتهاء التوليد تُجمع الصفحات في PDF واحد بمرفقات الطلب.</p>
+            @endif
             <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($codexRun->scenes ?? [] as $sceneNumber=>$sceneData)
                     <a href="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber]) }}" target="_blank" rel="noopener" class="rounded-lg border p-2">

@@ -1,11 +1,17 @@
 @php
     $attachmentOrders = collect($attachmentOrders ?? [$attachmentTarget ?? $order ?? null])->filter();
     $attachmentTarget ??= $attachmentOrders->first();
+    $publishedBookRuns = \App\Models\CodexSceneRun::whereIn('order_id', $attachmentOrders->pluck('id'))
+        ->where('production_kind', 'coloring_book')->where('book_pdf->status', 'ready')->get(['book_pdf', 'scenes']);
+    $visibleAttachmentIds = $attachmentOrders->flatMap(fn ($row) => $row->attachments->pluck('id'));
+    $packagedPageIds = $publishedBookRuns->filter(fn ($run) => $visibleAttachmentIds->contains($run->book_pdf['attachment_id'] ?? null))
+        ->flatMap(fn ($run) => collect($run->scenes ?? [])->pluck('attachment_id'))->filter();
     $orderAttachments = $attachmentOrders
         ->flatMap(fn ($attachmentOrder) => $attachmentOrder->attachments->map(fn ($attachment) => [
             'attachment' => $attachment,
             'order' => $attachmentOrder,
         ]))
+        ->reject(fn ($entry) => $packagedPageIds->contains($entry['attachment']->id))
         ->sortByDesc(fn ($entry) => $entry['attachment']->created_at)
         ->values();
     $collapsible ??= false;

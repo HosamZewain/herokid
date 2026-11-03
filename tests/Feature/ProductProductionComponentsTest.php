@@ -344,8 +344,9 @@ class ProductProductionComponentsTest extends TestCase
         app(ProductProductionPromptSyncService::class)->syncForProduct($product);
         app(ProductProductionComponentSnapshotService::class)->captureForItem($item->fresh());
         $units = ProductProductionPrompt::forItem($item->fresh());
-        $this->assertSame('Cover رقية only', $units[0]['prompt']);
-        $this->assertSame('20 pages for رقية', $units[1]['prompt']);
+        $this->assertSame('changed', $units[0]['prompt']);
+        $this->assertSame('changed', $units[1]['prompt']);
+        $this->assertDatabaseCount('book_prompt_revisions', 2);
         $this->assertSame([1, 20], $units->pluck('quantity_per_item')->all());
         $this->assertSame(['order_component_snapshot', 'order_component_snapshot'], $units->pluck('prompt_source')->all());
     }

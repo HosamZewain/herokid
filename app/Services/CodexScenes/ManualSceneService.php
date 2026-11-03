@@ -175,13 +175,24 @@ class ManualSceneService
 
     private function retainedBytes(CodexSceneRun $run, int $number, array $scene): string
     {
-        $attachment = OrderAttachment::find($scene['attachment_id'] ?? 0);
-        if (! $attachment || $attachment->order_id !== $run->order_id || $attachment->production_unit_key !== ($run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$run->order_id)
-            || $attachment->disk !== 's3_private' || $attachment->path !== ($scene['path'] ?? null)
-            || ! str_starts_with($attachment->path, 'orders/'.$run->order_id.'/codex-scenes/')) {
-            throw new \RuntimeException('Retained scene belongs to another story');
+        if ($run->production_kind === 'coloring_book' && empty($scene['attachment_id'])) {
+            $source = CodexSceneRun::find($scene['source_run_id'] ?? '');
+            if (! $source || $source->production_kind !== 'coloring_book' || $source->order_id !== $run->order_id
+                || $source->order_item_id !== $run->order_item_id || ($source->snapshot['unit_key'] ?? null) !== ($run->snapshot['unit_key'] ?? null)
+                || ($source->scenes[(string) $number]['path'] ?? null) !== ($scene['path'] ?? null)
+                || ($source->scenes[(string) $number]['sha256'] ?? null) !== ($scene['sha256'] ?? null)) {
+                throw new \RuntimeException('Retained page belongs to another book');
+            }
+            $bytes = BookPdfService::pageBytes($source, $number, $scene);
+        } else {
+            $attachment = OrderAttachment::find($scene['attachment_id'] ?? 0);
+            if (! $attachment || $attachment->order_id !== $run->order_id || $attachment->production_unit_key !== ($run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$run->order_id)
+                || $attachment->disk !== 's3_private' || $attachment->path !== ($scene['path'] ?? null)
+                || ! str_starts_with($attachment->path, 'orders/'.$run->order_id.'/codex-scenes/')) {
+                throw new \RuntimeException('Retained scene belongs to another story');
+            }
+            $bytes = Storage::disk('s3_private')->get($attachment->path);
         }
-        $bytes = Storage::disk('s3_private')->get($attachment->path);
         $size = @getimagesizefromstring($bytes);
         if (! hash_equals($scene['sha256'] ?? '', hash('sha256', $bytes)) || ! $size || $size['mime'] !== 'image/png'
             || min($size[0], $size[1]) < 1024 || ($run->production_kind === 'coloring_book' ? $size[1] <= $size[0] : $size[0] <= $size[1])) {
@@ -348,6 +359,7 @@ class ManualSceneService
     public function tick(): void
     {
         Cache::lock('codex-scenes-sync', 110)->get(function () {
+            app(BookPdfService::class)->retryPending();
             $this->enroll();
             app(BookPageService::class)->enroll();
             foreach (CodexSceneRun::where('active_slot', 1)->orderBy('created_at')->get() as $run) {
@@ -498,6 +510,9 @@ class ManualSceneService
                 $run->timing = $timing;
             }
             if (($state['status'] ?? '') === 'stopped') {
+                if ($run->production_kind === 'coloring_book' && $run->scenes) {
+                    app(BookPdfService::class)->request($run);
+                }
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 if (! $order->trashed() && $order->status === 'generating') {
                     $this->setStatus($order, $run->previous_status, 'توقف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
@@ -561,8 +576,8 @@ class ManualSceneService
                         throw new \RuntimeException('Storage verification failed');
                     }
                 }
-                $attachment = OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => $run->production_kind === 'coloring_book' ? $run->snapshot['unit_key'] : 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n.($artwork ? ' / A4 / '.$artwork['effective_ppi'].' PPI فعلية — راجع جودة الطباعة' : '')]);
-                $saved[$key] = ['attachment_id' => $attachment->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1], 'source_sha256' => $sourceSha, 'artwork' => $artwork];
+                $attachment = $run->production_kind === 'coloring_book' ? null : OrderAttachment::create(['order_id' => $order->id, 'uploaded_by_user_id' => null, 'production_unit_key' => 'story:'.$order->id, 'disk' => 's3_private', 'path' => $dest, 'original_name' => 'Codex-scene-'.sprintf('%02d', $n).'.png', 'mime_type' => 'image/png', 'size' => strlen($bytes), 'note' => 'Codex / '.$run->id.' / مشهد '.$n.($artwork ? ' / A4 / '.$artwork['effective_ppi'].' PPI فعلية — راجع جودة الطباعة' : '')]);
+                $saved[$key] = ['attachment_id' => $attachment?->id, 'source_run_id' => $run->id, 'path' => $dest, 'sha256' => $sha, 'width' => $size[0], 'height' => $size[1], 'source_sha256' => $sourceSha, 'artwork' => $artwork];
                 AutomationActivity::record($order, 'codex_scene_saved', 'توليد وحفظ مشهد '.$n.' من '.($run->scene_count ?? 13).' عبر Codex.', ['run_id' => $run->id, 'scene' => $n, 'sha256' => $sha]);
             }
             ksort($saved, SORT_NUMERIC);
@@ -618,11 +633,15 @@ class ManualSceneService
                     $run->error_code = 'codex_requires_review';
                 }
             }
+            if ($run->production_kind === 'coloring_book' && $saved && in_array($phase, ['completed', 'needs_manual', 'paused', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
+                app(BookPdfService::class)->request($run);
+            }
             $changed = $run->isDirty('status');
             $run->save();
             if ($changed) {
                 AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['needs_manual' => 'تسليم المشاهد الناقصة للتيم', 'running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'quality_review' => 'تحتاج مراجعة جودة: '.(CodexSceneRun::ERRORS[$run->error_code] ?? ''), 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
             }
         });
+        app(BookPdfService::class)->publish($run->fresh());
     }
 }

@@ -4,12 +4,15 @@ namespace App\Services\OrderAutomation\Process;
 
 use App\Models\OrderItem;
 use App\Models\OrderPreview;
+use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
 use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
@@ -67,8 +70,10 @@ class ProcessProductReview
         }
     }
 
-    public function ready(OrderProcessRun $run): bool
+    public function ready(OrderProcessRun $run, ?array $staffInputs = null): bool
     {
+        $savedManifest = OrderReviewManifest::where('run_id', $run->id)->first();
+        $staffInputs ??= $savedManifest ? app(StaffPreviewInputs::class)->recorded($savedManifest) : [];
         $stories = app(ProcessOrderContext::class)->orders($run->checkout_key)->whereNotNull('story_id');
         if ($stories->isNotEmpty() && ! app(ProcessIdentityService::class)->ready($run)) {
             return false;
@@ -93,7 +98,12 @@ class ProcessProductReview
             }
             $context = $this->capture($item);
             if (! hash_equals($context['fingerprint'], $generation->context['fingerprint'] ?? '')) {
-                throw new RuntimeException('preview_requires_review');
+                if (! hash_equals($context['fingerprint'], $staffInputs[(string) $item->id]['input_fingerprint'] ?? '')) {
+                    throw new RuntimeException('preview_requires_review');
+                }
+                // The approval attests to this saved artwork under the current brief;
+                // keep the original generation provenance in the immutable manifest.
+                $context['fingerprint'] = $generation->context['fingerprint'];
             }
             $preview = OrderPreview::find($generation->preview_id);
             if (! $preview || $preview->order_id !== $item->order_id || $preview->production_unit_key !== $context['unit_key'] || $preview->checksum !== $generation->checksum || $preview->productGallery?->status !== 'active') {
@@ -109,6 +119,20 @@ class ProcessProductReview
         }
         foreach ($images as $image) {
             $this->bytes($image);
+        }
+        $existingManifest = OrderReviewManifest::where('run_id', $run->id)->first();
+        if ($existingManifest) {
+            foreach ($images as &$image) {
+                if (($image['kind'] ?? '') !== 'book_cover') {
+                    continue;
+                }
+                $old = collect($existingManifest->images)->firstWhere('item_id', $image['item_id']);
+                if ($old && (app(BookPromptSync::class)->matchesInterior(OrderItem::findOrFail($image['item_id']), $old['interior_fingerprint'] ?? '')
+                    || app(BookPromptSync::class)->matchesInterior(OrderItem::findOrFail($image['item_id']), $staffInputs[(string) $image['item_id']]['interior_fingerprint'] ?? ''))) {
+                    $image['interior_fingerprint'] = $old['interior_fingerprint'];
+                }
+            }
+            unset($image);
         }
         $fingerprint = hash('sha256', json_encode($images, JSON_THROW_ON_ERROR));
         $manifest = OrderReviewManifest::firstOrCreate(['run_id' => $run->id], ['checkout_key' => $run->checkout_key, 'images' => $images, 'fingerprint' => $fingerprint]);
@@ -158,7 +182,7 @@ class ProcessProductReview
         return URL::temporarySignedRoute('order-process.review-preview', now()->addDays(35), ['manifest' => OrderReviewManifest::where('run_id', $run->id)->firstOrFail()->id]);
     }
 
-    public function approve(OrderProcessRun $run, array $config): void
+    public function approve(OrderProcessRun $run, array $config, ?OrderPreviewStaffApproval $staffApproval = null): void
     {
         if (! $this->ready($run)) {
             throw new RuntimeException('preview_requires_review');
@@ -167,20 +191,20 @@ class ProcessProductReview
         $decision = DB::table('order_process_responses')->where('run_id', $run->id)->where('step_id', $step->id)->first();
         $wait = collect($run->revision->definition['nodes'])->firstWhere('id', $config['response_node']);
         $case = collect($wait['config']['cases'])->firstWhere('text', 'تأكيد المعاينة');
-        if (! $decision || ! $case || $case['key'] !== $decision->decision) {
+        if ($staffApproval ? ! $staffApproval->matches($run) : (! $decision || ! $case || $case['key'] !== $decision->decision)) {
             throw new RuntimeException('preview_requires_review');
         }
         if (OrderProcessIdentity::where('run_id', $run->id)->exists()) {
-            app(ProcessIdentityService::class)->approve($run, $config, 'تأكيد المعاينة');
+            app(ProcessIdentityService::class)->approve($run, $config, 'تأكيد المعاينة', $staffApproval);
         }
         $manifest = OrderReviewManifest::where('run_id', $run->id)->lockForUpdate()->firstOrFail();
         if (! $manifest->approved_at) {
-            $manifest->update(['approved_at' => now(), 'response_message_id' => $decision->message_id]);
+            $manifest->update(['approved_at' => now(), 'response_message_id' => $staffApproval ? null : $decision->message_id]);
             // A product approval is not a printing or payment approval. Hand it to
             // staff; approved, paid books can enter their existing interior gate.
             $contexts = app(ProcessOrderContext::class);
             foreach ($contexts->orders($run->checkout_key, true)->whereNull('story_id') as $order) {
-                if (! in_array($order->status, ['new_confirmed', 'preview_uploaded'], true)) {
+                if (! in_array($order->status, $staffApproval ? ['new_confirmed', 'preview_uploaded', 'delivered', 'pending_team_review'] : ['new_confirmed', 'preview_uploaded'], true)) {
                     continue;
                 }
                 $from = $order->status;
@@ -190,7 +214,7 @@ class ProcessProductReview
                     ['run_id' => $run->id, 'manifest_id' => $manifest->id, 'from' => $from, 'to' => 'pending_team_review']);
             }
             $run->context = $contexts->snapshot($contexts->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
-            AutomationActivity::record($run->checkout_key, 'previews_approved', 'اعتماد صور المعاينة المحددة فقط بناءً على رد العميل؛ لم يسجل دفع.', ['manifest_id' => $manifest->id, 'image_count' => count($manifest->images), 'source_id' => $decision->message_id]);
+            AutomationActivity::record($run->checkout_key, 'previews_approved', $staffApproval ? 'اعتماد النسخة الحالية بناءً على موافقة العميل المسجلة بواسطة الفريق؛ لم يسجل دفع.' : 'اعتماد صور المعاينة المحددة فقط بناءً على رد العميل؛ لم يسجل دفع.', ['manifest_id' => $manifest->id, 'image_count' => count($manifest->images), 'source_id' => $staffApproval ? null : $decision->message_id, 'staff_approval_id' => $staffApproval?->id, 'requested_by' => $staffApproval?->user_id]);
         }
     }
 }

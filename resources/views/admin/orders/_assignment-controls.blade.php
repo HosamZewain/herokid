@@ -24,7 +24,17 @@
         @endcan
         @if($canControl)
             <details><summary class="cursor-pointer text-xs font-bold text-amber-800">التحكم في الأوتوميشن</summary>
-                @if(in_array($summary['control_state'], ['pause_requested','pause_uncertain'], true))
+                @if($summary['control_state'] === 'running' && !$summary['tracking'] && !($summary['has_execution'] ?? true))
+                    <p class="mt-2 text-xs font-bold text-gray-700">لا يوجد تنفيذ آلي جارٍ لهذا الطلب. ظهور إعداد الأوتوميشن لا يعني أن الطلب دخل الطابور.</p>
+                    @if(($summary['needs_enrollment'] ?? false) && auth()->user()->hasPermission('orders.photos.view') && auth()->user()->hasPermission('orders.production_prompt.manage'))
+                        <form method="POST" action="{{ route('admin.orders.workspace.admit', $group['representative_id']) }}" class="mt-2 space-y-2">
+                            @csrf
+                            <input type="hidden" name="version" value="{{ $summary['control_version'] }}">
+                            <label class="flex gap-2 text-xs"><input type="checkbox" name="confirm" value="1" required> فحص البيانات وبدء تجهيز المعاينات إذا كان الطلب مؤهلًا، دون إعادة رسالة تأكيد الطلب.</label>
+                            <button class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">فحص وإدخال للأوتوميشن</button>
+                        </form>
+                    @endif
+                @elseif(in_array($summary['control_state'], ['pause_requested','pause_uncertain'], true))
                     <p class="mt-2 text-xs font-bold text-red-800">{{ $summary['control_state'] === 'pause_requested' ? 'طلب الإيقاف مسجل؛ ننتظر حفظ الخطوة الجارية.' : 'لم يتأكد توقف العامل؛ يلزم مراجعة التنفيذ.' }}</p>
                 @else
                     <form method="POST" action="{{ $summary['control_state'] === 'paused_legacy' ? route('admin.orders.groups.assignment.automation',$group['representative_id']) : route('admin.orders.workspace.control',$group['representative_id']) }}" class="mt-2 space-y-2">
@@ -32,6 +42,7 @@
                         <input type="hidden" name="version" value="{{ $summary['control_version'] }}">
                         <input type="hidden" name="action" value="{{ in_array($summary['control_state'],['paused','paused_legacy'],true) ? 'resume' : 'pause' }}">
                         @if($summary['control_state'] === 'running')
+                            @if(!$summary['running'])<p class="text-xs text-gray-600">لا يوجد توليد جارٍ الآن. الإيقاف يمنع بدء الخطوات التالية إلى أن تستأنفها؛ راجع سبب الانتظار أعلى الطلب.</p>@endif
                             <input required name="reason" maxlength="1000" placeholder="سبب طلب الإيقاف" aria-label="سبب طلب الإيقاف" class="w-full rounded-lg border-gray-200 text-xs">
                         @else
                             <p class="text-xs text-gray-600">لو أضفت منتجات بعد المعاينة، أكد بيانات الطلب المعدّل واحفظ كل عناصره «طلب جديد مؤكد» أولًا. الاستئناف يحفظ الصور المطابقة، ويجهّز المضاف ثم يرسل معاينة جديدة؛ الرد القديم لا يعتمد الإضافات.</p>

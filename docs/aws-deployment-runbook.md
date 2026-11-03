@@ -1,5 +1,10 @@
 # HeroKid AWS deployment and agent handoff
 
+
+## 3 November 2026 — staff preview approval, book PDFs and prompt sync PREPARED
+
+Owner explicitly requested deployment of this combined follow-up and automatic book prompt synchronization. Prepared from verified main/live **279c9fab373aac0d4aa3bf51ef1adf047dd475e0** in isolated `codex/product-return-after-preview`; unrelated primary checkout preserved. [Behavior and recovery boundaries](staff-preview-book-pdf-prompts-2026-11-03.ar.md). Three additive migrations only; no Codex worker replacement, external test messages/generation, historical replay or automatic customer consent. Explicit backfill updates eligible unstarted template stages only; holds and accepted generation snapshots remain intact. Production verification follows below after the authorized release.
+
 ## 3 November 2026 — product preview return correction DEPLOYED; HK10-495 reconciled
 
 Prepared from live/main **1a542ac6074b027c1af8943bd480dbfc2d9786a6** in isolated `codex/product-return-after-preview`. This corrects the owner-reported HK11-57 resume defect within the authorized order-workspace follow-up. After staff confirms all revised product rows, explicit resume retains matching completed outputs, retires the old wait and creates a fresh preview version. No historical activation is part of deployment. No schema/config/Codex worker changes. [Behavior, test evidence and cancellation reconciliation](product-preview-return-2026-11-03.ar.md). Application **48f79aa3c17ada206b5feb824f142b8ab50697b0** deployed from GitHub main **13:41:33UTC**. All11 changed-file hashes and readability verified; environment/private configuration/routes/frontend manifest unchanged. Blade cache refreshed and FPM gracefully reloaded. Only order-process and conversations workers received graceful TERM; new PIDs1337211/1337226 verified running, default1318770/process-ai1318764/Codex1318728 preserved. Seven services active, failed_jobs81 unchanged, public home/up/cart200, no new Laravel/Nginx error markers. Short maintenance fence accounted for one503; no application500 observed.
