@@ -66,8 +66,9 @@ class OrderWorkspaceController extends Controller
     public function approvePreview(Request $request, Order $order, StaffPreviewApproval $approvals)
     {
         $data = $request->validate(['confirm' => 'accepted', 'manifest_id' => 'required|integer', 'fingerprint' => 'required|string|size:64',
-            'inputs_fingerprint' => 'required|string|size:64', 'run_version' => 'required|integer|min:1', 'control_version' => 'required|integer|min:1',
-            'channel' => 'required|in:phone,whatsapp,in_person,other', 'note' => 'required|string|min:3|max:1000']);
+            'inputs_fingerprint' => 'required|string|size:64', 'run_version' => 'required|integer|min:1', 'control_version' => 'required|integer|min:1']);
+        $data['channel'] = 'staff';
+        $data['note'] = 'سجّل الموظف موافقة العميل على المعاينة الحالية بواسطة زر تسجيل الموافقة واستكمال الطلب.';
         try {
             $approvals->approve($order, $request->user(), $request, $data);
         } catch (HttpExceptionInterface $e) {

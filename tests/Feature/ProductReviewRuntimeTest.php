@@ -387,7 +387,7 @@ class ProductReviewRuntimeTest extends TestCase
             'inputs_fingerprint' => app(StaffPreviewInputs::class)->fingerprint(app(StaffPreviewInputs::class)->capture($manifest)),
             'run_version' => $run->fresh()->version,
             'control_version' => DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version') ?? 1,
-            'confirm' => 1, 'channel' => 'phone', 'note' => 'Synthetic customer phone consent'];
+            'confirm' => 1];
     }
 
     public function test_staff_approval_settles_paused_paid_book_after_status_changes_without_resending(): void
@@ -404,6 +404,7 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertNull($manifest->fresh()->response_message_id);
         $this->assertDatabaseCount('order_process_responses', 0);
         $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertDatabaseHas('order_preview_staff_approvals', ['manifest_id' => $manifest->id, 'user_id' => $admin->id, 'channel' => 'staff']);
         $this->assertFalse(AutomationHandoff::held($run->checkout_key));
         $this->assertFalse(AutomationControl::blocked($run->checkout_key));
         $this->assertSame('waiting_staff', $run->fresh()->status);
@@ -426,7 +427,7 @@ class ProductReviewRuntimeTest extends TestCase
     {
         [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
         $this->actingAs($admin)->get(route('admin.orders.groups.show', $item->order))->assertOk()
-            ->assertSee('تسجيل موافقة العميل بواسطة الفريق')->assertDontSee('مراجعة الدفع — مرفقات العميل');
+            ->assertSee('تسجيل الموافقة واستكمال الطلب')->assertDontSee('طريقة موافقة العميل')->assertDontSee('تفاصيل الموافقة')->assertDontSee('مراجعة الدفع — مرفقات العميل');
         $this->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertRedirect()->assertSessionHasNoErrors();
         app(BookPageService::class)->enroll();
         $this->assertDatabaseCount('codex_scene_runs', 0);
@@ -488,7 +489,6 @@ class ProductReviewRuntimeTest extends TestCase
         [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
         $payload = $this->staffApprovalPayload($run, $manifest);
         $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['confirm' => 0]))->assertSessionHasErrors('confirm');
-        $this->post(route('admin.orders.workspace.preview-approval', $item->order), array_replace($payload, ['note' => '']))->assertSessionHasErrors('note');
         $this->actor->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.automation.control'])->pluck('id'));
         $this->actingAs($this->actor->fresh())->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertForbidden();
         $this->assertDatabaseCount('order_preview_staff_approvals', 0);
