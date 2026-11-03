@@ -62,7 +62,8 @@ class AutomationAssignment
         $puzzles = DB::table('puzzle_generations')->select('checkout_key')
             ->whereIn('status', ['queued', 'processing', 'uncertain'])
             ->where(fn ($q) => $q->whereNotIn('checkout_key', DB::table('order_automation_holds')->select('checkout_key'))->orWhereNotNull('requested_by'));
-        $keys = $runs->union($confirmations)->union($evaluating)->union($puzzles);
+        $identityRegenerations = DB::table('order_identity_regenerations')->select('checkout_key')->whereIn('status', ['queued', 'processing', 'uncertain']);
+        $keys = $runs->union($confirmations)->union($evaluating)->union($puzzles)->union($identityRegenerations);
 
         if (app(PuzzleAutomation::class)->enabled()) {
             $floor = max((int) config('puzzle_automation.after_event_id'), (int) DB::table('puzzle_automation_cursors')->where('id', 1)->value('event_id'));

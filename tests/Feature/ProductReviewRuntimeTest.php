@@ -435,6 +435,34 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertEqualsWithDelta(297 / 210, $scene['height'] / $scene['width'], .002);
     }
 
+    public function test_coloring_cover_can_regenerate_with_custom_prompt_without_reusing_old_approval(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        $this->send($run);
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.production_prompt.manage', 'orders.assign', 'orders.assignment.manage'])->pluck('id'));
+        $this->actingAs($this->actor->fresh());
+        $this->post(route('admin.orders.groups.assignment.automation', $item->order), ['action' => 'take'])->assertSessionHasNoErrors();
+        $manifest = OrderReviewManifest::sole();
+        $oldImages = $manifest->images;
+        $previous = PuzzleGeneration::sole();
+        $this->get(route('admin.orders.groups.show', $item->order))->assertOk()->assertSee('تعديل برومبت إعادة التوليد');
+        $this->post(route('admin.orders.products.regenerate', [$item->order, $item]), ['previous_run_id' => $previous->id, 'confirm' => 1,
+            'prompt' => 'CUSTOM NEW COVER WITH RAINBOW AND ORIGINAL CHILD'])->assertSessionHasNoErrors();
+        $new = PuzzleGeneration::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->withArgs(function (GptImageRequest $request) {
+            $this->assertStringContainsString('CUSTOM NEW COVER', $request->prompt);
+
+            return true;
+        })->andReturn(new GptImageResult($this->png(2), 'png', 'image/png', 'synthetic-new-cover', [], []));
+        app(PuzzleAutomation::class)->generate($new->id);
+        $this->assertSame('succeeded', $new->fresh()->status);
+        $this->assertSame($oldImages, $manifest->fresh()->images);
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertSame(0, CodexSceneRun::count());
+        $this->assertSame(2, OrderAttachment::count());
+    }
+
     private function generatedPreview(): array
     {
         $item = $this->book();

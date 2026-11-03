@@ -1,5 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
+## 3 November 2026 — identity regeneration and live order Codex banner prepared, NOT deployed
+
+Prepared in isolated branch `codex/order-preview-regeneration` from `2bc41a55a4d351024ca599edfa9209841d01d8f1`. AWS SHA rechecked unchanged at **07:56 UTC /09:56 Cairo**. Primary dirty checkout preserved. This scope has no new deployment authorization yet: no migrations, worker refresh, production order changes, generation, customer messaging or historical replay performed.
+
+Pending identity attempts become visible in orders; new successful identities get independent attachments. Staff can explicitly regenerate an identity or supported single-image product/cover with a per-attempt prompt and current photos, preserving history and guarding active jobs, stale approvals and uncertain results. One additive identity-regeneration table; it must precede code activation. Existing processes require explicit manual takeover; regeneration does not resume old previews or automatically send a message.
+
+A checkout-wide top banner displays active Codex story/book runs, saved/total pages, queue/running/review states and a 10-second live refresh; view-only staff can see counts without private images/prompts. HK11-65/order2828 was running a50-page coloring book,8pages saved at the stated observation time. No intervention.
+
+Validation:146tests/1223assertions on **each** isolated PHP8.3 SQLite/MySQL8 synthetic database;2frontend polling tests. Lockfile build succeeds; previous hashed assets retained. Scoped source syntax/manifest verification included. [Detailed prepared behavior and release boundaries](order-identity-regeneration-and-codex-banner-2026-11-03.ar.md). On future authorized release, revalidate exact main/live diff, preserve a fresh recovery checkpoint, apply only the additive migration, refresh affected Laravel workers gracefully and leave Codex in flight. No database rollback/table drop or historical generation replay.
+
+
 
 ## 2 November 2026 — mobile games configuration and anonymous reports deployed from main
 

@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Jobs\SendOrderConfirmationJob;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderIdentityRegeneration;
 use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessRun;
 use App\Models\PuzzleGeneration;
@@ -56,6 +57,9 @@ class AutomationHandoff
             $runs = OrderProcessRun::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get();
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get();
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
+            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', ['queued', 'processing', 'uncertain'])->exists()) {
+                throw ValidationException::withMessages(['assignment' => 'إعادة توليد الهوية جارية أو نتيجتها غير مؤكدة؛ انتظر المراجعة.']);
+            }
             abort_if($rows->isEmpty(), 404);
             if (PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->whereIn('status', ['processing', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'queued')->whereNotNull('requested_by')))->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'توليد البازل جارٍ أو نتيجته غير مؤكدة. انتظر اكتماله أو مراجعة المحاولة قبل الاستلام.']);
@@ -98,6 +102,9 @@ class AutomationHandoff
             $runs = OrderProcessRun::where('checkout_key', $key)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $events = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
+            if (OrderIdentityRegeneration::where('checkout_key', $key)->whereIn('status', ['queued', 'processing', 'uncertain'])->exists()) {
+                throw ValidationException::withMessages(['assignment' => 'إعادة توليد الهوية جارية أو نتيجتها غير مؤكدة؛ انتظر المراجعة.']);
+            }
             $hold = DB::table('order_automation_holds')->where('checkout_key', $key)->lockForUpdate()->first();
             abort_unless($hold, 422, 'الطلب ليس متوقفًا للعمل اليدوي.');
             if (CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()) {

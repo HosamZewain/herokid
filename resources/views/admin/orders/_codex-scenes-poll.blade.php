@@ -2,10 +2,11 @@
 @push('scripts')
 <script>
 (() => {
-    const panels = [...document.querySelectorAll('[data-codex-progress]')];
+    const panels = [...document.querySelectorAll('[data-codex-progress], [data-codex-generation-banner]')];
     const refresh = async () => {
         if (!document.hidden) {
             for (const panel of panels) {
+                const isBanner = panel.hasAttribute?.('data-codex-generation-banner');
                 const note = panel.parentElement.querySelector('[data-codex-refresh-note]');
                 try {
                     const response = await fetch(panel.dataset.url, {
@@ -20,9 +21,11 @@
                         panel.innerHTML = data.html;
                         panel.dataset.version = data.version;
                     }
-                    note.textContent = 'تتحدث المشاهد وحالة التوليد تلقائيًا كل 10 ثوانٍ.';
+                    if (isBanner) note.hidden = !data.html.trim();
+                    note.textContent = isBanner ? 'حالة التوليد وعدد الصفحات المحفوظة يتحدثان تلقائيًا كل 10 ثوانٍ.' : 'تتحدث المشاهد وحالة التوليد تلقائيًا كل 10 ثوانٍ.';
                 } catch (_) {
-                    note.textContent = 'تعذر تحديث المشاهد مؤقتًا؛ سنحاول تلقائيًا. الصور الحالية محفوظة.';
+                    note.hidden = false;
+                    note.textContent = isBanner ? 'تعذر تحديث حالة Codex؛ آخر حالة معروضة قد تكون قديمة. تحقق قبل بدء العمل اليدوي؛ سنحاول تلقائيًا.' : 'تعذر تحديث المشاهد مؤقتًا؛ سنحاول تلقائيًا. الصور الحالية محفوظة.';
                 }
             }
         }

@@ -13,6 +13,7 @@ use App\Models\Order;
 use App\Models\OrderAutomation;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderAutomationRun;
+use App\Models\OrderIdentityRegeneration;
 use App\Models\OrderPaymentReview;
 use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessIdentity;
@@ -39,6 +40,7 @@ use App\Services\OrderAutomation\Process\ProcessSimulator;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationAssignment;
+use App\Services\Orders\OrderIdentityRegenerationService;
 use App\Services\Orders\OrderPaymentService;
 use App\Services\Orders\OrderReviewLinks;
 use GuzzleHttp\Psr7\Response;
@@ -121,6 +123,125 @@ class OrderProcessIdentityTest extends TestCase
         app(ProcessRuntime::class)->tick();
 
         return OrderProcessRun::where('checkout_key', $key)->firstOrFail();
+    }
+
+    private function regenerationOrder(): Order
+    {
+        $run = $this->generated();
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.production_prompt.manage', 'orders.assignment.manage', 'orders.assign'])->pluck('id'));
+        $this->actingAs($this->actor);
+        $order = $run->order->fresh();
+        $this->post(route('admin.orders.groups.assignment.automation', $order), ['action' => 'take'])->assertSessionHasNoErrors();
+
+        return $order;
+    }
+
+    public function test_pending_identity_is_visible_in_order_and_has_independent_attachment(): void
+    {
+        $order = $this->regenerationOrder();
+        $attempt = $order->childIdentityRequest->attempts()->sole();
+        $this->assertNull($order->child_identity_approved_attempt_id);
+        $attachment = $order->attachments()->where('production_unit_key', 'identity:'.$attempt->id)->sole();
+        $this->assertNotSame($attempt->output_storage_path, $attachment->path);
+        $this->get(route('admin.orders.groups.show', $order))->assertOk()->assertSee('غير معتمدة')
+            ->assertSee(route('admin.orders.identity-attempts.image', [$order, $attempt]), false);
+        $this->get(route('admin.orders.identity-attempts.image', [$order, $attempt]))->assertOk()->assertStreamedContent($this->png);
+        $attachment->delete();
+        $this->assertTrue(Storage::disk($attempt->output_disk)->exists($attempt->output_storage_path));
+    }
+
+    public function test_identity_regeneration_uses_latest_photos_custom_prompt_and_keeps_history_unapproved(): void
+    {
+        $order = $this->regenerationOrder();
+        $previous = $order->childIdentityRequest->attempts()->sole();
+        $old = $previous->getAttributes();
+        Storage::disk('local')->put('child-photos/new.png', $this->png.'new-photo');
+        $order->updateQuietly(['uploaded_photos' => ['child-photos/new.png']]);
+        $prompt = str_repeat('New blue astronaut costume. ', 4);
+        $url = route('admin.orders.identity.regenerate', $order);
+        $data = ['previous_attempt_id' => $previous->id, 'prompt' => $prompt, 'confirm' => 1];
+        $this->post($url, $data)->assertSessionHasNoErrors();
+        $this->post($url, $data)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('order_identity_regenerations', 1);
+        $run = OrderIdentityRegeneration::sole();
+        $this->assertTrue(app(AutomationAssignment::class)->owns($order));
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->withArgs(function (GptImageRequest $r) use ($prompt) {
+            $this->assertSame(1, $r->maxAttempts);
+            $this->assertStringContainsString(trim($prompt), $r->prompt);
+            $this->assertSame('data:image/png;base64,'.base64_encode($this->png.'new-photo'), $r->inputImages[0]);
+
+            return true;
+        })->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-second', ['cost_usd' => 0.1], []));
+        $service = app(OrderIdentityRegenerationService::class);
+        $service->generate($run->id);
+        $service->generate($run->id);
+        $this->assertSame('succeeded', $run->fresh()->status);
+        $this->assertSame($old, $previous->fresh()->getAttributes());
+        $this->assertNull($order->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(2, $order->attachments()->count());
+        $this->assertSame('paused', OrderProcessRun::sole()->status);
+        $this->assertFalse(app(AutomationAssignment::class)->owns($order));
+        $links = app(OrderReviewLinks::class)->forOrders(collect([$order->fresh()]));
+        $this->assertStringContainsString('order-identity-review', $links);
+        preg_match('~https?://[^\s]+~u', $links, $match);
+        $this->get($match[0])->assertOk()->assertContent($this->png);
+        $this->get(route('orders.regenerated-identity-preview', $run))->assertForbidden();
+        $this->post(route('admin.orders.identity-attempts.approve', [$order, $previous]), ['confirm' => 1])->assertUnprocessable();
+        $this->post(route('admin.orders.identity-attempts.approve', [$order, $run->attempt]), ['confirm' => 1])->assertSessionHasNoErrors();
+        $this->assertSame($run->attempt_id, $order->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(0, $order->fresh()->paid_amount_cents);
+    }
+
+    public function test_paid_identity_output_remains_visible_when_attachment_copy_fails(): void
+    {
+        $order = $this->regenerationOrder();
+        $service = app(OrderIdentityRegenerationService::class);
+        $run = $service->request($order, $this->actor, $order->childIdentityRequest->attempts()->sole()->id, str_repeat('Original child with blue costume. ', 3));
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-copy-failure', ['cost_usd' => 0.1], []));
+        $this->mock(\App\Services\Orders\OrderIdentityMedia::class)->shouldReceive('attach')->once()->andThrow(new \RuntimeException('copy failed'));
+        $service->generate($run->id);
+        $service->generate($run->id);
+        $run->refresh();
+        $this->assertSame('review', $run->status);
+        $this->assertSame('succeeded', $run->attempt->status);
+        $this->assertSame('identity_attachment_failed', $run->error_code);
+        $this->get(route('admin.orders.identity-attempts.image', [$order, $run->attempt]))->assertOk();
+        $this->assertNull($order->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(1, $order->attachments()->count());
+    }
+
+    public function test_identity_regeneration_blocks_changed_inputs_and_uncertain_retry(): void
+    {
+        $order = $this->regenerationOrder();
+        $previous = $order->childIdentityRequest->attempts()->sole();
+        $service = app(OrderIdentityRegenerationService::class);
+        $run = $service->request($order, $this->actor, $previous->id, str_repeat('Use original child. ', 5));
+        $order->updateQuietly(['child_name' => 'changed']);
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        $service->generate($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertSame('not_billable', $run->attempt->fresh()->billing_status);
+        $next = $service->request($order->fresh(), $this->actor, $run->attempt_id, str_repeat('Use current child. ', 5));
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('timeout'));
+        $service->generate($next->id);
+        $service->generate($next->id);
+        $this->assertSame('uncertain', $next->fresh()->status);
+        $this->assertSame('unknown', $next->attempt->fresh()->billing_status);
+        $this->expectException(ValidationException::class);
+        $service->request($order->fresh(), $this->actor, $next->attempt_id, str_repeat('Another attempt. ', 5));
+    }
+
+    public function test_regeneration_requires_takeover_and_rejects_foreign_attempt_media(): void
+    {
+        $run = $this->generated(2);
+        $this->actingAs($this->actor);
+        $tasks = OrderProcessIdentity::orderBy('id')->get();
+        $this->get(route('admin.orders.identity-attempts.image', [$tasks[0]->order, $tasks[1]->attempt]))->assertNotFound();
+        $this->post(route('admin.orders.identity.regenerate', $tasks[0]->order), ['previous_attempt_id' => $tasks[0]->attempt_id, 'prompt' => str_repeat('example ', 10), 'confirm' => 1])->assertForbidden();
+        $this->actor->permissions()->syncWithoutDetaching(Permission::where('key', 'orders.production_prompt.manage')->pluck('id'));
+        $this->actingAs($this->actor->fresh());
+        $this->post(route('admin.orders.identity.regenerate', $tasks[0]->order), ['previous_attempt_id' => $tasks[0]->attempt_id, 'prompt' => str_repeat('example ', 10), 'confirm' => 1])->assertSessionHasErrors('regeneration');
     }
 
     public function test_unified_review_links_include_pending_identity_and_remove_stale_run_without_approval(): void

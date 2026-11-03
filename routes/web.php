@@ -111,6 +111,7 @@ use Illuminate\Support\Facades\Route;
 // exec() disabled). The .htaccess only routes requests to PHP when the file
 // does NOT exist on disk, so this only fires when the symlink is missing —
 // it has zero cost when the symlink is in place.
+Route::get('/order-identity-review/{regeneration}', \App\Http\Controllers\Front\OrderRegeneratedIdentityPreviewController::class)->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('orders.regenerated-identity-preview');
 Route::get('/order-review/{manifest}', [OrderReviewManifestController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->name('order-process.review-preview');
 Route::get('/order-review/{manifest}/image/{index}', [OrderReviewManifestController::class, 'image'])->middleware(['signed', 'throttle:120,1'])->whereNumber('index')->name('order-process.review-image');
 
@@ -860,6 +861,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', \App\Http\Middleware\Prote
     Route::delete('orders/{order}/photos/{index}', [OrderPhotoController::class, 'destroy'])->whereNumber(['order', 'index'])->middleware(['permission:orders.update', 'permission:orders.photos.view'])->name('orders.photos.destroy');
     Route::post('orders/{order}/codex-scenes', [\App\Http\Controllers\Admin\CodexSceneController::class, 'start'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.start');
     Route::post('orders/{order}/codex-scenes/{run}/stop', [\App\Http\Controllers\Admin\CodexSceneController::class, 'stop'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.codex-scenes.stop');
+    Route::get('orders/{order}/codex-scenes/banner', [\App\Http\Controllers\Admin\CodexSceneController::class, 'banner'])->middleware('permission:orders.view')->name('orders.codex-scenes.banner');
+    Route::get('orders/{order}/identity-attempts/{attempt}/image', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'image'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.identity-attempts.image');
+    Route::post('orders/{order}/identity/regenerate', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'regenerate'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity.regenerate');
+    Route::post('orders/{order}/identity-attempts/{attempt}/approve', [\App\Http\Controllers\Admin\OrderIdentityGenerationController::class, 'approve'])->middleware(['permission:orders.update', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.identity-attempts.approve');
     Route::get('orders/{order}/codex-scenes/progress', [\App\Http\Controllers\Admin\CodexSceneController::class, 'progress'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.photos.view'])->name('orders.codex-scenes.progress');
     Route::get('orders/{order}/codex-scenes/{run}/download', [\App\Http\Controllers\Admin\CodexSceneController::class, 'download'])->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.download');
     Route::get('orders/{order}/codex-scenes/{run}/images/{scene}', [\App\Http\Controllers\Admin\CodexSceneController::class, 'image'])->whereNumber('scene')->middleware(['permission:orders.view', 'permission:orders.photos.view'])->name('orders.codex-scenes.image');

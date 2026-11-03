@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Services\CodexScenes\ManualSceneService;
+use App\Services\CodexScenes\OrderGenerationBanner;
+use App\Services\CodexScenes\SceneTiming;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class CodexSceneController extends Controller
 {
@@ -28,13 +31,13 @@ class CodexSceneController extends Controller
 
     private function monitorData(Request $request): array
     {
-        $status = $request->validate(['status' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(CodexSceneRun::LABELS))]])['status'] ?? null;
+        $status = $request->validate(['status' => ['nullable', Rule::in(array_keys(CodexSceneRun::LABELS))]])['status'] ?? null;
         $runs = CodexSceneRun::with(['order.story', 'order.checkoutReference'])->when($status, fn ($q) => $q->where('status', $status))
             ->orderByRaw('CASE WHEN active_slot = 1 THEN 0 ELSE 1 END')->latest('created_at')->paginate(25)
             ->withPath(route('admin.order-automation.codex-scenes'))->appends($request->only('status'));
 
         return ['sceneRuns' => $runs, 'sceneStatus' => $status, 'sceneCounts' => CodexSceneRun::select('status')->selectRaw('count(*) as total')->groupBy('status')->pluck('total', 'status'),
-            'sceneHealth' => app(ManualSceneService::class)->health(), 'sceneTiming' => \App\Services\CodexScenes\SceneTiming::summary()];
+            'sceneHealth' => app(ManualSceneService::class)->health(), 'sceneTiming' => SceneTiming::summary()];
     }
 
     public function start(Request $request, Order $order, ManualSceneService $service)
@@ -51,6 +54,14 @@ class CodexSceneController extends Controller
         $service->cancel($run, $request->user());
 
         return back()->with('success', 'تم طلب الإيقاف. انتظر تأكيد توقف Codex قبل استكمال العمل.');
+    }
+
+    public function banner(Order $order, OrderGenerationBanner $banner)
+    {
+        $html = view('admin.orders._codex-generation-banner-content', $banner->data($order))->render();
+
+        return response()->json(['html' => $html, 'version' => hash('sha256', $html)])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function progress(Order $order)

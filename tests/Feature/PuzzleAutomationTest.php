@@ -66,6 +66,34 @@ class PuzzleAutomationTest extends TestCase
             'production_prompt_template' => 'One puzzle for {{child_full_name}}, {{child_age}}. {{child_image_references}}']);
     }
 
+    public function test_regeneration_prompt_override_is_scoped_to_attempt_and_uses_current_product_photos(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $this->fakeImage();
+        $service = app(PuzzleAutomation::class);
+        $service->tick();
+        $previous = PuzzleGeneration::sole();
+        $original = $previous->getAttributes();
+        $this->handoff($order, 'take');
+        $item = $order->items()->first();
+        $template = $item->product->production_prompt_template;
+        $custom = 'CUSTOM RED SPACE ROCKET FOR THIS ATTEMPT ONLY';
+        $this->post(route('admin.orders.products.regenerate', [$order, $item]), ['previous_run_id' => $previous->id, 'confirm' => 1, 'prompt' => $custom])->assertSessionHasNoErrors();
+        $run = PuzzleGeneration::latest('id')->first();
+        $this->fakeImage(1, function (GptImageRequest $request) use ($custom) {
+            $this->assertStringContainsString($custom, $request->prompt);
+
+            return true;
+        });
+        $service->generate($run->id);
+        $this->assertSame('succeeded', $run->fresh()->status);
+        $this->assertSame($custom, $run->context['prompt_override']);
+        $this->assertSame($template, $item->product->fresh()->production_prompt_template);
+        $this->assertSame($original, $previous->fresh()->getAttributes());
+        Http::assertNothingSent();
+    }
+
     public function test_regenerating_one_of_three_products_uses_updated_inputs_and_preserves_all_history(): void
     {
         $actor = $this->staff();

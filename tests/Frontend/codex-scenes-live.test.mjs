@@ -24,3 +24,23 @@ test('polling updates only the scene panel, preserves unchanged DOM and recovers
     fail = false; await callback(); assert.match(note.textContent, /تلقائيًا/);
     document.hidden = true; const previous = calls; await callback(); assert.equal(calls, previous);
 });
+
+test('top banner appears for new work, clears at handoff and preserves last state on failures', async () => {
+    let callback, html = '', version = 'empty', fail = false;
+    const note = {hidden: true, textContent: ''};
+    const panel = {dataset: {url: '/banner'}, hasAttribute: () => true, parentElement: {querySelector: () => note}, innerHTML: ''};
+    vm.runInNewContext(source, {
+        document: {hidden: false, querySelectorAll: () => [panel]}, AbortSignal,
+        window: {setTimeout: (fn) => { callback = fn; }},
+        fetch: async () => {
+            if (fail) throw Error('offline');
+            return {ok: true, redirected: false, json: async () => ({html, version})};
+        },
+    });
+    await callback(); assert.equal(note.hidden, true);
+    html = '<p>8 / 50</p>'; version = 'running';
+    await callback(); assert.equal(note.hidden, false); assert.equal(panel.innerHTML, html);
+    fail = true; await callback(); assert.equal(panel.innerHTML, html); assert.match(note.textContent, /قديمة/);
+    fail = false; html = ''; version = 'finished';
+    await callback(); assert.equal(panel.innerHTML, ''); assert.equal(note.hidden, true);
+});

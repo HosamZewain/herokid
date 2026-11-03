@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Models\Order;
+use App\Models\OrderIdentityRegeneration;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProductPreviewGallery;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
@@ -33,7 +34,11 @@ class OrderReviewLinks
             if ($attempt?->status === 'succeeded' && filled($attempt->output_storage_path)) {
                 $url = URL::temporarySignedRoute('orders.approved-child-identity', $expires, ['order' => $order->id]);
             } elseif (! $order->child_identity_approved_attempt_id) {
-                $task = $pending->get($order->id);
+                $manual = OrderIdentityRegeneration::where('order_id', $order->id)->latest('id')->first();
+                if ($manual && app(OrderIdentityRegenerationService::class)->previewReady($manual)) {
+                    $url = URL::temporarySignedRoute('orders.regenerated-identity-preview', $expires, ['regeneration' => $manual->id]);
+                }
+                $task = $manual ? null : $pending->get($order->id);
                 if ($task && $task->status === 'succeeded' && $task->attempt?->status === 'succeeded' && filled($task->attempt->output_storage_path)
                     && $task->run && $task->run->checkout_key === $order->checkoutGroupKey()
                     && ! in_array($task->run->status, ['cancelled', 'blocked', 'uncertain'], true)) {

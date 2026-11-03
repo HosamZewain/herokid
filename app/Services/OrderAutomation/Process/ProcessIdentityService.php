@@ -19,6 +19,7 @@ use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\ChildIdentity\ChildIdentitySettings;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
+use App\Services\Orders\OrderIdentityMedia;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -178,6 +179,11 @@ class ProcessIdentityService
                 $task->update(['status' => $valid ? 'succeeded' : 'uncertain', 'lease_until' => null]);
                 app(ChildIdentityAggregateService::class)->recalculate($task->attempt->identityRequest);
             });
+            try {
+                app(OrderIdentityMedia::class)->attach($task->order, $task->attempt->fresh());
+            } catch (Throwable) {
+                AutomationActivity::record($task->order, 'identity_attachment_review', 'الهوية محفوظة في سجلها؛ تعذر إنشاء نسخة المرفق وتحتاج مراجعة.', ['attempt_id' => $task->attempt_id]);
+            }
         } catch (Throwable $error) {
             // Preserve diagnostics without storing provider bodies, prompts or customer data.
             // A diagnostic receipt does not establish billing or permit an automatic retry.

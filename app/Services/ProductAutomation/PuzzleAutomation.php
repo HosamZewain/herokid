@@ -18,6 +18,7 @@ use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
+use App\Services\Orders\PreviewRegenerationGuard;
 use App\Support\AdminActivityLogger;
 use App\Support\BookArtwork;
 use Illuminate\Support\Facades\Crypt;
@@ -99,13 +100,13 @@ class PuzzleAutomation
         return hash('sha256', json_encode([$attachments, $previews], JSON_THROW_ON_ERROR));
     }
 
-    public function regenerate(Order $order, OrderItem $item, User $actor, int $previousId): PuzzleGeneration
+    public function regenerate(Order $order, OrderItem $item, User $actor, int $previousId, ?string $promptOverride = null): PuzzleGeneration
     {
         abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.update')
             && $actor->hasPermission('orders.photos.view') && $actor->hasPermission('orders.production_prompt.manage'), 403);
         abort_unless($item->order_id === $order->id, 404);
 
-        return DB::transaction(function () use ($order, $item, $actor, $previousId) {
+        return DB::transaction(function () use ($order, $item, $actor, $previousId, $promptOverride) {
             $rows = Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
             $order = $rows->firstWhere('id', $order->id);
             abort_unless($order, 404);
@@ -123,8 +124,12 @@ class PuzzleAutomation
                 throw ValidationException::withMessages(['product_generation' => 'انتظر انتهاء التنفيذ الحالي أو راجع المحاولة غير المؤكدة، ثم استلم الطلب يدويًا إذا كان تحت مسؤولية الأوتوميشن.']);
             }
             $this->assertRegenerationStage($rows);
+            app(PreviewRegenerationGuard::class)->check($order);
             try {
-                $context = app(PuzzleInputs::class)->capture($item);
+                $context = app(PuzzleInputs::class)->capture($item, $promptOverride);
+                if ($promptOverride !== null) {
+                    $context['prompt_override'] = $promptOverride;
+                }
             } catch (Throwable $error) {
                 throw ValidationException::withMessages(['product_generation' => 'راجع برومبت المنتج وصوره: '.$this->safeError($error, 'puzzle_preflight_failed')]);
             }
@@ -337,7 +342,7 @@ class PuzzleAutomation
             $this->assertRegenerationStage(Order::where('checkout_group_key', $run->checkout_key)->get());
         }
         $item = OrderItem::findOrFail($run->order_item_id);
-        $fresh = app(PuzzleInputs::class)->capture($item);
+        $fresh = app(PuzzleInputs::class)->capture($item, $run->context['prompt_override'] ?? null);
         if (! $run->context || ! hash_equals($run->context['fingerprint'], $fresh['fingerprint'])) {
             throw new RuntimeException('puzzle_inputs_changed');
         }

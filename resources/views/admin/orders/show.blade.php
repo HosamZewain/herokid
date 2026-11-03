@@ -82,6 +82,7 @@
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
+            @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $order])
             @if(session('success'))
             <div class="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-xl font-bold flex items-center gap-2">
                 ✅ {{ session('success') }}
@@ -152,6 +153,7 @@
                 'attachmentOrders' => $checkoutGroup['active_orders'] ?? collect([$order]),
             ])
 
+            @include('admin.orders._identity-generations')
             @if($order->childIdentityRequest)
                 <div class="rounded-2xl border border-fuchsia-200 bg-gradient-to-l from-fuchsia-50 to-indigo-50 p-5 text-right">
                     <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

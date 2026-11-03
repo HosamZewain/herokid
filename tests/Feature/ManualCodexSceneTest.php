@@ -594,6 +594,50 @@ class ManualCodexSceneTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_checkout_banner_counts_saved_pages_for_each_active_run_without_media_access(): void
+    {
+        $this->order->update(['checkout_group_key' => 'synthetic-banner']);
+        $run = $this->start();
+        $this->sceneOutput($run, 1);
+        app(ManualSceneService::class)->collect($run);
+        $book = Order::create(['checkout_group_key' => 'synthetic-banner', 'order_number' => 'SYNTHETIC-BOOK', 'child_name' => 'Second child', 'parent_name' => 'Synthetic']);
+        $bookRun = $run->fresh()->replicate();
+        $bookRun->id = (string) Str::uuid();
+        $bookRun->order_id = $book->id;
+        $bookRun->production_kind = 'coloring_book';
+        $bookRun->scene_count = 50;
+        $bookRun->status = 'waiting_slot';
+        $bookRun->scenes = ['2' => ['path' => 'private-path', 'sha256' => 'private-checksum'], '51' => ['path' => 'invalid', 'sha256' => 'invalid']];
+        $bookRun->save();
+        $this->actor->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $response = $this->actingAs($this->actor->fresh())->getJson(route('admin.orders.codex-scenes.banner', $this->order))->assertOk();
+        $html = $response->json('html');
+        $this->assertStringContainsString('جاري توليد الصفحات في Codex', $html);
+        $this->assertStringContainsString('تم حفظ 1 صفحة من إجمالي 13', $html);
+        $this->assertStringContainsString('تم حفظ 1 صفحة من إجمالي 50', $html);
+        $this->assertStringContainsString('في طابور الانتظار', $html);
+        $this->assertStringContainsString('Second child', $html);
+        foreach (['private-path', 'private-checksum', 'synthetic/identity.png', '<img', 'عرض الصفحات'] as $secret) {
+            $this->assertStringNotContainsString($secret, $html);
+        }
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+        $this->get(route('admin.orders.groups.show', $this->order))->assertOk()
+            ->assertSee('data-codex-generation-banner', false)->assertSee('تم حفظ 1 صفحة من إجمالي 50');
+        $this->get(route('admin.orders.show', $book))->assertOk()
+            ->assertSee('data-codex-generation-banner', false)->assertSee('تم حفظ 1 صفحة من إجمالي 13');
+        $bookRun->update(['status' => 'uncertain']);
+        $this->assertStringContainsString('لن نعيد التوليد تلقائيًا', $this->getJson(route('admin.orders.codex-scenes.banner', $book))->assertOk()->json('html'));
+        $run->update(['status' => 'completed', 'active_slot' => null]);
+        $bookRun->update(['status' => 'needs_manual', 'active_slot' => null]);
+        $empty = $this->getJson(route('admin.orders.codex-scenes.banner', $book))->assertOk();
+        $this->assertSame('', trim($empty->json('html')));
+        $other = Order::create(['order_number' => 'SYNTHETIC-UNRELATED', 'parent_name' => 'Synthetic']);
+        $run->update(['active_slot' => 1]);
+        $this->assertSame('', trim($this->getJson(route('admin.orders.codex-scenes.banner', $other))->assertOk()->json('html')));
+        $this->actingAs(User::factory()->create())->getJson(route('admin.orders.codex-scenes.banner', $this->order))->assertForbidden();
+        Http::assertNothingSent();
+    }
+
     public function test_progress_renders_saved_scenes_without_exposing_private_snapshot(): void
     {
         $run = $this->start();

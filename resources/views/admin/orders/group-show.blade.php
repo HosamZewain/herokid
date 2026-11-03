@@ -103,6 +103,7 @@
 
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
+            @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $attachmentTarget])
             @if(session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-800">{{ session('success') }}</div>
             @endif
@@ -452,6 +453,8 @@
                             </div>
                         @endif
 
+                        @include('admin.orders._identity-generations')
+
                         @can('orders.production_prompt.manage')
                             @php
                                 $childIdentityPrompt = app(\App\Services\Orders\OrderChildIdentityPromptService::class)->forOrder($order);
@@ -616,6 +619,9 @@
                                     @endcan
                                 @endif
                                 @can('orders.production_prompt.manage')
+                                    @if($productPrompt)
+                                        @include('admin.orders._product-regeneration')
+                                    @endif
                                     @if($productPrompt)
                                         @include('admin.orders._inline-production-prompt', [
                                             'promptDomId' => 'product-production-prompt-'.$product->id,

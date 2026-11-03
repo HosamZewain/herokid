@@ -15,7 +15,7 @@ use RuntimeException;
 
 class PuzzleInputs
 {
-    public function capture(OrderItem $item): array
+    public function capture(OrderItem $item, ?string $promptOverride = null): array
     {
         $item->loadMissing('order', 'product.productionComponents', 'productionComponents');
         $order = $item->order;
@@ -51,7 +51,10 @@ class PuzzleInputs
         if ($units->count() !== 1 || $units[0]['quantity_per_item'] !== 1 || trim($units[0]['prompt']) === '') {
             throw new RuntimeException('puzzle_single_image_required');
         }
-        $prompt = $units[0]['prompt'];
+        $prompt = $promptOverride !== null ? trim($promptOverride) : $units[0]['prompt'];
+        if ($prompt === '') {
+            throw new RuntimeException('puzzle_prompt_incomplete');
+        }
         if (str_contains($prompt, '[MISSING') || preg_match('/\{\{|signature=|X-Amz-/i', $prompt)) {
             throw new RuntimeException('puzzle_prompt_incomplete');
         }
