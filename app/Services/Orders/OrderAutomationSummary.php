@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Models\AdminActivityLog;
 use App\Models\CodexSceneRun;
+use App\Models\LegacyBookCoverApproval;
 use App\Models\Order;
 use App\Models\OrderAutomationRevision;
 use App\Models\OrderPaymentReview;
@@ -58,6 +59,8 @@ class OrderAutomationSummary
             ->join('order_item_production_components as component', 'component.order_item_id', '=', 'order_items.id')
             ->whereIn('orders.checkout_group_key', $keys)->where('component.production_stage', 'book_interior')
             ->select(['orders.checkout_group_key', 'order_items.id', 'order_items.order_id', 'order_items.title', 'component.quantity_per_item'])->get()->groupBy('checkout_group_key');
+        $legacyBooks = LegacyBookAdmission::candidates()->whereIn('order_id', $orders->flatten(1)->pluck('id'))->get(['id', 'order_id', 'title']);
+        $legacyApprovals = LegacyBookCoverApproval::whereIn('order_item_id', $books->flatten(1)->pluck('id'))->orderBy('id')->get(['id', 'order_item_id'])->keyBy('order_item_id');
         $manifests = OrderReviewManifest::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'approved_at', 'images'])->keyBy('checkout_key');
         $legacyOrderIds = DB::table('order_automation_runs')->whereIn('order_id', $orders->flatten(1)->pluck('id'))->where('dry_run', false)->pluck('order_id');
         $admissionErrors = AdminActivityLog::where('action', 'order.automation_admission_blocked')->where('subject_type', Order::class)
@@ -169,15 +172,31 @@ class OrderAutomationSummary
                 }
                 $add($stage, $state, self::STAGES[$stage].': '.$done.' من '.($run->scene_count ?? 13).' — '.(CodexSceneRun::LABELS[$run->status] ?? $run->status), $run->updated_at, $run->error_code ? $run->error_code : ($run->status === 'completed' && ! $fulfilled ? 'جاهز لمراجعة الفريق' : null), $run->order_id, $done, $run->scene_count ?? 13);
             }
+            foreach ($legacyBooks->whereIn('order_id', $rows->pluck('id')) as $book) {
+                if (! $fulfilled) {
+                    $add('book_pages', 'intervention', 'كتاب بإعدادات قديمة — '.$book->title, $rows->max('updated_at'),
+                        'استخدم «تجهيز الكتاب بالكفر الموجود» أعلى صفحة الطلب لمراجعة المعاينة وعدد الصفحات وتسجيل الموافقة.', $book->order_id);
+                }
+            }
             foreach ($books->get($key, collect()) as $book) {
-                if ($fulfilled || $scenes->get($key, collect())->contains('order_item_id', $book->id)) {
+                if ($fulfilled || $legacyBooks->contains('id', $book->id) || $scenes->get($key, collect())->contains('order_item_id', $book->id)) {
+                    continue;
+                }
+                if ($legacyApprovals->has($book->id)) {
+                    $paid = $rows->sum('paid_amount_cents') > 0;
+                    $add('book_pages', $paid ? 'intervention' : 'waiting', 'صفحات الكتاب القديم لم تبدأ — '.$book->title, $rows->max('updated_at'),
+                        $paid ? 'موافقة الفريق مسجلة. استخدم «فحص وبدء صفحات التلوين» للتحقق من الصور والبيانات الحالية ثم التشغيل.' : 'موافقة الفريق مسجلة؛ سجّل الدفعة الفعلية ثم استخدم فحص وبدء صفحات التلوين.', $book->order_id, 0, $book->quantity_per_item);
+
                     continue;
                 }
                 $cover = $products->get($key, collect())->where('order_item_id', $book->id)->last();
+                if (! $cover && ! $hasExecution && $needsEnrollment) {
+                    continue;
+                }
                 $manifest = $manifests->get($key);
                 $approved = $manifest?->approved_at && collect($manifest->images)->contains(fn ($image) => ($image['kind'] ?? '') === 'book_cover' && ($image['item_id'] ?? null) === $book->id && ($image['generation_id'] ?? null) === $cover?->id);
                 [$state,$reason] = ! $cover || $cover->status !== 'succeeded'
-                    ? ['queued', 'بانتظار تجهيز كفر الكتاب — الكفر بـOpenAI API، والداخل بـCodex.']
+                    ? [$hasExecution ? 'queued' : 'intervention', $hasExecution ? 'بانتظار تجهيز كفر الكتاب — الكفر بـOpenAI API، والداخل بـCodex.' : 'الكفر لم يدخل التوليد. استخدم فحص وإدخال للأوتوميشن للتحقق من بيانات الكتاب.']
                     : (! $approved ? ['waiting', 'بانتظار اعتماد الكفر الحالي.']
                     : ($rows->sum('paid_amount_cents') <= 0 ? ['waiting', 'بانتظار تسجيل دفعة فعلية.']
                     : ['intervention', 'الكفر معتمد والدفعة مسجلة، لكن صفحات Codex لم تبدأ. استخدم فحص وبدء صفحات التلوين؛ سيُراجع شروط التشغيل.']));

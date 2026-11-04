@@ -184,7 +184,7 @@ class ProcessProductReview
             throw new RuntimeException('preview_requires_review');
         }
 
-        return URL::temporarySignedRoute('order-process.review-preview', now()->addDays(35), ['manifest' => OrderReviewManifest::where('run_id', $run->id)->firstOrFail()->id]);
+        return URL::temporarySignedRoute('order-review.show', now()->addDays(35), ['manifest' => OrderReviewManifest::where('run_id', $run->id)->firstOrFail()->id]);
     }
 
     public function approve(OrderProcessRun $run, array $config, ?OrderPreviewStaffApproval $staffApproval = null): void

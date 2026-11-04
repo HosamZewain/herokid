@@ -4,6 +4,8 @@
             data-options-url="{{ route('admin.orders.groups.quick-edit-options', $group['representative_id']) }}"
             data-removal-options-url="{{ route('admin.orders.groups.removal-options', $group['representative_id']) }}"
             data-remove-url="{{ route('admin.orders.groups.items.destroy', [$group['representative_id'], '__ITEM__']) }}"
+            data-address-catalog-url="{{ route('admin.orders.groups.address-catalog', $group['representative_id']) }}"
+            data-address="{{ json_encode(\Illuminate\Support\Arr::only($group['delivery'], ['bosta_city_id', 'bosta_district_id', 'governorate', 'city', 'street', 'address', 'address_details']), JSON_UNESCAPED_UNICODE) }}"
             data-contact-url="{{ route('admin.orders.groups.contact', $group['representative_id']) }}"
             data-add-url="{{ route('admin.orders.groups.products.store', $group['representative_id']) }}"
             data-add-story-url="{{ route('admin.orders.groups.stories.store', $group['representative_id']) }}"

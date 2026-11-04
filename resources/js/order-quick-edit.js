@@ -77,6 +77,79 @@ export function initializeOrderQuickEdit() {
             container.append(img);
         });
     };
+    const renderAddress = () => {
+        const address = JSON.parse(root.dataset.address || '{}');
+        fields.append(element('p', `العنوان الحالي: ${[address.governorate, address.city, address.street || address.address, address.address_details].filter(Boolean).join(' — ') || 'غير مسجل'}`, 'rounded-xl bg-gray-50 p-3 text-sm text-gray-700'));
+        const edit = input(fields, 'تعديل عنوان الشحن — بصيغة بوسطة', '', '', 'checkbox');
+        edit.className = 'mt-2 h-5 w-5 rounded border-indigo-300 text-indigo-600';
+        const panel = element('fieldset', undefined, 'space-y-3 rounded-xl border border-indigo-100 p-3');
+        panel.hidden = true; panel.disabled = true; fields.append(panel);
+        panel.append(element('p', 'يحفظ عنوان الطلب لكل عناصره، ولا يغيّر تكلفة الشحن. لو فيه بوليصة موجودة، راجع عنوانها من إدارة الشحنة؛ لن تتعدّل تلقائيًا.', 'text-xs font-bold leading-6 text-amber-800'));
+        const citySearch = input(panel, 'ابحث عن المحافظة / المدينة', '', '', 'search');
+        const city = select(panel, 'المحافظة / المدينة — بوسطة *', 'shipping_address[bosta_city_id]', [['', 'اختر المحافظة']]);
+        city.required = true;
+        const districtSearch = input(panel, 'ابحث عن المنطقة', '', '', 'search');
+        const district = select(panel, 'المنطقة — بوسطة *', 'shipping_address[bosta_district_id]', [['', 'اختر المنطقة']]);
+        district.required = true;
+        const street = input(panel, 'الشارع ورقم المبنى *', 'shipping_address[street]', address.street || address.address, 'textarea');
+        street.required = true; street.minLength = 6; street.maxLength = 500;
+        input(panel, 'تفاصيل إضافية: الدور، الشقة، علامة مميزة', 'shipping_address[address_details]', address.address_details, 'textarea').maxLength = 500;
+        const message = element('p', '', 'text-sm font-bold text-amber-800'); panel.append(message);
+        const retry = element('button', 'إعادة تحميل مناطق بوسطة', 'rounded-xl border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700');
+        retry.type = 'button'; panel.append(retry);
+        let loaded = false, requestVersion = 0;
+        const filter = (search, target) => search.addEventListener('input', () => {
+            Array.from(target.options).forEach((option) => { option.hidden = Boolean(option.value && option.value !== target.value && !option.textContent.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())); });
+        });
+        filter(citySearch, city); filter(districtSearch, district);
+        const populate = (target, entries, placeholder, selected) => {
+            target.replaceChildren();
+            [['', placeholder], ...entries.map((entry) => [entry.id, entry.label])].forEach(([id, label]) => {
+                const option = element('option', label); option.value = id; target.append(option);
+            });
+            target.value = selected || '';
+            if (target.selectedIndex < 0) target.value = '';
+        };
+        const fetchCatalog = async (cityId = '') => {
+            const url = new URL(root.dataset.addressCatalogUrl, window.location.href);
+            if (cityId) url.searchParams.set('city_id', cityId);
+            const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'تعذر تحميل مناطق بوسطة. حاول مرة أخرى.');
+            return data;
+        };
+        const loadDistricts = async (selected = '') => {
+            const version = ++requestVersion;
+            populate(district, [], 'اختر المنطقة', ''); districtSearch.value = '';
+            if (!city.value) return;
+            message.textContent = 'جارٍ تحميل المناطق…';
+            try {
+                const data = await fetchCatalog(city.value);
+                if (version !== requestVersion) return;
+                populate(district, data.districts, 'اختر المنطقة', selected);
+                message.textContent = data.districts.length ? '' : 'لا توجد مناطق متاحة لهذه المحافظة. اختر محافظة أخرى أو أعد المحاولة.';
+            } catch (error) { if (version === requestVersion) message.textContent = error.message; }
+        };
+        const load = async () => {
+            message.textContent = 'جارٍ تحميل محافظات بوسطة…'; retry.disabled = true;
+            try {
+                const data = await fetchCatalog();
+                populate(city, data.cities, 'اختر المحافظة', city.value || address.bosta_city_id);
+                loaded = data.cities.length > 0;
+                if (!loaded) throw new Error('قائمة محافظات بوسطة غير متاحة حاليًا. أعد المحاولة.');
+                message.textContent = '';
+                await loadDistricts(city.value === address.bosta_city_id ? address.bosta_district_id : '');
+            } catch (error) { message.textContent = error.message; }
+            finally { retry.disabled = false; }
+        };
+        city.addEventListener('change', () => loadDistricts());
+        retry.addEventListener('click', load);
+        edit.addEventListener('change', () => {
+            panel.hidden = !edit.checked; panel.disabled = !edit.checked;
+            if (edit.checked && !loaded) load();
+        });
+    };
+
     const renderPersonalization = (container, schema, values = {}) => {
         container.replaceChildren();
         Object.entries(schema.fields ?? {}).filter(([, field]) => field.enabled).forEach(([key, field]) => {
@@ -276,7 +349,7 @@ export function initializeOrderQuickEdit() {
         const thisOpening = ++opening;
         save.disabled = true;
         dialog.showModal();
-        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', 'add-package': 'إضافة باقة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور', remove: 'تأكيد حذف عنصر من الطلب' }[mode];
+        root.querySelector('[data-quick-title]').textContent = { contact: 'تعديل بيانات التواصل والعنوان', add: 'إضافة منتج إلى الطلب', 'add-story': 'إضافة قصة إلى الطلب', 'add-package': 'إضافة باقة إلى الطلب', item: 'تعديل بيانات المنتج / الصور', story: 'تعديل بيانات القصة / الصور', remove: 'تأكيد حذف عنصر من الطلب' }[mode];
         save.textContent = mode === 'remove' ? 'تأكيد الحذف' : 'حفظ التعديل';
         save.classList.toggle('bg-red-600', mode === 'remove');
         save.classList.toggle('bg-indigo-600', mode !== 'remove');
@@ -288,6 +361,7 @@ export function initializeOrderQuickEdit() {
             const name = input(fields, 'اسم ولي الأمر *', 'parent_name', contact.parent_name); name.required = true; name.maxLength = 150;
             const phone = input(fields, 'رقم الموبايل *', 'phone', contact.phone, 'tel'); phone.required = true; phone.dir = 'ltr';
             const extra = input(fields, 'رقم إضافي (اختياري)', 'alternate_phone', contact.alternate_phone, 'tel'); extra.dir = 'ltr';
+            renderAddress();
             save.disabled = false;
             return;
         }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Orders\CustomerPreviewPage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Crypt;
@@ -38,7 +39,8 @@ class OrderProductPreviewGallery extends Model
     {
         $token = $this->plainPublicToken();
 
-        return $token ? route('order-product-previews.show', ['token' => $token]) : null;
+        return $token ? (app(CustomerPreviewPage::class)->matchingReviewUrl($this)
+            ?? route('order-product-previews.show', ['token' => $token])) : null;
     }
 
     public function isPubliclyAvailable(): bool

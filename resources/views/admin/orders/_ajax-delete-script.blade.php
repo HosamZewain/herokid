@@ -16,6 +16,8 @@
                     selectAll.indeterminate = selected.length > 0 && selected.length < checkboxes.length;
                 }
                 if (button) button.disabled = selected.length === 0;
+                const download = form.querySelector('[data-order-bulk-download]');
+                if (download) download.disabled = selected.length === 0 || download.dataset.downloading === 'true';
                 if (label) label.textContent = selected.length ? `تم تحديد ${selected.length}` : (label.dataset.emptyLabel || 'لم يتم تحديد ملفات');
             };
 
@@ -36,6 +38,43 @@
                 }
 
                 syncBulkDeleteForm(form);
+            });
+
+            document.addEventListener('click', async (event) => {
+                const button = event.target.closest('[data-order-bulk-download]');
+                if (!button || button.disabled) return;
+                const form = button.closest('[data-order-bulk-delete]');
+                const scope = form?.closest('[data-ajax-delete-scope]');
+                const selected = Array.from(scope?.querySelectorAll('[data-bulk-delete-checkbox]:checked') || []);
+                if (!selected.length) return;
+                const url = new URL(button.dataset.downloadUrl, window.location.origin);
+                selected.forEach((checkbox) => url.searchParams.append(checkbox.name, checkbox.value));
+                button.dataset.downloading = 'true';
+                button.disabled = true;
+                const label = button.textContent;
+                button.textContent = 'جارٍ تجهيز التحميل…';
+                try {
+                    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.message || 'تعذر تحميل الملفات. حاول مرة أخرى.');
+                    }
+                    if (!response.headers.get('Content-Type')?.includes('application/zip')) throw new Error('انتهت الجلسة أو تعذر التحميل. حدّث الصفحة وأعد المحاولة.');
+                    const blobUrl = URL.createObjectURL(await response.blob());
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || 'order-files.zip';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                } catch (error) {
+                    window.alert(error.message || 'تعذر تحميل الملفات. حاول مرة أخرى.');
+                } finally {
+                    delete button.dataset.downloading;
+                    button.textContent = label;
+                    syncBulkDeleteForm(form);
+                }
             });
 
             document.addEventListener('submit', async (event) => {

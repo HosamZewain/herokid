@@ -27,6 +27,17 @@ class ProductProductionComponentSnapshotService
             return;
         }
 
+        // New checkout snapshots must retain the selected variant's page count,
+        // rather than the catalog's generic component quantity (historically 1).
+        if ($item->wasRecentlyCreated && $components->contains('production_stage', 'book_interior')
+            && $item->product_variant_id && ! data_get($item->variant_snapshot, 'book_page_count')) {
+            $variant = $item->product->variants()->find($item->product_variant_id);
+            if ($variant?->book_page_count && (int) data_get($item->variant_snapshot, 'id') === $variant->id
+                && data_get($item->variant_snapshot, 'name_ar') === $variant->name_ar) {
+                $item->updateQuietly(['variant_snapshot' => array_merge($item->variant_snapshot ?? [], ['book_page_count' => (int) $variant->book_page_count])]);
+            }
+        }
+
         foreach ($components as $component) {
             $item->productionComponents()->updateOrCreate(
                 ['stable_key' => $component->stable_key],

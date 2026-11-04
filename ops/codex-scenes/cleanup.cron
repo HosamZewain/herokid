@@ -1,0 +1,4 @@
+# Completed Codex image copies only; 48h minimum, S3 SHA verification before removal.
+# Uses the existing cron daemon. No new EC2/service or second Laravel scheduler.
+MAILTO=""
+15 4 * * * root /usr/bin/nice -n 15 /usr/bin/ionice -c 3 /usr/local/sbin/herokid-codex-cleanup --apply >/dev/null 2>&1

@@ -166,7 +166,9 @@ class AdminOrderQuickEditService
 
     public function contact(Order $representative, array $data, User $actor, Request $request): void
     {
-        DB::transaction(function () use ($representative, $data, $actor, $request): void {
+        $address = isset($data['shipping_address'])
+            ? app(AdminOrderShippingAddress::class)->normalize($data['shipping_address']) : [];
+        DB::transaction(function () use ($representative, $data, $actor, $request, $address): void {
             $orders = Order::query()->where('checkout_group_key', $representative->checkoutGroupKey())
                 ->orderBy('id')->lockForUpdate()->get();
             abort_if($orders->isEmpty(), 404);
@@ -174,9 +176,10 @@ class AdminOrderQuickEditService
                 'parent_name' => $order->parent_name,
                 'phone' => data_get($order->delivery_details, 'phone'),
                 'alternate_phone' => data_get($order->delivery_details, 'alternate_phone'),
+                'shipping_address' => Arr::only($order->delivery_details ?? [], array_keys($address)),
             ]])->all();
             foreach ($orders as $order) {
-                $delivery = array_replace($order->delivery_details ?? [], Arr::only($data, ['phone', 'alternate_phone']));
+                $delivery = array_replace($order->delivery_details ?? [], Arr::only($data, ['phone', 'alternate_phone']), $address);
                 $order->forceFill([...Arr::only($data, ['parent_name']), 'delivery_details' => $delivery])->save();
             }
             // Keep a linked identity request's contact current without touching its child or production.
@@ -189,9 +192,9 @@ class AdminOrderQuickEditService
             }
             $first = $orders->first();
             AdminActivityLogger::log(
-                action: 'checkout.contact_updated', description: 'تعديل بيانات التواصل فقط', subject: $first,
+                action: 'checkout.contact_updated', description: $address === [] ? 'تعديل بيانات التواصل' : 'تعديل بيانات التواصل وعنوان الشحن', subject: $first,
                 properties: ['reason' => $data['change_reason'], 'order_ids' => $orders->pluck('id')->all(), 'before' => $before,
-                    'changes' => AdminActivityLogger::changedValues($before[$first->id], Arr::only($data, ['parent_name', 'phone', 'alternate_phone']))],
+                    'changes' => AdminActivityLogger::changedValues($before[$first->id], [...Arr::only($data, ['parent_name', 'phone', 'alternate_phone']), ...($address === [] ? [] : ['shipping_address' => $address])])],
                 admin: $actor, request: $request,
             );
         });

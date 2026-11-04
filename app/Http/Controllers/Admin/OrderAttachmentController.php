@@ -62,6 +62,11 @@ class OrderAttachmentController extends Controller
         return back()->with('success', 'تم حذف المرفق نهائيًا.');
     }
 
+    public function downloadMany(Request $request, Order $representative, \App\Services\Orders\OrderBulkDownload $downloads)
+    {
+        return $downloads->response($request, $representative, 'attachments');
+    }
+
     public function destroyMany(
         Request $request,
         Order $representative,

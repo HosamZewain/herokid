@@ -76,6 +76,11 @@ class OrderProductPreviewController extends Controller
         return back()->with('success', 'تم حذف صورة المعاينة.');
     }
 
+    public function downloadMany(Request $request, Order $representative, \App\Services\Orders\OrderBulkDownload $downloads)
+    {
+        return $downloads->response($request, $representative, 'previews');
+    }
+
     public function destroyMany(
         Request $request,
         Order $representative,

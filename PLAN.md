@@ -533,3 +533,5 @@ transport complexity that is not necessary for these seven reads.
   and `ops/agentic/README.md`.
 
 Prepared unlimited-execution amendment: PHP8.3 isolated SQLite regression passes480tests/5850assertions; focused execution baseline13/93, after15/120. No production changes; earlier MySQL/isolation evidence predates this amendment.
+
+Owner now explicitly authorizes publication after latest Main/AWS review and doubles AI allowance to2000/day. Prior deployment deferral and1000/day activation proposal are superseded. Preserve consumed attempts; activate all eligible active checkouts and six approved actions with explicit unlimited execution. Latest base66d7bec merged, preserving nullable legacy-book manifests plus admission guards.

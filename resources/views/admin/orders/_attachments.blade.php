@@ -86,7 +86,7 @@
             @endonce
         @endcan
 
-        @can('orders.update')
+        @can('orders.view')
             @if($orderAttachments->isNotEmpty())
                 <form id="bulk-attachment-delete-{{ $attachmentTarget->id }}" method="POST" action="{{ route('admin.orders.attachments.destroy-many', $attachmentTarget) }}" class="mt-5 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-3 sm:flex-row sm:items-center sm:justify-between" data-order-ajax-delete data-order-bulk-delete data-ajax-hide-when-empty data-delete-confirm="سيتم حذف كل المرفقات المحددة نهائيًا. هل تريد المتابعة؟">
                     @csrf
@@ -95,9 +95,10 @@
                         <input type="checkbox" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-all>
                         تحديد كل المرفقات
                     </label>
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-3">
                         <span class="text-xs font-black text-gray-500" data-bulk-delete-selection data-empty-label="لم يتم تحديد مرفقات">لم يتم تحديد مرفقات</span>
-                        <button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>
+                        <button type="button" disabled data-order-bulk-download data-download-url="{{ route('admin.orders.attachments.download-many', $attachmentTarget) }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">تحميل المحدد — ZIP</button>
+                        @can('orders.update')<button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>@endcan
                     </div>
                 </form>
             @endif
@@ -110,9 +111,9 @@
                     $attachmentOrder = $entry['order'];
                 @endphp
                 <article class="relative rounded-2xl border border-gray-100 bg-gray-50 p-4" data-ajax-delete-item data-order-attachment-id="{{ $attachment->id }}">
-                    @can('orders.update')
-                        <label class="absolute left-3 top-3 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-sm" title="تحديد المرفق للحذف">
-                            <input type="checkbox" name="attachment_ids[]" value="{{ $attachment->id }}" form="bulk-attachment-delete-{{ $attachmentTarget->id }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $attachment->original_name }} للحذف">
+                    @can('orders.view')
+                        <label class="absolute left-3 top-3 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-sm" title="تحديد المرفق">
+                            <input type="checkbox" name="attachment_ids[]" value="{{ $attachment->id }}" form="bulk-attachment-delete-{{ $attachmentTarget->id }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $attachment->original_name }}">
                         </label>
                     @endcan
                     <div class="flex items-start gap-3">

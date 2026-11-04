@@ -9,13 +9,16 @@ use App\Models\OrderPaymentEvent;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Bosta\BostaAddressCatalogService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductPersonalizationSchema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -191,6 +194,78 @@ class AdminOrderQuickEditTest extends TestCase
         }
         $this->assertSame($oldItems, OrderItem::get()->toArray());
         $this->assertDatabaseHas('admin_activity_logs', ['action' => 'checkout.contact_updated', 'user_id' => $this->admin->id]);
+    }
+
+    public function test_bosta_address_updates_entire_checkout_without_changing_production_or_payments(): void
+    {
+        Http::preventStrayRequests();
+        $catalog = $this->mock(BostaAddressCatalogService::class);
+        $catalog->shouldReceive('findCityById')->with('cairo')->andReturn(['id' => 'cairo', 'name' => 'Cairo', 'other_name' => 'القاهرة']);
+        $catalog->shouldReceive('findDistrictById')->with('cairo', 'nasr')->andReturn([
+            'id' => 'nasr', 'name' => 'Nasr City', 'other_name' => 'مدينة نصر',
+            'zone_id' => 'east', 'zone_name' => 'East', 'zone_other_name' => 'شرق',
+        ]);
+        $catalog->shouldReceive('findCityByName')->andReturnNull();
+        $sibling = $this->order->replicate();
+        $sibling->order_number = 'HK-ADDRESS-SIBLING';
+        $sibling->save();
+        $photos = $this->order->uploaded_photos;
+        $items = OrderItem::get()->toArray();
+        $payments = OrderPaymentEvent::get()->toArray();
+        $this->actingAs($this->admin)->patchJson(route('admin.orders.groups.contact', $this->order), [
+            'shipping_address' => ['bosta_city_id' => 'cairo', 'bosta_district_id' => 'nasr', 'street' => 'شارع الاختبار مبنى 12', 'address_details' => 'الدور الثاني شقة 4'],
+            'change_reason' => 'تصحيح عنوان الشحن بناء على طلب العميل.',
+        ])->assertOk();
+        foreach ([$this->order->fresh(), $sibling->fresh()] as $order) {
+            $this->assertSame('cairo', $order->delivery_details['bosta_city_id']);
+            $this->assertSame('nasr', $order->delivery_details['bosta_district_id']);
+            $this->assertSame('القاهرة', $order->delivery_details['governorate']);
+            $this->assertSame('مدينة نصر', $order->delivery_details['city']);
+            $this->assertSame('شرق', $order->delivery_details['bosta_zone_other_name']);
+            $this->assertSame('شارع الاختبار مبنى 12', $order->delivery_details['street']);
+            $this->assertSame('الدور الثاني شقة 4', $order->delivery_details['address_details']);
+            $this->assertSame(50, $order->delivery_details['delivery_fee']);
+            $this->assertSame('unchanged', $order->delivery_details['utm_campaign']);
+            $this->assertSame(30000, $order->paid_amount_cents);
+            $this->assertSame('ready_preview', $order->status);
+            $this->assertSame($photos, $order->uploaded_photos);
+        }
+        $this->assertSame($items, OrderItem::get()->toArray());
+        $this->assertSame($payments, OrderPaymentEvent::get()->toArray());
+        $log = AdminActivityLog::where('action', 'checkout.contact_updated')->firstOrFail();
+        $this->assertSame('nasr', data_get($log->properties, 'changes.shipping_address.new.bosta_district_id'));
+        $this->assertSame('original-district', data_get($log->properties, 'before.'.$this->order->id.'.shipping_address.bosta_district_id'));
+    }
+
+    public function test_wrong_city_district_and_incomplete_address_are_rejected_atomically(): void
+    {
+        $catalog = $this->mock(BostaAddressCatalogService::class);
+        $catalog->shouldReceive('findCityById')->with('cairo')->andReturn(['id' => 'cairo']);
+        $catalog->shouldReceive('findDistrictById')->with('cairo', 'foreign')->andReturnNull();
+        $before = $this->order->getAttributes();
+        $payload = ['parent_name' => 'لا يحفظ', 'change_reason' => 'تصحيح العنوان.', 'shipping_address' => ['bosta_city_id' => 'cairo', 'bosta_district_id' => 'foreign', 'street' => 'عنوان شارع الاختبار']];
+        $this->actingAs($this->admin)->patchJson(route('admin.orders.groups.contact', $this->order), $payload)->assertUnprocessable()->assertJsonValidationErrors('shipping_address.bosta_district_id');
+        unset($payload['shipping_address']['bosta_district_id']);
+        $this->patchJson(route('admin.orders.groups.contact', $this->order), $payload)->assertUnprocessable();
+        $this->assertSame($before, $this->order->fresh()->getAttributes());
+    }
+
+    public function test_address_catalog_is_order_scoped_and_requires_update_permission(): void
+    {
+        $catalog = $this->mock(BostaAddressCatalogService::class);
+        $catalog->shouldReceive('cities')->once()->andReturn([['id' => 'cairo', 'label' => 'القاهرة']]);
+        $catalog->shouldReceive('findCityById')->with('cairo')->andReturn(['id' => 'cairo']);
+        $catalog->shouldReceive('districts')->with('cairo')->once()->andReturn([['id' => 'nasr', 'label' => 'مدينة نصر']]);
+        $this->actingAs($this->admin)->getJson(route('admin.orders.groups.address-catalog', $this->order))->assertOk()->assertJsonPath('cities.0.id', 'cairo');
+        $this->getJson(route('admin.orders.groups.address-catalog', [$this->order, 'city_id' => 'cairo']))->assertOk()->assertJsonPath('districts.0.id', 'nasr');
+        $limited = User::factory()->create(['role' => 'admin']);
+        $limited->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $this->actingAs($limited)->getJson(route('admin.orders.groups.address-catalog', $this->order))->assertForbidden();
+        $limited->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update'])->pluck('id'));
+        $limited->unsetRelation('permissions');
+        Setting::updateOrCreate(['key' => 'orders_visibility'], ['value' => 'assigned']);
+        $this->getJson(route('admin.orders.groups.address-catalog', $this->order))->assertNotFound();
+        $this->patchJson(route('admin.orders.groups.contact', $this->order), ['parent_name' => 'ممنوع', 'change_reason' => 'اختبار نطاق الوصول.'])->assertNotFound();
     }
 
     public function test_invalid_changed_phone_rejected_but_unchanged_legacy_phone_does_not_block_name_edit(): void

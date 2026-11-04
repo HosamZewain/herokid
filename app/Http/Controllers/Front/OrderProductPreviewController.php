@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Front;
 use App\Http\Controllers\Controller;
 use App\Models\OrderPreview;
 use App\Models\OrderProductPreviewGallery;
+use App\Services\Orders\CustomerPreviewPage;
 use App\Services\Orders\OrderProductPreviewImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -21,12 +22,17 @@ class OrderProductPreviewController extends Controller
             'last_viewed_at' => now(),
         ]);
 
+        if ($url = app(CustomerPreviewPage::class)->matchingReviewUrl($gallery)) {
+            return redirect($url)->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+        }
+
         return response()
             ->view('front.order-product-previews.show', [
-                'gallery' => $gallery,
-                'token' => $token,
+                'images' => app(CustomerPreviewPage::class)->galleryImages($gallery, $token),
+                'orderReference' => app(CustomerPreviewPage::class)->reference($gallery->checkout_group_key),
             ])
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+            ->header('Referrer-Policy', 'no-referrer')
             ->header('Pragma', 'no-cache')
             ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
     }

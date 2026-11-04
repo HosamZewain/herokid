@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\OrderProductPreviewImageService;
+use App\Services\Orders\OrderProductPreviewService;
 use App\Services\Orders\OrderWhatsAppMessageService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -105,7 +106,7 @@ class OrderProductPreviewTest extends TestCase
     {
         $order = $this->productOrder();
         $this->actingAs($this->admin)->post(route('admin.orders.product-previews.store', $order), [
-            'preview_images' => [UploadedFile::fake()->image('preview.webp', 800, 800)],
+            'preview_images' => [UploadedFile::fake()->image('preview.jpg', 800, 800)],
         ])->assertRedirect();
 
         $group = app(AdminOrderGroupService::class)->findByRepresentative($order->id);
@@ -297,6 +298,41 @@ class OrderProductPreviewTest extends TestCase
             ->assertJsonValidationErrors('preview_ids');
 
         $this->assertDatabaseCount('order_previews', 2);
+    }
+
+    public function test_unified_gallery_has_order_and_exact_child_product_labels_without_internal_notes(): void
+    {
+        $order = $this->productOrder();
+        $order->update(['child_name' => 'ليلى']);
+        $item = $order->items()->first();
+        $other = $order->items()->create(['item_type' => 'product', 'title' => 'بازل', 'unit_price_cents' => 100, 'quantity' => 1, 'total_price_cents' => 100]);
+        $gallery = app(OrderProductPreviewService::class)->upload($order,
+            [UploadedFile::fake()->image('preview.jpg', 1000, 1000)], 'PRIVATE-NOTE-DO-NOT-SHOW', $this->admin, 'product:'.$other->id);
+        $this->get($gallery->publicUrl())->assertOk()->assertViewIs('front.order-product-previews.show')
+            ->assertSee('بازل — ليلى')->assertDontSee('ستيكر مخصص')->assertSee($order->checkoutReference->short_reference)
+            ->assertSee('bg-slate-50')->assertDontSee('PRIVATE-NOTE-DO-NOT-SHOW');
+        $foreign = $this->productOrder('foreign');
+        $foreignGallery = app(OrderProductPreviewService::class)->upload($foreign,
+            [UploadedFile::fake()->image('other.jpg')], null, $this->admin);
+        $this->get(route('order-product-previews.image', ['token' => $gallery->plainPublicToken(), 'preview' => $foreignGallery->previews->first()]))->assertNotFound();
+        $gallery->update(['status' => 'revoked']);
+        $this->get($gallery->publicUrl())->assertGone();
+    }
+
+    public function test_watermark_is_mandatory_even_if_the_text_setting_is_blank(): void
+    {
+        $source = new \Imagick;
+        $source->newImage(800, 1000, new \ImagickPixel('white'));
+        $source->setImageFormat('png');
+        $bytes = $source->getImageBlob();
+        config(['order_product_previews.watermark_text' => '']);
+        $result = app(OrderProductPreviewImageService::class)->protectedBytes($bytes);
+        $marked = new \Imagick;
+        $marked->readImageBlob($result);
+        $this->assertGreaterThan(1, $marked->getImageColors(), 'A white image must gain visible watermark pixels.');
+        $this->assertSame('JPEG', $marked->getImageFormat());
+        $marked->clear();
+        $source->clear();
     }
 
     private function productOrder(string $suffix = '1'): Order

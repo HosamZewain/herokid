@@ -96,7 +96,7 @@ class OrderWorkspaceController extends Controller
         if ($reason = $books->admissionReason($item)) {
             throw ValidationException::withMessages(['automation' => $reason]);
         }
-        $manifest = OrderReviewManifest::where('checkout_key', $order->checkoutGroupKey())->latest('id')->firstOrFail();
+        $manifest = OrderReviewManifest::where('checkout_key', $order->checkoutGroupKey())->latest('id')->first();
         try {
             $run = $books->start($item, $manifest, true);
         } catch (\RuntimeException $e) {
