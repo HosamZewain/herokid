@@ -1,57 +1,78 @@
 # HeroKid AWS deployment and agent handoff
 
-## 4 November 2026 — HeroKid Auto Pilot DEPLOYED; observation active, AI authentication pending
+## 4 November 2026 — HeroKid Auto Pilot DEPLOYED; Shadow evaluation active, 300/day
 
-Owner explicitly authorized this AWS release. Application **be5fe8b461e1bbd01bc3ebb93d9534f2117c638a**
-is deployed from GitHub main, based on freshly verified **99c0b981a37a4828f5c7fbafe85a96d5d2d574b1**.
-The dedicated feature branch is `codex/autopilot-shadow-release-20261103`; primary dirty/mobile work
-is preserved. [Deployment evidence and recovery](autopilot-aws-deployment-2026-11-04.ar.md).
-All129 changed-file hashes/readability and frontend manifest assets verified; old assets and preexisting
-mode/untracked-file drift preserved. Three exact additive migrations `2026_11_03_000001`,
-`000002`, `000003` created seven Auto Pilot tables. No general migrate/seed or business-order rewrite.
-Six owner-reviewed memory rules and six immutable owner-attributed versions imported through the
-existing authorized admin action. No staff permissions were added.
+Owner explicitly authorized this AWS release and subsequently raised its allowance to **300 decisions
+per Cairo day**. Application **be5fe8b461e1bbd01bc3ebb93d9534f2117c638a** is deployed from GitHub main,
+based on freshly verified **99c0b981a37a4828f5c7fbafe85a96d5d2d574b1**. Documentation-only HEAD
+**26b5f59cb2a795bdfb35c13d6dc3dc0a06c19dd3** and all132 changed-file hashes/readability were verified
+at06:58:35UTC; a later documentation successor requires no service refresh. Dedicated branch
+`codex/autopilot-shadow-release-20261103`; primary dirty/mobile work and known production drift preserved.
+[Deployment, live observations and recovery](autopilot-aws-deployment-2026-11-04.ar.md).
+[Sanitized activation evidence](autopilot-aws-activation-2026-11-04.json).
 
-**Live flags: observe=true, evaluate=false, mcp_enabled=false. Autonomous execution remains absent.**
-The operational dashboard and memory are available at `/admin/agentic-automation` and `/memory` below
-that path. The November4 Cairo attempt count89/100 was carried from local acceptance, not reset.
-At04:21:50UTC:260active groups,102observed,158unobserved,260unevaluated, zero AWS AI runs;
-the display accurately reports `evaluation_disabled`. Bounded observer runs each minute, reconciliation
-batch50 every five minutes; full sweep can take longer. Dirty hints verified from actual subsequent writes.
+**Live flags: observe=true, evaluate=true, mcp_enabled=false; provider=codex; daily_limit=300.**
+Autonomous execution remains absent. Three exact additive migrations2026_11_03_000001/000002/000003
+created seven Auto Pilot tables. No general migrate/seed, business-order rewrite or ownership change.
+Dashboard/activity `/admin/agentic-automation` and memory `/admin/agentic-automation/memory` work
+independently of AI. At06:58:32UTC:263active/observed groups,0unobserved,259unevaluated,4covered;
+activity `waiting_queue`, last observation06:58:23UTC. Memory edits invalidate coverage, preserving all
+prior immutable runs. Observer ticks each minute; reconciliation batch50 every five minutes.
 
-Docker29.9.3/Compose5.7.0, the pinned amd64 image pair, isolated private/outbound networks and dedicated
-non-login UID20000(runtime)/20001(worker) are installed on the existing EC2. No new AWS resource,
-API-key fallback or credential reuse. The PHP unit `herokid-autopilot-worker` is installed but not started;
-runtime evaluation awaits the owner's new dedicated device login, final container/network attestation,
-ChatGPT-only health and zero-tool checks. No inference is authorized to bypass those gates.
-The exact installation profile, image IDs and limits are in `ops/agentic/deploy/README.md`.
+Dedicated ChatGPT device authentication was persisted and verified on this host; no additional login
+is currently required. Docker29.9.3/Compose5.7.0, pinned amd64 images, private isolated/outbound
+networks and dedicated UID20000(runtime)/20001(worker) use existing EC2 only. Actual host/network
+attestations and ChatGPT-only health passed: zero model tools, no direct internet/IMDS/private egress,
+no app/source/secret/Docker mounts, no published ports or paid API fallback. SDK/CLI0.166.0.
+Credential directory0700 contains only auth.json0600 under UID20000; the PHP worker cannot read it.
+Keep login provisioning detached from SSH, then retain CLI bookkeeping outside the final auth mount.
+Wait boundedly for the startup isolation probes before requesting the private socket health.
 
-Private cached config was amended only for `agentic`, queue connection `agentic-shadow`, and the new
-`App\Providers\AgenticServiceProvider` in `app.providers`. **Preserving cached config also requires this
-provider registration:** Laravel skips merging `bootstrap/providers.php` for a cached configuration.
-The missing provider was detected during deployment verification, corrected without replacing unrelated
-settings, and actual scheduled observer ticks were verified. `.env` remains byte-identical. Do not blindly
-rebuild config from older environment defaults. Worker-only entrypoint sends logs to stderr without
-chmod of the web log; systemd socket guards were verified on actual Ubuntu systemd.
+Shadow evaluation first activated **06:40:51UTC**, initially100/day with89local acceptance attempts
+carried forward. The first10AWS proposals included7matching registered decisions and3incorrect
+completion proposals interpreting raw order `delivered` as customer delivery. Policy blocked all3
+(`INCOMPLETE_TARGET`); no execution occurred. Only the Shadow worker was disabled/drained. At06:53:58UTC
+the operator applied the owner's existing semantics via the authorized memory admin action: rule1
+revision1→2 explains that order `delivered` means production approval and shipping `not_required` is
+not delivery evidence. Six active rules now have seven encrypted immutable versions, owner actor1
+with explicit trusted-operator provenance. All rejected runs remain in audit; no model wrote memory.
 
-Validation:503tests/3988assertions on EACH isolated PHP8.3 SQLite/MySQL8.4 after the lifecycle amendment,
-approved actual v3 benchmark89/89correct with zero unsafe/false-wait/unevaluated results. Operator config
-patch passed synthetic PHP8.3 registration/idempotency/drift-refusal checks; worker isolation/logging,
-lint/Pint and unit validation passed. No test suite ran on production. Existing-owner middleware and
-server-side rendering passed for dashboard/monitor/activity/memory with private/no-store; browser
-automation failed, so authenticated HTTP/visual verification is **not** claimed. Guest routes redirect
-to login; home/up/cart HTTPS200. Seven existing services active, Codex PID1318728 preserved, failed_jobs82
-unchanged. No existing worker was explicitly restarted. At04:20:48UTC no new Laravel/Nginx error bytes;
-two503 responses occurred inside the four-second04:04:25–04:04:29UTC maintenance fence, no500 observed.
+The owner then explicitly raised the allowance100→300. Attempts99 were preserved; the same rejected
+checkout was re-evaluated at06:56:15UTC and correctly produced `human_required/FULFILLMENT_REQUIRES_TEAM`
+with revision2, zero tools and execution=false. Shadow scheduling resumed then. At06:58:32UTC:
+103/300attempts=89local+14AWS,11simulated and3earlier policy-blocked. Revision2's4completed proposals
+matched the registry, no new completion errors/false waits. This small sample is **not** independent
+approved-set accuracy; the previous local v3 score89/89 is historical. Expand the reviewed regression
+set and validate current memory before any future live execution; execution remains unauthorized.
 
-Recovery checkpoint **/home/ubuntu/herokid-before-autopilot-4375e0e** preserves source, private caches/env,
-autoload, drift, logs, workers and verified fresh backup **herokid-20261104T035353Z.sql.gz**
-(53815398bytes, SHA256`93a7e19b1fea23292c15c384fab8da040943eebe1dae3da07b674f3f56df1e28`),
-including matching off-instance S3 checksum/size. Disable/drain only the new evaluator to stop Auto Pilot;
-retain all seven tables, memory/audit history and later customer writes. No DB restore, migration-down,
-queue replay, destructive rollback or Hostinger writer. Containers intentionally do not auto-restart
-after reboot; require renewed attestation before evaluation. A documentation-only successor needs no
-worker refresh. Remaining activation work is authentication/attestation, not another deployment approval.
+Private cached config changed only for `agentic`, queue connection `agentic-shadow`, and
+`App\Providers\AgenticServiceProvider` in `app.providers`. **Preserving the cache requires provider
+registration and the approved300/day override**; Laravel skips merging bootstrap/providers.php
+when cached. Do not rebuild from older .env defaults. `.env` stays byte-identical. Stage changes must
+preserve the limit and quota. Dedicated worker uses process-only stderr logging and validated systemd
+socket guards. WorkerPID1623075/NRestarts0 active at06:58UTC; containers running without OOM/restarts.
+
+Validation:503tests/3988assertions on EACH isolated PHP8.3 SQLite/MySQL8.4 after lifecycle amendment;
+approved LOCAL v3 benchmark89/89correct, zero unsafe/false-wait/unevaluated results. No production test
+suite. The300limit helper passed isolated PHP8.3 synthetic checks for apply/preserve/unrelated config;
+no application-source changes in this activation. Existing-owner middleware/server-side rendering
+passed dashboard/monitor/activity/memory private/no-store. Browser automation remains unavailable;
+authenticated HTTP/visual verification is **not** claimed. Guest routes redirect to login; home/up/cart200.
+
+At06:58UTC all seven existing services active and CodexPID1318728 preserved; no explicit old-worker
+restart. failed_jobs83 was the **pre-activation** baseline (one unrelated order-process-ai failure at
+05:54:12UTC, after initial deployment's82). It remains83; Shadow worker failure markers0. Since
+activation: zero new Laravel/Nginx error bytes and zero HTTP5xx; initial four-second maintenance had
+two503 responses at04:04:26UTC. Available memory1958704KiB, disk4611424256bytes; no resize required.
+
+Recovery checkpoint **/home/ubuntu/herokid-before-autopilot-4375e0e** preserves source/private config,
+pre-evaluation/pre300 cached config, permissions, log baselines and fresh backup
+**herokid-20261104T035353Z.sql.gz** (53815398bytes,
+SHA256`93a7e19b1fea23292c15c384fab8da040943eebe1dae3da07b674f3f56df1e28`), with matching off-instance
+S3 checksum/size. Disable/drain only the new evaluator; retain schema, memory/history, quotas and all
+later customer writes. No DB restore, migration-down, queue replay or Hostinger writer. Containers do
+not auto-restart after reboot; require deliberate startup and renewed attestation. Renew credentials
+only when health requires it, never silently fallback to an API key.
 
 
 ## 3 November 2026 — checkout shipping review and coloring-book resume DEPLOYED from main

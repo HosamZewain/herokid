@@ -1,11 +1,14 @@
-# Auto Pilot host profile — installed on AWS, Shadow evaluation gated
+# Auto Pilot host profile — AWS Shadow evaluation active
 
 The owner resolved the lifecycle ambiguity; see
 [`../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md`](../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md).
 The owner explicitly approved this release on 4 November 2026. Application,
 additive schema, Docker and dedicated worker unit are installed; observation and
-reviewed memory are active. Evaluation remains disabled pending dedicated host
-ChatGPT authentication and actual running-container attestation. See
+reviewed memory are active. Dedicated host ChatGPT authentication, actual container
+and network attestation and zero-tool health passed; Shadow evaluation is active.
+The owner increased the effective host allowance to **300 decisions/Cairo day**,
+preserving all attempts. Six memory rules have seven immutable versions after an
+operator clarification of the already approved delivery semantics. See
 [`../../../docs/autopilot-aws-deployment-2026-11-04.ar.md`](../../../docs/autopilot-aws-deployment-2026-11-04.ar.md).
 No autonomous execution exists in this
 package. Do not run this as a blanket deployment script.
@@ -15,7 +18,10 @@ package. Do not run this as a blanket deployment script.
 The exact amd64 image pair was tested locally on Linux containers, including a
 real subscription decision and the November 4 approved v3 evaluation: 89/89
 correct, zero unsafe proposals/false waits/unevaluated targets, all subscription
-authenticated with zero model tools. This is local evidence, not AWS activation.
+authenticated with zero model tools. This is the earlier local benchmark. Actual
+AWS activation is separately documented: initial wrong completion proposals were
+blocked by policy, and the same case passed after memory revision 2. Do not reuse
+the local 89/89 score as a claim about every live decision or revised memory.
 The decision container has one internal network with
 Docker's `gateway_mode_ipv4=isolated`, no default route and no published port.
 Only the proxy joins a second outbound network. No other container may join the
@@ -61,6 +67,11 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    production-worker credentials, put auth in the app directory, transfer it into
    this repository, or log its contents. Mount only the dedicated final auth
    directory read-only in the decision service. Expiry requires deliberate renewal.
+   Run provisioning independently of SSH (a detached, temporary login container),
+   so a dropped operator connection does not discard the successful login. Verify
+   the final directory contains only `auth.json`; retain CLI bookkeeping outside
+   the mounted directory in protected operator storage. Remove the exited login
+   container after validation. Never archive device codes or credential contents.
 4. Supply a private env file with the six required Compose inputs: immutable
    `AUTOPILOT_DECISION_IMAGE`, `AUTOPILOT_EGRESS_IMAGE`, numeric `AUTOPILOT_UID`,
    `AUTOPILOT_GID`, absolute `AUTOPILOT_AUTH_DIR` and `AUTOPILOT_SOCKET_DIR`.
@@ -73,12 +84,17 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    acceptance script inside the container via stdin, then read bridge health.
    Host attestation, runtime isolation, zero tools and ChatGPT authentication must
    all pass. No inference is permitted on a failed or uncertain profile.
+   Allow a bounded startup wait for the Unix socket: startup runs local fake-provider
+   isolation probes before exposing health. This wait makes no model inference calls.
 6. Application rollout keeps observation, evaluation and MCP off first. Configure
    only reviewed `agentic`/queue keys in the existing private configuration;
    do not regenerate unrelated effective production configuration blindly. Set
    `agentic.bridge_socket=/run/herokid-autopilot/decision.sock` explicitly: this
    differs from the feature's generic default `/run/herokid-agentic/decision.sock`.
-   Keep provider `codex`, daily limit 100, cycles/pass 3. Discover Composer packages
+   Keep provider `codex`, cycles/pass 3 and the explicitly approved daily allowance:
+   the source default is 100; current AWS override is **300**, approved November 4.
+   Preserve it across enable/disable operations and do not reset the attempt count.
+   Discover Composer packages
    from the reviewed lockfile, then validate routes/views/cache; stale package
    discovery hid the MCP route in the first local test attempt.
    When preserving an existing configuration cache, explicitly append the new

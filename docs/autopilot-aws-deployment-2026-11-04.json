@@ -1,165 +1,179 @@
 {
   "application_sha": "be5fe8b461e1bbd01bc3ebb93d9534f2117c638a",
-  "state": "deployed_observation_active_subscription_pending",
+  "state": "deployed_shadow_evaluation_active",
   "shadow_only": true,
   "autonomous_execution": false,
-  "host": {
-    "verified_at_utc": "2026-11-04T04:20:48.240715+00:00",
-    "head": "be5fe8b461e1bbd01bc3ebb93d9534f2117c638a",
-    "base": "99c0b981a37a4828f5c7fbafe85a96d5d2d574b1",
-    "changed_file_hashes_verified": 129,
-    "changed_files_readable_by_web": true,
-    "environment_preserved": true,
-    "manifest_assets_present": true,
-    "previous_manifest_assets_preserved": true,
-    "worker_unit_matches_source": true,
-    "services": {
-      "nginx": true,
-      "php8.3-fpm": true,
-      "mysql": true,
-      "redis-server": true,
-      "supervisor": true,
-      "herokid-scheduler.timer": true,
-      "herokid-codex-scenes.service": true
-    },
-    "existing_codex_pid": "1318728",
-    "scheduler_result": "success",
-    "logs_since_checkpoint": {
-      "storage/logs/laravel.log": {
-        "new_bytes": 0,
-        "levels": {}
+  "effective_daily_limit": 300,
+  "activation_evidence": "autopilot-aws-activation-2026-11-04.json",
+  "initial_deployment_snapshot": {
+    "application_sha": "be5fe8b461e1bbd01bc3ebb93d9534f2117c638a",
+    "state": "deployed_observation_active_subscription_pending",
+    "shadow_only": true,
+    "autonomous_execution": false,
+    "host": {
+      "verified_at_utc": "2026-11-04T04:20:48.240715+00:00",
+      "head": "be5fe8b461e1bbd01bc3ebb93d9534f2117c638a",
+      "base": "99c0b981a37a4828f5c7fbafe85a96d5d2d574b1",
+      "changed_file_hashes_verified": 129,
+      "changed_files_readable_by_web": true,
+      "environment_preserved": true,
+      "manifest_assets_present": true,
+      "previous_manifest_assets_preserved": true,
+      "worker_unit_matches_source": true,
+      "services": {
+        "nginx": true,
+        "php8.3-fpm": true,
+        "mysql": true,
+        "redis-server": true,
+        "supervisor": true,
+        "herokid-scheduler.timer": true,
+        "herokid-codex-scenes.service": true
       },
-      "/var/log/nginx/herokid-production-access.log": {
-        "new_bytes": 249291,
-        "status_codes": {
-          "200": 482,
-          "404": 13,
-          "304": 31,
-          "503": 2,
-          "302": 1,
-          "206": 11
+      "existing_codex_pid": "1318728",
+      "scheduler_result": "success",
+      "logs_since_checkpoint": {
+        "storage/logs/laravel.log": {
+          "new_bytes": 0,
+          "levels": {}
         },
-        "server_errors": 2
+        "/var/log/nginx/herokid-production-access.log": {
+          "new_bytes": 249291,
+          "status_codes": {
+            "200": 482,
+            "404": 13,
+            "304": 31,
+            "503": 2,
+            "302": 1,
+            "206": 11
+          },
+          "server_errors": 2
+        },
+        "/var/log/nginx/herokid-production-error.log": {
+          "new_bytes": 0
+        }
       },
-      "/var/log/nginx/herokid-production-error.log": {
-        "new_bytes": 0
+      "disk_free_bytes": 4851531776,
+      "dedicated_auth_file_exists": false,
+      "worker_cannot_read_auth": true,
+      "web_cannot_write_socket_directory": true,
+      "known_git_status": [
+        "M bootstrap/cache/.gitignore",
+        "?? public/build/assets/app-Bhh21A7h.css",
+        "?? public/build/assets/app-D3H9Up8z.css",
+        "?? public/build/assets/app-Dzb4crYr.css"
+      ]
+    },
+    "admin": {
+      "verified_at_utc": "2026-11-04T04:21:50+00:00",
+      "method": "server-side existing admin action and permission middleware; no browser session",
+      "actor_id": 1,
+      "existing_permissions_passed": true,
+      "memory_before": 6,
+      "memory_after": 6,
+      "active_memory": 6,
+      "versions": 6,
+      "versions_attributed_to_owner": 6,
+      "pages": {
+        "admin.agentic.index": {
+          "status": 200,
+          "bytes": 73059,
+          "private_no_store": true,
+          "passed": true
+        },
+        "admin.agentic.monitor": {
+          "status": 200,
+          "bytes": 42583,
+          "private_no_store": true,
+          "passed": true
+        },
+        "admin.agentic.activity": {
+          "status": 200,
+          "bytes": 1972,
+          "private_no_store": true,
+          "passed": true
+        },
+        "admin.agentic.memory.index": {
+          "status": 200,
+          "bytes": 41246,
+          "private_no_store": true,
+          "passed": true
+        }
+      },
+      "dashboard_counts": {
+        "active": 260,
+        "unobserved": 158,
+        "unevaluated": 260,
+        "covered": 0
+      },
+      "activity_stage": "evaluation_disabled",
+      "last_observed_at": "2026-11-04 04:21:01",
+      "observed_groups": 102,
+      "state_counts": {
+        "pending": 102
+      },
+      "ai_runs": 0,
+      "quota_day": "2026-11-04",
+      "attempts": 89,
+      "evaluate": false,
+      "mcp_enabled": false,
+      "agentic_provider_loaded": true
+    },
+    "config_patch_validation": {
+      "php": "8.3",
+      "network": "none",
+      "only_synthetic_config": true,
+      "initial_registration": "passed",
+      "idempotent_registration": "passed",
+      "unrelated_config_drift": "refused_without_write"
+    },
+    "public_https": {
+      "/": 200,
+      "/up": 200,
+      "/cart": 200,
+      "admin_guest": "redirects_to_login"
+    },
+    "pending": [
+      "dedicated_AWS_ChatGPT_device_login",
+      "actual_running_container_and_network_attestation",
+      "enable_shadow_worker_after_gates"
+    ],
+    "browser_visual_check": "unavailable_due_to_browser_tool_timeoutMs_error",
+    "fresh_backup": {
+      "file": "herokid-20261104T035353Z.sql.gz",
+      "bytes": 53815398,
+      "sha256": "93a7e19b1fea23292c15c384fab8da040943eebe1dae3da07b674f3f56df1e28",
+      "local_gzip_sha256_verified": true,
+      "s3_sha256_and_size_verified": true
+    },
+    "regressions": {
+      "php": "8.3",
+      "sqlite": {
+        "tests": 503,
+        "assertions": 3988
+      },
+      "mysql8.4": {
+        "tests": 503,
+        "assertions": 3988
       }
     },
-    "disk_free_bytes": 4851531776,
-    "dedicated_auth_file_exists": false,
-    "worker_cannot_read_auth": true,
-    "web_cannot_write_socket_directory": true,
-    "known_git_status": [
-      "M bootstrap/cache/.gitignore",
-      "?? public/build/assets/app-Bhh21A7h.css",
-      "?? public/build/assets/app-D3H9Up8z.css",
-      "?? public/build/assets/app-Dzb4crYr.css"
-    ]
-  },
-  "admin": {
-    "verified_at_utc": "2026-11-04T04:21:50+00:00",
-    "method": "server-side existing admin action and permission middleware; no browser session",
-    "actor_id": 1,
-    "existing_permissions_passed": true,
-    "memory_before": 6,
-    "memory_after": 6,
-    "active_memory": 6,
-    "versions": 6,
-    "versions_attributed_to_owner": 6,
-    "pages": {
-      "admin.agentic.index": {
-        "status": 200,
-        "bytes": 73059,
-        "private_no_store": true,
-        "passed": true
-      },
-      "admin.agentic.monitor": {
-        "status": 200,
-        "bytes": 42583,
-        "private_no_store": true,
-        "passed": true
-      },
-      "admin.agentic.activity": {
-        "status": 200,
-        "bytes": 1972,
-        "private_no_store": true,
-        "passed": true
-      },
-      "admin.agentic.memory.index": {
-        "status": 200,
-        "bytes": 41246,
-        "private_no_store": true,
-        "passed": true
-      }
-    },
-    "dashboard_counts": {
-      "active": 260,
-      "unobserved": 158,
-      "unevaluated": 260,
-      "covered": 0
-    },
-    "activity_stage": "evaluation_disabled",
-    "last_observed_at": "2026-11-04 04:21:01",
-    "observed_groups": 102,
-    "state_counts": {
-      "pending": 102
-    },
-    "ai_runs": 0,
-    "quota_day": "2026-11-04",
-    "attempts": 89,
-    "evaluate": false,
-    "mcp_enabled": false,
-    "agentic_provider_loaded": true
-  },
-  "config_patch_validation": {
-    "php": "8.3",
-    "network": "none",
-    "only_synthetic_config": true,
-    "initial_registration": "passed",
-    "idempotent_registration": "passed",
-    "unrelated_config_drift": "refused_without_write"
-  },
-  "public_https": {
-    "/": 200,
-    "/up": 200,
-    "/cart": 200,
-    "admin_guest": "redirects_to_login"
-  },
-  "pending": [
-    "dedicated_AWS_ChatGPT_device_login",
-    "actual_running_container_and_network_attestation",
-    "enable_shadow_worker_after_gates"
-  ],
-  "browser_visual_check": "unavailable_due_to_browser_tool_timeoutMs_error",
-  "fresh_backup": {
-    "file": "herokid-20261104T035353Z.sql.gz",
-    "bytes": 53815398,
-    "sha256": "93a7e19b1fea23292c15c384fab8da040943eebe1dae3da07b674f3f56df1e28",
-    "local_gzip_sha256_verified": true,
-    "s3_sha256_and_size_verified": true
-  },
-  "regressions": {
-    "php": "8.3",
-    "sqlite": {
-      "tests": 503,
-      "assertions": 3988
-    },
-    "mysql8.4": {
-      "tests": 503,
-      "assertions": 3988
+    "real_evaluation": {
+      "dataset": "actual-orders.v3",
+      "targets": 89,
+      "correct": 89,
+      "unsafe": 0,
+      "false_waits": 0,
+      "unsupported": 19,
+      "unevaluated": 0,
+      "existing_comparable": 24,
+      "differences": 0,
+      "location": "isolated_local_acceptance",
+      "aws_inference_calls": 0
     }
   },
-  "real_evaluation": {
-    "dataset": "actual-orders.v3",
-    "targets": 89,
-    "correct": 89,
-    "unsafe": 0,
-    "false_waits": 0,
-    "unsupported": 19,
-    "unevaluated": 0,
-    "existing_comparable": 24,
-    "differences": 0,
-    "location": "isolated_local_acceptance",
-    "aws_inference_calls": 0
-  }
+  "pending_validation": [
+    "live sample registry agreement is not independent owner-approved accuracy",
+    "full approved v3 corpus was not rerun with memory revision 2",
+    "authenticated browser/visual checks unavailable due to browser tool timeoutMs error",
+    "containers require deliberate start and renewed attestation after reboot"
+  ]
 }

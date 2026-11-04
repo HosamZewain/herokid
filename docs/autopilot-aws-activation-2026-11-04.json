@@ -1,0 +1,438 @@
+{
+  "host": {
+    "verified_at_utc": "2026-11-04T06:58:35.823373+00:00",
+    "head": "26b5f59cb2a795bdfb35c13d6dc3dc0a06c19dd3",
+    "base": "99c0b981a37a4828f5c7fbafe85a96d5d2d574b1",
+    "changed_file_hashes_verified": 132,
+    "changed_files_readable_by_web": true,
+    "environment_preserved": true,
+    "manifest_assets_present": true,
+    "previous_manifest_assets_preserved": true,
+    "worker_unit_matches_source": true,
+    "services": {
+      "nginx": true,
+      "php8.3-fpm": true,
+      "mysql": true,
+      "redis-server": true,
+      "supervisor": true,
+      "herokid-scheduler.timer": true,
+      "herokid-codex-scenes.service": true
+    },
+    "existing_codex_pid": "1318728",
+    "scheduler_result": "success",
+    "logs_since_checkpoint": {
+      "storage/logs/laravel.log": {
+        "new_bytes": 17250,
+        "levels": {
+          "ERROR": 1
+        }
+      },
+      "/var/log/nginx/herokid-production-access.log": {
+        "new_bytes": 2289492,
+        "status_codes": {
+          "200": 3981,
+          "404": 124,
+          "304": 972,
+          "503": 2,
+          "302": 13,
+          "206": 29,
+          "301": 1,
+          "405": 10,
+          "201": 11,
+          "419": 2,
+          "499": 3,
+          "403": 1
+        },
+        "server_errors": 2
+      },
+      "/var/log/nginx/herokid-production-error.log": {
+        "new_bytes": 0
+      }
+    },
+    "disk_free_bytes": 4611362816,
+    "dedicated_auth_file_exists": true,
+    "worker_cannot_read_auth": true,
+    "web_cannot_write_socket_directory": true,
+    "known_git_status": [
+      "M bootstrap/cache/.gitignore",
+      "?? public/build/assets/app-Bhh21A7h.css",
+      "?? public/build/assets/app-D3H9Up8z.css",
+      "?? public/build/assets/app-Dzb4crYr.css"
+    ]
+  },
+  "activation": {
+    "verified_at_utc": "2026-11-04T06:58:33.331315+00:00",
+    "activation_at_utc": "2026-11-04T06:40:51Z",
+    "resumed_at_utc": "2026-11-04T06:56:15Z",
+    "logs_since_activation": {
+      "/var/www/herokid/storage/logs/laravel.log": {
+        "new_bytes": 0,
+        "levels": {}
+      },
+      "/var/log/nginx/herokid-production-access.log": {
+        "new_bytes": 452312,
+        "status_codes": {
+          "404": 14,
+          "200": 502,
+          "499": 3,
+          "304": 781,
+          "405": 4,
+          "302": 2,
+          "403": 1
+        },
+        "server_errors": 0
+      },
+      "/var/log/nginx/herokid-production-error.log": {
+        "new_bytes": 0
+      }
+    },
+    "worker": {
+      "MainPID": "1623075",
+      "NRestarts": "0",
+      "ActiveState": "active"
+    },
+    "worker_failed_job_markers": 0,
+    "containers_running_without_oom": true,
+    "container_restarts": {
+      "herokid-autopilot-decision-1": 0,
+      "herokid-autopilot-egress-1": 0
+    },
+    "dedicated_auth_mode": "0600",
+    "dedicated_auth_only_entry": true,
+    "available_memory_kib": 1958704,
+    "disk_free_bytes": 4611424256
+  },
+  "admin": {
+    "verified_at_utc": "2026-11-04T06:58:32+00:00",
+    "method": "server-side existing admin action and permission middleware; no browser session",
+    "actor_id": 1,
+    "existing_permissions_passed": true,
+    "memory_before": 6,
+    "memory_after": 6,
+    "active_memory": 6,
+    "versions": 7,
+    "versions_attributed_to_owner": 7,
+    "pages": {
+      "admin.agentic.index": {
+        "status": 200,
+        "bytes": 74610,
+        "private_no_store": true,
+        "passed": true
+      },
+      "admin.agentic.monitor": {
+        "status": 200,
+        "bytes": 44976,
+        "private_no_store": true,
+        "passed": true
+      },
+      "admin.agentic.activity": {
+        "status": 200,
+        "bytes": 2645,
+        "private_no_store": true,
+        "passed": true
+      },
+      "admin.agentic.memory.index": {
+        "status": 200,
+        "bytes": 41908,
+        "private_no_store": true,
+        "passed": true
+      }
+    },
+    "dashboard_counts": {
+      "active": 263,
+      "unobserved": 0,
+      "unevaluated": 259,
+      "covered": 4
+    },
+    "activity_stage": "waiting_queue",
+    "last_observed_at": "2026-11-04 06:58:23",
+    "observed_groups": 263,
+    "state_counts": {
+      "covered": 4,
+      "pending": 259
+    },
+    "ai_runs": 14,
+    "quota_day": "2026-11-04",
+    "attempts": 103,
+    "evaluate": true,
+    "mcp_enabled": false,
+    "agentic_provider_loaded": true
+  },
+  "shadow": {
+    "verified_at_utc": "2026-11-04T06:58:32+00:00",
+    "observe": true,
+    "evaluate": true,
+    "mcp_enabled": false,
+    "provider": "codex",
+    "daily_limit": 300,
+    "cycles_per_pass": 3,
+    "quota_day": "2026-11-04",
+    "attempts": 103,
+    "lease_held": false,
+    "activity_stage": "waiting_queue",
+    "activity_updated_at": "2026-11-04 06:58:23",
+    "last_observed_at": "2026-11-04 06:58:23",
+    "provider_checked_at": "2026-11-04 06:58:14",
+    "provider_error": null,
+    "observed_groups": 263,
+    "state_counts": {
+      "covered": 4,
+      "pending": 259
+    },
+    "today_aws_runs": 14,
+    "run_statuses": {
+      "simulated": 11,
+      "policy_blocked": 3
+    },
+    "saved_decisions": 14,
+    "decision_types": {
+      "human_required": 9,
+      "completed": 3,
+      "wait": 2
+    },
+    "decision_reason_codes": {
+      "FULFILLMENT_REQUIRES_TEAM": 7,
+      "ORDER_DELIVERED": 3,
+      "CUSTOMER_DELIVERY_PENDING": 2,
+      "IDENTITY_WORKFLOW_REQUIRED": 2
+    },
+    "execution_disabled_for_every_saved_decision": true,
+    "completed_runs_subscription_zero_tools_isolation": true,
+    "completed_runs_with_metadata": 14,
+    "active_memory_rules": 6,
+    "memory_versions": 7,
+    "failed_jobs": 83
+  },
+  "live_quality": {
+    "verified_at_utc": "2026-11-04T06:58:32+00:00",
+    "scope": "actual AWS Shadow proposals; anonymized aggregate",
+    "not_independent_owner_approved_accuracy": true,
+    "existing_automation_comparison": "not measured for this live sample",
+    "delivery_memory_revision_cohorts": {
+      "1": {
+        "runs": 10,
+        "completed_proposals": 10,
+        "registry_agreement": 7,
+        "policy_blocked": 3,
+        "false_waits_vs_registry": 0,
+        "incomplete_completion_proposals": 3,
+        "unsupported_targets": 0,
+        "execution_allowed": 0,
+        "provider_failed_or_unfinished": 0
+      },
+      "2": {
+        "runs": 4,
+        "completed_proposals": 4,
+        "registry_agreement": 4,
+        "policy_blocked": 0,
+        "false_waits_vs_registry": 0,
+        "incomplete_completion_proposals": 0,
+        "unsupported_targets": 0,
+        "execution_allowed": 0,
+        "provider_failed_or_unfinished": 0
+      }
+    }
+  },
+  "runtime_attestation": {
+    "verified": true,
+    "private_network": true,
+    "host_gateway_absent": true,
+    "model_ports_published": false,
+    "model_mounts": [
+      "read_only_dedicated_auth",
+      "private_unix_socket"
+    ],
+    "direct_model_egress": false
+  },
+  "network_attestation": {
+    "direct_paths": {
+      "1.1.1.1": "denied",
+      "169.254.169.254": "denied",
+      "10.0.0.1": "denied"
+    },
+    "forbidden_tunnels": [
+      "example.com:443",
+      "api.openai.com:443",
+      "169.254.169.254:443",
+      "127.0.0.1:443",
+      "chatgpt.com:80",
+      "chatgpt.com.example.com:443"
+    ],
+    "subscription_tunnels": [
+      "chatgpt.com",
+      "auth.openai.com"
+    ],
+    "general_http": "denied",
+    "inference_calls": 0
+  },
+  "bridge_health": {
+    "ready": true,
+    "authentication": "chatgpt",
+    "isolation_verified": true,
+    "tool_count": 0,
+    "sdk_version": "0.166.0",
+    "cli_version": "0.166.0",
+    "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+    "error": null,
+    "elapsed_seconds": 0.368
+  },
+  "provider_health": {
+    "provider": "codex",
+    "health": {
+      "ready": true,
+      "reason": null
+    },
+    "shadow_queue_size": 0
+  },
+  "before_activation": {
+    "verified_at_utc": "2026-11-04T06:40:50+00:00",
+    "observe": true,
+    "evaluate": false,
+    "mcp_enabled": false,
+    "provider": "codex",
+    "daily_limit": 100,
+    "cycles_per_pass": 3,
+    "quota_day": "2026-11-04",
+    "attempts": 89,
+    "lease_held": false,
+    "activity_stage": "evaluation_disabled",
+    "activity_updated_at": null,
+    "last_observed_at": "2026-11-04 06:40:02",
+    "provider_checked_at": null,
+    "provider_error": null,
+    "observed_groups": 263,
+    "state_counts": {
+      "pending": 263
+    },
+    "today_aws_runs": 0,
+    "run_statuses": [],
+    "saved_decisions": 0,
+    "decision_types": [],
+    "decision_reason_codes": [],
+    "execution_disabled_for_every_saved_decision": true,
+    "completed_runs_subscription_zero_tools_isolation": true,
+    "completed_runs_with_metadata": 0,
+    "active_memory_rules": 6,
+    "memory_versions": 6,
+    "failed_jobs": 83
+  },
+  "budget_change": {
+    "stage": "evaluate",
+    "observe": true,
+    "evaluate": true,
+    "daily_limit": 300,
+    "mcp": false,
+    "agentic_provider_registered": true,
+    "unrelated_config_preserved": true,
+    "env_preserved": true
+  },
+  "memory_clarification": {
+    "verified_at_utc": "2026-11-04T06:53:58+00:00",
+    "memory_id": 1,
+    "before_revision": 1,
+    "after_revision": 2,
+    "before_guidance_sha256": "04ed7675d9bd9961929a601c963aeb9719f8278f70772bab311e923866430837",
+    "after_guidance_sha256": "17cf6b127e4d1354bad85d00b2a61f5a7da102f1d5d6488e5e86273fd0f539cf",
+    "guidance": "حالة الأوردر «تم الإنتاج والموافقة» لا تعني تسليم العميل، وتظل تحت المتابعة. تنتهي الدورة عند الإلغاء أو عندما تسجل حالة الشحن التسليم الفعلي للعميل، حتى لو بقي إيقاف يدوي قديم. قبل التسليم احترم الإيقاف والعمل الجاري؛ تابع الطباعة والتجهيز والشحن مع الفريق دون إعادة إنتاج نتائج معتمدة. صفحات الكتاب الناقصة تخضع لشروط بدء أو استئناف المسار الحالي. داخل الطلب المجمع قيّم الوحدات المفتوحة المستقلة ولا تغلقها بسبب انتهاء وحدة أخرى.\nتفسير مفاتيح البيانات: orders[].status=delivered أو order_behavior=delivered يعني «تم الإنتاج والموافقة» فقط، وليس تسليم العميل. shipping_status=not_required أو shipping_behavior=not_required ليس دليل تسليم. التسليم الفعلي هو shipping_behavior=delivered. إذا كانت الوحدة active=true والهدف المسجل human_required/FULFILLMENT_REQUIRES_TEAM، فاعرض المتابعة مع الفريق ولا تقترح completed أو ORDER_DELIVERED بسبب حالة الأوردر. احترم أهداف Capability Registry والسياسة المسجلة.",
+    "change_reason": "توضيح المفاتيح الداخلية لقاعدة التسليم التي اعتمدها المالك، بعد رصد اقتراحات مرفوضة في Shadow Mode؛ سجله مشغل النشر بتفويض المالك دون تغيير السياسة أو تنفيذ أي إجراء على الأوردرات.",
+    "actor_id": 1,
+    "operator_provenance_recorded": true,
+    "previous_versions_preserved": true,
+    "blocked_cases_reobserved": 3,
+    "original_blocked_runs_retained": 3,
+    "attempts_unchanged": true,
+    "inference_calls": 0,
+    "business_order_writes": 0,
+    "policy_changed": false
+  },
+  "same_case_recheck": {
+    "verified_at_utc": "2026-11-04T06:56:15+00:00",
+    "case": "previously blocked active production-approved unit",
+    "same_checkout_as_rejected_case": true,
+    "memory_versions": [
+      {
+        "id": 1,
+        "revision": 2
+      },
+      {
+        "id": 2,
+        "revision": 1
+      },
+      {
+        "id": 3,
+        "revision": 1
+      },
+      {
+        "id": 4,
+        "revision": 1
+      },
+      {
+        "id": 5,
+        "revision": 1
+      },
+      {
+        "id": 6,
+        "revision": 1
+      }
+    ],
+    "previous_proposal": "completed",
+    "previous_policy_reason": "INCOMPLETE_TARGET",
+    "status": "simulated",
+    "decision": "human_required",
+    "action": null,
+    "reason_code": "FULFILLMENT_REQUIRES_TEAM",
+    "expected_decision": "human_required",
+    "expected_reason_code": "FULFILLMENT_REQUIRES_TEAM",
+    "matches_registered_target": true,
+    "execution_allowed": false,
+    "provider_metadata": {
+      "tools_used": 0,
+      "authentication": "chatgpt",
+      "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba"
+    },
+    "attempts": 100,
+    "daily_limit": 300,
+    "inference_calls": 1,
+    "approved_full_dataset_rerun": false
+  },
+  "state": "deployed_shadow_evaluation_active",
+  "application_sha": "be5fe8b461e1bbd01bc3ebb93d9534f2117c638a",
+  "autonomous_execution": false,
+  "public_https": {
+    "/": {
+      "status": 200,
+      "redirects_to_login": false
+    },
+    "/up": {
+      "status": 200,
+      "redirects_to_login": false
+    },
+    "/cart": {
+      "status": 200,
+      "redirects_to_login": false
+    },
+    "/admin/agentic-automation": {
+      "status": 302,
+      "redirects_to_login": true
+    },
+    "/admin/agentic-automation/memory": {
+      "status": 302,
+      "redirects_to_login": true
+    }
+  },
+  "daily_limit_authorization": "Owner explicitly requested 300 decisions/day on 4 November 2026; no attempt reset",
+  "config_limit_validation": {
+    "php": "8.3",
+    "network": "none",
+    "synthetic_only": true,
+    "explicit_300_applied": true,
+    "300_preserved_when_disabling": true,
+    "unrelated_config_preserved": true
+  },
+  "limitations": [
+    "live sample registry agreement is not independent owner-approved accuracy",
+    "full approved v3 corpus was not rerun with memory revision 2",
+    "authenticated browser/visual checks unavailable due to browser tool timeoutMs error",
+    "containers require deliberate start and renewed attestation after reboot"
+  ]
+}

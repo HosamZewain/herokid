@@ -4,12 +4,22 @@
 
 The owner explicitly authorized deployment. Application `be5fe8b461e1bbd01bc3ebb93d9534f2117c638a`
 is deployed from GitHub main on the existing AWS host. The three exact additive
-migrations are applied, observation is enabled, and six reviewed memory rules
-are active with immutable owner-attributed versions. Dashboard/activity updates
-work without AI. The dedicated Docker images, isolated networks and PHP worker
-unit are installed; **evaluation remains disabled pending dedicated AWS ChatGPT
-authentication and final running-container attestation**. MCP and autonomous
-execution remain disabled. No new AWS resource was created.
+migrations are applied and observation is enabled. Dedicated AWS ChatGPT device
+authentication, actual container/network attestation and zero-tool health passed.
+**Shadow evaluation started at 06:40:51 UTC; autonomous execution remains absent.**
+The owner then explicitly raised the effective allowance to **300 decisions/Cairo
+day**, preserving the 89 local acceptance attempts and all subsequent AWS attempts.
+Dashboard/activity updates work without AI. MCP remains disabled; no new AWS resource.
+
+The first ten AWS proposals included three incorrect completion proposals caused
+by interpreting raw order `delivered` as customer delivery. Hard policy blocked all
+three. After draining only the Shadow worker, the trusted operator clarified the
+owner's existing memory rule with explicit field meanings, using the existing admin
+action and immutable revision 2. Six rules now have seven versions; all rejected
+decisions remain in audit. A real re-evaluation of the same rejected checkout used
+revision 2 and correctly returned `human_required/FULFILLMENT_REQUIRES_TEAM`.
+Shadow scheduling resumed at 06:56:15 UTC. This small live verification is not a
+new full approved-dataset accuracy result; expand coverage before any live-execution gate.
 
 The existing private configuration was preserved, with only Auto Pilot settings,
 its dedicated queue and `App\Providers\AgenticServiceProvider` added. The cached
@@ -302,8 +312,9 @@ transport complexity that is not necessary for these seven reads.
   `docs/autopilot-lifecycle-clarification-2026-11-04.ar.md` for this amendment's evidence.
 - Docker 29.9.3 and Compose 5.7.0 are installed on AWS after explicit approval;
   the exact image pair and three additive migrations are installed, and bounded
-  observation is enabled. Dedicated host authentication and final running-container
-  attestation remain required before Shadow evaluation can start.
+  observation and Shadow evaluation are enabled. Dedicated host authentication,
+  actual container/network attestation and zero-tool checks passed on November 4.
+  The owner raised the current host allowance to 300/day without resetting usage.
 
 - November 3 real acceptance: dedicated ChatGPT authentication verified through
   actual inference; **87/87 correct (100%)** on 37 owner-approved checkouts,
@@ -338,11 +349,13 @@ transport complexity that is not necessary for these seven reads.
 - Historical first owner review remains in `actual-orders.v2.json`: 37 checkouts,
   87 targets. The latest delivery clarification is the separately versioned v3
   with 89 targets; actual customer delivery takes precedence over an old hold.
-- Remaining activation gates: complete dedicated AWS subscription authentication,
-  attest the actual container pair and network, then enable only the dedicated
-  Shadow evaluator within the carried daily quota. Live autonomous execution remains unimplemented and
-  unauthorized. The local approved evaluation has no unresolved safety-critical
-  failure; new scenarios or runtime changes require proportionate validation.
+- AWS Shadow activation is complete; no further device login is currently needed.
+  Live autonomous execution remains unimplemented and unauthorized. The earlier
+  approved local v3 score is 89/89; initial AWS completion errors were separately
+  blocked and retained. Revision 2 clarified the owner's existing semantics and
+  passed one same-case real decision. The broader revision-2 accuracy gate is not
+  claimed complete. New live scenarios must join a reviewed regression set before
+  any future execution approval; preserve all failures and independent evaluation.
 - Detailed files, measured tests, known SQLite limitations and runtime boundaries:
   `docs/agentic-shadow-implementation.md`, `docs/agentic-shadow-architecture.md`,
   and `ops/agentic/README.md`.
