@@ -88,7 +88,8 @@ class LocalCleanupPlan
         }
 
         return ['id' => $run->id, 'revision' => $this->revision($run), 'order_id' => $run->order_id, 'scene_count' => $run->scene_count,
-            'finished_at' => $run->finished_at->timestamp, 'scenes' => $scenes];
+            'finished_at' => $run->finished_at->timestamp, 'protocol' => $run->protocol,
+            'identity_checksum' => $run->snapshot['identity_checksum'] ?? null, 'scenes' => $scenes];
     }
 
     public function unchanged(array $entry): bool

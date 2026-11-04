@@ -49,7 +49,7 @@ def clean(plan, home, spool, apply=False, now=None):
         if not plain_dir(root):
             raise ValueError('unsafe_root')
     result = {'apply': apply, 'eligible_runs': 0, 'candidate_files': 0, 'deleted_files': 0,
-              'candidate_bytes': 0, 'deleted_bytes': 0, 'skipped_runs': 0, 'skipped_files': 0}
+              'candidate_bytes': 0, 'deleted_bytes': 0, 'skipped_runs': 0, 'skipped_files': 0, 'skip_reasons': {}}
     accepted_hashes = set()
     receipts = []
     seen_ids = set()
@@ -98,9 +98,29 @@ def clean(plan, home, spool, apply=False, now=None):
             if (state.get('id') != key or state.get('status') != 'completed' or state_file.stat().st_mtime > cutoff
                     or manifest.get('id') != key or manifest.get('order_id') != run['order_id']
                     or manifest.get('scene_count') != run['scene_count']
-                    or state.get('manifest_sha256') != hashlib.sha256(manifest_bytes).hexdigest()
                     or any((inbox / marker).exists() for marker in ['cancel', 'pause-after-scene'])):
                 raise ValueError('worker_not_settled')
+            if state.get('manifest_sha256') is None:
+                # Early protocol 2/3/4 workers did not publish a manifest digest.
+                # Require approved identity binding and EVERY saved page receipt;
+                # the actual local/S3 image hash is still checked before unlink.
+                identity = run.get('identity_checksum')
+                if (manifest.get('protocol') not in [2, 3, 4] or manifest.get('protocol') != run.get('protocol')
+                        or not isinstance(identity, str) or not SHA.fullmatch(identity)
+                        or manifest.get('identity_checksum') != identity):
+                    raise ValueError('legacy_binding_missing')
+                for number, sha in scenes.items():
+                    meta_path = out / f'scene-{int(number):02d}.json'
+                    if (meta_path.is_symlink() or not meta_path.is_file() or meta_path.stat().st_size > 65536
+                            or meta_path.stat().st_mtime > cutoff):
+                        raise ValueError('legacy_binding_missing')
+                    meta = json.loads(meta_path.read_text())
+                    if (meta.get('id') != key or meta.get('order_id') != run['order_id']
+                            or meta.get('scene') != int(number) or meta.get('identity_checksum') != identity
+                            or meta.get('sha256') != sha):
+                        raise ValueError('legacy_binding_mismatch')
+            elif state['manifest_sha256'] != hashlib.sha256(manifest_bytes).hexdigest():
+                raise ValueError('manifest_changed')
             # Only numbered accepted images below are candidates; rejected or unknown files remain.
             result['eligible_runs'] += 1
             receipt = {'version': 1, 'id': key, 'verified_at': int(now), 'local_images_removed': True, 'shared_cache_done': False}
@@ -114,8 +134,11 @@ def clean(plan, home, spool, apply=False, now=None):
                 accepted_hashes.add(sha)
                 if apply and any((folder / name).exists() or (folder / name).is_symlink() for folder in [work, out, inbox]):
                     receipt['local_images_removed'] = False
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError) as error:
             result['skipped_runs'] += 1
+            known = {'invalid_run', 'unsafe_run_directory', 'unsafe_metadata', 'worker_not_settled', 'manifest_changed', 'legacy_binding_missing', 'legacy_binding_mismatch'}
+            reason = str(error) if isinstance(error, ValueError) and str(error) in known else type(error).__name__
+            result['skip_reasons'][reason] = result['skip_reasons'].get(reason, 0) + 1
 
     # The shared image tool cache is touched only when no worker run is in flight.
     idle = plan.get('allow_generated_cache') is True

@@ -126,6 +126,39 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(0, self.clean()['deleted_files'])
         self.assertTrue((external / 'scene-01.png').exists())
 
+    def legacy_receipts(self):
+        identity = 'c' * 64
+        manifest = json.loads((self.inbox / 'manifest.json').read_text())
+        manifest.update(protocol=4, identity_checksum=identity)
+        self.write(self.inbox / 'manifest.json', json.dumps(manifest).encode())
+        state = self.state.copy()
+        state.pop('manifest_sha256')
+        self.write(self.out / 'status.json', json.dumps(state).encode())
+        self.plan['runs'][0].update(protocol=4, identity_checksum=identity)
+        meta = {'id': self.key, 'order_id': 17, 'scene': 1, 'identity_checksum': identity, 'sha256': self.sha}
+        self.write(self.out / 'scene-01.json', json.dumps(meta).encode())
+
+    def test_legacy_without_manifest_digest_requires_all_bound_scene_receipts(self):
+        self.legacy_receipts()
+        result = self.clean()
+        self.assertEqual(3, result['deleted_files'])
+        self.assertTrue((self.out / 'scene-01.json').exists())
+
+    def test_legacy_wrong_identity_or_receipt_and_modern_missing_digest_are_preserved(self):
+        self.legacy_receipts()
+        meta_path = self.out / 'scene-01.json'
+        meta = json.loads(meta_path.read_text())
+        self.write(meta_path, json.dumps({**meta, 'order_id': 999}).encode())
+        self.assertEqual(0, self.clean()['deleted_files'])
+        self.write(meta_path, json.dumps(meta).encode())
+        self.plan['runs'][0]['identity_checksum'] = 'd' * 64
+        self.assertEqual(0, self.clean()['deleted_files'])
+        self.plan['runs'][0].update(protocol=6, identity_checksum='c' * 64)
+        manifest = json.loads((self.inbox / 'manifest.json').read_text())
+        manifest['protocol'] = 6
+        self.write(self.inbox / 'manifest.json', json.dumps(manifest).encode())
+        self.assertEqual(0, self.clean()['deleted_files'])
+
     def test_symlink_receipt_temp_never_overwrites_another_file(self):
         target = self.root / 'protected.txt'
         target.write_bytes(b'preserve')
