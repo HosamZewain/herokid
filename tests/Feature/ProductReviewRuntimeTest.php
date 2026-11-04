@@ -16,6 +16,7 @@ use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderProcessStep;
+use App\Models\OrderProductPreviewGallery;
 use App\Models\OrderReviewManifest;
 use App\Models\OrderStatusDefinition;
 use App\Models\Permission;
@@ -49,6 +50,8 @@ use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\OrderAutomationGuidance;
 use App\Services\Orders\OrderAutomationSummary;
+use App\Services\Orders\OrderProductPreviewImageService;
+use App\Services\Orders\OrderProductPreviewService;
 use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\BookCatalog;
@@ -61,6 +64,7 @@ use App\Support\ProductProductionStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1279,11 +1283,68 @@ class ProductReviewRuntimeTest extends TestCase
         $manifest = OrderReviewManifest::sole();
         $this->assertCount(2, $manifest->images);
         Http::assertSentCount(2);
-        $this->get(URL::temporarySignedRoute('order-process.review-preview', now()->addMinute(), ['manifest' => $manifest->id]))->assertOk()->assertSee('كتاب اختبار');
+        $this->followingRedirects()->get(URL::temporarySignedRoute('order-process.review-preview', now()->addMinute(), ['manifest' => $manifest->id]))->assertOk()->assertSee('كتاب اختبار');
         $two->productionComponents()->where('production_stage', 'book_cover')->update(['prompt_template' => 'Changed cover']);
         $this->reply($run);
         $this->assertNull($manifest->fresh()->approved_at);
         $this->assertSame('blocked', $run->fresh()->status);
+    }
+
+    public function test_unified_review_preserves_old_links_snapshot_and_protects_every_image(): void
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic', [], []));
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        $this->send($run);
+        $manifest = OrderReviewManifest::sole();
+        $expires = now()->addMinutes(30);
+        $legacy = URL::temporarySignedRoute('order-process.review-preview', $expires, ['manifest' => $manifest->id]);
+        $canonical = URL::temporarySignedRoute('order-review.show', $expires, ['manifest' => $manifest->id]);
+        $this->get($legacy)->assertRedirect($canonical);
+        $gallery = OrderProductPreviewGallery::sole();
+        $unified = URL::temporarySignedRoute('order-review.show', now()->addDays(35), ['manifest' => $manifest->id]);
+        $this->assertSame($unified, $gallery->publicUrl());
+        $galleryUrl = route('order-product-previews.show', ['token' => $gallery->plainPublicToken()]);
+        $this->get($galleryUrl)->assertRedirect($unified);
+        $this->get($canonical)->assertOk()->assertViewIs('front.order-product-previews.show')
+            ->assertSee($item->order->checkoutReference->short_reference)
+            ->assertSee('كتاب اختبار')->assertSee('bg-slate-50')->assertDontSee($manifest->images[0]['path']);
+        $this->get(route('order-review.show', $manifest))->assertForbidden();
+        $this->get(URL::temporarySignedRoute('order-review.show', now()->subMinute(), ['manifest' => $manifest->id]))->assertForbidden();
+        $this->get(URL::temporarySignedRoute('order-process.review-preview', now()->subMinute(), ['manifest' => $manifest->id]))->assertForbidden();
+
+        $original = $manifest->images[0];
+        $snapshot = $manifest->images;
+        // Identity images must use the same mandatory watermark path as product covers.
+        $identity = $original;
+        unset($identity['preview_id']);
+        $identity['kind'] = 'identity';
+        $identity['label'] = 'هوية طفل اختبار — قصة اختبار';
+        $manifest->update(['images' => [$original, $identity]]);
+        foreach (['order-process.review-image', 'order-review.image'] as $route) {
+            foreach ([0, 1] as $index) {
+                $url = URL::temporarySignedRoute($route, now()->addMinutes(15), ['manifest' => $manifest->id, 'index' => $index]);
+                $this->withHeader('Sec-Fetch-Dest', 'document')->get($url)->assertNotFound();
+                $image = $this->withHeader('Sec-Fetch-Dest', 'image')->get($url)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+                $this->assertNotSame(app(ProcessProductReview::class)->bytes($original), $image->getContent());
+                $this->assertSame(app(OrderProductPreviewImageService::class)->protectedBytes(app(ProcessProductReview::class)->bytes($original)), $image->getContent());
+            }
+        }
+        $this->assertNull($manifest->fresh()->approved_at);
+        $manifest->update(['images' => $snapshot]);
+        // Editing the order does not relabel or replace artwork in an already sent snapshot.
+        $item->order->update(['child_name' => 'اسم مختلف']);
+        $this->get($canonical)->assertOk()->assertDontSee('اسم مختلف');
+        $this->assertSame($snapshot, $manifest->fresh()->images);
+        // An extra manual preview must not disappear by redirecting to an older snapshot.
+        app(OrderProductPreviewService::class)->upload($item->order,
+            [UploadedFile::fake()->image('extra.jpg')], null, $this->actor);
+        $this->get($galleryUrl)->assertOk()->assertSee('2 صورة معاينة');
+        $this->get($canonical)->assertOk()->assertSee('1 صورة معاينة');
+        $run->update(['status' => 'cancelled']);
+        $this->get($canonical)->assertNotFound();
+        $this->get($legacy)->assertNotFound();
     }
 
     public function test_cutover_keeps_old_response_processing_and_avoids_duplicate_ownership(): void

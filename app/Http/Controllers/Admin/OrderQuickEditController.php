@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Bosta\BostaAddressCatalogService;
 use App\Services\Orders\AdminOrderQuickEditService;
 use App\Support\Phone;
 use App\Support\StoryAgeOptions;
@@ -12,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderQuickEditController extends Controller
 {
@@ -39,12 +41,37 @@ class OrderQuickEditController extends Controller
         return response()->json($edits->options($representative, $request->user()))->header('Cache-Control', 'private, no-store');
     }
 
+    public function addressCatalog(Request $request, Order $representative, BostaAddressCatalogService $catalog)
+    {
+        $data = $request->validate(['city_id' => ['nullable', 'string', 'max:100']]);
+        try {
+            if (filled($data['city_id'] ?? null)) {
+                abort_unless($catalog->findCityById($data['city_id']), 422, 'اختر محافظة صحيحة من قائمة بوسطة.');
+                $result = ['districts' => $catalog->districts($data['city_id'])];
+            } else {
+                $result = ['cities' => $catalog->cities()];
+            }
+        } catch (HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            report($exception);
+            abort(503, 'تعذر تحميل مناطق بوسطة. حاول مرة أخرى؛ يمكنك حفظ بيانات التواصل دون تغيير العنوان.');
+        }
+
+        return response()->json($result)->header('Cache-Control', 'private, no-store');
+    }
+
     public function contact(Request $request, Order $representative, AdminOrderQuickEditService $edits)
     {
         $validated = $request->validate([
             'parent_name' => ['sometimes', 'required', 'string', 'max:150'],
             'phone' => ['sometimes', 'required', 'string', 'max:30'],
             'alternate_phone' => ['nullable', 'string', 'max:30'],
+            'shipping_address' => ['sometimes', 'required', 'array:bosta_city_id,bosta_district_id,street,address_details'],
+            'shipping_address.bosta_city_id' => ['required_with:shipping_address', 'string', 'max:100'],
+            'shipping_address.bosta_district_id' => ['required_with:shipping_address', 'string', 'max:100'],
+            'shipping_address.street' => ['required_with:shipping_address', 'string', 'min:6', 'max:500'],
+            'shipping_address.address_details' => ['nullable', 'string', 'max:500'],
             'change_reason' => $this->reasonRules(),
         ], $this->messages());
         foreach (['phone', 'alternate_phone'] as $key) {
@@ -163,7 +190,12 @@ class OrderQuickEditController extends Controller
 
     private function messages(): array
     {
-        return ['change_reason.required' => 'اكتب سبب التعديل لحفظه في سجل النشاط.',
+        return [
+            'shipping_address.bosta_city_id.required_with' => 'اختر محافظة بوسطة.',
+            'shipping_address.bosta_district_id.required_with' => 'اختر المنطقة التابعة للمحافظة.',
+            'shipping_address.street.required_with' => 'اكتب الشارع ورقم المبنى.',
+            'shipping_address.street.min' => 'عنوان الشارع يجب ألا يقل عن ٦ أحرف.',
+            'change_reason.required' => 'اكتب سبب التعديل لحفظه في سجل النشاط.',
             'change_reason.min' => 'سبب التعديل يجب ألا يقل عن ٥ أحرف.'];
     }
 

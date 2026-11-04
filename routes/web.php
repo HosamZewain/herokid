@@ -128,7 +128,7 @@ use Illuminate\Support\Facades\Route;
 // does NOT exist on disk, so this only fires when the symlink is missing —
 // it has zero cost when the symlink is in place.
 Route::get('/order-identity-review/{regeneration}', OrderRegeneratedIdentityPreviewController::class)->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('orders.regenerated-identity-preview');
-Route::get('/order-review/{manifest}', [OrderReviewManifestController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->name('order-process.review-preview');
+Route::get('/order-review/{manifest}', [OrderReviewManifestController::class, 'legacy'])->middleware(['signed', 'throttle:60,1'])->name('order-process.review-preview');
 Route::get('/order-review/{manifest}/image/{index}', [OrderReviewManifestController::class, 'image'])->middleware(['signed', 'throttle:120,1'])->whereNumber('index')->name('order-process.review-image');
 
 Route::get('/storage/{path}', function (string $path) {
@@ -178,6 +178,11 @@ Route::get('/preview/{token}/scenes', [PublicBookletPreviewController::class, 's
 Route::get('/preview-media/{bookletPreview}', [PublicBookletPreviewController::class, 'document'])
     ->middleware('throttle:300,1')
     ->name('booklet-previews.document');
+
+Route::get('/order-preview/review-{manifest}', [OrderReviewManifestController::class, 'show'])
+    ->whereNumber('manifest')->middleware(['signed', 'throttle:60,1'])->name('order-review.show');
+Route::get('/order-preview/review-{manifest}/images/{index}', [OrderReviewManifestController::class, 'image'])
+    ->whereNumber('manifest')->whereNumber('index')->middleware(['signed', 'throttle:120,1'])->name('order-review.image');
 
 Route::get('/order-preview/{token}', [PublicOrderProductPreviewController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{64}')
@@ -851,6 +856,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
     Route::get('orders/groups/{representative}/quick-edit-options', [OrderQuickEditController::class, 'options'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.quick-edit-options');
     Route::get('orders/groups/{representative}/removal-options', [OrderQuickEditController::class, 'removalOptions'])->whereNumber('representative')->middleware('permission:orders.delete')->name('orders.groups.removal-options');
     Route::delete('orders/groups/{representative}/items/{item}', [OrderQuickEditController::class, 'removeItem'])->whereNumber(['representative', 'item'])->withTrashed()->middleware('permission:orders.delete')->name('orders.groups.items.destroy');
+    Route::get('orders/groups/{representative}/address-catalog', [OrderQuickEditController::class, 'addressCatalog'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.address-catalog');
     Route::patch('orders/groups/{representative}/contact', [OrderQuickEditController::class, 'contact'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.contact');
     Route::post('orders/groups/{representative}/products', [OrderQuickEditController::class, 'addProduct'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.products.store');
     Route::post('orders/groups/{representative}/packages', [OrderQuickEditController::class, 'addPackage'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.packages.store');
@@ -867,6 +873,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
     Route::post('orders/groups/{representative}/shipping-merge/{review}/resolve', [OrderGroupController::class, 'resolveShippingMerge'])->whereNumber(['representative', 'review'])->middleware(['permission:orders.update', 'permission:orders.view_all'])->name('orders.groups.shipping-merge.resolve');
     Route::post('orders/groups/{representative}/merge', [OrderGroupController::class, 'merge'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.merge');
     Route::post('orders/{order}/product-previews', [AdminOrderProductPreviewController::class, 'store'])->whereNumber('order')->middleware('permission:orders.preview.upload')->name('orders.product-previews.store');
+    Route::get('orders/groups/{representative}/product-previews/download', [AdminOrderProductPreviewController::class, 'downloadMany'])->whereNumber('representative')->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.product-previews.download-many');
     Route::delete('orders/groups/{representative}/product-previews', [AdminOrderProductPreviewController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy-many');
     Route::delete('orders/{order}/product-previews/{preview}', [AdminOrderProductPreviewController::class, 'destroy'])->whereNumber(['order', 'preview'])->middleware('permission:orders.preview.upload')->name('orders.product-previews.destroy');
     Route::post('orders/groups/{representative}/assignment/automation', [OrderAssignmentController::class, 'automation'])->whereNumber('representative')->middleware(['permission:orders.automation.control', 'permission:orders.update'])->name('orders.groups.assignment.automation');
@@ -913,6 +920,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
     Route::get('orders/{order}/puzzle-generations/{run}/image', [PuzzleGenerationController::class, 'image'])->middleware('permission:orders.view')->name('orders.puzzle-image');
 
     Route::post('orders/{order}/attachments', [OrderAttachmentController::class, 'store'])->middleware('permission:orders.update')->name('orders.attachments.store');
+    Route::get('orders/groups/{representative}/attachments/download', [OrderAttachmentController::class, 'downloadMany'])->whereNumber('representative')->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.attachments.download-many');
     Route::delete('orders/groups/{representative}/attachments', [OrderAttachmentController::class, 'destroyMany'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.attachments.destroy-many');
     Route::get('order-attachments/{attachment}', [OrderAttachmentController::class, 'show'])->middleware('permission:orders.view')->name('orders.attachments.show');
     Route::get('order-attachments/{attachment}/download', [OrderAttachmentController::class, 'download'])->middleware('permission:orders.view')->name('orders.attachments.download');

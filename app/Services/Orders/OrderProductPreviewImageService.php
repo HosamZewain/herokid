@@ -46,6 +46,7 @@ class OrderProductPreviewImageService
         $directory = trim(dirname($preview->file_path), '.');
         $fingerprint = substr(hash('sha256', implode('|', [
             $preview->checksum ?: $preview->file_path,
+            'mandatory-watermark-v2',
             (string) config('order_product_previews.watermark_version', 1),
             (string) config('order_product_previews.watermark_text', 'HeroKid Preview'),
             (string) config('order_product_previews.customer_max_width', 1400),
@@ -60,12 +61,22 @@ class OrderProductPreviewImageService
 
     private function createProtectedImage(string $sourcePath, string $protectedPath, string $disk): void
     {
+        $blob = $this->protectedBytes(file_get_contents($sourcePath));
+        abort_unless(Storage::disk($disk)->put($protectedPath, $blob, ['visibility' => 'private']), 500);
+    }
+
+    /** Always render a derivative; callers must never fall back to the original on failure. */
+    public function protectedBytes(string $bytes): string
+    {
+        $image = new Imagick;
         try {
-            $image = new Imagick($sourcePath);
+            $image->readImageBlob($bytes);
             $image->setIteratorIndex(0);
             $image->autoOrient();
             $image->setImageBackgroundColor(new ImagickPixel('white'));
-            $image = $image->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+            $flattened = $image->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+            $image->clear();
+            $image = $flattened;
             $image->thumbnailImage(
                 (int) config('order_product_previews.customer_max_width', 1400),
                 (int) config('order_product_previews.customer_max_height', 1400),
@@ -73,21 +84,18 @@ class OrderProductPreviewImageService
                 true,
             );
             $image->setImageColorspace(Imagick::COLORSPACE_SRGB);
-
             $this->applyWatermark($image);
-
             $image->stripImage();
             $image->setImageFormat('jpeg');
             $image->setImageCompression(Imagick::COMPRESSION_JPEG);
             $image->setImageCompressionQuality((int) config('order_product_previews.customer_jpeg_quality', 80));
 
-            $blob = $image->getImagesBlob();
-            $image->clear();
-            $image->destroy();
-
-            abort_unless(Storage::disk($disk)->put($protectedPath, $blob, ['visibility' => 'private']), 500);
+            return $image->getImagesBlob();
         } catch (ImagickException $exception) {
             throw new RuntimeException('تعذر تجهيز نسخة المعاينة المحمية.', previous: $exception);
+        } finally {
+            $image->clear();
+            $image->destroy();
         }
     }
 
@@ -95,7 +103,7 @@ class OrderProductPreviewImageService
     {
         $text = trim((string) config('order_product_previews.watermark_text', 'HeroKid Preview'));
         if ($text === '') {
-            return;
+            $text = 'HeroKid Preview';
         }
 
         $width = $image->getImageWidth();
@@ -105,6 +113,7 @@ class OrderProductPreviewImageService
         $verticalStep = max(180, (int) round($fontSize * 5));
 
         $draw = new ImagickDraw;
+        $draw->setFont(public_path('fonts/cairo-bold.ttf'));
         $draw->setFillColor(new ImagickPixel('rgba(255,255,255,0.42)'));
         $draw->setStrokeColor(new ImagickPixel('rgba(15,23,42,0.28)'));
         $draw->setStrokeWidth(max(1, $fontSize * 0.035));

@@ -1,5 +1,10 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — unified previews, selected downloads and Bosta address PREPARED
+
+Prepared on isolated `codex/unified-customer-preview` from live/main `322a40ff6130d643f18d71a45f34f4006f2b4b64`; primary mobile/UI edits untouched. Owner requested these additions before upload. [Scope and tests](unified-preview-address-download-2026-11-04.md). Code/routes/assets only; no migrations, dependency or environment changes. Preserve legacy signed/token URLs, immutable approval snapshots, production originals and existing waybills. PHP8.3 SQLite/MySQL8 each106tests/1239assertions; final security-header/preview/quick-edit regression103tests/1097assertions; six JS tests. Local rendered desktop/mobile and admin controls checked. Build retains old hashed assets. Deployment verification and checkpoint still pending.
+
+
 ## 4 November 2026 — actionable order guidance and preview preflight recovery DEPLOYED
 
 Application **449cb0194cfaa772ba4ae7c855d7028aaebd9724** deployed from GitHub/AWS main **10:12:27UTC /12:12 Cairo**, base **6421694bdeb9df3734188a7eec5e4de9fbd4bdbc**, after explicit owner approval “انشر”. [Staff behavior, boundaries and validation](order-self-service-guidance-2026-11-04.ar.md). Primary mobile/UI work preserved.

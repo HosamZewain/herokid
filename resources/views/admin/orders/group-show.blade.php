@@ -194,7 +194,7 @@
                     <div class="mb-2 flex items-center justify-between gap-2">
                         <h3 class="text-sm font-black text-gray-900">العميل والتوصيل</h3>
                         @can('orders.update')
-                            @if(!$group['trashed'])<button type="button" data-quick-open="contact" class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700">تعديل بيانات التواصل</button>@endif
+                            @if(!$group['trashed'])<button type="button" data-quick-open="contact" class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-700">تعديل التواصل والعنوان</button>@endif
                         @endcan
                     </div>
                     <div class="grid grid-cols-2 gap-1.5 lg:grid-cols-4" data-order-compact-customer>
@@ -678,7 +678,7 @@
                                 <input x-ref="url" value="{{ $productPreviewGallery->publicUrl() }}" readonly dir="ltr" class="min-w-0 flex-1 rounded-xl border-gray-200 bg-white text-left text-xs text-gray-500">
                             </div>
 
-                            @can('orders.preview.upload')
+                            @can('orders.view')
                                 @if(!$group['trashed'])
                                     <form id="bulk-product-preview-delete-{{ $group['representative_id'] }}" method="POST" action="{{ route('admin.orders.product-previews.destroy-many', $group['representative_id']) }}" class="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-3 sm:flex-row sm:items-center sm:justify-between" data-order-ajax-delete data-order-bulk-delete data-delete-confirm="سيتم حذف كل صور المعاينة المحددة. هل تريد المتابعة؟">
                                         @csrf
@@ -687,9 +687,10 @@
                                             <input type="checkbox" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-all>
                                             تحديد كل صور المعاينة
                                         </label>
-                                        <div class="flex items-center gap-3">
+                                        <div class="flex flex-wrap items-center gap-3">
                                             <span class="text-xs font-black text-gray-500" data-bulk-delete-selection data-empty-label="لم يتم تحديد صور">لم يتم تحديد صور</span>
-                                            <button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>
+                                            <button type="button" disabled data-order-bulk-download data-download-url="{{ route('admin.orders.product-previews.download-many', $group['representative_id']) }}" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">تحميل المحدد — ZIP</button>
+                                            @can('orders.preview.upload')<button type="submit" disabled class="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">حذف المحدد</button>@endcan
                                         </div>
                                     </form>
                                 @endif
@@ -698,10 +699,10 @@
                             <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                                 @foreach($productPreviewGallery->previews as $preview)
                                     <article class="relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm" data-ajax-delete-item data-order-preview-id="{{ $preview->id }}">
-                                        @can('orders.preview.upload')
+                                        @can('orders.view')
                                             @if(!$group['trashed'])
-                                                <label class="absolute left-2 top-2 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-md" title="تحديد الصورة للحذف">
-                                                    <input type="checkbox" name="preview_ids[]" value="{{ $preview->id }}" form="bulk-product-preview-delete-{{ $group['representative_id'] }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $preview->original_name ?: 'صورة المعاينة' }} للحذف">
+                                                <label class="absolute left-2 top-2 z-10 inline-flex cursor-pointer rounded-lg bg-white p-2 shadow-md" title="تحديد الصورة">
+                                                    <input type="checkbox" name="preview_ids[]" value="{{ $preview->id }}" form="bulk-product-preview-delete-{{ $group['representative_id'] }}" class="rounded border-gray-300 text-red-600 focus:ring-red-500" data-bulk-delete-checkbox aria-label="تحديد {{ $preview->original_name ?: 'صورة المعاينة' }}">
                                                 </label>
                                             @endif
                                         @endcan
