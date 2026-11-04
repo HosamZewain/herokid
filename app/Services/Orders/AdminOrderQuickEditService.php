@@ -59,7 +59,6 @@ class AdminOrderQuickEditService
                     'values' => $this->childValues($order),
                     'photos' => $canSeePhotos ? collect($order->uploaded_photos ?? [])->keys()
                         ->map(fn (int $index): string => route('admin.orders.photo', [$order, $index, 'thumbnail' => 1]))->all() : [],
-                    'photo_revision' => $canSeePhotos ? $this->photoRevision($order) : null,
                 ])->concat(filled(data_get($representative->delivery_details, 'phone'))
                     ? $this->customerChildren->children(data_get($representative->delivery_details, 'phone'), $actor) : [])
                 ->unique('order_id')->values()->all(),
@@ -85,6 +84,7 @@ class AdminOrderQuickEditService
                     'values' => $this->childValues($order),
                     'photos' => $canSeePhotos ? collect($order->uploaded_photos ?? [])->keys()
                         ->map(fn (int $index): string => route('admin.orders.photo', [$order, $index, 'thumbnail' => 1]))->all() : [],
+                    'photo_revision' => $canSeePhotos ? $this->photoRevision($order) : null,
                 ])->values()->all(),
             'items' => $orders->flatMap->items->filter(fn (OrderItem $item): bool => in_array($item->item_type, ['product', 'product_add_on'], true))
                 ->map(fn (OrderItem $item): array => [

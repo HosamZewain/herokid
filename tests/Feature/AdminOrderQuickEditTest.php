@@ -359,7 +359,7 @@ class AdminOrderQuickEditTest extends TestCase
         $limited->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update'])->pluck('id'));
         $limited->unsetRelation('permissions');
         $options = $this->actingAs($limited)->getJson(route('admin.orders.groups.quick-edit-options', $this->order))->assertOk();
-        $options->assertJsonPath('children.0.photos', []);
+        $options->assertJsonPath('children.0.photos', [])->assertJsonPath('children.0.photo_revision', null);
         $this->actingAs($limited)->postJson(route('admin.orders.groups.products.store', $this->order), [
             'request_key' => (string) Str::uuid(), 'product_id' => $this->personalized()->id, 'quantity' => 1,
             'reuse_child_order_id' => $this->order->id, 'change_reason' => 'إعادة استخدام صور الطفل.',
@@ -520,7 +520,10 @@ class AdminOrderQuickEditTest extends TestCase
         $this->add($product, ['reuse_child_order_id' => $this->order->id])->assertOk();
         $item = OrderItem::with('order')->where('product_id', $product->id)->firstOrFail();
         $path = $item->order->uploaded_photos[0];
-        $revision = app(AdminOrderQuickEditService::class)->photoRevision($item->order);
+        $lookup = $this->actingAs($this->admin)->getJson(route('admin.orders.groups.quick-edit-options', $this->order))->assertOk();
+        $child = collect($lookup->json('children'))->firstWhere('order_id', $item->order_id);
+        $revision = $child['photo_revision'];
+        $this->assertSame(app(AdminOrderQuickEditService::class)->photoRevision($item->order), $revision);
         $this->updateItem($item, ['removed_photos' => [0], 'photo_revision' => $revision, 'photos' => [UploadedFile::fake()->image('replacement.jpg')]])->assertOk();
         $item->refresh();
         $item->load('order');
