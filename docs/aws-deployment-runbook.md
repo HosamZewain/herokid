@@ -1,5 +1,15 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — legacy book component-key collision correction DEPLOYED
+
+Corrective follow-up to the owner-approved legacy admission release after the HK10-558 report. Application **f0ae79da3d90871faa8a0a89843b45271415cb9f** deployed from main **13:25:53UTC /15:25 Cairo**, base **ab9f2d032cd48d9817cf51c2a56538000ee46974**. [Root cause, behavior and tests](legacy-book-key-collision-2026-11-04.ar.md). HK10-558/item2820 retains three standard components; catalog interior13 reuses one historical stable key. Retiring that row does not release its unique item/key pair. Preparation now assigns a deterministic unused key to the new component, reserving archived keys too. Existing IDs/briefs/cover and source references remain intact; no per-order database patch.
+
+All3 changed-file hashes/readability and PHP8.3 syntax verified. Only FPM gracefully reloaded; no migration, dependency, config, route/view/asset changes or maintenance fence. Four Laravel worker PIDs, Shadow1784544 and Codex1318728 preserved; old workers stayed stopped. Private environment/config/routes/manifest bytes and known mode/untracked assets unchanged. No historical admission, cover approval, generation or message submitted by the agent.
+
+PHP8.3 SQLite and isolated MySQL8 each **138tests/1308assertions** pass, including failing-before/passing-after HTTP reproduction, preserved old briefs, archived alternative-key collisions, reapproval and consistent worker fingerprints. Production read-only preparation confirms item2820 keeps20pages, yields `legacy-book_interior-13`, and has zero collision with retained keys. Authenticated GET displays valid retained preview3575/20pages and approval button. No production POST was used; staff must reopen the form to obtain the updated token and explicitly approve/start.
+
+Recovery **/home/ubuntu/herokid-before-book-key-collision-f0ae79d** contains base source archive/hash, private environment/config/routes, worker/log/drift baselines and exact changed files. Home/up/cart HTTPS200; eight services active, scheduler success/exit0, failed_jobs83unchanged; bounded87requests/zero5xx and zero new Laravel/Nginx/worker error bytes. Compatible rollback must retain legacy approvals, component keys/history and active Codex runs; no DB restore, migration-down, file deletion or queue replay. Documentation-only successor requires no service refresh.
+
 ## 4 November 2026 — legacy coloring-book admission and missing page counts DEPLOYED
 
 Owner explicitly approved “انشر” for **fe85b10adeedd453b7f990e28f40743be03ce4c6**. Application deployed from GitHub/AWS main at **12:55:21 UTC /14:55 Cairo**, base **1e72e581ba1408ef9bedb97889a896f92ba96d46**. [Behavior, team steps and tests](legacy-book-admission-2026-11-04.ar.md). Primary mobile/UI checkout preserved.
