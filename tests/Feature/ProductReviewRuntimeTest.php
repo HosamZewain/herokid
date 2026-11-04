@@ -500,6 +500,44 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertDatabaseCount('codex_scene_runs', 0);
     }
 
+    public function test_note_edit_can_be_explicitly_approved_without_replacing_accepted_cover(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $this->staffApprovalPayload($run, $manifest))->assertSessionHasNoErrors();
+        Setting::updateOrCreate(['key' => 'book_approved_enrollment_after'], ['value' => now()->addDay()->toDateTimeString()]);
+        $originalApproval = OrderPreviewStaffApproval::sole()->getRawOriginal();
+        $originalManifest = $manifest->fresh()->getRawOriginal();
+        app(AutomationHandoff::class)->take($item->order, $admin, Request::create('/'));
+        $item->order->updateQuietly(['parent_notes' => 'Use simpler interior activities', 'status' => 'delivered', 'paid_amount_cents' => 20000, 'payment_status' => 'partially_paid']);
+        $this->get(route('admin.orders.groups.show', $item->order))->assertOk()->assertSee('تسجيل الموافقة واستكمال الطلب');
+        $payload = $this->staffApprovalPayload($run, $manifest->fresh());
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('order_preview_staff_approvals', 2);
+        $this->assertSame($originalApproval, OrderPreviewStaffApproval::oldest('id')->first()->getRawOriginal());
+        $this->assertSame($originalManifest, $manifest->fresh()->getRawOriginal());
+        $this->assertFalse(AutomationHandoff::held($run->checkout_key));
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertStatus(409);
+        app(BookPageService::class)->enroll();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        Http::assertSentCount(2);
+    }
+
+    public function test_note_edit_before_first_staff_approval_preserves_child_variant_and_photo_gates(): void
+    {
+        [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();
+        $item->order->updateQuietly(['parent_notes' => 'New instruction for pages']);
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $item->order->updateQuietly(['parent_notes' => 'Another instruction after opening page']);
+        $this->actingAs($admin)->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertStatus(409);
+        $payload = $this->staffApprovalPayload($run, $manifest);
+        $item->order->updateQuietly(['interests' => 'Changed theme']);
+        $this->post(route('admin.orders.workspace.preview-approval', $item->order), $payload)->assertSessionHasErrors('preview_approval');
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
     public function test_staff_can_accept_existing_cover_after_template_refresh_without_regenerating_it(): void
     {
         [$item, $run, $manifest, $admin] = $this->staffApprovalFixture();

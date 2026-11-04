@@ -10,6 +10,7 @@ use App\Models\OrderAutomationRun;
 use App\Models\OrderGroupMergeAlias;
 use App\Models\OrderItem;
 use App\Models\OrderPaymentEvent;
+use App\Models\OrderPaymentReview;
 use App\Models\OrderPreview;
 use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
@@ -65,13 +66,13 @@ class OrderContextBuilder
             'positive_recorded' => $live->contains(fn ($o) => $o->paid_amount_cents > 0 && in_array($o->payment_status, ['partially_paid', 'paid_in_full', 'paid_without_shipping'], true)),
             'consistent' => $balances->count() <= 1,
             'ledger_ref' => OrderPaymentEvent::where('checkout_group_key', $key)->max('id'),
-            'review_pending' => DB::table('order_payment_reviews')->where('checkout_key', $key)->where('status', 'pending')->exists(),
+            'review_pending' => OrderPaymentReview::where('checkout_key', $key)->actionable()->exists(),
         ];
         $runs = OrderProcessRun::where('checkout_key', $key)->with('automation:id,enabled,accepts_new_runs')->orderBy('id')->get();
         $responses = DB::table('order_process_responses')->whereIn('run_id', $runs->pluck('id'))->orderBy('id')->get(['id', 'run_id', 'decision']);
         $latestResponse = $responses->last();
         $manifest = OrderReviewManifest::where('checkout_key', $key)->latest('id')->first();
-        $staffApproval = $manifest ? OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->first() : null;
+        $staffApproval = $manifest ? OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->latest('id')->first() : null;
         $staffInputs = $manifest ? app(StaffPreviewInputs::class)->recorded($manifest) : [];
         $control = DB::table('order_automation_controls')->where('checkout_key', $key)->first(['state', 'version']);
         $confirmation = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->latest('id')->first();

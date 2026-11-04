@@ -18,6 +18,8 @@ use App\Services\OrderAutomation\Process\ProcessPaymentReview;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\OrderActivityTimelineService;
+use App\Services\Orders\OrderAutomationSummary;
+use App\Services\Orders\OrderPaymentLedgerService;
 use App\Services\RoboDesk\Conversations\ActiveConversationRefreshService;
 use App\Services\RoboDesk\Conversations\OrderConversationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -76,6 +78,45 @@ class ProcessPaymentReviewTest extends TestCase
     private function poll(): void
     {
         app(ProcessPaymentReview::class)->process($this->conversation);
+    }
+
+    public function test_staff_payment_resolves_earlier_alert_but_later_attachment_stays_actionable(): void
+    {
+        $this->message('receipt');
+        $this->poll();
+        $review = OrderPaymentReview::sole();
+        $this->travel(2)->seconds();
+        $this->order->updateQuietly(['payment_status' => 'partially_paid', 'paid_amount_cents' => 12000]);
+        app(OrderPaymentLedgerService::class)->recordTransition($this->order,
+            ['payment_status' => 'pending_review', 'paid_amount_cents' => 0],
+            ['payment_status' => 'partially_paid', 'paid_amount_cents' => 12000], 'admin_payment_update', $this->actor);
+        $this->assertFalse(OrderPaymentReview::actionable()->exists());
+        $summary = (new OrderAutomationSummary)->forKeys([$this->order->checkoutGroupKey()]);
+        $this->assertFalse(collect($summary[$this->order->checkoutGroupKey()]['parts'])->contains('label', 'بانتظار مراجعة الدفع'));
+        $this->assertSame('pending', $review->fresh()->status); // original evidence retained
+        $this->travel(2)->seconds();
+        $this->message('later-attachment');
+        $this->poll();
+        $this->assertTrue(OrderPaymentReview::actionable()->exists());
+        $summary = (new OrderAutomationSummary)->forKeys([$this->order->checkoutGroupKey()]);
+        $this->assertTrue(collect($summary[$this->order->checkoutGroupKey()]['parts'])->contains('label', 'مرفق جديد بعد تسجيل الدفع'));
+        $this->assertSame(12000, $this->order->fresh()->paid_amount_cents);
+        $this->assertDatabaseCount('order_payment_review_signals', 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_payment_status_alone_and_reversed_payment_do_not_dismiss_attachment(): void
+    {
+        $this->message('receipt');
+        $this->poll();
+        $this->order->updateQuietly(['payment_status' => 'paid_in_full', 'paid_amount_cents' => 100]);
+        $this->assertTrue(OrderPaymentReview::actionable()->exists());
+        $this->travel(2)->seconds();
+        app(OrderPaymentLedgerService::class)->recordTransition($this->order,
+            ['paid_amount_cents' => 0], ['paid_amount_cents' => 100], 'admin_payment_update', $this->actor);
+        $this->assertFalse(OrderPaymentReview::actionable()->exists());
+        $this->order->updateQuietly(['payment_status' => 'unpaid', 'paid_amount_cents' => 0]);
+        $this->assertTrue(OrderPaymentReview::actionable()->exists());
     }
 
     public function test_revised_preview_in_same_interaction_marks_only_current_version(): void

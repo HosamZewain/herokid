@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\AdminActivityLog;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderPaymentReview;
 use App\Models\OrderReviewManifest;
 use App\Models\OrderShippingMergeRequest;
 use App\Models\PuzzleGeneration;
@@ -57,7 +58,7 @@ class OrderAutomationSummary
         $legacyOrderIds = DB::table('order_automation_runs')->whereIn('order_id', $orders->flatten(1)->pluck('id'))->where('dry_run', false)->pluck('order_id');
         $admissionErrors = AdminActivityLog::where('action', 'order.automation_admission_blocked')->where('subject_type', Order::class)
             ->whereIn('subject_id', $orders->flatten(1)->pluck('id'))->orderBy('id')->get(['subject_id', 'properties', 'created_at'])->keyBy('subject_id');
-        $reviews = DB::table('order_payment_reviews')->whereIn('checkout_key', $keys)->where('status', 'pending')->get(['checkout_key', 'updated_at'])->keyBy('checkout_key');
+        $reviews = OrderPaymentReview::query()->whereIn('checkout_key', $keys)->actionable()->get(['checkout_key', 'updated_at'])->keyBy('checkout_key');
         $shippingReviews = OrderShippingMergeRequest::where('status', 'pending')
             ->where(fn ($q) => $q->whereHas('sourceOrder', fn ($q) => $q->whereIn('checkout_group_key', $keys))->orWhereHas('targetOrder', fn ($q) => $q->whereIn('checkout_group_key', $keys)))
             ->with(['sourceOrder:id,checkout_group_key', 'targetOrder:id,checkout_group_key'])->get();
@@ -175,8 +176,9 @@ class OrderAutomationSummary
                     : 'لا يوجد تشغيل مسجل لتجهيز الهوية أو المنتجات. استخدم «فحص وإدخال للأوتوميشن» لعرض أي بيانات ناقصة قبل البدء.';
                 $add('preview', 'intervention', 'لم يدخل مسار الإنتاج الآلي', $failure?->created_at ?? $rows->max('updated_at'), $reason);
             }
-            if ($reviews->has($key) || $rows->contains('payment_status', 'pending_review')) {
-                $add('payment', 'intervention', 'بانتظار مراجعة الدفع', $reviews->get($key)?->updated_at ?? $rows->max('updated_at'), 'راجع رسالة العميل وسجّل الدفع يدويًا.');
+            if ($reviews->has($key) || ($rows->sum('paid_amount_cents') <= 0 && $rows->contains('payment_status', 'pending_review'))) {
+                $paid = $rows->sum('paid_amount_cents') > 0;
+                $add('payment', 'intervention', $paid ? 'مرفق جديد بعد تسجيل الدفع' : 'بانتظار مراجعة الدفع', $reviews->get($key)?->updated_at ?? $rows->max('updated_at'), $paid ? 'الدفعة مسجلة بالفعل؛ راجع المرفق الجديد في رسالة العميل. لا تسجّل نفس الدفعة مرة أخرى.' : 'راجع رسالة العميل وسجّل الدفع يدويًا.');
             }
             if ($rows->contains(fn ($o) => in_array($o->status, ['pending_team_review', 'modification_requested', 'revision_requested'], true))) {
                 $add('team', 'intervention', 'الطلب يحتاج تدخل الفريق', $rows->max('updated_at'));

@@ -5,7 +5,9 @@ namespace App\Services\Orders;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Models\OrderIdentityRegeneration;
+use App\Models\OrderItem;
 use App\Models\OrderPreviewStaffApproval;
+use App\Models\OrderProcessEvent;
 use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
@@ -38,9 +40,6 @@ class StaffPreviewApproval
             abort_unless($manifest && $manifest->id === (int) $data['manifest_id'] && hash_equals($manifest->fingerprint, $data['fingerprint'])
                 && $run && $run->version === (int) $data['run_version']
                 && (int) ($control->version ?? 1) === (int) $data['control_version'], 409, 'تغيرت المعاينة أو حالة التنفيذ؛ حدّث الصفحة وراجع النسخة الحالية.');
-            if ($manifest->approved_at) {
-                $deny('هذه النسخة معتمدة بالفعل؛ استخدم تشغيل الصفحات أو راجع التقدم.');
-            }
             if (! in_array($control->state ?? 'running', ['running', 'paused'], true)
                 || ! in_array($run->status, ['waiting_response', 'waiting_staff', 'paused', 'blocked'], true)
                 || $runs->whereNotIn('status', ['completed', 'cancelled'])->where('id', '!=', $run->id)->isNotEmpty()
@@ -78,6 +77,9 @@ class StaffPreviewApproval
             }
             try {
                 $inputs = app(StaffPreviewInputs::class)->capture($manifest);
+                if (! app(StaffPreviewInputs::class)->needsApproval($manifest, $inputs)) {
+                    $deny('هذه النسخة معتمدة بالفعل؛ استخدم تشغيل الصفحات أو راجع التقدم.');
+                }
                 abort_unless(hash_equals(app(StaffPreviewInputs::class)->fingerprint($inputs), $data['inputs_fingerprint']), 409, 'تغير البرومبت أو عدد الصفحات؛ حدّث الصفحة وراجع البيانات.');
                 if (! app(ProcessProductReview::class)->ready($run, $inputs)) {
                     $deny('المعاينات لم تكتمل بعد.');
@@ -91,6 +93,7 @@ class StaffPreviewApproval
             if ($events->contains(fn ($event) => in_array($event->status, ['processing', 'unknown'], true))) {
                 $deny('إرسال تأكيد الطلب لم يُحسم بعد؛ انتظر تسوية الإرسال.');
             }
+            $wasApproved = (bool) $manifest->approved_at;
             $approval = OrderPreviewStaffApproval::create(['manifest_id' => $manifest->id, 'fingerprint' => $manifest->fingerprint,
                 'user_id' => $actor->id, 'channel' => $data['channel'], 'note' => trim($data['note']), 'production_inputs' => $inputs]);
             app(ProcessProductReview::class)->approve($run, $approvalNode['config'], $approval);
@@ -108,6 +111,13 @@ class StaffPreviewApproval
             }
             DB::table('order_automation_controls')->updateOrInsert(['checkout_key' => $key], ['state' => 'running',
                 'version' => (int) ($control->version ?? 1) + 1, 'error_code' => null, 'updated_at' => now()]);
+            foreach ($inputs as $itemId => $input) {
+                if ($wasApproved && $input['page_count'] !== null) {
+                    OrderProcessEvent::create(['event_key' => 'staff-book-resume:'.$approval->id.':'.$itemId,
+                        'type' => 'book_pages_resume', 'order_id' => OrderItem::findOrFail($itemId)->order_id,
+                        'checkout_key' => $key, 'data' => ['staff_approval_id' => $approval->id, 'item_id' => $itemId], 'status' => 'processed']);
+                }
+            }
             AdminActivityLogger::log('order.preview_approved_by_staff', 'تسجيل موافقة العميل على المعاينة الحالية بواسطة الفريق واستكمال المتبقي المؤهل.', $order,
                 ['approval_id' => $approval->id, 'manifest_id' => $manifest->id, 'fingerprint' => $manifest->fingerprint,
                     'channel' => $approval->channel, 'note' => $data['note'], 'previous_control_state' => $control->state ?? 'running',

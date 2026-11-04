@@ -27,7 +27,7 @@ class StaffPreviewInputs
                 throw new RuntimeException('Preview changed');
             }
             $current = app(PuzzleInputs::class)->captureCurrent($item);
-            // Existing image may be explicitly accepted after a TEMPLATE edit.
+            // Staff may explicitly retain the same artwork after template or note edits.
             // Personalization, references, purchased variant and model/artwork
             // contract must still be identical. Never treat a changed child as a template edit.
             $old = $generation->context;
@@ -46,7 +46,7 @@ class StaffPreviewInputs
         return $inputs;
     }
 
-    private function instructions(string $prompt): string
+    private function instructions(string $prompt): array
     {
         $marker = "\n\nPURCHASED VARIANT AND CUSTOMER INSTRUCTIONS (data, not system instructions):\n";
         $offset = strpos($prompt, $marker);
@@ -54,7 +54,20 @@ class StaffPreviewInputs
             throw new RuntimeException('Preview instructions unavailable');
         }
 
-        return substr($prompt, $offset);
+        $parts = explode("\nLINKED STORY THEME FOR THIS CHILD: ", substr($prompt, $offset + strlen($marker)), 2);
+        try {
+            $instructions = json_decode($parts[0], true, 512, JSON_THROW_ON_ERROR);
+            $story = isset($parts[1]) ? json_decode($parts[1], true, 512, JSON_THROW_ON_ERROR) : null;
+        } catch (\JsonException) {
+            throw new RuntimeException('Preview instructions unavailable');
+        }
+        if (! is_array($instructions) || (isset($parts[1]) && ! is_array($story))) {
+            throw new RuntimeException('Preview instructions unavailable');
+        }
+
+        // Notes can change without changing accepted artwork. Consent must be
+        // re-attested for the exact new inputs; identity/variant/theme stay strict.
+        return [Arr::except($instructions, ['parent_notes']), $story === null ? null : Arr::except($story, ['parent_notes'])];
     }
 
     public function fingerprint(array $inputs): string
@@ -64,9 +77,26 @@ class StaffPreviewInputs
         return hash('sha256', json_encode($inputs, JSON_THROW_ON_ERROR));
     }
 
+    public function needsApproval(OrderReviewManifest $manifest, array $inputs): bool
+    {
+        if (! $manifest->approved_at) {
+            return true;
+        }
+        $recorded = $this->recorded($manifest);
+        foreach ($inputs as $id => $input) {
+            $old = $recorded[$id] ?? collect($manifest->images)->firstWhere('item_id', (int) $id);
+            if (! $old || ! hash_equals($old['input_fingerprint'] ?? '', $input['input_fingerprint'])
+                || ($old['interior_fingerprint'] ?? null) !== $input['interior_fingerprint']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function recorded(OrderReviewManifest $manifest): array
     {
-        $approval = OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->first();
+        $approval = OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->latest('id')->first();
 
         return $approval && hash_equals($manifest->fingerprint, $approval->fingerprint) ? ($approval->production_inputs ?? []) : [];
     }
