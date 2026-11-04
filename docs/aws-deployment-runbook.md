@@ -1,5 +1,16 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — preview note reapproval and stale payment alerts DEPLOYED
+
+Application **e755c035636d99201c89a10bd6532896bd4ec61d** deployed from GitHub/AWS main at **07:45:04UTC /09:45 Cairo**, base **9289a0fbd20b0be820d9a39653fa37d42801b67e**. Owner's ongoing instruction to complete and publish the order-resume/payment follow-up applies. Primary dirty/mobile checkout preserved; isolated branch `codex/preview-notes-payment-review`. [Behavior and tests](preview-notes-payment-alerts-2026-11-04.ar.md).
+
+All11 changed-file hashes/readability/PHP8.3 syntax passed. Only migration2026_11_04_100000 adds the replacement manifest index then removes the single-approval unique constraint; prior approvals retained. FPM/Blade refreshed. Process/conversation workers gracefully refreshed (1648671/1648691); default/process-ai preserved. Shadow worker drained to clean inactive Result=success then started1649184 to read the shared alert/approval projection. **Codex1318728 preserved**, legacy workers stopped. Environment/private config bytes unchanged, including Auto Pilot Shadow300/day and provider registration. No business-order/payment/approval rewrite, historical activation, customer message, paid generation or new resource performed by this release.
+
+Read-only production verification07:49:49UTC:18older attachment alerts have later staff-ledger receipts; all18summary projections now have zero stale payment-request labels (batch77ms). Later attachments remain actionable with payment-already-recorded wording. Authenticated HK11-94 displays that new wording and **running14/20 saved pages**. It started07:19:05UTC after a real user approved newmanifest43; deployment did not trigger or interrupt it. Staff must explicitly re-attest retained covers after note edits; no automatic consent or regeneration.117tests/1042assertions EACH isolated PHP8.3 SQLite/MySQL8, Pint/diff and lockfile build passed; prior hashed assets preserved. Home/up/cart/CSS HTTPS200; eight relevant services active, failed_jobs83unchanged. Bounded153HTTP requests/zero5xx and zero new Laravel/Nginx/worker error bytes.
+
+Recovery **/home/ubuntu/herokid-before-notes-payment-e755c03**: source archive/hash, private env/config/routes, drift/log/worker baselines, exact migration and backup evidence. Fresh **herokid-20261104T074212Z.sql.gz** passed gzip/localSHA and off-instance S3 SHA/size. Code-only rollback must preserve approval-history schema/rows and use latest staff attestations; do not restore the unique constraint or revert to readers that select the first approval. Preserve later customer writes, ledger/signals, Codex and Shadow runtime/config. Documentation successor requires no service refresh.
+
+
 ## 4 November 2026 — HeroKid Auto Pilot DEPLOYED; Shadow evaluation active, 300/day
 
 Owner explicitly authorized this AWS release and subsequently raised its allowance to **300 decisions
