@@ -24,7 +24,7 @@ const options = {
         school_name: { enabled: true, label: 'اسم المدرسة', type: 'text' },
         photos: { enabled: true, required: true, label: 'صور الطفل', type: 'photos' },
     } } }, { id: 3, name: 'كتاب تلوين', price: 300, linked: false, variants: [], schema: { fields: {} } }],
-    children: [{ order_id: 1, name: 'ليلى أحمد', story: true, values: { child_name: 'ليلى أحمد', school_name: 'الأمل' }, photos: ['/photo-test'] }],
+    children: [{ photo_revision: 'b'.repeat(64), order_id: 1, name: 'ليلى أحمد', story: true, values: { child_name: 'ليلى أحمد', school_name: 'الأمل' }, photos: ['/photo-test'] }],
     items: [{ id: 9, order_id: 1, title: 'ستيكر', linked: false, values: { child_name: 'ليلى أحمد', school_name: 'الأمل' }, schema: { fields: {
         child_name: { enabled: true, required: true, label: 'اسم الطفل', type: 'text' },
         school_name: { enabled: true, label: 'اسم المدرسة', type: 'text' },
@@ -272,4 +272,28 @@ test('mobile quick story addition reuses a previous child and keeps photos and o
     assert.ok(key(bodies[0])); assert.equal(key(bodies[0]), key(bodies[1]));
     assert.ok(bodies[0].includes('extra.png')); assert.ok(!bodies[0].includes('name="product_id"'));
     assert.deepEqual(errors, []); await page.close();
+});
+
+for (const width of [390, 1200]) test(`product photo removal is reversible and submits only the chosen references at ${width}px`, async () => {
+    const { page, errors } = await pageFixture(width);
+    await page.locator('[data-quick-open="item"]').click();
+    const remove = page.getByRole('button', { name: 'إزالة الصورة', exact: true });
+    await remove.click();
+    assert.equal(await page.locator('[name="removed_photos[]"]').isChecked(), true);
+    await page.getByRole('button', { name: 'تراجع عن الإزالة', exact: true }).click();
+    assert.equal(await page.locator('[name="removed_photos[]"]').isChecked(), false);
+    await remove.click();
+    await page.locator('#quick-change-reason').fill('إزالة المرجع غير الصحيح.');
+    let body;
+    await page.route('**/products/9', route => { body = route.request().postData(); return route.fulfill({ status: 422, json: { errors: { removed_photos: ['ارفع صورة بديلة'] } } }); });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.locator('[data-quick-save]').click();
+    await page.getByText('ارفع صورة بديلة', { exact: true }).waitFor();
+    assert.ok(body.includes('name="removed_photos[]"\r\n\r\n0'));
+    assert.ok(body.includes('b'.repeat(64)));
+    assert.ok(!body.includes('name="photos[]"'));
+    assert.equal(await page.locator('[name="removed_photos[]"]').isChecked(), true);
+    if (process.env.HEROKID_PHOTO_UI_DIR) await page.screenshot({ path: `${process.env.HEROKID_PHOTO_UI_DIR}/photo-${width}.png` });
+    assert.deepEqual(errors, []);
+    await page.close();
 });

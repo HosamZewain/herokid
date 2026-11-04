@@ -65,6 +65,7 @@ use App\Services\Orders\OrderProductPreviewImageService;
 use App\Services\Orders\OrderProductPreviewService;
 use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Services\Orders\StaffPreviewInputs;
+use App\Services\Orders\StoryPreviewRecovery;
 use App\Services\ProductAutomation\BookCatalog;
 use App\Services\ProductAutomation\BookVariantSnapshot;
 use App\Services\ProductAutomation\PuzzleAutomation;
@@ -263,7 +264,7 @@ class ProductReviewRuntimeTest extends TestCase
         return $item;
     }
 
-    private function mixedPreflightFixture(): array
+    private function mixedPreflightFixture(bool $secondStory = false): array
     {
         $book = $this->book();
         $story = Story::create(['title' => 'Synthetic recovery story', 'slug' => 'recovery-story', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
@@ -273,6 +274,13 @@ class ProductReviewRuntimeTest extends TestCase
         $storyOrder->status = 'new_confirmed';
         $storyOrder->save();
         $storyOrder->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => 'Synthetic story', 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+        if ($secondStory) {
+            $sibling = $storyOrder->replicate();
+            $sibling->order_number = 'SYN-SIBLING';
+            $sibling->child_name = 'Other child';
+            $sibling->save();
+            $sibling->items()->create($storyOrder->items()->first()->only(['item_type', 'story_id', 'title', 'quantity', 'unit_price_cents', 'total_price_cents']));
+        }
         $items = collect([$book]);
         foreach (['personalized-child-adventure-hdf-puzzle', 'bostr-mkhss-bsor-altfl-mkas-a4', 'personalized-child-family-photo-mug'] as $slug) {
             $order = $book->order->replicate();
@@ -1984,6 +1992,255 @@ class ProductReviewRuntimeTest extends TestCase
         $this->get(route('admin.orders.workspace.legacy-book', [$item->order, $item, 'replacement' => 1]))->assertOk()->assertSee('راجع الاختيار المشترى وعدد صفحات الكتاب');
         $this->assertDatabaseCount('legacy_book_cover_approvals', 0);
         $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
+    private function storyReplacementFixture(bool $inPlace = false, bool $secondStory = false): array
+    {
+        [$book,$story,$items,$blocked,$admin] = $this->mixedPreflightFixture($secondStory);
+        $this->post(route('admin.orders.workspace.control', $book->order), $this->recheckPayload($blocked))->assertSessionHasNoErrors();
+        $previous = OrderProcessRun::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->times($secondStory ? 3 : 2)->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(ProcessRuntime::class)->advance($previous->id);
+        app(PuzzleAutomation::class)->generate(PuzzleGeneration::where('status', 'queued')->sole()->id);
+        foreach (OrderProcessIdentity::where('run_id', $previous->id)->get() as $task) {
+            app(ProcessIdentityService::class)->generate($task->id);
+        }
+        $this->send($previous);
+        // Distinct real sends have distinct provider IDs. The shared synthetic
+        // transport otherwise returns one fixed receipt for every test send.
+        foreach ($previous->steps()->where('type', 'whatsapp')->get() as $sent) {
+            $receipt = array_replace($sent->receipt, ['message_id' => 'wamid.old.review', 'interaction_id' => 'old-review-interaction']);
+            $sent->update(['receipt' => $receipt]);
+            foreach ($sent->messageAttempts()->get() as $attempt) {
+                $attempt->update(['receipt' => $receipt]);
+            }
+        }
+        $version = DB::table('order_automation_controls')->value('version');
+        $this->post(route('admin.orders.workspace.control', $book->order), ['action' => 'pause', 'version' => $version, 'reason' => 'Customer requested a different story'])->assertSessionHasNoErrors();
+        $replacement = $story->story->replicate();
+        $replacement->slug = 'new-story-'.Str::random(6);
+        $replacement->title = 'New replacement story';
+        $replacement->save();
+        if ($inPlace) {
+            $story->refresh()->updateQuietly(['story_id' => $replacement->id]);
+            $story->items()->where('item_type', 'story')->update(['story_id' => $replacement->id, 'title' => $replacement->title]);
+            $current = $story->fresh();
+        } else {
+            $current = $story->fresh()->replicate(['child_identity_request_id', 'child_identity_approved_attempt_id', 'preview_approved_at']);
+            $current->order_number = 'SYN-NEW-'.Str::random(6);
+            $current->story_id = $replacement->id;
+            $current->status = 'new';
+            $current->save();
+            $current->items()->create(['item_type' => 'story', 'story_id' => $replacement->id, 'title' => $replacement->title, 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+            $story->delete();
+        }
+        $poster = $items->first(fn ($item) => $item->product->slug === 'bostr-mkhss-bsor-altfl-mkas-a4');
+        Storage::disk('s3_private')->put('child-photos/revised-poster.png', $this->png(8));
+        $poster->order->updateQuietly(['uploaded_photos' => ['child-photos/revised-poster.png']]);
+
+        return [$book->fresh(), $current->fresh(), $poster->fresh(), $previous->fresh(), $admin];
+    }
+
+    public function test_story_replacement_keeps_matching_products_and_explicitly_retained_artwork_in_a_new_preview(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture();
+        $oldManifest = OrderReviewManifest::sole()->getRawOriginal();
+        $oldGenerations = PuzzleGeneration::orderBy('id')->get()->map->getRawOriginal()->all();
+        $oldIdentity = OrderProcessIdentity::sole()->getRawOriginal();
+        $service = app(StoryPreviewRecovery::class);
+        $this->get(route('admin.orders.groups.show', $book->order))->assertOk()->assertSee('استكمال بعد تغيير القصة');
+        $this->get(route('admin.orders.workspace.story-recovery', $book->order))->assertOk()->assertSee('New replacement story')->assertSee('الاحتفاظ بالصورة المعروضة');
+        $plan = $service->plan($book->order);
+        $this->assertCount(1, array_filter($plan['products'], fn ($p) => $p['changed']));
+        $payload = ['confirm' => 1, 'preview_token' => $service->token($plan), 'products' => [$poster->id => 'retain']];
+        $url = route('admin.orders.workspace.story-recover', $book->order);
+        $this->post($url, $payload)->assertSessionHasNoErrors();
+        $run = OrderProcessRun::latest('id')->first();
+        $this->assertSame('cancelled', $previous->fresh()->status);
+        $this->assertSame('new_confirmed', $story->fresh()->status);
+        $this->assertSame('running', DB::table('order_automation_controls')->value('state'));
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        $this->assertSame($oldGenerations, PuzzleGeneration::orderBy('id')->get()->map->getRawOriginal()->all());
+        $this->assertSame($oldIdentity, OrderProcessIdentity::oldest('id')->first()->getRawOriginal());
+        $this->post($url, $payload)->assertSessionHasErrors('story_recovery');
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(ProcessRuntime::class)->advance($run->id);
+        $task = OrderProcessIdentity::where('run_id', $run->id)->sole();
+        $this->assertSame($story->id, $task->order_id);
+        app(ProcessIdentityService::class)->generate($task->id);
+        $this->send($run);
+        $manifest = OrderReviewManifest::latest('id')->first();
+        $this->assertCount(5, $manifest->images);
+        $this->assertNull($manifest->approved_at);
+        $this->assertSame($story->id, collect($manifest->images)->firstWhere('kind', 'identity')['order_id']);
+        $image = collect($manifest->images)->firstWhere('item_id', $poster->id);
+        $this->assertSame(PuzzleGeneration::where('order_item_id', $poster->id)->sole()->preview_id, $image['preview_id']);
+        $this->assertNotSame($image['input_fingerprint'], $image['retained_input_fingerprint']);
+        $this->assertCount(4, app(StaffPreviewInputs::class)->capture($manifest));
+        $this->assertSame($oldManifest, OrderReviewManifest::oldest('id')->first()->getRawOriginal());
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        $this->reply($run->fresh());
+        $this->assertNotNull($manifest->fresh()->approved_at);
+        $this->assertSame('costomer_confirmed', $story->fresh()->status);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertSame($oldGenerations, PuzzleGeneration::orderBy('id')->get()->map->getRawOriginal()->all());
+        $this->assertNotNull(data_get($run->fresh()->context, 'story_recovery.retired_order_ids'));
+    }
+
+    public function test_story_replacement_regenerates_only_the_changed_product_and_the_new_story_identity(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture();
+        $service = app(StoryPreviewRecovery::class);
+        $plan = $service->plan($book->order);
+        $old = PuzzleGeneration::orderBy('id')->get()->map->getRawOriginal()->all();
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), ['confirm' => 1, 'preview_token' => $service->token($plan), 'products' => [$poster->id => 'regenerate']])->assertSessionHasNoErrors();
+        $new = PuzzleGeneration::latest('id')->first();
+        $this->assertSame($poster->id, $new->order_item_id);
+        $this->assertNull($new->handoff_token);
+        $this->assertNotNull($new->requested_by);
+        $run = OrderProcessRun::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->twice()->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(ProcessRuntime::class)->advance($run->id);
+        app(PuzzleAutomation::class)->generate($new->id);
+        $this->assertSame('succeeded', $new->fresh()->status, $new->fresh()->error_code ?? '');
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::where('run_id', $run->id)->sole()->id);
+        $this->send($run);
+        $this->assertSame($old, PuzzleGeneration::orderBy('id')->limit(4)->get()->map->getRawOriginal()->all());
+        $this->assertSame($new->fresh()->preview_id, collect(OrderReviewManifest::latest('id')->first()->images)->firstWhere('item_id', $poster->id)['preview_id']);
+        $this->assertDatabaseCount('puzzle_generations', 5);
+    }
+
+    public function test_story_revision_stale_selection_and_missing_choice_leave_the_pause_and_history_intact(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture();
+        $service = app(StoryPreviewRecovery::class);
+        $token = $service->token($service->plan($book->order));
+        $url = route('admin.orders.workspace.story-recover', $book->order);
+        $this->post($url, ['confirm' => 1, 'preview_token' => $token])->assertSessionHasErrors('story_recovery');
+        $story->updateQuietly(['child_age' => 8]);
+        $this->post($url, ['confirm' => 1, 'preview_token' => $token, 'products' => [$poster->id => 'retain']])->assertStatus(409);
+        $this->assertSame('new', $story->fresh()->status);
+        $this->assertSame('paused', $previous->fresh()->status);
+        $this->assertDatabaseCount('order_automation_holds', 1);
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        $this->assertDatabaseCount('order_process_identities', 1);
+        $this->assertDatabaseCount('order_review_manifests', 1);
+    }
+
+    public function test_in_place_story_change_forks_identity_without_overwriting_the_old_request_or_attempt(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture(true);
+        $oldTask = OrderProcessIdentity::sole();
+        $requestId = $story->child_identity_request_id;
+        $service = app(StoryPreviewRecovery::class);
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), ['confirm' => 1, 'preview_token' => $service->token($service->plan($book->order)), 'products' => [$poster->id => 'retain']])->assertSessionHasNoErrors();
+        $run = OrderProcessRun::latest('id')->first();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertNotSame($requestId, $story->fresh()->child_identity_request_id);
+        $this->assertDatabaseCount('child_identity_requests', 2);
+        $this->assertSame('succeeded', $oldTask->fresh()->status);
+        $this->assertNull($story->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame('queued', OrderProcessIdentity::where('run_id', $run->id)->sole()->status);
+    }
+
+    public function test_story_replacement_reuses_an_unchanged_sibling_identity_and_keeps_native_duplicate_admission_closed(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture(true, true);
+        $sibling = Order::where('order_number', 'SYN-SIBLING')->sole();
+        $old = OrderProcessIdentity::where('order_id', $sibling->id)->sole();
+        $service = app(StoryPreviewRecovery::class);
+        $plan = $service->plan($book->order);
+        $this->assertSame('reuse', $plan['recovery']['identities'][$sibling->id]['mode']);
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), ['confirm' => 1, 'preview_token' => $service->token($plan), 'products' => [$poster->id => 'retain']])->assertSessionHasNoErrors();
+        $run = OrderProcessRun::latest('id')->first();
+        app(ProcessRuntime::class)->advance($run->id);
+        $reused = OrderProcessIdentity::where('run_id', $run->id)->where('order_id', $sibling->id)->sole();
+        $this->assertSame('succeeded', $reused->status);
+        $this->assertSame($old->attempt_id, $reused->attempt_id);
+        $this->assertDatabaseCount('child_identity_generation_attempts', 3);
+        $this->assertSame('succeeded', $old->fresh()->status);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::where('run_id', $run->id)->where('order_id', $story->id)->sole()->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertNotNull(app(MessageDispatchContext::class)->forCheckout($run->checkout_key));
+        $this->send($run);
+        $this->assertCount(6, OrderReviewManifest::latest('id')->first()->images);
+        // Removing the explicit revision receipt never permits claiming the old
+        // identity through the ordinary admission path, despite relaxed history indexes.
+        $native = new OrderProcessRun($run->only(['checkout_key', 'automation_id', 'revision_id']));
+        $native->context = app(ProcessOrderContext::class)->snapshot(collect([$sibling->fresh()]));
+        $native->setRelation('revision', $run->revision);
+        try {
+            app(ProcessIdentityService::class)->preflight($native, $run->revision->definition['nodes'][0]['config']);
+            $this->fail('native duplicate accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('identity_already_claimed', $e->getMessage());
+        }
+    }
+
+    public function test_reply_to_superseded_story_preview_cannot_approve_the_new_preview(): void
+    {
+        [$book,$story,$poster,$previous] = $this->storyReplacementFixture();
+        $service = app(StoryPreviewRecovery::class);
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), ['confirm' => 1, 'preview_token' => $service->token($service->plan($book->order)), 'products' => [$poster->id => 'retain']])->assertSessionHasNoErrors();
+        $run = OrderProcessRun::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(ProcessRuntime::class)->advance($run->id);
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::where('run_id', $run->id)->sole()->id);
+        $this->send($run);
+        $conversation = WhatsAppConversation::create(['account_key' => $run->account_key, 'phone_hash' => $run->phone_hash, 'phone' => '+201000000001']);
+        $base = ['remote_id' => 'old-template', 'remote_hash' => hash('sha256', 'old-template'), 'fingerprint' => hash('sha256', 'old-template'), 'direction' => 'outbound', 'body' => 'معاينة', 'kind' => 'text', 'sent_at' => now(),
+            'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.old.review', 'replyTo' => null, 'templateName' => ProcessTemplates::REVIEW, 'interactionId' => 'old-review-interaction']];
+        $conversation->messages()->create($base);
+        $this->travel(3)->seconds();
+        $conversation->messages()->create(array_replace($base, ['remote_id' => 'old-answer', 'remote_hash' => hash('sha256', 'old-answer'), 'fingerprint' => hash('sha256', 'old-answer'), 'direction' => 'inbound', 'body' => 'تأكيد المعاينة', 'sent_at' => now(),
+            'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'old-answer', 'replyTo' => 'wamid.old.review', 'templateName' => null, 'interactionId' => 'old-review-interaction']]));
+        app(ProcessResponsePoller::class)->process($conversation);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('waiting_response', $run->fresh()->status);
+        $this->assertNull(OrderReviewManifest::latest('id')->first()->approved_at);
+        $this->assertNull($story->fresh()->child_identity_approved_attempt_id);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
+
+    public function test_story_recovery_rejects_other_product_choices_corrupt_files_and_unsettled_work_without_mutation(): void
+    {
+        [$book,$story,$poster,$previous,$admin] = $this->storyReplacementFixture();
+        $service = app(StoryPreviewRecovery::class);
+        $plan = $service->plan($book->order);
+        $payload = ['confirm' => 1, 'preview_token' => $service->token($plan), 'products' => [$poster->id => 'retain']];
+        $url = route('admin.orders.workspace.story-recover', $book->order);
+        $sentCount = count(Http::recorded());
+        $this->post($url, array_replace($payload, ['products' => [$book->id => 'regenerate']]))->assertSessionHasErrors('story_recovery');
+        $saved = PuzzleGeneration::where('order_item_id', $poster->id)->sole();
+        $saved->update(['lease_until' => now()->addMinute()]);
+        $this->post($url, $payload)->assertSessionHasErrors('story_recovery');
+        $saved->update(['lease_until' => null]);
+        Storage::disk($saved->disk)->put($saved->output_path, 'corrupt');
+        $this->post($url, $payload)->assertSessionHasErrors('story_recovery');
+        $this->assertSame('paused', $previous->fresh()->status);
+        $this->assertDatabaseCount('order_automation_holds', 1);
+        $this->assertDatabaseCount('order_review_manifests', 1);
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        $this->assertSame('new', $story->fresh()->status);
+        $this->assertSame($sentCount, count(Http::recorded()));
+    }
+
+    public function test_story_recovery_respects_controls_permissions_and_rejects_deleted_product_rows(): void
+    {
+        [$book,$story,$poster,$previous,$admin] = $this->storyReplacementFixture();
+        $service = app(StoryPreviewRecovery::class);
+        $payload = ['confirm' => 1, 'preview_token' => $service->token($service->plan($book->order)), 'products' => [$poster->id => 'retain']];
+        $limited = User::factory()->create(['role' => 'admin']);
+        $limited->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $this->actingAs($limited)->get(route('admin.orders.workspace.story-recovery', $book->order))->assertForbidden();
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), $payload)->assertForbidden();
+        $this->actingAs($admin);
+        $poster->order->delete();
+        $this->post(route('admin.orders.workspace.story-recover', $book->order), $payload)->assertSessionHasErrors('story_recovery');
+        $this->assertSame('paused', $previous->fresh()->status);
+        $this->assertDatabaseCount('order_automation_holds', 1);
+        $this->assertDatabaseCount('order_review_manifests', 1);
     }
 
     private function generatedPreview(): array

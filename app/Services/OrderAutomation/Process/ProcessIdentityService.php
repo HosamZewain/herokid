@@ -23,7 +23,6 @@ use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderIdentityMedia;
 use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -41,7 +40,7 @@ class ProcessIdentityService
         if (! config('order_process.identity_enabled')) {
             throw new RuntimeException('identity_disabled');
         }
-        $orders = app(ProcessOrderContext::class)->orders($run->checkout_key, $lock)->filter(fn ($o) => $o->story_id);
+        $orders = app(ProcessOrderContext::class)->forRun($run, $lock)->filter(fn ($o) => $o->story_id);
         $selected = $run->revision->definition['conditions']['story_ids'];
         if ($orders->isEmpty() || ($selected && $orders->contains(fn ($o) => ! in_array($o->story_id, $selected, true)))) {
             // A checkout-level message must not claim to preview an omitted sibling's identity.
@@ -61,11 +60,45 @@ class ProcessIdentityService
         }
         $captured = [];
         $identities = [];
+        $reused = [];
         foreach ($orders as $order) {
-            if (OrderProcessIdentity::where('order_id', $order->id)->exists() || OrderAutomationRun::where('live_key', 'story-identity:'.$order->id)->exists()) {
+            $mode = data_get($run->context, 'story_recovery.identities.'.$order->id);
+            $prior = OrderProcessIdentity::where('order_id', $order->id)->orderBy('id')->get();
+            if ((! $mode && $prior->isNotEmpty()) || ($mode && $prior->modelKeys() !== $mode['prior_task_ids'])
+                || OrderAutomationRun::where('live_key', 'story-identity:'.$order->id)->exists()) {
                 throw new RuntimeException('identity_already_claimed');
             }
             $captured[$order->id] = app(WorkflowInputs::class)->capture($order, $this->inputDefinition());
+            if ($mode && ! hash_equals($mode['input_fingerprint'], $captured[$order->id]['fingerprint'])) {
+                throw new RuntimeException('inputs_changed');
+            }
+            if ($mode && $mode['mode'] === 'reuse') {
+                $source = $prior->firstWhere('id', $mode['source_task_id']);
+                if (! $source || $source->run_id !== data_get($run->context, 'story_recovery.source_run_id')
+                    || $source->status !== 'succeeded' || $source->lease_until || $source->attempt?->status !== 'succeeded'
+                    || $order->child_identity_request_id !== $source->attempt->child_identity_request_id
+                    || ! hash_equals($captured[$order->id]['fingerprint'], $source->context['fingerprint'])) {
+                    throw new RuntimeException('identity_existing_review');
+                }
+                $bytes = Storage::disk($source->attempt->output_disk)->get($source->attempt->output_storage_path);
+                if (! hash_equals($source->attempt->output_checksum, hash('sha256', $bytes))) {
+                    throw new RuntimeException('identity_requires_review');
+                }
+                $reused[$order->id] = $source;
+                $identities[$order->id] = $order->childIdentityRequest;
+
+                continue;
+            }
+            if ($mode && $mode['mode'] === 'new') {
+                // Explicit changed-story admission creates a new request. The old
+                // request, attempts and any shared links remain historical records.
+                if ($order->childIdentityRequest?->attempts()->whereIn('status', ['pending', 'processing'])->exists()) {
+                    throw new RuntimeException('identity_existing_review');
+                }
+                $identities[$order->id] = null;
+
+                continue;
+            }
             $identity = $order->childIdentityRequest;
             if ($identity) {
                 $identity = ChildIdentityRequest::withTrashed()->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($identity->id);
@@ -77,14 +110,20 @@ class ProcessIdentityService
             $identities[$order->id] = $identity;
         }
 
-        return compact('orders', 'provider', 'model', 'size', 'quality', 'estimate', 'captured', 'identities');
+        return compact('orders', 'provider', 'model', 'size', 'quality', 'estimate', 'captured', 'identities', 'reused');
     }
 
     public function prepare(OrderProcessRun $run, OrderProcessStep $step, array $config): void
     {
         ['orders' => $orders, 'provider' => $provider, 'model' => $model, 'size' => $size,
-            'quality' => $quality, 'estimate' => $estimate, 'captured' => $captured, 'identities' => $identities] = $this->preflight($run, $config, true);
+            'quality' => $quality, 'estimate' => $estimate, 'captured' => $captured, 'identities' => $identities, 'reused' => $reused] = $this->preflight($run, $config, true);
         foreach ($orders as $order) {
+            if ($source = $reused[$order->id] ?? null) {
+                OrderProcessIdentity::create(['run_id' => $run->id, 'step_id' => $step->id, 'order_id' => $order->id,
+                    'attempt_id' => $source->attempt_id, 'status' => 'succeeded', 'context' => $source->context]);
+
+                continue;
+            }
             $inputs = $captured[$order->id];
             $identity = $identities[$order->id];
             if (! $identity) {
@@ -99,7 +138,7 @@ class ProcessIdentityService
                     // Do not invent a new customer consent event.
                     'converted_at' => now(), 'last_activity_at' => now(),
                 ]);
-                $order->update(['child_identity_request_id' => $identity->id]);
+                $order->update(['child_identity_request_id' => $identity->id, 'child_identity_approved_attempt_id' => null, 'preview_approved_at' => null]);
             }
             $attempt = $identity->attempts()->create([
                 'attempt_number' => ((int) $identity->attempts()->max('attempt_number')) + 1,
@@ -118,7 +157,7 @@ class ProcessIdentityService
             app(ChildIdentityAggregateService::class)->recalculate($identity);
             GenerateProcessIdentity::dispatch($task->id)->afterCommit();
         }
-        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
+        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->forRun($run, true)) + app(ProcessOrderContext::class)->metadata($run);
         $run->update(['status' => 'waiting_identity', 'next_at' => now()->addMinute()]);
         $step->update(['status' => 'waiting', 'started_at' => now()]);
     }
@@ -306,7 +345,7 @@ class ProcessIdentityService
                     'notes' => ($staffApproval ? 'موافقة العميل على الهوية مسجلة بواسطة الفريق؛ سجل الاعتماد #'.$staffApproval->id : 'تأكيد هوية العميل عبر مسار العمليات #'.$run->id)]);
             }
         }
-        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($run->checkout_key, true)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id']);
+        $run->context = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->forRun($run, true)) + app(ProcessOrderContext::class)->metadata($run);
     }
 
     public function previewUrl(OrderProcessRun $run): string
@@ -330,7 +369,7 @@ class ProcessIdentityService
         return $model;
     }
 
-    private function inputDefinition(): array
+    public function inputDefinition(): array
     {
         return ['story_ids' => [], 'photo_limit' => 3, 'prompt' => '{{identity_prompt}}'];
     }

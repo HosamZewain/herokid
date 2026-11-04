@@ -19,6 +19,7 @@ use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\LegacyBookAdmission;
+use App\Services\Orders\PreviewProductReuse;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
@@ -60,10 +61,13 @@ class BookPageService
         $interior = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');
         $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
         $staffInputs = app(StaffPreviewInputs::class)->recorded($manifest);
-        $currentCover = app(PuzzleInputs::class)->captureCurrent($item)['fingerprint'];
+        $currentCoverInputs = app(PuzzleInputs::class)->captureCurrent($item);
+        $currentCover = $currentCoverInputs['fingerprint'];
+        $retained = isset($image['retained_input_fingerprint']) && hash_equals($image['retained_input_fingerprint'], $currentCover)
+            && $generation && PreviewProductReuse::matches($manifest->run, $item, $generation, $currentCoverInputs);
         $currentInterior = app(ProcessProductReview::class)->interiorFingerprint($item);
         if (! $image || ! $interior || ! $generation || $generation->id !== $image['generation_id'] || $generation->status !== 'succeeded'
-            || (! hash_equals($image['input_fingerprint'], $currentCover) && ! hash_equals($staffInputs[(string) $item->id]['input_fingerprint'] ?? '', $currentCover))
+            || (! $retained && ! hash_equals($image['input_fingerprint'], $currentCover) && ! hash_equals($staffInputs[(string) $item->id]['input_fingerprint'] ?? '', $currentCover))
             || (! app(BookPromptSync::class)->matchesInterior($item, $image['interior_fingerprint'] ?? '') && ! app(BookPromptSync::class)->matchesInterior($item, $staffInputs[(string) $item->id]['interior_fingerprint'] ?? ''))
             || ! $generation->preview_id || $generation->preview_id !== $image['preview_id']) {
             throw new RuntimeException('Book inputs changed after approval');
@@ -78,7 +82,7 @@ class BookPageService
             throw new RuntimeException('Book pages incomplete');
         }
 
-        $references = app(BookReferences::class)->capture($item, $generation->context['photos'], $count);
+        $references = app(BookReferences::class)->capture($item, $retained ? $currentCoverInputs['photos'] : $generation->context['photos'], $count);
 
         return ['manifest_id' => $manifest->id, 'item_id' => $item->id, 'unit_key' => $interior['unit_key'], 'page_count' => $count,
             'artwork_contract' => 'a4-interior-v1', 'references' => $references['references'], 'texts' => $references['texts'],

@@ -272,12 +272,12 @@ class ProcessRuntime
                                 throw new RuntimeException('state_conflict');
                             }
                             // Only policy-approved early-order transitions; no payment/shipping/AI side effects.
-                            foreach ($this->contexts->orders($run->checkout_key, true) as $order) {
+                            foreach ($this->contexts->forRun($run, true) as $order) {
                                 $order->update(['status' => $c['to']]);
                                 AutomationActivity::record($order, 'status_changed', 'تغيير حالة الطلب بواسطة الأوتوميشن', ['before' => ['status' => $c['from']], 'after' => ['status' => $c['to']], 'source_id' => $run->id]);
                                 $order->statusLogs()->create(['status_type' => 'order', 'status' => $c['to'], 'notes' => 'مسار العمليات #'.$run->id]);
                             }
-                            $run->context = $this->contexts->snapshot($this->contexts->orders($run->checkout_key, true)) + ['actor_id' => $run->context['actor_id']];
+                            $run->context = $this->contexts->snapshot($this->contexts->forRun($run, true)) + $this->contexts->metadata($run);
                             break;
                         case 'condition':
                             $next = $c[$run->context[$c['field']] === $c['value'] ? 'yes' : 'no'];
@@ -477,7 +477,7 @@ class ProcessRuntime
         if (! $this->policy->authorized($authority)) {
             throw new RuntimeException('actor_revoked');
         }
-        $snapshot = $this->contexts->snapshot($this->contexts->orders($run->checkout_key, DB::transactionLevel() > 0), (int) ($run->context['fingerprint_version'] ?? 1));
+        $snapshot = $this->contexts->snapshot($this->contexts->forRun($run, DB::transactionLevel() > 0), (int) ($run->context['fingerprint_version'] ?? 1));
         if (! hash_equals($run->context['fingerprint'], $snapshot['fingerprint'])) {
             throw new RuntimeException('inputs_changed');
         }

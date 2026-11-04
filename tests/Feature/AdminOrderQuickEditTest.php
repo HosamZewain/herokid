@@ -14,6 +14,7 @@ use App\Models\Story;
 use App\Models\User;
 use App\Services\Bosta\BostaAddressCatalogService;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\AdminOrderQuickEditService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductPersonalizationSchema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -365,6 +366,19 @@ class AdminOrderQuickEditTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_removing_existing_product_photos_requires_photo_permission_even_with_a_valid_revision(): void
+    {
+        $this->add($this->personalized(), ['reuse_child_order_id' => $this->order->id])->assertOk();
+        $item = OrderItem::where('item_type', 'product')->firstOrFail();
+        $limited = User::factory()->create(['role' => 'admin']);
+        $limited->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update'])->pluck('id'));
+        $this->actingAs($limited)->patchJson(route('admin.orders.groups.products.update', [$this->order, $item]), [
+            'removed_photos' => [0], 'photo_revision' => app(AdminOrderQuickEditService::class)->photoRevision($item->order),
+            'change_reason' => 'Remove source photo',
+        ])->assertForbidden();
+        $this->assertCount(1, $item->order->fresh()->uploaded_photos);
+    }
+
     public function test_lookup_is_read_only_and_does_not_leak_raw_storage_paths(): void
     {
         $before = $this->order->getAttributes();
@@ -498,6 +512,39 @@ class AdminOrderQuickEditTest extends TestCase
     {
         return Product::create($attributes + ['name_ar' => 'منتج جديد', 'slug' => 'quick-'.Str::random(8), 'price_cents' => 20000,
             'is_active' => true, 'personalization_mode' => 'none', 'purchase_mode' => 'standalone']);
+    }
+
+    public function test_product_photos_can_be_removed_and_replaced_without_deleting_shared_or_historical_files(): void
+    {
+        $product = $this->personalized();
+        $this->add($product, ['reuse_child_order_id' => $this->order->id])->assertOk();
+        $item = OrderItem::with('order')->where('product_id', $product->id)->firstOrFail();
+        $path = $item->order->uploaded_photos[0];
+        $revision = app(AdminOrderQuickEditService::class)->photoRevision($item->order);
+        $this->updateItem($item, ['removed_photos' => [0], 'photo_revision' => $revision, 'photos' => [UploadedFile::fake()->image('replacement.jpg')]])->assertOk();
+        $item->refresh();
+        $item->load('order');
+        $this->assertCount(1, $item->order->uploaded_photos);
+        $this->assertNotContains($path, $item->order->uploaded_photos);
+        $this->assertSame([$path], $this->order->fresh()->uploaded_photos);
+        Storage::disk('local')->assertExists($path);
+        $this->assertSame(1, $item->personalization_snapshot['fields']['photos']['value']);
+        $this->assertSame([0], AdminActivityLog::where('action', 'order.product_details_updated')->latest('id')->first()->properties['removed_photo_indexes']);
+        $this->updateItem($item, ['removed_photos' => [0], 'photo_revision' => $revision, 'photos' => [UploadedFile::fake()->image('another.jpg')]])->assertConflict();
+    }
+
+    public function test_product_photo_removal_requires_current_scope_permissions_and_minimum_images(): void
+    {
+        $product = $this->personalized();
+        $this->add($product, ['reuse_child_order_id' => $this->order->id])->assertOk();
+        $item = OrderItem::with('order')->where('product_id', $product->id)->firstOrFail();
+        $revision = app(AdminOrderQuickEditService::class)->photoRevision($item->order);
+        $this->updateItem($item, ['removed_photos' => [0]])->assertUnprocessable()->assertJsonValidationErrors('photo_revision');
+        $this->updateItem($item, ['removed_photos' => [0], 'photo_revision' => $revision])->assertUnprocessable()->assertJsonValidationErrors('removed_photos');
+        $this->updateItem($item, ['removed_photos' => [99], 'photo_revision' => $revision])->assertUnprocessable();
+        $this->updateItem($item, ['removed_photos' => [0, 0], 'photo_revision' => $revision])->assertUnprocessable();
+        $this->assertCount(1, $item->order->fresh()->uploaded_photos);
+        $this->assertDatabaseMissing('admin_activity_logs', ['action' => 'order.product_details_updated']);
     }
 
     private function personalized(): Product

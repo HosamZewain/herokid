@@ -158,7 +158,7 @@ export function initializeOrderQuickEdit() {
             const name = `personalization[${key}]`;
             if (field.type === 'photos') {
                 if (!options.can_upload_photos) return;
-                node = input(container, mode === 'item' ? 'إضافة صور للطفل (الصور الحالية لن تُحذف)' : field.label, 'photos[]', '', 'file');
+                node = input(container, mode === 'item' ? 'إضافة صور بديلة أو إضافية للطفل' : field.label, 'photos[]', '', 'file');
                 node.multiple = true;
                 node.accept = 'image/*,.heic,.heif';
                 return;
@@ -410,7 +410,19 @@ export function initializeOrderQuickEdit() {
                 if (!currentItem || currentItem.linked) throw new Error('هذا المنتج مرتبط بقصة؛ عدّل بيانات الطفل من القصة المرتبطة.');
                 const child = options.children.find((c) => c.order_id === currentItem.order_id);
                 const previews = element('div', undefined, 'flex flex-wrap gap-2');
-                photoPreview(previews, child?.photos ?? []); fields.append(previews);
+                if (options.can_upload_photos && child?.photo_revision) {
+                    input(fields, '', 'photo_revision', child.photo_revision, 'hidden');
+                    (child.photos ?? []).forEach((url,index)=>{
+                        const tile = element('div',undefined,'rounded-lg border p-2');
+                        const image = element('img'); image.src=url; image.alt=`صورة الطفل ${index+1}`; image.className='h-24 w-20 object-contain';
+                        const checkbox = element('input'); checkbox.type='checkbox'; checkbox.name='removed_photos[]'; checkbox.value=String(index); checkbox.hidden=true;
+                        const remove = element('button','إزالة الصورة','mt-2 block text-xs font-bold text-red-700'); remove.type='button';
+                        remove.addEventListener('click',()=>{checkbox.checked=!checkbox.checked;image.style.opacity=checkbox.checked?'0.3':'1';remove.textContent=checkbox.checked?'تراجع عن الإزالة':'إزالة الصورة';remove.setAttribute('aria-pressed',String(checkbox.checked));});
+                        tile.append(image,checkbox,remove);previews.append(tile);
+                    });
+                    fields.append(element('p','اختَر الصور المراد إزالتها، ثم احفظ التعديل. الإزالة تخص مراجع هذا المنتج؛ الصور في المحاولات السابقة تبقى محفوظة.','text-xs font-bold text-gray-600'));
+                } else { photoPreview(previews, child?.photos ?? []); }
+                fields.append(previews);
                 const personalization = element('div', undefined, 'space-y-3'); fields.append(personalization);
                 renderPersonalization(personalization, currentItem.schema, currentItem.values);
             }

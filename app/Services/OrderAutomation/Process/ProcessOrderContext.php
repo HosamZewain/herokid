@@ -3,12 +3,49 @@
 namespace App\Services\OrderAutomation\Process;
 
 use App\Models\Order;
+use App\Models\OrderProcessRun;
 use App\Support\Phone;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use RuntimeException;
 
 class ProcessOrderContext
 {
+    public const METADATA = ['actor_id', 'supersedes_run_id', 'story_recovery'];
+
+    /** Only an explicit story-revision run may exclude its reviewed archived stories. */
+    public function forRun(OrderProcessRun $run, bool $lock = false): Collection
+    {
+        $revision = $run->context['story_recovery'] ?? null;
+        if (! $revision) {
+            return $this->orders($run->checkout_key, $lock);
+        }
+        $source = OrderProcessRun::where('checkout_key', $run->checkout_key)->find($revision['source_run_id'] ?? 0);
+        if (! $source || $source->id === $run->id) {
+            throw new RuntimeException('order_ineligible');
+        }
+        $all = Order::withTrashed()->where('checkout_group_key', $run->checkout_key)->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->with('items')->get();
+        $retired = $revision['retired_order_ids'] ?? [];
+        $known = array_merge($source->context['order_ids'], data_get($source->context, 'story_recovery.retired_order_ids', []));
+        foreach ($retired as $id) {
+            $row = $all->firstWhere('id', $id);
+            if (! $row || ! $row->trashed() || ! $row->story_id || ! in_array($id, $known, true)) {
+                throw new RuntimeException('order_ineligible');
+            }
+        }
+        $orders = $all->whereNotIn('id', $retired)->values();
+        if ($orders->isEmpty() || $orders->contains(fn ($row) => $row->trashed() || $row->id <= (int) config('order_process.after_order_id'))) {
+            throw new RuntimeException('order_ineligible');
+        }
+
+        return $orders;
+    }
+
+    public function metadata(OrderProcessRun $run): array
+    {
+        return Arr::only($run->context, self::METADATA);
+    }
+
     public function orders(string $key, bool $lock = false): Collection
     {
         $orders = Order::withTrashed()->where('checkout_group_key', $key)->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->with('items')->get();

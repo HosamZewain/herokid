@@ -110,7 +110,10 @@ class OrderQuickEditController extends Controller
 
     public function updateItem(Request $request, Order $representative, OrderItem $item, AdminOrderQuickEditService $edits)
     {
-        $validated = $request->validate($this->personalizationRules(), $this->messages());
+        $validated = $request->validate($this->personalizationRules() + [
+            'removed_photos' => ['sometimes', 'array', 'max:100'], 'removed_photos.*' => ['required', 'integer', 'distinct', 'min:0', 'max:99'],
+            'photo_revision' => ['required_with:removed_photos', 'string', 'size:64'],
+        ], $this->messages());
         $edits->updateItem($representative, $item, $validated, $request->user(), $request);
 
         return $this->saved($request);

@@ -48,7 +48,7 @@ class OrderIdentityGenerationController extends Controller
                 && $order->childIdentityRequest->attempts()->max('id') === $attempt->id
                 && ! $order->childIdentityRequest->orders()->whereKeyNot($order->id)->exists(), 422, 'هذه ليست آخر محاولة لهذا الطلب.');
             $manual = OrderIdentityRegeneration::where('attempt_id', $attempt->id)->first();
-            $automatic = OrderProcessIdentity::where('order_id', $order->id)->where('attempt_id', $attempt->id)->first();
+            $automatic = OrderProcessIdentity::where('order_id', $order->id)->where('attempt_id', $attempt->id)->latest('id')->first();
             abort_unless(($manual && $manual->status === 'succeeded') || ($automatic && $automatic->status === 'succeeded'), 422, 'المحاولة غير جاهزة للاعتماد.');
             $current = app(WorkflowInputs::class)->capture($order, ['story_ids' => [], 'photo_limit' => 3, 'prompt' => '{{identity_prompt}}']);
             abort_unless(hash_equals(($manual ?? $automatic)->context['fingerprint'], $current['fingerprint']), 422, 'تغيّرت صور الطفل أو بياناته بعد التوليد؛ راجعها قبل الاعتماد.');

@@ -59,6 +59,7 @@ class AdminOrderQuickEditService
                     'values' => $this->childValues($order),
                     'photos' => $canSeePhotos ? collect($order->uploaded_photos ?? [])->keys()
                         ->map(fn (int $index): string => route('admin.orders.photo', [$order, $index, 'thumbnail' => 1]))->all() : [],
+                    'photo_revision' => $canSeePhotos ? $this->photoRevision($order) : null,
                 ])->concat(filled(data_get($representative->delivery_details, 'phone'))
                     ? $this->customerChildren->children(data_get($representative->delivery_details, 'phone'), $actor) : [])
                 ->unique('order_id')->values()->all(),
@@ -299,15 +300,39 @@ class AdminOrderQuickEditService
                 $item = OrderItem::query()->with('product')->lockForUpdate()->findOrFail($item->id);
                 $order = $orders->firstWhere('id', (int) $item->order_id);
                 abort_unless($order && $item->item_type === 'product', 404);
+                app(AutomationAssignment::class)->assertAvailable($order);
                 if ($order->story_id || $order->items()->whereKeyNot($item->id)->where('personalization_mode', 'collect_child_details')->exists()) {
                     throw ValidationException::withMessages(['personalization' => 'هذا السجل القديم يجمع بيانات طفل لعدة منتجات؛ استخدم تعديل الطلب الكامل لتجنب تغيير منتج آخر.']);
                 }
                 $schema = $this->itemSchema($item);
                 $before = $item->personalization_snapshot ?? [];
                 $oldValues = $this->itemValues($item, $order);
-                $this->authorizePhotos($actor, $data['photos'] ?? []);
-                $this->validateFields($schema, $data['personalization'] ?? [], $data['photos'] ?? [], count($order->uploaded_photos ?? []), true);
+                $removed = array_map('intval', $data['removed_photos'] ?? []);
+                $currentPhotos = array_values($order->uploaded_photos ?? []);
+                $this->authorizePhotos($actor, $data['photos'] ?? [], $removed);
+                if (isset($data['photo_revision'])) {
+                    abort_unless(hash_equals($this->photoRevision($order), $data['photo_revision']), 409, 'تغيرت صور المنتج؛ أغلق النافذة وافتحها مجددًا قبل الحذف أو الإضافة.');
+                }
+                if ($removed !== []) {
+                    abort_unless(isset($data['photo_revision']) && count(array_unique($removed)) === count($removed)
+                        && collect($removed)->every(fn ($index) => $index >= 0 && array_key_exists($index, $currentPhotos)), 422, 'اختيار الصور غير صالح لهذا المنتج.');
+                    $field = ProductPersonalizationSchema::enabledFields($schema)['photos'] ?? null;
+                    if (! $field) {
+                        throw ValidationException::withMessages(['removed_photos' => 'هذا المنتج لا يتيح تعديل الصور.']);
+                    }
+                    $remaining = count($currentPhotos) - count($removed) + count($data['photos'] ?? []);
+                    if ($remaining < ($field['required'] ? max(1, (int) $field['min_files']) : 0)) {
+                        throw ValidationException::withMessages(['removed_photos' => 'احتفظ بالحد الأدنى من صور هذا المنتج أو ارفع صورًا بديلة قبل الحفظ.']);
+                    }
+                }
+                $kept = array_values(array_diff_key($currentPhotos, array_flip($removed)));
+                $this->validateFields($schema, $data['personalization'] ?? [], $data['photos'] ?? [], count($kept), true);
                 $values = array_replace($oldValues, $data['personalization'] ?? []);
+                if ($removed !== []) {
+                    // Detach references only: previous attempts, shared children and
+                    // immutable previews may still require the original S3 object.
+                    $order->forceFill(['uploaded_photos' => $kept])->save();
+                }
                 if (($data['photos'] ?? []) !== []) {
                     $this->photos->append($order, $data['photos'], $onStored);
                 }
@@ -322,6 +347,7 @@ class AdminOrderQuickEditService
                         'before' => $before, 'after' => $snapshot,
                         'changes' => AdminActivityLogger::changedValues($oldValues + ['uploaded_photos_count' => $before['uploaded_photos_count'] ?? 0],
                             $values + ['uploaded_photos_count' => count($order->uploaded_photos ?? [])]),
+                        'removed_photo_indexes' => $removed,
                         'file_names' => collect($data['photos'] ?? [])->map(fn ($file) => $file->getClientOriginalName())->all()],
                     admin: $actor, request: $request,
                 );
@@ -431,6 +457,11 @@ class AdminOrderQuickEditService
         unset($validated['photos']);
 
         return $validated;
+    }
+
+    public function photoRevision(Order $order): string
+    {
+        return hash('sha256', json_encode([$order->id, array_values($order->uploaded_photos ?? [])], JSON_THROW_ON_ERROR));
     }
 
     private function authorizePhotos(User $actor, array $newPhotos, array $reusedPhotos = []): void

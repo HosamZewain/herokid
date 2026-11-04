@@ -30,7 +30,7 @@ class MessageDispatchContext
                 $authority->setRelation('revision', $run->revision);
                 $authority->process_activated_by = $run->context['actor_id'];
                 $contexts = app(ProcessOrderContext::class);
-                $current = $contexts->snapshot($contexts->orders($key), (int) ($run->context['fingerprint_version'] ?? 1));
+                $current = $contexts->snapshot($contexts->forRun($run), (int) ($run->context['fingerprint_version'] ?? 1));
                 if (! $policy->authorized($authority) || $run->account_key !== config('robodesk.conversations.account_key', 'primary')
                     || ! hash_equals($run->context['fingerprint'], $current['fingerprint'])) {
                     continue;

@@ -40,6 +40,7 @@ class StaffPreviewApproval
             abort_unless($manifest && $manifest->id === (int) $data['manifest_id'] && hash_equals($manifest->fingerprint, $data['fingerprint'])
                 && $run && $run->version === (int) $data['run_version']
                 && (int) ($control->version ?? 1) === (int) $data['control_version'], 409, 'تغيرت المعاينة أو حالة التنفيذ؛ حدّث الصفحة وراجع النسخة الحالية.');
+            $rows = app(ProcessOrderContext::class)->forRun($run, true);
             if (! in_array($control->state ?? 'running', ['running', 'paused'], true)
                 || ! in_array($run->status, ['waiting_response', 'waiting_staff', 'paused', 'blocked'], true)
                 || $runs->whereNotIn('status', ['completed', 'cancelled'])->where('id', '!=', $run->id)->isNotEmpty()

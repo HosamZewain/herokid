@@ -6,7 +6,6 @@ use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationHandoff;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 /** Reflect an accepted preview send without repeating any provider effect. */
@@ -46,7 +45,7 @@ class ProcessPreviewStatus
             // context fingerprint commit atomically; old manifests are never rewritten.
             $runtime->guard($run);
             $contexts = app(ProcessOrderContext::class);
-            $orders = $contexts->orders($run->checkout_key, true)->whereIn('id', $ids);
+            $orders = $contexts->forRun($run, true)->whereIn('id', $ids);
             if ($orders->isEmpty() || $orders->contains(fn ($order) => ! in_array($order->status, ['new_confirmed', 'ready_preview', 'preview_uploaded'], true))) {
                 return;
             }
@@ -64,7 +63,7 @@ class ProcessPreviewStatus
                 $changed = true;
             }
             if ($changed) {
-                $run->update(['context' => $contexts->snapshot($contexts->orders($run->checkout_key, true), (int) ($run->context['fingerprint_version'] ?? 1)) + Arr::only($run->context, ['actor_id', 'supersedes_run_id'])]);
+                $run->update(['context' => $contexts->snapshot($contexts->forRun($run, true), (int) ($run->context['fingerprint_version'] ?? 1)) + app(ProcessOrderContext::class)->metadata($run)]);
             }
         });
     }

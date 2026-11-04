@@ -39,7 +39,9 @@ class StaffPreviewInputs
             $old = $generation->context;
             $facts = Arr::except($current, ['prompt', 'fingerprint']);
             $oldFacts = Arr::except($old, ['prompt', 'fingerprint']);
-            if ($facts != $oldFacts || $this->instructions($current['prompt']) !== $this->instructions($old['prompt'])) {
+            $retained = isset($image['retained_input_fingerprint']) && hash_equals($image['retained_input_fingerprint'], $current['fingerprint'])
+                && PreviewProductReuse::matches($manifest->run, $item, $generation, $current);
+            if (! $retained && ($facts != $oldFacts || $this->instructions($current['prompt']) !== $this->instructions($old['prompt']))) {
                 throw new RuntimeException('Preview customer inputs changed');
             }
             $unit = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');

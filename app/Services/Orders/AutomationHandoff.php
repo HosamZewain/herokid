@@ -169,6 +169,9 @@ class AutomationHandoff
                 if ($rows->every(fn ($row) => ! $row->story_id) && $rows->contains('status', 'new')) {
                     throw ValidationException::withMessages(['assignment' => 'الطلب المعدّل غير مؤكد. بعد موافقة العميل على البيانات الجديدة، احفظ حالة «طلب جديد مؤكد» لكل عملية الشراء ثم أرجعه للأوتوميشن. البازل وكفر التلوين يبدأان قبل الدفع؛ صفحات التلوين تبدأ بعد اعتماد الكفر وتسجيل دفعة.']);
                 }
+                if (app(StoryPreviewRecovery::class)->candidate($order)) {
+                    throw ValidationException::withMessages(['assignment' => 'تغيّرت القصة بعد المعاينة. استخدم «استكمال بعد تغيير القصة» أعلى الطلب لمراجعة المنتجات وتجهيز معاينة جديدة.']);
+                }
                 throw ValidationException::withMessages(['assignment' => 'تغيّرت بيانات الطلب أو هويته أثناء العمل اليدوي؛ لا يمكن استكمال مسار برسائل أو صور قديمة. أكمل يدويًا أو استخدم زر Codex بعد اعتماد الهوية وتسجيل الدفعة.']);
             }
             if ($approvedBooks->isNotEmpty()) {

@@ -15,11 +15,13 @@ use App\Services\Orders\AutomationControl;
 use App\Services\Orders\OrderAccess;
 use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderAutomationAdmission;
+use App\Services\Orders\OrderAutomationGuidance;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\ProductPreviewRecovery;
 use App\Services\Orders\StaffOrderConfirmation;
 use App\Services\Orders\StaffPreviewApproval;
+use App\Services\Orders\StoryPreviewRecovery;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
 use Illuminate\Http\Request;
@@ -29,6 +31,38 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderWorkspaceController extends Controller
 {
+    public function storyRecovery(Request $request, Order $order, StoryPreviewRecovery $recovery)
+    {
+        $recovery->authorize($order, $request->user());
+        $plan = null;
+        $error = null;
+        try {
+            $plan = $recovery->plan($order);
+        } catch (ValidationException $e) {
+            $error = collect($e->errors())->flatten()->first();
+        } catch (\RuntimeException $e) {
+            $error = preg_match('/\A[a-z_]+\z/', $e->getMessage()) ? OrderAutomationGuidance::reason($e->getMessage()) : 'تعذر فحص المراجع الحالية؛ راجع صور الطفل والمنتجات وأعد الفحص.';
+        }
+
+        return view('admin.orders.story-recovery', compact('order', 'plan', 'error'));
+    }
+
+    public function recoverStory(Request $request, Order $order, StoryPreviewRecovery $recovery)
+    {
+        $recovery->authorize($order, $request->user());
+        $data = $request->validate(['confirm' => 'required|accepted', 'preview_token' => 'required|string|max:10000',
+            'products' => 'sometimes|array|max:100', 'products.*' => 'required|in:retain,regenerate']);
+        try {
+            $recovery->start($order, $request->user(), $request, $data['preview_token'], $data['products'] ?? []);
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['story_recovery' => preg_match('/\A[a-z_]+\z/', $e->getMessage()) ? OrderAutomationGuidance::reason($e->getMessage()) : 'تعذر فحص المراجع الحالية؛ لم يبدأ تشغيل جديد. راجع الصور وأعد الفحص.']);
+        }
+
+        return redirect()->route('admin.orders.groups.show', $order)->with('success', 'تم تأكيد بيانات الطلب المعدّل وإدخاله لتجهيز معاينة القصة الجديدة مع المنتجات المختارة. تابع التقدم؛ موافقة المعاينة الجديدة مستقلة ولم نسجل دفعًا أو نعد رسالة تأكيد الطلب.');
+    }
+
     public function assign(Request $request, OrderAssignmentService $assignments)
     {
         $data = $request->validate(['target_id' => 'nullable|integer|exists:users,id', 'reason' => 'required|string|max:1000',
