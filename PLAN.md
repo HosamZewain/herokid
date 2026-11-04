@@ -1,5 +1,23 @@
 # HeroKid Auto Pilot — Phase 1
 
+## AWS deployment status — 4 November 2026
+
+The owner explicitly authorized deployment. Application `be5fe8b461e1bbd01bc3ebb93d9534f2117c638a`
+is deployed from GitHub main on the existing AWS host. The three exact additive
+migrations are applied, observation is enabled, and six reviewed memory rules
+are active with immutable owner-attributed versions. Dashboard/activity updates
+work without AI. The dedicated Docker images, isolated networks and PHP worker
+unit are installed; **evaluation remains disabled pending dedicated AWS ChatGPT
+authentication and final running-container attestation**. MCP and autonomous
+execution remain disabled. No new AWS resource was created.
+
+The existing private configuration was preserved, with only Auto Pilot settings,
+its dedicated queue and `App\Providers\AgenticServiceProvider` added. The cached
+provider registration is essential: Laravel does not merge `bootstrap/providers.php`
+when configuration is already cached. The actual scheduler now lists and runs
+the bounded observer. Current evidence, limits and recovery are recorded in
+`docs/autopilot-aws-deployment-2026-11-04.ar.md` and the AWS runbook.
+
 ## Owner review and memory/activity amendments — 3–4 November 2026
 
 - Product name: **HeroKid Auto Pilot**. Preserve technical route/config names for compatibility.
@@ -33,17 +51,17 @@
 - Baseline existing automation before edits, then test memory permissions, revisions,
   rollback, applicability, stale in-flight decisions, terminal/mixed checkouts,
   manual staff actions and current activity on isolated SQLite/MySQL.
-- Keep all observation/evaluation/MCP defaults OFF, no execution controls, no AWS
-  deployment or production migrations. AWS was reverified read-only at 22:10 UTC
+- Keep source observation/evaluation/MCP defaults OFF and no execution controls.
+  AWS was reverified read-only at 22:10 UTC
   on 3 November (4 November Cairo): `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`.
   The dedicated release branch includes that base; recheck any intervening drift
-  before a separately approved deployment. Preserve the dirty primary checkout.
+  before the subsequently approved deployment. Preserve the dirty primary checkout.
 
-Status: architecture and amendments implemented locally; approved real evaluation
-and memory acceptance passed, **Shadow Mode only**. Production defaults remain off;
-nothing deployed and no autonomous execution activated. Release boundaries remain below.
-Owner amendments: 2 November 2026. No AWS deployment, production migration,
-customer messaging, production generation, or autonomous execution is authorized.
+Status: architecture and amendments implemented; approved real evaluation and
+memory acceptance passed, **Shadow Mode only**. See the current AWS status above.
+The November 2 no-deployment boundary was superseded only for this explicit AWS
+release. Customer messaging, production generation and autonomous execution by
+Auto Pilot remain unauthorized and unimplemented.
 
 ## Baseline and scope
 
@@ -238,8 +256,10 @@ transport complexity that is not necessary for these seven reads.
   preserve earlier hashed assets when the dashboard requires an asset build.
 - Document installation, isolated validation, limits, evidence, observation-only
   reconciliation and stopping the new components without changing legacy work.
-- No AWS deployment, production migration, service/config change or new recurring
-  AWS resource. Future deployment requires explicit approval and runbook checks.
+- The November 4 explicit authorization covers this AWS application release,
+  its three additive migrations, isolated host runtime and Shadow operation.
+  No new recurring AWS resource is authorized. Later releases still require scope
+  and runbook checks; deployment approval never grants autonomous execution.
 - Later execution phases require separate review of ownership transfer, one
   capability/cohort at a time, idempotency and the approved real evaluation gate.
 
@@ -262,7 +282,7 @@ transport complexity that is not necessary for these seven reads.
   `codex/autopilot-shadow-release-20261103` is based on read-only verified AWS
   `99c0b981a37a4828f5c7fbafe85a96d5d2d574b1`, preserving its assignment permissions,
   durable pause controls, staff preview approval and book prompt lineage. This is
-  prepared code, not a deployed release. Details and exact gates are in
+  the reviewed preparation baseline, subsequently deployed as recorded above. Details and exact gates are in
   `docs/autopilot-release-preparation-2026-11-03.ar.md`.
 - Before integration, 435 tests / 3,348 assertions passed on each isolated PHP 8.3
   SQLite and MySQL 8.4 database. After integration, 496 / 3,866 passed on each;
@@ -280,9 +300,10 @@ transport complexity that is not necessary for these seven reads.
   existing read-only admission fence, cover/payment/link checks and executor preflight.
   Memory v2 and evaluation corpus v3 preserve all historical originals. See
   `docs/autopilot-lifecycle-clarification-2026-11-04.ar.md` for this amendment's evidence.
-- Docker is not installed on AWS. Runtime installation, the three exact additive
-  migrations, fresh dedicated host authentication and enabling shadow observation
-  require a concrete approved deployment. No production changes have been made.
+- Docker 29.9.3 and Compose 5.7.0 are installed on AWS after explicit approval;
+  the exact image pair and three additive migrations are installed, and bounded
+  observation is enabled. Dedicated host authentication and final running-container
+  attestation remain required before Shadow evaluation can start.
 
 - November 3 real acceptance: dedicated ChatGPT authentication verified through
   actual inference; **87/87 correct (100%)** on 37 owner-approved checkouts,
@@ -317,9 +338,9 @@ transport complexity that is not necessary for these seven reads.
 - Historical first owner review remains in `actual-orders.v2.json`: 37 checkouts,
   87 targets. The latest delivery clarification is the separately versioned v3
   with 89 targets; actual customer delivery takes precedence over an old hold.
-- Remaining release gates: reconcile the then-current AWS release, review the
-  runtime installation and dedicated credential renewal, and obtain explicit
-  deployment approval. Live autonomous execution remains unimplemented and
+- Remaining activation gates: complete dedicated AWS subscription authentication,
+  attest the actual container pair and network, then enable only the dedicated
+  Shadow evaluator within the carried daily quota. Live autonomous execution remains unimplemented and
   unauthorized. The local approved evaluation has no unresolved safety-critical
   failure; new scenarios or runtime changes require proportionate validation.
 - Detailed files, measured tests, known SQLite limitations and runtime boundaries:

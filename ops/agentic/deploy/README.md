@@ -1,8 +1,12 @@
-# Prepared Auto Pilot host profile — not installed
+# Auto Pilot host profile — installed on AWS, Shadow evaluation gated
 
 The owner resolved the lifecycle ambiguity; see
 [`../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md`](../../../docs/autopilot-lifecycle-clarification-2026-11-04.ar.md).
-Release still requires scoped AWS/migration approval and actual host attestation.
+The owner explicitly approved this release on 4 November 2026. Application,
+additive schema, Docker and dedicated worker unit are installed; observation and
+reviewed memory are active. Evaluation remains disabled pending dedicated host
+ChatGPT authentication and actual running-container attestation. See
+[`../../../docs/autopilot-aws-deployment-2026-11-04.ar.md`](../../../docs/autopilot-aws-deployment-2026-11-04.ar.md).
 No autonomous execution exists in this
 package. Do not run this as a blanket deployment script.
 
@@ -36,7 +40,7 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
 [Docker gateway modes](https://docs.docker.com/engine/network/port-publishing/#gateway-modes),
 [Squid ACL semantics](https://www.squid-cache.org/Doc/config/acl/).
 
-## Reviewed installation sequence after approval
+## Reviewed installation and verification sequence
 
 1. Recheck AWS SHA, drift, free disk/memory, current jobs and actual OS. Preserve
    the existing environment, private config cache, permissions, assets, logs and
@@ -77,6 +81,12 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    Keep provider `codex`, daily limit 100, cycles/pass 3. Discover Composer packages
    from the reviewed lockfile, then validate routes/views/cache; stale package
    discovery hid the MCP route in the first local test attempt.
+   When preserving an existing configuration cache, explicitly append the new
+   `App\Providers\AgenticServiceProvider` to `app.providers` exactly once, retaining
+   every other provider and setting. Laravel skips merging `bootstrap/providers.php`
+   when configuration is cached. Verify the actual `schedule:list` includes
+   `agentic:observe` and `agentic-shadow-dispatch`, then observe a natural timer tick;
+   a successful manual observer command alone does not prove scheduling or hints.
    Before enabling evaluation on the same Cairo day, carry forward the greater
    recorded local/host Auto Pilot attempt count under the runtime-state lock;
    a fresh host database must not create a second daily allowance. Preserve all
