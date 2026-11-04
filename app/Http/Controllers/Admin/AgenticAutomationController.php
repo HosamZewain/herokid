@@ -70,7 +70,7 @@ class AgenticAutomationController extends Controller
 
         return response()->view('admin.agentic.show', ['order' => $order, 'context' => $context, 'state' => $state,
             'history' => $history, 'matches' => $matches, 'targets' => $registry->targets($context), 'tasks' => $registry->humanTasks($context),
-            'execution' => app(ExecutionMonitor::class)->snapshot($order->checkoutGroupKey())])
+            'execution' => app(ExecutionMonitor::class)->snapshot($builder->canonicalKey($order->checkoutGroupKey()))])
             ->header('Cache-Control', 'private, no-store');
     }
 

@@ -13,13 +13,13 @@ under AGENTS.md before applying this new release.
 Before continuing implementation, GitHub main and AWS HEAD were both verified as
 `449cb0194cfaa772ba4ae7c855d7028aaebd9724`; all17 changed-file hashes matched. The
 new main guidance, valid same-child photo fallback and explicit untouched-preflight
-recovery are merged. Only a documentation merge conflict required reconciliation.
+recovery are merged. The subsequent documentation-only main/AWS HEAD `322a40ff6130d643f18d71a45f34f4006f2b4b64` was reverified and merged; both updated documentation hashes matched AWS. Only documentation merge conflicts required reconciliation.
 The primary checkout's unrelated mobile/UI work remains untouched. Branch:
 `codex/autopilot-controlled-execution-20261104`.
 
-A SELECT-only inventory at10:08:38UTC covered261 active checkouts and601 decision
-targets without errors. Ten units were eligible for production preflight (8 product
-images,2 book covers); this was eligibility at scan time, not permission or proof
+The latest SELECT-only inventory at11:04:24UTC covered264 active checkouts and610
+decision targets without errors. Nine units were eligible for production preflight
+(8 product images,1 book cover); this was eligibility at scan time, not permission or proof
 of provider admission. All other reasons remain visible; no historical attempts,
 paused workflows, completed artwork or uncertain sends are automatically replayed.
 
@@ -40,7 +40,10 @@ paused workflows, completed artwork or uncertain sends are automatically replaye
    unique active-unit reservations remain the authoritative final fence.
 4. Require a fresh post-activation Codex decision, subscription/zero-tool/isolation
    evidence, current memory and context fingerprints. Lock memory and perform the
-   last check **inside each native executor's checkout lock**. Keep the established
+   last check **inside each native executor's checkout lock**. Serialize both new
+   memory rules and edits through the same admission lock. Use READ COMMITTED for
+   the admission transaction only so a committed edit cannot hide in an older
+   MySQL snapshot; preserve the worker session default. Keep the established
    Codex-pool lock ordering. Do not call paid providers in the admission gateway.
 5. Start product images/covers through PuzzleAutomation first-admission preflight;
    start stories and approved book interiors through their existing services.
@@ -98,9 +101,24 @@ in-flight work in the display, and includes the separate action count/stop contr
   workers. Preserve the running Codex generation service and all queues/receipts.
 - Verify authenticated order/dashboard behavior, source hashes, public HTTPS,
   errors and native queue state. Activation is a separate recorded configuration
-  step, starting with a bounded named cohort and reviewed daily action allowance,
-  then expanding to all eligible orders after observing real receipts. Never
+  step. Proposed first activation: all active checkouts in scope (as requested), all
+  six authorized actions, at most3 admissions/pass and20 admissions/Cairo day,
+  while retaining1000 AI decisions/day. Review actual receipts before raising the
+  independent action allowance. This proposal is not applied. Never
   equate scans of all orders with forced execution of held/unsupported work.
+
+## Implementation evidence
+
+Prepared gateway, six native adapters, persistent new-admission stop, scoped order
+monitoring and the existing order activity timeline are complete in the feature
+branch. PHP8.3 regression suites, isolated MySQL concurrency checks,15 real-CLI
+isolation probes and actual Blade/RTL rendering are recorded in
+[the milestone report](docs/autopilot-controlled-execution-2026-11-04.ar.md).
+No AWS application/config/schema/queue/order mutation was performed in this turn.
+At11:09:15UTC the actual dedicated worker identity reported ChatGPT provider ready,
+Shadow evaluation active,545/1000 attempts and execution disabled; the new schema
+was absent. Reading health as www-data is not authoritative because the private
+socket belongs to the dedicated worker security boundary.
 
 ## Historical Phase 1 record
 

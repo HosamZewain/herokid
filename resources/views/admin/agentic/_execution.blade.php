@@ -7,6 +7,9 @@
     </div>
     <p>{{ !$execution['enabled'] ? 'التنفيذ غير مفعّل؛ القرارات للمراجعة فقط.' : ($execution['control']?->paused ? 'تسليم الخطوات الجديدة متوقف بأمر الموظف.' : 'التنفيذ متاح داخل النطاق والحد المعتمدين.') }}</p>
     <p class="text-sm">الخطوات المقبولة اليوم: <bdi>{{ $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() ? $execution['control']->admissions : 0 }} / {{ $execution['daily_limit'] }}</bdi>. حد التنفيذ مستقل عن حد قرارات الذكاء الاصطناعي. قبول الخطوة في الطابور لا يعني اكتمالها.</p>
+    @if($execution['enabled'] && $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() && $execution['control']->admissions >= $execution['daily_limit'])
+        <p class="font-bold text-amber-700">اكتمل حد خطوات التنفيذ اليوم؛ الخطوات الجديدة تنتظر تجدد الحد. متابعة العمل الجاري مستمرة.</p>
+    @endif
     <p>مسارات التنفيذ أو الانتظار الجاري متابعتها: {{ $execution['active_count'] }}.</p>
     @foreach($execution['rows'] as $row)
         @php($receipt = $row['receipt'])

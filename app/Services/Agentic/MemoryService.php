@@ -40,6 +40,7 @@ class MemoryService
         }
 
         return DB::transaction(function () use ($memory, $data, $actor, $expectedRevision, $sourceKey, $runId) {
+            $this->lockAdmission();
             if ($memory) {
                 $memory = AiMemory::lockForUpdate()->findOrFail($memory->id);
                 if ($memory->revision !== $expectedRevision) {
@@ -94,6 +95,7 @@ class MemoryService
         $seeds = json_decode(file_get_contents(resource_path('agentic/owner-memory-2026-11-03.v2.json')), true, 16, JSON_THROW_ON_ERROR);
 
         return DB::transaction(function () use ($actor, $original, $seeds) {
+            $this->lockAdmission();
             $count = 0;
             foreach ($seeds as $seed) {
                 $key = 'owner-review:2026-11-03:'.$seed['key'];
@@ -127,5 +129,15 @@ class MemoryService
 
             return $count;
         }, 3);
+    }
+
+    private function lockAdmission(): void
+    {
+        if (config('agentic.execution.enabled')) {
+            // Serialize new rules as well as edits with production admission.
+            // Row locks on existing memories alone do not fence inserts in MySQL
+            // READ COMMITTED. Always take the admission lock before memory locks.
+            DB::table('ai_production_controls')->where('id', 1)->lockForUpdate()->first();
+        }
     }
 }
