@@ -111,6 +111,56 @@ class PuzzleAutomationTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_poster_generates_portrait_once_with_its_own_variant_and_private_photo(): void
+    {
+        $this->product->update(['slug' => 'bostr-mkhss-bsor-altfl-mkas-a4']);
+        $order = $this->order();
+        $item = $order->items()->sole();
+        $item->update(['variant_snapshot' => ['size' => '20x30', 'frame' => true]]);
+        $image = imagecreatetruecolor(1024, 1536);
+        ob_start();
+        imagepng($image);
+        $portrait = ob_get_clean();
+        imagedestroy($image);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->withArgs(function (GptImageRequest $request) {
+                $this->assertSame('1024x1536', $request->size);
+                $this->assertSame(1, $request->maxAttempts);
+                $this->assertStringContainsString('رقية', $request->prompt);
+                $this->assertStringContainsString('20x30', $request->prompt);
+
+                return true;
+            })->andReturn(new GptImageResult($portrait, 'png', 'image/png', 'synthetic-poster', [], []));
+        $service = app(PuzzleAutomation::class);
+        $service->tick();
+        $service->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('succeeded', $run->status, $run->error_code ?? '');
+        $this->assertSame($item->id, $run->order_item_id);
+        $this->assertSame(hash('sha256', $this->png), $run->context['photos'][0]['checksum']);
+        $this->assertSame($portrait, Storage::disk('local')->get($run->output_path));
+        $this->assertDatabaseHas('order_attachments', ['id' => $run->attachment_id, 'order_id' => $order->id, 'production_unit_key' => 'product:'.$item->id]);
+        $this->assertDatabaseHas('order_previews', ['id' => $run->preview_id, 'order_id' => $order->id, 'production_unit_key' => 'product:'.$item->id]);
+        $this->assertSame('unpaid', $order->fresh()->payment_status);
+        Http::assertNothingSent();
+    }
+
+    public function test_poster_landscape_output_is_preserved_for_review_without_publication_or_retry(): void
+    {
+        $this->product->update(['slug' => 'bostr-mkhss-bsor-altfl-mkas-a4']);
+        $this->order();
+        $this->fakeImage();
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('review', $run->status);
+        $this->assertSame('puzzle_output_quality', $run->error_code);
+        $this->assertSame($this->png, Storage::disk('local')->get($run->output_path));
+        $this->assertDatabaseCount('order_previews', 0);
+        $this->assertDatabaseCount('order_attachments', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_uncertain_retry_rejects_unfinished_leased_saved_and_cancelled_attempts(): void
     {
         $this->staff();

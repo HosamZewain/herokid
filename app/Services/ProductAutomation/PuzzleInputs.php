@@ -123,7 +123,8 @@ class PuzzleInputs
         if (! $model || ! app(AiProviderAvailability::class)->modelAvailable($model, 'image_editing')) {
             throw new RuntimeException('puzzle_provider_unavailable');
         }
-        $size = config($book ? 'product_review.cover_size' : 'puzzle_automation.size');
+        $size = $book ? config('product_review.cover_size')
+            : config('puzzle_automation.product_sizes.'.$item->product?->slug, config('puzzle_automation.size'));
         $quality = config($book ? 'product_review.cover_quality' : 'puzzle_automation.quality');
         $cost = app(AiImagePricingService::class)->calculate($model, $size, $quality, []);
         if (strtoupper($model->estimated_cost_currency ?: 'USD') !== 'USD' || ! $cost['cost_usd']

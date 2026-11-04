@@ -1306,6 +1306,59 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertDatabaseCount('order_process_responses', 1);
     }
 
+    public function test_mixed_story_puzzle_poster_book_and_mug_produce_one_complete_preview(): void
+    {
+        $book = $this->book();
+        $story = Story::create(['title' => 'Synthetic story', 'slug' => 'poster-mixed-story', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
+        $storyOrder = $book->order->replicate();
+        $storyOrder->order_number = 'SYN-POSTER-STORY';
+        $storyOrder->story_id = $story->id;
+        $storyOrder->status = 'new_confirmed';
+        $storyOrder->save();
+        $storyOrder->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => 'Synthetic story', 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+        $posterItem = null;
+        foreach (['personalized-child-adventure-hdf-puzzle', 'bostr-mkhss-bsor-altfl-mkas-a4', 'personalized-child-family-photo-mug'] as $slug) {
+            $order = $book->order->replicate();
+            $order->order_number = 'SYN-'.Str::random(8);
+            $order->status = 'new_confirmed';
+            $order->save();
+            $product = Product::create(['slug' => $slug, 'name_ar' => $slug, 'is_active' => true, 'price_cents' => 10000,
+                'production_prompt_template' => 'One image for {{child_full_name}} using {{child_image_references}}']);
+            $item = $order->items()->create(['item_type' => 'product', 'product_id' => $product->id, 'title' => $slug, 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+            if ($slug === 'bostr-mkhss-bsor-altfl-mkas-a4') {
+                $posterItem = $item;
+            }
+        }
+        $run = $this->enroll($book->order);
+        $this->assertDatabaseCount('puzzle_generations', 4);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->times(5)
+            ->andReturnUsing(function (GptImageRequest $request) {
+                $bytes = $this->png;
+                if ($request->size === '1536x1024') {
+                    $image = imagecreatetruecolor(1536, 1024);
+                    ob_start();
+                    imagepng($image);
+                    $bytes = ob_get_clean();
+                    imagedestroy($image);
+                }
+
+                return new GptImageResult($bytes, 'png', 'image/png', 'synthetic', [], []);
+            });
+        app(ProcessIdentityService::class)->generate(OrderProcessIdentity::sole()->id);
+        foreach (PuzzleGeneration::orderBy('id')->get() as $generation) {
+            app(PuzzleAutomation::class)->generate($generation->id);
+            $this->assertSame('succeeded', $generation->fresh()->status, $generation->fresh()->error_code ?? '');
+        }
+        $this->send($run);
+        $manifest = OrderReviewManifest::sole();
+        $this->assertCount(5, $manifest->images);
+        $this->assertSame($posterItem->id, collect($manifest->images)->firstWhere('item_id', $posterItem->id)['item_id']);
+        $this->assertSame('preview_uploaded', $book->order->fresh()->status);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        Http::assertSentCount(2);
+    }
+
     public function test_staff_approval_of_mixed_two_child_preview_approves_exact_identity_and_cover(): void
     {
         $item = $this->book();

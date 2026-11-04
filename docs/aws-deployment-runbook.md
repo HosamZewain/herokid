@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — poster automation support PREPARED, NOT DEPLOYED
+
+Owner requested supporting the single-image poster after HK11-117. Isolated base `a76d735dd8015921b9c73d26c7d5a3c9856a19e3` includes the ready-first Auto Pilot release. Adds the known poster slug to the shared product allowlist, requests portrait artwork, and validates non-book image dimensions against the captured request. Existing event boundaries, completed outputs, holds, permissions, provider/budget checks and book approvals remain enforced. No production admission or source/config mutation was performed. **163tests/1626assertions passed on each isolated PHP8.3 SQLite/MySQL8.4**; candidate SELECT-only HK11-117 preflight succeeded and preserved completed sibling fingerprints. [Implementation, tests and bounded publication plan](poster-automation-support-2026-11-04.ar.md). Deployment requires approval for this addition. Preserve private cached Auto Pilot configuration; update only the reviewed product allowlist/size keys, never blindly rebuild cached configuration. Do not treat this prepared section as a newer deployed SHA.
+
 ## 4 November 2026 — Auto Pilot ready-first improvements DEPLOYED
 
 Owner explicitly approved “انشر”. Application **d2551f08d5ba3191980865e64dc99928e716cfc1**, base **c1a6a8dc57e656c66df78316c9279335cbfdcd35**, published to Main and AWS at **17:03:51UTC /19:03:51Cairo**. Ready units lead two of three scheduling passes and first cycles inside mixed checkouts; every third pass retains fairness. At most two typed decision-transport retries share the normal quota; unknown/auth/tool/policy/persistence/worker failures stay closed. Native outcomes and ready-work wait age update without AI. [Files, tests, diagnosis, measured live results and recovery](autopilot-ready-first-2026-11-04.ar.md).

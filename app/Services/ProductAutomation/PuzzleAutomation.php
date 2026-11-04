@@ -363,7 +363,17 @@ class PuzzleAutomation
                     }
                     $this->guard($run);
                     $book = ($run->context['production_stage'] ?? '') === 'book_cover';
-                    if ($book ? ($size[0] < 1024 || $size[1] <= $size[0] || abs($size[1] / $size[0] - ($artwork ? 297 / 210 : 1.5)) > .015) : ($size[1] < 1024 || $size[0] < 1536 || abs($size[0] / $size[1] - 1.5) > .015)) {
+                    if ($book) {
+                        $validSize = $size[0] >= 1024 && $size[1] > $size[0]
+                            && abs($size[1] / $size[0] - ($artwork ? 297 / 210 : 1.5)) <= .015;
+                    } else {
+                        // Validate the captured request, not a landscape-only assumption.
+                        // Old puzzle/mug receipts retain their original dimensions.
+                        $validSize = preg_match('/\A([1-9][0-9]*)x([1-9][0-9]*)\z/', $run->context['size'] ?? '', $expected)
+                            && $size[0] >= (int) $expected[1] && $size[1] >= (int) $expected[2]
+                            && abs($size[0] / $size[1] - (int) $expected[1] / (int) $expected[2]) <= .015;
+                    }
+                    if (! $validSize) {
                         throw new RuntimeException('puzzle_output_quality');
                     }
                 } catch (Throwable $error) {

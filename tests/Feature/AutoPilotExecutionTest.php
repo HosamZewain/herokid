@@ -8,7 +8,9 @@ use App\Models\AiProductionExecution;
 use App\Models\AiProvider;
 use App\Models\Order;
 use App\Models\OrderAttachment;
+use App\Models\OrderProcessEvent;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
@@ -101,6 +103,38 @@ class AutoPilotExecutionTest extends TestCase
         $this->assertSame('processing', $run->fresh()->status);
         $this->assertSame('processing', app(ExecutionMonitor::class)->snapshot()['rows'][0]['current_status']);
         Log::shouldHaveReceived('warning')->with('autopilot_progress_audit_failed', ['executor_type' => 'puzzle', 'executor_id' => $run->id])->once();
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_poster_autopilot_admission_preserves_completed_sibling_and_runs_once(): void
+    {
+        $state = $this->observedCheckout('poster-siblings', 2);
+        $orders = Order::where('checkout_group_key', 'poster-siblings')->orderBy('id')->get();
+        $finishedItem = $orders[0]->items()->sole();
+        $event = OrderProcessEvent::create(['event_key' => 'synthetic-finished-sibling',
+            'checkout_key' => 'poster-siblings', 'order_id' => $orders[0]->id, 'type' => 'status_entered',
+            'status' => 'processed', 'data' => ['status' => 'new_confirmed']]);
+        $finished = PuzzleGeneration::create(['order_id' => $orders[0]->id, 'order_item_id' => $finishedItem->id,
+            'checkout_key' => 'poster-siblings', 'event_id' => $event->id, 'unit_key' => 'product:'.$finishedItem->id, 'status' => 'succeeded']);
+        $before = $finished->fresh()->getRawOriginal();
+        $poster = Product::create(['slug' => 'bostr-mkhss-bsor-altfl-mkas-a4', 'name_ar' => 'Synthetic poster',
+            'is_active' => true, 'price_cents' => 100, 'production_prompt_template' => 'One 20x30 poster for {{child_full_name}}']);
+        $posterItem = $orders[1]->items()->sole();
+        $posterItem->update(['product_id' => $poster->id, 'variant_snapshot' => ['size' => '20x30']]);
+        $state = app(ContextObserver::class)->observe('poster-siblings');
+        $unit = collect($state->snapshot['units'])->firstWhere('unit_key', 'product:'.$posterItem->id);
+        $this->assertTrue($unit['supported']);
+        $this->assertSame('single_image', $unit['capability']);
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $run = PuzzleGeneration::where('order_item_id', $posterItem->id)->sole();
+        $this->assertSame('queued', $run->status);
+        $this->assertSame('1024x1536', $run->context['size']);
+        $this->assertStringContainsString('Synthetic child 1', $run->context['prompt']);
+        $this->assertSame(0, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $this->assertSame($before, $finished->fresh()->getRawOriginal());
+        $this->assertDatabaseCount('puzzle_generations', 2);
         Http::assertNothingSent();
         Queue::assertNothingPushed();
     }
