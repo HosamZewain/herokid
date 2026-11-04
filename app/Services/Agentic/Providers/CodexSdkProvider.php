@@ -45,7 +45,7 @@ class CodexSdkProvider implements DecisionProvider
         }
         $stream = @stream_socket_client('unix://'.$socket, $errno, $error, min(3, $timeout));
         if (! $stream) {
-            throw new RuntimeException('codex_bridge_unavailable');
+            throw new TransientDecisionFailure('DECISION_BRIDGE_UNAVAILABLE');
         }
         try {
             stream_set_timeout($stream, $timeout);
@@ -54,6 +54,9 @@ class CodexSdkProvider implements DecisionProvider
                 throw new RuntimeException('codex_request_rejected');
             }
             $line = fgets($stream, 65537);
+            if (stream_get_meta_data($stream)['timed_out']) {
+                throw new TransientDecisionFailure('DECISION_TRANSPORT_TIMEOUT');
+            }
             if (! is_string($line) || ! str_ends_with($line, "\n") || stream_get_meta_data($stream)['timed_out']) {
                 throw new RuntimeException('codex_result_uncertain');
             }

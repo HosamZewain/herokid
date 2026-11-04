@@ -1,5 +1,11 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — Auto Pilot ready-first improvements PREPARED, NOT DEPLOYED
+
+Feature `codex/autopilot-ready-first-20261104`, verified base **c1a6a8dc57e656c66df78316c9279335cbfdcd35**. Owner requested implementation after the read-only zero-admission audit. Ready units now lead two of three scheduling passes and the first cycles inside a mixed checkout; every third pass retains oldest-attempt fairness. Bounded typed decision-transport retries share the existing AI quota; unknown/auth/tool/policy/persistence/worker failures remain closed. SQL-backed native outcomes and waiting age are visible independently of AI. [Changed files, tests, diagnosis and release requirements](autopilot-ready-first-2026-11-04.ar.md).
+
+One additive migration `2026_11_04_000003_add_autopilot_ready_scheduling.php` is **unapplied**: two observer metadata columns and bounded dirty-state reread, no business mutation or model call. Existing production remains on the verified release below with2000/day and unlimited approved admissions. No new live configuration, service restart, replay, customer message or production/provider test was performed. Revalidate Main/AWS and obtain authorization for this new release before deployment.
+
 ## 4 November 2026 - Auto Pilot execution and2000/day ACTIVATED
 
 Owner authorized production publication after latest Main/AWS review, then doubled AI allowance. Application **70dd35e8c55654a8e7555c82acb8f4ed540b2361**, base **66d7bec050fa4edda99145cb2825a82528db63a8**, preserves newer legacy-book/preview/storage releases. Nullable legacy manifests and admission guards are merged together. Activation **15:34:28UTC /17:34:28Cairo**. [Release, tests, limits and recovery](autopilot-live-execution-2026-11-04.ar.md).

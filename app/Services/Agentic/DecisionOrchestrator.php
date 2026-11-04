@@ -6,6 +6,7 @@ use App\Models\AiAgentRun;
 use App\Models\AiCheckoutState;
 use App\Models\AiOrderDecision;
 use App\Services\Agentic\Providers\DecisionProvider;
+use App\Services\Agentic\Providers\TransientDecisionFailure;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -60,9 +61,9 @@ class DecisionOrchestrator
             if ($stateId !== null) {
                 $due->whereKey($stateId);
             }
-            // Every third pass is oldest-attempt-first, so hot blocked work cannot starve coverage.
+            // Two passes prioritize ready units, one preserves oldest-attempt fairness.
             if ($control->turns % 3 !== 0) {
-                $due->orderByDesc('blocked')->orderByRaw("CASE WHEN status = 'pending' AND context_version > 1 THEN 0 ELSE 1 END");
+                $due->orderByRaw('CASE WHEN ready_target_count > 0 THEN 0 ELSE 1 END')->orderByDesc('blocked')->orderByRaw("CASE WHEN status = 'pending' AND context_version > 1 THEN 0 ELSE 1 END");
             }
             $state = $due->orderByRaw('CASE WHEN last_attempt_at IS NULL THEN 0 ELSE 1 END')->orderBy('last_attempt_at')->orderBy('id')->first();
             if (! $state) {
@@ -91,6 +92,13 @@ class DecisionOrchestrator
                     $state->update(['status' => 'covered']);
                     break;
                 }
+                // Keep the full checkout context, but constrain this cycle to ready
+                // siblings first. Policy validation enforces the same candidate set.
+                $ready = array_values(array_filter($capabilities, fn ($target) => $target['decision'] === 'execute'
+                    && in_array($target['target_id'], $remaining, true)));
+                if ($ready) {
+                    $remaining = array_column($ready, 'target_id');
+                }
                 $input = $this->input($context, $remaining, $capabilities, $state->covered_targets ?? []);
                 if (strlen(json_encode($input, JSON_THROW_ON_ERROR)) > config('agentic.max_context_bytes') - 1024) {
                     $state->update(['status' => 'error', 'error_code' => 'CONTEXT_TOO_LARGE']);
@@ -102,9 +110,11 @@ class DecisionOrchestrator
                     break;
                 }
                 $calls++;
+                $phase = 'provider';
                 try {
                     $activity->record($token, 'awaiting_decision', $state, $run, $remaining);
                     $response = $this->provider->decide($input);
+                    $phase = 'validation';
                     $decision = $this->validator->validate($response['decision'] ?? null);
                     $activity->record($token, 'checking_policy', $state, $run, [$decision['target_id']]);
                     $fresh = $this->observer->observe($state->checkout_key);
@@ -114,6 +124,7 @@ class DecisionOrchestrator
                     }
                     $simulation = $this->gateway->simulate($decision, $policy, $fresh->snapshot);
                     $activity->record($token, 'saving_decision', $state, $run, [$decision['target_id']]);
+                    $phase = 'persistence';
                     DB::transaction(function () use ($run, $decision, &$policy, &$simulation, $fresh, $response) {
                         $locked = AiCheckoutState::lockForUpdate()->findOrFail($fresh->id);
                         $memory = app(MemoryService::class)->forContext($locked->checkout_key, $locked->snapshot);
@@ -135,20 +146,31 @@ class DecisionOrchestrator
                             return;
                         }
                         $covered = array_values(array_unique([...($locked->covered_targets ?? []), $decision['target_id']]));
-                        $locked->update(['covered_targets' => $covered, 'status' => count($covered) >= $locked->target_count ? 'covered' : 'partial',
+                        $locked->fill(['covered_targets' => $covered, 'status' => count($covered) >= $locked->target_count ? 'covered' : 'partial',
                             'error_code' => null, 'evaluated_at' => now(), 'next_evaluation_at' => now()->addMinute()]);
+                        $locked->trackReadyTargets($this->registry->targets($locked->snapshot));
+                        $locked->save();
                     });
                     $state = $state->fresh();
                     if (! $policy['allowed_proposal'] || $state->context_version !== $run->context_version) {
                         break;
                     }
                 } catch (\Throwable $error) {
-                    $code = $error instanceof \InvalidArgumentException ? 'INVALID_DECISION' : 'PROVIDER_RESULT_UNCERTAIN';
+                    $transient = $phase === 'provider' && $error instanceof TransientDecisionFailure;
+                    $code = $transient ? $error->getMessage() : ($phase === 'persistence' ? 'DECISION_SAVE_FAILED'
+                        : ($error instanceof \InvalidArgumentException ? 'INVALID_DECISION' : 'PROVIDER_RESULT_UNCERTAIN'));
                     $run->update(['status' => 'failed', 'error_code' => $code, 'finished_at' => now()]);
                     app(AutoPilotAudit::class)->failed($run, $code);
-                    // Never reset or repeat an uncertain call; leave uncovered targets visible.
+                    // Only typed transport failures in a zero-tool decision call are
+                    // retryable. Never replay a native executor or an uncertain worker.
+                    $failures = $transient ? AiAgentRun::where('checkout_state_id', $state->id)
+                        ->where('fingerprint', $run->fingerprint)->where('status', 'failed')
+                        ->whereIn('error_code', TransientDecisionFailure::CODES)->count() : 0;
+                    $retry = $transient && $failures <= max(0, min(2, (int) config('agentic.decision_retry_limit', 2)));
                     AiCheckoutState::whereKey($state->id)->where('context_version', $run->context_version)
-                        ->update(['status' => 'error', 'error_code' => $code]);
+                        ->where('fingerprint', $run->fingerprint)
+                        ->update(['status' => $retry ? 'pending' : 'error', 'error_code' => $code,
+                            'next_evaluation_at' => $retry ? now()->addMinutes($failures === 1 ? 5 : 15) : null]);
                     break;
                 }
             }

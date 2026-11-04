@@ -9,6 +9,8 @@ return [
     'provider' => env('AGENTIC_PROVIDER', 'codex'),
     'daily_limit' => (int) env('AGENTIC_DAILY_LIMIT', 100),
     'cycles_per_pass' => (int) env('AGENTIC_CYCLES_PER_PASS', 3),
+    // At most two retries, after 5 and 15 minutes, sharing the normal AI quota.
+    'decision_retry_limit' => (int) env('AGENTIC_DECISION_RETRY_LIMIT', 2),
     'debounce_seconds' => 30,
     'reconcile_batch' => 50,
     'timeout_seconds' => 90,

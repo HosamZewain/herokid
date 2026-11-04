@@ -162,8 +162,10 @@ class ProductionExecutor
                 // quota and scheduler. Other units retain their covered status.
                 $current = AiCheckoutState::lockForUpdate()->findOrFail($state->id);
                 if ($current->fingerprint === $run->fingerprint && $current->context_version === $run->context_version) {
-                    $current->update(['covered_targets' => array_values(array_diff($current->covered_targets ?? [], [$decision['target_id']])),
+                    $current->fill(['covered_targets' => array_values(array_diff($current->covered_targets ?? [], [$decision['target_id']])),
                         'status' => 'partial', 'next_evaluation_at' => now(), 'error_code' => null]);
+                    $current->trackReadyTargets(app(CapabilityRegistry::class)->targets($current->snapshot));
+                    $current->save();
                 }
             }
 

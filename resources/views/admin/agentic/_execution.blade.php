@@ -11,13 +11,27 @@
         <p class="font-bold text-amber-700">اكتمل حد خطوات التنفيذ اليوم؛ الخطوات الجديدة تنتظر تجدد الحد. متابعة العمل الجاري مستمرة.</p>
     @endif
     <p>مسارات التنفيذ أو الانتظار الجاري متابعتها: {{ $execution['active_count'] }}.</p>
+    <div class="rounded border bg-slate-50 p-3 space-y-2">
+        <p>جاهز للفحص وينتظر قرارًا بحسب آخر قراءة محفوظة: <bdi>{{ $execution['readiness']['targets'] }}</bdi> وحدة في <bdi>{{ $execution['readiness']['checkouts'] }}</bdi> طلب. الجاهزية لا تتجاوز موافقات وفحص الخدمة الحالية.</p>
+        @if($execution['readiness']['attention_checkouts'])<p class="text-amber-700">منها {{ $execution['readiness']['attention_checkouts'] }} طلب متوقف عند خطأ ويحتاج مراجعة المسؤول.</p>@endif
+        @if($execution['readiness']['oldest_at'])
+            <p>أقدم انتظار جاهز منذ <bdi>{{ \Carbon\Carbon::parse($execution['readiness']['oldest_at'])->timezone('Africa/Cairo')->format('Y-m-d H:i') }}</bdi> بتوقيت القاهرة ({{ (int) \Carbon\Carbon::parse($execution['readiness']['oldest_at'])->diffInMinutes(now(), true) }} دقيقة).</p>
+        @endif
+        <p>إجمالي الإيصالات: {{ $execution['admitted'] }} مقبولة، {{ $execution['not_admitted'] }} لم تدخل التنفيذ.</p>
+        <dl class="grid grid-cols-2 gap-2 md:grid-cols-3">
+            @foreach($execution['outcomes'] as $outcome => $count)
+                <div><dt>{{ __('agentic.execution_outcomes.'.$outcome) }}</dt><dd class="font-bold">{{ $count }}</dd></div>
+            @endforeach
+        </dl>
+        <p class="text-xs">الحالات الحالية لمسارات العمل المسجلة منذ بدء Auto Pilot، دون تكرار المسار المشترك. اكتمال الإنتاج لا يعني اعتماد العميل أو تسليم الأوردر؛ قبول إرسال الرسالة لا يثبت وصولها للعميل. الأرقام تُحدّث من السجلات دون استدعاء AI.</p>
+    </div>
     @foreach($execution['rows'] as $row)
         @php($receipt = $row['receipt'])
         <article class="rounded border p-3">
             <p class="font-bold">{{ __('agentic.actions.'.$receipt->action) }} · <bdi>{{ $receipt->target_id }}</bdi>
                 @if($row['order']) · <a class="text-indigo-700 underline" href="{{ route('admin.orders.show',$row['order']) }}">{{ $row['order']->checkoutReference?->short_reference ?: 'Order '.$row['order']->id }}</a>@endif</p>
             <p>{{ $receipt->status === 'admitted' ? 'سُلّمت للمسار الحالي' : 'لم تُسلّم للتنفيذ' }} · {{ \Illuminate\Support\Facades\Lang::has('agentic.execution_reasons.'.$receipt->reason_code) ? __('agentic.execution_reasons.'.$receipt->reason_code) : \App\Services\Orders\OrderAutomationGuidance::reason($receipt->reason_code) }}</p>
-            @if($row['current_status'])<p>حالة المسار الآن: {{ __('agentic.executor_states.'.$row['current_status']) }}</p>@endif
+            @if($row['current_status'])<p>حالة المسار الآن: {{ $receipt->executor_type === 'confirmation' && $row['current_status'] === 'succeeded' ? __('agentic.execution_outcomes.message_accepted') : __('agentic.executor_states.'.$row['current_status']) }}</p>@endif
             <p class="text-xs">{{ $receipt->created_at->timezone('Africa/Cairo')->format('Y-m-d H:i:s') }} بتوقيت القاهرة · إيصال {{ $receipt->id }} · <bdi>{{ $receipt->executor_type }}:{{ $receipt->executor_id }}</bdi></p>
         </article>
     @endforeach

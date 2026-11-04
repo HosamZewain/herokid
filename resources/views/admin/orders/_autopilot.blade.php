@@ -3,6 +3,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-xl font-bold">HeroKid Auto Pilot — قرارات وخطوات هذا الطلب</h2>
         @if(auth()->user()->hasPermission('order_automation.view') && !app(\App\Services\Orders\OrderAccess::class)->restricted())<a class="text-indigo-700 underline" href="{{ route('admin.agentic.show',$order) }}">سجل القرارات والذاكرة</a>@endif</div>
     <p>آخر قراءة: {{ $pilot['state']?->observed_at?->timezone('Africa/Cairo')->format('Y-m-d H:i:s') ?: 'لم يُقرأ بعد' }} بتوقيت القاهرة · {{ __('agentic.states.'.($pilot['state']?->status ?? 'unobserved')) }}</p>
+    @include('admin.agentic._decision-retry', ['retryState' => $pilot['state']])
     @if(!config('agentic.evaluate'))<p>مراجعة الذكاء الاصطناعي متوقفة؛ بيانات الإنتاج وسجل التنفيذ متاحان.</p>
     @elseif($pilot['runtime']?->provider_error)<p>مراجعة القرارات تنتظر استعادة اتصال المساعد أو تأكيد المصادقة والعزل.</p>
     @elseif($pilot['runtime']?->quota_day === now('Africa/Cairo')->toDateString() && $pilot['runtime']->attempts >= config('agentic.daily_limit'))<p>التقييم التالي ينتظر تجدد حصة القرارات اليومية؛ عرض الإنتاج مستمر.</p>

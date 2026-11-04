@@ -42,6 +42,7 @@ class ContextObserver
             $state->representative_id = $context['representative_id'];
             $state->target_count = count($targets);
             $state->blocked = collect($targets)->contains(fn ($t) => in_array($t['decision'], ['human_required', 'escalate'], true));
+            $state->trackReadyTargets($targets);
             $state->observed_at = now();
             $state->dirty_at = null;
             $state->save();

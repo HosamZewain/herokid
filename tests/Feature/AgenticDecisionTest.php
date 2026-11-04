@@ -5,11 +5,16 @@ namespace Tests\Feature;
 use App\Models\AiAgentRun;
 use App\Models\AiOrderDecision;
 use App\Models\Order;
+use App\Services\Agentic\CapabilityRegistry;
 use App\Services\Agentic\ContextObserver;
 use App\Services\Agentic\DecisionOrchestrator;
 use App\Services\Agentic\DecisionValidator;
+use App\Services\Agentic\ExecutionGateway;
+use App\Services\Agentic\Providers\CodexSdkProvider;
 use App\Services\Agentic\Providers\DecisionProvider;
+use App\Services\Agentic\Providers\EvaluationBudgetProvider;
 use App\Services\Agentic\Providers\MockProvider;
+use App\Services\Agentic\Providers\TransientDecisionFailure;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -35,29 +40,49 @@ class AgenticDecisionTest extends TestCase
 
     public function test_real_benchmark_adapter_shares_quota_and_cannot_overlap_operational_decisions(): void
     {
-        $fake = new class extends \App\Services\Agentic\Providers\CodexSdkProvider
+        $fake = new class extends CodexSdkProvider
         {
             public int $calls = 0;
-            public function health(): array { return ['ready' => true]; }
-            public function decide(array $input): array { $this->calls++; return ['decision' => [], 'metadata' => []]; }
+
+            public function health(): array
+            {
+                return ['ready' => true];
+            }
+
+            public function decide(array $input): array
+            {
+                $this->calls++;
+
+                return ['decision' => [], 'metadata' => []];
+            }
         };
-        $adapter = new \App\Services\Agentic\Providers\EvaluationBudgetProvider($fake);
+        $adapter = new EvaluationBudgetProvider($fake);
         config(['agentic.daily_limit' => 1]);
         $adapter->decide([]);
         $this->assertSame(1, $fake->calls);
-        try { $adapter->decide([]); $this->fail('Quota must refuse a second call'); } catch (\RuntimeException $e) { $this->assertSame('benchmark_quota_exhausted', $e->getMessage()); }
+        try {
+            $adapter->decide([]);
+            $this->fail('Quota must refuse a second call');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('benchmark_quota_exhausted', $e->getMessage());
+        }
         config(['agentic.daily_limit' => 100]);
-        DB::table('ai_runtime_states')->where('id', 1)->update(['lease_token' => (string) \Illuminate\Support\Str::uuid(), 'lease_until' => now()->addMinute()]);
-        try { $adapter->decide([]); $this->fail('Lease must refuse overlap'); } catch (\RuntimeException $e) { $this->assertSame('benchmark_busy', $e->getMessage()); }
+        DB::table('ai_runtime_states')->where('id', 1)->update(['lease_token' => (string) Str::uuid(), 'lease_until' => now()->addMinute()]);
+        try {
+            $adapter->decide([]);
+            $this->fail('Lease must refuse overlap');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('benchmark_busy', $e->getMessage());
+        }
         $this->assertSame(1, $fake->calls);
     }
 
     public function test_bridge_schema_matches_php_actions_and_gateway_has_no_execution_method(): void
     {
         $schema = json_decode(file_get_contents(base_path('ops/agentic/decision-schema.json')), true);
-        $this->assertEqualsCanonicalizing(\App\Services\Agentic\DecisionValidator::FIELDS, $schema['required']);
-        $this->assertEqualsCanonicalizing([null, ...\App\Services\Agentic\CapabilityRegistry::ACTIONS], $schema['properties']['action']['enum']);
-        $this->assertSame(['simulate'], array_map(fn ($m) => $m->name, (new \ReflectionClass(\App\Services\Agentic\ExecutionGateway::class))->getMethods(\ReflectionMethod::IS_PUBLIC)));
+        $this->assertEqualsCanonicalizing(DecisionValidator::FIELDS, $schema['required']);
+        $this->assertEqualsCanonicalizing([null, ...CapabilityRegistry::ACTIONS], $schema['properties']['action']['enum']);
+        $this->assertSame(['simulate'], array_map(fn ($m) => $m->name, (new \ReflectionClass(ExecutionGateway::class))->getMethods(\ReflectionMethod::IS_PUBLIC)));
     }
 
     public function test_sequential_passes_cover_independent_siblings_once_without_simulating_effects(): void
@@ -134,7 +159,7 @@ class AgenticDecisionTest extends TestCase
         Order::where('checkout_group_key', 'blocked-sibling')->orderBy('id')->first()->update(['uploaded_photos' => []]);
         app(ContextObserver::class)->observe('blocked-sibling');
         $this->assertSame(2, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
-        $this->assertSame(['human_required', 'execute'], AiOrderDecision::orderBy('id')->get()->pluck('decision.decision')->all());
+        $this->assertSame(['execute', 'human_required'], AiOrderDecision::orderBy('id')->get()->pluck('decision.decision')->all());
     }
 
     public function test_changed_state_during_provider_call_is_stale_and_never_covers_units(): void
@@ -229,6 +254,191 @@ class AgenticDecisionTest extends TestCase
             app(DecisionOrchestrator::class)->evaluatePass();
         }
         $this->assertSame('covered', $normal->fresh()->status);
+    }
+
+    public function test_ready_work_leads_but_third_pass_still_covers_old_blocked_work(): void
+    {
+        $blocked = $this->observedCheckout('old-blocked');
+        Order::where('checkout_group_key', 'old-blocked')->update(['uploaded_photos' => []]);
+        app(ContextObserver::class)->observe('old-blocked');
+        $ready = [];
+        foreach (range(1, 5) as $i) {
+            $ready[] = $this->observedCheckout('ready-'.$i);
+        }
+        app(DecisionOrchestrator::class)->evaluatePass();
+        $this->assertSame('covered', $ready[0]->fresh()->status);
+        $this->assertSame('pending', $blocked->fresh()->status);
+        app(DecisionOrchestrator::class)->evaluatePass();
+        app(DecisionOrchestrator::class)->evaluatePass();
+        $this->assertSame('covered', $blocked->fresh()->status);
+        $this->assertSame('pending', $ready[2]->fresh()->status);
+    }
+
+    public function test_ready_counter_tracks_uncovered_siblings_and_preserves_wait_age(): void
+    {
+        config(['agentic.cycles_per_pass' => 1]);
+        $state = $this->observedCheckout('ready-age', 2);
+        $since = $state->ready_since->toISOString();
+        $this->assertSame(2, $state->ready_target_count);
+        $this->travel(2)->minutes();
+        app(ContextObserver::class)->observe('ready-age');
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, $state->fresh()->ready_target_count);
+        $this->assertSame($since, $state->fresh()->ready_since->toISOString());
+        $this->travel(1)->minutes();
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(0, $state->fresh()->ready_target_count);
+        $this->assertNull($state->fresh()->ready_since);
+    }
+
+    public function test_ready_priority_is_rechecked_against_a_new_hold_before_calling_model(): void
+    {
+        $state = $this->observedCheckout('new-hold');
+        DB::table('order_automation_holds')->insert(['checkout_key' => 'new-hold', 'user_id' => 999,
+            'fingerprint' => str_repeat('a', 64), 'runs' => '{}', 'confirmations' => '{}', 'created_at' => now(), 'updated_at' => now()]);
+        app(DecisionOrchestrator::class)->evaluatePass();
+        $this->assertSame('human_required', AiOrderDecision::sole()->decision['decision']);
+        $this->assertSame('MANUAL_HOLD', AiOrderDecision::sole()->decision['reason_code']);
+        $this->assertSame(0, $state->fresh()->ready_target_count);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+    }
+
+    public function test_unchanged_blocked_work_does_not_spend_ai_on_reconciliation_but_new_photos_wake_it(): void
+    {
+        $state = $this->observedCheckout('waiting-change');
+        Order::where('checkout_group_key', 'waiting-change')->update(['uploaded_photos' => []]);
+        app(ContextObserver::class)->observe('waiting-change');
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        foreach (range(1, 3) as $i) {
+            $this->travel(6)->minutes();
+            app(ContextObserver::class)->markDirty('waiting-change');
+            app(ContextObserver::class)->observeDirty();
+            app(ContextObserver::class)->reconcile();
+            $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        }
+        Order::where('checkout_group_key', 'waiting-change')->update(['uploaded_photos' => ['synthetic/photo.png']]);
+        app(ContextObserver::class)->observeDirty();
+        // Query-builder writes may bypass events: the periodic sweep is the fallback.
+        app(ContextObserver::class)->observe('waiting-change');
+        $this->assertSame(1, $state->fresh()->ready_target_count);
+        $this->assertSame(1, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertDatabaseCount('ai_agent_runs', 2);
+    }
+
+    public function test_transient_decision_transport_retries_are_delayed_bounded_and_charge_normal_quota(): void
+    {
+        $state = $this->observedCheckout('transport');
+        $this->app->instance(DecisionProvider::class, new class extends MockProvider
+        {
+            public function decide(array $input): array
+            {
+                throw new TransientDecisionFailure('DECISION_TRANSPORT_TIMEOUT');
+            }
+        });
+        $this->assertSame(1, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertSame('pending', $state->fresh()->status);
+        $this->assertEqualsWithDelta(300, now()->diffInSeconds($state->fresh()->next_evaluation_at), 1);
+        $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->travel(5)->minutes();
+        $this->assertSame(1, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertEqualsWithDelta(900, now()->diffInSeconds($state->fresh()->next_evaluation_at), 1);
+        $this->travel(15)->minutes();
+        $this->assertSame(1, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertSame('error', $state->fresh()->status);
+        $this->travel(1)->day();
+        $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertSame(3, (int) DB::table('ai_runtime_states')->value('attempts'));
+        $this->assertDatabaseCount('ai_agent_runs', 3);
+        $this->assertDatabaseCount('ai_order_decisions', 0);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    public function test_transient_retry_still_needs_health_and_quota_then_can_succeed_once(): void
+    {
+        config(['agentic.daily_limit' => 1]);
+        $state = $this->observedCheckout('recover');
+        $provider = new class extends MockProvider
+        {
+            public bool $ready = true;
+
+            public int $calls = 0;
+
+            public function health(): array
+            {
+                return ['ready' => $this->ready];
+            }
+
+            public function decide(array $input): array
+            {
+                if (++$this->calls === 1) {
+                    throw new TransientDecisionFailure('DECISION_BRIDGE_UNAVAILABLE');
+                }
+
+                return parent::decide($input);
+            }
+        };
+        $this->app->instance(DecisionProvider::class, $provider);
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->travel(5)->minutes();
+        $provider->ready = false;
+        $this->assertSame('provider_unavailable', app(DecisionOrchestrator::class)->evaluatePass($state->id)['status']);
+        $provider->ready = true;
+        $this->assertSame('quota_deferred', app(DecisionOrchestrator::class)->evaluatePass($state->id)['status']);
+        config(['agentic.daily_limit' => 2]);
+        $this->assertSame('covered', app(DecisionOrchestrator::class)->evaluatePass($state->id)['status']);
+        $this->assertSame(2, $provider->calls);
+        $this->assertNull($state->fresh()->error_code);
+        $this->assertDatabaseCount('ai_order_decisions', 1);
+    }
+
+    public function test_uncertain_provider_or_authentication_refusal_is_not_retried(): void
+    {
+        $state = $this->observedCheckout('uncertain');
+        $this->app->instance(DecisionProvider::class, new class extends MockProvider
+        {
+            public function decide(array $input): array
+            {
+                throw new \RuntimeException('codex_result_rejected');
+            }
+        });
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->travel(1)->day();
+        $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertSame('PROVIDER_RESULT_UNCERTAIN', $state->fresh()->error_code);
+        $this->assertDatabaseCount('ai_agent_runs', 1);
+    }
+
+    public function test_decision_persistence_failure_is_distinct_and_never_retried(): void
+    {
+        $state = $this->observedCheckout('save-error');
+        AiOrderDecision::creating(fn () => throw new \RuntimeException('synthetic persistence failure'));
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame('DECISION_SAVE_FAILED', $state->fresh()->error_code);
+        $this->assertSame('error', $state->fresh()->status);
+        $this->assertDatabaseCount('ai_order_decisions', 0);
+        $this->travel(1)->day();
+        $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+    }
+
+    public function test_retry_limit_can_be_disabled_without_resetting_coverage_or_history(): void
+    {
+        config(['agentic.decision_retry_limit' => 0]);
+        $state = $this->observedCheckout('no-retry');
+        $this->app->instance(DecisionProvider::class, new class extends MockProvider
+        {
+            public function decide(array $input): array
+            {
+                throw new TransientDecisionFailure('DECISION_BRIDGE_UNAVAILABLE');
+            }
+        });
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame('error', $state->fresh()->status);
+        $this->assertSame([], $state->fresh()->covered_targets);
+        $this->travel(1)->day();
+        $this->assertSame(0, app(DecisionOrchestrator::class)->evaluatePass($state->id)['calls']);
+        $this->assertDatabaseCount('ai_agent_runs', 1);
     }
 
     public function test_schema_rejects_extra_actions_type_coercion_and_confidence_override(): void

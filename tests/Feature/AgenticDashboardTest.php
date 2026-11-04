@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiOrderDecision;
 use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Product;
@@ -78,11 +79,26 @@ class AgenticDashboardTest extends TestCase
         Order::where('checkout_group_key', 'same-second')->orderBy('id')->first()->update(['uploaded_photos' => []]);
         app(ContextObserver::class)->observe('same-second');
         app(DecisionOrchestrator::class)->evaluatePass($state->id);
-        $last = \App\Models\AiOrderDecision::orderByDesc('id')->first();
+        $last = AiOrderDecision::orderByDesc('id')->first();
         $this->assertSame($last->agent_run_id, $state->fresh()->last_run_id);
-        $response = $this->actingAs($this->staff())->get(route('admin.agentic.index', ['decision' => 'execute']))->assertOk();
+        $response = $this->actingAs($this->staff())->get(route('admin.agentic.index', ['decision' => 'human_required']))->assertOk();
         $this->assertSame($last->agent_run_id, $response->viewData('rows')->first()->latest->id);
-        $this->get(route('admin.agentic.index', ['decision' => 'human_required']))->assertOk()->assertSee('لا توجد طلبات مطابقة.');
+        $this->get(route('admin.agentic.index', ['decision' => 'execute']))->assertOk()->assertSee('لا توجد طلبات مطابقة.');
+    }
+
+    public function test_retry_schedule_renders_for_query_rows_without_calling_ai(): void
+    {
+        $state = $this->observedCheckout('retry-display');
+        $state->update(['status' => 'pending', 'error_code' => 'DECISION_TRANSPORT_TIMEOUT', 'next_evaluation_at' => now()->addMinutes(5)]);
+        $this->actingAs($this->staff())->get(route('admin.agentic.index'))->assertOk()
+            ->assertSee('أقرب موعد لإعادة تقييم القرار')->assertSee('لا تُعاد خطوات الإنتاج أو الرسائل');
+        $this->getJson(route('admin.orders.autopilot-monitor', $state->representative_id))->assertOk()
+            ->assertJsonStructure(['html']);
+        $state->update(['status' => 'error', 'next_evaluation_at' => null]);
+        $this->get(route('admin.agentic.index'))->assertOk()->assertSee('توقفت المحاولات التلقائية');
+        $this->assertDatabaseCount('ai_agent_runs', 0);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
     }
 
     private function staff(array $keys = ['orders.view', 'order_automation.view']): User

@@ -102,7 +102,7 @@ class AgenticAutomationController extends Controller
             });
         }
         $rows = $groups->select(['g.*', 's.id as state_id', 's.last_run_id', 's.status', 's.context_version', 's.target_count', 's.covered_targets',
-            's.error_code', 's.observed_at', 's.evaluated_at', 's.dirty_at'])->orderByRaw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END')
+            's.error_code', 's.next_evaluation_at', 's.observed_at', 's.evaluated_at', 's.dirty_at'])->orderByRaw('CASE WHEN s.id IS NULL THEN 0 ELSE 1 END')
             ->orderBy('s.last_attempt_at')->orderByDesc('g.representative_id')->paginate(25)
             ->withPath(route('admin.agentic.index'))->appends($filters);
         $orders = Order::whereIn('checkout_group_key', $rows->pluck('checkout_group_key'))->select('id', 'checkout_group_key', 'status')

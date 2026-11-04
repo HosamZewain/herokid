@@ -27,6 +27,7 @@
                                 <p>تنفيذ بواسطة الـAgent: لم يحدث</p>
                             @endif
                         @endif
+                        @include('admin.agentic._decision-retry', ['retryState' => $row])
                         @if($row->error_code || $row->latest?->error_code)<p class="text-red-700">{{ $row->error_code ?? $row->latest?->error_code }}</p>@endif
                     </td>
                 </tr>

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'execution_outcomes' => ['waiting' => 'في الطابور أو ينتظر ردًا', 'running' => 'جارٍ العمل الآن',
+        'production_completed' => 'مسارات إنتاج اكتملت', 'message_accepted' => 'طلبات إرسال قبلها مزوّد الرسائل',
+        'workflow_completed' => 'مسارات متابعة الرسائل اكتملت', 'failed' => 'مسارات تعثرت',
+        'review' => 'تحتاج مراجعة أو موافقة', 'stopped' => 'متوقفة أو ملغاة', 'unknown' => 'نتائج غير مؤكدة أو سجلات مفقودة'],
     'executor_states' => ['queued' => 'في طابور التنفيذ', 'pending' => 'في انتظار التنفيذ', 'waiting_slot' => 'ينتظر دور التوليد', 'processing' => 'جارٍ التنفيذ', 'running' => 'جارٍ التنفيذ',
         'preparing' => 'جارٍ تجهيز المدخلات', 'sending' => 'جارٍ إرسال الرسالة', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر قرار الموظف',
         'waiting_identity' => 'ينتظر تجهيز الهوية أو المعاينة', 'succeeded' => 'اكتملت الخطوة وسُجلت نتيجتها', 'completed' => 'اكتمل المسار',

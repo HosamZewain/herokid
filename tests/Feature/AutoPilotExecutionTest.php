@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\AiAgentRun;
+use App\Models\AiOrderDecision;
 use App\Models\AiProductionExecution;
 use App\Models\AiProvider;
 use App\Models\Order;
 use App\Models\OrderAttachment;
 use App\Models\Permission;
 use App\Models\PuzzleGeneration;
+use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Services\Agentic\AutoPilotAudit;
 use App\Services\Agentic\ContextObserver;
@@ -27,6 +29,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Support\AgenticFixtures;
 use Tests\Support\AutoPilotExecutionFixtures;
 use Tests\TestCase;
@@ -267,6 +270,57 @@ class AutoPilotExecutionTest extends TestCase
         $this->assertDatabaseCount('puzzle_generations', 2);
         $this->assertSame(2, PuzzleGeneration::distinct()->count('order_item_id'));
         $this->assertSame('succeeded', $first->fresh()->status);
+    }
+
+    public function test_monitor_counts_native_outcomes_beyond_recent_twenty_even_without_ai(): void
+    {
+        foreach (range(1, 22) as $i) {
+            $this->propose('outcomes-'.$i);
+            $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+            PuzzleGeneration::latest('id')->first()->update(['status' => $i === 1 ? 'processing' : ($i === 2 ? 'failed' : 'succeeded')]);
+            // The synthetic activation has a bounded cap; reset only its synthetic counter.
+            DB::table('ai_production_controls')->update(['admissions' => 0]);
+        }
+        config(['agentic.evaluate' => false]);
+        $execution = app(ExecutionMonitor::class)->snapshot();
+        $this->assertSame(22, $execution['admitted']);
+        $this->assertSame(1, $execution['outcomes']['running']);
+        $this->assertSame(1, $execution['outcomes']['failed']);
+        $this->assertSame(20, $execution['outcomes']['production_completed']);
+        $this->assertSame(0, $execution['outcomes']['message_accepted']);
+        $this->assertSame(1, $execution['active_count']);
+        $scoped = app(ExecutionMonitor::class)->snapshot('outcomes-2');
+        $this->assertSame(1, $scoped['admitted']);
+        $this->assertSame(1, $scoped['outcomes']['failed']);
+        $this->assertSame(0, $scoped['outcomes']['production_completed']);
+        $html = view('admin.agentic._execution', compact('execution'))->render();
+        $this->assertStringContainsString('قبول إرسال الرسالة لا يثبت وصولها للعميل', $html);
+        $this->assertDatabaseCount('ai_agent_runs', 22);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    public function test_monitor_deduplicates_native_message_acceptance_and_exposes_missing_receipts(): void
+    {
+        $state = $this->propose('message-outcomes', 3);
+        $event = RoboDeskIntegrationEvent::create(['event_id' => (string) Str::uuid(),
+            'direction' => 'outbound', 'event_type' => 'synthetic', 'order_id' => $state->representative_id, 'status' => 'succeeded']);
+        foreach (AiOrderDecision::orderBy('id')->get() as $i => $decision) {
+            AiProductionExecution::create(['decision_id' => $decision->id, 'idempotency_key' => hash('sha256', 'monitor-'.$i),
+                'activation_id' => 'synthetic', 'checkout_key' => 'message-outcomes', 'order_id' => $state->representative_id,
+                'target_id' => $decision->decision['target_id'], 'action' => 'send_order_confirmation', 'context_fingerprint' => $state->fingerprint,
+                'status' => 'admitted', 'executor_type' => $i === 2 ? 'unsupported' : 'confirmation', 'executor_id' => $event->id]);
+        }
+        $execution = app(ExecutionMonitor::class)->snapshot('message-outcomes');
+        $this->assertSame(3, $execution['admitted']);
+        $this->assertSame(1, $execution['outcomes']['message_accepted']);
+        $this->assertSame(1, $execution['outcomes']['unknown']);
+        $this->assertSame(0, $execution['outcomes']['production_completed']);
+        $this->assertCount(3, $execution['rows']);
+        DB::table('robodesk_integration_events')->where('id', $event->id)->delete();
+        $this->assertSame(2, app(ExecutionMonitor::class)->snapshot()['outcomes']['unknown']);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
     }
 
     public function test_order_page_projection_and_timeline_have_decisions_waits_and_safe_receipts(): void
