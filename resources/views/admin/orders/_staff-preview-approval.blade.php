@@ -13,7 +13,7 @@
     @endphp
     <section class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4" id="staff-preview-approval">
         @if($approvalInputs === null)
-            <p class="mt-3 text-sm font-bold text-red-700">بيانات الطفل أو مراجع المعاينة تغيرت أو غير متاحة. راجع المعاينة الحالية قبل تسجيل الموافقة.</p>
+            <p class="mt-3 text-sm font-bold text-red-700">الموافقة الحالية مرتبطة بصورة أو بيانات سابقة. لكتاب التلوين: ارفع الكفر الجديد في «المعاينات»، ثم استخدم «اختيار واعتماد الكفر البديل واستكمال الكتاب» عند بند الكتاب أعلاه. اختر الصورة التي وافق عليها العميل؛ لن يُعاد توليد الكفر.</p>
         @elseif(app(\App\Services\Orders\StaffPreviewInputs::class)->needsApproval($approvalManifest, $approvalInputs))
         @if($approvalManifest->approved_at)
             <p class="mb-2 text-sm">تغيّرت تعليمات الإنتاج. بعد مراجعتها، يمكنك اعتماد نفس صور المعاينة واستكمال الطلب دون إعادة توليد الكفر.</p>

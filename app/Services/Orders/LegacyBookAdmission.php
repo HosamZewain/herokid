@@ -152,7 +152,7 @@ class LegacyBookAdmission
         }
     }
 
-    private function capture(OrderItem $item, OrderPreview $preview): array
+    public function capture(OrderItem $item, OrderPreview $preview): array
     {
         $order = $item->order;
         $unit = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');
@@ -224,6 +224,7 @@ class LegacyBookAdmission
         } catch (\Throwable) {
             abort(409, 'انتهت صلاحية الاختيار؛ حدّث الصفحة.');
         }
+        abort_if(isset($offer['purpose']), 409, 'استخدم إجراء اعتماد الكفر البديل لهذا الاختيار.');
 
         return DB::transaction(function () use ($item, $actor, $request, $offer) {
             $key = $item->order->checkoutGroupKey();
@@ -266,7 +267,10 @@ class LegacyBookAdmission
     public function approvedInputs(OrderItem $item): array
     {
         $approval = LegacyBookCoverApproval::where('order_item_id', $item->id)->latest('id')->first();
-        if (! $approval || PuzzleGeneration::where('order_item_id', $item->id)->exists()) {
+        if (($approval?->configuration_before['source'] ?? null) === 'manual_replacement') {
+            app(ManualBookCoverApproval::class)->validateReceipt($item, $approval);
+        }
+        if (! $approval || (($approval->configuration_before['source'] ?? null) !== 'manual_replacement' && PuzzleGeneration::where('order_item_id', $item->id)->exists())) {
             throw new RuntimeException('Book approval unavailable');
         }
         $preview = OrderPreview::find($approval->order_preview_id);
@@ -288,7 +292,7 @@ class LegacyBookAdmission
         return ['manifest_id' => null, 'legacy_approval_id' => $approval->id] + $current;
     }
 
-    private function hash(array $inputs): string
+    public function hash(array $inputs): string
     {
         $canonical = function (array $value) use (&$canonical): array {
             if (! array_is_list($value)) {

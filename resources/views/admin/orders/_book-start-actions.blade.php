@@ -14,6 +14,10 @@
             <p class="text-sm font-bold">{{ $book->title }} — الصفحات الداخلية عبر Codex</p>
             <input type="hidden" name="expected_updated_at" value="{{ $book->updated_at->toISOString() }}">
             @if($bookAdmissionReason)<p class="my-2 text-sm font-bold text-amber-800">{{ $bookAdmissionReason }}</p>@endif
+            @if(app(\App\Services\Orders\ManualBookCoverApproval::class)->candidate($book))
+                <p class="my-2 text-sm">لو الفريق رفع كفرًا بديلًا أو تغيرت بيانات الطفل، اختر الصورة التي وافق عليها العميل وسجّل موافقته على البيانات الحالية.</p>
+                <a class="my-2 block text-sm font-bold text-indigo-700 underline" href="{{ route('admin.orders.workspace.legacy-book', [$workspaceOrder, $book, 'replacement' => 1]) }}">اختيار واعتماد الكفر البديل واستكمال الكتاب</a>
+            @endif
             @if($bookAdmissionReason && ($book->item_snapshot['legacy_book_adopted'] ?? false))
                 <a class="text-sm font-bold text-indigo-700 underline" href="{{ route('admin.orders.workspace.legacy-book', [$workspaceOrder, $book]) }}">مراجعة واعتماد الكفر الموجود</a>
             @endif

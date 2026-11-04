@@ -53,7 +53,7 @@ class OrderAutomationSummary
         $confirmations = DB::table('robodesk_integration_events')->whereIn('checkout_group_key', $keys)->where('event_type', 'order.pending_confirmation')->orderBy('id')->get(['id', 'checkout_group_key', 'status', 'updated_at'])->groupBy('checkout_group_key');
         $identities = DB::table('order_process_identities')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->get(['id', 'run_id', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('run_id');
         $manualIdentities = DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
-        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'status', 'error_code', 'context', 'updated_at', 'finished_at', 'lease_until', 'output_path', 'attachment_id', 'preview_id'])->groupBy('checkout_key');
+        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'unit_key', 'status', 'error_code', 'context', 'requested_by', 'checksum', 'updated_at', 'started_at', 'finished_at', 'lease_until', 'provider_request_id', 'output_path', 'attachment_id', 'preview_id'])->groupBy('checkout_key');
         $scenes = CodexSceneRun::whereIn('checkout_key', $keys)->orderBy('created_at')->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'production_kind', 'status', 'book_pdf', 'scenes', 'scene_count', 'error_code', 'updated_at'])->groupBy('checkout_key');
         $books = DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('order_item_production_components as component', 'component.order_item_id', '=', 'order_items.id')
@@ -184,7 +184,7 @@ class OrderAutomationSummary
                 }
                 if ($legacyApprovals->has($book->id)) {
                     $paid = $rows->sum('paid_amount_cents') > 0;
-                    $add('book_pages', $paid ? 'intervention' : 'waiting', 'صفحات الكتاب القديم لم تبدأ — '.$book->title, $rows->max('updated_at'),
+                    $add('book_pages', $paid ? 'intervention' : 'waiting', 'صفحات الكتاب المعتمد بواسطة الفريق لم تبدأ — '.$book->title, $rows->max('updated_at'),
                         $paid ? 'موافقة الفريق مسجلة. استخدم «فحص وبدء صفحات التلوين» للتحقق من الصور والبيانات الحالية ثم التشغيل.' : 'موافقة الفريق مسجلة؛ سجّل الدفعة الفعلية ثم استخدم فحص وبدء صفحات التلوين.', $book->order_id, 0, $book->quantity_per_item);
 
                     continue;
@@ -226,19 +226,27 @@ class OrderAutomationSummary
             }
             $recheck = null;
             $openRuns = $processes->get($key, collect())->whereNotIn('status', ['cancelled', 'completed']);
-            if (! $fulfilled && $openRuns->count() === 1 && ! $rows->contains(fn ($o) => (bool) $o->story_id)
+            if (! $fulfilled && $openRuns->count() === 1
                 && $manualIdentities->get($key, collect())->isEmpty() && ! $rows->contains(fn ($o) => $legacyOrderIds->contains($o->id))
-                && $products->get($key, collect())->isEmpty() && $scenes->get($key, collect())->isEmpty() && ! $manifests->has($key)
+                && $products->get($key, collect())->every(fn ($generation) => MixedPreviewRecovery::reusable($generation))
+                && $scenes->get($key, collect())->isEmpty() && ! $manifests->has($key)
                 && in_array($control?->state ?? 'running', ['running', 'paused'], true)) {
                 $candidate = $openRuns->first();
                 $first = $revisions->get($candidate->revision_id)?->definition['nodes'][0] ?? [];
                 if (in_array($candidate->status, ['blocked', 'paused'], true) && ! $startedRuns->contains($candidate->id)
                     && ($first['type'] ?? '') === 'generate_previews' && ($first['id'] ?? '') === $candidate->node_id
                     && ! $processes->get($key, collect())->contains(fn ($r) => $identities->get($r->id, collect())->isNotEmpty())) {
-                    $recheck = ['run_id' => $candidate->id, 'version' => $candidate->version];
+                    $recheck = ['run_id' => $candidate->id, 'version' => $candidate->version,
+                        'mixed' => $rows->contains(fn ($row) => (bool) $row->story_id) || $products->get($key, collect())->isNotEmpty()];
                 }
             }
-            $this->cache[$key] = $top + ['recheck' => $recheck, 'tracking' => $tracking, 'has_execution' => $hasExecution, 'needs_enrollment' => $needsEnrollment, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
+            $canConfirm = ! $fulfilled && $processes->get($key, collect())->isEmpty() && $products->get($key, collect())->isEmpty()
+                && $scenes->get($key, collect())->isEmpty() && ! $manifests->has($key) && $manualIdentities->get($key, collect())->isEmpty()
+                && ! $rows->contains(fn ($row) => $legacyOrderIds->contains($row->id))
+                && $rows->every(fn ($row) => in_array($row->status, ['new', 'new_confirmed'], true) && $row->printing_status === 'not_started' && $row->shipping_status === 'not_ready')
+                && ! $confirmations->get($key, collect())->contains(fn ($event) => in_array($event->status, ['processing', 'unknown'], true))
+                && in_array($control?->state ?? 'running', ['running', 'paused'], true);
+            $this->cache[$key] = $top + ['can_confirm_order' => $canConfirm, 'recheck' => $recheck, 'tracking' => $tracking, 'has_execution' => $hasExecution, 'needs_enrollment' => $needsEnrollment, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
                 'updated_at' => collect($parts)->max('at') ?: (string) $rows->max('updated_at'), 'control_state' => $control?->state ?? ($holds->contains($key) ? 'paused_legacy' : 'running'),
                 'control_version' => (int) ($control?->version ?? 1), 'assignment_version' => (int) ($control?->assignment_version ?? 0)];
         }

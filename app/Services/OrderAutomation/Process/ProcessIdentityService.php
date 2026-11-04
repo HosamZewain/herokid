@@ -36,12 +36,12 @@ class ProcessIdentityService
     // Existing production status key; keep its spelling to preserve saved references.
     public const APPROVED_ORDER_STATUS = 'costomer_confirmed';
 
-    public function prepare(OrderProcessRun $run, OrderProcessStep $step, array $config): void
+    public function preflight(OrderProcessRun $run, array $config, bool $lock = false): array
     {
         if (! config('order_process.identity_enabled')) {
             throw new RuntimeException('identity_disabled');
         }
-        $orders = app(ProcessOrderContext::class)->orders($run->checkout_key, true)->filter(fn ($o) => $o->story_id);
+        $orders = app(ProcessOrderContext::class)->orders($run->checkout_key, $lock)->filter(fn ($o) => $o->story_id);
         $selected = $run->revision->definition['conditions']['story_ids'];
         if ($orders->isEmpty() || ($selected && $orders->contains(fn ($o) => ! in_array($o->story_id, $selected, true)))) {
             // A checkout-level message must not claim to preview an omitted sibling's identity.
@@ -59,19 +59,35 @@ class ProcessIdentityService
         if (strtoupper((string) ($model->estimated_cost_currency ?: 'USD')) !== 'USD' || ! $estimate['cost_usd'] || (float) $estimate['cost_usd'] <= 0 || $orders->count() * (float) $estimate['cost_usd'] > $budget) {
             throw new RuntimeException('identity_budget_required');
         }
+        $captured = [];
+        $identities = [];
         foreach ($orders as $order) {
             if (OrderProcessIdentity::where('order_id', $order->id)->exists() || OrderAutomationRun::where('live_key', 'story-identity:'.$order->id)->exists()) {
                 throw new RuntimeException('identity_already_claimed');
             }
-            $inputs = app(WorkflowInputs::class)->capture($order, $this->inputDefinition());
+            $captured[$order->id] = app(WorkflowInputs::class)->capture($order, $this->inputDefinition());
             $identity = $order->childIdentityRequest;
             if ($identity) {
-                $identity = ChildIdentityRequest::withTrashed()->lockForUpdate()->findOrFail($identity->id);
+                $identity = ChildIdentityRequest::withTrashed()->when($lock, fn ($q) => $q->lockForUpdate())->findOrFail($identity->id);
                 if ($identity->trashed() || $identity->approved_attempt_id || $identity->orders()->whereKeyNot($order->id)->exists()
                     || $identity->attempts()->where(fn ($q) => $q->whereIn('status', ['pending', 'processing'])->orWhereNotNull('output_storage_path'))->exists()) {
                     throw new RuntimeException('identity_existing_review');
                 }
-            } else {
+            }
+            $identities[$order->id] = $identity;
+        }
+
+        return compact('orders', 'provider', 'model', 'size', 'quality', 'estimate', 'captured', 'identities');
+    }
+
+    public function prepare(OrderProcessRun $run, OrderProcessStep $step, array $config): void
+    {
+        ['orders' => $orders, 'provider' => $provider, 'model' => $model, 'size' => $size,
+            'quality' => $quality, 'estimate' => $estimate, 'captured' => $captured, 'identities' => $identities] = $this->preflight($run, $config, true);
+        foreach ($orders as $order) {
+            $inputs = $captured[$order->id];
+            $identity = $identities[$order->id];
+            if (! $identity) {
                 $identity = ChildIdentityRequest::create([
                     'uuid' => (string) Str::uuid(), 'user_id' => $order->user_id,
                     'resume_token_hash' => hash('sha256', Str::random(80)),

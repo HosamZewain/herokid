@@ -43,7 +43,8 @@ class BookPageService
 
     private function approvedInputs(OrderItem $item, ?OrderReviewManifest $manifest, bool $pausedResume = false): array
     {
-        if (! $manifest && LegacyBookCoverApproval::where('order_item_id', $item->id)->exists()) {
+        $manualApproval = LegacyBookCoverApproval::where('order_item_id', $item->id)->latest('id')->first();
+        if ($manualApproval && (! $manifest || ($manualApproval->configuration_before['source'] ?? null) === 'manual_replacement')) {
             return app(LegacyBookAdmission::class)->approvedInputs($item);
         }
         if (! $manifest) {

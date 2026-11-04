@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\Models\OrderItem;
+use App\Models\OrderPreview;
 use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
@@ -24,6 +25,11 @@ class StaffPreviewInputs
             $item = OrderItem::findOrFail($image['item_id']);
             $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->firstOrFail();
             if ($generation->id !== $image['generation_id'] || $generation->status !== 'succeeded') {
+                throw new RuntimeException('Preview changed');
+            }
+            $preview = OrderPreview::with('productGallery')->find($image['preview_id'] ?? null);
+            if (! $preview || $preview->order_id !== $item->order_id || $preview->productGallery?->status !== 'active'
+                || $preview->file_path !== ($image['path'] ?? null) || $preview->checksum !== ($image['sha256'] ?? null)) {
                 throw new RuntimeException('Preview changed');
             }
             $current = app(PuzzleInputs::class)->captureCurrent($item);

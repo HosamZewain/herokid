@@ -2,6 +2,16 @@
 <section class="mb-4 rounded-2xl border-2 border-indigo-200 bg-white p-5" aria-label="وضع الطلب في الأوتوميشن">
     <h3 class="mb-3 text-lg font-black">وضع الطلب في الأوتوميشن</h3>
     @include('admin.orders._automation-summary', ['group'=>['representative_id'=>$workspaceOrder->id,'automation_summary'=>$workspaceSummary]])
+    @if(($workspaceSummary['can_confirm_order'] ?? false) && app(\App\Services\Orders\OrderAccess::class)->controls($workspaceOrder, auth()->user())
+        && auth()->user()->hasPermission('orders.update') && auth()->user()->hasPermission('orders.photos.view') && auth()->user()->hasPermission('orders.production_prompt.manage'))
+        <form class="mt-3" method="POST" action="{{ route('admin.orders.workspace.control', $workspaceOrder) }}">
+            @csrf
+            <input type="hidden" name="action" value="confirm">
+            <input type="hidden" name="version" value="{{ $workspaceSummary['control_version'] }}">
+            <p class="mb-2 text-sm">لو العميل أكد الطلب بمكالمة أو رسالة خارج زر واتساب، سجّل تأكيده هنا. هذا لا يعتمد المعاينة ولا يسجل دفعًا.</p>
+            <button type="submit" name="confirm" value="1" class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">تأكيد الطلب بواسطة الفريق واستكمال الأوتوميشن</button>
+        </form>
+    @endif
     @if(($workspaceSummary['recheck'] ?? null) && app(\App\Services\Orders\OrderAccess::class)->controls($workspaceOrder, auth()->user())
         && auth()->user()->hasPermission('orders.photos.view') && auth()->user()->hasPermission('orders.production_prompt.manage'))
         <form class="mt-3" method="POST" action="{{ route('admin.orders.workspace.control', $workspaceOrder) }}">
@@ -10,8 +20,8 @@
             <input type="hidden" name="version" value="{{ $workspaceSummary['control_version'] }}">
             <input type="hidden" name="run_id" value="{{ $workspaceSummary['recheck']['run_id'] }}">
             <input type="hidden" name="run_version" value="{{ $workspaceSummary['recheck']['version'] }}">
-            <p class="mb-2 text-sm">هذا المسار توقف قبل أي توليد. الفحص يوضح البيانات الناقصة؛ وإذا كانت سليمة يبدأ تجهيز المعاينة بالصور الصالحة لنفس الطفل.</p>
-            <button class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">فحص واستكمال تجهيز المعاينة</button>
+            <p class="mb-2 text-sm">{{ ($workspaceSummary['recheck']['mixed'] ?? false) ? 'يحتفظ الفحص بالصور المكتملة المطابقة ويتابع تجهيز الصور والهوية الناقصة فقط. لن يعيد رسالة تأكيد الطلب أو يسجل موافقة العميل أو دفعة.' : 'هذا المسار توقف قبل أي توليد. الفحص يوضح البيانات الناقصة؛ وإذا كانت سليمة يبدأ تجهيز المعاينة بالصور الصالحة لنفس الطفل.' }}</p>
+            <button class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">{{ ($workspaceSummary['recheck']['mixed'] ?? false) ? 'فحص واستكمال الناقص' : 'فحص واستكمال تجهيز المعاينة' }}</button>
         </form>
     @endif
     @if($workspaceSummary['state'] === 'intervention')

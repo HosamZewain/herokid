@@ -18,6 +18,7 @@ use App\Services\Orders\OrderAutomationAdmission;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Orders\ProductPreviewRecovery;
+use App\Services\Orders\StaffOrderConfirmation;
 use App\Services\Orders\StaffPreviewApproval;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
@@ -46,7 +47,12 @@ class OrderWorkspaceController extends Controller
 
     public function control(Request $request, Order $order, AutomationControl $control)
     {
-        $data = $request->validate(['action' => 'required|in:pause,resume,recheck', 'version' => 'required|integer|min:1', 'reason' => 'required_if:action,pause|nullable|string|max:1000', 'run_id' => 'required_if:action,recheck|integer|min:1', 'run_version' => 'required_if:action,recheck|integer|min:1']);
+        $data = $request->validate(['action' => 'required|in:pause,resume,recheck,confirm', 'confirm' => 'exclude_unless:action,confirm|required|accepted', 'version' => 'required|integer|min:1', 'reason' => 'required_if:action,pause|nullable|string|max:1000', 'run_id' => 'required_if:action,recheck|integer|min:1', 'run_version' => 'required_if:action,recheck|integer|min:1']);
+        if ($data['action'] === 'confirm') {
+            app(StaffOrderConfirmation::class)->confirm($order, $request->user(), $request, (int) $data['version']);
+
+            return back()->with('success', 'تم تسجيل تأكيد الطلب بواسطة الفريق وإدخاله لتجهيز المعاينة؛ لم تُسجل موافقة على الصور أو دفعة ولم نُعد رسالة التأكيد.');
+        }
         if ($data['action'] === 'recheck') {
             app(ProductPreviewRecovery::class)->recheck($order, $request->user(), $request,
                 (int) $data['version'], (int) $data['run_id'], (int) $data['run_version']);

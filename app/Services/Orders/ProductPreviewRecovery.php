@@ -24,6 +24,9 @@ class ProductPreviewRecovery
 {
     public static function untouched(OrderProcessRun $run): bool
     {
+        if (MixedPreviewRecovery::candidate($run)) {
+            return true;
+        }
         $first = $run->revision->definition['nodes'][0] ?? [];
 
         return in_array($run->status, ['blocked', 'paused'], true)
@@ -51,6 +54,12 @@ class ProductPreviewRecovery
             abort_unless($run->version === $runVersion && self::untouched($run), 409, 'تغير المسار أو بدأ تنفيذ بالفعل. حدّث الصفحة واتبع الإجراء الظاهر؛ لم يُكرر أي توليد أو إرسال.');
             if (! config('product_review.enabled') || ! app(PuzzleAutomation::class)->enabled()) {
                 throw ValidationException::withMessages(['automation' => OrderAutomationGuidance::reason('preview_disabled')]);
+            }
+            if (Order::where('checkout_group_key', $key)->whereNotNull('story_id')->exists()
+                || PuzzleGeneration::where('checkout_key', $key)->exists()) {
+                app(MixedPreviewRecovery::class)->restart($run, $actor, $request, $version);
+
+                return;
             }
             $totalCost = 0;
             $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();

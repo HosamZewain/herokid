@@ -1,15 +1,16 @@
 <x-admin-layout>
-    <x-slot name="header"><h2 class="text-xl font-bold">تجهيز كتاب قديم بالمعاينة الموجودة</h2></x-slot>
+    <x-slot name="header"><h2 class="text-xl font-bold">{{ $replacement ? 'اعتماد الكفر البديل واستكمال الكتاب' : 'تجهيز كتاب قديم بالمعاينة الموجودة' }}</h2></x-slot>
     <div class="mx-auto max-w-4xl space-y-4 p-4" dir="rtl">
         <a href="{{ route('admin.orders.groups.show', $order) }}" class="font-bold text-indigo-700">العودة للطلب</a>
         <h3 class="text-lg font-bold">{{ $item->title }} — {{ $item->order->child_name }}</h3>
-        <p>اختر الكفر الصحيح لهذا الطفل والكتاب، بعد مراجعة موافقة العميل عليه. سيتم حفظ إعدادات الإنتاج القديمة واستخدام إعدادات الصفحات الحالية، مع الاحتفاظ بالصور والمرفقات.</p>
-        <p>تسجيل الموافقة لا يعيد توليد الكفر ولا يرسل رسالة. بدء الصفحات يحتاج دفعة مسجلة ويظهر كإجراء مستقل في صفحة الطلب.</p>
+        <p>اختر الكفر الصحيح لهذا الطفل والكتاب بعد مراجعة موافقة العميل عليه. يُربط الكفر المحدد ببيانات الطفل وإعدادات الصفحات الحالية، مع الاحتفاظ بالصور والمرفقات وسجل التوليد السابق.</p>
+        <p>{{ $replacement ? 'يسجل الزر موافقة العميل على الصورة المحددة ويبدأ الصفحات إن كانت الشروط والدفعة مكتملة؛ وإلا يوضح المطلوب. لا يعيد توليد الكفر ولا يرسل رسالة.' : 'تسجيل الموافقة لا يعيد توليد الكفر ولا يرسل رسالة. بدء الصفحات يحتاج دفعة مسجلة ويظهر كإجراء مستقل في صفحة الطلب.' }}</p>
         @foreach($errors->all() as $message)<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{{ $message }}</p>@endforeach
         @if($error)<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{{ $error }}</p>@endif
         @if(!$error && !$offers)<p>لا توجد معاينة متاحة لهذا الطفل. ارفع الكفر من تبويب «المعاينات» في صفحة الطلب ثم ارجع هنا.</p>@endif
         <form method="POST" action="{{ route('admin.orders.workspace.legacy-book-approve', [$order, $item]) }}" class="space-y-4">
             @csrf
+            @if($replacement)<input type="hidden" name="replacement" value="1">@endif
             @foreach($offers as $offer)
             @php($preview = $offer['preview'])
             <label class="block rounded-xl border bg-white p-4">
@@ -27,7 +28,7 @@
             @endforeach
             @if(collect($offers)->contains(fn ($offer) => isset($offer['token'])))
             <p>بالضغط على الزر أسجّل موافقة العميل على الكفر المحدد لهذا الطفل وعدد الصفحات المعروض.</p>
-            <button name="confirm" value="1" class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">تسجيل الموافقة وتجهيز الكتاب بالكفر المحدد</button>
+            <button name="confirm" value="1" class="rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white">{{ $replacement ? 'تسجيل الموافقة وبدء الصفحات بالكفر المحدد' : 'تسجيل الموافقة وتجهيز الكتاب بالكفر المحدد' }}</button>
             @endif
         </form>
     </div>
