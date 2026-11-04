@@ -83,7 +83,8 @@ class PuzzleInputs
             throw new RuntimeException('puzzle_photos_required');
         }
         $photos = [];
-        foreach ($paths as $path) {
+        $excluded = [];
+        foreach ($paths as $index => $path) {
             if (str_contains($path, '..') || str_starts_with($path, '/') || str_contains($path, '://')) {
                 throw new RuntimeException('puzzle_invalid_photo');
             }
@@ -94,12 +95,17 @@ class PuzzleInputs
                     continue;
                 }
                 if ($storage->size($path) > 15 * 1024 * 1024) {
-                    throw new RuntimeException('puzzle_invalid_photo');
+                    $excluded[] = ['number' => $index + 1, 'path' => $path, 'reason' => 'too_large'];
+
+                    continue 2;
                 }
                 $bytes = $storage->get($path);
                 $size = @getimagesizefromstring($bytes);
                 if (! $size || $size[0] * $size[1] > 25000000 || ! in_array($size['mime'], ['image/png', 'image/jpeg', 'image/webp'], true)) {
-                    throw new RuntimeException('puzzle_invalid_photo');
+                    $excluded[] = ['number' => $index + 1, 'path' => $path, 'checksum' => hash('sha256', $bytes),
+                        'reason' => $size && $size[0] * $size[1] > 25000000 ? 'too_large' : 'unsupported_or_damaged'];
+
+                    continue 2;
                 }
                 $photo = ['disk' => $disk, 'path' => $path, 'checksum' => hash('sha256', $bytes), 'mime' => $size['mime']];
                 break;
@@ -108,6 +114,9 @@ class PuzzleInputs
                 throw new RuntimeException('puzzle_photo_missing');
             }
             $photos[] = $photo;
+        }
+        if (! $photos) {
+            throw new RuntimeException('puzzle_no_usable_photos');
         }
         $model = AiModel::with('provider')->where('code', config('puzzle_automation.model_code'))
             ->whereHas('provider', fn ($q) => $q->where('driver', 'openai'))->first();
@@ -128,6 +137,10 @@ class PuzzleInputs
             'quantity' => $item->quantity, 'linked_order_item_id' => $item->linked_order_item_id,
             'item_identity' => $item->only(['id', 'order_id', 'item_type', 'product_id', 'product_variant_id', 'title', 'sku']),
             'child_identity' => $order->only(['child_name', 'child_age', 'child_gender'])];
+
+        if ($excluded) {
+            $context['excluded_photos'] = $excluded;
+        }
 
         if ($book) {
             $context['production_stage'] = 'book_cover';

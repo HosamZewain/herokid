@@ -17,6 +17,7 @@ use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderAutomationAdmission;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Orders\ProductPreviewRecovery;
 use App\Services\Orders\StaffPreviewApproval;
 use App\Support\AdminActivityLogger;
 use App\Support\OrderStatusRegistry;
@@ -45,7 +46,13 @@ class OrderWorkspaceController extends Controller
 
     public function control(Request $request, Order $order, AutomationControl $control)
     {
-        $data = $request->validate(['action' => 'required|in:pause,resume', 'version' => 'required|integer|min:1', 'reason' => 'required_if:action,pause|nullable|string|max:1000']);
+        $data = $request->validate(['action' => 'required|in:pause,resume,recheck', 'version' => 'required|integer|min:1', 'reason' => 'required_if:action,pause|nullable|string|max:1000', 'run_id' => 'required_if:action,recheck|integer|min:1', 'run_version' => 'required_if:action,recheck|integer|min:1']);
+        if ($data['action'] === 'recheck') {
+            app(ProductPreviewRecovery::class)->recheck($order, $request->user(), $request,
+                (int) $data['version'], (int) $data['run_id'], (int) $data['run_version']);
+
+            return back()->with('success', 'نجح الفحص وأُعيد الطلب لطابور تجهيز المعاينة. تابع التقدم أعلى الطلب؛ لم نُعد رسالة تأكيد الطلب.');
+        }
         if ($data['action'] === 'pause') {
             $control->pause($order, $request->user(), $request, (int) $data['version'], $data['reason']);
         } else {

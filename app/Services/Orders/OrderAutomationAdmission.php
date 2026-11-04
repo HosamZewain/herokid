@@ -23,6 +23,7 @@ class OrderAutomationAdmission
     public static function message(string $code): string
     {
         return match ($code) {
+            'puzzle_no_usable_photos' => 'لا توجد صورة صالحة لهذا الطفل. ارفع صورة JPG أو PNG أو WebP؛ صيغة HEIC غير مدعومة في هذا المسار.',
             'puzzle_invalid_photo', 'unsupported_image' => 'إحدى صور الطفل غير مدعومة أو تتجاوز الحجم المسموح. ارفع صور JPG أو PNG أو WebP؛ صيغة HEIC غير مدعومة في هذا المسار.',
             'puzzle_photos_required', 'photos_required', 'puzzle_photo_missing' => 'صور الطفل ناقصة أو غير متاحة. راجع صور كل طفل ثم أعد الفحص.',
             'existing_workflow_or_manual_hold', 'existing_identity_or_output', 'existing_book_output_or_attempt', 'existing_product_attempt_requires_review' => 'يوجد عمل سابق أو إيقاف يدوي؛ راجع النتائج أو استأنف المسار الحالي بدل إنشاء مسار مكرر.',

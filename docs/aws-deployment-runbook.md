@@ -1,5 +1,10 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — actionable order guidance and preview preflight recovery PREPARED, NOT DEPLOYED
+
+Prepared in isolated checkout based on `6421694bdeb9df3734188a7eec5e4de9fbd4bdbc`; primary mobile/UI work preserved. [Staff behavior, boundaries and validation](order-self-service-guidance-2026-11-04.ar.md). General Arabic reasons/next actions, same-child valid-photo fallback with exclusion notice, and explicit versioned recovery for untouched product-preview preflight failures. No production changes, historical replay, customer message or provider call. PHP8.3 SQLite and MySQL8 each158tests/1672assertions pass; Pint/diff/lockfile build pass, manifest unchanged and old assets retained. No migration. Deploy only after authorization and fresh production/base verification, with scoped graceful affected-worker refresh; preserve active Codex. Existing deployed release below remains current.
+
+
 ## 4 November 2026 — explicit uncertain product recovery DEPLOYED
 
 Application **bef8d6939da3139a41dd6488c72387f9ae39c262** deployed from GitHub/AWS main **08:23:13UTC /10:23 Cairo**, base **a82e92758b8cfd15b41d5fb32f785298dc8ac8d5**. Owner explicitly instructed “حل المشكلة وانشر”. Primary dirty/mobile checkout preserved. [Behavior, diagnostics, tests and recovery contract](product-uncertain-recovery-2026-11-04.ar.md).

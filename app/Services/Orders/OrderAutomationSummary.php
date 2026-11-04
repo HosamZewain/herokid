@@ -5,7 +5,9 @@ namespace App\Services\Orders;
 use App\Models\AdminActivityLog;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Models\OrderAutomationRevision;
 use App\Models\OrderPaymentReview;
+use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Models\OrderShippingMergeRequest;
 use App\Models\PuzzleGeneration;
@@ -40,11 +42,13 @@ class OrderAutomationSummary
 
     private function load(Collection $keys): void
     {
-        $orders = Order::withTrashed()->whereIn('checkout_group_key', $keys)->get(['id', 'checkout_group_key', 'status', 'payment_status', 'child_name', 'updated_at', 'paid_amount_cents', 'printing_status', 'shipping_status'])->groupBy('checkout_group_key');
+        $orders = Order::withTrashed()->whereIn('checkout_group_key', $keys)->get(['id', 'checkout_group_key', 'status', 'payment_status', 'child_name', 'updated_at', 'paid_amount_cents', 'printing_status', 'shipping_status', 'story_id'])->groupBy('checkout_group_key');
         $controls = DB::table('order_automation_controls')->whereIn('checkout_key', $keys)->get()->keyBy('checkout_key');
         $owned = DB::query()->fromSub(app(AutomationAssignment::class)->keys(), 'owned')->whereIn('checkout_key', $keys)->pluck('checkout_key');
         $holds = DB::table('order_automation_holds')->whereIn('checkout_key', $keys)->pluck('checkout_key');
-        $processes = DB::table('order_process_runs')->whereIn('checkout_key', $keys)->get(['id', 'checkout_key', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
+        $processes = OrderProcessRun::whereIn('checkout_key', $keys)->get(['id', 'checkout_key', 'status', 'node_id', 'revision_id', 'version', 'context', 'error_code', 'updated_at'])->groupBy('checkout_key');
+        $startedRuns = DB::table('order_process_steps')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->distinct()->pluck('run_id');
+        $revisions = OrderAutomationRevision::whereIn('id', $processes->flatten(1)->pluck('revision_id'))->get()->keyBy('id');
         $confirmations = DB::table('robodesk_integration_events')->whereIn('checkout_group_key', $keys)->where('event_type', 'order.pending_confirmation')->orderBy('id')->get(['id', 'checkout_group_key', 'status', 'updated_at'])->groupBy('checkout_group_key');
         $identities = DB::table('order_process_identities')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->get(['id', 'run_id', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('run_id');
         $manualIdentities = DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
@@ -73,7 +77,10 @@ class OrderAutomationSummary
             $fulfilled = $rows->isNotEmpty() && $rows->every(fn ($o) => $o->status === 'cancelled' || $o->printing_status !== 'not_started' || $o->shipping_status !== 'not_ready');
             $activeScenes = $scenes->get($key, collect())->contains(fn ($r) => in_array($r->status, ['waiting_slot', 'queued', 'preparing', 'running'], true));
             $add = function (string $stage, string $state, string $label, $at, ?string $reason = null, ?int $orderId = null, ?int $done = null, ?int $total = null) use (&$parts, $rows) {
-                $parts[] = compact('stage', 'state', 'label', 'reason', 'done', 'total') + ['at' => (string) $at, 'child' => $rows->firstWhere('id', $orderId)?->child_name];
+                $next = OrderAutomationGuidance::next($stage, $state, $reason);
+                $reason = OrderAutomationGuidance::reason($reason);
+                $destination = OrderAutomationGuidance::destination($stage);
+                $parts[] = compact('stage', 'state', 'label', 'reason', 'done', 'total', 'next', 'destination') + ['at' => (string) $at, 'child' => $rows->firstWhere('id', $orderId)?->child_name];
             };
             foreach ($shippingReviews->filter(fn ($review) => in_array($key, [$review->sourceOrder?->checkoutGroupKey(), $review->targetOrder?->checkoutGroupKey()], true)) as $review) {
                 $add('team', 'intervention', 'طلب ضم الشحن — بانتظار مراجعة الفريق', $review->updated_at,
@@ -116,6 +123,13 @@ class OrderAutomationSummary
                     $stage = 'payment';
                     $label = 'بانتظار دفعة مسجلة';
                 }
+                if ($run->status === 'waiting_identity' && ! $rows->contains(fn ($o) => (bool) $o->story_id)) {
+                    $stage = 'preview';
+                    $label = 'تجهيز معاينات المنتجات والكفرات';
+                }
+                if ($itemId = data_get($run->context, 'blocker.item_id')) {
+                    $label .= ' — المنتج #'.(int) $itemId;
+                }
                 $add($stage, $state, $label, $run->updated_at, $run->error_code);
                 foreach ($identities->get($run->id, collect()) as $identity) {
                     if ($identity->status === 'succeeded') {
@@ -139,7 +153,7 @@ class OrderAutomationSummary
                 $state = match ($product->status) {
                     'processing' => 'running','queued' => 'queued','succeeded' => 'idle',default => 'intervention'
                 };
-                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->status === 'uncertain' && $product->canAuthorizeUncertainRetry() ? 'أوقف الأوتوميشن بأمان، ثم استخدم إعادة التوليد من بند المنتج مع الموافقة على محاولة جديدة.' : (PuzzleGeneration::ERRORS[$product->error_code] ?? $product->error_code), $product->order_id, $product->status === 'succeeded' ? 1 : 0, 1);
+                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->photoWarning() && in_array($product->status, ['queued', 'processing', 'succeeded'], true) ? $product->photoWarning() : ($product->status === 'uncertain' && $product->canAuthorizeUncertainRetry() ? 'أوقف الأوتوميشن بأمان، ثم استخدم إعادة التوليد من بند المنتج مع الموافقة على محاولة جديدة.' : $product->error_code), $product->order_id, $product->status === 'succeeded' ? 1 : 0, 1);
             }
             foreach ($scenes->get($key, collect())->keyBy(fn ($run) => $run->order_id.':'.($run->order_item_id ?? 'story')) as $run) {
                 $done = collect($run->scenes ?? [])->filter(fn ($s, $number) => ctype_digit((string) $number) && (int) $number >= 1 && (int) $number <= ($run->scene_count ?? 13) && ! empty($s['path']) && ! empty($s['sha256']))->count();
@@ -153,7 +167,7 @@ class OrderAutomationSummary
                 if ($run->status === 'completed' && $fulfilled) {
                     $state = 'idle';
                 }
-                $add($stage, $state, self::STAGES[$stage].': '.$done.' من '.($run->scene_count ?? 13).' — '.(CodexSceneRun::LABELS[$run->status] ?? $run->status), $run->updated_at, $run->error_code ? (CodexSceneRun::ERRORS[$run->error_code] ?? $run->error_code) : ($run->status === 'completed' && ! $fulfilled ? 'جاهز لمراجعة الفريق' : null), $run->order_id, $done, $run->scene_count ?? 13);
+                $add($stage, $state, self::STAGES[$stage].': '.$done.' من '.($run->scene_count ?? 13).' — '.(CodexSceneRun::LABELS[$run->status] ?? $run->status), $run->updated_at, $run->error_code ? $run->error_code : ($run->status === 'completed' && ! $fulfilled ? 'جاهز لمراجعة الفريق' : null), $run->order_id, $done, $run->scene_count ?? 13);
             }
             foreach ($books->get($key, collect()) as $book) {
                 if ($fulfilled || $scenes->get($key, collect())->contains('order_item_id', $book->id)) {
@@ -191,7 +205,21 @@ class OrderAutomationSummary
             if ($control?->state === 'paused' || $holds->contains($key) || ($needsEnrollment && ! collect($parts)->contains('state', 'running'))) {
                 $tracking = false;
             }
-            $this->cache[$key] = $top + ['tracking' => $tracking, 'has_execution' => $hasExecution, 'needs_enrollment' => $needsEnrollment, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
+            $recheck = null;
+            $openRuns = $processes->get($key, collect())->whereNotIn('status', ['cancelled', 'completed']);
+            if (! $fulfilled && $openRuns->count() === 1 && ! $rows->contains(fn ($o) => (bool) $o->story_id)
+                && $manualIdentities->get($key, collect())->isEmpty() && ! $rows->contains(fn ($o) => $legacyOrderIds->contains($o->id))
+                && $products->get($key, collect())->isEmpty() && $scenes->get($key, collect())->isEmpty() && ! $manifests->has($key)
+                && in_array($control?->state ?? 'running', ['running', 'paused'], true)) {
+                $candidate = $openRuns->first();
+                $first = $revisions->get($candidate->revision_id)?->definition['nodes'][0] ?? [];
+                if (in_array($candidate->status, ['blocked', 'paused'], true) && ! $startedRuns->contains($candidate->id)
+                    && ($first['type'] ?? '') === 'generate_previews' && ($first['id'] ?? '') === $candidate->node_id
+                    && ! $processes->get($key, collect())->contains(fn ($r) => $identities->get($r->id, collect())->isNotEmpty())) {
+                    $recheck = ['run_id' => $candidate->id, 'version' => $candidate->version];
+                }
+            }
+            $this->cache[$key] = $top + ['recheck' => $recheck, 'tracking' => $tracking, 'has_execution' => $hasExecution, 'needs_enrollment' => $needsEnrollment, 'running' => collect($parts)->contains('state', 'running'), 'parts' => $parts,
                 'updated_at' => collect($parts)->max('at') ?: (string) $rows->max('updated_at'), 'control_state' => $control?->state ?? ($holds->contains($key) ? 'paused_legacy' : 'running'),
                 'control_version' => (int) ($control?->version ?? 1), 'assignment_version' => (int) ($control?->assignment_version ?? 0)];
         }

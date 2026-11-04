@@ -136,7 +136,8 @@ class AutomationHandoff
                     && $row->items()->exists() && ! $row->items()->where('item_type', 'story')->exists());
             $productReturn = $confirmedProducts && $runs->isEmpty();
             $revisedArtwork = PuzzleGeneration::where('checkout_key', $key)->whereNotNull('requested_by')->where('created_at', '>=', $hold->created_at)->exists();
-            $revisedPreview = ($changed || $revisedArtwork) && $confirmedProducts && $runs->isNotEmpty();
+            $unstartedPreview = $runs->contains(fn ($run) => (json_decode($hold->runs, true)[$run->id] ?? null) === 'blocked' && ProductPreviewRecovery::untouched($run));
+            $revisedPreview = ($changed || $revisedArtwork || $unstartedPreview) && $confirmedProducts && $runs->isNotEmpty();
             if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
             }

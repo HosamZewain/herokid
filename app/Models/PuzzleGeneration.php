@@ -17,6 +17,19 @@ class PuzzleGeneration extends Model
         'uncertain' => 'نتيجة التوليد غير مؤكدة — تحتاج قرار الفريق', 'review' => 'الصورة محفوظة للمراجعة — لم تُنشر في المعاينة'];
 
     public const ERRORS = [
+        'puzzle_no_usable_photos' => 'لا توجد صورة صالحة للتوليد. ارفع صورة واضحة للطفل بصيغة JPG أو PNG أو WebP، أقل من 15 ميجابايت و25 مليون بكسل، ثم أعد الفحص.',
+        'puzzle_photos_required' => 'صور الطفل ناقصة أو تتجاوز 10 صور. عدّل صور هذا الطفل ثم أعد الفحص.',
+        'puzzle_invalid_photo' => 'أحد مراجع صور الطفل غير صالح. أعد رفع الصورة من تعديل الطلب ثم أعد الفحص.',
+        'puzzle_photo_missing' => 'تعذر العثور على صورة الطفل المحفوظة. أعد رفعها؛ لا تبدأ التوليد من غير مراجع الطفل.',
+        'puzzle_prompt_incomplete' => 'برومبت المنتج يحتوي بيانات ناقصة. أكمل بيانات الطفل والمنتج وحدّث البرومبت ثم أعد الفحص.',
+        'puzzle_budget_required' => 'تكلفة التوليد تتجاوز الحد المسموح أو لم تُضبط. يراجع المدير إعدادات مزود الصور والميزانية.',
+        'puzzle_single_image_required' => 'إعداد المنتج لا يحدد صورة واحدة للكفر أو المنتج. يراجع المدير مكونات الإنتاج.',
+        'puzzle_book_child_requires_review' => 'اسم الطفل في تخصيص المنتج لا يطابق الطفل المرتبط به. صحح الربط من تعديل الطلب.',
+        'puzzle_book_story_requires_review' => 'القصة المرتبطة بالكتاب لا تخص نفس الطفل. صحح ربط المنتج قبل التوليد.',
+        'puzzle_book_variant_requires_review' => 'اختيار مقاس الكتاب أو عدد الصفحات غير مكتمل. يراجع المدير الاختيار ومكوناته.',
+        'puzzle_book_structure_invalid' => 'مكونات الكتاب تحتاج كفرًا واحدًا وقسمًا مستقلًا للصفحات. يراجع المدير إعداد المنتج.',
+        'puzzle_ineligible' => 'حالة الطلب أو نوع المنتج لا يسمحان ببدء التوليد. راجع تأكيد الطلب وإعداد المنتج.',
+
         'puzzle_result_uncertain' => 'انتهت المحاولة دون نتيجة مؤكدة؛ السبب التفصيلي غير متاح للمحاولة القديمة.',
         'puzzle_receipt_missing' => 'لم يؤكد العامل انتهاء المحاولة؛ يلزم فحص التنفيذ قبل إعادة التوليد.',
         'puzzle_provider_connection' => 'انقطع الاتصال بمزود الصور أو انتهت مهلة الانتظار دون استلام نتيجة مؤكدة.',
@@ -29,6 +42,17 @@ class PuzzleGeneration extends Model
         'puzzle_inputs_failed' => 'تعذر تجهيز صور أو بيانات المنتج قبل الإرسال.',
         'puzzle_storage_failed' => 'تعذر التأكد من حفظ الصورة؛ راجع التخزين قبل محاولة جديدة.',
     ];
+
+    public function photoWarning(): ?string
+    {
+        $excluded = $this->context['excluded_photos'] ?? [];
+        if (! $excluded) {
+            return null;
+        }
+        $numbers = implode('، ', array_map(fn ($photo) => (int) $photo['number'], $excluded));
+
+        return 'يستخدم التوليد '.count($this->context['photos'] ?? []).' صورة صالحة لنفس الطفل. استُبعدت الصور رقم '.$numbers.' لأنها غير مدعومة أو تتجاوز حدود الصورة؛ الملفات الأصلية محفوظة.';
+    }
 
     /** Worker completion is distinct from provider/billing certainty. */
     public function canAuthorizeUncertainRetry(): bool
