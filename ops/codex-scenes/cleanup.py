@@ -181,6 +181,7 @@ def clean(plan, home, spool, apply=False, now=None):
             temp = path.with_suffix('.json.tmp')
             try:
                 fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+                os.fchmod(fd, 0o640)  # Root wrapper's umask 077 must not hide receipts from the bridge group.
                 with os.fdopen(fd, 'w') as stream:
                     json.dump(receipt, stream, sort_keys=True)
                 temp.replace(path)

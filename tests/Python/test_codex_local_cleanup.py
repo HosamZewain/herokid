@@ -167,6 +167,14 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(b'preserve', target.read_bytes())
         self.assertGreater(result['skipped_files'], 0)
 
+    def test_receipt_group_readability_survives_restrictive_umask(self):
+        prior = os.umask(0o077)
+        try:
+            self.clean()
+        finally:
+            os.umask(prior)
+        self.assertEqual(0o640, (self.out / 'local-cleanup.json').stat().st_mode & 0o777)
+
     def test_wrong_s3_attestation_never_deletes_image(self):
         self.plan['runs'][0]['scenes']['1'] = 'b' * 64
         self.assertEqual(0, self.clean()['deleted_files'])
