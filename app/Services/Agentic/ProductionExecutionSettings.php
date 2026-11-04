@@ -12,10 +12,12 @@ final class ProductionExecutionSettings
     public function approved(): ?array
     {
         $c = config('agentic.execution', []);
+        $c['unlimited'] = $c['unlimited'] ?? false;
         if (($c['enabled'] ?? false) !== true || ! preg_match('/\A[a-zA-Z0-9_-]{8,80}\z/', $c['activation_id'] ?? '')
             || ! is_array($c['actions'] ?? null) || ! $c['actions'] || array_diff($c['actions'], self::ACTIONS)
             || ! is_array($c['order_ids'] ?? null) || count($c['order_ids']) > 1000
-            || ! is_int($c['daily_limit'] ?? null) || $c['daily_limit'] < 1 || $c['daily_limit'] > 1000) {
+            || ! is_bool($c['unlimited'])
+            || (! $c['unlimited'] && (! is_int($c['daily_limit'] ?? null) || $c['daily_limit'] < 1 || $c['daily_limit'] > 1000))) {
             return null;
         }
         foreach ($c['order_ids'] as $id) {

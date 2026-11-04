@@ -42,6 +42,7 @@ class ExecutionMonitor
 
         return ['enabled' => app(ProductionExecutionSettings::class)->approved() !== null && config('agentic.observe') && config('agentic.evaluate') && config('agentic.provider') === 'codex',
             'control' => DB::table('ai_production_controls')->where('id', 1)->first(), 'rows' => $rows,
+            'unlimited' => config('agentic.execution.unlimited') === true,
             'total' => $query->count(), 'active_count' => $activeCount, 'daily_limit' => (int) config('agentic.execution.daily_limit', 0)];
     }
 }

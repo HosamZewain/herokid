@@ -24,6 +24,8 @@ return [
         'actions' => array_values(array_filter(explode(',', (string) env('AUTOPILOT_EXECUTION_ACTIONS', '')))),
         'order_ids' => array_values(array_filter(explode(',', (string) env('AUTOPILOT_EXECUTION_ORDER_IDS', '')))),
         'all_checkouts' => (bool) env('AUTOPILOT_EXECUTION_ALL_CHECKOUTS', false),
+        // Explicit opt-in; a missing/zero cap alone never grants unlimited execution.
+        'unlimited' => env('AUTOPILOT_EXECUTION_UNLIMITED', false),
         'daily_limit' => (int) env('AUTOPILOT_EXECUTION_DAILY_LIMIT', 0),
         'batch_size' => 3,
         'decision_max_age_seconds' => 900,

@@ -5,9 +5,9 @@
             <form method="POST" action="{{ route('admin.agentic.pause-execution') }}">@csrf<button type="submit" class="rounded border px-4 py-2 font-bold text-red-700">إيقاف تسليم خطوات جديدة</button></form>
         @endif
     </div>
-    <p>{{ !$execution['enabled'] ? 'التنفيذ غير مفعّل؛ القرارات للمراجعة فقط.' : ($execution['control']?->paused ? 'تسليم الخطوات الجديدة متوقف بأمر الموظف.' : 'التنفيذ متاح داخل النطاق والحد المعتمدين.') }}</p>
-    <p class="text-sm">الخطوات المقبولة اليوم: <bdi>{{ $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() ? $execution['control']->admissions : 0 }} / {{ $execution['daily_limit'] }}</bdi>. حد التنفيذ مستقل عن حد قرارات الذكاء الاصطناعي. قبول الخطوة في الطابور لا يعني اكتمالها.</p>
-    @if($execution['enabled'] && $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() && $execution['control']->admissions >= $execution['daily_limit'])
+    <p>{{ !$execution['enabled'] ? 'التنفيذ غير مفعّل؛ القرارات للمراجعة فقط.' : ($execution['control']?->paused ? 'تسليم الخطوات الجديدة متوقف بأمر الموظف.' : 'التنفيذ متاح للأوردرات المؤهلة داخل النطاق المعتمد.') }}</p>
+    <p class="text-sm">الخطوات المقبولة اليوم: <bdi>{{ $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() ? $execution['control']->admissions : 0 }}@unless($execution['unlimited']) / {{ $execution['daily_limit'] }}@endunless</bdi>. @if($execution['unlimited'])بدون سقف يومي لخطوات التنفيذ.@endif حد قرارات الذكاء الاصطناعي مستقل. قبول الخطوة في الطابور لا يعني اكتمالها.</p>
+    @if($execution['enabled'] && !$execution['unlimited'] && $execution['control']?->quota_day === now('Africa/Cairo')->toDateString() && $execution['control']->admissions >= $execution['daily_limit'])
         <p class="font-bold text-amber-700">اكتمل حد خطوات التنفيذ اليوم؛ الخطوات الجديدة تنتظر تجدد الحد. متابعة العمل الجاري مستمرة.</p>
     @endif
     <p>مسارات التنفيذ أو الانتظار الجاري متابعتها: {{ $execution['active_count'] }}.</p>

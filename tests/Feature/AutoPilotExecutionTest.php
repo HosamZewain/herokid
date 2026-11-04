@@ -177,6 +177,48 @@ class AutoPilotExecutionTest extends TestCase
         $this->assertSame(1, (int) DB::table('ai_runtime_states')->value('attempts'));
     }
 
+    public function test_explicit_unlimited_execution_continues_beyond_daily_counts_without_repeating_work(): void
+    {
+        config(['agentic.execution.unlimited' => true, 'agentic.execution.daily_limit' => 0]);
+        foreach ([20, 1000] as $used) {
+            $this->propose('unlimited-'.$used);
+            DB::table('ai_production_controls')->update(['quota_day' => now('Africa/Cairo')->toDateString(), 'admissions' => $used, 'paused' => true]);
+            $this->assertSame(['paused'], app(ProductionExecutor::class)->dispatchPass()['results']);
+            DB::table('ai_production_controls')->update(['paused' => false]);
+            $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+            $this->assertSame($used + 1, (int) DB::table('ai_production_controls')->value('admissions'));
+            $this->assertSame(0, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        }
+        $this->assertDatabaseCount('ai_agent_runs', 2);
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        $execution = app(ExecutionMonitor::class)->snapshot();
+        $this->assertTrue($execution['enabled']);
+        $html = view('admin.agentic._execution', compact('execution'))->render();
+        $this->assertStringContainsString('بدون سقف يومي لخطوات التنفيذ', $html);
+        $this->assertStringContainsString('1001', $html);
+        $this->assertStringNotContainsString('اكتمل حد خطوات التنفيذ اليوم', $html);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_unlimited_execution_requires_explicit_boolean_and_preserves_other_activation_gates(): void
+    {
+        $this->propose();
+        foreach (['true', 'false', 1, 'unlimited'] as $invalid) {
+            config(['agentic.execution.unlimited' => $invalid]);
+            $this->assertSame('disabled', app(ProductionExecutor::class)->dispatchPass()['status']);
+        }
+        config(['agentic.execution.unlimited' => true, 'agentic.execution.daily_limit' => 0]);
+        foreach (['agentic.execution.enabled' => false, 'agentic.execution.activation_id' => null,
+            'agentic.execution.actions' => [], 'agentic.execution.all_checkouts' => false] as $key => $value) {
+            $original = config($key);
+            config([$key => $value]);
+            $this->assertSame('disabled', app(ProductionExecutor::class)->dispatchPass()['status']);
+            config([$key => $original]);
+        }
+        $this->assertDatabaseCount('puzzle_generations', 0);
+    }
+
     public function test_expired_decision_requests_one_fresh_evaluation_then_can_admit(): void
     {
         $state = $this->propose();

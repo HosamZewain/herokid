@@ -30,7 +30,8 @@ paused workflows, completed artwork or uncertain sends are automatically replaye
    Shadow simulation; a **separate trusted application executor** can admit a
    permitted step only after explicit configuration and a fresh policy check.
 2. Fail closed unless activation ID/time, allowed actions, checkout scope and a
-   separate action/day limit are complete. All defaults remain OFF/empty/zero.
+   separate action/day limit or explicit unlimited execution mode are complete.
+   All defaults remain OFF/empty/zero; a missing/zero cap never means unlimited.
    The permanent AI decision limit stays1000/day; it is NOT a production or
    message budget. Existing per-product estimates/caps and Codex pool concurrency
    remain unchanged. No new AWS service, worker resource or recurring spend.
@@ -102,9 +103,12 @@ in-flight work in the display, and includes the separate action count/stop contr
 - Verify authenticated order/dashboard behavior, source hashes, public HTTPS,
   errors and native queue state. Activation is a separate recorded configuration
   step. Proposed first activation: all active checkouts in scope (as requested), all
-  six authorized actions, at most3 admissions/pass and20 admissions/Cairo day,
-  while retaining1000 AI decisions/day. Review actual receipts before raising the
-  independent action allowance. This proposal is not applied. Never
+  six authorized actions, at most3 admissions/pass and **no daily execution cap**,
+  as subsequently requested by the owner. Set `execution.unlimited=true` and
+  `execution.all_checkouts=true` only with the complete activation configuration.
+  Retain1000 AI decisions/day; exhausted AI quota can defer new decisions while
+  monitoring and already admitted native work continue. The owner explicitly
+  deferred publication; this configuration remains prepared and unapplied. Never
   equate scans of all orders with forced execution of held/unsupported work.
 
 ## Implementation evidence
@@ -527,3 +531,5 @@ transport complexity that is not necessary for these seven reads.
 - Detailed files, measured tests, known SQLite limitations and runtime boundaries:
   `docs/agentic-shadow-implementation.md`, `docs/agentic-shadow-architecture.md`,
   and `ops/agentic/README.md`.
+
+Prepared unlimited-execution amendment: PHP8.3 isolated SQLite regression passes480tests/5850assertions; focused execution baseline13/93, after15/120. No production changes; earlier MySQL/isolation evidence predates this amendment.

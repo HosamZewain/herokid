@@ -72,7 +72,7 @@ class ProductionExecutor
             }
             $day = now('Africa/Cairo')->toDateString();
             $used = $control->quota_day === $day ? $control->admissions : 0;
-            if ($used >= $c['daily_limit']) {
+            if (! $c['unlimited'] && $used >= $c['daily_limit']) {
                 return 'quota_deferred';
             }
             if (AiProductionExecution::where('decision_id', $receipt->id)->exists()) {
