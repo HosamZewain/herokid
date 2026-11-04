@@ -47,7 +47,7 @@ class OrderProductPreviewImageService
         $directory = trim(dirname($preview->file_path), '.');
         $fingerprint = substr(hash('sha256', implode('|', [
             $preview->checksum ?: $preview->file_path,
-            'mandatory-watermark-v3',
+            'mandatory-watermark-v4',
             (string) config('order_product_previews.watermark_version', 1),
             (string) config('order_product_previews.watermark_text', 'HeroKid Preview'),
             (string) config('order_product_previews.customer_max_width', 1400),
@@ -69,7 +69,7 @@ class OrderProductPreviewImageService
     /** Cache only a derived, watermarked JPEG; original bytes are verified by the caller on every read. */
     public function cachedProtectedBytes(string $bytes): string
     {
-        $fingerprint = hash('sha256', hash('sha256', $bytes).'|mandatory-watermark-v3|'.json_encode(config('order_product_previews'), JSON_THROW_ON_ERROR));
+        $fingerprint = hash('sha256', hash('sha256', $bytes).'|mandatory-watermark-v4|'.json_encode(config('order_product_previews'), JSON_THROW_ON_ERROR));
         // Reuse the existing seven-day private derived-thumbnail retention, never customer originals.
         $disk = $this->mediaStorage->processingDisk();
         $path = 'order-thumbnails/protected/'.$fingerprint.'.jpg';
@@ -94,7 +94,11 @@ class OrderProductPreviewImageService
     public function protectedBytes(string $bytes): string
     {
         $image = new Imagick;
+        $threads = Imagick::getResourceLimit(Imagick::RESOURCETYPE_THREAD);
         try {
+            // FPM already parallelizes image requests; nested OpenMP threads contend
+            // on the same small CPU pool. Restore the per-process limit afterwards.
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_THREAD, 1);
             $image->readImageBlob($bytes);
             $image->setIteratorIndex(0);
             $image->autoOrient();
@@ -121,6 +125,7 @@ class OrderProductPreviewImageService
         } finally {
             $image->clear();
             $image->destroy();
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_THREAD, $threads);
         }
     }
 
@@ -149,13 +154,18 @@ class OrderProductPreviewImageService
         // Draw a small seamless tile once. Annotating the full image repeatedly was
         // rerasterizing hundreds of text runs, including many outside the image.
         $tile = new Imagick;
+        $stamp = new Imagick;
         $canvas = new Imagick;
         $texture = null;
         try {
+            $stamp->newImage($horizontalStep * 3, $verticalStep * 3, new ImagickPixel('transparent'), 'png');
+            $stamp->annotateImage($draw, $horizontalStep * 1.5, $verticalStep * 1.5, -28, $text);
+            $stamp->trimImage(0);
+            $stamp->setImagePage(0, 0, 0, 0);
             $tile->newImage($horizontalStep * 3, $verticalStep * 3, new ImagickPixel('transparent'), 'png');
             for ($y = 0; $y < 3; $y++) {
                 for ($x = 0; $x < 3; $x++) {
-                    $tile->annotateImage($draw, ($x + 0.5) * $horizontalStep, ($y + 0.5) * $verticalStep, -28, $text);
+                    $tile->compositeImage($stamp, Imagick::COMPOSITE_OVER, (int) round(($x + 0.5) * $horizontalStep - $stamp->getImageWidth() / 2), (int) round(($y + 0.5) * $verticalStep - $stamp->getImageHeight() / 2));
                 }
             }
             $tile->cropImage($horizontalStep, $verticalStep, $horizontalStep, $verticalStep);
@@ -167,6 +177,7 @@ class OrderProductPreviewImageService
             $texture?->clear();
             $canvas->clear();
             $tile->clear();
+            $stamp->clear();
             $draw->clear();
         }
     }

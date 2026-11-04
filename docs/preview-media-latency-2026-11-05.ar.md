@@ -18,3 +18,9 @@
 ## التحقق المعزول
 
 PHP 8.3.3: نجح 238 اختبارًا / 2782 تأكيدًا على كل من SQLite وMySQL 8.4، مع HTTP خارجي ممنوع ووسائط وبيانات اصطناعية. تغطي الاختبارات الروابط القديمة والموقعة، إلغاء الإتاحة بعد تجهيز الكاش، رفض أصل تغيرت بصمته، تغير إعداد العلامة، هوية/مشاهد مصغرة مع 304 ومنع الوصول المتقاطع وسحب الصلاحيات، والفلاتر والعدادات والدفعات والاستئناف. نجح Pint وdiff والبناء من lockfile؛ manifest والأصول لم تتغير وكل الأصول القديمة محفوظة. فشل اختبار hydration في أول جولة وثبت نفس الفشل على baseline؛ أصلحنا تحميل الحقول لا الاختبار، والجولة النهائية كاملة ناجحة على القاعدتين.
+
+## Initial publication and cold-render follow-up
+
+Application 2d5e5d707240a2723a3601762c278459b456508f published on AWS at 2026-11-04T22:08:25Z (5 November Cairo). Recovery /home/ubuntu/herokid-before-preview-latency-20261105. All source hashes and private config/environment/routes/manifest bytes verified; only Blade cache/FPM reload, worker PIDs preserved. Eight services active, scheduler success, failed_jobs83 unchanged. Initial80HTTP requests/zero5xx, zero new Laravel/Nginx errors. Exact preview browser: cold load14.955s/all5images15.449s; repeat load3.071s/all5images3.555s. Cold rendering therefore still needs improvement despite warm-cache gain; no blanket subsecond claim.
+
+Follow-up renders the text once as a stamp, copies it into the repeating tile, and limits nested Imagick threads to1 during this render only, restoring the original resource limit even on failure. Cache renderer version4 separates the new derivative. Same original read-only CLI candidate: source216ms, render759ms. Synthetic visual QA shows the mandatory repeated diagonal text. PHP8.3 full SQLite/MySQL regression each238tests/2782assertions passed after stamp change; final resource-limit/corrupt-image regressions each9tests/121assertions passed. No infrastructure/config/worker change is needed; a scoped FPM refresh only. Final live evidence follows in the runbook.

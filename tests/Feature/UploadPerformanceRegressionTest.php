@@ -151,7 +151,9 @@ class UploadPerformanceRegressionTest extends TestCase
         Storage::fake('local');
         $source = UploadedFile::fake()->image('synthetic.png', 700, 900)->get();
         $service = app(OrderProductPreviewImageService::class);
+        $threads = \Imagick::getResourceLimit(\Imagick::RESOURCETYPE_THREAD);
         $first = $service->cachedProtectedBytes($source);
+        $this->assertSame($threads, \Imagick::getResourceLimit(\Imagick::RESOURCETYPE_THREAD));
         $this->assertSame($first, $service->cachedProtectedBytes($source));
         $this->assertNotSame($source, $first);
         $this->assertSame('image/jpeg', getimagesizefromstring($first)['mime']);
@@ -161,6 +163,12 @@ class UploadPerformanceRegressionTest extends TestCase
         $this->assertCount(2, Storage::disk('local')->allFiles('order-thumbnails/protected'));
         $service->cachedProtectedBytes(UploadedFile::fake()->image('different.png', 900, 700)->get());
         $this->assertCount(3, Storage::disk('local')->allFiles('order-thumbnails/protected'));
+        try {
+            $service->protectedBytes('invalid image');
+            $this->fail('An invalid image must never fall back to an unprotected response.');
+        } catch (\RuntimeException) {
+            $this->assertSame($threads, \Imagick::getResourceLimit(\Imagick::RESOURCETYPE_THREAD));
+        }
     }
 
     public function test_thumbnail_cleanup_removes_only_old_derived_files(): void
