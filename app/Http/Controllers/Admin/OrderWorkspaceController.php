@@ -166,7 +166,7 @@ class OrderWorkspaceController extends Controller
     public function progress(Request $request, AdminOrderGroupService $groups, OrderAutomationSummary $summaries)
     {
         $data = $request->validate(['visible' => 'sometimes|array|max:100', 'visible.*' => 'integer|distinct']);
-        $result = $groups->paginate($request, false);
+        $result = $groups->progress($request);
         $ids = array_map('intval', $data['visible'] ?? []);
         $visible = Order::withTrashed()->whereIn('id', $ids)->get(['id', 'checkout_group_key', 'status']);
         $states = $summaries->forKeys($visible->pluck('checkout_group_key'));
@@ -182,8 +182,8 @@ class OrderWorkspaceController extends Controller
             }
         }
 
-        return response()->json(['ids' => $result['groups']->getCollection()->pluck('representative_id')->values(),
-            'total' => $result['groups']->total(), 'counts' => $result['workspaceCounts'],
+        return response()->json(['ids' => $result['ids'],
+            'total' => $result['total'], 'counts' => $result['counts'],
             'revoked' => array_values(array_diff($ids, $visible->pluck('id')->all())),
             'rows' => $visible->map(fn ($o) => ['id' => $o->id, 'summary' => $states[$o->checkout_group_key],
                 'assignee' => $assignments->get($o->checkout_group_key)?->assignee?->name ?? 'غير مسند',

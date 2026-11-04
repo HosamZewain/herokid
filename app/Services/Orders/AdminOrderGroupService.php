@@ -86,18 +86,7 @@ class AdminOrderGroupService
         $includeDeleted = $this->includeDeleted($request, $lifecycle);
         $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
 
-        $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
-            ? $request->integer('per_page', 25)
-            : 25;
-
-        $groups = (clone $query)
-            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at, MIN(id) as representative_id')
-            ->groupBy('checkout_group_key');
-
-        $this->applyGroupOrdering($groups, $request);
-
-        $groups = $groups->paginate($perPage)
-            ->withQueryString();
+        $groups = $this->groupPage($query, $request);
 
         $keys = $groups->getCollection()->pluck('checkout_group_key');
         $orders = $this->ordersForKeys($keys, $includeDeleted)->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
@@ -109,10 +98,7 @@ class AdminOrderGroupService
 
         $summaries = app(OrderAutomationSummary::class)->forKeys($keys);
         $groups->setCollection($groups->getCollection()->map(fn ($group) => $group + ['automation_summary' => $summaries[$group['key']] ?? null]));
-        $countRequest = $request->duplicate($request->except(['workspace', 'page']));
-        $workspaceKeys = $this->groupedFilteredQuery($countRequest, $includeDeleted, $catalogType, $lifecycle)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
-        $workspaceStates = collect(app(OrderAutomationSummary::class)->forKeys($workspaceKeys));
-        $workspaceCounts = ['all' => $workspaceStates->count(), 'automation' => $workspaceStates->where('tracking', true)->count(), 'team' => $workspaceStates->where('tracking', false)->count(), 'attention' => $workspaceStates->where('state', 'intervention')->count()];
+        $workspaceCounts = $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle);
         $stats = null;
 
         // Share the resolved checkout keys across cards: repeating nested catalog
@@ -155,6 +141,52 @@ class AdminOrderGroupService
             'filterTags' => $this->tagOptions(),
             'activeTags' => $activeTags,
         ];
+    }
+
+    /** Polling needs only membership and counts, never full cards/prompts/media. */
+    public function progress(Request $request): array
+    {
+        $catalogType = $this->catalogType($request);
+        $lifecycle = $this->lifecycle($request);
+        $includeDeleted = $this->includeDeleted($request, $lifecycle);
+        $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
+        $page = $this->groupPage($query, $request);
+        $keys = $page->getCollection()->pluck('checkout_group_key');
+        // A status/search filter can match a later child. The displayed card is
+        // still represented by the first live sibling, including archived views.
+        $representatives = ($includeDeleted ? Order::withTrashed() : Order::query())
+            ->whereIn('checkout_group_key', $keys)->select('checkout_group_key')
+            ->selectRaw('COALESCE(MIN(CASE WHEN deleted_at IS NULL THEN id END), MIN(id)) as representative_id')
+            ->groupBy('checkout_group_key')->pluck('representative_id', 'checkout_group_key');
+
+        return ['ids' => $keys->map(fn ($key) => (int) $representatives[$key])->values(), 'total' => $page->total(),
+            'counts' => $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle)];
+    }
+
+    private function groupPage(Builder $query, Request $request): LengthAwarePaginator
+    {
+        $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
+            ? $request->integer('per_page', 25)
+            : 25;
+
+        $groups = (clone $query)
+            ->selectRaw('checkout_group_key, MAX(created_at) as latest_at, MAX(updated_at) as latest_updated_at, MIN(id) as representative_id')
+            ->groupBy('checkout_group_key');
+
+        $this->applyGroupOrdering($groups, $request);
+
+        return $groups->paginate($perPage)
+            ->withQueryString();
+
+    }
+
+    private function workspaceCounts(Request $request, bool $includeDeleted, string $catalogType, string $lifecycle): array
+    {
+        $countRequest = $request->duplicate($request->except(['workspace', 'page']));
+        $workspaceKeys = $this->groupedFilteredQuery($countRequest, $includeDeleted, $catalogType, $lifecycle)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        $workspaceStates = collect(app(OrderAutomationSummary::class)->forKeys($workspaceKeys));
+
+        return ['all' => $workspaceStates->count(), 'automation' => $workspaceStates->where('tracking', true)->count(), 'team' => $workspaceStates->where('tracking', false)->count(), 'attention' => $workspaceStates->where('state', 'intervention')->count()];
     }
 
     /** Count the results of each card's link without querying financial aggregates. */

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\AdminPermissionRegistry;
 use App\Support\AdminPermissionSyncer;
 use App\Support\AdminRoleRegistry;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,33 @@ use Tests\TestCase;
 class AdminPermissionsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_effective_permission_keys_stay_unique_and_observe_current_loaded_relations_without_a_stale_cache(): void
+    {
+        $user = new User(['role' => 'admin']);
+        $direct = new Permission(['key' => 'orders.view']);
+        $shared = new Permission(['key' => 'orders.view']);
+        $extra = new Permission(['key' => 'orders.update']);
+        $role = new AdminRole(['is_active' => true]);
+        $role->setRelation('permissions', new Collection([$shared, $extra]));
+        $user->setRelation('permissions', new Collection([$direct]));
+        $user->setRelation('adminRoles', new Collection([$role]));
+        $this->assertSame(['orders.view', 'orders.update'], $user->permissionKeys()->all());
+        $this->assertTrue($user->hasPermission('orders.update'));
+        $user->permissionKeys()->push('admin_users.manage');
+        $this->assertFalse($user->hasPermission('admin_users.manage'));
+        $role->is_active = false;
+        $this->assertFalse($user->hasPermission('orders.update'));
+        $role->is_active = true;
+        $extra->key = 'orders.delete';
+        $this->assertFalse($user->hasPermission('orders.update'));
+        $this->assertTrue($user->hasPermission('orders.delete'));
+        $role->setRelation('permissions', new Collection);
+        $this->assertFalse($user->hasPermission('orders.delete'));
+        $user->setRelation('permissions', new Collection);
+        $this->assertFalse($user->hasPermission('orders.view'));
+        $this->assertSame([], $user->permissionKeys()->all());
+    }
 
     public function test_customer_user_cannot_access_admin_routes(): void
     {

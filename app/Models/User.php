@@ -178,11 +178,22 @@ class User extends Authenticatable
     {
         $this->loadMissing(['permissions:id,key', 'adminRoles.permissions:id,key']);
 
-        return $this->permissions->pluck('key')
-            ->merge($this->adminRoles
-                ->where('is_active', true)
-                ->flatMap(fn (AdminRole $role) => $role->permissions->pluck('key')))
-            ->unique()
-            ->values();
+        // Permission keys are stored strings, with no accessor/cast. Avoid the
+        // repeated Eloquent ArrayAccess/collection pipeline on every Blade gate.
+        // Read the current attributes on each call: no cross-request or stale
+        // authorization cache, and relation reloads/revocations remain immediate.
+        $keys = [];
+        foreach ($this->permissions as $permission) {
+            $keys[$permission->getAttributes()['key']] = true;
+        }
+        foreach ($this->adminRoles as $role) {
+            if ($role->is_active) {
+                foreach ($role->permissions as $permission) {
+                    $keys[$permission->getAttributes()['key']] = true;
+                }
+            }
+        }
+
+        return collect(array_keys($keys));
     }
 }

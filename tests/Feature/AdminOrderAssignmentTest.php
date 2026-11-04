@@ -156,6 +156,35 @@ class AdminOrderAssignmentTest extends TestCase
         DB::disableQueryLog();
     }
 
+    public function test_polling_preserves_filtered_membership_counts_and_first_live_representative_without_hydrating_cards(): void
+    {
+        $manager = User::factory()->create(['role' => 'admin']);
+        [$first, $later] = $this->group();
+        $first->updateQuietly(['status' => 'preview_uploaded']);
+        $other = $this->order('OTHER', 'OTHER');
+        $archived = $this->order('ARCHIVED', 'ARCHIVED');
+        $archived->delete();
+        $this->actingAs($manager);
+        foreach ([[], ['status' => ['new']], ['q' => 'ASSIGN-2'], ['workspace' => 'team'],
+            ['workspace' => 'attention'], ['automation_state' => 'waiting'], ['view' => 'all', 'q' => 'ARCHIVED'], ['view' => 'trash']] as $filters) {
+            $index = $this->get(route('admin.orders.index', $filters))->assertOk();
+            $expected = $index->viewData('groups')->getCollection()->pluck('representative_id')->values()->all();
+            DB::enableQueryLog();
+            DB::flushQueryLog();
+            $poll = $this->getJson(route('admin.orders.workspace.progress', $filters + ['visible' => [$first->id, $other->id]]))->assertOk();
+            $queries = collect(DB::getQueryLog())->pluck('query')->implode("\n");
+            DB::disableQueryLog();
+            $poll->assertJsonPath('ids', $expected)->assertJsonPath('total', $index->viewData('groups')->total())
+                ->assertJsonPath('counts', $index->viewData('workspaceCounts'));
+            $this->assertStringNotContainsString('production_prompt_template', $queries);
+            $this->assertStringNotContainsString('full_story', $queries);
+            $this->assertStringNotContainsString('marketing_carts', $queries);
+        }
+        $ids = $this->getJson(route('admin.orders.workspace.progress', ['status' => ['new']]))->json('ids');
+        $this->assertContains($first->id, $ids);
+        $this->assertNotContains($later->id, $ids);
+    }
+
     private function group(): array
     {
         return [

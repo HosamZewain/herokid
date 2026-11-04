@@ -260,7 +260,9 @@ class OrderAutomationSummary
         if ($tab === 'all' && ! $state && ! $stage) {
             return;
         }
-        $all = $this->forKeys(Order::withTrashed()->select('checkout_group_key')->distinct()->pluck('checkout_group_key'));
+        // Respect the already applied lifecycle/catalog/search and access scope;
+        // unrelated historical checkouts cannot affect this filtered result.
+        $all = $this->forKeys((clone $query)->reorder()->select('orders.checkout_group_key')->distinct()->pluck('orders.checkout_group_key'));
         $matched = array_keys(array_filter($all, fn ($s) => ($tab !== 'automation' || $s['tracking']) && ($tab !== 'team' || ! $s['tracking']) && ($tab !== 'attention' || $s['state'] === 'intervention')
             && (! $state || $s['state'] === $state) && (! $stage || collect($s['parts'])->contains('stage', $stage))));
         $query->whereIn('orders.checkout_group_key', $matched);
